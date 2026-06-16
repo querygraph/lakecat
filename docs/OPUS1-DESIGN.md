@@ -552,7 +552,8 @@ commit hangs on it:
    `UPDATE tables SET … WHERE table_key = ? AND metadata_location = :prev`;
    `rows_affected == 0` is a concurrency conflict. The service can now advance
    the pointer from a Sail-facing LakeCat `metadata-location` commit extension;
-   full object metadata writes are still pending.
+   local `file://` object metadata writes are implemented for commit plans that
+   carry new metadata.
 2. **Isolation actually holds** under concurrent commits to the same table.
 
 Keep the schema portable, but treat the Rust `turso` crate as the selected path
@@ -572,7 +573,7 @@ only once **P2** gives it a governed path to run on.
   Sail-assembled metadata → `object_store` write → pointer CAS → idempotency/audit/
   pointer-log/outbox in one txn. (Milestones 2–3; Findings 3, 4, 10.) *Turso
   store plus pointer-log/idempotency/audit/outbox rows and CAS semantics are
-  started; object-store metadata write and outbox drain remain.*
+  started; local object-store metadata writes are started; outbox drain remains.*
 - **P2 — finish governance: capability model + governed read path.** Promote the
   boolean receipt to `Capability<Action, Resource>`; route agent reads through
   governed scan-planning; persist the receipt with the audit row. (Milestones 1, 5;

@@ -116,6 +116,7 @@ pub struct CommitTableRequest {
     #[serde(default)]
     pub updates: Vec<Value>,
     pub metadata_location: Option<String>,
+    pub metadata: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

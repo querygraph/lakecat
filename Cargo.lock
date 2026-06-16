@@ -3681,6 +3681,7 @@ dependencies = [
  "lakecat-sail",
  "lakecat-security",
  "lakecat-store",
+ "object_store",
  "sail-catalog-iceberg",
  "sail-iceberg",
  "serde",

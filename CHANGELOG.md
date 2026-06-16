@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added local `file://` object-store metadata writes for commit plans that carry
+  new metadata, keeping the Sail-prepared metadata JSON, the written metadata
+  object, and the Turso CAS table record in sync.
 - Added a LakeCat `metadata-location` commit extension that the Sail-facing
   commit plan validates alongside standard Iceberg REST requirements and threads
   through Turso pointer CAS; aligned the local Grust path dependency with the

@@ -28,7 +28,11 @@ use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationRequest, CatalogAction, GovernanceEngine,
 };
 use lakecat_store::{CatalogStore, TableCommit, TableRecord, table_ident};
+use object_store::local::LocalFileSystem;
+use object_store::path::Path as ObjectPath;
+use object_store::{ObjectStoreExt, PutPayload};
 use serde_json::json;
+use url::Url;
 
 #[derive(Clone)]
 pub struct LakeCatState {
@@ -283,10 +287,12 @@ async fn commit_table(
             current_metadata_location: current_metadata_location.clone(),
             new_metadata_location: request.metadata_location,
             current_metadata: current.metadata,
+            new_metadata: request.metadata,
             requirements: request.requirements,
             updates: request.updates,
         })
         .await?;
+    write_planned_metadata(&commit_plan).await?;
     let table = state
         .store
         .commit_table(
@@ -295,7 +301,8 @@ async fn commit_table(
                 requirements: commit_plan.requirements,
                 updates: commit_plan.updates,
                 expected_previous_metadata_location: current_metadata_location.clone(),
-                new_metadata_location: commit_plan.new_metadata_location,
+                new_metadata_location: commit_plan.new_metadata_location.clone(),
+                new_metadata: Some(commit_plan.new_metadata.clone()),
                 idempotency_key: None,
                 principal: principal.clone(),
             },
@@ -322,6 +329,46 @@ async fn commit_table(
         metadata_location: table.metadata_location,
         metadata: table.metadata,
     }))
+}
+
+async fn write_planned_metadata(
+    commit_plan: &lakecat_sail::CommitPlan,
+) -> Result<(), LakeCatError> {
+    if !commit_plan.metadata_write_required {
+        return Ok(());
+    }
+    let Some(location) = commit_plan.new_metadata_location.as_deref() else {
+        return Ok(());
+    };
+    let url = Url::parse(location).map_err(|err| {
+        LakeCatError::InvalidArgument(format!("invalid metadata location '{location}': {err}"))
+    })?;
+    if url.scheme() != "file" {
+        return Err(LakeCatError::NotSupported(format!(
+            "metadata object writes currently support file:// locations, not {}",
+            url.scheme()
+        )));
+    }
+    let path = url.to_file_path().map_err(|_| {
+        LakeCatError::InvalidArgument(format!(
+            "metadata location is not a valid file URL: {location}"
+        ))
+    })?;
+    let object_path = ObjectPath::from_absolute_path(&path).map_err(|err| {
+        LakeCatError::InvalidArgument(format!("invalid metadata object path '{location}': {err}"))
+    })?;
+    let payload = serde_json::to_vec_pretty(&commit_plan.new_metadata)
+        .map_err(|err| LakeCatError::Internal(format!("failed to encode metadata JSON: {err}")))?;
+    let store = LocalFileSystem::new();
+    store
+        .put(&object_path, PutPayload::from(payload))
+        .await
+        .map_err(|err| {
+            LakeCatError::Internal(format!(
+                "failed to write metadata object '{location}': {err}"
+            ))
+        })?;
+    Ok(())
 }
 
 async fn plan_table_scan(
@@ -777,12 +824,96 @@ mod tests {
     #[tokio::test]
     async fn commit_can_advance_metadata_location_extension() {
         let app = test_app();
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lakecat-commit-metadata-{unique}"));
+        let table_dir = root.join("events");
+        let metadata_dir = table_dir.join("metadata");
+        std::fs::create_dir_all(&metadata_dir).unwrap();
+        let table_location = url::Url::from_directory_path(&table_dir)
+            .expect("table dir URL")
+            .to_string();
+        let initial_metadata_location = url::Url::from_file_path(metadata_dir.join("00000.json"))
+            .unwrap()
+            .to_string();
+        let committed_metadata_location = url::Url::from_file_path(metadata_dir.join("00001.json"))
+            .unwrap()
+            .to_string();
+        let new_metadata = serde_json::json!({
+            "format-version": 3,
+            "table-uuid": "11111111-1111-1111-1111-111111111111",
+            "location": table_location,
+            "last-sequence-number": 8,
+            "last-updated-ms": 1710000000100_i64,
+            "last-column-id": 1,
+            "schemas": [{
+                "type": "struct",
+                "schema-id": 1,
+                "fields": [{
+                    "id": 1,
+                    "name": "id",
+                    "type": "string",
+                    "required": true,
+                    "doc": "Event identifier."
+                }]
+            }],
+            "current-schema-id": 1,
+            "partition-specs": [{"spec-id": 0, "fields": []}],
+            "default-spec-id": 0,
+            "current-snapshot-id": 43,
+            "snapshots": [{
+                "snapshot-id": 43,
+                "sequence-number": 8,
+                "timestamp-ms": 1710000000100_i64,
+                "summary": {"operation": "append"},
+                "schema-id": 1
+            }],
+            "snapshot-log": [{"timestamp-ms": 1710000000100_i64, "snapshot-id": 43}]
+        });
         let create = Request::builder()
             .method(Method::POST)
             .uri("/catalog/v1/namespaces/default/tables")
             .header("content-type", "application/json")
             .body(Body::from(
-                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"table-uuid":"11111111-1111-1111-1111-111111111111","location":"file:///tmp/events","last-sequence-number":7,"last-updated-ms":1710000000000,"last-column-id":1,"schemas":[{"type":"struct","schema-id":1,"fields":[{"id":1,"name":"id","type":"string","required":true,"doc":"Event identifier."}]}],"current-schema-id":1,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"current-snapshot-id":42,"snapshots":[{"snapshot-id":42,"sequence-number":7,"timestamp-ms":1710000000000,"manifest-list":"file:///tmp/events/metadata/snap-42.avro","summary":{"operation":"append"},"schema-id":1}],"snapshot-log":[{"timestamp-ms":1710000000000,"snapshot-id":42}]}}"#,
+                serde_json::json!({
+                    "name": "events",
+                    "location": table_location,
+                    "metadata-location": initial_metadata_location,
+                    "metadata": {
+                        "format-version": 3,
+                        "table-uuid": "11111111-1111-1111-1111-111111111111",
+                        "location": table_location,
+                        "last-sequence-number": 7,
+                        "last-updated-ms": 1710000000000_i64,
+                        "last-column-id": 1,
+                        "schemas": [{
+                            "type": "struct",
+                            "schema-id": 1,
+                            "fields": [{
+                                "id": 1,
+                                "name": "id",
+                                "type": "string",
+                                "required": true,
+                                "doc": "Event identifier."
+                            }]
+                        }],
+                        "current-schema-id": 1,
+                        "partition-specs": [{"spec-id": 0, "fields": []}],
+                        "default-spec-id": 0,
+                        "current-snapshot-id": 42,
+                        "snapshots": [{
+                            "snapshot-id": 42,
+                            "sequence-number": 7,
+                            "timestamp-ms": 1710000000000_i64,
+                            "summary": {"operation": "append"},
+                            "schema-id": 1
+                        }],
+                        "snapshot-log": [{"timestamp-ms": 1710000000000_i64, "snapshot-id": 42}]
+                    }
+                })
+                .to_string(),
             ))
             .unwrap();
         let response = app.clone().oneshot(create).await.unwrap();
@@ -793,7 +924,13 @@ mod tests {
             .uri("/catalog/v1/namespaces/default/tables/events/commit")
             .header("content-type", "application/json")
             .body(Body::from(
-                r#"{"requirements":[],"updates":[],"metadata-location":"file:///tmp/events/metadata/00001.json"}"#,
+                serde_json::json!({
+                    "requirements": [],
+                    "updates": [],
+                    "metadata-location": committed_metadata_location,
+                    "metadata": new_metadata,
+                })
+                .to_string(),
             ))
             .unwrap();
         let response = app.clone().oneshot(commit).await.unwrap();
@@ -804,7 +941,14 @@ mod tests {
         let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(
             payload["metadata-location"],
-            serde_json::json!("file:///tmp/events/metadata/00001.json")
+            serde_json::json!(committed_metadata_location)
+        );
+        let written_metadata: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(metadata_dir.join("00001.json")).unwrap())
+                .unwrap();
+        assert_eq!(
+            written_metadata["current-snapshot-id"],
+            serde_json::json!(43)
         );
 
         let load = Request::builder()
@@ -820,8 +964,13 @@ mod tests {
         let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(
             payload["metadata-location"],
-            serde_json::json!("file:///tmp/events/metadata/00001.json")
+            serde_json::json!(committed_metadata_location)
         );
+        assert_eq!(
+            payload["metadata"]["current-snapshot-id"],
+            serde_json::json!(43)
+        );
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[cfg(feature = "sail-local")]

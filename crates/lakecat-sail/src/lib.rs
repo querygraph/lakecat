@@ -22,6 +22,7 @@ pub struct CommitPreparationRequest {
     pub current_metadata_location: Option<String>,
     pub new_metadata_location: Option<String>,
     pub current_metadata: Value,
+    pub new_metadata: Option<Value>,
     pub requirements: Vec<Value>,
     pub updates: Vec<Value>,
 }
@@ -32,6 +33,8 @@ pub struct CommitPlan {
     pub requirements: Vec<Value>,
     pub updates: Vec<Value>,
     pub new_metadata_location: Option<String>,
+    pub new_metadata: Value,
+    pub metadata_write_required: bool,
     pub metadata_patch: Value,
 }
 
@@ -160,15 +163,20 @@ impl DeferredSailCatalogEngine {
 #[async_trait]
 impl SailCatalogEngine for DeferredSailCatalogEngine {
     async fn prepare_commit(&self, request: CommitPreparationRequest) -> LakeCatResult<CommitPlan> {
+        let metadata_write_required =
+            request.new_metadata_location.is_some() || request.new_metadata.is_some();
         let new_metadata_location = request
             .new_metadata_location
             .clone()
             .or_else(|| request.current_metadata_location.clone());
+        let new_metadata = request.new_metadata.unwrap_or(request.current_metadata);
         Ok(CommitPlan {
             prepared_by: "lakecat-sail-deferred".to_string(),
             requirements: request.requirements,
             updates: request.updates,
             new_metadata_location,
+            new_metadata,
+            metadata_write_required,
             metadata_patch: serde_json::json!({
                 "lakecat:sail-delegation": "deferred",
                 "lakecat:sail-target": "sail-catalog + sail-iceberg",
@@ -259,6 +267,8 @@ pub mod sail_integration {
             &self,
             request: CommitPreparationRequest,
         ) -> LakeCatResult<CommitPlan> {
+            let metadata_write_required =
+                request.new_metadata_location.is_some() || request.new_metadata.is_some();
             let (metadata_summary, typed_metadata) =
                 inspect_sail_table_metadata_with_typed(&request.current_metadata)?;
             let validated_requirements = match typed_metadata.as_ref() {
@@ -294,11 +304,15 @@ pub mod sail_integration {
                 .new_metadata_location
                 .clone()
                 .or_else(|| request.current_metadata_location.clone());
+            let new_metadata = request.new_metadata.unwrap_or(request.current_metadata);
+            validate_lakecat_metadata_format(&new_metadata)?;
             Ok(CommitPlan {
                 prepared_by: "sail-rest-models".to_string(),
                 requirements,
                 updates,
                 new_metadata_location: new_metadata_location.clone(),
+                new_metadata,
+                metadata_write_required,
                 metadata_patch: json!({
                     "lakecat:sail-delegation": "sail-catalog-iceberg-rest-models",
                     "lakecat:format-support": IcebergFormatSupport::default(),
@@ -2460,6 +2474,7 @@ pub mod sail_integration {
                     ),
                     new_metadata_location: None,
                     current_metadata: sample_metadata(3),
+                    new_metadata: None,
                     requirements: vec![
                         json!({
                             "type": "assert-table-uuid",
@@ -2508,6 +2523,7 @@ pub mod sail_integration {
                         "file:///tmp/events/metadata/00001.json".to_string(),
                     ),
                     current_metadata: sample_metadata(3),
+                    new_metadata: Some(sample_metadata(3)),
                     requirements: Vec::new(),
                     updates: Vec::new(),
                 })
@@ -2522,6 +2538,7 @@ pub mod sail_integration {
                 plan.metadata_patch["new-metadata-location"],
                 json!("file:///tmp/events/metadata/00001.json")
             );
+            assert!(plan.metadata_write_required);
         }
 
         #[tokio::test]
@@ -2541,6 +2558,7 @@ pub mod sail_integration {
                     ),
                     new_metadata_location: None,
                     current_metadata: sample_metadata(3),
+                    new_metadata: None,
                     requirements: vec![json!({
                         "type": "assert-current-schema-id",
                         "current-schema-id": 9

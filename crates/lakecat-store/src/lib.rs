@@ -67,6 +67,7 @@ pub struct TableCommit {
     pub updates: Vec<Value>,
     pub expected_previous_metadata_location: Option<String>,
     pub new_metadata_location: Option<String>,
+    pub new_metadata: Option<Value>,
     pub idempotency_key: Option<String>,
     pub principal: Principal,
 }
@@ -188,6 +189,7 @@ impl CatalogStore for MemoryCatalogStore {
             "updates": &commit.updates,
             "expected_previous_metadata_location": &commit.expected_previous_metadata_location,
             "new_metadata_location": &commit.new_metadata_location,
+            "new_metadata": &commit.new_metadata,
         }))?;
         let (
             previous_metadata_location,
@@ -211,6 +213,9 @@ impl CatalogStore for MemoryCatalogStore {
                 )));
             }
             table.metadata_location = commit.new_metadata_location.clone();
+            if let Some(new_metadata) = commit.new_metadata {
+                table.metadata = new_metadata;
+            }
             table.version += 1;
             table.updated_at = Utc::now();
             table.metadata["lakecat:version"] = serde_json::json!(table.version);
@@ -508,6 +513,7 @@ pub mod turso_store {
                 "updates": &commit.updates,
                 "expected_previous_metadata_location": &commit.expected_previous_metadata_location,
                 "new_metadata_location": &commit.new_metadata_location,
+                "new_metadata": &commit.new_metadata,
             }))?;
             if previous_metadata_location != commit.expected_previous_metadata_location {
                 return Err(LakeCatError::Conflict(format!(
@@ -516,6 +522,9 @@ pub mod turso_store {
                 )));
             }
             table.metadata_location = commit.new_metadata_location.clone();
+            if let Some(new_metadata) = commit.new_metadata {
+                table.metadata = new_metadata;
+            }
             table.version += 1;
             table.updated_at = Utc::now();
             table.metadata["lakecat:version"] = serde_json::json!(table.version);
@@ -799,6 +808,7 @@ pub mod turso_store {
                     "file:///tmp/events/metadata/00000.json".to_string(),
                 ),
                 new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+                new_metadata: None,
                 idempotency_key: Some("commit-1".to_string()),
                 principal: Principal::anonymous(),
             };
@@ -846,6 +856,7 @@ pub mod turso_store {
                         new_metadata_location: Some(
                             "file:///tmp/events/metadata/00001.json".to_string(),
                         ),
+                        new_metadata: None,
                         idempotency_key: None,
                         principal: Principal::anonymous(),
                     },
