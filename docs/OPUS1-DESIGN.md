@@ -593,7 +593,10 @@ only once **P2** gives it a governed path to run on.
   `IcebergRestCatalogProvider` over REST, then the in-process `LakeCatCatalogProvider`
   so policy + plan fuse. (Milestone 6; Finding 6.)
 - **P4 — typed Grust catalog graph + outbox**, then **OpenLineage + TypeDID**.
-  (Milestones 7–8; Findings 8, 10.)
+  (Milestones 7–8; Findings 8, 10.) *Started for catalog-level OpenLineage:
+  outbox-drained namespace/table lineage events now project to OpenLineage-shaped
+  payloads and hash receipts in `lakecat-lineage`; TypeDID attestations and typed
+  Grust graph taxonomy remain pending.*
 - **P5 — QueryGraph end-to-end.** `querygraph import-lakecat`; QGLake "Resilience
   Desk" as the acceptance test. (Milestone 9.)
 - **Deferred — Tier-0 pruning depth and typed v4.** Good but diminishing-returns

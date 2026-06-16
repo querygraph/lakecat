@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added catalog-level OpenLineage projection in `lakecat-lineage`, including
+  OpenLineage event hashing in the default lineage sink for outbox-drained
+  table and namespace operations.
 - Added HMAC-signed Sail plan-task envelopes for new scan-planning tokens while
   keeping legacy unsigned structured tokens decodable for compatibility.
 - Added a capability-gated Iceberg REST table credentials endpoint that audits

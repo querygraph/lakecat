@@ -3630,6 +3630,7 @@ dependencies = [
  "lakecat-core",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

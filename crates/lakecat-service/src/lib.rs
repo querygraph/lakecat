@@ -935,6 +935,7 @@ mod tests {
             self.events.lock().await.push(event);
             Ok(LineageReceipt {
                 event_hash: "recorded".to_string(),
+                open_lineage_hash: "recorded-openlineage".to_string(),
                 sink: "recording".to_string(),
             })
         }
