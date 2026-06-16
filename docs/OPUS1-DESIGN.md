@@ -568,9 +568,10 @@ should be a deliberate product/runtime choice, not the default next step; the
 Reconciles the OPUS1 milestones with the push-back above. Resume Tier-0 pruning
 only once **P2** gives it a governed path to run on.
 
-- **P0 — make `cargo test --workspace` green.** Done locally. Add a CI matrix over
-  `{default, sail-local, typesec-local, grust-local, turso-local, all-features}`.
-  (OPUS1 Milestone 0; Finding 1.) *Smallest unblock.*
+- **P0 — make `cargo test --workspace` green.** Done locally, with a CI matrix
+  added over `{default, sail-local, typesec-local, grust-local, turso-local,
+  all-features}` and sibling Sail/Grust/TypeSec checkouts matching LakeCat path
+  dependencies. (OPUS1 Milestone 0; Finding 1.) *Smallest unblock.*
 - **P1 — persistence + durable commit spine.** `TursoCatalogStore`;
   Sail-assembled metadata → `object_store` write → pointer CAS → idempotency/audit/
   pointer-log/outbox in one txn. (Milestones 2–3; Findings 3, 4, 10.) *Turso

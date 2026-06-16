@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a GitHub Actions Rust CI matrix for default workspace tests plus
+  `sail-local`, `typesec-local`, `grust-local`, `turso-local`, and all-features
+  rows, with sibling Sail/Grust/TypeSec checkouts matching LakeCat path deps.
 - Removed inline graph and lineage side effects from catalog request handlers;
   durable outbox events are now the delivery path for table/namespace
   graph-lineage projections.
