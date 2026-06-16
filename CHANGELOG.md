@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Required the typed table-scan capability for fetch-scan-tasks as well as scan
+  planning, keeping task materialization on the governed Sail read path.
 - Added a typed table-scan capability and routed scan planning through a helper
   that requires the minted governance proof before invoking Sail.
 - Persisted commit authorization receipts into Turso audit and outbox payloads,

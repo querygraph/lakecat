@@ -468,24 +468,10 @@ async fn fetch_scan_tasks(
 ) -> Result<Json<FetchScanTasksResponse>, LakeCatHttpError> {
     let principal = request_principal(&headers)?;
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
-    authorize(
-        &state,
-        principal.clone(),
-        CatalogAction::TablePlanScan,
-        Some(ident.clone()),
-    )
-    .await?;
-    let table = state.store.load_table(&ident).await?;
-    let fetched = state
-        .sail
-        .fetch_scan_tasks(SailFetchScanTasksRequest {
-            table: ident.clone(),
-            principal,
-            metadata_location: table.metadata_location,
-            table_metadata: table.metadata,
-            plan_task: request.plan_task,
-        })
-        .await?;
+    let capability = authorize_table_scan(&state, principal, ident).await?;
+    let table = state.store.load_table(capability.table()).await?;
+    let fetched = fetch_scan_tasks_with_capability(&state, &capability, table, request).await?;
+    let ident = capability.table().clone();
     Ok(Json(FetchScanTasksResponse {
         table: TableIdentifier::from_ident(&ident),
         planned_by: fetched.planned_by,
@@ -497,6 +483,24 @@ async fn fetch_scan_tasks(
         lakecat_plan_tasks: fetched.plan_tasks,
         residual_filter: fetched.residual_filter,
     }))
+}
+
+async fn fetch_scan_tasks_with_capability(
+    state: &LakeCatState,
+    capability: &TableScanCapability,
+    table: TableRecord,
+    request: ApiFetchScanTasksRequest,
+) -> Result<lakecat_sail::FetchScanTasksPlan, LakeCatHttpError> {
+    Ok(state
+        .sail
+        .fetch_scan_tasks(SailFetchScanTasksRequest {
+            table: capability.table().clone(),
+            principal: capability.receipt().principal.clone(),
+            metadata_location: table.metadata_location,
+            table_metadata: table.metadata,
+            plan_task: request.plan_task,
+        })
+        .await?)
 }
 
 fn plan_task_tokens(tasks: &[serde_json::Value]) -> Vec<String> {
