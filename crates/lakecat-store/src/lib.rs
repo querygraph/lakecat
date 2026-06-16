@@ -27,6 +27,16 @@ pub trait CatalogStore: Send + Sync + 'static {
         ident: &TableIdent,
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord>;
+    async fn pending_outbox_events(
+        &self,
+        _sink: Option<&str>,
+        _limit: usize,
+    ) -> LakeCatResult<Vec<OutboxEvent>> {
+        Ok(Vec::new())
+    }
+    async fn mark_outbox_delivered(&self, _event_ids: &[String]) -> LakeCatResult<usize> {
+        Ok(0)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -81,6 +91,16 @@ pub struct TableCommitRecord {
     pub principal: Principal,
     pub request_hash: String,
     pub committed_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OutboxEvent {
+    pub event_id: String,
+    pub sink: String,
+    pub event_type: String,
+    pub payload: Value,
+    pub created_at: DateTime<Utc>,
+    pub delivered_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Default)]
@@ -279,9 +299,12 @@ pub mod turso_store {
         LakeCatError, LakeCatResult, Namespace, TableIdent, WarehouseName, content_hash_json,
     };
     use serde::de::DeserializeOwned;
-    use turso::{Connection, Database, Row, Value};
+    use serde_json::Value as JsonValue;
+    use turso::{Connection, Database, Row, Value as TursoValue};
 
-    use crate::{CatalogStore, TableCommit, TableCommitRecord, TableRecord, table_key};
+    use crate::{
+        CatalogStore, OutboxEvent, TableCommit, TableCommitRecord, TableRecord, table_key,
+    };
 
     #[derive(Debug, Clone)]
     pub struct TursoCatalogStore {
@@ -656,6 +679,68 @@ pub mod turso_store {
             tx.commit().await.map_err(turso_error)?;
             Ok(table)
         }
+
+        async fn pending_outbox_events(
+            &self,
+            sink: Option<&str>,
+            limit: usize,
+        ) -> LakeCatResult<Vec<OutboxEvent>> {
+            let conn = self.connect()?;
+            let limit = checked_i64(limit as u64, "outbox event limit")?;
+            let mut rows = if let Some(sink) = sink {
+                conn.query(
+                    "select event_id, sink, event_type, payload_json, created_at, delivered_at
+                     from outbox_events
+                     where delivered_at is null and sink = ?1
+                     order by created_at, event_id
+                     limit ?2",
+                    (sink, limit),
+                )
+                .await
+                .map_err(turso_error)?
+            } else {
+                conn.query(
+                    "select event_id, sink, event_type, payload_json, created_at, delivered_at
+                     from outbox_events
+                     where delivered_at is null
+                     order by created_at, event_id
+                     limit ?1",
+                    (limit,),
+                )
+                .await
+                .map_err(turso_error)?
+            };
+
+            let mut events = Vec::new();
+            while let Some(row) = rows.next().await.map_err(turso_error)? {
+                events.push(outbox_event_from_row(&row)?);
+            }
+            Ok(events)
+        }
+
+        async fn mark_outbox_delivered(&self, event_ids: &[String]) -> LakeCatResult<usize> {
+            if event_ids.is_empty() {
+                return Ok(0);
+            }
+            let mut conn = self.connect()?;
+            let tx = conn.transaction().await.map_err(turso_error)?;
+            let delivered_at = Utc::now().to_rfc3339();
+            let mut delivered = 0usize;
+            for event_id in event_ids {
+                let changed = tx
+                    .execute(
+                        "update outbox_events
+                         set delivered_at = ?2
+                         where event_id = ?1 and delivered_at is null",
+                        (event_id.as_str(), delivered_at.as_str()),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                delivered += changed as usize;
+            }
+            tx.commit().await.map_err(turso_error)?;
+            Ok(delivered)
+        }
     }
 
     const TURSO_MIGRATION: &[&str] = &[
@@ -739,9 +824,19 @@ pub mod turso_store {
 
     fn row_string(row: &Row, idx: usize) -> LakeCatResult<String> {
         match row.get_value(idx).map_err(turso_error)? {
-            Value::Text(value) => Ok(value),
+            TursoValue::Text(value) => Ok(value),
             value => Err(LakeCatError::Internal(format!(
                 "Turso catalog store expected text at column {idx}, got {value:?}"
+            ))),
+        }
+    }
+
+    fn row_optional_string(row: &Row, idx: usize) -> LakeCatResult<Option<String>> {
+        match row.get_value(idx).map_err(turso_error)? {
+            TursoValue::Null => Ok(None),
+            TursoValue::Text(value) => Ok(Some(value)),
+            value => Err(LakeCatError::Internal(format!(
+                "Turso catalog store expected nullable text at column {idx}, got {value:?}"
             ))),
         }
     }
@@ -749,11 +844,32 @@ pub mod turso_store {
     #[cfg(test)]
     fn row_i64(row: &Row, idx: usize) -> LakeCatResult<i64> {
         match row.get_value(idx).map_err(turso_error)? {
-            Value::Integer(value) => Ok(value),
+            TursoValue::Integer(value) => Ok(value),
             value => Err(LakeCatError::Internal(format!(
                 "Turso catalog store expected integer at column {idx}, got {value:?}"
             ))),
         }
+    }
+
+    fn outbox_event_from_row(row: &Row) -> LakeCatResult<OutboxEvent> {
+        Ok(OutboxEvent {
+            event_id: row_string(row, 0)?,
+            sink: row_string(row, 1)?,
+            event_type: row_string(row, 2)?,
+            payload: decode_json::<JsonValue>(row_string(row, 3)?)?,
+            created_at: parse_turso_datetime(row_string(row, 4)?, "outbox created_at")?,
+            delivered_at: row_optional_string(row, 5)?
+                .map(|value| parse_turso_datetime(value, "outbox delivered_at"))
+                .transpose()?,
+        })
+    }
+
+    fn parse_turso_datetime(value: String, name: &str) -> LakeCatResult<chrono::DateTime<Utc>> {
+        chrono::DateTime::parse_from_rfc3339(&value)
+            .map(|datetime| datetime.with_timezone(&Utc))
+            .map_err(|err| {
+                LakeCatError::Internal(format!("failed to parse {name} timestamp: {err}"))
+            })
     }
 
     fn is_unique_violation(err: &turso::Error) -> bool {
@@ -827,6 +943,30 @@ pub mod turso_store {
             assert_eq!(audit_count, 1);
             let outbox_count = store.count_rows("outbox_events").await.unwrap();
             assert_eq!(outbox_count, 1);
+
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 1);
+            assert_eq!(pending[0].event_type, "table.commit");
+            assert_eq!(
+                pending[0].payload["commit"]["new_metadata_location"],
+                serde_json::json!("file:///tmp/events/metadata/00001.json")
+            );
+            let event_ids = pending
+                .iter()
+                .map(|event| event.event_id.clone())
+                .collect::<Vec<_>>();
+            assert_eq!(store.mark_outbox_delivered(&event_ids).await.unwrap(), 1);
+            assert!(
+                store
+                    .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                    .await
+                    .unwrap()
+                    .is_empty()
+            );
+            assert_eq!(store.mark_outbox_delivered(&event_ids).await.unwrap(), 0);
         }
 
         #[tokio::test]

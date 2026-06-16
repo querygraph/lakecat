@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a typed catalog outbox drain API and Turso implementation so commit
+  events can be fetched by sink and marked delivered without coupling graph or
+  lineage side effects to the request path.
 - Added local `file://` object-store metadata writes for commit plans that carry
   new metadata, keeping the Sail-prepared metadata JSON, the written metadata
   object, and the Turso CAS table record in sync.

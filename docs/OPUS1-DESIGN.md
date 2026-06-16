@@ -573,7 +573,8 @@ only once **P2** gives it a governed path to run on.
   Sail-assembled metadata → `object_store` write → pointer CAS → idempotency/audit/
   pointer-log/outbox in one txn. (Milestones 2–3; Findings 3, 4, 10.) *Turso
   store plus pointer-log/idempotency/audit/outbox rows and CAS semantics are
-  started; local object-store metadata writes are started; outbox drain remains.*
+  started; local object-store metadata writes are started; a typed store-level
+  outbox drain API is started, with sink projection still pending.*
 - **P2 — finish governance: capability model + governed read path.** Promote the
   boolean receipt to `Capability<Action, Resource>`; route agent reads through
   governed scan-planning; persist the receipt with the audit row. (Milestones 1, 5;
