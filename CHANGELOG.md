@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a typed table-scan capability and routed scan planning through a helper
+  that requires the minted governance proof before invoking Sail.
 - Persisted commit authorization receipts into Turso audit and outbox payloads,
   keeping TypeSec governance decisions attached to the durable commit record.
 - Added a Turso concurrent commit regression that exercises two writers racing on

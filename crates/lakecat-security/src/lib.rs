@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use lakecat_core::{LakeCatResult, Principal, TableIdent};
+use lakecat_core::{LakeCatError, LakeCatResult, Principal, TableIdent};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -41,10 +41,107 @@ pub enum CatalogAction {
 pub struct AuthorizationReceipt {
     pub principal: Principal,
     pub action: CatalogAction,
+    pub table: Option<TableIdent>,
     pub allowed: bool,
     pub engine: String,
     pub policy_hash: Option<String>,
     pub checked_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Capability<Action, Resource> {
+    receipt: AuthorizationReceipt,
+    resource: Resource,
+    _action: std::marker::PhantomData<Action>,
+}
+
+impl<Action, Resource> Capability<Action, Resource> {
+    pub fn receipt(&self) -> &AuthorizationReceipt {
+        &self.receipt
+    }
+
+    pub fn resource(&self) -> &Resource {
+        &self.resource
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanPlanScan;
+
+pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
+
+impl TableScanCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
+        if !receipt.allowed {
+            return Err(LakeCatError::Conflict(
+                "authorization receipt is not allowed".to_string(),
+            ));
+        }
+        if receipt.action != CatalogAction::TablePlanScan {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "authorization receipt action {:?} cannot plan table scans",
+                receipt.action
+            )));
+        }
+        if receipt.table.as_ref() != Some(&table) {
+            return Err(LakeCatError::InvalidArgument(
+                "authorization receipt table does not match scan table".to_string(),
+            ));
+        }
+        Ok(Self {
+            receipt,
+            resource: table,
+            _action: std::marker::PhantomData,
+        })
+    }
+
+    pub fn table(&self) -> &TableIdent {
+        self.resource()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use lakecat_core::{Namespace, PrincipalKind, TableName, WarehouseName};
+
+    use super::*;
+
+    #[test]
+    fn table_scan_capability_requires_matching_allowed_receipt() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:reader".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::TablePlanScan,
+            table: Some(table.clone()),
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            checked_at: Utc::now(),
+        };
+
+        let capability = TableScanCapability::from_receipt(receipt.clone(), table.clone())
+            .expect("matching receipt should mint capability");
+        assert_eq!(capability.table(), &table);
+        assert_eq!(capability.receipt(), &receipt);
+
+        let other_table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("other").unwrap(),
+        );
+        assert!(TableScanCapability::from_receipt(receipt.clone(), other_table).is_err());
+
+        let mut load_receipt = receipt;
+        load_receipt.action = CatalogAction::TableLoad;
+        assert!(TableScanCapability::from_receipt(load_receipt, table).is_err());
+    }
 }
 
 #[derive(Debug, Default)]
@@ -65,6 +162,7 @@ impl GovernanceEngine for AllowAllGovernanceEngine {
         Ok(AuthorizationReceipt {
             principal: request.principal,
             action: request.action,
+            table: request.table,
             allowed: true,
             engine: "lakecat-allow-all-typesec-placeholder".to_string(),
             policy_hash: None,
@@ -129,6 +227,7 @@ pub mod typesec_integration {
             Ok(AuthorizationReceipt {
                 principal: request.principal,
                 action: request.action,
+                table: request.table,
                 allowed,
                 engine: "typesec".to_string(),
                 policy_hash: Some(content_hash_json(&serde_json::json!({

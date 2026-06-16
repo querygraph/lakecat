@@ -26,7 +26,7 @@ use lakecat_sail::{
 };
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
-    GovernanceEngine,
+    GovernanceEngine, TableScanCapability,
 };
 use lakecat_store::{CatalogStore, TableCommit, TableRecord, table_ident};
 use object_store::local::LocalFileSystem;
@@ -387,39 +387,12 @@ async fn plan_table_scan(
 ) -> Result<Json<PlanTableScanResponse>, LakeCatHttpError> {
     let principal = request_principal(&headers)?;
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
-    authorize(
-        &state,
-        principal.clone(),
-        CatalogAction::TablePlanScan,
-        Some(ident.clone()),
-    )
-    .await?;
-    let table = state.store.load_table(&ident).await?;
-    request.validate_scan_mode()?;
-    let projection = request.projected_fields();
-    let filters = request.filter_values();
-    let scan_request_extensions = json!({
-        "case-sensitive": request.case_sensitive,
-        "use-snapshot-schema": request.use_snapshot_schema,
-        "start-snapshot-id": request.start_snapshot_id,
-        "end-snapshot-id": request.end_snapshot_id,
-        "stats-fields": request.stats_fields,
-    });
-    let scan = state
-        .sail
-        .plan_scan(ScanPlanningRequest {
-            table: ident.clone(),
-            principal: principal.clone(),
-            metadata_location: table.metadata_location.clone(),
-            table_metadata: table.metadata.clone(),
-            projection,
-            filters,
-            limit: request.limit,
-            snapshot_id: request.snapshot_id,
-            start_snapshot_id: request.start_snapshot_id,
-            end_snapshot_id: request.end_snapshot_id,
-        })
-        .await?;
+    let capability = authorize_table_scan(&state, principal.clone(), ident.clone()).await?;
+    let table = state.store.load_table(capability.table()).await?;
+    let (scan, scan_request_extensions) =
+        plan_scan_with_capability(&state, &capability, table, request).await?;
+    let ident = capability.table().clone();
+    let principal = capability.receipt().principal.clone();
     state
         .graph
         .emit(GraphEvent::table(
@@ -451,6 +424,40 @@ async fn plan_table_scan(
             scan_request_extensions,
         ),
     }))
+}
+
+async fn plan_scan_with_capability(
+    state: &LakeCatState,
+    capability: &TableScanCapability,
+    table: TableRecord,
+    request: PlanTableScanRequest,
+) -> Result<(lakecat_sail::ScanPlan, serde_json::Value), LakeCatHttpError> {
+    request.validate_scan_mode()?;
+    let projection = request.projected_fields();
+    let filters = request.filter_values();
+    let scan_request_extensions = json!({
+        "case-sensitive": request.case_sensitive,
+        "use-snapshot-schema": request.use_snapshot_schema,
+        "start-snapshot-id": request.start_snapshot_id,
+        "end-snapshot-id": request.end_snapshot_id,
+        "stats-fields": request.stats_fields,
+    });
+    let scan = state
+        .sail
+        .plan_scan(ScanPlanningRequest {
+            table: capability.table().clone(),
+            principal: capability.receipt().principal.clone(),
+            metadata_location: table.metadata_location.clone(),
+            table_metadata: table.metadata.clone(),
+            projection,
+            filters,
+            limit: request.limit,
+            snapshot_id: request.snapshot_id,
+            start_snapshot_id: request.start_snapshot_id,
+            end_snapshot_id: request.end_snapshot_id,
+        })
+        .await?;
+    Ok((scan, scan_request_extensions))
 }
 
 async fn fetch_scan_tasks(
@@ -606,6 +613,21 @@ async fn authorize(
     }
 }
 
+async fn authorize_table_scan(
+    state: &LakeCatState,
+    principal: Principal,
+    table: TableIdent,
+) -> Result<TableScanCapability, LakeCatHttpError> {
+    let receipt = authorize(
+        state,
+        principal,
+        CatalogAction::TablePlanScan,
+        Some(table.clone()),
+    )
+    .await?;
+    Ok(TableScanCapability::from_receipt(receipt, table)?)
+}
+
 #[derive(Debug)]
 pub struct LakeCatHttpError(LakeCatError);
 
@@ -660,6 +682,7 @@ mod tests {
             Ok(lakecat_security::AuthorizationReceipt {
                 principal: request.principal,
                 action: request.action,
+                table: request.table,
                 allowed: true,
                 engine: "recording".to_string(),
                 policy_hash: None,
