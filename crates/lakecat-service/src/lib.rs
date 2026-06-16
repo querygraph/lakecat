@@ -41,7 +41,7 @@ use lakecat_store::{
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStoreExt, PutPayload};
-use serde_json::json;
+use serde_json::{Value, json};
 use url::Url;
 
 #[derive(Clone)]
@@ -167,7 +167,7 @@ async fn get_config(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
 ) -> Result<Json<CatalogConfigResponse>, LakeCatHttpError> {
-    let capability = authorize_catalog_config(&state, request_principal(&headers)?).await?;
+    let capability = authorize_catalog_config(&state, request_identity(&headers)?).await?;
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -189,8 +189,8 @@ async fn create_namespace(
     headers: HeaderMap,
     Json(request): Json<CreateNamespaceRequest>,
 ) -> Result<Json<NamespaceResponse>, LakeCatHttpError> {
-    let principal = request_principal(&headers)?;
-    let capability = authorize_namespace_create(&state, principal.clone()).await?;
+    let identity = request_identity(&headers)?;
+    let capability = authorize_namespace_create(&state, identity).await?;
     let namespace = Namespace::new(request.namespace)?;
     state
         .store
@@ -217,7 +217,7 @@ async fn list_namespaces(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
 ) -> Result<Json<ListNamespacesResponse>, LakeCatHttpError> {
-    let capability = authorize_namespace_list(&state, request_principal(&headers)?).await?;
+    let capability = authorize_namespace_list(&state, request_identity(&headers)?).await?;
     let namespaces = state.store.list_namespaces(&state.warehouse).await?;
     state
         .store
@@ -247,13 +247,14 @@ async fn create_table(
     Path(namespace): Path<String>,
     Json(request): Json<CreateTableRequest>,
 ) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
-    let principal = request_principal(&headers)?;
+    let identity = request_identity(&headers)?;
+    let principal = identity.principal.clone();
     let ident = table_ident(
         state.warehouse.as_str(),
         namespace,
         TableName::new(request.name)?.as_str(),
     )?;
-    let capability = authorize_table_create(&state, principal.clone(), ident).await?;
+    let capability = authorize_table_create(&state, identity, ident).await?;
     let ident = capability.table().clone();
     let table = TableRecord::new(
         ident.clone(),
@@ -287,9 +288,9 @@ async fn load_table(
     headers: HeaderMap,
     Path((namespace, table)): Path<(String, String)>,
 ) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
-    let principal = request_principal(&headers)?;
+    let identity = request_identity(&headers)?;
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
-    let capability = authorize_table_load(&state, principal, ident).await?;
+    let capability = authorize_table_load(&state, identity, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
     let ident = capability.table().clone();
     let principal = capability.receipt().principal.clone();
@@ -316,9 +317,9 @@ async fn delete_table(
     headers: HeaderMap,
     Path((namespace, table)): Path<(String, String)>,
 ) -> Result<StatusCode, LakeCatHttpError> {
-    let principal = request_principal(&headers)?;
+    let identity = request_identity(&headers)?;
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
-    let capability = authorize_table_drop(&state, principal, ident).await?;
+    let capability = authorize_table_drop(&state, identity, ident).await?;
     let ident = capability.table().clone();
     state
         .store
@@ -339,9 +340,9 @@ async fn restore_table(
     Path((warehouse, namespace, table)): Path<(String, String, String)>,
 ) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
     let warehouse = management_warehouse(&state, warehouse)?;
-    let principal = request_principal(&headers)?;
+    let identity = request_identity(&headers)?;
     let ident = table_ident(warehouse.as_str(), namespace, table)?;
-    let capability = authorize_table_restore(&state, principal, ident).await?;
+    let capability = authorize_table_restore(&state, identity, ident).await?;
     let restored = state
         .store
         .restore_table(
@@ -360,9 +361,9 @@ async fn load_credentials(
     headers: HeaderMap,
     Path((namespace, table)): Path<(String, String)>,
 ) -> Result<Json<LoadCredentialsResponse>, LakeCatHttpError> {
-    let principal = request_principal(&headers)?;
+    let identity = request_identity(&headers)?;
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
-    let capability = authorize_credentials_vend(&state, principal, ident).await?;
+    let capability = authorize_credentials_vend(&state, identity, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
     let storage_profile = state.store.storage_profile_for_table(&table).await?;
     let storage_credentials = storage_credentials_for_profile(&storage_profile);
@@ -395,7 +396,7 @@ async fn list_storage_profiles(
     Path(warehouse): Path<String>,
 ) -> Result<Json<ListStorageProfilesResponse>, LakeCatHttpError> {
     let warehouse = management_warehouse(&state, warehouse)?;
-    let capability = authorize_storage_profile_manage(&state, request_principal(&headers)?).await?;
+    let capability = authorize_storage_profile_manage(&state, request_identity(&headers)?).await?;
     let profiles = state.store.list_storage_profiles(&warehouse).await?;
     state
         .store
@@ -423,7 +424,7 @@ async fn upsert_storage_profile(
     Json(request): Json<UpsertStorageProfileRequest>,
 ) -> Result<Json<StorageProfileResponse>, LakeCatHttpError> {
     let warehouse = management_warehouse(&state, warehouse)?;
-    let capability = authorize_storage_profile_manage(&state, request_principal(&headers)?).await?;
+    let capability = authorize_storage_profile_manage(&state, request_identity(&headers)?).await?;
     let storage_profile = StorageProfile::new(
         profile,
         warehouse.clone(),
@@ -456,7 +457,7 @@ async fn list_policy_bindings(
     Path(warehouse): Path<String>,
 ) -> Result<Json<ListPolicyBindingsResponse>, LakeCatHttpError> {
     let warehouse = management_warehouse(&state, warehouse)?;
-    let capability = authorize_policy_manage(&state, request_principal(&headers)?).await?;
+    let capability = authorize_policy_manage(&state, request_identity(&headers)?).await?;
     let policies = state.store.list_policy_bindings(&warehouse).await?;
     state
         .store
@@ -484,7 +485,7 @@ async fn upsert_policy_binding(
     Json(request): Json<UpsertPolicyBindingRequest>,
 ) -> Result<Json<PolicyBindingResponse>, LakeCatHttpError> {
     let warehouse = management_warehouse(&state, warehouse)?;
-    let capability = authorize_policy_manage(&state, request_principal(&headers)?).await?;
+    let capability = authorize_policy_manage(&state, request_identity(&headers)?).await?;
     let namespace = request.namespace.map(Namespace::new).transpose()?;
     let table = request.table.map(TableName::new).transpose()?;
     let binding = PolicyBinding::new(
@@ -519,9 +520,9 @@ async fn commit_table(
     Path((namespace, table)): Path<(String, String)>,
     Json(request): Json<CommitTableRequest>,
 ) -> Result<Json<CommitTableResponse>, LakeCatHttpError> {
-    let principal = request_principal(&headers)?;
+    let identity = request_identity(&headers)?;
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
-    let capability = authorize_table_commit(&state, principal, ident).await?;
+    let capability = authorize_table_commit(&state, identity, ident).await?;
     let current = state.store.load_table(capability.table()).await?;
     let current_metadata_location = current.metadata_location.clone();
     let commit_plan = state
@@ -612,9 +613,9 @@ async fn plan_table_scan(
     Path((namespace, table)): Path<(String, String)>,
     Json(request): Json<PlanTableScanRequest>,
 ) -> Result<Json<PlanTableScanResponse>, LakeCatHttpError> {
-    let principal = request_principal(&headers)?;
+    let identity = request_identity(&headers)?;
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
-    let capability = authorize_table_scan(&state, principal.clone(), ident.clone()).await?;
+    let capability = authorize_table_scan(&state, identity, ident.clone()).await?;
     let table = state.store.load_table(capability.table()).await?;
     let (scan, scan_request_extensions) =
         plan_scan_with_capability(&state, &capability, table, request).await?;
@@ -692,9 +693,9 @@ async fn fetch_scan_tasks(
     Path((namespace, table)): Path<(String, String)>,
     Json(request): Json<ApiFetchScanTasksRequest>,
 ) -> Result<Json<FetchScanTasksResponse>, LakeCatHttpError> {
-    let principal = request_principal(&headers)?;
+    let identity = request_identity(&headers)?;
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
-    let capability = authorize_table_scan(&state, principal, ident).await?;
+    let capability = authorize_table_scan(&state, identity, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
     let fetched = fetch_scan_tasks_with_capability(&state, &capability, table, request).await?;
     let ident = capability.table().clone();
@@ -779,7 +780,7 @@ async fn querygraph_bootstrap(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
 ) -> Result<Json<QueryGraphBootstrap>, LakeCatHttpError> {
-    let capability = authorize_graph_read(&state, request_principal(&headers)?).await?;
+    let capability = authorize_graph_read(&state, request_identity(&headers)?).await?;
     let tables = state.store.list_tables(&state.warehouse).await?;
     state
         .store
@@ -971,7 +972,13 @@ fn management_warehouse(
     Ok(warehouse)
 }
 
-fn request_principal(headers: &HeaderMap) -> Result<Principal, LakeCatHttpError> {
+#[derive(Debug, Clone)]
+struct RequestIdentity {
+    principal: Principal,
+    envelope: Value,
+}
+
+fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpError> {
     let header = |name: &str| -> Result<Option<&str>, LakeCatError> {
         headers
             .get(name)
@@ -983,35 +990,73 @@ fn request_principal(headers: &HeaderMap) -> Result<Principal, LakeCatHttpError>
             .transpose()
     };
 
-    if let Some(subject) = header("x-lakecat-principal")? {
-        let kind = header("x-lakecat-principal-kind")?
-            .map(str::parse)
-            .transpose()?
-            .unwrap_or(PrincipalKind::Human);
-        return Principal::new(subject, kind).map_err(Into::into);
-    }
+    let explicit_principal = header("x-lakecat-principal")?;
+    let explicit_kind = header("x-lakecat-principal-kind")?
+        .map(str::parse)
+        .transpose()?;
+    let agent_did = header("x-lakecat-agent-did")?;
+    let typedid = header("x-lakecat-typedid")?.or(agent_did);
+    let typedid_proof = header("x-lakecat-typedid-proof")?;
+    let delegation = header("x-lakecat-agent-delegation")?;
+    let signed_summary = header("x-lakecat-agent-summary-signature")?;
+    let authorization = header("authorization")?;
 
-    if let Some(did) = header("x-lakecat-agent-did")? {
-        return Principal::new(did, PrincipalKind::Agent).map_err(Into::into);
-    }
-
-    if let Some(authorization) = header("authorization")? {
-        if let Some(token) = authorization.strip_prefix("Bearer ") {
-            let subject = format!("bearer:{}", content_hash_bytes(token.as_bytes()));
-            return Principal::new(subject, PrincipalKind::Service).map_err(Into::into);
-        }
-        return Err(LakeCatError::InvalidArgument(
-            "unsupported Authorization scheme; use Bearer".to_string(),
+    let (principal, source, bearer_token_sha256) = if let Some(subject) = explicit_principal {
+        (
+            Principal::new(subject, explicit_kind.unwrap_or(PrincipalKind::Human))?,
+            "x-lakecat-principal",
+            None,
         )
-        .into());
-    }
+    } else if let Some(did) = agent_did {
+        (
+            Principal::new(did, PrincipalKind::Agent)?,
+            "x-lakecat-agent-did",
+            None,
+        )
+    } else if let Some(authorization) = authorization {
+        if let Some(token) = authorization.strip_prefix("Bearer ") {
+            (
+                Principal::new(
+                    format!("bearer:{}", content_hash_bytes(token.as_bytes())),
+                    PrincipalKind::Service,
+                )?,
+                "authorization",
+                Some(content_hash_bytes(token.as_bytes())),
+            )
+        } else {
+            return Err(LakeCatError::InvalidArgument(
+                "unsupported Authorization scheme; use Bearer".to_string(),
+            )
+            .into());
+        }
+    } else {
+        (Principal::anonymous(), "anonymous", None)
+    };
 
-    Ok(Principal::anonymous())
+    let envelope = json!({
+        "type": "lakecat.request-identity.v1",
+        "principal": principal,
+        "source": source,
+        "agent-did": agent_did,
+        "typedid": typedid,
+        "typedid-proof-sha256": typedid_proof.map(|value| content_hash_bytes(value.as_bytes())),
+        "agent-delegation-sha256": delegation.map(|value| content_hash_bytes(value.as_bytes())),
+        "agent-summary-signature-sha256": signed_summary
+            .map(|value| content_hash_bytes(value.as_bytes())),
+        "bearer-token-sha256": bearer_token_sha256,
+        "attestation-state": "unverified",
+        "raw-secret-material": false,
+    });
+
+    Ok(RequestIdentity {
+        principal,
+        envelope,
+    })
 }
 
 async fn authorize(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
     action: CatalogAction,
     table: Option<TableIdent>,
 ) -> Result<AuthorizationReceipt, LakeCatHttpError> {
@@ -1023,11 +1068,12 @@ async fn authorize(
     let receipt = state
         .governance
         .authorize(AuthorizationRequest {
-            principal,
+            principal: identity.principal,
             action,
             table,
             context: json!({
                 "warehouse": state.warehouse.as_str(),
+                "request-identity": identity.envelope,
                 "policy-bindings": policy_bindings
                     .iter()
                     .map(policy_binding_response)
@@ -1044,12 +1090,12 @@ async fn authorize(
 
 async fn authorize_table_create(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
     table: TableIdent,
 ) -> Result<TableCreateCapability, LakeCatHttpError> {
     let receipt = authorize(
         state,
-        principal,
+        identity,
         CatalogAction::TableCreate,
         Some(table.clone()),
     )
@@ -1059,36 +1105,36 @@ async fn authorize_table_create(
 
 async fn authorize_catalog_config(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
 ) -> Result<CatalogConfigCapability, LakeCatHttpError> {
-    let receipt = authorize(state, principal, CatalogAction::CatalogConfig, None).await?;
+    let receipt = authorize(state, identity, CatalogAction::CatalogConfig, None).await?;
     Ok(CatalogConfigCapability::from_receipt(receipt)?)
 }
 
 async fn authorize_namespace_create(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
 ) -> Result<NamespaceCreateCapability, LakeCatHttpError> {
-    let receipt = authorize(state, principal, CatalogAction::NamespaceCreate, None).await?;
+    let receipt = authorize(state, identity, CatalogAction::NamespaceCreate, None).await?;
     Ok(NamespaceCreateCapability::from_receipt(receipt)?)
 }
 
 async fn authorize_namespace_list(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
 ) -> Result<NamespaceListCapability, LakeCatHttpError> {
-    let receipt = authorize(state, principal, CatalogAction::NamespaceList, None).await?;
+    let receipt = authorize(state, identity, CatalogAction::NamespaceList, None).await?;
     Ok(NamespaceListCapability::from_receipt(receipt)?)
 }
 
 async fn authorize_table_load(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
     table: TableIdent,
 ) -> Result<TableLoadCapability, LakeCatHttpError> {
     let receipt = authorize(
         state,
-        principal,
+        identity,
         CatalogAction::TableLoad,
         Some(table.clone()),
     )
@@ -1098,12 +1144,12 @@ async fn authorize_table_load(
 
 async fn authorize_table_commit(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
     table: TableIdent,
 ) -> Result<TableCommitCapability, LakeCatHttpError> {
     let receipt = authorize(
         state,
-        principal,
+        identity,
         CatalogAction::TableCommit,
         Some(table.clone()),
     )
@@ -1113,12 +1159,12 @@ async fn authorize_table_commit(
 
 async fn authorize_table_drop(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
     table: TableIdent,
 ) -> Result<TableDropCapability, LakeCatHttpError> {
     let receipt = authorize(
         state,
-        principal,
+        identity,
         CatalogAction::TableDrop,
         Some(table.clone()),
     )
@@ -1128,12 +1174,12 @@ async fn authorize_table_drop(
 
 async fn authorize_table_restore(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
     table: TableIdent,
 ) -> Result<TableRestoreCapability, LakeCatHttpError> {
     let receipt = authorize(
         state,
-        principal,
+        identity,
         CatalogAction::TableRestore,
         Some(table.clone()),
     )
@@ -1143,12 +1189,12 @@ async fn authorize_table_restore(
 
 async fn authorize_table_scan(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
     table: TableIdent,
 ) -> Result<TableScanCapability, LakeCatHttpError> {
     let receipt = authorize(
         state,
-        principal,
+        identity,
         CatalogAction::TablePlanScan,
         Some(table.clone()),
     )
@@ -1158,12 +1204,12 @@ async fn authorize_table_scan(
 
 async fn authorize_credentials_vend(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
     table: TableIdent,
 ) -> Result<CredentialsVendCapability, LakeCatHttpError> {
     let receipt = authorize(
         state,
-        principal,
+        identity,
         CatalogAction::CredentialsVend,
         Some(table.clone()),
     )
@@ -1173,25 +1219,25 @@ async fn authorize_credentials_vend(
 
 async fn authorize_storage_profile_manage(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
 ) -> Result<StorageProfileManageCapability, LakeCatHttpError> {
-    let receipt = authorize(state, principal, CatalogAction::StorageProfileManage, None).await?;
+    let receipt = authorize(state, identity, CatalogAction::StorageProfileManage, None).await?;
     Ok(StorageProfileManageCapability::from_receipt(receipt)?)
 }
 
 async fn authorize_policy_manage(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
 ) -> Result<PolicyManageCapability, LakeCatHttpError> {
-    let receipt = authorize(state, principal, CatalogAction::PolicyManage, None).await?;
+    let receipt = authorize(state, identity, CatalogAction::PolicyManage, None).await?;
     Ok(PolicyManageCapability::from_receipt(receipt)?)
 }
 
 async fn authorize_graph_read(
     state: &LakeCatState,
-    principal: Principal,
+    identity: RequestIdentity,
 ) -> Result<GraphReadCapability, LakeCatHttpError> {
-    let receipt = authorize(state, principal, CatalogAction::GraphRead, None).await?;
+    let receipt = authorize(state, identity, CatalogAction::GraphRead, None).await?;
     Ok(GraphReadCapability::from_receipt(receipt)?)
 }
 
@@ -1406,9 +1452,50 @@ mod tests {
                 allowed: true,
                 engine: "recording".to_string(),
                 policy_hash: None,
+                context: request.context,
                 checked_at: chrono::Utc::now(),
             })
         }
+    }
+
+    #[test]
+    fn request_identity_hashes_typedid_envelope_material() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-lakecat-agent-did", "did:example:agent".parse().unwrap());
+        headers.insert("x-lakecat-typedid-proof", "signed-proof".parse().unwrap());
+        headers.insert(
+            "x-lakecat-agent-delegation",
+            "delegation-token".parse().unwrap(),
+        );
+        headers.insert(
+            "x-lakecat-agent-summary-signature",
+            "summary-secret".parse().unwrap(),
+        );
+
+        let identity = request_identity(&headers).expect("identity should parse");
+
+        assert_eq!(identity.principal.subject, "did:example:agent");
+        assert_eq!(identity.principal.kind, PrincipalKind::Agent);
+        assert_eq!(
+            identity.envelope["typedid-proof-sha256"],
+            serde_json::json!(content_hash_bytes("signed-proof".as_bytes()))
+        );
+        assert_eq!(
+            identity.envelope["agent-delegation-sha256"],
+            serde_json::json!(content_hash_bytes("delegation-token".as_bytes()))
+        );
+        assert_eq!(
+            identity.envelope["agent-summary-signature-sha256"],
+            serde_json::json!(content_hash_bytes("summary-secret".as_bytes()))
+        );
+        assert_eq!(
+            identity.envelope["raw-secret-material"],
+            serde_json::json!(false)
+        );
+        let envelope = identity.envelope.to_string();
+        assert!(!envelope.contains("signed-proof"));
+        assert!(!envelope.contains("delegation-token"));
+        assert!(!envelope.contains("summary-secret"));
     }
 
     #[tokio::test]
@@ -1477,6 +1564,16 @@ mod tests {
         let principals = governance.principals.lock().await;
         assert_eq!(principals[0].subject, "alice@example.com");
         assert_eq!(principals[0].kind, PrincipalKind::Human);
+        drop(principals);
+        let contexts = governance.contexts.lock().await;
+        assert_eq!(
+            contexts[0]["request-identity"]["source"],
+            serde_json::json!("x-lakecat-principal")
+        );
+        assert_eq!(
+            contexts[0]["request-identity"]["principal"]["subject"],
+            serde_json::json!("alice@example.com")
+        );
     }
 
     #[tokio::test]

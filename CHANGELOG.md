@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added sanitized TypeDID/agent request envelopes to authorization receipts so
+  governed audit/outbox records carry durable identity context without storing
+  raw proof, delegation, bearer-token, or signature material.
 - Added basic Iceberg partition-spec projection to the in-process Sail provider
   so Sail `TableStatus` includes partition fields and partition column flags.
 - Added Iceberg current-schema column projection to the in-process Sail provider

@@ -48,6 +48,7 @@ pub struct AuthorizationReceipt {
     pub allowed: bool,
     pub engine: String,
     pub policy_hash: Option<String>,
+    pub context: Value,
     pub checked_at: DateTime<Utc>,
 }
 
@@ -329,6 +330,7 @@ mod tests {
             allowed: true,
             engine: "test".to_string(),
             policy_hash: None,
+            context: serde_json::json!({}),
             checked_at: Utc::now(),
         };
 
@@ -358,6 +360,7 @@ mod tests {
             allowed: true,
             engine: "test".to_string(),
             policy_hash: None,
+            context: serde_json::json!({}),
             checked_at: Utc::now(),
         };
         let load_capability =
@@ -375,6 +378,7 @@ mod tests {
             allowed: true,
             engine: "test".to_string(),
             policy_hash: None,
+            context: serde_json::json!({}),
             checked_at: Utc::now(),
         };
         let commit_capability =
@@ -392,6 +396,7 @@ mod tests {
             allowed: true,
             engine: "test".to_string(),
             policy_hash: None,
+            context: serde_json::json!({}),
             checked_at: Utc::now(),
         };
         let drop_capability =
@@ -409,6 +414,7 @@ mod tests {
             allowed: true,
             engine: "test".to_string(),
             policy_hash: None,
+            context: serde_json::json!({}),
             checked_at: Utc::now(),
         };
         let create_capability =
@@ -426,6 +432,7 @@ mod tests {
             allowed: true,
             engine: "test".to_string(),
             policy_hash: None,
+            context: serde_json::json!({}),
             checked_at: Utc::now(),
         };
         let credentials_capability = CredentialsVendCapability::from_receipt(
@@ -445,6 +452,7 @@ mod tests {
             allowed: true,
             engine: "test".to_string(),
             policy_hash: None,
+            context: serde_json::json!({}),
             checked_at: Utc::now(),
         };
         let graph_capability = GraphReadCapability::from_receipt(graph_receipt.clone())
@@ -465,6 +473,7 @@ mod tests {
             allowed: true,
             engine: "test".to_string(),
             policy_hash: None,
+            context: serde_json::json!({}),
             checked_at: Utc::now(),
         };
         assert!(CatalogConfigCapability::from_receipt(config_receipt).is_ok());
@@ -479,6 +488,7 @@ mod tests {
             allowed: true,
             engine: "test".to_string(),
             policy_hash: None,
+            context: serde_json::json!({}),
             checked_at: Utc::now(),
         };
         assert!(NamespaceCreateCapability::from_receipt(namespace_create_receipt).is_ok());
@@ -493,6 +503,7 @@ mod tests {
             allowed: true,
             engine: "test".to_string(),
             policy_hash: None,
+            context: serde_json::json!({}),
             checked_at: Utc::now(),
         };
         assert!(NamespaceListCapability::from_receipt(namespace_list_receipt).is_ok());
@@ -507,6 +518,7 @@ mod tests {
             allowed: true,
             engine: "test".to_string(),
             policy_hash: None,
+            context: serde_json::json!({}),
             checked_at: Utc::now(),
         };
         assert!(StorageProfileManageCapability::from_receipt(storage_profile_receipt).is_ok());
@@ -521,6 +533,7 @@ mod tests {
             allowed: true,
             engine: "test".to_string(),
             policy_hash: None,
+            context: serde_json::json!({}),
             checked_at: Utc::now(),
         };
         assert!(PolicyManageCapability::from_receipt(policy_receipt).is_ok());
@@ -535,6 +548,7 @@ mod tests {
             allowed: true,
             engine: "test".to_string(),
             policy_hash: None,
+            context: serde_json::json!({}),
             checked_at: Utc::now(),
         };
         assert!(TableRestoreCapability::from_receipt(restore_receipt, table).is_ok());
@@ -563,6 +577,7 @@ impl GovernanceEngine for AllowAllGovernanceEngine {
             allowed: true,
             engine: "lakecat-allow-all-typesec-placeholder".to_string(),
             policy_hash: None,
+            context: request.context,
             checked_at: Utc::now(),
         })
     }
@@ -633,7 +648,9 @@ pub mod typesec_integration {
                     "action": action,
                     "resource": resource.as_str(),
                     "decision": policy_result_name(&decision),
+                    "context-hash": content_hash_json(&request.context)?,
                 }))?),
+                context: request.context,
                 checked_at: Utc::now(),
             })
         }

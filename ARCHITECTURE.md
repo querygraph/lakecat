@@ -397,8 +397,12 @@ Policy decisions should consider:
 - ODRL usage constraints;
 - whether the caller is a human, service, or agent.
 
-The authorization receipt should be persisted with the audit event and attached
-to QueryGraph lineage.
+LakeCat captures a sanitized `lakecat.request-identity.v1` envelope from
+principal, bearer-token, TypeDID, delegation, and agent-summary headers before it
+calls TypeSec. Proof-like material is reduced to SHA-256 hashes and the envelope
+is marked `unverified` until TypeSec/TypeDID verification is plugged in. The
+authorization receipt, including this request context, should be persisted with
+the audit event and attached to QueryGraph lineage.
 
 ## QueryGraph Integration
 

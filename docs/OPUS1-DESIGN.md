@@ -498,7 +498,7 @@ append a dated entry per slice; keep the finding-status table current.
 | # | Finding | Status | Evidence / note |
 | --- | --- | --- | --- |
 | 1 | Red default-feature tests | **CLOSED** | default workspace tests pass; Sail-specific service assertions are gated |
-| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added; catalog config, namespace create/list, table create/load/commit, scan planning, task materialization, credential-vending requests, and QueryGraph bootstrap now require typed capabilities; catalog/namespace/table/scan/bootstrap/credential events and commit receipts persist in Turso audit/outbox; storage-profile modeling is started, but real short-lived remote credential issuance is still pending |
+| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added with sanitized `lakecat.request-identity.v1` envelopes on authorization receipts; catalog config, namespace create/list, table create/load/commit, scan planning, task materialization, credential-vending requests, and QueryGraph bootstrap now require typed capabilities; catalog/namespace/table/scan/bootstrap/credential events and commit receipts persist in Turso audit/outbox; storage-profile modeling is started, but real TypeDID verification and short-lived remote credential issuance are still pending |
 | 3 | No durable / CAS commit | **CLOSED for local durable spine** | Turso commits now write local `file://` metadata when provided by the Sail-facing plan, advance pointers with expected-previous compare-and-swap, persist idempotency/audit/outbox rows, and have a concurrent writer regression |
 | 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, outbox, object-write-aware commits, outbox delivery, typed inferred storage profiles, governed managed warehouse storage profiles, governed ODRL policy bindings, and governed table soft delete/restore; external secret-store integration and credential issuance remain pending |
 | 5 | Service can't activate real engines | **CLOSED** | `sail-local` / `typesec-local` / `grust-local` passthroughs now in `lakecat-service` |
@@ -605,7 +605,10 @@ only once **P2** gives it a governed path to run on.
   credential-vend, and graph-read capabilities, persisted commit authorization
   receipts, and durable catalog-config / namespace-create / namespace-list /
   table-create / metadata-read / scan-planning / scan-task-fetch /
-  credential-vending / QueryGraph-bootstrap audit/outbox records.*
+  credential-vending / QueryGraph-bootstrap audit/outbox records. Authorization
+  receipts now carry a sanitized request-identity envelope for TypeDID/agent,
+  bearer-token, delegation, and signed-summary material; real TypeDID signature
+  verification remains pending in the TypeSec integration.*
 - **P3 — Sail Tier 1 (`CatalogProvider`).** Start "free" via Sail's
   `IcebergRestCatalogProvider` over REST, then the in-process `LakeCatCatalogProvider`
   so policy + plan fuse. (Milestone 6; Finding 6.) *Started with a feature-gated
@@ -619,8 +622,9 @@ only once **P2** gives it a governed path to run on.
 - **P4 — typed Grust catalog graph + outbox**, then **OpenLineage + TypeDID**.
   (Milestones 7–8; Findings 8, 10.) *Started for catalog-level OpenLineage:
   outbox-drained namespace/table lineage events now project to OpenLineage-shaped
-  payloads and hash receipts in `lakecat-lineage`; TypeDID attestations and typed
-  Grust graph taxonomy remain pending.*
+  payloads and hash receipts in `lakecat-lineage`; TypeDID request envelopes are
+  captured on receipts, but verification/attestation and typed Grust graph
+  taxonomy remain pending.*
 - **P5 — QueryGraph end-to-end.** `querygraph import-lakecat`; QGLake "Resilience
   Desk" as the acceptance test. (Milestone 9.)
 - **Deferred — Tier-0 pruning depth and typed v4.** Good but diminishing-returns
