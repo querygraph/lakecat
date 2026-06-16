@@ -26,7 +26,7 @@ use lakecat_sail::{
 };
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
-    GovernanceEngine, TableScanCapability,
+    GovernanceEngine, TableLoadCapability, TableScanCapability,
 };
 use lakecat_store::{CatalogAuditEvent, CatalogStore, TableCommit, TableRecord, table_ident};
 use object_store::local::LocalFileSystem;
@@ -235,14 +235,25 @@ async fn load_table(
 ) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
     let principal = request_principal(&headers)?;
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
-    authorize(
-        &state,
-        principal.clone(),
-        CatalogAction::TableLoad,
-        Some(ident.clone()),
-    )
-    .await?;
-    let table = state.store.load_table(&ident).await?;
+    let capability = authorize_table_load(&state, principal, ident).await?;
+    let table = state.store.load_table(capability.table()).await?;
+    let ident = capability.table().clone();
+    let principal = capability.receipt().principal.clone();
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "table.loaded",
+            Some(ident.clone()),
+            principal.clone(),
+            json!({
+                "event-type": "table.loaded",
+                "table": ident,
+                "authorization-receipt": capability.receipt(),
+                "metadata-location": table.metadata_location,
+                "version": table.version,
+            }),
+        )?)
+        .await?;
     state
         .graph
         .emit(GraphEvent::table(
@@ -650,6 +661,21 @@ async fn authorize(
     } else {
         Err(LakeCatError::Conflict("authorization denied".to_string()).into())
     }
+}
+
+async fn authorize_table_load(
+    state: &LakeCatState,
+    principal: Principal,
+    table: TableIdent,
+) -> Result<TableLoadCapability, LakeCatHttpError> {
+    let receipt = authorize(
+        state,
+        principal,
+        CatalogAction::TableLoad,
+        Some(table.clone()),
+    )
+    .await?;
+    Ok(TableLoadCapability::from_receipt(receipt, table)?)
 }
 
 async fn authorize_table_scan(

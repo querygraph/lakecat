@@ -498,7 +498,7 @@ append a dated entry per slice; keep the finding-status table current.
 | # | Finding | Status | Evidence / note |
 | --- | --- | --- | --- |
 | 1 | Red default-feature tests | **CLOSED** | default workspace tests pass; Sail-specific service assertions are gated |
-| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added; commit authorization receipts persist in Turso audit/outbox; scan planning and task materialization now require a typed table-scan capability; governed scan planning and scan-task fetches record durable audit/outbox events; governed vending still pending |
+| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added; commit authorization receipts persist in Turso audit/outbox; table load, scan planning, and task materialization now require typed capabilities; governed metadata/scan reads record durable audit/outbox events; governed vending still pending |
 | 3 | No durable / CAS commit | **OPEN** | |
 | 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, and outbox; full management schema/object writes/CAS pending |
 | 5 | Service can't activate real engines | **CLOSED** | `sail-local` / `typesec-local` / `grust-local` passthroughs now in `lakecat-service` |
@@ -580,8 +580,8 @@ only once **P2** gives it a governed path to run on.
 - **P2 — finish governance: capability model + governed read path.** Promote the
   boolean receipt to `Capability<Action, Resource>`; route agent reads through
   governed scan-planning; persist the receipt with the audit row. (Milestones 1, 5;
-  Finding 2.) *Started with typed table-scan capabilities on the scan-planning
-  and fetch-scan-tasks paths, persisted commit authorization receipts, and durable
+  Finding 2.) *Started with typed table-load and table-scan capabilities,
+  persisted commit authorization receipts, and durable metadata-read /
   scan-planning / scan-task-fetch audit/outbox records.*
 - **P3 — Sail Tier 1 (`CatalogProvider`).** Start "free" via Sail's
   `IcebergRestCatalogProvider` over REST, then the in-process `LakeCatCatalogProvider`

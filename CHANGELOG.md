@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a typed table-load capability and durable `table.loaded` audit/outbox
+  events so metadata reads leave the same governance trail as governed scans.
 - Added durable audit/outbox recording for governed scan-task fetches, carrying
   the table-scan capability receipt, plan-task token, and materialized task
   counts.

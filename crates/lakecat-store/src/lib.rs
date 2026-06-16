@@ -1211,6 +1211,48 @@ pub mod turso_store {
                 fetched.payload["payload"]["authorization-receipt"]["engine"],
                 serde_json::json!("typesec")
             );
+
+            store
+                .record_audit_event(
+                    CatalogAuditEvent::new(
+                        "table.loaded",
+                        Some(ident.clone()),
+                        Principal::anonymous(),
+                        serde_json::json!({
+                            "event-type": "table.loaded",
+                            "table": ident,
+                            "authorization-receipt": {
+                                "engine": "typesec",
+                                "allowed": true,
+                                "action": "table-load"
+                            },
+                            "metadata-location": "file:///tmp/events/metadata/00000.json",
+                            "version": 7
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 3);
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 3);
+            let loaded = pending
+                .iter()
+                .find(|event| event.event_type == "table.loaded")
+                .expect("table loaded event");
+            assert_eq!(
+                loaded.payload["payload"]["metadata-location"],
+                serde_json::json!("file:///tmp/events/metadata/00000.json")
+            );
+            assert_eq!(
+                loaded.payload["payload"]["authorization-receipt"]["action"],
+                serde_json::json!("table-load")
+            );
         }
 
         #[tokio::test]

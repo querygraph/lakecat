@@ -66,38 +66,66 @@ impl<Action, Resource> Capability<Action, Resource> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanLoadTable;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanPlanScan;
 
+pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
 pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
 
-impl TableScanCapability {
+impl TableLoadCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
-        if !receipt.allowed {
-            return Err(LakeCatError::Conflict(
-                "authorization receipt is not allowed".to_string(),
-            ));
-        }
-        if receipt.action != CatalogAction::TablePlanScan {
-            return Err(LakeCatError::InvalidArgument(format!(
-                "authorization receipt action {:?} cannot plan table scans",
-                receipt.action
-            )));
-        }
-        if receipt.table.as_ref() != Some(&table) {
-            return Err(LakeCatError::InvalidArgument(
-                "authorization receipt table does not match scan table".to_string(),
-            ));
-        }
-        Ok(Self {
-            receipt,
-            resource: table,
-            _action: std::marker::PhantomData,
-        })
+        table_capability_from_receipt(receipt, table, CatalogAction::TableLoad, "load table")
     }
 
     pub fn table(&self) -> &TableIdent {
         self.resource()
     }
+}
+
+impl TableScanCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
+        table_capability_from_receipt(
+            receipt,
+            table,
+            CatalogAction::TablePlanScan,
+            "plan table scans",
+        )
+    }
+
+    pub fn table(&self) -> &TableIdent {
+        self.resource()
+    }
+}
+
+fn table_capability_from_receipt<Action>(
+    receipt: AuthorizationReceipt,
+    table: TableIdent,
+    expected_action: CatalogAction,
+    action_description: &str,
+) -> LakeCatResult<Capability<Action, TableIdent>> {
+    if !receipt.allowed {
+        return Err(LakeCatError::Conflict(
+            "authorization receipt is not allowed".to_string(),
+        ));
+    }
+    if receipt.action != expected_action {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "authorization receipt action {:?} cannot {action_description}",
+            receipt.action,
+        )));
+    }
+    if receipt.table.as_ref() != Some(&table) {
+        return Err(LakeCatError::InvalidArgument(
+            "authorization receipt table does not match scan table".to_string(),
+        ));
+    }
+    Ok(Capability {
+        receipt,
+        resource: table,
+        _action: std::marker::PhantomData,
+    })
 }
 
 #[cfg(test)]
@@ -107,7 +135,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn table_scan_capability_requires_matching_allowed_receipt() {
+    fn table_capabilities_require_matching_allowed_receipts() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),
             "default".parse::<Namespace>().unwrap(),
@@ -141,6 +169,23 @@ mod tests {
         let mut load_receipt = receipt;
         load_receipt.action = CatalogAction::TableLoad;
         assert!(TableScanCapability::from_receipt(load_receipt, table).is_err());
+
+        let load_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:reader".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::TableLoad,
+            table: Some(capability.table().clone()),
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            checked_at: Utc::now(),
+        };
+        let load_capability =
+            TableLoadCapability::from_receipt(load_receipt, capability.table().clone())
+                .expect("matching load receipt should mint capability");
+        assert_eq!(load_capability.table(), capability.table());
     }
 }
 
