@@ -279,7 +279,9 @@ idempotency/audit/outbox records, and expose a service-level drain that projects
 committed events to graph and lineage sinks. A typed storage-profile model now
 drives conservative credential responses: embedded `file://` tables can return
 scoped no-secret profile hints, while remote object stores return no credentials
-until short-lived issuance is implemented. Warehouse/profile management, soft
+until short-lived issuance is implemented. Governed management endpoints can now
+upsert and list warehouse storage profiles, and Turso persists those profiles for
+longest-prefix credential selection. Short-lived remote credential issuance, soft
 deletes, policy bindings, and external secret-store integration remain pending.
 
 Required tables:
@@ -449,8 +451,8 @@ querygraph import-lakecat --catalog http://localhost:8181/catalog \
    lineage projections.
 7. Add remote scan planning through Sail and return Iceberg scan tasks.
 8. Add QueryGraph bootstrap/export with Croissant, CDIF, policies, and lineage.
-9. Add warehouse storage-profile management, short-lived remote credential
-   issuance, soft deletion, policy management APIs, and OIDC.
+9. Add short-lived remote credential issuance, soft deletion, policy management
+   APIs, external secret-store integration, and OIDC.
 10. Push reusable catalog graph taxonomy into Grust and consume it from LakeCat.
 11. Add v4-ready metadata extension tests as the Iceberg v4 spec settles.
 

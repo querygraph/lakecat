@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reconciled the architecture and OPUS1 working-plan docs with the governed
+  storage-profile management implementation.
 - Added governed management endpoints and durable store support for warehouse
   storage profiles, including longest-prefix profile selection for credential
   responses.
