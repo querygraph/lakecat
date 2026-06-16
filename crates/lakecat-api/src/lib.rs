@@ -31,6 +31,8 @@ impl Default for CatalogConfigResponse {
                 "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks"
                     .to_string(),
                 "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials".to_string(),
+                "POST /management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/restore"
+                    .to_string(),
                 "GET /management/v1/warehouses/{warehouse}/storage-profiles".to_string(),
                 "PUT /management/v1/warehouses/{warehouse}/storage-profiles/{profile}".to_string(),
                 "GET /management/v1/warehouses/{warehouse}/policies".to_string(),

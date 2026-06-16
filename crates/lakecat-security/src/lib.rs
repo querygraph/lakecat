@@ -32,6 +32,7 @@ pub enum CatalogAction {
     TablePlanScan,
     TableCommit,
     TableDrop,
+    TableRestore,
     CredentialsVend,
     StorageProfileManage,
     PolicyManage,
@@ -80,6 +81,9 @@ pub struct CanCommitTable;
 pub struct CanDropTable;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanRestoreTable;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanPlanScan;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,6 +111,7 @@ pub type TableCreateCapability = Capability<CanCreateTable, TableIdent>;
 pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
 pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
 pub type TableDropCapability = Capability<CanDropTable, TableIdent>;
+pub type TableRestoreCapability = Capability<CanRestoreTable, TableIdent>;
 pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
 pub type CredentialsVendCapability = Capability<CanVendCredentials, TableIdent>;
 pub type StorageProfileManageCapability = Capability<CanManageStorageProfiles, ()>;
@@ -149,6 +154,16 @@ impl TableCommitCapability {
 impl TableDropCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
         table_capability_from_receipt(receipt, table, CatalogAction::TableDrop, "drop table")
+    }
+
+    pub fn table(&self) -> &TableIdent {
+        self.resource()
+    }
+}
+
+impl TableRestoreCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
+        table_capability_from_receipt(receipt, table, CatalogAction::TableRestore, "restore table")
     }
 
     pub fn table(&self) -> &TableIdent {
@@ -331,7 +346,7 @@ mod tests {
 
         let mut wrong_action_receipt = receipt;
         wrong_action_receipt.action = CatalogAction::TableLoad;
-        assert!(TableScanCapability::from_receipt(wrong_action_receipt, table).is_err());
+        assert!(TableScanCapability::from_receipt(wrong_action_receipt, table.clone()).is_err());
 
         let load_receipt = AuthorizationReceipt {
             principal: Principal {
@@ -509,6 +524,20 @@ mod tests {
             checked_at: Utc::now(),
         };
         assert!(PolicyManageCapability::from_receipt(policy_receipt).is_ok());
+
+        let restore_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:operator".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::TableRestore,
+            table: Some(table.clone()),
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            checked_at: Utc::now(),
+        };
+        assert!(TableRestoreCapability::from_receipt(restore_receipt, table).is_ok());
     }
 }
 
@@ -679,6 +708,7 @@ pub fn action_name(action: &CatalogAction) -> &'static str {
         CatalogAction::TablePlanScan => "table.plan_scan",
         CatalogAction::TableCommit => "table.commit",
         CatalogAction::TableDrop => "table.drop",
+        CatalogAction::TableRestore => "table.restore",
         CatalogAction::CredentialsVend => "credentials.vend",
         CatalogAction::StorageProfileManage => "storage_profile.manage",
         CatalogAction::PolicyManage => "policy.manage",

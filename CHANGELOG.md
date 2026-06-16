@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added governed table restore, including a management restore endpoint,
+  table-scoped restore capability, memory/Turso soft-delete removal, and
+  durable `table.restored` audit/outbox records with OpenLineage projection.
 - Reconciled the architecture and OPUS1 working-plan docs with the governed
   table soft-delete implementation.
 - Added governed table soft deletion, including catalog `DELETE` handling,

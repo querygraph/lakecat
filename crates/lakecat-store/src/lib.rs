@@ -34,6 +34,12 @@ pub trait CatalogStore: Send + Sync + 'static {
         principal: Principal,
         authorization_receipt: Option<Value>,
     ) -> LakeCatResult<TableRecord>;
+    async fn restore_table(
+        &self,
+        ident: &TableIdent,
+        principal: Principal,
+        authorization_receipt: Option<Value>,
+    ) -> LakeCatResult<TableRecord>;
     async fn upsert_storage_profile(
         &self,
         profile: StorageProfile,
@@ -616,6 +622,30 @@ impl CatalogStore for MemoryCatalogStore {
             },
         );
         Ok(table)
+    }
+
+    async fn restore_table(
+        &self,
+        ident: &TableIdent,
+        _principal: Principal,
+        _authorization_receipt: Option<Value>,
+    ) -> LakeCatResult<TableRecord> {
+        let mut state = self.state.write().await;
+        let key = table_key(ident);
+        if state.soft_deletes.remove(&key).is_none() {
+            return Err(LakeCatError::NotFound {
+                object: "soft-deleted table",
+                name: ident.stable_id(),
+            });
+        }
+        state
+            .tables
+            .get(&key)
+            .cloned()
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "table",
+                name: ident.stable_id(),
+            })
     }
 
     async fn upsert_storage_profile(
@@ -1307,6 +1337,97 @@ pub mod turso_store {
                     "table.deleted",
                     encode_json(&outbox_payload)?,
                     deleted_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
+            tx.commit().await.map_err(turso_error)?;
+            Ok(table)
+        }
+
+        async fn restore_table(
+            &self,
+            ident: &TableIdent,
+            principal: lakecat_core::Principal,
+            authorization_receipt: Option<JsonValue>,
+        ) -> LakeCatResult<TableRecord> {
+            let mut conn = self.connect()?;
+            let tx = conn.transaction().await.map_err(turso_error)?;
+            let mut rows = tx
+                .query(
+                    "select t.record_json from tables t
+                     join soft_deletes d on d.table_key = t.table_key
+                     where t.table_key = ?1",
+                    (table_key(ident),),
+                )
+                .await
+                .map_err(turso_error)?;
+            let Some(row) = rows.next().await.map_err(turso_error)? else {
+                return Err(LakeCatError::NotFound {
+                    object: "soft-deleted table",
+                    name: ident.stable_id(),
+                });
+            };
+            let table: TableRecord = decode_json(row_string(&row, 0)?)?;
+            let restored_at = Utc::now();
+            let changed = tx
+                .execute(
+                    "delete from soft_deletes where table_key = ?1",
+                    (table_key(ident),),
+                )
+                .await
+                .map_err(turso_error)?;
+            if changed == 0 {
+                return Err(LakeCatError::NotFound {
+                    object: "soft-deleted table",
+                    name: ident.stable_id(),
+                });
+            }
+
+            let audit_payload = serde_json::json!({
+                "event-type": "table.restored",
+                "table": ident,
+                "authorization-receipt": authorization_receipt,
+                "metadata-location": table.metadata_location,
+                "version": table.version,
+            });
+            let audit_event_id = content_hash_json(&audit_payload)?;
+            tx.execute(
+                "insert into audit_events (
+                    event_id, event_type, table_key, principal_json,
+                    request_hash, event_json, created_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                (
+                    audit_event_id.as_str(),
+                    "table.restored",
+                    table_key(ident),
+                    encode_json(&principal)?,
+                    audit_event_id.as_str(),
+                    encode_json(&audit_payload)?,
+                    restored_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
+            let outbox_payload = serde_json::json!({
+                "audit-event-id": audit_event_id,
+                "event-type": "table.restored",
+                "table": ident,
+                "payload": audit_payload,
+                "authorization-receipt": audit_payload["authorization-receipt"].clone(),
+            });
+            tx.execute(
+                "insert into outbox_events (
+                    event_id, sink, event_type, payload_json, created_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5)",
+                (
+                    content_hash_json(&outbox_payload)?,
+                    "lakecat.lineage-and-graph",
+                    "table.restored",
+                    encode_json(&outbox_payload)?,
+                    restored_at.to_rfc3339(),
                 ),
             )
             .await
@@ -2411,6 +2532,70 @@ pub mod turso_store {
                 .unwrap();
             assert_eq!(pending.len(), 1);
             assert_eq!(pending[0].event_type, "table.deleted");
+        }
+
+        #[tokio::test]
+        async fn turso_store_restores_soft_deleted_tables() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace,
+                TableName::new("events").unwrap(),
+            );
+            let table = TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            );
+            store.create_table(table).await.unwrap();
+            store
+                .soft_delete_table(
+                    &ident,
+                    Principal::anonymous(),
+                    Some(serde_json::json!({
+                        "engine": "typesec",
+                        "allowed": true,
+                        "action": "table-drop"
+                    })),
+                )
+                .await
+                .unwrap();
+            assert!(matches!(
+                store.load_table(&ident).await,
+                Err(LakeCatError::NotFound { .. })
+            ));
+
+            let restored = store
+                .restore_table(
+                    &ident,
+                    Principal::anonymous(),
+                    Some(serde_json::json!({
+                        "engine": "typesec",
+                        "allowed": true,
+                        "action": "table-restore"
+                    })),
+                )
+                .await
+                .unwrap();
+            assert_eq!(restored.ident, ident);
+            assert_eq!(store.load_table(&ident).await.unwrap().ident, ident);
+            assert_eq!(store.list_tables(&warehouse).await.unwrap().len(), 1);
+            assert_eq!(store.count_rows("soft_deletes").await.unwrap(), 0);
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 2);
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 2);
+            assert!(
+                pending
+                    .iter()
+                    .any(|event| event.event_type == "table.restored")
+            );
         }
     }
 }

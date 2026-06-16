@@ -32,7 +32,7 @@ use lakecat_security::{
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
     NamespaceCreateCapability, NamespaceListCapability, PolicyManageCapability,
     StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
-    TableDropCapability, TableLoadCapability, TableScanCapability,
+    TableDropCapability, TableLoadCapability, TableRestoreCapability, TableScanCapability,
 };
 use lakecat_store::{
     CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, PolicyBinding,
@@ -125,6 +125,10 @@ pub fn app(state: LakeCatState) -> Router {
         .route(
             "/catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
             get(load_credentials),
+        )
+        .route(
+            "/management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/restore",
+            post(restore_table),
         )
         .route(
             "/management/v1/warehouses/{warehouse}/storage-profiles",
@@ -327,6 +331,28 @@ async fn delete_table(
         )
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn restore_table(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, table)): Path<(String, String, String)>,
+) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let principal = request_principal(&headers)?;
+    let ident = table_ident(warehouse.as_str(), namespace, table)?;
+    let capability = authorize_table_restore(&state, principal, ident).await?;
+    let restored = state
+        .store
+        .restore_table(
+            capability.table(),
+            capability.receipt().principal.clone(),
+            Some(serde_json::to_value(capability.receipt()).map_err(|err| {
+                LakeCatError::Internal(format!("failed to encode restore receipt: {err}"))
+            })?),
+        )
+        .await?;
+    Ok(Json(load_table_response(restored)))
 }
 
 async fn load_credentials(
@@ -816,6 +842,18 @@ async fn project_outbox_event(
                 event_payload,
             ))
             .await?;
+    } else if event.event_type == "table.restored" {
+        if let Some(table) = table {
+            state
+                .lineage
+                .emit(LineageEvent::new(
+                    LineageEventType::TableRestored,
+                    principal,
+                    Some(table),
+                    event_payload,
+                ))
+                .await?;
+        }
     }
     Ok(())
 }
@@ -1088,6 +1126,21 @@ async fn authorize_table_drop(
     Ok(TableDropCapability::from_receipt(receipt, table)?)
 }
 
+async fn authorize_table_restore(
+    state: &LakeCatState,
+    principal: Principal,
+    table: TableIdent,
+) -> Result<TableRestoreCapability, LakeCatHttpError> {
+    let receipt = authorize(
+        state,
+        principal,
+        CatalogAction::TableRestore,
+        Some(table.clone()),
+    )
+    .await?;
+    Ok(TableRestoreCapability::from_receipt(receipt, table)?)
+}
+
 async fn authorize_table_scan(
     state: &LakeCatState,
     principal: Principal,
@@ -1290,6 +1343,17 @@ mod tests {
         ) -> lakecat_core::LakeCatResult<TableRecord> {
             Err(LakeCatError::NotSupported(
                 "recording store does not delete tables".to_string(),
+            ))
+        }
+
+        async fn restore_table(
+            &self,
+            _ident: &TableIdent,
+            _principal: Principal,
+            _authorization_receipt: Option<serde_json::Value>,
+        ) -> lakecat_core::LakeCatResult<TableRecord> {
+            Err(LakeCatError::NotSupported(
+                "recording store does not restore tables".to_string(),
             ))
         }
 
@@ -2032,6 +2096,52 @@ mod tests {
             .unwrap();
         let response = app.oneshot(delete_again).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn restore_table_reopens_soft_deleted_catalog_reads() {
+        let app = test_app();
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"current-schema-id":1,"schemas":[{"schema-id":1,"fields":[{"id":1,"name":"event_id","type":"string","required":true}]}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let delete = Request::builder()
+            .method(Method::DELETE)
+            .uri("/catalog/v1/namespaces/default/tables/events")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(delete).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        let restore = Request::builder()
+            .method(Method::POST)
+            .uri("/management/v1/warehouses/local/namespaces/default/tables/events/restore")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(restore).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["identifier"]["name"], serde_json::json!("events"));
+
+        let load = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/namespaces/default/tables/events")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(load).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[tokio::test]

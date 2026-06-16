@@ -46,6 +46,7 @@ pub enum LineageEventType {
     TableScanPlanned,
     TableCommitted,
     TableDeleted,
+    TableRestored,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -131,7 +132,9 @@ fn lineage_inputs(event: &LineageEvent) -> Vec<Value> {
 
 fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
     match event.event_type {
-        LineageEventType::TableCreated | LineageEventType::TableCommitted => event
+        LineageEventType::TableCreated
+        | LineageEventType::TableCommitted
+        | LineageEventType::TableRestored => event
             .table
             .as_ref()
             .map(|table| vec![open_lineage_dataset(table, &event.payload)])
@@ -191,6 +194,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::TableScanPlanned => "table-scan-planned",
         LineageEventType::TableCommitted => "table-committed",
         LineageEventType::TableDeleted => "table-deleted",
+        LineageEventType::TableRestored => "table-restored",
     }
 }
 
@@ -228,6 +232,32 @@ mod tests {
             json!("file:///tmp/events")
         );
         assert_eq!(projected["outputs"], json!([]));
+    }
+
+    #[test]
+    fn projects_table_restore_to_openlineage_output() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let event = LineageEvent::new(
+            LineageEventType::TableRestored,
+            Principal::anonymous(),
+            Some(table),
+            json!({
+                "metadata-location": "file:///tmp/events/metadata/00000.json",
+                "version": 0,
+            }),
+        );
+        let projected = open_lineage_event(&event);
+        assert_eq!(projected["job"]["name"], json!("table-restored"));
+        assert_eq!(projected["inputs"], json!([]));
+        assert_eq!(projected["outputs"][0]["name"], json!("events"));
+        assert_eq!(
+            projected["outputs"][0]["facets"]["dataSource"]["uri"],
+            json!("file:///tmp/events/metadata/00000.json")
+        );
     }
 
     #[tokio::test]

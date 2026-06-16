@@ -281,10 +281,11 @@ drives conservative credential responses: embedded `file://` tables can return
 scoped no-secret profile hints, while remote object stores return no credentials
 until short-lived issuance is implemented. Governed management endpoints can now
 upsert and list warehouse storage profiles, and Turso persists those profiles for
-longest-prefix credential selection. Short-lived remote credential issuance, soft
-restore, and external secret-store integration remain pending. Governed table
-soft deletion now records soft-delete rows, hides deleted tables from normal
-catalog reads, and emits `table.deleted` audit/outbox events. Governed policy
+longest-prefix credential selection. Short-lived remote credential issuance and
+external secret-store integration remain pending. Governed table lifecycle now
+records soft-delete rows, hides deleted tables from normal catalog reads, restores
+soft-deleted tables through a governed management endpoint, and emits
+`table.deleted` / `table.restored` audit/outbox events. Governed policy
 management endpoints can now upsert/list enforced ODRL policy bindings, and
 active table bindings are attached to authorization context before TypeSec runs.
 
@@ -455,8 +456,8 @@ querygraph import-lakecat --catalog http://localhost:8181/catalog \
    lineage projections.
 7. Add remote scan planning through Sail and return Iceberg scan tasks.
 8. Add QueryGraph bootstrap/export with Croissant, CDIF, policies, and lineage.
-9. Add short-lived remote credential issuance, table restore, external
-   secret-store integration, and OIDC.
+9. Add short-lived remote credential issuance, external secret-store integration,
+   and OIDC.
 10. Push reusable catalog graph taxonomy into Grust and consume it from LakeCat.
 11. Add v4-ready metadata extension tests as the Iceberg v4 spec settles.
 
