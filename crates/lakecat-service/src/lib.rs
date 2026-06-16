@@ -6,10 +6,11 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use lakecat_api::{
-    CatalogConfigResponse, CommitTableRequest, CommitTableResponse, CreateNamespaceRequest,
-    CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest, FetchScanTasksResponse,
-    ListNamespacesResponse, LoadCredentialsResponse, LoadTableResponse, NamespaceResponse,
-    PlanTableScanRequest, PlanTableScanResponse, TableIdentifier,
+    CatalogConfigResponse, CommitTableRequest, CommitTableResponse, ConfigEntry,
+    CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest,
+    FetchScanTasksResponse, ListNamespacesResponse, LoadCredentialsResponse, LoadTableResponse,
+    NamespaceResponse, PlanTableScanRequest, PlanTableScanResponse, StorageCredential,
+    TableIdentifier,
 };
 use lakecat_core::{
     LakeCatError, Namespace, Principal, PrincipalKind, TableIdent, TableName, WarehouseName,
@@ -31,7 +32,8 @@ use lakecat_security::{
     TableCreateCapability, TableLoadCapability, TableScanCapability,
 };
 use lakecat_store::{
-    CatalogAuditEvent, CatalogStore, OutboxEvent, TableCommit, TableRecord, table_ident,
+    CatalogAuditEvent, CatalogStore, OutboxEvent, StorageProfile, TableCommit, TableRecord,
+    table_ident,
 };
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
@@ -295,6 +297,8 @@ async fn load_credentials(
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
     let capability = authorize_credentials_vend(&state, principal, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
+    let storage_profile = state.store.storage_profile_for_table(&table).await?;
+    let storage_credentials = storage_credentials_for_profile(&storage_profile);
     let ident = capability.table().clone();
     state
         .store
@@ -307,13 +311,14 @@ async fn load_credentials(
                 "table": ident,
                 "authorization-receipt": capability.receipt(),
                 "storage-location": table.location,
-                "credential-count": 0,
-                "mode": "governed-read-required",
+                "storage-profile-id": storage_profile.profile_id,
+                "credential-count": storage_credentials.len(),
+                "mode": storage_profile.issuance_mode.as_str(),
             }),
         )?)
         .await?;
     Ok(Json(LoadCredentialsResponse {
-        storage_credentials: Vec::new(),
+        storage_credentials,
     }))
 }
 
@@ -697,6 +702,26 @@ fn load_table_response(table: TableRecord) -> LoadTableResponse {
         metadata: table.metadata,
         config: vec![],
     }
+}
+
+fn storage_credentials_for_profile(profile: &StorageProfile) -> Vec<StorageCredential> {
+    if !profile.can_return_public_credential() {
+        return Vec::new();
+    }
+    let mut config = vec![ConfigEntry::new(
+        "lakecat.storage-profile-id",
+        profile.profile_id.clone(),
+    )];
+    config.extend(
+        profile
+            .public_config
+            .iter()
+            .map(|(key, value)| ConfigEntry::new(key.clone(), value.clone())),
+    );
+    vec![StorageCredential {
+        prefix: profile.location_prefix.clone(),
+        config,
+    }]
 }
 
 fn request_principal(headers: &HeaderMap) -> Result<Principal, LakeCatHttpError> {
@@ -1633,7 +1658,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_credentials_is_governed_and_returns_no_raw_secrets_by_default() {
+    async fn load_credentials_returns_scoped_local_file_profile_without_raw_secrets() {
         let app = test_app();
         let create = Request::builder()
             .method(Method::POST)
@@ -1641,6 +1666,49 @@ mod tests {
             .header("content-type", "application/json")
             .body(Body::from(
                 r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"current-schema-id":1,"schemas":[{"schema-id":1,"fields":[{"id":1,"name":"event_id","type":"string","required":true}]}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let credentials = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/namespaces/default/tables/events/credentials")
+            .header("x-lakecat-agent-did", "did:example:agent")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(credentials).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let credentials = body["storage-credentials"].as_array().unwrap();
+        assert_eq!(credentials.len(), 1);
+        assert_eq!(
+            credentials[0]["prefix"],
+            serde_json::json!("file:///tmp/events")
+        );
+        let config = credentials[0]["config"].as_array().unwrap();
+        assert!(config.iter().any(|entry| {
+            entry["key"] == "lakecat.credential-mode" && entry["value"] == "local-file-no-secret"
+        }));
+        assert!(!config.iter().any(|entry| {
+            entry["key"]
+                .as_str()
+                .is_some_and(|key| key.contains("secret") || key.contains("token"))
+        }));
+    }
+
+    #[tokio::test]
+    async fn load_credentials_returns_empty_for_remote_profile_until_issuance_exists() {
+        let app = test_app();
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"s3://lakecat-demo/events","metadata-location":"s3://lakecat-demo/events/metadata/00000.json","metadata":{"format-version":3,"current-schema-id":1,"schemas":[{"schema-id":1,"fields":[{"id":1,"name":"event_id","type":"string","required":true}]}]}}"#,
             ))
             .unwrap();
         let response = app.clone().oneshot(create).await.unwrap();

@@ -27,6 +27,12 @@ pub trait CatalogStore: Send + Sync + 'static {
         ident: &TableIdent,
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord>;
+    async fn storage_profile_for_table(
+        &self,
+        table: &TableRecord,
+    ) -> LakeCatResult<StorageProfile> {
+        Ok(StorageProfile::inferred_for_table(table))
+    }
     async fn record_audit_event(&self, _event: CatalogAuditEvent) -> LakeCatResult<()> {
         Ok(())
     }
@@ -95,6 +101,113 @@ pub struct TableCommitRecord {
     pub principal: Principal,
     pub request_hash: String,
     pub committed_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct StorageProfile {
+    pub profile_id: String,
+    pub warehouse: WarehouseName,
+    pub location_prefix: String,
+    pub provider: StorageProvider,
+    pub issuance_mode: CredentialIssuanceMode,
+    pub public_config: BTreeMap<String, String>,
+}
+
+impl StorageProfile {
+    pub fn inferred_for_table(table: &TableRecord) -> Self {
+        let provider = StorageProvider::from_location(&table.location);
+        let issuance_mode = match provider {
+            StorageProvider::File => CredentialIssuanceMode::LocalFileNoSecret,
+            StorageProvider::S3
+            | StorageProvider::Gcs
+            | StorageProvider::Azure
+            | StorageProvider::Unknown => CredentialIssuanceMode::GovernedReadRequired,
+        };
+        let mut public_config = BTreeMap::new();
+        public_config.insert(
+            "lakecat.credential-mode".to_string(),
+            issuance_mode.as_str().to_string(),
+        );
+        public_config.insert(
+            "lakecat.storage-provider".to_string(),
+            provider.as_str().to_string(),
+        );
+        public_config.insert(
+            "lakecat.governed-read-required".to_string(),
+            matches!(issuance_mode, CredentialIssuanceMode::GovernedReadRequired).to_string(),
+        );
+        Self {
+            profile_id: format!("{}:{}", table.ident.warehouse.as_str(), provider.as_str()),
+            warehouse: table.ident.warehouse.clone(),
+            location_prefix: table.location.clone(),
+            provider,
+            issuance_mode,
+            public_config,
+        }
+    }
+
+    pub fn can_return_public_credential(&self) -> bool {
+        matches!(
+            self.issuance_mode,
+            CredentialIssuanceMode::LocalFileNoSecret
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum StorageProvider {
+    File,
+    S3,
+    Gcs,
+    Azure,
+    Unknown,
+}
+
+impl StorageProvider {
+    fn from_location(location: &str) -> Self {
+        if location.starts_with("file://") {
+            Self::File
+        } else if location.starts_with("s3://") || location.starts_with("s3a://") {
+            Self::S3
+        } else if location.starts_with("gs://") {
+            Self::Gcs
+        } else if location.starts_with("az://")
+            || location.starts_with("abfs://")
+            || location.starts_with("abfss://")
+        {
+            Self::Azure
+        } else {
+            Self::Unknown
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::File => "file",
+            Self::S3 => "s3",
+            Self::Gcs => "gcs",
+            Self::Azure => "azure",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum CredentialIssuanceMode {
+    GovernedReadRequired,
+    LocalFileNoSecret,
+}
+
+impl CredentialIssuanceMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::GovernedReadRequired => "governed-read-required",
+            Self::LocalFileNoSecret => "local-file-no-secret",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

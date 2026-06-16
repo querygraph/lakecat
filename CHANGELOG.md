@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a typed storage-profile model for credential vending, returning scoped
+  no-secret `file://` profile hints while keeping remote object-store credentials
+  empty until short-lived issuance is implemented.
 - Reconciled the OPUS1 working-plan and architecture docs with the current
   implementation status for Turso CAS commits, local object metadata writes,
   durable outbox draining, OpenLineage projection, and remaining storage-profile,
