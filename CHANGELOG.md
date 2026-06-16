@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a typed graph-read capability and durable `querygraph.bootstrap`
+  audit/outbox event so QueryGraph bootstrap reads carry a replayable governance
+  proof without moving graph behavior into LakeCat.
 - Added a typed table-create capability and durable `table.created` audit/outbox
   events so table creation is governed and replayable through the catalog outbox.
 - Added a typed table-commit capability so metadata commits must carry a minted

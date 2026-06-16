@@ -26,8 +26,8 @@ use lakecat_sail::{
 };
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
-    GovernanceEngine, TableCommitCapability, TableCreateCapability, TableLoadCapability,
-    TableScanCapability,
+    GovernanceEngine, GraphReadCapability, TableCommitCapability, TableCreateCapability,
+    TableLoadCapability, TableScanCapability,
 };
 use lakecat_store::{CatalogAuditEvent, CatalogStore, TableCommit, TableRecord, table_ident};
 use object_store::local::LocalFileSystem;
@@ -588,14 +588,22 @@ async fn querygraph_bootstrap(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
 ) -> Result<Json<QueryGraphBootstrap>, LakeCatHttpError> {
-    authorize(
-        &state,
-        request_principal(&headers)?,
-        CatalogAction::GraphRead,
-        None,
-    )
-    .await?;
+    let capability = authorize_graph_read(&state, request_principal(&headers)?).await?;
     let tables = state.store.list_tables(&state.warehouse).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "querygraph.bootstrap",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "querygraph.bootstrap",
+                "authorization-receipt": capability.receipt(),
+                "warehouse": state.warehouse.as_str(),
+                "table-count": tables.len(),
+            }),
+        )?)
+        .await?;
     Ok(Json(QueryGraphBootstrap::from_tables(
         state.warehouse.clone(),
         tables,
@@ -729,6 +737,14 @@ async fn authorize_table_scan(
     )
     .await?;
     Ok(TableScanCapability::from_receipt(receipt, table)?)
+}
+
+async fn authorize_graph_read(
+    state: &LakeCatState,
+    principal: Principal,
+) -> Result<GraphReadCapability, LakeCatHttpError> {
+    let receipt = authorize(state, principal, CatalogAction::GraphRead, None).await?;
+    Ok(GraphReadCapability::from_receipt(receipt)?)
 }
 
 #[derive(Debug)]

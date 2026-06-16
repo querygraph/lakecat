@@ -77,10 +77,14 @@ pub struct CanCommitTable;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanPlanScan;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanReadGraph;
+
 pub type TableCreateCapability = Capability<CanCreateTable, TableIdent>;
 pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
 pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
 pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
+pub type GraphReadCapability = Capability<CanReadGraph, ()>;
 
 impl TableCreateCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
@@ -125,6 +129,40 @@ impl TableScanCapability {
     pub fn table(&self) -> &TableIdent {
         self.resource()
     }
+}
+
+impl GraphReadCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
+        catalog_capability_from_receipt(receipt, CatalogAction::GraphRead, "read catalog graph")
+    }
+}
+
+fn catalog_capability_from_receipt<Action>(
+    receipt: AuthorizationReceipt,
+    expected_action: CatalogAction,
+    action_description: &str,
+) -> LakeCatResult<Capability<Action, ()>> {
+    if !receipt.allowed {
+        return Err(LakeCatError::Conflict(
+            "authorization receipt is not allowed".to_string(),
+        ));
+    }
+    if receipt.action != expected_action {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "authorization receipt action {:?} cannot {action_description}",
+            receipt.action,
+        )));
+    }
+    if receipt.table.is_some() {
+        return Err(LakeCatError::InvalidArgument(
+            "catalog authorization receipt must not be table-scoped".to_string(),
+        ));
+    }
+    Ok(Capability {
+        receipt,
+        resource: (),
+        _action: std::marker::PhantomData,
+    })
 }
 
 fn table_capability_from_receipt<Action>(
@@ -248,6 +286,26 @@ mod tests {
             TableCreateCapability::from_receipt(create_receipt, capability.table().clone())
                 .expect("matching create receipt should mint capability");
         assert_eq!(create_capability.table(), capability.table());
+
+        let graph_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:querygraph".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::GraphRead,
+            table: None,
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            checked_at: Utc::now(),
+        };
+        let graph_capability = GraphReadCapability::from_receipt(graph_receipt.clone())
+            .expect("matching graph-read receipt should mint capability");
+        assert_eq!(graph_capability.receipt(), &graph_receipt);
+
+        let mut table_scoped_graph_receipt = graph_receipt;
+        table_scoped_graph_receipt.table = Some(capability.table().clone());
+        assert!(GraphReadCapability::from_receipt(table_scoped_graph_receipt).is_err());
     }
 }
 

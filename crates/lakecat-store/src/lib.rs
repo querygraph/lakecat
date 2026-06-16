@@ -1296,6 +1296,47 @@ pub mod turso_store {
                 created.payload["payload"]["authorization-receipt"]["action"],
                 serde_json::json!("table-create")
             );
+
+            store
+                .record_audit_event(
+                    CatalogAuditEvent::new(
+                        "querygraph.bootstrap",
+                        None,
+                        Principal::anonymous(),
+                        serde_json::json!({
+                            "event-type": "querygraph.bootstrap",
+                            "authorization-receipt": {
+                                "engine": "typesec",
+                                "allowed": true,
+                                "action": "graph-read"
+                            },
+                            "warehouse": "local",
+                            "table-count": 1
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 5);
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 5);
+            let bootstrap = pending
+                .iter()
+                .find(|event| event.event_type == "querygraph.bootstrap")
+                .expect("querygraph bootstrap event");
+            assert_eq!(
+                bootstrap.payload["payload"]["authorization-receipt"]["action"],
+                serde_json::json!("graph-read")
+            );
+            assert_eq!(
+                bootstrap.payload["payload"]["table-count"],
+                serde_json::json!(1)
+            );
         }
 
         #[tokio::test]
