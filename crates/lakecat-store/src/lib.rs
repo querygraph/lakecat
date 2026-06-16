@@ -1010,5 +1010,62 @@ pub mod turso_store {
             assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
             assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);
         }
+
+        #[tokio::test]
+        async fn turso_store_allows_only_one_concurrent_metadata_pointer_commit() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(warehouse, namespace, TableName::new("events").unwrap());
+            let table = TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            );
+            store.create_table(table).await.unwrap();
+
+            let commit_a = TableCommit {
+                requirements: vec![],
+                updates: vec![serde_json::json!({"action": "append", "writer": "a"})],
+                expected_previous_metadata_location: Some(
+                    "file:///tmp/events/metadata/00000.json".to_string(),
+                ),
+                new_metadata_location: Some("file:///tmp/events/metadata/00001-a.json".to_string()),
+                new_metadata: None,
+                idempotency_key: None,
+                principal: Principal::anonymous(),
+            };
+            let commit_b = TableCommit {
+                requirements: vec![],
+                updates: vec![serde_json::json!({"action": "append", "writer": "b"})],
+                expected_previous_metadata_location: Some(
+                    "file:///tmp/events/metadata/00000.json".to_string(),
+                ),
+                new_metadata_location: Some("file:///tmp/events/metadata/00001-b.json".to_string()),
+                new_metadata: None,
+                idempotency_key: None,
+                principal: Principal::anonymous(),
+            };
+
+            let (result_a, result_b) = tokio::join!(
+                store.commit_table(&ident, commit_a),
+                store.commit_table(&ident, commit_b)
+            );
+            let results = [result_a, result_b];
+            let success_count = results.iter().filter(|result| result.is_ok()).count();
+            let conflict_count = results
+                .iter()
+                .filter(|result| matches!(result, Err(LakeCatError::Conflict(_))))
+                .count();
+
+            assert_eq!(success_count, 1);
+            assert_eq!(conflict_count, 1);
+            assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
+            assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 1);
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 1);
+            assert_eq!(store.count_rows("outbox_events").await.unwrap(), 1);
+        }
     }
 }

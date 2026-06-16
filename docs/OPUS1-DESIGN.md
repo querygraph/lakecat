@@ -554,7 +554,9 @@ commit hangs on it:
    the pointer from a Sail-facing LakeCat `metadata-location` commit extension;
    local `file://` object metadata writes are implemented for commit plans that
    carry new metadata.
-2. **Isolation actually holds** under concurrent commits to the same table.
+2. **Isolation actually holds** under concurrent commits to the same table. A
+   Turso regression now races two writers against the same expected metadata
+   pointer and verifies one commit succeeds while one returns a conflict.
 
 Keep the schema portable, but treat the Rust `turso` crate as the selected path
 for LakeCat's durable local spine. A future Postgres/SQLx or libSQL-client backend

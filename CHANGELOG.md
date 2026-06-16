@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a Turso concurrent commit regression that exercises two writers racing on
+  the same metadata pointer and verifies compare-and-swap admits only one.
 - Added a typed catalog outbox drain API and Turso implementation so commit
   events can be fetched by sink and marked delivered without coupling graph or
   lineage side effects to the request path.
