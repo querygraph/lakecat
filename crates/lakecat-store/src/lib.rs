@@ -27,6 +27,9 @@ pub trait CatalogStore: Send + Sync + 'static {
         ident: &TableIdent,
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord>;
+    async fn record_audit_event(&self, _event: CatalogAuditEvent) -> LakeCatResult<()> {
+        Ok(())
+    }
     async fn pending_outbox_events(
         &self,
         _sink: Option<&str>,
@@ -102,6 +105,35 @@ pub struct OutboxEvent {
     pub payload: Value,
     pub created_at: DateTime<Utc>,
     pub delivered_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CatalogAuditEvent {
+    pub event_type: String,
+    pub table: Option<TableIdent>,
+    pub principal: Principal,
+    pub request_hash: Option<String>,
+    pub payload: Value,
+    pub created_at: DateTime<Utc>,
+}
+
+impl CatalogAuditEvent {
+    pub fn new(
+        event_type: impl Into<String>,
+        table: Option<TableIdent>,
+        principal: Principal,
+        payload: Value,
+    ) -> LakeCatResult<Self> {
+        let request_hash = Some(content_hash_json(&payload)?);
+        Ok(Self {
+            event_type: event_type.into(),
+            table,
+            principal,
+            request_hash,
+            payload,
+            created_at: Utc::now(),
+        })
+    }
 }
 
 #[derive(Debug, Default)]
@@ -305,7 +337,8 @@ pub mod turso_store {
     use turso::{Connection, Database, Row, Value as TursoValue};
 
     use crate::{
-        CatalogStore, OutboxEvent, TableCommit, TableCommitRecord, TableRecord, table_key,
+        CatalogAuditEvent, CatalogStore, OutboxEvent, TableCommit, TableCommitRecord, TableRecord,
+        table_key,
     };
 
     #[derive(Debug, Clone)]
@@ -685,6 +718,45 @@ pub mod turso_store {
             Ok(table)
         }
 
+        async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {
+            let conn = self.connect()?;
+            let event_id = content_hash_json(&serde_json::json!({
+                "event-type": &event.event_type,
+                "table": &event.table,
+                "principal": &event.principal,
+                "request-hash": &event.request_hash,
+                "payload": &event.payload,
+                "created-at": event.created_at.to_rfc3339(),
+            }))?;
+            conn.execute(
+                "insert into audit_events (
+                    event_id, event_type, table_key, principal_json,
+                    request_hash, event_json, created_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                (
+                    event_id.as_str(),
+                    event.event_type.as_str(),
+                    event.table.as_ref().map(table_key),
+                    encode_json(&event.principal)?,
+                    event.request_hash.as_deref(),
+                    encode_json(&event.payload)?,
+                    event.created_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
+
+            let outbox_payload = serde_json::json!({
+                "audit-event-id": event_id,
+                "event-type": event.event_type,
+                "table": event.table,
+                "payload": event.payload,
+            });
+            tx_insert_outbox_event(&conn, &outbox_payload, event.created_at).await?;
+            Ok(())
+        }
+
         async fn pending_outbox_events(
             &self,
             sink: Option<&str>,
@@ -877,6 +949,29 @@ pub mod turso_store {
             })
     }
 
+    async fn tx_insert_outbox_event(
+        conn: &Connection,
+        payload: &JsonValue,
+        created_at: chrono::DateTime<Utc>,
+    ) -> LakeCatResult<()> {
+        conn.execute(
+            "insert into outbox_events (
+                event_id, sink, event_type, payload_json, created_at
+             )
+             values (?1, ?2, ?3, ?4, ?5)",
+            (
+                content_hash_json(payload)?,
+                "lakecat.lineage-and-graph",
+                payload["event-type"].as_str(),
+                encode_json(payload)?,
+                created_at.to_rfc3339(),
+            ),
+        )
+        .await
+        .map_err(turso_error)?;
+        Ok(())
+    }
+
     fn is_unique_violation(err: &turso::Error) -> bool {
         matches!(err, turso::Error::Constraint(message) if message.contains("UNIQUE") || message.contains("PRIMARY KEY"))
     }
@@ -1024,6 +1119,54 @@ pub mod turso_store {
             assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 0);
             assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
             assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);
+        }
+
+        #[tokio::test]
+        async fn turso_store_records_governed_scan_audit_outbox_events() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            store
+                .record_audit_event(
+                    CatalogAuditEvent::new(
+                        "table.scan-planned",
+                        Some(ident.clone()),
+                        Principal::anonymous(),
+                        serde_json::json!({
+                            "event-type": "table.scan-planned",
+                            "table": ident,
+                            "authorization-receipt": {
+                                "engine": "typesec",
+                                "allowed": true,
+                                "action": "table-plan-scan"
+                            },
+                            "planned-by": "lakecat-sail",
+                            "scan-task-count": 2
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 1);
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 1);
+            assert_eq!(pending[0].event_type, "table.scan-planned");
+            assert_eq!(
+                pending[0].payload["payload"]["authorization-receipt"]["engine"],
+                serde_json::json!("typesec")
+            );
+            assert_eq!(
+                pending[0].payload["payload"]["scan-task-count"],
+                serde_json::json!(2)
+            );
         }
 
         #[tokio::test]

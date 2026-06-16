@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added durable Turso audit/outbox recording for governed scan planning events,
+  including the typed table-scan authorization receipt and Sail plan summary.
 - Required the typed table-scan capability for fetch-scan-tasks as well as scan
   planning, keeping task materialization on the governed Sail read path.
 - Added a typed table-scan capability and routed scan planning through a helper

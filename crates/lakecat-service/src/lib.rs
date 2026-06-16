@@ -28,7 +28,7 @@ use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     GovernanceEngine, TableScanCapability,
 };
-use lakecat_store::{CatalogStore, TableCommit, TableRecord, table_ident};
+use lakecat_store::{CatalogAuditEvent, CatalogStore, TableCommit, TableRecord, table_ident};
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStoreExt, PutPayload};
@@ -393,6 +393,22 @@ async fn plan_table_scan(
         plan_scan_with_capability(&state, &capability, table, request).await?;
     let ident = capability.table().clone();
     let principal = capability.receipt().principal.clone();
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "table.scan-planned",
+            Some(ident.clone()),
+            principal.clone(),
+            json!({
+                "event-type": "table.scan-planned",
+                "table": ident,
+                "authorization-receipt": capability.receipt(),
+                "planned-by": scan.planned_by,
+                "snapshot-id": scan.snapshot_id,
+                "scan-task-count": scan.scan_tasks.len(),
+            }),
+        )?)
+        .await?;
     state
         .graph
         .emit(GraphEvent::table(
