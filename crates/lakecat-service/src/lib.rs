@@ -8,8 +8,8 @@ use axum::{Json, Router};
 use lakecat_api::{
     CatalogConfigResponse, CommitTableRequest, CommitTableResponse, CreateNamespaceRequest,
     CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest, FetchScanTasksResponse,
-    ListNamespacesResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
-    PlanTableScanResponse, TableIdentifier,
+    ListNamespacesResponse, LoadCredentialsResponse, LoadTableResponse, NamespaceResponse,
+    PlanTableScanRequest, PlanTableScanResponse, TableIdentifier,
 };
 use lakecat_core::{
     LakeCatError, Namespace, Principal, PrincipalKind, TableIdent, TableName, WarehouseName,
@@ -26,9 +26,9 @@ use lakecat_sail::{
 };
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
-    CatalogConfigCapability, GovernanceEngine, GraphReadCapability, NamespaceCreateCapability,
-    NamespaceListCapability, TableCommitCapability, TableCreateCapability, TableLoadCapability,
-    TableScanCapability,
+    CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
+    NamespaceCreateCapability, NamespaceListCapability, TableCommitCapability,
+    TableCreateCapability, TableLoadCapability, TableScanCapability,
 };
 use lakecat_store::{
     CatalogAuditEvent, CatalogStore, OutboxEvent, TableCommit, TableRecord, table_ident,
@@ -116,6 +116,10 @@ pub fn app(state: LakeCatState) -> Router {
         .route(
             "/catalog/v1/namespaces/{namespace}/tables/{table}/tasks",
             post(fetch_scan_tasks),
+        )
+        .route(
+            "/catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
+            get(load_credentials),
         )
         .route("/querygraph/v1/bootstrap", get(querygraph_bootstrap))
         .with_state(state)
@@ -280,6 +284,37 @@ async fn load_table(
         )?)
         .await?;
     Ok(Json(load_table_response(table)))
+}
+
+async fn load_credentials(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((namespace, table)): Path<(String, String)>,
+) -> Result<Json<LoadCredentialsResponse>, LakeCatHttpError> {
+    let principal = request_principal(&headers)?;
+    let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
+    let capability = authorize_credentials_vend(&state, principal, ident).await?;
+    let table = state.store.load_table(capability.table()).await?;
+    let ident = capability.table().clone();
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "credentials.vend-attempted",
+            Some(ident.clone()),
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "credentials.vend-attempted",
+                "table": ident,
+                "authorization-receipt": capability.receipt(),
+                "storage-location": table.location,
+                "credential-count": 0,
+                "mode": "governed-read-required",
+            }),
+        )?)
+        .await?;
+    Ok(Json(LoadCredentialsResponse {
+        storage_credentials: Vec::new(),
+    }))
 }
 
 async fn commit_table(
@@ -806,6 +841,21 @@ async fn authorize_table_scan(
     )
     .await?;
     Ok(TableScanCapability::from_receipt(receipt, table)?)
+}
+
+async fn authorize_credentials_vend(
+    state: &LakeCatState,
+    principal: Principal,
+    table: TableIdent,
+) -> Result<CredentialsVendCapability, LakeCatHttpError> {
+    let receipt = authorize(
+        state,
+        principal,
+        CatalogAction::CredentialsVend,
+        Some(table.clone()),
+    )
+    .await?;
+    Ok(CredentialsVendCapability::from_receipt(receipt, table)?)
 }
 
 async fn authorize_graph_read(
@@ -1579,6 +1629,35 @@ mod tests {
             .unwrap();
         let response = app.oneshot(bootstrap).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn load_credentials_is_governed_and_returns_no_raw_secrets_by_default() {
+        let app = test_app();
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"current-schema-id":1,"schemas":[{"schema-id":1,"fields":[{"id":1,"name":"event_id","type":"string","required":true}]}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let credentials = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/namespaces/default/tables/events/credentials")
+            .header("x-lakecat-agent-did", "did:example:agent")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(credentials).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["storage-credentials"], serde_json::json!([]));
     }
 
     #[cfg(feature = "sail-local")]

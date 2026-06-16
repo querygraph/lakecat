@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a capability-gated Iceberg REST table credentials endpoint that audits
+  credential-vending attempts and returns no raw storage secrets until storage
+  profiles can issue short-lived credentials safely.
 - Added a GitHub Actions Rust CI matrix for default workspace tests plus
   `sail-local`, `typesec-local`, `grust-local`, `turso-local`, and all-features
   rows, with sibling Sail/Grust/TypeSec checkouts matching LakeCat path deps.

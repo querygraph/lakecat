@@ -78,6 +78,9 @@ pub struct CanCommitTable;
 pub struct CanPlanScan;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanVendCredentials;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanReadGraph;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,6 +96,7 @@ pub type TableCreateCapability = Capability<CanCreateTable, TableIdent>;
 pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
 pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
 pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
+pub type CredentialsVendCapability = Capability<CanVendCredentials, TableIdent>;
 pub type GraphReadCapability = Capability<CanReadGraph, ()>;
 pub type CatalogConfigCapability = Capability<CanReadCatalogConfig, ()>;
 pub type NamespaceCreateCapability = Capability<CanCreateNamespace, ()>;
@@ -135,6 +139,21 @@ impl TableScanCapability {
             table,
             CatalogAction::TablePlanScan,
             "plan table scans",
+        )
+    }
+
+    pub fn table(&self) -> &TableIdent {
+        self.resource()
+    }
+}
+
+impl CredentialsVendCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
+        table_capability_from_receipt(
+            receipt,
+            table,
+            CatalogAction::CredentialsVend,
+            "vend table credentials",
         )
     }
 
@@ -324,6 +343,25 @@ mod tests {
             TableCreateCapability::from_receipt(create_receipt, capability.table().clone())
                 .expect("matching create receipt should mint capability");
         assert_eq!(create_capability.table(), capability.table());
+
+        let credentials_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:reader".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::CredentialsVend,
+            table: Some(capability.table().clone()),
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            checked_at: Utc::now(),
+        };
+        let credentials_capability = CredentialsVendCapability::from_receipt(
+            credentials_receipt,
+            capability.table().clone(),
+        )
+        .expect("matching credential receipt should mint capability");
+        assert_eq!(credentials_capability.table(), capability.table());
 
         let graph_receipt = AuthorizationReceipt {
             principal: Principal {

@@ -28,6 +28,7 @@ impl Default for CatalogConfigResponse {
                 "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan".to_string(),
                 "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks"
                     .to_string(),
+                "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials".to_string(),
             ],
         }
     }
@@ -90,6 +91,19 @@ pub struct LoadTableResponse {
     pub identifier: TableIdentifier,
     pub metadata_location: Option<String>,
     pub metadata: Value,
+    pub config: Vec<ConfigEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct LoadCredentialsResponse {
+    pub storage_credentials: Vec<StorageCredential>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct StorageCredential {
+    pub prefix: String,
     pub config: Vec<ConfigEntry>,
 }
 

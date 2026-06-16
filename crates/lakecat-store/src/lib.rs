@@ -1401,6 +1401,49 @@ pub mod turso_store {
                 namespace_listed.payload["payload"]["namespace-count"],
                 serde_json::json!(1)
             );
+
+            store
+                .record_audit_event(
+                    CatalogAuditEvent::new(
+                        "credentials.vend-attempted",
+                        Some(ident.clone()),
+                        Principal::anonymous(),
+                        serde_json::json!({
+                            "event-type": "credentials.vend-attempted",
+                            "table": ident,
+                            "authorization-receipt": {
+                                "engine": "typesec",
+                                "allowed": true,
+                                "action": "credentials-vend"
+                            },
+                            "storage-location": "file:///tmp/events",
+                            "credential-count": 0,
+                            "mode": "governed-read-required"
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 9);
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 9);
+            let credentials = pending
+                .iter()
+                .find(|event| event.event_type == "credentials.vend-attempted")
+                .expect("credentials vend attempted event");
+            assert_eq!(
+                credentials.payload["payload"]["credential-count"],
+                serde_json::json!(0)
+            );
+            assert_eq!(
+                credentials.payload["payload"]["authorization-receipt"]["action"],
+                serde_json::json!("credentials-vend")
+            );
         }
 
         #[tokio::test]
