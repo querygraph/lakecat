@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+- Fixed `validate_secret_ref` not re-running on the `upsert_storage_profile`
+  path: all three store implementations (no-op default, in-memory, Turso) now
+  call `StorageProfile::validate()` before persisting, closing the bypass where
+  a profile reconstructed via serde deserialization could be re-stored without
+  any validation.
+- Fixed `validate_secret_ref` keyword blocklist missing common embedded-secret
+  patterns: `api_key=`, `apikey=`, `access_key=`, `private_key=`, `pass=`, and
+  `auth=` are now rejected alongside the existing `password=`, `secret=`,
+  `token=`, and `credential=` patterns.
+- Fixed Iceberg sort-order direction parsing accepting only the 4-char
+  abbreviation `"desc"`: `table_sort_fields` now matches both `"desc"` and
+  `"descending"` (case-insensitive) so externally-written Iceberg metadata using
+  the verbose form is read correctly; fields with an absent or unrecognised
+  direction are skipped rather than silently defaulted to ascending.
+- Fixed `create_table` in the in-process Sail provider always writing
+  `"default-sort-order-id": 1` even for unsorted tables: Iceberg spec §4.1.2
+  reserves id 0 for the unsorted order; a non-zero id implies intentional
+  sorting and caused clients that issue `assert-default-sort-order-id: 0` on
+  subsequent commits to receive a 409 Conflict. Unsorted tables now write id 0;
+  the id-0 sentinel entry is included in `sort-orders` in all cases.
+- Fixed `TypeSecCredentialIssuer` silently returning `Ok(vec![])` for
+  `secret_ref` URIs that use a scheme other than `typesec://` (e.g.
+  `vault://`, `aws-sm://`): these schemes pass `validate_secret_ref` at profile
+  creation time but were not handled by the TypeSec issuer, returning an empty
+  credential list with HTTP 200 rather than surfacing the misconfiguration.  The
+  issuer now returns `InvalidArgument` for unsupported schemes.
+- Fixed `create_table` handler deriving the stored principal from the
+  pre-authorization identity instead of `capability.receipt().principal`:
+  the principal embedded in `TableRecord` and the `table.created` audit event
+  now consistently comes from the governance receipt, matching all other
+  request handlers.
+- Fixed `request_identity` computing `content_hash_bytes` twice on the same
+  Bearer token bytes: the SHA-256 is now computed once and reused for both the
+  principal subject string and the `bearer-token-sha256` envelope field.
+- Fixed `x-lakecat-typedid` not selecting `PrincipalKind::Agent`: a caller
+  sending only `x-lakecat-typedid` (without `x-lakecat-agent-did`) fell through
+  to `Principal::anonymous()` because the principal-selection chain only checked
+  `agent_did`. The TypeDID value was captured in the audit envelope but never
+  used for authorization, so TypeSec policy ran against the wrong subject.
+  `x-lakecat-typedid` is now an independent Agent-principal selector with
+  `x-lakecat-agent-did` taking precedence when both headers are present.
 - Added Iceberg default sort-order projection to the in-process Sail provider
   so LakeCat `TableStatus.sort_by` reflects Iceberg sort metadata.
 - Added a `typesec-local` credential issuer that gates `typesec://` secret-ref
