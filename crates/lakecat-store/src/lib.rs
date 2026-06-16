@@ -40,6 +40,21 @@ pub trait CatalogStore: Send + Sync + 'static {
     ) -> LakeCatResult<Vec<StorageProfile>> {
         Ok(Vec::new())
     }
+    async fn upsert_policy_binding(&self, binding: PolicyBinding) -> LakeCatResult<PolicyBinding> {
+        Ok(binding)
+    }
+    async fn list_policy_bindings(
+        &self,
+        _warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<PolicyBinding>> {
+        Ok(Vec::new())
+    }
+    async fn policy_bindings_for_table(
+        &self,
+        _table: &TableIdent,
+    ) -> LakeCatResult<Vec<PolicyBinding>> {
+        Ok(Vec::new())
+    }
     async fn storage_profile_for_table(
         &self,
         table: &TableRecord,
@@ -301,6 +316,59 @@ pub struct CatalogAuditEvent {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PolicyBinding {
+    pub policy_id: String,
+    pub warehouse: WarehouseName,
+    pub namespace: Option<Namespace>,
+    pub table: Option<TableName>,
+    pub enforced: bool,
+    pub odrl: Value,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl PolicyBinding {
+    pub fn new(
+        policy_id: impl Into<String>,
+        warehouse: WarehouseName,
+        namespace: Option<Namespace>,
+        table: Option<TableName>,
+        enforced: bool,
+        odrl: Value,
+    ) -> LakeCatResult<Self> {
+        let policy_id = policy_id.into();
+        validate_policy_id(&policy_id)?;
+        if table.is_some() && namespace.is_none() {
+            return Err(LakeCatError::InvalidArgument(
+                "table-scoped policy binding requires namespace".to_string(),
+            ));
+        }
+        Ok(Self {
+            policy_id,
+            warehouse,
+            namespace,
+            table,
+            enforced,
+            odrl,
+            updated_at: Utc::now(),
+        })
+    }
+
+    pub fn applies_to_table(&self, table: &TableIdent) -> bool {
+        if self.warehouse != table.warehouse {
+            return false;
+        }
+        match (&self.namespace, &self.table) {
+            (None, None) => true,
+            (Some(namespace), None) => namespace == &table.namespace,
+            (Some(namespace), Some(table_name)) => {
+                namespace == &table.namespace && table_name == &table.name
+            }
+            (None, Some(_)) => false,
+        }
+    }
+}
+
 impl CatalogAuditEvent {
     pub fn new(
         event_type: impl Into<String>,
@@ -338,6 +406,7 @@ struct MemoryState {
     commits: Vec<TableCommitRecord>,
     idempotency: BTreeMap<String, TableRecord>,
     storage_profiles: BTreeMap<String, StorageProfile>,
+    policy_bindings: BTreeMap<String, PolicyBinding>,
 }
 
 #[async_trait]
@@ -525,6 +594,41 @@ impl CatalogStore for MemoryCatalogStore {
                 .unwrap_or_else(|| StorageProfile::inferred_for_table(table)),
         )
     }
+
+    async fn upsert_policy_binding(&self, binding: PolicyBinding) -> LakeCatResult<PolicyBinding> {
+        let mut state = self.state.write().await;
+        state.policy_bindings.insert(
+            policy_binding_key(&binding.warehouse, &binding.policy_id),
+            binding.clone(),
+        );
+        Ok(binding)
+    }
+
+    async fn list_policy_bindings(
+        &self,
+        warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<PolicyBinding>> {
+        let state = self.state.read().await;
+        let mut bindings = state
+            .policy_bindings
+            .values()
+            .filter(|binding| binding.warehouse == *warehouse)
+            .cloned()
+            .collect::<Vec<_>>();
+        bindings.sort_by(|left, right| left.policy_id.cmp(&right.policy_id));
+        Ok(bindings)
+    }
+
+    async fn policy_bindings_for_table(
+        &self,
+        table: &TableIdent,
+    ) -> LakeCatResult<Vec<PolicyBinding>> {
+        let state = self.state.read().await;
+        Ok(policy_bindings_for_table(
+            state.policy_bindings.values(),
+            table,
+        ))
+    }
 }
 
 pub fn table_ident(
@@ -548,6 +652,10 @@ fn table_key(ident: &TableIdent) -> String {
 
 fn storage_profile_key(warehouse: &WarehouseName, profile_id: &str) -> String {
     format!("{}:{profile_id}", warehouse.as_str())
+}
+
+fn policy_binding_key(warehouse: &WarehouseName, policy_id: &str) -> String {
+    format!("{}:{policy_id}", warehouse.as_str())
 }
 
 fn storage_profile_match<'a>(
@@ -595,6 +703,36 @@ fn validate_public_config(config: &BTreeMap<String, String>) -> LakeCatResult<()
     Ok(())
 }
 
+fn validate_policy_id(policy_id: &str) -> LakeCatResult<()> {
+    if policy_id.is_empty() {
+        return Err(LakeCatError::InvalidArgument(
+            "policy id must not be empty".to_string(),
+        ));
+    }
+    if !policy_id
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+    {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "policy id contains unsupported characters: {policy_id}"
+        )));
+    }
+    Ok(())
+}
+
+fn policy_bindings_for_table<'a>(
+    bindings: impl IntoIterator<Item = &'a PolicyBinding>,
+    table: &TableIdent,
+) -> Vec<PolicyBinding> {
+    let mut bindings = bindings
+        .into_iter()
+        .filter(|binding| binding.enforced && binding.applies_to_table(table))
+        .cloned()
+        .collect::<Vec<_>>();
+    bindings.sort_by(|left, right| left.policy_id.cmp(&right.policy_id));
+    bindings
+}
+
 #[cfg(feature = "turso-local")]
 pub mod turso_store {
     use std::sync::Arc;
@@ -602,15 +740,17 @@ pub mod turso_store {
     use async_trait::async_trait;
     use chrono::Utc;
     use lakecat_core::{
-        LakeCatError, LakeCatResult, Namespace, TableIdent, WarehouseName, content_hash_json,
+        LakeCatError, LakeCatResult, Namespace, TableIdent, TableName, WarehouseName,
+        content_hash_json,
     };
     use serde::de::DeserializeOwned;
     use serde_json::Value as JsonValue;
     use turso::{Connection, Database, Row, Value as TursoValue};
 
     use crate::{
-        CatalogAuditEvent, CatalogStore, OutboxEvent, StorageProfile, TableCommit,
-        TableCommitRecord, TableRecord, storage_profile_key, storage_profile_match, table_key,
+        CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, StorageProfile, TableCommit,
+        TableCommitRecord, TableRecord, policy_binding_key, policy_bindings_for_table,
+        storage_profile_key, storage_profile_match, table_key,
     };
 
     #[derive(Debug, Clone)]
@@ -1153,6 +1293,68 @@ pub mod turso_store {
             Ok(storage_profile_match(profiles.iter(), table)
                 .unwrap_or_else(|| StorageProfile::inferred_for_table(table)))
         }
+
+        async fn upsert_policy_binding(
+            &self,
+            binding: PolicyBinding,
+        ) -> LakeCatResult<PolicyBinding> {
+            let conn = self.connect()?;
+            conn.execute(
+                "insert into policy_bindings (
+                    policy_key, policy_id, warehouse, namespace_path, table_name,
+                    enforced, binding_json, updated_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                 on conflict(policy_key) do update set
+                    namespace_path = excluded.namespace_path,
+                    table_name = excluded.table_name,
+                    enforced = excluded.enforced,
+                    binding_json = excluded.binding_json,
+                    updated_at = excluded.updated_at",
+                (
+                    policy_binding_key(&binding.warehouse, &binding.policy_id),
+                    binding.policy_id.as_str(),
+                    binding.warehouse.as_str(),
+                    binding.namespace.as_ref().map(Namespace::path),
+                    binding.table.as_ref().map(TableName::as_str),
+                    if binding.enforced { 1_i64 } else { 0_i64 },
+                    encode_json(&binding)?,
+                    binding.updated_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
+            Ok(binding)
+        }
+
+        async fn list_policy_bindings(
+            &self,
+            warehouse: &WarehouseName,
+        ) -> LakeCatResult<Vec<PolicyBinding>> {
+            let conn = self.connect()?;
+            let mut rows = conn
+                .query(
+                    "select binding_json from policy_bindings
+                     where warehouse = ?1
+                     order by policy_id",
+                    (warehouse.as_str(),),
+                )
+                .await
+                .map_err(turso_error)?;
+            let mut bindings = Vec::new();
+            while let Some(row) = rows.next().await.map_err(turso_error)? {
+                bindings.push(decode_json(row_string(&row, 0)?)?);
+            }
+            Ok(bindings)
+        }
+
+        async fn policy_bindings_for_table(
+            &self,
+            table: &TableIdent,
+        ) -> LakeCatResult<Vec<PolicyBinding>> {
+            let bindings = self.list_policy_bindings(&table.warehouse).await?;
+            Ok(policy_bindings_for_table(bindings.iter(), table))
+        }
     }
 
     const TURSO_MIGRATION: &[&str] = &[
@@ -1221,6 +1423,18 @@ pub mod turso_store {
         )",
         "create index if not exists idx_storage_profiles_warehouse
             on storage_profiles (warehouse, profile_id)",
+        "create table if not exists policy_bindings (
+            policy_key text primary key,
+            policy_id text not null,
+            warehouse text not null,
+            namespace_path text,
+            table_name text,
+            enforced integer not null,
+            binding_json text not null,
+            updated_at text not null
+        )",
+        "create index if not exists idx_policy_bindings_warehouse
+            on policy_bindings (warehouse, policy_id)",
     ];
 
     fn encode_json(value: impl serde::Serialize) -> LakeCatResult<String> {
@@ -1333,7 +1547,7 @@ pub mod turso_store {
 
         use lakecat_core::{Principal, TableName};
 
-        use crate::{CredentialIssuanceMode, StorageProvider};
+        use crate::{CredentialIssuanceMode, PolicyBinding, StorageProvider};
 
         use super::*;
 
@@ -1903,6 +2117,52 @@ pub mod turso_store {
             assert_eq!(
                 matched.public_config["lakecat.endpoint"],
                 narrow.public_config["lakecat.endpoint"]
+            );
+        }
+
+        #[tokio::test]
+        async fn turso_store_persists_policy_bindings_and_matches_table_scope() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let table = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("events").unwrap(),
+            );
+            let binding = PolicyBinding::new(
+                "agent-read",
+                warehouse.clone(),
+                Some(namespace),
+                Some(TableName::new("events").unwrap()),
+                true,
+                serde_json::json!({
+                    "uid": "policy:agent-read",
+                    "permission": [{"action": "read"}]
+                }),
+            )
+            .unwrap();
+            let inactive = PolicyBinding::new(
+                "inactive",
+                warehouse.clone(),
+                None,
+                None,
+                false,
+                serde_json::json!({"uid": "policy:inactive"}),
+            )
+            .unwrap();
+
+            store.upsert_policy_binding(binding.clone()).await.unwrap();
+            store.upsert_policy_binding(inactive).await.unwrap();
+
+            let policies = store.list_policy_bindings(&warehouse).await.unwrap();
+            assert_eq!(policies.len(), 2);
+            let active = store.policy_bindings_for_table(&table).await.unwrap();
+            assert_eq!(active.len(), 1);
+            assert_eq!(active[0].policy_id, binding.policy_id);
+            assert_eq!(
+                active[0].odrl["uid"],
+                serde_json::json!("policy:agent-read")
             );
         }
     }

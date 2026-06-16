@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added governed policy-binding management for ODRL documents, with memory/Turso
+  persistence and active table bindings attached to authorization context.
 - Reconciled the architecture and OPUS1 working-plan docs with the governed
   storage-profile management implementation.
 - Added governed management endpoints and durable store support for warehouse

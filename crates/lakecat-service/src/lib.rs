@@ -8,9 +8,10 @@ use axum::{Json, Router};
 use lakecat_api::{
     CatalogConfigResponse, CommitTableRequest, CommitTableResponse, ConfigEntry,
     CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest,
-    FetchScanTasksResponse, ListNamespacesResponse, ListStorageProfilesResponse,
-    LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
-    PlanTableScanResponse, StorageCredential, StorageProfileResponse, TableIdentifier,
+    FetchScanTasksResponse, ListNamespacesResponse, ListPolicyBindingsResponse,
+    ListStorageProfilesResponse, LoadCredentialsResponse, LoadTableResponse, NamespaceResponse,
+    PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse, StorageCredential,
+    StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest,
     UpsertStorageProfileRequest,
 };
 use lakecat_core::{
@@ -29,12 +30,13 @@ use lakecat_sail::{
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
-    NamespaceCreateCapability, NamespaceListCapability, StorageProfileManageCapability,
-    TableCommitCapability, TableCreateCapability, TableLoadCapability, TableScanCapability,
+    NamespaceCreateCapability, NamespaceListCapability, PolicyManageCapability,
+    StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
+    TableLoadCapability, TableScanCapability,
 };
 use lakecat_store::{
-    CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, StorageProfile,
-    StorageProvider, TableCommit, TableRecord, table_ident,
+    CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, PolicyBinding,
+    StorageProfile, StorageProvider, TableCommit, TableRecord, table_ident,
 };
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
@@ -131,6 +133,14 @@ pub fn app(state: LakeCatState) -> Router {
         .route(
             "/management/v1/warehouses/{warehouse}/storage-profiles/{profile}",
             post(upsert_storage_profile).put(upsert_storage_profile),
+        )
+        .route(
+            "/management/v1/warehouses/{warehouse}/policies",
+            get(list_policy_bindings),
+        )
+        .route(
+            "/management/v1/warehouses/{warehouse}/policies/{policy}",
+            post(upsert_policy_binding).put(upsert_policy_binding),
         )
         .route("/querygraph/v1/bootstrap", get(querygraph_bootstrap))
         .with_state(state)
@@ -390,6 +400,69 @@ async fn upsert_storage_profile(
         )?)
         .await?;
     Ok(Json(storage_profile_response(&storage_profile)))
+}
+
+async fn list_policy_bindings(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path(warehouse): Path<String>,
+) -> Result<Json<ListPolicyBindingsResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let capability = authorize_policy_manage(&state, request_principal(&headers)?).await?;
+    let policies = state.store.list_policy_bindings(&warehouse).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "policy-binding.listed",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "policy-binding.listed",
+                "warehouse": warehouse.as_str(),
+                "authorization-receipt": capability.receipt(),
+                "policy-count": policies.len(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(ListPolicyBindingsResponse {
+        policies: policies.iter().map(policy_binding_response).collect(),
+    }))
+}
+
+async fn upsert_policy_binding(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, policy)): Path<(String, String)>,
+    Json(request): Json<UpsertPolicyBindingRequest>,
+) -> Result<Json<PolicyBindingResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let capability = authorize_policy_manage(&state, request_principal(&headers)?).await?;
+    let namespace = request.namespace.map(Namespace::new).transpose()?;
+    let table = request.table.map(TableName::new).transpose()?;
+    let binding = PolicyBinding::new(
+        policy,
+        warehouse.clone(),
+        namespace,
+        table,
+        request.enforced,
+        request.odrl,
+    )?;
+    let binding = state.store.upsert_policy_binding(binding).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "policy-binding.upserted",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "policy-binding.upserted",
+                "warehouse": warehouse.as_str(),
+                "policy": policy_binding_response(&binding),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(policy_binding_response(&binding)))
 }
 
 async fn commit_table(
@@ -805,6 +878,23 @@ fn storage_profile_response(profile: &StorageProfile) -> StorageProfileResponse 
     }
 }
 
+fn policy_binding_response(binding: &PolicyBinding) -> PolicyBindingResponse {
+    PolicyBindingResponse {
+        policy_id: binding.policy_id.clone(),
+        warehouse: binding.warehouse.as_str().to_string(),
+        namespace: binding
+            .namespace
+            .as_ref()
+            .map(|namespace| namespace.parts().to_vec()),
+        table: binding
+            .table
+            .as_ref()
+            .map(|table| table.as_str().to_string()),
+        enforced: binding.enforced,
+        odrl: binding.odrl.clone(),
+    }
+}
+
 fn management_warehouse(
     state: &LakeCatState,
     warehouse: String,
@@ -864,13 +954,24 @@ async fn authorize(
     action: CatalogAction,
     table: Option<TableIdent>,
 ) -> Result<AuthorizationReceipt, LakeCatHttpError> {
+    let policy_bindings = if let Some(table) = table.as_ref() {
+        state.store.policy_bindings_for_table(table).await?
+    } else {
+        Vec::new()
+    };
     let receipt = state
         .governance
         .authorize(AuthorizationRequest {
             principal,
             action,
             table,
-            context: json!({ "warehouse": state.warehouse.as_str() }),
+            context: json!({
+                "warehouse": state.warehouse.as_str(),
+                "policy-bindings": policy_bindings
+                    .iter()
+                    .map(policy_binding_response)
+                    .collect::<Vec<_>>(),
+            }),
         })
         .await?;
     if receipt.allowed {
@@ -987,6 +1088,14 @@ async fn authorize_storage_profile_manage(
     Ok(StorageProfileManageCapability::from_receipt(receipt)?)
 }
 
+async fn authorize_policy_manage(
+    state: &LakeCatState,
+    principal: Principal,
+) -> Result<PolicyManageCapability, LakeCatHttpError> {
+    let receipt = authorize(state, principal, CatalogAction::PolicyManage, None).await?;
+    Ok(PolicyManageCapability::from_receipt(receipt)?)
+}
+
 async fn authorize_graph_read(
     state: &LakeCatState,
     principal: Principal,
@@ -1038,6 +1147,7 @@ mod tests {
     #[derive(Debug, Default)]
     struct RecordingGovernance {
         principals: Mutex<Vec<Principal>>,
+        contexts: Mutex<Vec<serde_json::Value>>,
     }
 
     #[derive(Debug, Default)]
@@ -1164,6 +1274,7 @@ mod tests {
             request: AuthorizationRequest,
         ) -> lakecat_core::LakeCatResult<lakecat_security::AuthorizationReceipt> {
             self.principals.lock().await.push(request.principal.clone());
+            self.contexts.lock().await.push(request.context.clone());
             Ok(lakecat_security::AuthorizationReceipt {
                 principal: request.principal,
                 action: request.action,
@@ -1912,6 +2023,101 @@ mod tests {
             config
                 .iter()
                 .any(|entry| { entry["key"] == "lakecat.endpoint" && entry["value"] == "local" })
+        );
+    }
+
+    #[tokio::test]
+    async fn policy_bindings_are_governed_and_attached_to_table_authorization_context() {
+        let governance = Arc::new(RecordingGovernance::default());
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_integrations(
+            default_sail_engine(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        ));
+
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/policies/agent-read")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "namespace": ["default"],
+                    "table": "events",
+                    "enforced": true,
+                    "odrl": {
+                        "uid": "policy:agent-read",
+                        "permission": [{
+                            "action": "read",
+                            "constraint": [{
+                                "leftOperand": "purpose",
+                                "operator": "eq",
+                                "rightOperand": "resilience-demo"
+                            }]
+                        }]
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let list = Request::builder()
+            .method(Method::GET)
+            .uri("/management/v1/warehouses/local/policies")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(list).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["policies"].as_array().unwrap().len(), 1);
+
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"current-schema-id":1,"schemas":[{"schema-id":1,"fields":[{"id":1,"name":"event_id","type":"string","required":true}]}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let load = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/namespaces/default/tables/events")
+            .header("x-lakecat-agent-did", "did:example:agent")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(load).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let contexts = governance.contexts.lock().await;
+        let load_context = contexts
+            .iter()
+            .find(|context| {
+                context["policy-bindings"]
+                    .as_array()
+                    .is_some_and(|bindings| !bindings.is_empty())
+            })
+            .expect("table authorization should include active policy bindings");
+        assert_eq!(
+            load_context["policy-bindings"][0]["policy-id"],
+            serde_json::json!("agent-read")
+        );
+        assert_eq!(
+            load_context["policy-bindings"][0]["odrl"]["uid"],
+            serde_json::json!("policy:agent-read")
         );
     }
 

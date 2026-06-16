@@ -34,6 +34,7 @@ pub enum CatalogAction {
     TableDrop,
     CredentialsVend,
     StorageProfileManage,
+    PolicyManage,
     GraphRead,
     LineageRead,
 }
@@ -85,6 +86,9 @@ pub struct CanVendCredentials;
 pub struct CanManageStorageProfiles;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanManagePolicies;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanReadGraph;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,6 +106,7 @@ pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
 pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
 pub type CredentialsVendCapability = Capability<CanVendCredentials, TableIdent>;
 pub type StorageProfileManageCapability = Capability<CanManageStorageProfiles, ()>;
+pub type PolicyManageCapability = Capability<CanManagePolicies, ()>;
 pub type GraphReadCapability = Capability<CanReadGraph, ()>;
 pub type CatalogConfigCapability = Capability<CanReadCatalogConfig, ()>;
 pub type NamespaceCreateCapability = Capability<CanCreateNamespace, ()>;
@@ -174,6 +179,12 @@ impl StorageProfileManageCapability {
             CatalogAction::StorageProfileManage,
             "manage storage profiles",
         )
+    }
+}
+
+impl PolicyManageCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
+        catalog_capability_from_receipt(receipt, CatalogAction::PolicyManage, "manage policies")
     }
 }
 
@@ -453,6 +464,20 @@ mod tests {
             checked_at: Utc::now(),
         };
         assert!(StorageProfileManageCapability::from_receipt(storage_profile_receipt).is_ok());
+
+        let policy_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:operator".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::PolicyManage,
+            table: None,
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            checked_at: Utc::now(),
+        };
+        assert!(PolicyManageCapability::from_receipt(policy_receipt).is_ok());
     }
 }
 
@@ -625,6 +650,7 @@ pub fn action_name(action: &CatalogAction) -> &'static str {
         CatalogAction::TableDrop => "table.drop",
         CatalogAction::CredentialsVend => "credentials.vend",
         CatalogAction::StorageProfileManage => "storage_profile.manage",
+        CatalogAction::PolicyManage => "policy.manage",
         CatalogAction::GraphRead => "graph.read",
         CatalogAction::LineageRead => "lineage.read",
     }

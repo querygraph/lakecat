@@ -32,6 +32,8 @@ impl Default for CatalogConfigResponse {
                 "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials".to_string(),
                 "GET /management/v1/warehouses/{warehouse}/storage-profiles".to_string(),
                 "PUT /management/v1/warehouses/{warehouse}/storage-profiles/{profile}".to_string(),
+                "GET /management/v1/warehouses/{warehouse}/policies".to_string(),
+                "PUT /management/v1/warehouses/{warehouse}/policies/{policy}".to_string(),
             ],
         }
     }
@@ -135,6 +137,38 @@ pub struct StorageProfileResponse {
 #[serde(rename_all = "kebab-case")]
 pub struct ListStorageProfilesResponse {
     pub storage_profiles: Vec<StorageProfileResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct UpsertPolicyBindingRequest {
+    pub namespace: Option<Vec<String>>,
+    pub table: Option<String>,
+    #[serde(default = "default_enforced")]
+    pub enforced: bool,
+    #[serde(default)]
+    pub odrl: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct PolicyBindingResponse {
+    pub policy_id: String,
+    pub warehouse: String,
+    pub namespace: Option<Vec<String>>,
+    pub table: Option<String>,
+    pub enforced: bool,
+    pub odrl: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ListPolicyBindingsResponse {
+    pub policies: Vec<PolicyBindingResponse>,
+}
+
+fn default_enforced() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
