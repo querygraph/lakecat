@@ -507,7 +507,7 @@ append a dated entry per slice; keep the finding-status table current.
 | 8 | Grust graph is a placeholder taxonomy | **OPEN** | |
 | 9 | `list_namespaces` fabricates `default` | **CLOSED** | memory and Turso stores return an empty list until namespace creation |
 | 10 | Side effects coupled to request path | **CLOSED** | Turso outbox and service drain/projection API exist; catalog handlers record durable events and no longer emit graph/lineage inline |
-| 11 | Plan tokens unauthenticated / leak paths | **MOSTLY MITIGATED** | now table-bound + path re-validated; not yet HMAC-signed |
+| 11 | Plan tokens unauthenticated / leak paths | **CLOSED** | new structured Sail plan-task tokens are table-bound, path re-validated, and HMAC-signed; legacy unsigned structured tokens remain decodable for compatibility |
 | 12 | v4 = JSON passthrough, thin coverage | **OPEN (by design)** | keep behind capability flag |
 
 ### Latest slice reviewed — scan-filter / file-bound pruning
@@ -596,5 +596,6 @@ only once **P2** gives it a governed path to run on.
   (Milestones 7–8; Findings 8, 10.)
 - **P5 — QueryGraph end-to-end.** `querygraph import-lakecat`; QGLake "Resilience
   Desk" as the acceptance test. (Milestone 9.)
-- **Deferred — Tier-0 pruning depth, typed v4, HMAC-signed tokens.** Good but
-  diminishing-returns until P1–P3 land. (Milestone 10; Findings 11, 12.)
+- **Deferred — Tier-0 pruning depth and typed v4.** Good but diminishing-returns
+  until P1–P3 land; HMAC-signed plan-task tokens are now implemented for new
+  Sail scan-planning tokens. (Milestone 10; Finding 12.)

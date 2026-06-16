@@ -232,6 +232,7 @@ pub mod sail_integration {
     use std::sync::Arc;
 
     use async_trait::async_trait;
+    use hmac::{Hmac, Mac};
     use lakecat_core::{LakeCatError, LakeCatResult, TableIdent};
     use object_store::local::LocalFileSystem;
     use sail_catalog_iceberg::models;
@@ -243,6 +244,7 @@ pub mod sail_integration {
     };
     use serde::{Deserialize, Serialize};
     use serde_json::{Value, json};
+    use sha2::Sha256;
     use url::Url;
 
     use crate::{
@@ -254,6 +256,10 @@ pub mod sail_integration {
 
     #[derive(Debug, Default)]
     pub struct SailRestModelCatalogEngine;
+
+    type HmacSha256 = Hmac<Sha256>;
+    const PLAN_TASK_SIGNING_KEY_ENV: &str = "LAKECAT_PLAN_TASK_SIGNING_KEY";
+    const DEFAULT_PLAN_TASK_SIGNING_KEY: &[u8] = b"lakecat-local-plan-task-signing-key-v1";
 
     impl SailRestModelCatalogEngine {
         pub fn new() -> Arc<Self> {
@@ -1070,7 +1076,12 @@ pub mod sail_integration {
         let bytes = serde_json::to_vec(&payload).map_err(|err| {
             LakeCatError::Internal(format!("failed to encode LakeCat/Sail plan task: {err}"))
         })?;
-        Ok(format!("lakecat:sail-json:{}", hex::encode(bytes)))
+        let signature = sign_plan_task_payload(&bytes)?;
+        Ok(format!(
+            "lakecat:sail-json-hmac:{}:{}",
+            signature,
+            hex::encode(bytes)
+        ))
     }
 
     fn scan_task_value(task: SailScanTask) -> LakeCatResult<Value> {
@@ -1897,31 +1908,29 @@ pub mod sail_integration {
     }
 
     fn decode_plan_task(plan_task: &str) -> LakeCatResult<DecodedPlanTask> {
+        if let Some(rest) = plan_task.strip_prefix("lakecat:sail-json-hmac:") {
+            let mut parts = rest.splitn(2, ':');
+            let Some(signature) = parts.next() else {
+                return invalid_plan_task(plan_task);
+            };
+            let Some(encoded) = parts.next() else {
+                return invalid_plan_task(plan_task);
+            };
+            let bytes = hex::decode(encoded).map_err(|_| {
+                LakeCatError::InvalidArgument(format!(
+                    "invalid LakeCat/Sail signed plan task: {plan_task}"
+                ))
+            })?;
+            verify_plan_task_signature(&bytes, signature)?;
+            return decode_structured_plan_task(plan_task, &bytes);
+        }
         if let Some(encoded) = plan_task.strip_prefix("lakecat:sail-json:") {
             let bytes = hex::decode(encoded).map_err(|_| {
                 LakeCatError::InvalidArgument(format!(
                     "invalid LakeCat/Sail structured plan task: {plan_task}"
                 ))
             })?;
-            let task: EncodedPlanTask = serde_json::from_slice(&bytes).map_err(|err| {
-                LakeCatError::InvalidArgument(format!(
-                    "invalid LakeCat/Sail structured plan task payload: {err}"
-                ))
-            })?;
-            if !matches!(
-                task.kind.as_str(),
-                "manifest-list" | "incremental-manifest-list" | "manifest"
-            ) {
-                return invalid_plan_task(plan_task);
-            }
-            return Ok(DecodedPlanTask {
-                raw: plan_task.to_string(),
-                table: Some(task.table),
-                kind: task.kind,
-                snapshot_id: task.snapshot_id,
-                path: task.path,
-                filters: task.filters,
-            });
+            return decode_structured_plan_task(plan_task, &bytes);
         }
         let mut parts = plan_task.splitn(5, ':');
         let Some(prefix) = parts.next() else {
@@ -1959,6 +1968,58 @@ pub mod sail_integration {
             path: path.to_string(),
             filters: Vec::new(),
         })
+    }
+
+    fn decode_structured_plan_task(
+        plan_task: &str,
+        bytes: &[u8],
+    ) -> LakeCatResult<DecodedPlanTask> {
+        let task: EncodedPlanTask = serde_json::from_slice(bytes).map_err(|err| {
+            LakeCatError::InvalidArgument(format!(
+                "invalid LakeCat/Sail structured plan task payload: {err}"
+            ))
+        })?;
+        if !matches!(
+            task.kind.as_str(),
+            "manifest-list" | "incremental-manifest-list" | "manifest"
+        ) {
+            return invalid_plan_task(plan_task);
+        }
+        Ok(DecodedPlanTask {
+            raw: plan_task.to_string(),
+            table: Some(task.table),
+            kind: task.kind,
+            snapshot_id: task.snapshot_id,
+            path: task.path,
+            filters: task.filters,
+        })
+    }
+
+    fn sign_plan_task_payload(bytes: &[u8]) -> LakeCatResult<String> {
+        let mut mac = HmacSha256::new_from_slice(&plan_task_signing_key()).map_err(|err| {
+            LakeCatError::Internal(format!("failed to initialize plan-task HMAC: {err}"))
+        })?;
+        mac.update(bytes);
+        Ok(hex::encode(mac.finalize().into_bytes()))
+    }
+
+    fn verify_plan_task_signature(bytes: &[u8], signature: &str) -> LakeCatResult<()> {
+        let signature = hex::decode(signature).map_err(|_| {
+            LakeCatError::InvalidArgument("invalid LakeCat/Sail plan task signature".to_string())
+        })?;
+        let mut mac = HmacSha256::new_from_slice(&plan_task_signing_key()).map_err(|err| {
+            LakeCatError::Internal(format!("failed to initialize plan-task HMAC: {err}"))
+        })?;
+        mac.update(bytes);
+        mac.verify_slice(&signature).map_err(|_| {
+            LakeCatError::InvalidArgument("invalid LakeCat/Sail plan task signature".to_string())
+        })
+    }
+
+    fn plan_task_signing_key() -> Vec<u8> {
+        std::env::var(PLAN_TASK_SIGNING_KEY_ENV)
+            .map(|value| value.into_bytes())
+            .unwrap_or_else(|_| DEFAULT_PLAN_TASK_SIGNING_KEY.to_vec())
     }
 
     fn invalid_plan_task<T>(plan_task: &str) -> LakeCatResult<T> {
@@ -2967,12 +3028,27 @@ pub mod sail_integration {
                 plan.scan_tasks[0]["plan-task"]
                     .as_str()
                     .unwrap()
-                    .starts_with("lakecat:sail-json:")
+                    .starts_with("lakecat:sail-json-hmac:")
             );
             let decoded = decode_plan_task(plan.scan_tasks[0]["plan-task"].as_str().unwrap())
                 .expect("structured plan task should decode");
             assert_eq!(decoded.table.as_deref(), Some(table.stable_id().as_str()));
             assert_eq!(decoded.filters.len(), 1);
+            let plan_task = plan.scan_tasks[0]["plan-task"].as_str().unwrap();
+            let mut tampered_plan_task = plan_task.to_string();
+            let signature_start = "lakecat:sail-json-hmac:".len();
+            let replacement = if &tampered_plan_task[signature_start..signature_start + 1] == "0" {
+                "1"
+            } else {
+                "0"
+            };
+            tampered_plan_task.replace_range(signature_start..signature_start + 1, replacement);
+            assert!(
+                decode_plan_task(&tampered_plan_task)
+                    .expect_err("tampered plan task should fail signature verification")
+                    .to_string()
+                    .contains("signature")
+            );
             let other_table = TableIdent::new(
                 WarehouseName::new("local").unwrap(),
                 "default".parse::<Namespace>().unwrap(),

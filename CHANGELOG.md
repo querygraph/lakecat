@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added HMAC-signed Sail plan-task envelopes for new scan-planning tokens while
+  keeping legacy unsigned structured tokens decodable for compatibility.
 - Added a capability-gated Iceberg REST table credentials endpoint that audits
   credential-vending attempts and returns no raw storage secrets until storage
   profiles can issue short-lived credentials safely.
