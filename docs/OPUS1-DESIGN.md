@@ -500,7 +500,7 @@ append a dated entry per slice; keep the finding-status table current.
 | 1 | Red default-feature tests | **CLOSED** | default workspace tests pass; Sail-specific service assertions are gated |
 | 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added; catalog config, namespace create/list, table create/load/commit, scan planning, task materialization, credential-vending requests, and QueryGraph bootstrap now require typed capabilities; catalog/namespace/table/scan/bootstrap/credential events and commit receipts persist in Turso audit/outbox; storage-profile modeling is started, but real short-lived remote credential issuance is still pending |
 | 3 | No durable / CAS commit | **CLOSED for local durable spine** | Turso commits now write local `file://` metadata when provided by the Sail-facing plan, advance pointers with expected-previous compare-and-swap, persist idempotency/audit/outbox rows, and have a concurrent writer regression |
-| 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, outbox, object-write-aware commits, outbox delivery, typed inferred storage profiles, governed managed warehouse storage profiles, and governed ODRL policy bindings; soft deletes, external secret-store integration, and credential issuance remain pending |
+| 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, outbox, object-write-aware commits, outbox delivery, typed inferred storage profiles, governed managed warehouse storage profiles, governed ODRL policy bindings, and governed table soft deletes; table restore, external secret-store integration, and credential issuance remain pending |
 | 5 | Service can't activate real engines | **CLOSED** | `sail-local` / `typesec-local` / `grust-local` passthroughs now in `lakecat-service` |
 | 6 | Sail used as struct library, not planner | **OPEN** | Tier 1 (`CatalogProvider`) not started |
 | 7 | Plan ↔ implementation drift | **PARTIAL** | architecture and OPUS working-plan docs now track the committed Turso CAS/object-write/outbox/OpenLineage/storage-profile slices; remaining drift risk is around Sail Tier 1, Grust taxonomy placement, and remote credential issuance |
@@ -539,9 +539,10 @@ object-store locations return no credentials until short-lived issuance exists.
 Governed management endpoints now upsert/list warehouse storage profiles and the
 Turso store persists them for longest-prefix credential selection. LakeCat also
 persists governed ODRL policy bindings and attaches active table bindings to the
-authorization context before TypeSec runs. The remaining P1/P2 work is remote
-object-store credential issuance, soft deletes, external secret-store
-integration, and broader operator APIs.
+authorization context before TypeSec runs. Governed table soft deletion now hides
+deleted tables from normal catalog reads and emits `table.deleted` audit/outbox
+events. The remaining P1/P2 work is remote object-store credential issuance,
+table restore, external secret-store integration, and broader operator APIs.
 
 ### Reviewer note — endorse the Turso pivot, with a gate (2026-06-16)
 
@@ -592,9 +593,9 @@ only once **P2** gives it a governed path to run on.
   graph/lineage side effects. Typed inferred storage profiles, governed
   storage-profile management endpoints, and Turso-backed longest-prefix profile
   selection are started. Governed ODRL policy-binding management is started and
-  active table bindings flow into authorization context; remote credential
-  issuance, soft deletes, and external secret-store integration remain
-  outstanding.*
+  active table bindings flow into authorization context. Governed table soft
+  deletion is started; remote credential issuance, table restore, and external
+  secret-store integration remain outstanding.*
 - **P2 — finish governance: capability model + governed read path.** Promote the
   boolean receipt to `Capability<Action, Resource>`; route agent reads through
   governed scan-planning; persist the receipt with the audit row. (Milestones 1, 5;
