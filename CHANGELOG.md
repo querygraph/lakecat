@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a `typesec-local` credential issuer that gates `typesec://` secret-ref
+  credential resolution through TypeSec `credentials.issue` policy checks before
+  returning scoped short-lived credential config.
 - Added a pluggable credential issuer on `LakeCatState`; the default issuer keeps
   remote profiles empty, while integrations can mint scoped short-lived
   credentials from governed storage-profile secret references.

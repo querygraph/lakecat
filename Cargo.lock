@@ -3705,6 +3705,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tower",
+ "typesec",
  "url",
 ]
 

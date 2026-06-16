@@ -93,6 +93,140 @@ impl CredentialIssuer for ConservativeCredentialIssuer {
     }
 }
 
+#[cfg(feature = "typesec-local")]
+pub mod typesec_credential_issuer {
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+    use lakecat_api::{ConfigEntry, StorageCredential};
+    use lakecat_core::{LakeCatError, LakeCatResult};
+    use lakecat_store::CredentialIssuanceMode;
+    use typesec::{PolicyEngine, PolicyResult, ResourceId, SubjectId};
+
+    use crate::{CredentialIssuanceRequest, CredentialIssuer};
+
+    #[async_trait]
+    pub trait SecretRefCredentialResolver: Send + Sync + 'static {
+        async fn resolve(
+            &self,
+            request: &CredentialIssuanceRequest,
+        ) -> LakeCatResult<Vec<StorageCredential>>;
+    }
+
+    pub struct TypeSecCredentialIssuer {
+        engine: Arc<dyn PolicyEngine>,
+        resolver: Arc<dyn SecretRefCredentialResolver>,
+    }
+
+    impl TypeSecCredentialIssuer {
+        pub fn new(
+            engine: Arc<dyn PolicyEngine>,
+            resolver: Arc<dyn SecretRefCredentialResolver>,
+        ) -> Arc<Self> {
+            Arc::new(Self { engine, resolver })
+        }
+
+        pub fn allow_all_demo() -> Arc<Self> {
+            Self::new(Arc::new(AllowAllPolicy), Arc::new(NoopSecretRefResolver))
+        }
+    }
+
+    #[async_trait]
+    impl CredentialIssuer for TypeSecCredentialIssuer {
+        async fn issue(
+            &self,
+            request: CredentialIssuanceRequest,
+        ) -> LakeCatResult<Vec<StorageCredential>> {
+            if request.profile.can_return_public_credential() {
+                return Ok(crate::public_storage_credentials_for_profile(
+                    &request.profile,
+                ));
+            }
+            if request.profile.issuance_mode != CredentialIssuanceMode::ShortLivedSecretRef {
+                return Ok(Vec::new());
+            }
+            let Some(secret_ref) = request.profile.secret_ref.as_deref() else {
+                return Err(LakeCatError::InvalidArgument(
+                    "short-lived credential issuance requires a secret reference".to_string(),
+                ));
+            };
+            if !secret_ref.starts_with("typesec://") {
+                return Ok(Vec::new());
+            }
+            let subject = SubjectId::from(request.authorization_receipt.principal.subject.clone());
+            let resource = ResourceId::from(secret_ref.to_string());
+            let decision = self.engine.check(&subject, "credentials.issue", &resource);
+            match decision {
+                PolicyResult::Allow => self.resolver.resolve(&request).await,
+                PolicyResult::Deny(reason) => Err(LakeCatError::Conflict(format!(
+                    "TypeSec denied credential issuance: {reason}"
+                ))),
+                PolicyResult::Delegate(reason) => Err(LakeCatError::Conflict(format!(
+                    "TypeSec delegated credential issuance without resolver policy: {reason}"
+                ))),
+                _ => Err(LakeCatError::Conflict(
+                    "TypeSec returned an unsupported credential issuance decision".to_string(),
+                )),
+            }
+        }
+    }
+
+    struct AllowAllPolicy;
+
+    impl PolicyEngine for AllowAllPolicy {
+        fn check(
+            &self,
+            _subject: &SubjectId,
+            _action: &str,
+            _resource: &ResourceId,
+        ) -> PolicyResult {
+            PolicyResult::Allow
+        }
+    }
+
+    struct NoopSecretRefResolver;
+
+    #[async_trait]
+    impl SecretRefCredentialResolver for NoopSecretRefResolver {
+        async fn resolve(
+            &self,
+            _request: &CredentialIssuanceRequest,
+        ) -> LakeCatResult<Vec<StorageCredential>> {
+            Ok(Vec::new())
+        }
+    }
+
+    pub struct StaticSecretRefCredentialResolver {
+        credentials: BTreeMap<String, Vec<ConfigEntry>>,
+    }
+
+    impl StaticSecretRefCredentialResolver {
+        pub fn new(credentials: BTreeMap<String, Vec<ConfigEntry>>) -> Arc<Self> {
+            Arc::new(Self { credentials })
+        }
+    }
+
+    #[async_trait]
+    impl SecretRefCredentialResolver for StaticSecretRefCredentialResolver {
+        async fn resolve(
+            &self,
+            request: &CredentialIssuanceRequest,
+        ) -> LakeCatResult<Vec<StorageCredential>> {
+            let Some(secret_ref) = request.profile.secret_ref.as_deref() else {
+                return Ok(Vec::new());
+            };
+            let Some(config) = self.credentials.get(secret_ref) else {
+                return Ok(Vec::new());
+            };
+            Ok(vec![StorageCredential {
+                prefix: request.profile.location_prefix.clone(),
+                config: config.clone(),
+            }])
+        }
+    }
+}
+
 impl LakeCatState {
     pub fn new(warehouse: WarehouseName, store: Arc<dyn CatalogStore>) -> Self {
         Self {
@@ -1399,6 +1533,32 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "typesec-local")]
+    #[derive(Debug)]
+    struct AllowCredentialIssuePolicy {
+        subject: String,
+        resource: String,
+    }
+
+    #[cfg(feature = "typesec-local")]
+    impl typesec::PolicyEngine for AllowCredentialIssuePolicy {
+        fn check(
+            &self,
+            subject: &typesec::SubjectId,
+            action: &str,
+            resource: &typesec::ResourceId,
+        ) -> typesec::PolicyResult {
+            if subject.as_str() == self.subject
+                && action == "credentials.issue"
+                && resource.as_str() == self.resource
+            {
+                typesec::PolicyResult::Allow
+            } else {
+                typesec::PolicyResult::Deny("not granted".to_string())
+            }
+        }
+    }
+
     #[derive(Debug, Default)]
     struct RecordingOutboxStore {
         events: Mutex<Vec<OutboxEvent>>,
@@ -2549,6 +2709,91 @@ mod tests {
             requests[0].authorization_receipt.principal.subject,
             "did:example:agent"
         );
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_gates_secret_ref_resolution() {
+        use std::collections::BTreeMap;
+
+        use crate::typesec_credential_issuer::{
+            StaticSecretRefCredentialResolver, TypeSecCredentialIssuer,
+        };
+
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:agent".to_string(),
+                resource: "typesec://lakecat/local/s3-events".to_string(),
+            }),
+            StaticSecretRefCredentialResolver::new(BTreeMap::from([(
+                "typesec://lakecat/local/s3-events".to_string(),
+                vec![
+                    ConfigEntry::new("lakecat.credential-kind", "typesec-short-lived"),
+                    ConfigEntry::new("aws.session-token", "temporary-typesec-token"),
+                ],
+            )])),
+        );
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_credential_issuer(issuer));
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/storage-profiles/s3-events")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "location-prefix": "s3://lakecat-demo/events",
+                    "provider": "s3",
+                    "issuance-mode": "short-lived-secret-ref",
+                    "secret-ref": "typesec://lakecat/local/s3-events"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"s3://lakecat-demo/events/tenant-a","metadata-location":"s3://lakecat-demo/events/tenant-a/metadata/00000.json","metadata":{"format-version":3,"current-schema-id":1,"schemas":[{"schema-id":1,"fields":[{"id":1,"name":"event_id","type":"string","required":true}]}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let credentials = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/namespaces/default/tables/events/credentials")
+            .header("x-lakecat-agent-did", "did:example:agent")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(credentials).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let credentials = body["storage-credentials"].as_array().unwrap();
+        assert_eq!(credentials.len(), 1);
+        let config = credentials[0]["config"].as_array().unwrap();
+        assert!(config.iter().any(|entry| {
+            entry["key"] == "lakecat.credential-kind" && entry["value"] == "typesec-short-lived"
+        }));
+
+        let denied = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/namespaces/default/tables/events/credentials")
+            .header("x-lakecat-agent-did", "did:example:other")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(denied).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
     }
 
     #[tokio::test]

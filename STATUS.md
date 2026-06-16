@@ -6,10 +6,10 @@ Updated: 2026-06-16
 
 - LakeCat is on `master`.
 - Latest committed LakeCat slice before this continuation:
-  `6e62202 Model storage profile secret refs`.
-- Current working slice adds a pluggable credential issuer to governed credential
-  vending. The default issuer remains conservative; integrations can now mint
-  scoped short-lived credentials from storage-profile secret references.
+  `a700fc0 Add pluggable credential issuer`.
+- Current working slice adds a `typesec-local` credential issuer that gates
+  `typesec://` secret-ref resolution through TypeSec `credentials.issue` policy
+  checks before returning scoped short-lived credential config.
 - Graph-related implementation is still intentionally kept out of LakeCat unless
   it is a bounded outbox/projection concern. Reusable graph taxonomy and graph
   mechanics belong in `/Users/alexy/src/grust`.
@@ -18,17 +18,14 @@ Updated: 2026-06-16
 
 ## In Progress In This Commit
 
-- `LakeCatState` now carries an object-safe `CredentialIssuer`.
-- `ConservativeCredentialIssuer` is the default and preserves the previous safe
-  behavior: local `file://` profiles return no-secret hints, remote profiles
-  return no credentials.
-- Credential vending calls the issuer after the typed `CredentialsVendCapability`
-  is minted.
-- The issuer receives the table record, matched storage profile, and
-  authorization receipt.
-- Tests include a recording issuer that vends mock short-lived credentials from
-  a `short-lived-secret-ref` profile without exposing the `secret-ref` in the
-  response.
+- `lakecat-service/typesec-local` now depends on the TypeSec facade directly.
+- `TypeSecCredentialIssuer` checks `credentials.issue` against the requesting
+  principal and `typesec://` secret-ref resource.
+- `SecretRefCredentialResolver` is an injected boundary for resolving a
+  policy-approved secret reference into scoped short-lived credential config.
+- The service binary installs a no-op TypeSec issuer when `typesec-local` is
+  enabled, preserving safe defaults until a real resolver backend is configured.
+- Feature-gated tests cover allowed issuance and denied issuance.
 
 ## Verification To Run Before Commit
 
@@ -40,6 +37,6 @@ Updated: 2026-06-16
 
 ## Next Recommended Slice
 
-Implement a TypeSec-backed credential issuer that resolves `typesec://` secret
-references and mints real short-lived cloud credentials, keeping raw long-lived
-secret material out of LakeCat catalog state.
+Implement real external secret-store resolver backends for `typesec://` profiles
+and OIDC/cloud federation, keeping raw long-lived secret material out of LakeCat
+catalog state.

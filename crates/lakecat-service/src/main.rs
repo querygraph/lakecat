@@ -8,7 +8,7 @@ use lakecat_lineage::HashOnlyLineageSink;
 #[cfg(not(feature = "typesec-local"))]
 use lakecat_security::AllowAllGovernanceEngine;
 use lakecat_security::GovernanceEngine;
-use lakecat_service::{LakeCatState, app};
+use lakecat_service::{CredentialIssuer, LakeCatState, app};
 use lakecat_store::{CatalogStore, MemoryCatalogStore};
 
 #[tokio::main]
@@ -19,12 +19,14 @@ async fn main() {
     );
     let state = {
         let sail = state.sail.clone();
-        state.with_integrations(
-            sail,
-            configured_governance_engine(),
-            configured_graph_sink(),
-            HashOnlyLineageSink::new(),
-        )
+        state
+            .with_integrations(
+                sail,
+                configured_governance_engine(),
+                configured_graph_sink(),
+                HashOnlyLineageSink::new(),
+            )
+            .with_credential_issuer(configured_credential_issuer())
     };
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8181")
         .await
@@ -61,6 +63,16 @@ fn configured_governance_engine() -> Arc<dyn GovernanceEngine> {
 #[cfg(not(feature = "typesec-local"))]
 fn configured_governance_engine() -> Arc<dyn GovernanceEngine> {
     AllowAllGovernanceEngine::new()
+}
+
+#[cfg(feature = "typesec-local")]
+fn configured_credential_issuer() -> Arc<dyn CredentialIssuer> {
+    lakecat_service::typesec_credential_issuer::TypeSecCredentialIssuer::allow_all_demo()
+}
+
+#[cfg(not(feature = "typesec-local"))]
+fn configured_credential_issuer() -> Arc<dyn CredentialIssuer> {
+    lakecat_service::ConservativeCredentialIssuer::new()
 }
 
 #[cfg(feature = "grust-local")]
