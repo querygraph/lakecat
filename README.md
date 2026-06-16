@@ -1,0 +1,38 @@
+# LakeCat
+
+LakeCat is a Rust-native Iceberg REST catalog and QueryGraph foundation.
+
+The implementation keeps Iceberg compatibility at the service boundary while
+pushing engine-heavy metadata planning, pruning, and commit validation toward
+Sail. See [ARCHITECTURE.md](ARCHITECTURE.md) for the system design.
+
+The current scaffold exposes an Iceberg REST-compatible catalog surface under
+`/catalog/v1` and a QueryGraph bootstrap bundle at `/querygraph/v1/bootstrap`.
+The bootstrap bundle projects live catalog tables into Croissant, CDIF, OSI,
+ODRL, OpenLineage, and a Grust-ready graph envelope.
+
+Scan planning already routes through the Sail-facing engine. Point-in-time scans
+produce opaque Iceberg REST plan-task tokens from stable Sail metadata, and
+append-only incremental scans over a parent snapshot chain use Sail's manifest
+list reader to plan only manifests added in `(start-snapshot-id, end-snapshot-id]`
+when the table metadata and manifests are locally readable. Added delete
+manifests are expanded through Sail's delete-file index so file scan tasks carry
+Iceberg delete-file references. Non-append snapshot operations intentionally fail
+until overwrite/delete incremental semantics are planned end to end.
+
+REST scan filters are validated against Sail's generated Iceberg expression
+models and stable table schema before planning. The accepted expression bundle is
+preserved in structured opaque plan-task tokens, which are bound to the planned
+table for stateless fetchScanTasks calls. During local manifest expansion, simple
+predicates are applied conservatively to Iceberg file bounds when metrics are
+present; missing metrics keep the file.
+
+HTTP handlers resolve principals from `x-lakecat-principal`,
+`x-lakecat-agent-did`, or bearer authorization headers before calling the
+governance engine; absent credentials remain anonymous for local compatibility.
+The service binary exposes `sail-local`, `typesec-local`, `grust-local`, and
+`turso-local` feature gates so local real integrations can be activated without
+code edits. With the `turso-local` feature, `LAKECAT_TURSO_PATH` selects a
+Turso-backed `TursoCatalogStore` for namespaces, table records, metadata pointer
+history, audit/outbox rows, and idempotent commit replay; without it the binary
+keeps the in-memory store.

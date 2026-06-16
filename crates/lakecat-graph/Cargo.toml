@@ -1,0 +1,18 @@
+[package]
+name = "lakecat-graph"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+grust-local = ["dep:grust-graph"]
+
+[dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true }
+grust-graph = { workspace = true, optional = true, features = ["memory"] }
+lakecat-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

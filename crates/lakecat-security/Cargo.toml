@@ -1,0 +1,21 @@
+[package]
+name = "lakecat-security"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+typesec-local = ["dep:typesec"]
+
+[dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true }
+lakecat-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+typesec = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

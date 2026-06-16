@@ -1,0 +1,537 @@
+use chrono::{DateTime, Utc};
+use lakecat_core::{LakeCatResult, TableIdent, WarehouseName, content_hash_json};
+use lakecat_store::TableRecord;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct QueryGraphBootstrap {
+    pub warehouse: WarehouseName,
+    pub generated_at: DateTime<Utc>,
+    pub bundle_hash: String,
+    pub tables: Vec<QueryGraphTableProjection>,
+    pub graph: QueryGraphCatalogGraph,
+    pub open_lineage: Value,
+}
+
+impl QueryGraphBootstrap {
+    pub fn from_tables(
+        warehouse: WarehouseName,
+        tables: impl IntoIterator<Item = TableRecord>,
+    ) -> LakeCatResult<Self> {
+        let generated_at = Utc::now();
+        let tables = tables
+            .into_iter()
+            .map(QueryGraphTableProjection::from_table)
+            .collect::<Vec<_>>();
+        let graph = QueryGraphCatalogGraph::from_tables(&tables);
+        let open_lineage = bootstrap_open_lineage(&warehouse, &tables, generated_at);
+        let bundle_payload = json!({
+            "warehouse": warehouse.as_str(),
+            "tables": tables,
+            "graph": graph,
+            "openLineage": open_lineage,
+        });
+        let bundle_hash = content_hash_json(&bundle_payload)?;
+        let tables = serde_json::from_value(bundle_payload["tables"].clone()).map_err(|err| {
+            lakecat_core::LakeCatError::Internal(format!(
+                "failed to rebuild QueryGraph table projections: {err}"
+            ))
+        })?;
+        let graph = serde_json::from_value(bundle_payload["graph"].clone()).map_err(|err| {
+            lakecat_core::LakeCatError::Internal(format!(
+                "failed to rebuild QueryGraph catalog graph: {err}"
+            ))
+        })?;
+        Ok(Self {
+            warehouse,
+            generated_at,
+            bundle_hash,
+            tables,
+            graph,
+            open_lineage,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct QueryGraphTableProjection {
+    pub ident: TableIdent,
+    pub stable_id: String,
+    pub location: String,
+    pub metadata_location: Option<String>,
+    pub version: u64,
+    pub format_version: Option<i64>,
+    pub croissant: Value,
+    pub cdif: Value,
+    pub osi: Value,
+    pub odrl: Value,
+}
+
+impl QueryGraphTableProjection {
+    pub fn from_table(table: TableRecord) -> Self {
+        let stable_id = table.ident.stable_id();
+        let fields = iceberg_fields(&table.metadata);
+        let odrl = odrl_policy(&stable_id);
+        let croissant = croissant_dataset(&table, &stable_id, &fields);
+        let cdif = cdif_resource(&table, &stable_id, &fields, odrl.clone());
+        let osi = osi_document(&table, &fields);
+        Self {
+            ident: table.ident,
+            stable_id,
+            location: table.location,
+            metadata_location: table.metadata_location,
+            version: table.version,
+            format_version: table.metadata.get("format-version").and_then(Value::as_i64),
+            croissant,
+            cdif,
+            osi,
+            odrl,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct QueryGraphCatalogGraph {
+    pub nodes: Vec<QueryGraphNode>,
+    pub edges: Vec<QueryGraphEdge>,
+}
+
+impl QueryGraphCatalogGraph {
+    pub fn from_tables(tables: &[QueryGraphTableProjection]) -> Self {
+        let mut nodes = Vec::with_capacity(tables.len() * 3 + 1);
+        let mut edges = Vec::with_capacity(tables.len() * 3);
+        nodes.push(QueryGraphNode {
+            id: "lakecat:catalog".to_string(),
+            label: "Catalog".to_string(),
+            properties: json!({ "name": "LakeCat" }),
+        });
+        for table in tables {
+            let namespace_id = format!(
+                "lakecat:namespace:{}:{}",
+                table.ident.warehouse, table.ident.namespace
+            );
+            nodes.push(QueryGraphNode {
+                id: namespace_id.clone(),
+                label: "Namespace".to_string(),
+                properties: json!({
+                    "warehouse": table.ident.warehouse.as_str(),
+                    "namespace": table.ident.namespace.path(),
+                }),
+            });
+            nodes.push(QueryGraphNode {
+                id: table.stable_id.clone(),
+                label: "IcebergTable".to_string(),
+                properties: json!({
+                    "name": table.ident.name.as_str(),
+                    "location": table.location,
+                    "metadataLocation": table.metadata_location,
+                    "formatVersion": table.format_version,
+                }),
+            });
+            let policy_id = table
+                .odrl
+                .get("@id")
+                .and_then(Value::as_str)
+                .unwrap_or("lakecat:policy:unknown")
+                .to_string();
+            nodes.push(QueryGraphNode {
+                id: policy_id.clone(),
+                label: "ODRLPolicy".to_string(),
+                properties: json!({ "target": table.stable_id }),
+            });
+            edges.push(QueryGraphEdge {
+                from: "lakecat:catalog".to_string(),
+                to: namespace_id.clone(),
+                label: "HAS_NAMESPACE".to_string(),
+            });
+            edges.push(QueryGraphEdge {
+                from: namespace_id,
+                to: table.stable_id.clone(),
+                label: "CONTAINS_TABLE".to_string(),
+            });
+            edges.push(QueryGraphEdge {
+                from: table.stable_id.clone(),
+                to: policy_id,
+                label: "GOVERNED_BY".to_string(),
+            });
+        }
+        Self { nodes, edges }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct QueryGraphNode {
+    pub id: String,
+    pub label: String,
+    pub properties: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct QueryGraphEdge {
+    pub from: String,
+    pub to: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct IcebergFieldProjection {
+    id: Option<i64>,
+    name: String,
+    data_type: String,
+    required: bool,
+    description: String,
+    semantic_type: Option<String>,
+}
+
+fn croissant_dataset(
+    table: &TableRecord,
+    stable_id: &str,
+    fields: &[IcebergFieldProjection],
+) -> Value {
+    json!({
+        "@context": {
+            "@vocab": "https://schema.org/",
+            "cr": "http://mlcommons.org/croissant/",
+            "dcat": "http://www.w3.org/ns/dcat#",
+            "odrl": "http://www.w3.org/ns/odrl/2/"
+        },
+        "@type": "cr:Dataset",
+        "@id": stable_id,
+        "name": table.ident.name.as_str(),
+        "description": format!("Iceberg table {} served by LakeCat for QueryGraph.", table.ident.stable_id()),
+        "license": "https://spdx.org/licenses/Apache-2.0.html",
+        "creator": [{"@type": "Organization", "name": "LakeCat"}],
+        "keywords": ["lakecat", "iceberg", "sail", "querygraph"],
+        "distribution": [{
+            "@type": "cr:FileObject",
+            "@id": format!("{stable_id}#metadata"),
+            "name": "Iceberg table metadata",
+            "contentUrl": table.metadata_location.as_deref().unwrap_or(&table.location),
+            "encodingFormat": "application/vnd.apache.iceberg.metadata+json"
+        }],
+        "recordSet": [{
+            "@type": "cr:RecordSet",
+            "@id": format!("{stable_id}#record-set"),
+            "name": table.ident.name.as_str(),
+            "field": fields.iter().map(croissant_field).collect::<Vec<_>>()
+        }]
+    })
+}
+
+fn cdif_resource(
+    table: &TableRecord,
+    stable_id: &str,
+    fields: &[IcebergFieldProjection],
+    odrl: Value,
+) -> Value {
+    json!({
+        "@context": {
+            "cdif": "https://cdif.codata.org/",
+            "dcat": "http://www.w3.org/ns/dcat#",
+            "dct": "http://purl.org/dc/terms/",
+            "odrl": "http://www.w3.org/ns/odrl/2/"
+        },
+        "@type": "dcat:Dataset",
+        "@id": stable_id,
+        "dct:title": table.ident.name.as_str(),
+        "dct:description": format!("LakeCat CDIF projection for Iceberg table {}.", table.ident.stable_id()),
+        "cdif:profile": [
+            "https://cdif.codata.org/profile/discovery",
+            "https://cdif.codata.org/profile/manifest",
+            "https://cdif.codata.org/profile/data-description",
+            "https://cdif.codata.org/profile/data-access",
+            "https://cdif.codata.org/profile/access-rights",
+            "https://cdif.codata.org/profile/data-integration",
+            "https://cdif.codata.org/profile/provenance"
+        ],
+        "dcat:landingPage": format!("lakecat://{}", table.ident.stable_id()),
+        "dcat:accessService": {
+            "@type": "dcat:DataService",
+            "endpointURL": format!("/catalog/v1/namespaces/{}/tables/{}", table.ident.namespace.path(), table.ident.name.as_str())
+        },
+        "dcat:distribution": [{
+            "@type": "dcat:Distribution",
+            "@id": format!("{stable_id}#metadata"),
+            "dct:title": "Iceberg table metadata",
+            "dcat:downloadURL": table.metadata_location.as_deref().unwrap_or(&table.location),
+            "dcat:mediaType": "application/vnd.apache.iceberg.metadata+json"
+        }],
+        "cdif:dataElement": fields.iter().map(|field| {
+            json!({
+                "@type": "cdif:DataElement",
+                "@id": format!("{stable_id}/field/{}", field.name),
+                "dct:title": field.name,
+                "dct:description": field.description,
+                "cdif:dataType": field.data_type,
+                "cdif:semanticType": field.semantic_type,
+                "cdif:recordSet": format!("{stable_id}#record-set")
+            })
+        }).collect::<Vec<_>>(),
+        "dct:accessRights": {
+            "@type": "dct:RightsStatement",
+            "@id": odrl.get("@id").and_then(Value::as_str),
+            "dct:license": "https://spdx.org/licenses/Apache-2.0.html",
+            "dct:description": "Access and usage must satisfy ODRL and TypeSec policy before agent use.",
+            "odrl:policy": odrl
+        }
+    })
+}
+
+fn osi_document(table: &TableRecord, fields: &[IcebergFieldProjection]) -> Value {
+    json!({
+        "version": "0.2.0.dev0",
+        "semantic_model": {
+            "name": safe_sql_name(&format!("lakecat_{}_{}", table.ident.namespace.path(), table.ident.name.as_str())),
+            "description": format!("Open Semantic Interchange model for {}.", table.ident.stable_id()),
+            "ai_context": "Use Sail planning through LakeCat and obey TypeSec/ODRL rights before any agent reads table data.",
+            "datasets": [{
+                "name": safe_sql_name(table.ident.name.as_str()),
+                "source": format!("sail.{}.{}", safe_sql_name(&table.ident.namespace.path()), safe_sql_name(table.ident.name.as_str())),
+                "description": format!("Governed Iceberg table at {}.", table.location),
+                "ai_context": "This dataset is backed by Iceberg metadata and planned through Sail.",
+                "fields": fields.iter().map(|field| {
+                    json!({
+                        "name": safe_sql_name(&field.name),
+                        "description": field.description,
+                        "semantic_type": field.semantic_type,
+                        "expression": {
+                            "dialects": [{
+                                "dialect": "SAIL_SQL",
+                                "expression": field.name
+                            }]
+                        }
+                    })
+                }).collect::<Vec<_>>()
+            }],
+            "metrics": [],
+            "ontology_terms": fields
+                .iter()
+                .filter_map(|field| field.semantic_type.as_ref())
+                .map(|term| json!({
+                    "id": term,
+                    "label": term,
+                    "source": "iceberg-schema"
+                }))
+                .collect::<Vec<_>>()
+        }
+    })
+}
+
+fn odrl_policy(stable_id: &str) -> Value {
+    json!({
+        "@type": "odrl:Policy",
+        "@id": format!("{stable_id}#odrl"),
+        "odrl:target": stable_id,
+        "odrl:assigner": "did:web:querygraph.ai:lakecat",
+        "odrl:permission": [
+            {
+                "odrl:action": "odrl:read",
+                "odrl:assignee": "did:web:querygraph.ai:agent",
+                "odrl:constraint": "typesec:catalog.table.load"
+            },
+            {
+                "odrl:action": "querygraph:index",
+                "odrl:assignee": "did:web:querygraph.ai:agent",
+                "odrl:constraint": "typesec:catalog.table.plan_scan"
+            }
+        ],
+        "odrl:prohibition": []
+    })
+}
+
+fn bootstrap_open_lineage(
+    warehouse: &WarehouseName,
+    tables: &[QueryGraphTableProjection],
+    generated_at: DateTime<Utc>,
+) -> Value {
+    json!({
+        "eventType": "COMPLETE",
+        "eventTime": generated_at,
+        "run": {
+            "runId": format!("lakecat-querygraph-bootstrap-{}", warehouse.as_str()),
+            "facets": {
+                "queryGraph_semanticBundle": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/querygraph-semantic-bundle-facet/0.1.0.json",
+                    "tableCount": tables.len()
+                }
+            }
+        },
+        "job": {
+            "namespace": format!("lakecat.{}", warehouse.as_str()),
+            "name": "querygraph-bootstrap"
+        },
+        "inputs": [],
+        "outputs": tables.iter().map(|table| {
+            json!({
+                "namespace": format!("lakecat.{}.{}", table.ident.warehouse, table.ident.namespace),
+                "name": table.ident.name.as_str(),
+                "facets": {
+                    "dataSource": {
+                        "_producer": "https://querygraph.ai/lakecat",
+                        "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/DatasourceDatasetFacet.json",
+                        "name": "LakeCat",
+                        "uri": table.location
+                    },
+                    "queryGraph_catalog": {
+                        "_producer": "https://querygraph.ai/lakecat",
+                        "_schemaURL": "https://querygraph.ai/schemas/openlineage/querygraph-catalog-facet/0.1.0.json",
+                        "stableId": table.stable_id,
+                        "metadataLocation": table.metadata_location,
+                        "formatVersion": table.format_version
+                    }
+                }
+            })
+        }).collect::<Vec<_>>(),
+        "producer": "https://querygraph.ai/lakecat",
+        "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json"
+    })
+}
+
+fn croissant_field(field: &IcebergFieldProjection) -> Value {
+    json!({
+        "@type": "cr:Field",
+        "name": field.name,
+        "dataType": field.data_type,
+        "description": field.description,
+        "sameAs": field.semantic_type,
+        "required": field.required,
+        "source": field.id.map(|id| format!("iceberg-field-id:{id}"))
+    })
+}
+
+fn iceberg_fields(metadata: &Value) -> Vec<IcebergFieldProjection> {
+    let schema = current_schema(metadata)
+        .or_else(|| metadata.get("schema"))
+        .unwrap_or(&Value::Null);
+    schema
+        .get("fields")
+        .and_then(Value::as_array)
+        .map(|fields| fields.iter().map(iceberg_field).collect())
+        .unwrap_or_default()
+}
+
+fn current_schema(metadata: &Value) -> Option<&Value> {
+    let current_schema_id = metadata.get("current-schema-id").and_then(Value::as_i64)?;
+    metadata
+        .get("schemas")
+        .and_then(Value::as_array)?
+        .iter()
+        .find(|schema| schema.get("schema-id").and_then(Value::as_i64) == Some(current_schema_id))
+}
+
+fn iceberg_field(field: &Value) -> IcebergFieldProjection {
+    let name = field
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("field")
+        .to_string();
+    IcebergFieldProjection {
+        id: field.get("id").and_then(Value::as_i64),
+        data_type: field_type(field.get("type").unwrap_or(&Value::Null)),
+        required: field
+            .get("required")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        description: field
+            .get("doc")
+            .or_else(|| field.get("description"))
+            .and_then(Value::as_str)
+            .map(ToString::to_string)
+            .unwrap_or_else(|| format!("Iceberg field {name}.")),
+        semantic_type: field
+            .get("semantic-type")
+            .or_else(|| field.get("semanticType"))
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        name,
+    }
+}
+
+fn field_type(value: &Value) -> String {
+    match value {
+        Value::String(value) => value.clone(),
+        Value::Object(map) => map
+            .get("type")
+            .and_then(Value::as_str)
+            .map(ToString::to_string)
+            .unwrap_or_else(|| "struct".to_string()),
+        _ => "unknown".to_string(),
+    }
+}
+
+fn safe_sql_name(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+        } else {
+            out.push('_');
+        }
+    }
+    let out = out.trim_matches('_');
+    if out.is_empty() {
+        "lakecat_value".to_string()
+    } else {
+        out.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lakecat_core::{Namespace, Principal, TableName};
+
+    #[test]
+    fn projects_iceberg_table_into_querygraph_bundle() {
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            Namespace::new(vec!["default".to_string()]).unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let table = TableRecord::new(
+            ident,
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            json!({
+                "format-version": 3,
+                "current-schema-id": 1,
+                "schemas": [{
+                    "schema-id": 1,
+                    "fields": [{
+                        "id": 1,
+                        "name": "event_id",
+                        "type": "string",
+                        "required": true,
+                        "doc": "Event identifier.",
+                        "semantic-type": "https://schema.org/identifier"
+                    }]
+                }]
+            }),
+            Principal::anonymous(),
+        );
+
+        let bundle =
+            QueryGraphBootstrap::from_tables(WarehouseName::new("local").unwrap(), vec![table])
+                .unwrap();
+
+        assert_eq!(bundle.tables.len(), 1);
+        assert_eq!(bundle.tables[0].format_version, Some(3));
+        assert_eq!(
+            bundle.tables[0].cdif["dct:accessRights"]["odrl:policy"]["@type"],
+            "odrl:Policy"
+        );
+        assert!(
+            bundle
+                .graph
+                .edges
+                .iter()
+                .any(|edge| edge.label == "GOVERNED_BY")
+        );
+        assert_eq!(bundle.open_lineage["eventType"], "COMPLETE");
+    }
+}

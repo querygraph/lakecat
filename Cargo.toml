@@ -1,0 +1,48 @@
+[workspace]
+members = [
+    "crates/lakecat-api",
+    "crates/lakecat-core",
+    "crates/lakecat-graph",
+    "crates/lakecat-lineage",
+    "crates/lakecat-querygraph",
+    "crates/lakecat-sail",
+    "crates/lakecat-security",
+    "crates/lakecat-service",
+    "crates/lakecat-store",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/querygraph/lakecat"
+
+[workspace.dependencies]
+async-trait = "0.1"
+axum = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+hex = "0.4"
+http = "1"
+object_store = { version = "0.13.2", features = ["aws", "gcp", "azure", "http"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync"] }
+tower = "0.5"
+turso = { version = "0.7.0-pre.7", default-features = false }
+url = "2.5.8"
+uuid = { version = "1", features = ["serde", "v4"] }
+
+lakecat-api = { path = "crates/lakecat-api" }
+lakecat-core = { path = "crates/lakecat-core" }
+lakecat-graph = { path = "crates/lakecat-graph" }
+lakecat-lineage = { path = "crates/lakecat-lineage" }
+lakecat-querygraph = { path = "crates/lakecat-querygraph" }
+lakecat-sail = { path = "crates/lakecat-sail" }
+lakecat-security = { path = "crates/lakecat-security" }
+lakecat-store = { path = "crates/lakecat-store" }
+
+grust-graph = { package = "grust-graph", path = "../grust/crates/grust", version = "0.8.4", default-features = false }
+typesec = { path = "../typesec/crates/typesec", version = "0.7.0", default-features = false }

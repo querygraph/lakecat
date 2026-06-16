@@ -1,0 +1,37 @@
+[package]
+name = "lakecat-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+grust-local = ["dep:grust-graph", "lakecat-graph/grust-local"]
+sail-local = ["lakecat-sail/sail-local"]
+turso-local = ["lakecat-store/turso-local"]
+typesec-local = ["lakecat-security/typesec-local"]
+
+[dependencies]
+axum = { workspace = true }
+http = { workspace = true }
+lakecat-api = { workspace = true }
+lakecat-core = { workspace = true }
+lakecat-graph = { workspace = true }
+lakecat-lineage = { workspace = true }
+lakecat-querygraph = { workspace = true }
+lakecat-sail = { workspace = true }
+lakecat-security = { workspace = true }
+lakecat-store = { workspace = true }
+chrono = { workspace = true }
+grust-graph = { workspace = true, optional = true, features = ["memory"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+sail-catalog-iceberg = { path = "../../../sail/crates/sail-catalog-iceberg" }
+sail-iceberg = { path = "../../../sail/crates/sail-iceberg" }
+url = { workspace = true }
