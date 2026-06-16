@@ -13,6 +13,7 @@ turso-local = ["lakecat-store/turso-local"]
 typesec-local = ["lakecat-security/typesec-local"]
 
 [dependencies]
+async-trait = { workspace = true }
 axum = { workspace = true }
 http = { workspace = true }
 lakecat-api = { workspace = true }
@@ -33,6 +34,5 @@ tower = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
-async-trait = { workspace = true }
 sail-catalog-iceberg = { path = "../../../sail/crates/sail-catalog-iceberg" }
 sail-iceberg = { path = "../../../sail/crates/sail-iceberg" }

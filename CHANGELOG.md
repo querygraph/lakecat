@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a pluggable credential issuer on `LakeCatState`; the default issuer keeps
+  remote profiles empty, while integrations can mint scoped short-lived
+  credentials from governed storage-profile secret references.
 - Added external secret-store references to governed storage profiles, including
   `short-lived-secret-ref` issuance metadata while keeping remote credential
   responses empty until a real issuer is wired in.

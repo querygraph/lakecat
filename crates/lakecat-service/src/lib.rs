@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -50,8 +51,46 @@ pub struct LakeCatState {
     pub store: Arc<dyn CatalogStore>,
     pub sail: Arc<dyn SailCatalogEngine>,
     pub governance: Arc<dyn GovernanceEngine>,
+    pub credential_issuer: Arc<dyn CredentialIssuer>,
     pub graph: Arc<dyn CatalogGraphSink>,
     pub lineage: Arc<dyn LineageSink>,
+}
+
+#[async_trait]
+pub trait CredentialIssuer: Send + Sync + 'static {
+    async fn issue(
+        &self,
+        request: CredentialIssuanceRequest,
+    ) -> Result<Vec<StorageCredential>, LakeCatError>;
+}
+
+#[derive(Debug, Clone)]
+pub struct CredentialIssuanceRequest {
+    pub table: TableRecord,
+    pub profile: StorageProfile,
+    pub authorization_receipt: AuthorizationReceipt,
+}
+
+#[derive(Debug, Default)]
+pub struct ConservativeCredentialIssuer;
+
+impl ConservativeCredentialIssuer {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self)
+    }
+}
+
+#[async_trait]
+impl CredentialIssuer for ConservativeCredentialIssuer {
+    async fn issue(
+        &self,
+        request: CredentialIssuanceRequest,
+    ) -> Result<Vec<StorageCredential>, LakeCatError> {
+        if request.profile.can_return_public_credential() {
+            return Ok(public_storage_credentials_for_profile(&request.profile));
+        }
+        Ok(Vec::new())
+    }
 }
 
 impl LakeCatState {
@@ -61,6 +100,7 @@ impl LakeCatState {
             store,
             sail: default_sail_engine(),
             governance: AllowAllGovernanceEngine::new(),
+            credential_issuer: ConservativeCredentialIssuer::new(),
             graph: NoopCatalogGraphSink::new(),
             lineage: HashOnlyLineageSink::new(),
         }
@@ -77,6 +117,11 @@ impl LakeCatState {
         self.governance = governance;
         self.graph = graph;
         self.lineage = lineage;
+        self
+    }
+
+    pub fn with_credential_issuer(mut self, credential_issuer: Arc<dyn CredentialIssuer>) -> Self {
+        self.credential_issuer = credential_issuer;
         self
     }
 }
@@ -366,7 +411,14 @@ async fn load_credentials(
     let capability = authorize_credentials_vend(&state, identity, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
     let storage_profile = state.store.storage_profile_for_table(&table).await?;
-    let storage_credentials = storage_credentials_for_profile(&storage_profile);
+    let storage_credentials = state
+        .credential_issuer
+        .issue(CredentialIssuanceRequest {
+            table: table.clone(),
+            profile: storage_profile.clone(),
+            authorization_receipt: capability.receipt().clone(),
+        })
+        .await?;
     let ident = capability.table().clone();
     state
         .store
@@ -380,6 +432,7 @@ async fn load_credentials(
                 "authorization-receipt": capability.receipt(),
                 "storage-location": table.location,
                 "storage-profile-id": storage_profile.profile_id,
+                "secret-ref-present": storage_profile.secret_ref.is_some(),
                 "credential-count": storage_credentials.len(),
                 "mode": storage_profile.issuance_mode.as_str(),
             }),
@@ -910,10 +963,7 @@ fn load_table_response(table: TableRecord) -> LoadTableResponse {
     }
 }
 
-fn storage_credentials_for_profile(profile: &StorageProfile) -> Vec<StorageCredential> {
-    if !profile.can_return_public_credential() {
-        return Vec::new();
-    }
+fn public_storage_credentials_for_profile(profile: &StorageProfile) -> Vec<StorageCredential> {
     let mut config = vec![ConfigEntry::new(
         "lakecat.storage-profile-id",
         profile.profile_id.clone(),
@@ -1316,6 +1366,36 @@ mod tests {
                 open_lineage_hash: "recorded-openlineage".to_string(),
                 sink: "recording".to_string(),
             })
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct RecordingCredentialIssuer {
+        requests: Mutex<Vec<CredentialIssuanceRequest>>,
+    }
+
+    #[async_trait]
+    impl CredentialIssuer for RecordingCredentialIssuer {
+        async fn issue(
+            &self,
+            request: CredentialIssuanceRequest,
+        ) -> lakecat_core::LakeCatResult<Vec<StorageCredential>> {
+            self.requests.lock().await.push(request.clone());
+            if request.profile.issuance_mode == CredentialIssuanceMode::ShortLivedSecretRef {
+                return Ok(vec![StorageCredential {
+                    prefix: request.profile.location_prefix.clone(),
+                    config: vec![
+                        ConfigEntry::new("lakecat.storage-profile-id", request.profile.profile_id),
+                        ConfigEntry::new("lakecat.credential-kind", "mock-short-lived"),
+                        ConfigEntry::new(
+                            "lakecat.authorization-principal",
+                            request.authorization_receipt.principal.subject,
+                        ),
+                        ConfigEntry::new("aws.session-token", "temporary-test-token"),
+                    ],
+                }]);
+            }
+            Ok(public_storage_credentials_for_profile(&request.profile))
         }
     }
 
@@ -2392,6 +2472,83 @@ mod tests {
             .unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["storage-credentials"], serde_json::json!([]));
+    }
+
+    #[tokio::test]
+    async fn credential_issuer_vends_short_lived_credentials_for_secret_ref_profile() {
+        let issuer = Arc::new(RecordingCredentialIssuer::default());
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_credential_issuer(issuer.clone()));
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/storage-profiles/s3-events")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "location-prefix": "s3://lakecat-demo/events",
+                    "provider": "s3",
+                    "issuance-mode": "short-lived-secret-ref",
+                    "secret-ref": "typesec://lakecat/local/s3-events"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"s3://lakecat-demo/events/tenant-a","metadata-location":"s3://lakecat-demo/events/tenant-a/metadata/00000.json","metadata":{"format-version":3,"current-schema-id":1,"schemas":[{"schema-id":1,"fields":[{"id":1,"name":"event_id","type":"string","required":true}]}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let credentials = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/namespaces/default/tables/events/credentials")
+            .header("x-lakecat-agent-did", "did:example:agent")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(credentials).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let credentials = body["storage-credentials"].as_array().unwrap();
+        assert_eq!(credentials.len(), 1);
+        assert_eq!(
+            credentials[0]["prefix"],
+            serde_json::json!("s3://lakecat-demo/events")
+        );
+        let config = credentials[0]["config"].as_array().unwrap();
+        assert!(config.iter().any(|entry| {
+            entry["key"] == "lakecat.credential-kind" && entry["value"] == "mock-short-lived"
+        }));
+        assert!(
+            !config
+                .iter()
+                .any(|entry| { entry["value"] == "typesec://lakecat/local/s3-events" })
+        );
+
+        let requests = issuer.requests.lock().await;
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            requests[0].profile.secret_ref.as_deref(),
+            Some("typesec://lakecat/local/s3-events")
+        );
+        assert_eq!(
+            requests[0].authorization_receipt.principal.subject,
+            "did:example:agent"
+        );
     }
 
     #[tokio::test]

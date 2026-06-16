@@ -292,11 +292,14 @@ committed events to graph and lineage sinks. A typed storage-profile model now
 drives conservative credential responses: embedded `file://` tables can return
 scoped no-secret profile hints, while remote object stores can reference external
 secret stores and still return no credentials until short-lived issuance is
-implemented. Governed management endpoints can now upsert and list warehouse
-storage profiles, and Turso persists those profiles for longest-prefix credential
-selection. Short-lived remote credential issuance and external secret-store
-resolution remain pending. Governed table lifecycle now records soft-delete rows,
-hides deleted tables from normal catalog reads, restores
+implemented. Credential vending now goes through a `CredentialIssuer` integration
+hook on the service state: the default issuer is conservative, while TypeSec or
+cloud-specific integrations can mint scoped short-lived credentials from secret
+references without storing raw secrets in catalog state. Governed management
+endpoints can now upsert and list warehouse storage profiles, and Turso persists
+those profiles for longest-prefix credential selection. TypeSec-backed
+secret-store resolution remains pending. Governed table lifecycle now records
+soft-delete rows, hides deleted tables from normal catalog reads, restores
 soft-deleted tables through a governed management endpoint, and emits
 `table.deleted` / `table.restored` audit/outbox events. Governed policy
 management endpoints can now upsert/list enforced ODRL policy bindings, and
@@ -473,8 +476,8 @@ querygraph import-lakecat --catalog http://localhost:8181/catalog \
    lineage projections.
 7. Add remote scan planning through Sail and return Iceberg scan tasks.
 8. Add QueryGraph bootstrap/export with Croissant, CDIF, policies, and lineage.
-9. Add short-lived remote credential issuance, external secret-store integration,
-   and OIDC.
+9. Add a TypeSec-backed credential issuer, external secret-store resolution, and
+   OIDC.
 10. Push reusable catalog graph taxonomy into Grust and consume it from LakeCat.
 11. Add v4-ready metadata extension tests as the Iceberg v4 spec settles.
 

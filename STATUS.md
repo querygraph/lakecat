@@ -5,10 +5,11 @@ Updated: 2026-06-16
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed LakeCat slice before this pause: `81c83fe Capture TypeDID request identity envelopes`.
-- Current working slice adds external secret-store references to governed storage
-  profiles and keeps remote credential responses empty until a short-lived issuer
-  is implemented.
+- Latest committed LakeCat slice before this continuation:
+  `6e62202 Model storage profile secret refs`.
+- Current working slice adds a pluggable credential issuer to governed credential
+  vending. The default issuer remains conservative; integrations can now mint
+  scoped short-lived credentials from storage-profile secret references.
 - Graph-related implementation is still intentionally kept out of LakeCat unless
   it is a bounded outbox/projection concern. Reusable graph taxonomy and graph
   mechanics belong in `/Users/alexy/src/grust`.
@@ -17,16 +18,17 @@ Updated: 2026-06-16
 
 ## In Progress In This Commit
 
-- `StorageProfile` now has an optional `secret_ref`.
-- New credential issuance mode: `short-lived-secret-ref`.
-- Storage profile management accepts and returns `secret-ref`.
-- Turso persists the profile JSON, including `secret_ref`.
-- Secret references are validated as external secret-store URIs such as
-  `typesec://`, `vault://`, `aws-sm://`, `gcp-sm://`, or `azure-kv://`.
-- Secret references reject obvious embedded raw secret material such as query
-  parameters named `token`, `secret`, `password`, or `credential`.
-- Remote credentials are still not vended. This is deliberate until a real
-  short-lived credential issuer is connected.
+- `LakeCatState` now carries an object-safe `CredentialIssuer`.
+- `ConservativeCredentialIssuer` is the default and preserves the previous safe
+  behavior: local `file://` profiles return no-secret hints, remote profiles
+  return no credentials.
+- Credential vending calls the issuer after the typed `CredentialsVendCapability`
+  is minted.
+- The issuer receives the table record, matched storage profile, and
+  authorization receipt.
+- Tests include a recording issuer that vends mock short-lived credentials from
+  a `short-lived-secret-ref` profile without exposing the `secret-ref` in the
+  response.
 
 ## Verification To Run Before Commit
 
@@ -38,7 +40,6 @@ Updated: 2026-06-16
 
 ## Next Recommended Slice
 
-Implement a credential issuer trait that can mint short-lived scoped credentials
-from a `StorageProfile` secret reference without exposing raw secrets through
-catalog state, probably with a no-op/unsupported default and a TypeSec-backed
-feature implementation once the TypeSec API shape is confirmed.
+Implement a TypeSec-backed credential issuer that resolves `typesec://` secret
+references and mints real short-lived cloud credentials, keeping raw long-lived
+secret material out of LakeCat catalog state.

@@ -498,9 +498,9 @@ append a dated entry per slice; keep the finding-status table current.
 | # | Finding | Status | Evidence / note |
 | --- | --- | --- | --- |
 | 1 | Red default-feature tests | **CLOSED** | default workspace tests pass; Sail-specific service assertions are gated |
-| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added with sanitized `lakecat.request-identity.v1` envelopes on authorization receipts; catalog config, namespace create/list, table create/load/commit, scan planning, task materialization, credential-vending requests, and QueryGraph bootstrap now require typed capabilities; catalog/namespace/table/scan/bootstrap/credential events and commit receipts persist in Turso audit/outbox; storage-profile modeling is started, but real TypeDID verification and short-lived remote credential issuance are still pending |
+| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added with sanitized `lakecat.request-identity.v1` envelopes on authorization receipts; catalog config, namespace create/list, table create/load/commit, scan planning, task materialization, credential-vending requests, and QueryGraph bootstrap now require typed capabilities; catalog/namespace/table/scan/bootstrap/credential events and commit receipts persist in Turso audit/outbox; storage-profile modeling and a pluggable credential issuer are started, but real TypeDID verification and TypeSec-backed remote credential issuance are still pending |
 | 3 | No durable / CAS commit | **CLOSED for local durable spine** | Turso commits now write local `file://` metadata when provided by the Sail-facing plan, advance pointers with expected-previous compare-and-swap, persist idempotency/audit/outbox rows, and have a concurrent writer regression |
-| 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, outbox, object-write-aware commits, outbox delivery, typed inferred storage profiles, governed managed warehouse storage profiles with external secret references, governed ODRL policy bindings, and governed table soft delete/restore; external secret-store resolution and credential issuance remain pending |
+| 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, outbox, object-write-aware commits, outbox delivery, typed inferred storage profiles, governed managed warehouse storage profiles with external secret references, a service credential-issuer hook, governed ODRL policy bindings, and governed table soft delete/restore; TypeSec-backed external secret-store resolution remains pending |
 | 5 | Service can't activate real engines | **CLOSED** | `sail-local` / `typesec-local` / `grust-local` passthroughs now in `lakecat-service` |
 | 6 | Sail used as struct library, not planner | **STARTED** | `lakecat-sail/catalog-provider` now exposes a governed in-process Sail `CatalogProvider` over LakeCat namespaces/tables/commits, pointer-log-backed commit discovery, and basic Iceberg current-schema/partition `TableStatus`; full nested/sort conversion and deeper planner fusion remain pending |
 | 7 | Plan ↔ implementation drift | **PARTIAL** | architecture and OPUS working-plan docs now track the committed Turso CAS/object-write/outbox/OpenLineage/storage-profile and in-process Sail provider slices; remaining drift risk is around Grust taxonomy placement and remote credential issuance |
@@ -592,11 +592,12 @@ only once **P2** gives it a governed path to run on.
   graph/lineage projection are now implemented for the local durable spine;
   catalog handlers rely on durable outbox delivery instead of inline
   graph/lineage side effects. Typed inferred storage profiles, governed
-  storage-profile management endpoints, external secret references, and
-  Turso-backed longest-prefix profile selection are started. Governed ODRL
-  policy-binding management is started and active table bindings flow into
-  authorization context. Governed table soft delete/restore is started; remote
-  credential issuance and external secret-store resolution remain outstanding.*
+  storage-profile management endpoints, external secret references, a pluggable
+  credential issuer, and Turso-backed longest-prefix profile selection are
+  started. Governed ODRL policy-binding management is started and active table
+  bindings flow into authorization context. Governed table soft delete/restore is
+  started; TypeSec-backed credential issuance and external secret-store
+  resolution remain outstanding.*
 - **P2 — finish governance: capability model + governed read path.** Promote the
   boolean receipt to `Capability<Action, Resource>`; route agent reads through
   governed scan-planning; persist the receipt with the audit row. (Milestones 1, 5;
