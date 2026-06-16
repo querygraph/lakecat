@@ -167,6 +167,7 @@ pub struct StorageProfile {
     pub location_prefix: String,
     pub provider: StorageProvider,
     pub issuance_mode: CredentialIssuanceMode,
+    pub secret_ref: Option<String>,
     pub public_config: BTreeMap<String, String>,
 }
 
@@ -177,6 +178,7 @@ impl StorageProfile {
         location_prefix: impl Into<String>,
         provider: StorageProvider,
         issuance_mode: CredentialIssuanceMode,
+        secret_ref: Option<String>,
         public_config: BTreeMap<String, String>,
     ) -> LakeCatResult<Self> {
         let profile_id = profile_id.into();
@@ -187,6 +189,16 @@ impl StorageProfile {
                 "storage profile location prefix must not be empty".to_string(),
             ));
         }
+        if let Some(secret_ref) = secret_ref.as_deref() {
+            validate_secret_ref(secret_ref)?;
+        }
+        if matches!(issuance_mode, CredentialIssuanceMode::ShortLivedSecretRef)
+            && secret_ref.is_none()
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "short-lived-secret-ref issuance mode requires a secret reference".to_string(),
+            ));
+        }
         validate_public_config(&public_config)?;
         Ok(Self {
             profile_id,
@@ -194,6 +206,7 @@ impl StorageProfile {
             location_prefix,
             provider,
             issuance_mode,
+            secret_ref,
             public_config,
         })
     }
@@ -226,6 +239,7 @@ impl StorageProfile {
             location_prefix: table.location.clone(),
             provider,
             issuance_mode,
+            secret_ref: None,
             public_config,
         }
     }
@@ -299,6 +313,7 @@ impl FromStr for StorageProvider {
 pub enum CredentialIssuanceMode {
     GovernedReadRequired,
     LocalFileNoSecret,
+    ShortLivedSecretRef,
 }
 
 impl CredentialIssuanceMode {
@@ -306,6 +321,7 @@ impl CredentialIssuanceMode {
         match self {
             Self::GovernedReadRequired => "governed-read-required",
             Self::LocalFileNoSecret => "local-file-no-secret",
+            Self::ShortLivedSecretRef => "short-lived-secret-ref",
         }
     }
 }
@@ -317,6 +333,9 @@ impl FromStr for CredentialIssuanceMode {
         match value.trim().to_ascii_lowercase().as_str() {
             "governed-read-required" | "governed" => Ok(Self::GovernedReadRequired),
             "local-file-no-secret" | "no-secret" => Ok(Self::LocalFileNoSecret),
+            "short-lived-secret-ref" | "secret-ref" | "short-lived" => {
+                Ok(Self::ShortLivedSecretRef)
+            }
             other => Err(LakeCatError::InvalidArgument(format!(
                 "unknown credential issuance mode: {other}"
             ))),
@@ -813,6 +832,38 @@ fn validate_public_config(config: &BTreeMap<String, String>) -> LakeCatResult<()
                 "storage profile public config key may expose secret material: {key}"
             )));
         }
+    }
+    Ok(())
+}
+
+fn validate_secret_ref(secret_ref: &str) -> LakeCatResult<()> {
+    let trimmed = secret_ref.trim();
+    if trimmed.is_empty() {
+        return Err(LakeCatError::InvalidArgument(
+            "storage profile secret reference must not be empty".to_string(),
+        ));
+    }
+    let allowed = [
+        "typesec://",
+        "vault://",
+        "aws-sm://",
+        "gcp-sm://",
+        "azure-kv://",
+    ];
+    if !allowed.iter().any(|prefix| trimmed.starts_with(prefix)) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "storage profile secret reference must use an external secret-store URI: {secret_ref}"
+        )));
+    }
+    let normalized = trimmed.to_ascii_lowercase();
+    if normalized.contains("password=")
+        || normalized.contains("secret=")
+        || normalized.contains("token=")
+        || normalized.contains("credential=")
+    {
+        return Err(LakeCatError::InvalidArgument(
+            "storage profile secret reference must not embed raw secret material".to_string(),
+        ));
     }
     Ok(())
 }
@@ -2478,6 +2529,7 @@ pub mod turso_store {
                 "file:///tmp/events",
                 StorageProvider::File,
                 CredentialIssuanceMode::LocalFileNoSecret,
+                None,
                 BTreeMap::new(),
             )
             .unwrap();
@@ -2487,6 +2539,7 @@ pub mod turso_store {
                 "file:///tmp/events/tenant-a",
                 StorageProvider::File,
                 CredentialIssuanceMode::LocalFileNoSecret,
+                None,
                 BTreeMap::from([("lakecat.endpoint".to_string(), "local".to_string())]),
             )
             .unwrap();
@@ -2502,6 +2555,41 @@ pub mod turso_store {
                 matched.public_config["lakecat.endpoint"],
                 narrow.public_config["lakecat.endpoint"]
             );
+        }
+
+        #[tokio::test]
+        async fn turso_store_persists_secret_ref_profiles_without_secret_material() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let profile = StorageProfile::new(
+                "s3-events",
+                warehouse.clone(),
+                "s3://lakecat-demo/events",
+                StorageProvider::S3,
+                CredentialIssuanceMode::ShortLivedSecretRef,
+                Some("typesec://lakecat/local/s3-events".to_string()),
+                BTreeMap::from([("lakecat.region".to_string(), "us-west-2".to_string())]),
+            )
+            .unwrap();
+
+            store.upsert_storage_profile(profile).await.unwrap();
+            let profiles = store.list_storage_profiles(&warehouse).await.unwrap();
+            assert_eq!(profiles.len(), 1);
+            assert_eq!(
+                profiles[0].secret_ref.as_deref(),
+                Some("typesec://lakecat/local/s3-events")
+            );
+
+            let embedded_secret = StorageProfile::new(
+                "bad-s3-events",
+                warehouse,
+                "s3://lakecat-demo/events",
+                StorageProvider::S3,
+                CredentialIssuanceMode::ShortLivedSecretRef,
+                Some("typesec://lakecat/local/s3-events?token=secret".to_string()),
+                BTreeMap::new(),
+            );
+            assert!(embedded_secret.is_err());
         }
 
         #[tokio::test]

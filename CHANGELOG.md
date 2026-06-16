@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added external secret-store references to governed storage profiles, including
+  `short-lived-secret-ref` issuance metadata while keeping remote credential
+  responses empty until a real issuer is wired in.
 - Added sanitized TypeDID/agent request envelopes to authorization receipts so
   governed audit/outbox records carry durable identity context without storing
   raw proof, delegation, bearer-token, or signature material.

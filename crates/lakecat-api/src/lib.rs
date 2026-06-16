@@ -121,6 +121,7 @@ pub struct UpsertStorageProfileRequest {
     pub location_prefix: String,
     pub provider: String,
     pub issuance_mode: String,
+    pub secret_ref: Option<String>,
     #[serde(default)]
     pub public_config: BTreeMap<String, String>,
 }
@@ -133,6 +134,7 @@ pub struct StorageProfileResponse {
     pub location_prefix: String,
     pub provider: String,
     pub issuance_mode: String,
+    pub secret_ref: Option<String>,
     pub public_config: BTreeMap<String, String>,
 }
 

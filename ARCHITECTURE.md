@@ -147,7 +147,8 @@ Keep these in LakeCat:
 - Tenant/project/warehouse management, inspired by Lakekeeper's separation
   between catalog API and management API.
 - Warehouse storage profiles and credential vending.
-- Secret references and external secret-store integration.
+- External secret-store references on storage profiles, with secret resolution
+  and short-lived credential issuance kept outside catalog rows.
 - Catalog state persistence and optimistic concurrency.
 - Namespace and table lifecycle policy, including soft deletion and restore.
 - Governance checks before load, scan-plan, commit, register, drop, and
@@ -289,12 +290,13 @@ new metadata, advance table pointers through compare-and-swap, persist
 idempotency/audit/outbox records, and expose a service-level drain that projects
 committed events to graph and lineage sinks. A typed storage-profile model now
 drives conservative credential responses: embedded `file://` tables can return
-scoped no-secret profile hints, while remote object stores return no credentials
-until short-lived issuance is implemented. Governed management endpoints can now
-upsert and list warehouse storage profiles, and Turso persists those profiles for
-longest-prefix credential selection. Short-lived remote credential issuance and
-external secret-store integration remain pending. Governed table lifecycle now
-records soft-delete rows, hides deleted tables from normal catalog reads, restores
+scoped no-secret profile hints, while remote object stores can reference external
+secret stores and still return no credentials until short-lived issuance is
+implemented. Governed management endpoints can now upsert and list warehouse
+storage profiles, and Turso persists those profiles for longest-prefix credential
+selection. Short-lived remote credential issuance and external secret-store
+resolution remain pending. Governed table lifecycle now records soft-delete rows,
+hides deleted tables from normal catalog reads, restores
 soft-deleted tables through a governed management endpoint, and emits
 `table.deleted` / `table.restored` audit/outbox events. Governed policy
 management endpoints can now upsert/list enforced ODRL policy bindings, and

@@ -431,6 +431,7 @@ async fn upsert_storage_profile(
         request.location_prefix,
         request.provider.parse::<StorageProvider>()?,
         request.issuance_mode.parse::<CredentialIssuanceMode>()?,
+        request.secret_ref,
         request.public_config,
     )?;
     let storage_profile = state.store.upsert_storage_profile(storage_profile).await?;
@@ -936,6 +937,7 @@ fn storage_profile_response(profile: &StorageProfile) -> StorageProfileResponse 
         location_prefix: profile.location_prefix.clone(),
         provider: profile.provider.as_str().to_string(),
         issuance_mode: profile.issuance_mode.as_str().to_string(),
+        secret_ref: profile.secret_ref.clone(),
         public_config: profile.public_config.clone(),
     }
 }
@@ -2332,6 +2334,64 @@ mod tests {
                 .iter()
                 .any(|entry| { entry["key"] == "lakecat.endpoint" && entry["value"] == "local" })
         );
+    }
+
+    #[tokio::test]
+    async fn remote_storage_profile_accepts_secret_ref_without_vending_raw_secrets() {
+        let app = test_app();
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/storage-profiles/s3-events")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "location-prefix": "s3://lakecat-demo/events",
+                    "provider": "s3",
+                    "issuance-mode": "short-lived-secret-ref",
+                    "secret-ref": "typesec://lakecat/local/s3-events",
+                    "public-config": {
+                        "lakecat.region": "us-west-2"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            body["secret-ref"],
+            serde_json::json!("typesec://lakecat/local/s3-events")
+        );
+
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"s3://lakecat-demo/events/tenant-a","metadata-location":"s3://lakecat-demo/events/tenant-a/metadata/00000.json","metadata":{"format-version":3,"current-schema-id":1,"schemas":[{"schema-id":1,"fields":[{"id":1,"name":"event_id","type":"string","required":true}]}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let credentials = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/namespaces/default/tables/events/credentials")
+            .header("x-lakecat-agent-did", "did:example:agent")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(credentials).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["storage-credentials"], serde_json::json!([]));
     }
 
     #[tokio::test]
