@@ -152,7 +152,10 @@ pub mod typesec_credential_issuer {
                 ));
             };
             if !secret_ref.starts_with("typesec://") {
-                return Ok(Vec::new());
+                return Err(LakeCatError::InvalidArgument(format!(
+                    "unsupported secret-ref scheme for TypeSec credential issuance: \
+                     expected typesec://, got {secret_ref}"
+                )));
             }
             let subject = SubjectId::from(request.authorization_receipt.principal.subject.clone());
             let resource = ResourceId::from(secret_ref.to_string());
@@ -427,13 +430,13 @@ async fn create_table(
     Json(request): Json<CreateTableRequest>,
 ) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
-    let principal = identity.principal.clone();
     let ident = table_ident(
         state.warehouse.as_str(),
         namespace,
         TableName::new(request.name)?.as_str(),
     )?;
     let capability = authorize_table_create(&state, identity, ident).await?;
+    let principal = capability.receipt().principal.clone();
     let ident = capability.table().clone();
     let table = TableRecord::new(
         ident.clone(),
@@ -1181,7 +1184,8 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
         .map(str::parse)
         .transpose()?;
     let agent_did = header("x-lakecat-agent-did")?;
-    let typedid = header("x-lakecat-typedid")?.or(agent_did);
+    let explicit_typedid = header("x-lakecat-typedid")?;
+    let typedid = explicit_typedid.or(agent_did);
     let typedid_proof = header("x-lakecat-typedid-proof")?;
     let delegation = header("x-lakecat-agent-delegation")?;
     let signed_summary = header("x-lakecat-agent-summary-signature")?;
@@ -1199,15 +1203,22 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
             "x-lakecat-agent-did",
             None,
         )
+    } else if let Some(did) = explicit_typedid {
+        (
+            Principal::new(did, PrincipalKind::Agent)?,
+            "x-lakecat-typedid",
+            None,
+        )
     } else if let Some(authorization) = authorization {
         if let Some(token) = authorization.strip_prefix("Bearer ") {
+            let token_sha256 = content_hash_bytes(token.as_bytes());
             (
                 Principal::new(
-                    format!("bearer:{}", content_hash_bytes(token.as_bytes())),
+                    format!("bearer:{token_sha256}"),
                     PrincipalKind::Service,
                 )?,
                 "authorization",
-                Some(content_hash_bytes(token.as_bytes())),
+                Some(token_sha256),
             )
         } else {
             return Err(LakeCatError::InvalidArgument(
@@ -1738,6 +1749,34 @@ mod tests {
         assert!(!envelope.contains("signed-proof"));
         assert!(!envelope.contains("delegation-token"));
         assert!(!envelope.contains("summary-secret"));
+    }
+
+    #[test]
+    fn request_identity_typedid_header_alone_selects_agent_principal() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-lakecat-typedid",
+            "did:example:typedid-only".parse().unwrap(),
+        );
+        let identity = request_identity(&headers).expect("identity should parse");
+        assert_eq!(identity.principal.subject, "did:example:typedid-only");
+        assert_eq!(identity.principal.kind, PrincipalKind::Agent);
+        assert_eq!(identity.envelope["source"], serde_json::json!("x-lakecat-typedid"));
+        assert_eq!(
+            identity.envelope["typedid"],
+            serde_json::json!("did:example:typedid-only")
+        );
+    }
+
+    #[test]
+    fn request_identity_agent_did_takes_precedence_over_typedid() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-lakecat-agent-did", "did:example:agent".parse().unwrap());
+        headers.insert("x-lakecat-typedid", "did:example:typedid".parse().unwrap());
+        let identity = request_identity(&headers).expect("identity should parse");
+        assert_eq!(identity.principal.subject, "did:example:agent");
+        assert_eq!(identity.principal.kind, PrincipalKind::Agent);
+        assert_eq!(identity.envelope["source"], serde_json::json!("x-lakecat-agent-did"));
     }
 
     #[tokio::test]
