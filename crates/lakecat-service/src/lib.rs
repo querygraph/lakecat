@@ -25,7 +25,8 @@ use lakecat_sail::{
     SailCatalogEngine, ScanPlanningRequest,
 };
 use lakecat_security::{
-    AllowAllGovernanceEngine, AuthorizationRequest, CatalogAction, GovernanceEngine,
+    AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
+    GovernanceEngine,
 };
 use lakecat_store::{CatalogStore, TableCommit, TableRecord, table_ident};
 use object_store::local::LocalFileSystem;
@@ -270,7 +271,7 @@ async fn commit_table(
 ) -> Result<Json<CommitTableResponse>, LakeCatHttpError> {
     let principal = request_principal(&headers)?;
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
-    authorize(
+    let authorization_receipt = authorize(
         &state,
         principal.clone(),
         CatalogAction::TableCommit,
@@ -305,6 +306,13 @@ async fn commit_table(
                 new_metadata: Some(commit_plan.new_metadata.clone()),
                 idempotency_key: None,
                 principal: principal.clone(),
+                authorization_receipt: Some(serde_json::to_value(&authorization_receipt).map_err(
+                    |err| {
+                        LakeCatError::Internal(format!(
+                            "failed to encode authorization receipt: {err}"
+                        ))
+                    },
+                )?),
             },
         )
         .await?;
@@ -581,7 +589,7 @@ async fn authorize(
     principal: Principal,
     action: CatalogAction,
     table: Option<TableIdent>,
-) -> Result<(), LakeCatHttpError> {
+) -> Result<AuthorizationReceipt, LakeCatHttpError> {
     let receipt = state
         .governance
         .authorize(AuthorizationRequest {
@@ -592,7 +600,7 @@ async fn authorize(
         })
         .await?;
     if receipt.allowed {
-        Ok(())
+        Ok(receipt)
     } else {
         Err(LakeCatError::Conflict("authorization denied".to_string()).into())
     }

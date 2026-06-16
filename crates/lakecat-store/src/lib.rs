@@ -80,6 +80,7 @@ pub struct TableCommit {
     pub new_metadata: Option<Value>,
     pub idempotency_key: Option<String>,
     pub principal: Principal,
+    pub authorization_receipt: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -210,6 +211,7 @@ impl CatalogStore for MemoryCatalogStore {
             "expected_previous_metadata_location": &commit.expected_previous_metadata_location,
             "new_metadata_location": &commit.new_metadata_location,
             "new_metadata": &commit.new_metadata,
+            "authorization_receipt": &commit.authorization_receipt,
         }))?;
         let (
             previous_metadata_location,
@@ -537,6 +539,7 @@ pub mod turso_store {
                 "expected_previous_metadata_location": &commit.expected_previous_metadata_location,
                 "new_metadata_location": &commit.new_metadata_location,
                 "new_metadata": &commit.new_metadata,
+                "authorization_receipt": &commit.authorization_receipt,
             }))?;
             if previous_metadata_location != commit.expected_previous_metadata_location {
                 return Err(LakeCatError::Conflict(format!(
@@ -615,6 +618,7 @@ pub mod turso_store {
                 "event-type": "table.commit",
                 "table": ident,
                 "commit": record,
+                "authorization-receipt": commit.authorization_receipt,
             });
             let audit_event_id = content_hash_json(&audit_payload)?;
             tx.execute(
@@ -641,6 +645,7 @@ pub mod turso_store {
                 "event-type": "table.commit",
                 "table": ident,
                 "commit": record,
+                "authorization-receipt": audit_payload["authorization-receipt"].clone(),
             });
             tx.execute(
                 "insert into outbox_events (
@@ -927,6 +932,11 @@ pub mod turso_store {
                 new_metadata: None,
                 idempotency_key: Some("commit-1".to_string()),
                 principal: Principal::anonymous(),
+                authorization_receipt: Some(serde_json::json!({
+                    "engine": "typesec",
+                    "allowed": true,
+                    "action": "table.commit"
+                })),
             };
             let committed = store.commit_table(&ident, commit.clone()).await.unwrap();
             assert_eq!(committed.version, 1);
@@ -953,6 +963,10 @@ pub mod turso_store {
             assert_eq!(
                 pending[0].payload["commit"]["new_metadata_location"],
                 serde_json::json!("file:///tmp/events/metadata/00001.json")
+            );
+            assert_eq!(
+                pending[0].payload["authorization-receipt"]["engine"],
+                serde_json::json!("typesec")
             );
             let event_ids = pending
                 .iter()
@@ -999,6 +1013,7 @@ pub mod turso_store {
                         new_metadata: None,
                         idempotency_key: None,
                         principal: Principal::anonymous(),
+                        authorization_receipt: None,
                     },
                 )
                 .await
@@ -1036,6 +1051,7 @@ pub mod turso_store {
                 new_metadata: None,
                 idempotency_key: None,
                 principal: Principal::anonymous(),
+                authorization_receipt: None,
             };
             let commit_b = TableCommit {
                 requirements: vec![],
@@ -1047,6 +1063,7 @@ pub mod turso_store {
                 new_metadata: None,
                 idempotency_key: None,
                 principal: Principal::anonymous(),
+                authorization_receipt: None,
             };
 
             let (result_a, result_b) = tokio::join!(

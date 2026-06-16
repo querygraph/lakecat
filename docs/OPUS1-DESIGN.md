@@ -498,7 +498,7 @@ append a dated entry per slice; keep the finding-status table current.
 | # | Finding | Status | Evidence / note |
 | --- | --- | --- | --- |
 | 1 | Red default-feature tests | **CLOSED** | default workspace tests pass; Sail-specific service assertions are gated |
-| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added; capability model + governed vending still pending |
+| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added; commit authorization receipts persist in Turso audit/outbox; capability model + governed vending still pending |
 | 3 | No durable / CAS commit | **OPEN** | |
 | 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, and outbox; full management schema/object writes/CAS pending |
 | 5 | Service can't activate real engines | **CLOSED** | `sail-local` / `typesec-local` / `grust-local` passthroughs now in `lakecat-service` |

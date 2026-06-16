@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Persisted commit authorization receipts into Turso audit and outbox payloads,
+  keeping TypeSec governance decisions attached to the durable commit record.
 - Added a Turso concurrent commit regression that exercises two writers racing on
   the same metadata pointer and verifies compare-and-swap admits only one.
 - Added a typed catalog outbox drain API and Turso implementation so commit
