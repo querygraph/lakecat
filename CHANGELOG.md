@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a typed table-commit capability so metadata commits must carry a minted
+  governance proof before Sail prepares metadata and Turso advances the pointer.
 - Added a typed table-load capability and durable `table.loaded` audit/outbox
   events so metadata reads leave the same governance trail as governed scans.
 - Added durable audit/outbox recording for governed scan-task fetches, carrying

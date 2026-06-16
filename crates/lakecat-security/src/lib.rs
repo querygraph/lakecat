@@ -69,14 +69,28 @@ impl<Action, Resource> Capability<Action, Resource> {
 pub struct CanLoadTable;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanCommitTable;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanPlanScan;
 
 pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
+pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
 pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
 
 impl TableLoadCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
         table_capability_from_receipt(receipt, table, CatalogAction::TableLoad, "load table")
+    }
+
+    pub fn table(&self) -> &TableIdent {
+        self.resource()
+    }
+}
+
+impl TableCommitCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
+        table_capability_from_receipt(receipt, table, CatalogAction::TableCommit, "commit table")
     }
 
     pub fn table(&self) -> &TableIdent {
@@ -166,9 +180,9 @@ mod tests {
         );
         assert!(TableScanCapability::from_receipt(receipt.clone(), other_table).is_err());
 
-        let mut load_receipt = receipt;
-        load_receipt.action = CatalogAction::TableLoad;
-        assert!(TableScanCapability::from_receipt(load_receipt, table).is_err());
+        let mut wrong_action_receipt = receipt;
+        wrong_action_receipt.action = CatalogAction::TableLoad;
+        assert!(TableScanCapability::from_receipt(wrong_action_receipt, table).is_err());
 
         let load_receipt = AuthorizationReceipt {
             principal: Principal {
@@ -186,6 +200,23 @@ mod tests {
             TableLoadCapability::from_receipt(load_receipt, capability.table().clone())
                 .expect("matching load receipt should mint capability");
         assert_eq!(load_capability.table(), capability.table());
+
+        let commit_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:writer".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::TableCommit,
+            table: Some(capability.table().clone()),
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            checked_at: Utc::now(),
+        };
+        let commit_capability =
+            TableCommitCapability::from_receipt(commit_receipt, capability.table().clone())
+                .expect("matching commit receipt should mint capability");
+        assert_eq!(commit_capability.table(), capability.table());
     }
 }
 

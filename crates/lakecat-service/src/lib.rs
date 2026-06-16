@@ -26,7 +26,7 @@ use lakecat_sail::{
 };
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
-    GovernanceEngine, TableLoadCapability, TableScanCapability,
+    GovernanceEngine, TableCommitCapability, TableLoadCapability, TableScanCapability,
 };
 use lakecat_store::{CatalogAuditEvent, CatalogStore, TableCommit, TableRecord, table_ident};
 use object_store::local::LocalFileSystem;
@@ -282,20 +282,14 @@ async fn commit_table(
 ) -> Result<Json<CommitTableResponse>, LakeCatHttpError> {
     let principal = request_principal(&headers)?;
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
-    let authorization_receipt = authorize(
-        &state,
-        principal.clone(),
-        CatalogAction::TableCommit,
-        Some(ident.clone()),
-    )
-    .await?;
-    let current = state.store.load_table(&ident).await?;
+    let capability = authorize_table_commit(&state, principal, ident).await?;
+    let current = state.store.load_table(capability.table()).await?;
     let current_metadata_location = current.metadata_location.clone();
     let commit_plan = state
         .sail
         .prepare_commit(CommitPreparationRequest {
-            table: ident.clone(),
-            principal: principal.clone(),
+            table: capability.table().clone(),
+            principal: capability.receipt().principal.clone(),
             current_metadata_location: current_metadata_location.clone(),
             new_metadata_location: request.metadata_location,
             current_metadata: current.metadata,
@@ -308,7 +302,7 @@ async fn commit_table(
     let table = state
         .store
         .commit_table(
-            &ident,
+            capability.table(),
             TableCommit {
                 requirements: commit_plan.requirements,
                 updates: commit_plan.updates,
@@ -316,8 +310,8 @@ async fn commit_table(
                 new_metadata_location: commit_plan.new_metadata_location.clone(),
                 new_metadata: Some(commit_plan.new_metadata.clone()),
                 idempotency_key: None,
-                principal: principal.clone(),
-                authorization_receipt: Some(serde_json::to_value(&authorization_receipt).map_err(
+                principal: capability.receipt().principal.clone(),
+                authorization_receipt: Some(serde_json::to_value(capability.receipt()).map_err(
                     |err| {
                         LakeCatError::Internal(format!(
                             "failed to encode authorization receipt: {err}"
@@ -327,6 +321,8 @@ async fn commit_table(
             },
         )
         .await?;
+    let ident = capability.table().clone();
+    let principal = capability.receipt().principal.clone();
     state
         .graph
         .emit(GraphEvent::table(
@@ -676,6 +672,21 @@ async fn authorize_table_load(
     )
     .await?;
     Ok(TableLoadCapability::from_receipt(receipt, table)?)
+}
+
+async fn authorize_table_commit(
+    state: &LakeCatState,
+    principal: Principal,
+    table: TableIdent,
+) -> Result<TableCommitCapability, LakeCatHttpError> {
+    let receipt = authorize(
+        state,
+        principal,
+        CatalogAction::TableCommit,
+        Some(table.clone()),
+    )
+    .await?;
+    Ok(TableCommitCapability::from_receipt(receipt, table)?)
 }
 
 async fn authorize_table_scan(
