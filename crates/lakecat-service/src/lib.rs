@@ -26,8 +26,9 @@ use lakecat_sail::{
 };
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
-    GovernanceEngine, GraphReadCapability, TableCommitCapability, TableCreateCapability,
-    TableLoadCapability, TableScanCapability,
+    CatalogConfigCapability, GovernanceEngine, GraphReadCapability, NamespaceCreateCapability,
+    NamespaceListCapability, TableCommitCapability, TableCreateCapability, TableLoadCapability,
+    TableScanCapability,
 };
 use lakecat_store::{CatalogAuditEvent, CatalogStore, TableCommit, TableRecord, table_ident};
 use object_store::local::LocalFileSystem;
@@ -122,13 +123,20 @@ async fn get_config(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
 ) -> Result<Json<CatalogConfigResponse>, LakeCatHttpError> {
-    authorize(
-        &state,
-        request_principal(&headers)?,
-        CatalogAction::CatalogConfig,
-        None,
-    )
-    .await?;
+    let capability = authorize_catalog_config(&state, request_principal(&headers)?).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "catalog.config-read",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "catalog.config-read",
+                "authorization-receipt": capability.receipt(),
+                "warehouse": state.warehouse.as_str(),
+            }),
+        )?)
+        .await?;
     Ok(Json(CatalogConfigResponse::default()))
 }
 
@@ -138,17 +146,25 @@ async fn create_namespace(
     Json(request): Json<CreateNamespaceRequest>,
 ) -> Result<Json<NamespaceResponse>, LakeCatHttpError> {
     let principal = request_principal(&headers)?;
-    authorize(
-        &state,
-        principal.clone(),
-        CatalogAction::NamespaceCreate,
-        None,
-    )
-    .await?;
+    let capability = authorize_namespace_create(&state, principal.clone()).await?;
     let namespace = Namespace::new(request.namespace)?;
     state
         .store
         .create_namespace(&state.warehouse, namespace.clone())
+        .await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "namespace.created",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "namespace.created",
+                "authorization-receipt": capability.receipt(),
+                "warehouse": state.warehouse.as_str(),
+                "namespace": namespace.parts(),
+            }),
+        )?)
         .await?;
     state
         .lineage
@@ -166,14 +182,22 @@ async fn list_namespaces(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
 ) -> Result<Json<ListNamespacesResponse>, LakeCatHttpError> {
-    authorize(
-        &state,
-        request_principal(&headers)?,
-        CatalogAction::NamespaceList,
-        None,
-    )
-    .await?;
+    let capability = authorize_namespace_list(&state, request_principal(&headers)?).await?;
     let namespaces = state.store.list_namespaces(&state.warehouse).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "namespace.listed",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "namespace.listed",
+                "authorization-receipt": capability.receipt(),
+                "warehouse": state.warehouse.as_str(),
+                "namespace-count": namespaces.len(),
+            }),
+        )?)
+        .await?;
     Ok(Json(ListNamespacesResponse {
         namespaces: namespaces
             .into_iter()
@@ -692,6 +716,30 @@ async fn authorize_table_create(
     )
     .await?;
     Ok(TableCreateCapability::from_receipt(receipt, table)?)
+}
+
+async fn authorize_catalog_config(
+    state: &LakeCatState,
+    principal: Principal,
+) -> Result<CatalogConfigCapability, LakeCatHttpError> {
+    let receipt = authorize(state, principal, CatalogAction::CatalogConfig, None).await?;
+    Ok(CatalogConfigCapability::from_receipt(receipt)?)
+}
+
+async fn authorize_namespace_create(
+    state: &LakeCatState,
+    principal: Principal,
+) -> Result<NamespaceCreateCapability, LakeCatHttpError> {
+    let receipt = authorize(state, principal, CatalogAction::NamespaceCreate, None).await?;
+    Ok(NamespaceCreateCapability::from_receipt(receipt)?)
+}
+
+async fn authorize_namespace_list(
+    state: &LakeCatState,
+    principal: Principal,
+) -> Result<NamespaceListCapability, LakeCatHttpError> {
+    let receipt = authorize(state, principal, CatalogAction::NamespaceList, None).await?;
+    Ok(NamespaceListCapability::from_receipt(receipt)?)
 }
 
 async fn authorize_table_load(

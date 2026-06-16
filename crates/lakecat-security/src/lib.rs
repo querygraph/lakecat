@@ -80,11 +80,23 @@ pub struct CanPlanScan;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanReadGraph;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanReadCatalogConfig;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanCreateNamespace;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanListNamespaces;
+
 pub type TableCreateCapability = Capability<CanCreateTable, TableIdent>;
 pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
 pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
 pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
 pub type GraphReadCapability = Capability<CanReadGraph, ()>;
+pub type CatalogConfigCapability = Capability<CanReadCatalogConfig, ()>;
+pub type NamespaceCreateCapability = Capability<CanCreateNamespace, ()>;
+pub type NamespaceListCapability = Capability<CanListNamespaces, ()>;
 
 impl TableCreateCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
@@ -134,6 +146,32 @@ impl TableScanCapability {
 impl GraphReadCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
         catalog_capability_from_receipt(receipt, CatalogAction::GraphRead, "read catalog graph")
+    }
+}
+
+impl CatalogConfigCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
+        catalog_capability_from_receipt(
+            receipt,
+            CatalogAction::CatalogConfig,
+            "read catalog config",
+        )
+    }
+}
+
+impl NamespaceCreateCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
+        catalog_capability_from_receipt(
+            receipt,
+            CatalogAction::NamespaceCreate,
+            "create namespaces",
+        )
+    }
+}
+
+impl NamespaceListCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
+        catalog_capability_from_receipt(receipt, CatalogAction::NamespaceList, "list namespaces")
     }
 }
 
@@ -306,6 +344,48 @@ mod tests {
         let mut table_scoped_graph_receipt = graph_receipt;
         table_scoped_graph_receipt.table = Some(capability.table().clone());
         assert!(GraphReadCapability::from_receipt(table_scoped_graph_receipt).is_err());
+
+        let config_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:catalog".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::CatalogConfig,
+            table: None,
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            checked_at: Utc::now(),
+        };
+        assert!(CatalogConfigCapability::from_receipt(config_receipt).is_ok());
+
+        let namespace_create_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:catalog".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::NamespaceCreate,
+            table: None,
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            checked_at: Utc::now(),
+        };
+        assert!(NamespaceCreateCapability::from_receipt(namespace_create_receipt).is_ok());
+
+        let namespace_list_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:catalog".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::NamespaceList,
+            table: None,
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            checked_at: Utc::now(),
+        };
+        assert!(NamespaceListCapability::from_receipt(namespace_list_receipt).is_ok());
     }
 }
 

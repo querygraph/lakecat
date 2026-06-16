@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added typed catalog-config and namespace capabilities plus durable
+  `catalog.config-read`, `namespace.created`, and `namespace.listed`
+  audit/outbox events for the remaining catalog-scope read/write paths.
 - Added a typed graph-read capability and durable `querygraph.bootstrap`
   audit/outbox event so QueryGraph bootstrap reads carry a replayable governance
   proof without moving graph behavior into LakeCat.

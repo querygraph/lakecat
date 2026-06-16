@@ -1337,6 +1337,70 @@ pub mod turso_store {
                 bootstrap.payload["payload"]["table-count"],
                 serde_json::json!(1)
             );
+
+            for (event_type, payload) in [
+                (
+                    "catalog.config-read",
+                    serde_json::json!({
+                        "event-type": "catalog.config-read",
+                        "authorization-receipt": {
+                            "engine": "typesec",
+                            "allowed": true,
+                            "action": "catalog-config"
+                        },
+                        "warehouse": "local"
+                    }),
+                ),
+                (
+                    "namespace.created",
+                    serde_json::json!({
+                        "event-type": "namespace.created",
+                        "authorization-receipt": {
+                            "engine": "typesec",
+                            "allowed": true,
+                            "action": "namespace-create"
+                        },
+                        "warehouse": "local",
+                        "namespace": ["default"]
+                    }),
+                ),
+                (
+                    "namespace.listed",
+                    serde_json::json!({
+                        "event-type": "namespace.listed",
+                        "authorization-receipt": {
+                            "engine": "typesec",
+                            "allowed": true,
+                            "action": "namespace-list"
+                        },
+                        "warehouse": "local",
+                        "namespace-count": 1
+                    }),
+                ),
+            ] {
+                store
+                    .record_audit_event(
+                        CatalogAuditEvent::new(event_type, None, Principal::anonymous(), payload)
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+            }
+
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 8);
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 8);
+            let namespace_listed = pending
+                .iter()
+                .find(|event| event.event_type == "namespace.listed")
+                .expect("namespace listed event");
+            assert_eq!(
+                namespace_listed.payload["payload"]["namespace-count"],
+                serde_json::json!(1)
+            );
         }
 
         #[tokio::test]
