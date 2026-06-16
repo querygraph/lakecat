@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added basic Iceberg partition-spec projection to the in-process Sail provider
+  so Sail `TableStatus` includes partition fields and partition column flags.
 - Added Iceberg current-schema column projection to the in-process Sail provider
   so LakeCat tables expose useful Sail `TableStatus` columns.
 - Added Sail `CatalogProvider::get_table_commits` support backed by LakeCat's

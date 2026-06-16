@@ -246,7 +246,8 @@ pub mod catalog_provider {
         Namespace as SailNamespace, TableCommitInfo,
     };
     use sail_common_datafusion::catalog::{
-        DatabaseStatus, TableColumnStatus, TableKind, TableStatus,
+        CatalogPartitionField, DatabaseStatus, PartitionTransform, TableColumnStatus, TableKind,
+        TableStatus,
     };
     use serde_json::json;
 
@@ -436,6 +437,11 @@ pub mod catalog_provider {
                             "doc": column.comment,
                         })
                     }).collect::<Vec<_>>()
+                }],
+                "default-spec-id": 0,
+                "partition-specs": [{
+                    "spec-id": 0,
+                    "fields": partition_spec_fields(&options.columns, &options.partition_by),
                 }],
                 "properties": options.properties,
                 "lakecat:sail-provider": self.name,
@@ -700,7 +706,7 @@ pub mod catalog_provider {
                 constraints: Vec::new(),
                 location: Some(record.location.clone()),
                 format: "iceberg".to_string(),
-                partition_by: Vec::new(),
+                partition_by: table_partition_fields(record),
                 sort_by: Vec::new(),
                 bucket_by: None,
                 properties: vec![
@@ -713,12 +719,13 @@ pub mod catalog_provider {
     }
 
     fn table_columns(record: &TableRecord) -> Vec<TableColumnStatus> {
+        let partition_columns = partition_source_column_names(&record.metadata);
         current_schema(&record.metadata)
             .and_then(|schema| schema.get("fields").and_then(serde_json::Value::as_array))
             .map(|fields| {
                 fields
                     .iter()
-                    .filter_map(table_column_status)
+                    .filter_map(|field| table_column_status(field, &partition_columns))
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default()
@@ -738,8 +745,12 @@ pub mod catalog_provider {
             .or_else(|| schemas.last())
     }
 
-    fn table_column_status(field: &serde_json::Value) -> Option<TableColumnStatus> {
+    fn table_column_status(
+        field: &serde_json::Value,
+        partition_columns: &[String],
+    ) -> Option<TableColumnStatus> {
         let name = field.get("name")?.as_str()?.to_string();
+        let is_partition = partition_columns.iter().any(|column| column == &name);
         Some(TableColumnStatus {
             name,
             data_type: iceberg_type_to_datafusion(field.get("type")?),
@@ -754,10 +765,85 @@ pub mod catalog_provider {
             default: None,
             generated_always_as: None,
             identity: None,
-            is_partition: false,
+            is_partition,
             is_bucket: false,
             is_cluster: false,
         })
+    }
+
+    fn table_partition_fields(record: &TableRecord) -> Vec<CatalogPartitionField> {
+        let Some(spec) = current_partition_spec(&record.metadata) else {
+            return Vec::new();
+        };
+        let Some(fields) = spec.get("fields").and_then(serde_json::Value::as_array) else {
+            return Vec::new();
+        };
+        let id_to_name = schema_id_to_name(&record.metadata);
+        fields
+            .iter()
+            .filter_map(|field| {
+                let source_id = field
+                    .get("source-id")
+                    .and_then(serde_json::Value::as_i64)
+                    .and_then(|id| i32::try_from(id).ok())?;
+                let column = id_to_name.get(&source_id)?.clone();
+                let transform = field
+                    .get("transform")
+                    .and_then(serde_json::Value::as_str)
+                    .and_then(partition_transform_from_iceberg);
+                Some(CatalogPartitionField { column, transform })
+            })
+            .collect()
+    }
+
+    fn partition_source_column_names(metadata: &serde_json::Value) -> Vec<String> {
+        let id_to_name = schema_id_to_name(metadata);
+        current_partition_spec(metadata)
+            .and_then(|spec| spec.get("fields").and_then(serde_json::Value::as_array))
+            .map(|fields| {
+                fields
+                    .iter()
+                    .filter_map(|field| {
+                        field
+                            .get("source-id")
+                            .and_then(serde_json::Value::as_i64)
+                            .and_then(|id| i32::try_from(id).ok())
+                            .and_then(|id| id_to_name.get(&id).cloned())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn current_partition_spec(metadata: &serde_json::Value) -> Option<&serde_json::Value> {
+        let specs = metadata.get("partition-specs")?.as_array()?;
+        let default_spec_id = metadata
+            .get("default-spec-id")
+            .and_then(serde_json::Value::as_i64);
+        default_spec_id
+            .and_then(|id| {
+                specs.iter().find(|spec| {
+                    spec.get("spec-id").and_then(serde_json::Value::as_i64) == Some(id)
+                })
+            })
+            .or_else(|| specs.last())
+    }
+
+    fn schema_id_to_name(metadata: &serde_json::Value) -> std::collections::BTreeMap<i32, String> {
+        current_schema(metadata)
+            .and_then(|schema| schema.get("fields").and_then(serde_json::Value::as_array))
+            .map(|fields| {
+                fields
+                    .iter()
+                    .filter_map(|field| {
+                        Some((
+                            i32::try_from(field.get("id")?.as_i64()?).ok()?,
+                            field.get("name")?.as_str()?.to_string(),
+                        ))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     fn iceberg_type_to_datafusion(value: &serde_json::Value) -> DataType {
@@ -803,6 +889,83 @@ pub mod catalog_provider {
             DataType::Binary | DataType::LargeBinary | DataType::FixedSizeBinary(_) => "binary",
             DataType::Decimal128(_, _) | DataType::Decimal256(_, _) => "decimal(38,18)",
             _ => "string",
+        }
+    }
+
+    fn partition_spec_fields(
+        columns: &[sail_catalog::provider::CreateTableColumnOptions],
+        partition_by: &[CatalogPartitionField],
+    ) -> Vec<serde_json::Value> {
+        let column_ids = columns
+            .iter()
+            .enumerate()
+            .map(|(idx, column)| {
+                (
+                    column.name.as_str(),
+                    i32::try_from(idx + 1).unwrap_or(i32::MAX),
+                )
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        partition_by
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, field)| {
+                let source_id = *column_ids.get(field.column.as_str())?;
+                let (transform, name) = partition_transform_to_iceberg(field);
+                Some(json!({
+                    "source-id": source_id,
+                    "field-id": i32::try_from(idx + 1000).unwrap_or(i32::MAX),
+                    "name": name,
+                    "transform": transform,
+                }))
+            })
+            .collect()
+    }
+
+    fn partition_transform_to_iceberg(field: &CatalogPartitionField) -> (String, String) {
+        match field.transform {
+            None | Some(PartitionTransform::Identity) => {
+                ("identity".to_string(), field.column.clone())
+            }
+            Some(PartitionTransform::Year) => {
+                ("year".to_string(), format!("{}_year", field.column))
+            }
+            Some(PartitionTransform::Month) => {
+                ("month".to_string(), format!("{}_month", field.column))
+            }
+            Some(PartitionTransform::Day) => ("day".to_string(), format!("{}_day", field.column)),
+            Some(PartitionTransform::Hour) => {
+                ("hour".to_string(), format!("{}_hour", field.column))
+            }
+            Some(PartitionTransform::Bucket(n)) => {
+                (format!("bucket[{n}]"), format!("{}_bucket", field.column))
+            }
+            Some(PartitionTransform::Truncate(w)) => {
+                (format!("truncate[{w}]"), format!("{}_trunc", field.column))
+            }
+        }
+    }
+
+    fn partition_transform_from_iceberg(transform: &str) -> Option<PartitionTransform> {
+        match transform {
+            "identity" => None,
+            "year" => Some(PartitionTransform::Year),
+            "month" => Some(PartitionTransform::Month),
+            "day" => Some(PartitionTransform::Day),
+            "hour" => Some(PartitionTransform::Hour),
+            value if value.starts_with("bucket[") && value.ends_with(']') => value
+                .trim_start_matches("bucket[")
+                .trim_end_matches(']')
+                .parse()
+                .ok()
+                .map(PartitionTransform::Bucket),
+            value if value.starts_with("truncate[") && value.ends_with(']') => value
+                .trim_start_matches("truncate[")
+                .trim_end_matches(']')
+                .parse()
+                .ok()
+                .map(PartitionTransform::Truncate),
+            _ => None,
         }
     }
 
@@ -911,7 +1074,10 @@ pub mod catalog_provider {
                         constraints: Vec::new(),
                         location: Some("file:///tmp/events".to_string()),
                         format: "iceberg".to_string(),
-                        partition_by: Vec::new(),
+                        partition_by: vec![CatalogPartitionField {
+                            column: "event_id".to_string(),
+                            transform: None,
+                        }],
                         sort_by: Vec::new(),
                         bucket_by: None,
                         if_not_exists: false,
@@ -926,17 +1092,31 @@ pub mod catalog_provider {
             assert_eq!(created.name, "events");
             let loaded = provider.get_table(&namespace, "events").await.unwrap();
             assert_eq!(loaded.name, "events");
-            let TableKind::Table { columns, .. } = loaded.kind else {
+            let TableKind::Table {
+                columns,
+                partition_by,
+                ..
+            } = loaded.kind
+            else {
                 panic!("expected Sail table status")
             };
             assert_eq!(columns.len(), 2);
             assert_eq!(columns[0].name, "event_id");
             assert_eq!(columns[0].data_type, DataType::Utf8);
             assert!(!columns[0].nullable);
+            assert!(columns[0].is_partition);
             assert_eq!(columns[0].comment.as_deref(), Some("Event identifier"));
             assert_eq!(columns[1].name, "count");
             assert_eq!(columns[1].data_type, DataType::Int32);
             assert!(columns[1].nullable);
+            assert!(!columns[1].is_partition);
+            assert_eq!(
+                partition_by,
+                vec![CatalogPartitionField {
+                    column: "event_id".to_string(),
+                    transform: None,
+                }]
+            );
             assert_eq!(provider.list_tables(&namespace).await.unwrap().len(), 1);
             provider
                 .commit_table(
