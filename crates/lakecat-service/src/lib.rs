@@ -26,7 +26,8 @@ use lakecat_sail::{
 };
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
-    GovernanceEngine, TableCommitCapability, TableLoadCapability, TableScanCapability,
+    GovernanceEngine, TableCommitCapability, TableCreateCapability, TableLoadCapability,
+    TableScanCapability,
 };
 use lakecat_store::{CatalogAuditEvent, CatalogStore, TableCommit, TableRecord, table_ident};
 use object_store::local::LocalFileSystem;
@@ -193,13 +194,8 @@ async fn create_table(
         namespace,
         TableName::new(request.name)?.as_str(),
     )?;
-    authorize(
-        &state,
-        principal.clone(),
-        CatalogAction::TableCreate,
-        Some(ident.clone()),
-    )
-    .await?;
+    let capability = authorize_table_create(&state, principal.clone(), ident).await?;
+    let ident = capability.table().clone();
     let table = TableRecord::new(
         ident.clone(),
         request.location,
@@ -208,6 +204,22 @@ async fn create_table(
         principal.clone(),
     );
     let table = state.store.create_table(table).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "table.created",
+            Some(ident.clone()),
+            principal.clone(),
+            json!({
+                "event-type": "table.created",
+                "table": ident,
+                "authorization-receipt": capability.receipt(),
+                "metadata-location": table.metadata_location,
+                "location": table.location,
+                "version": table.version,
+            }),
+        )?)
+        .await?;
     state
         .graph
         .emit(GraphEvent::table(
@@ -657,6 +669,21 @@ async fn authorize(
     } else {
         Err(LakeCatError::Conflict("authorization denied".to_string()).into())
     }
+}
+
+async fn authorize_table_create(
+    state: &LakeCatState,
+    principal: Principal,
+    table: TableIdent,
+) -> Result<TableCreateCapability, LakeCatHttpError> {
+    let receipt = authorize(
+        state,
+        principal,
+        CatalogAction::TableCreate,
+        Some(table.clone()),
+    )
+    .await?;
+    Ok(TableCreateCapability::from_receipt(receipt, table)?)
 }
 
 async fn authorize_table_load(

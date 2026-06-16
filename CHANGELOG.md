@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a typed table-create capability and durable `table.created` audit/outbox
+  events so table creation is governed and replayable through the catalog outbox.
 - Added a typed table-commit capability so metadata commits must carry a minted
   governance proof before Sail prepares metadata and Turso advances the pointer.
 - Added a typed table-load capability and durable `table.loaded` audit/outbox

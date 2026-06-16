@@ -66,6 +66,9 @@ impl<Action, Resource> Capability<Action, Resource> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanCreateTable;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanLoadTable;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,9 +77,20 @@ pub struct CanCommitTable;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanPlanScan;
 
+pub type TableCreateCapability = Capability<CanCreateTable, TableIdent>;
 pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
 pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
 pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
+
+impl TableCreateCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
+        table_capability_from_receipt(receipt, table, CatalogAction::TableCreate, "create table")
+    }
+
+    pub fn table(&self) -> &TableIdent {
+        self.resource()
+    }
+}
 
 impl TableLoadCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
@@ -217,6 +231,23 @@ mod tests {
             TableCommitCapability::from_receipt(commit_receipt, capability.table().clone())
                 .expect("matching commit receipt should mint capability");
         assert_eq!(commit_capability.table(), capability.table());
+
+        let create_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:writer".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::TableCreate,
+            table: Some(capability.table().clone()),
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            checked_at: Utc::now(),
+        };
+        let create_capability =
+            TableCreateCapability::from_receipt(create_receipt, capability.table().clone())
+                .expect("matching create receipt should mint capability");
+        assert_eq!(create_capability.table(), capability.table());
     }
 }
 
