@@ -498,12 +498,12 @@ append a dated entry per slice; keep the finding-status table current.
 | # | Finding | Status | Evidence / note |
 | --- | --- | --- | --- |
 | 1 | Red default-feature tests | **CLOSED** | default workspace tests pass; Sail-specific service assertions are gated |
-| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added; catalog config, namespace create/list, table create/load/commit, scan planning, task materialization, credential-vending requests, and QueryGraph bootstrap now require typed capabilities; catalog/namespace/table/scan/bootstrap/credential events and commit receipts persist in Turso audit/outbox; real storage-profile credential issuance still pending |
+| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added; catalog config, namespace create/list, table create/load/commit, scan planning, task materialization, credential-vending requests, and QueryGraph bootstrap now require typed capabilities; catalog/namespace/table/scan/bootstrap/credential events and commit receipts persist in Turso audit/outbox; storage-profile modeling is started, but real short-lived remote credential issuance is still pending |
 | 3 | No durable / CAS commit | **CLOSED for local durable spine** | Turso commits now write local `file://` metadata when provided by the Sail-facing plan, advance pointers with expected-previous compare-and-swap, persist idempotency/audit/outbox rows, and have a concurrent writer regression |
-| 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, outbox, object-write-aware commits, and outbox delivery; full management schema, storage profiles, soft deletes, policy bindings, and credential issuance remain pending |
+| 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, outbox, object-write-aware commits, outbox delivery, and typed inferred storage profiles; full management schema, managed warehouse profiles, soft deletes, policy bindings, and credential issuance remain pending |
 | 5 | Service can't activate real engines | **CLOSED** | `sail-local` / `typesec-local` / `grust-local` passthroughs now in `lakecat-service` |
 | 6 | Sail used as struct library, not planner | **OPEN** | Tier 1 (`CatalogProvider`) not started |
-| 7 | Plan ↔ implementation drift | **PARTIAL** | architecture and OPUS working-plan docs now track the committed Turso CAS/object-write/outbox/OpenLineage slices; remaining drift risk is around Sail Tier 1, Grust taxonomy placement, and storage-profile credential issuance |
+| 7 | Plan ↔ implementation drift | **PARTIAL** | architecture and OPUS working-plan docs now track the committed Turso CAS/object-write/outbox/OpenLineage/storage-profile slices; remaining drift risk is around Sail Tier 1, Grust taxonomy placement, and remote credential issuance |
 | 8 | Grust graph is a placeholder taxonomy | **OPEN** | |
 | 9 | `list_namespaces` fabricates `default` | **CLOSED** | memory and Turso stores return an empty list until namespace creation |
 | 10 | Side effects coupled to request path | **CLOSED** | Turso outbox and service drain/projection API exist; catalog handlers record durable events and no longer emit graph/lineage inline |
@@ -532,9 +532,13 @@ events. The service binary can use it when built with `turso-local` and
 `file://` metadata objects when the Sail-facing commit plan carries new metadata,
 advances table pointers with expected-previous compare-and-swap, persists
 authorization/audit/outbox receipts across privileged catalog paths, and drains
-committed outbox events into graph and lineage sinks. The remaining P1/P2 work is
-the management/storage-profile layer: warehouse profiles, remote object-store
-credential issuance, soft deletes, policy bindings, and operator APIs.
+committed outbox events into graph and lineage sinks. LakeCat also has a typed
+inferred storage-profile model for conservative credential responses: local
+`file://` tables can return scoped no-secret profile hints, while remote
+object-store locations return no credentials until short-lived issuance exists.
+The remaining P1/P2 work is the management/storage-profile layer: managed
+warehouse profiles, remote object-store credential issuance, soft deletes,
+policy bindings, and operator APIs.
 
 ### Reviewer note — endorse the Turso pivot, with a gate (2026-06-16)
 
@@ -582,8 +586,9 @@ only once **P2** gives it a governed path to run on.
   object metadata writes, a typed store-level outbox drain API, and service-level
   graph/lineage projection are now implemented for the local durable spine;
   catalog handlers rely on durable outbox delivery instead of inline
-  graph/lineage side effects. Storage-profile management and remote credential
-  issuance remain outstanding.*
+  graph/lineage side effects. Typed inferred storage profiles are started for
+  no-secret local credential hints; managed warehouse profiles and remote
+  credential issuance remain outstanding.*
 - **P2 — finish governance: capability model + governed read path.** Promote the
   boolean receipt to `Capability<Action, Resource>`; route agent reads through
   governed scan-planning; persist the receipt with the audit row. (Milestones 1, 5;

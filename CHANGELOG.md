@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Updated the architecture and OPUS1 working-plan docs to mark storage-profile
+  modeling as started while keeping remote credential issuance and management
+  APIs as pending work.
 - Added a typed storage-profile model for credential vending, returning scoped
   no-secret `file://` profile hints while keeping remote object-store credentials
   empty until short-lived issuance is implemented.
