@@ -8,9 +8,10 @@ use axum::{Json, Router};
 use lakecat_api::{
     CatalogConfigResponse, CommitTableRequest, CommitTableResponse, ConfigEntry,
     CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest,
-    FetchScanTasksResponse, ListNamespacesResponse, LoadCredentialsResponse, LoadTableResponse,
-    NamespaceResponse, PlanTableScanRequest, PlanTableScanResponse, StorageCredential,
-    TableIdentifier,
+    FetchScanTasksResponse, ListNamespacesResponse, ListStorageProfilesResponse,
+    LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
+    PlanTableScanResponse, StorageCredential, StorageProfileResponse, TableIdentifier,
+    UpsertStorageProfileRequest,
 };
 use lakecat_core::{
     LakeCatError, Namespace, Principal, PrincipalKind, TableIdent, TableName, WarehouseName,
@@ -28,12 +29,12 @@ use lakecat_sail::{
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
-    NamespaceCreateCapability, NamespaceListCapability, TableCommitCapability,
-    TableCreateCapability, TableLoadCapability, TableScanCapability,
+    NamespaceCreateCapability, NamespaceListCapability, StorageProfileManageCapability,
+    TableCommitCapability, TableCreateCapability, TableLoadCapability, TableScanCapability,
 };
 use lakecat_store::{
-    CatalogAuditEvent, CatalogStore, OutboxEvent, StorageProfile, TableCommit, TableRecord,
-    table_ident,
+    CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, StorageProfile,
+    StorageProvider, TableCommit, TableRecord, table_ident,
 };
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
@@ -122,6 +123,14 @@ pub fn app(state: LakeCatState) -> Router {
         .route(
             "/catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
             get(load_credentials),
+        )
+        .route(
+            "/management/v1/warehouses/{warehouse}/storage-profiles",
+            get(list_storage_profiles),
+        )
+        .route(
+            "/management/v1/warehouses/{warehouse}/storage-profiles/{profile}",
+            post(upsert_storage_profile).put(upsert_storage_profile),
         )
         .route("/querygraph/v1/bootstrap", get(querygraph_bootstrap))
         .with_state(state)
@@ -320,6 +329,67 @@ async fn load_credentials(
     Ok(Json(LoadCredentialsResponse {
         storage_credentials,
     }))
+}
+
+async fn list_storage_profiles(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path(warehouse): Path<String>,
+) -> Result<Json<ListStorageProfilesResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let capability = authorize_storage_profile_manage(&state, request_principal(&headers)?).await?;
+    let profiles = state.store.list_storage_profiles(&warehouse).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "storage-profile.listed",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "storage-profile.listed",
+                "warehouse": warehouse.as_str(),
+                "authorization-receipt": capability.receipt(),
+                "storage-profile-count": profiles.len(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(ListStorageProfilesResponse {
+        storage_profiles: profiles.iter().map(storage_profile_response).collect(),
+    }))
+}
+
+async fn upsert_storage_profile(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, profile)): Path<(String, String)>,
+    Json(request): Json<UpsertStorageProfileRequest>,
+) -> Result<Json<StorageProfileResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let capability = authorize_storage_profile_manage(&state, request_principal(&headers)?).await?;
+    let storage_profile = StorageProfile::new(
+        profile,
+        warehouse.clone(),
+        request.location_prefix,
+        request.provider.parse::<StorageProvider>()?,
+        request.issuance_mode.parse::<CredentialIssuanceMode>()?,
+        request.public_config,
+    )?;
+    let storage_profile = state.store.upsert_storage_profile(storage_profile).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "storage-profile.upserted",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "storage-profile.upserted",
+                "warehouse": warehouse.as_str(),
+                "storage-profile": storage_profile_response(&storage_profile),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(storage_profile_response(&storage_profile)))
 }
 
 async fn commit_table(
@@ -724,6 +794,32 @@ fn storage_credentials_for_profile(profile: &StorageProfile) -> Vec<StorageCrede
     }]
 }
 
+fn storage_profile_response(profile: &StorageProfile) -> StorageProfileResponse {
+    StorageProfileResponse {
+        profile_id: profile.profile_id.clone(),
+        warehouse: profile.warehouse.as_str().to_string(),
+        location_prefix: profile.location_prefix.clone(),
+        provider: profile.provider.as_str().to_string(),
+        issuance_mode: profile.issuance_mode.as_str().to_string(),
+        public_config: profile.public_config.clone(),
+    }
+}
+
+fn management_warehouse(
+    state: &LakeCatState,
+    warehouse: String,
+) -> Result<WarehouseName, LakeCatHttpError> {
+    let warehouse = WarehouseName::new(warehouse)?;
+    if warehouse != state.warehouse {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "management warehouse {} does not match configured warehouse {}",
+            warehouse, state.warehouse
+        ))
+        .into());
+    }
+    Ok(warehouse)
+}
+
 fn request_principal(headers: &HeaderMap) -> Result<Principal, LakeCatHttpError> {
     let header = |name: &str| -> Result<Option<&str>, LakeCatError> {
         headers
@@ -881,6 +977,14 @@ async fn authorize_credentials_vend(
     )
     .await?;
     Ok(CredentialsVendCapability::from_receipt(receipt, table)?)
+}
+
+async fn authorize_storage_profile_manage(
+    state: &LakeCatState,
+    principal: Principal,
+) -> Result<StorageProfileManageCapability, LakeCatHttpError> {
+    let receipt = authorize(state, principal, CatalogAction::StorageProfileManage, None).await?;
+    Ok(StorageProfileManageCapability::from_receipt(receipt)?)
 }
 
 async fn authorize_graph_read(
@@ -1727,6 +1831,88 @@ mod tests {
             .unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["storage-credentials"], serde_json::json!([]));
+    }
+
+    #[tokio::test]
+    async fn management_storage_profile_overrides_inferred_credentials_by_prefix() {
+        let app = test_app();
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/storage-profiles/local-events")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "location-prefix": "file:///tmp/events",
+                    "provider": "file",
+                    "issuance-mode": "local-file-no-secret",
+                    "public-config": {
+                        "lakecat.endpoint": "local"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["profile-id"], serde_json::json!("local-events"));
+
+        let list = Request::builder()
+            .method(Method::GET)
+            .uri("/management/v1/warehouses/local/storage-profiles")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(list).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["storage-profiles"].as_array().unwrap().len(), 1);
+
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events/tenant-a","metadata-location":"file:///tmp/events/tenant-a/metadata/00000.json","metadata":{"format-version":3,"current-schema-id":1,"schemas":[{"schema-id":1,"fields":[{"id":1,"name":"event_id","type":"string","required":true}]}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let credentials = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/namespaces/default/tables/events/credentials")
+            .header("x-lakecat-agent-did", "did:example:agent")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(credentials).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let credentials = body["storage-credentials"].as_array().unwrap();
+        assert_eq!(credentials.len(), 1);
+        assert_eq!(
+            credentials[0]["prefix"],
+            serde_json::json!("file:///tmp/events")
+        );
+        let config = credentials[0]["config"].as_array().unwrap();
+        assert!(config.iter().any(|entry| {
+            entry["key"] == "lakecat.storage-profile-id" && entry["value"] == "local-events"
+        }));
+        assert!(
+            config
+                .iter()
+                .any(|entry| { entry["key"] == "lakecat.endpoint" && entry["value"] == "local" })
+        );
     }
 
     #[cfg(feature = "sail-local")]

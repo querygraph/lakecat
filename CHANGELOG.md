@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added governed management endpoints and durable store support for warehouse
+  storage profiles, including longest-prefix profile selection for credential
+  responses.
 - Updated the architecture and OPUS1 working-plan docs to mark storage-profile
   modeling as started while keeping remote credential issuance and management
   APIs as pending work.

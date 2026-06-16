@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -27,6 +28,18 @@ pub trait CatalogStore: Send + Sync + 'static {
         ident: &TableIdent,
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord>;
+    async fn upsert_storage_profile(
+        &self,
+        profile: StorageProfile,
+    ) -> LakeCatResult<StorageProfile> {
+        Ok(profile)
+    }
+    async fn list_storage_profiles(
+        &self,
+        _warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<StorageProfile>> {
+        Ok(Vec::new())
+    }
     async fn storage_profile_for_table(
         &self,
         table: &TableRecord,
@@ -115,6 +128,33 @@ pub struct StorageProfile {
 }
 
 impl StorageProfile {
+    pub fn new(
+        profile_id: impl Into<String>,
+        warehouse: WarehouseName,
+        location_prefix: impl Into<String>,
+        provider: StorageProvider,
+        issuance_mode: CredentialIssuanceMode,
+        public_config: BTreeMap<String, String>,
+    ) -> LakeCatResult<Self> {
+        let profile_id = profile_id.into();
+        validate_profile_id(&profile_id)?;
+        let location_prefix = location_prefix.into();
+        if location_prefix.trim().is_empty() {
+            return Err(LakeCatError::InvalidArgument(
+                "storage profile location prefix must not be empty".to_string(),
+            ));
+        }
+        validate_public_config(&public_config)?;
+        Ok(Self {
+            profile_id,
+            warehouse,
+            location_prefix,
+            provider,
+            issuance_mode,
+            public_config,
+        })
+    }
+
     pub fn inferred_for_table(table: &TableRecord) -> Self {
         let provider = StorageProvider::from_location(&table.location);
         let issuance_mode = match provider {
@@ -166,7 +206,7 @@ pub enum StorageProvider {
 }
 
 impl StorageProvider {
-    fn from_location(location: &str) -> Self {
+    pub fn from_location(location: &str) -> Self {
         if location.starts_with("file://") {
             Self::File
         } else if location.starts_with("s3://") || location.starts_with("s3a://") {
@@ -194,6 +234,23 @@ impl StorageProvider {
     }
 }
 
+impl FromStr for StorageProvider {
+    type Err = LakeCatError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "file" | "local-file" => Ok(Self::File),
+            "s3" | "s3a" => Ok(Self::S3),
+            "gcs" | "gs" => Ok(Self::Gcs),
+            "azure" | "az" | "abfs" | "abfss" => Ok(Self::Azure),
+            "unknown" => Ok(Self::Unknown),
+            other => Err(LakeCatError::InvalidArgument(format!(
+                "unknown storage provider: {other}"
+            ))),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum CredentialIssuanceMode {
@@ -206,6 +263,20 @@ impl CredentialIssuanceMode {
         match self {
             Self::GovernedReadRequired => "governed-read-required",
             Self::LocalFileNoSecret => "local-file-no-secret",
+        }
+    }
+}
+
+impl FromStr for CredentialIssuanceMode {
+    type Err = LakeCatError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "governed-read-required" | "governed" => Ok(Self::GovernedReadRequired),
+            "local-file-no-secret" | "no-secret" => Ok(Self::LocalFileNoSecret),
+            other => Err(LakeCatError::InvalidArgument(format!(
+                "unknown credential issuance mode: {other}"
+            ))),
         }
     }
 }
@@ -266,6 +337,7 @@ struct MemoryState {
     tables: BTreeMap<String, TableRecord>,
     commits: Vec<TableCommitRecord>,
     idempotency: BTreeMap<String, TableRecord>,
+    storage_profiles: BTreeMap<String, StorageProfile>,
 }
 
 #[async_trait]
@@ -415,6 +487,44 @@ impl CatalogStore for MemoryCatalogStore {
         }
         Ok(table)
     }
+
+    async fn upsert_storage_profile(
+        &self,
+        profile: StorageProfile,
+    ) -> LakeCatResult<StorageProfile> {
+        let mut state = self.state.write().await;
+        state.storage_profiles.insert(
+            storage_profile_key(&profile.warehouse, &profile.profile_id),
+            profile.clone(),
+        );
+        Ok(profile)
+    }
+
+    async fn list_storage_profiles(
+        &self,
+        warehouse: &WarehouseName,
+    ) -> LakeCatResult<Vec<StorageProfile>> {
+        let state = self.state.read().await;
+        let mut profiles = state
+            .storage_profiles
+            .values()
+            .filter(|profile| profile.warehouse == *warehouse)
+            .cloned()
+            .collect::<Vec<_>>();
+        profiles.sort_by(|left, right| left.profile_id.cmp(&right.profile_id));
+        Ok(profiles)
+    }
+
+    async fn storage_profile_for_table(
+        &self,
+        table: &TableRecord,
+    ) -> LakeCatResult<StorageProfile> {
+        let state = self.state.read().await;
+        Ok(
+            storage_profile_match(state.storage_profiles.values(), table)
+                .unwrap_or_else(|| StorageProfile::inferred_for_table(table)),
+        )
+    }
 }
 
 pub fn table_ident(
@@ -436,6 +546,55 @@ fn table_key(ident: &TableIdent) -> String {
     )
 }
 
+fn storage_profile_key(warehouse: &WarehouseName, profile_id: &str) -> String {
+    format!("{}:{profile_id}", warehouse.as_str())
+}
+
+fn storage_profile_match<'a>(
+    profiles: impl IntoIterator<Item = &'a StorageProfile>,
+    table: &TableRecord,
+) -> Option<StorageProfile> {
+    profiles
+        .into_iter()
+        .filter(|profile| profile.warehouse == table.ident.warehouse)
+        .filter(|profile| table.location.starts_with(&profile.location_prefix))
+        .max_by_key(|profile| profile.location_prefix.len())
+        .cloned()
+}
+
+fn validate_profile_id(profile_id: &str) -> LakeCatResult<()> {
+    if profile_id.is_empty() {
+        return Err(LakeCatError::InvalidArgument(
+            "storage profile id must not be empty".to_string(),
+        ));
+    }
+    if !profile_id
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+    {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "storage profile id contains unsupported characters: {profile_id}"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_public_config(config: &BTreeMap<String, String>) -> LakeCatResult<()> {
+    for key in config.keys() {
+        let normalized = key.to_ascii_lowercase();
+        if normalized.contains("secret")
+            || normalized.contains("token")
+            || normalized.contains("password")
+            || normalized.contains("credential")
+        {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "storage profile public config key may expose secret material: {key}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(feature = "turso-local")]
 pub mod turso_store {
     use std::sync::Arc;
@@ -450,8 +609,8 @@ pub mod turso_store {
     use turso::{Connection, Database, Row, Value as TursoValue};
 
     use crate::{
-        CatalogAuditEvent, CatalogStore, OutboxEvent, TableCommit, TableCommitRecord, TableRecord,
-        table_key,
+        CatalogAuditEvent, CatalogStore, OutboxEvent, StorageProfile, TableCommit,
+        TableCommitRecord, TableRecord, storage_profile_key, storage_profile_match, table_key,
     };
 
     #[derive(Debug, Clone)]
@@ -931,6 +1090,69 @@ pub mod turso_store {
             tx.commit().await.map_err(turso_error)?;
             Ok(delivered)
         }
+
+        async fn upsert_storage_profile(
+            &self,
+            profile: StorageProfile,
+        ) -> LakeCatResult<StorageProfile> {
+            let conn = self.connect()?;
+            conn.execute(
+                "insert into storage_profiles (
+                    profile_key, profile_id, warehouse, location_prefix,
+                    provider, issuance_mode, profile_json, updated_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                 on conflict(profile_key) do update set
+                    location_prefix = excluded.location_prefix,
+                    provider = excluded.provider,
+                    issuance_mode = excluded.issuance_mode,
+                    profile_json = excluded.profile_json,
+                    updated_at = excluded.updated_at",
+                (
+                    storage_profile_key(&profile.warehouse, &profile.profile_id),
+                    profile.profile_id.as_str(),
+                    profile.warehouse.as_str(),
+                    profile.location_prefix.as_str(),
+                    profile.provider.as_str(),
+                    profile.issuance_mode.as_str(),
+                    encode_json(&profile)?,
+                    Utc::now().to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
+            Ok(profile)
+        }
+
+        async fn list_storage_profiles(
+            &self,
+            warehouse: &WarehouseName,
+        ) -> LakeCatResult<Vec<StorageProfile>> {
+            let conn = self.connect()?;
+            let mut rows = conn
+                .query(
+                    "select profile_json from storage_profiles
+                     where warehouse = ?1
+                     order by profile_id",
+                    (warehouse.as_str(),),
+                )
+                .await
+                .map_err(turso_error)?;
+            let mut profiles = Vec::new();
+            while let Some(row) = rows.next().await.map_err(turso_error)? {
+                profiles.push(decode_json(row_string(&row, 0)?)?);
+            }
+            Ok(profiles)
+        }
+
+        async fn storage_profile_for_table(
+            &self,
+            table: &TableRecord,
+        ) -> LakeCatResult<StorageProfile> {
+            let profiles = self.list_storage_profiles(&table.ident.warehouse).await?;
+            Ok(storage_profile_match(profiles.iter(), table)
+                .unwrap_or_else(|| StorageProfile::inferred_for_table(table)))
+        }
     }
 
     const TURSO_MIGRATION: &[&str] = &[
@@ -987,6 +1209,18 @@ pub mod turso_store {
             created_at text not null,
             delivered_at text
         )",
+        "create table if not exists storage_profiles (
+            profile_key text primary key,
+            profile_id text not null,
+            warehouse text not null,
+            location_prefix text not null,
+            provider text not null,
+            issuance_mode text not null,
+            profile_json text not null,
+            updated_at text not null
+        )",
+        "create index if not exists idx_storage_profiles_warehouse
+            on storage_profiles (warehouse, profile_id)",
     ];
 
     fn encode_json(value: impl serde::Serialize) -> LakeCatResult<String> {
@@ -1095,7 +1329,11 @@ pub mod turso_store {
 
     #[cfg(test)]
     mod tests {
+        use std::collections::BTreeMap;
+
         use lakecat_core::{Principal, TableName};
+
+        use crate::{CredentialIssuanceMode, StorageProvider};
 
         use super::*;
 
@@ -1616,6 +1854,56 @@ pub mod turso_store {
             assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 1);
             assert_eq!(store.count_rows("audit_events").await.unwrap(), 1);
             assert_eq!(store.count_rows("outbox_events").await.unwrap(), 1);
+        }
+
+        #[tokio::test]
+        async fn turso_store_persists_storage_profiles_and_matches_longest_prefix() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace,
+                TableName::new("events").unwrap(),
+            );
+            let table = TableRecord::new(
+                ident,
+                "file:///tmp/events/tenant-a/table".to_string(),
+                Some("file:///tmp/events/tenant-a/table/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            );
+
+            let broad = StorageProfile::new(
+                "local-broad",
+                warehouse.clone(),
+                "file:///tmp/events",
+                StorageProvider::File,
+                CredentialIssuanceMode::LocalFileNoSecret,
+                BTreeMap::new(),
+            )
+            .unwrap();
+            let narrow = StorageProfile::new(
+                "local-tenant-a",
+                warehouse.clone(),
+                "file:///tmp/events/tenant-a",
+                StorageProvider::File,
+                CredentialIssuanceMode::LocalFileNoSecret,
+                BTreeMap::from([("lakecat.endpoint".to_string(), "local".to_string())]),
+            )
+            .unwrap();
+
+            store.upsert_storage_profile(broad).await.unwrap();
+            store.upsert_storage_profile(narrow.clone()).await.unwrap();
+
+            let profiles = store.list_storage_profiles(&warehouse).await.unwrap();
+            assert_eq!(profiles.len(), 2);
+            let matched = store.storage_profile_for_table(&table).await.unwrap();
+            assert_eq!(matched.profile_id, narrow.profile_id);
+            assert_eq!(
+                matched.public_config["lakecat.endpoint"],
+                narrow.public_config["lakecat.endpoint"]
+            );
         }
     }
 }

@@ -1,6 +1,7 @@
 use lakecat_core::{LakeCatError, LakeCatResult, Namespace, TableIdent};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -29,6 +30,8 @@ impl Default for CatalogConfigResponse {
                 "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks"
                     .to_string(),
                 "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials".to_string(),
+                "GET /management/v1/warehouses/{warehouse}/storage-profiles".to_string(),
+                "PUT /management/v1/warehouses/{warehouse}/storage-profiles/{profile}".to_string(),
             ],
         }
     }
@@ -105,6 +108,33 @@ pub struct LoadCredentialsResponse {
 pub struct StorageCredential {
     pub prefix: String,
     pub config: Vec<ConfigEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct UpsertStorageProfileRequest {
+    pub location_prefix: String,
+    pub provider: String,
+    pub issuance_mode: String,
+    #[serde(default)]
+    pub public_config: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct StorageProfileResponse {
+    pub profile_id: String,
+    pub warehouse: String,
+    pub location_prefix: String,
+    pub provider: String,
+    pub issuance_mode: String,
+    pub public_config: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ListStorageProfilesResponse {
+    pub storage_profiles: Vec<StorageProfileResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -33,6 +33,7 @@ pub enum CatalogAction {
     TableCommit,
     TableDrop,
     CredentialsVend,
+    StorageProfileManage,
     GraphRead,
     LineageRead,
 }
@@ -81,6 +82,9 @@ pub struct CanPlanScan;
 pub struct CanVendCredentials;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanManageStorageProfiles;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanReadGraph;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,6 +101,7 @@ pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
 pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
 pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
 pub type CredentialsVendCapability = Capability<CanVendCredentials, TableIdent>;
+pub type StorageProfileManageCapability = Capability<CanManageStorageProfiles, ()>;
 pub type GraphReadCapability = Capability<CanReadGraph, ()>;
 pub type CatalogConfigCapability = Capability<CanReadCatalogConfig, ()>;
 pub type NamespaceCreateCapability = Capability<CanCreateNamespace, ()>;
@@ -159,6 +164,16 @@ impl CredentialsVendCapability {
 
     pub fn table(&self) -> &TableIdent {
         self.resource()
+    }
+}
+
+impl StorageProfileManageCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
+        catalog_capability_from_receipt(
+            receipt,
+            CatalogAction::StorageProfileManage,
+            "manage storage profiles",
+        )
     }
 }
 
@@ -424,6 +439,20 @@ mod tests {
             checked_at: Utc::now(),
         };
         assert!(NamespaceListCapability::from_receipt(namespace_list_receipt).is_ok());
+
+        let storage_profile_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:operator".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::StorageProfileManage,
+            table: None,
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            checked_at: Utc::now(),
+        };
+        assert!(StorageProfileManageCapability::from_receipt(storage_profile_receipt).is_ok());
     }
 }
 
@@ -595,6 +624,7 @@ pub fn action_name(action: &CatalogAction) -> &'static str {
         CatalogAction::TableCommit => "table.commit",
         CatalogAction::TableDrop => "table.drop",
         CatalogAction::CredentialsVend => "credentials.vend",
+        CatalogAction::StorageProfileManage => "storage_profile.manage",
         CatalogAction::GraphRead => "graph.read",
         CatalogAction::LineageRead => "lineage.read",
     }
