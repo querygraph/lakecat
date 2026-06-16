@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a feature-gated in-process Sail `CatalogProvider` bridge that lets Sail
+  resolve governed LakeCat namespaces and tables without a REST hop.
 - Added governed table restore, including a management restore endpoint,
   table-scoped restore capability, memory/Turso soft-delete removal, and
   durable `table.restored` audit/outbox records with OpenLineage projection.

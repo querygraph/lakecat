@@ -7,17 +7,27 @@ repository.workspace = true
 
 [features]
 default = []
+catalog-provider = [
+    "dep:lakecat-security",
+    "dep:lakecat-store",
+    "dep:sail-catalog",
+    "dep:sail-common-datafusion",
+]
 sail-local = ["dep:hex", "dep:hmac", "dep:object_store", "dep:sail-catalog-iceberg", "dep:sail-iceberg", "dep:sha2", "dep:url", "dep:uuid"]
 
 [dependencies]
 async-trait = { workspace = true }
 lakecat-core = { workspace = true }
+lakecat-security = { workspace = true, optional = true }
+lakecat-store = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 hmac = { workspace = true, optional = true }
 object_store = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sail-catalog = { workspace = true, optional = true }
 sail-catalog-iceberg = { path = "../../../sail/crates/sail-catalog-iceberg", optional = true }
+sail-common-datafusion = { workspace = true, optional = true }
 sail-iceberg = { path = "../../../sail/crates/sail-iceberg", optional = true }
 sha2 = { workspace = true, optional = true }
 url = { workspace = true, optional = true }

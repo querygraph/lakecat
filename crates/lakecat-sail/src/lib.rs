@@ -227,6 +227,537 @@ pub fn validate_lakecat_metadata_format(metadata: &Value) -> LakeCatResult<Icebe
     )))
 }
 
+#[cfg(feature = "catalog-provider")]
+pub mod catalog_provider {
+    use std::sync::Arc;
+
+    use lakecat_core::{Namespace, Principal, TableIdent, TableName, WarehouseName};
+    use lakecat_security::{
+        AuthorizationRequest, CatalogAction, GovernanceEngine, TableCommitCapability,
+        TableCreateCapability, TableDropCapability, TableLoadCapability,
+    };
+    use lakecat_store::{CatalogStore, TableCommit, TableRecord};
+    use sail_catalog::error::{CatalogError, CatalogObject, CatalogResult};
+    use sail_catalog::provider::{
+        AlterTableOptions, CatalogProvider, CommitTableOptions, CreateDatabaseOptions,
+        CreateTableOptions, CreateViewOptions, DropDatabaseOptions, DropTableOptions,
+        DropViewOptions, GetTableCommitsOptions, GetTableCommitsResponse,
+        Namespace as SailNamespace,
+    };
+    use sail_common_datafusion::catalog::{DatabaseStatus, TableKind, TableStatus};
+    use serde_json::json;
+
+    use crate::{CommitPreparationRequest, SailCatalogEngine};
+
+    pub struct LakeCatCatalogProvider {
+        name: String,
+        warehouse: WarehouseName,
+        store: Arc<dyn CatalogStore>,
+        sail: Arc<dyn SailCatalogEngine>,
+        governance: Arc<dyn GovernanceEngine>,
+        principal: Principal,
+    }
+
+    impl LakeCatCatalogProvider {
+        pub fn new(
+            name: impl Into<String>,
+            warehouse: WarehouseName,
+            store: Arc<dyn CatalogStore>,
+            sail: Arc<dyn SailCatalogEngine>,
+            governance: Arc<dyn GovernanceEngine>,
+            principal: Principal,
+        ) -> Self {
+            Self {
+                name: name.into(),
+                warehouse,
+                store,
+                sail,
+                governance,
+                principal,
+            }
+        }
+
+        fn ident(&self, database: &SailNamespace, table: &str) -> CatalogResult<TableIdent> {
+            Ok(TableIdent::new(
+                self.warehouse.clone(),
+                lakecat_namespace(database)?,
+                TableName::new(table).map_err(catalog_error)?,
+            ))
+        }
+
+        async fn authorize_table(
+            &self,
+            action: CatalogAction,
+            table: TableIdent,
+        ) -> CatalogResult<lakecat_security::AuthorizationReceipt> {
+            let receipt = self
+                .governance
+                .authorize(AuthorizationRequest {
+                    principal: self.principal.clone(),
+                    action,
+                    table: Some(table),
+                    context: json!({"lakecat:sail-provider": self.name}),
+                })
+                .await
+                .map_err(catalog_error)?;
+            if !receipt.allowed {
+                return Err(CatalogError::Conflict(
+                    "LakeCat governance denied Sail catalog operation".to_string(),
+                ));
+            }
+            Ok(receipt)
+        }
+
+        async fn authorize_catalog(
+            &self,
+            action: CatalogAction,
+        ) -> CatalogResult<lakecat_security::AuthorizationReceipt> {
+            let receipt = self
+                .governance
+                .authorize(AuthorizationRequest {
+                    principal: self.principal.clone(),
+                    action,
+                    table: None,
+                    context: json!({"lakecat:sail-provider": self.name}),
+                })
+                .await
+                .map_err(catalog_error)?;
+            if !receipt.allowed {
+                return Err(CatalogError::Conflict(
+                    "LakeCat governance denied Sail catalog operation".to_string(),
+                ));
+            }
+            Ok(receipt)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl CatalogProvider for LakeCatCatalogProvider {
+        fn get_name(&self) -> &str {
+            &self.name
+        }
+
+        async fn create_database(
+            &self,
+            database: &SailNamespace,
+            _options: CreateDatabaseOptions,
+        ) -> CatalogResult<DatabaseStatus> {
+            self.authorize_catalog(CatalogAction::NamespaceCreate)
+                .await?;
+            let namespace = lakecat_namespace(database)?;
+            self.store
+                .create_namespace(&self.warehouse, namespace.clone())
+                .await
+                .map_err(catalog_error)?;
+            Ok(database_status(&self.name, &namespace))
+        }
+
+        async fn get_database(&self, database: &SailNamespace) -> CatalogResult<DatabaseStatus> {
+            self.authorize_catalog(CatalogAction::NamespaceList).await?;
+            let namespace = lakecat_namespace(database)?;
+            let namespaces = self
+                .store
+                .list_namespaces(&self.warehouse)
+                .await
+                .map_err(catalog_error)?;
+            if namespaces.iter().any(|existing| existing == &namespace) {
+                Ok(database_status(&self.name, &namespace))
+            } else {
+                Err(CatalogError::NotFound(
+                    CatalogObject::Database,
+                    namespace.path(),
+                ))
+            }
+        }
+
+        async fn list_databases(
+            &self,
+            prefix: Option<&SailNamespace>,
+        ) -> CatalogResult<Vec<DatabaseStatus>> {
+            self.authorize_catalog(CatalogAction::NamespaceList).await?;
+            let prefix = prefix.map(lakecat_namespace).transpose()?;
+            Ok(self
+                .store
+                .list_namespaces(&self.warehouse)
+                .await
+                .map_err(catalog_error)?
+                .into_iter()
+                .filter(|namespace| {
+                    prefix
+                        .as_ref()
+                        .is_none_or(|prefix| starts_with_namespace(namespace, prefix))
+                })
+                .map(|namespace| database_status(&self.name, &namespace))
+                .collect())
+        }
+
+        async fn drop_database(
+            &self,
+            _database: &SailNamespace,
+            _options: DropDatabaseOptions,
+        ) -> CatalogResult<()> {
+            Err(CatalogError::NotSupported(
+                "LakeCat namespace drop is not implemented".to_string(),
+            ))
+        }
+
+        async fn create_table(
+            &self,
+            database: &SailNamespace,
+            table: &str,
+            options: CreateTableOptions,
+        ) -> CatalogResult<TableStatus> {
+            let ident = self.ident(database, table)?;
+            let receipt = self
+                .authorize_table(CatalogAction::TableCreate, ident.clone())
+                .await?;
+            let capability = TableCreateCapability::from_receipt(receipt.clone(), ident.clone())
+                .map_err(catalog_error)?;
+            let location = options.location.clone().ok_or_else(|| {
+                CatalogError::InvalidArgument(
+                    "LakeCat Sail table creation requires a location".to_string(),
+                )
+            })?;
+            let metadata = json!({
+                "format-version": 3,
+                "location": location,
+                "properties": options.properties,
+                "lakecat:sail-provider": self.name,
+            });
+            let record = TableRecord::new(
+                capability.table().clone(),
+                location,
+                None,
+                metadata,
+                receipt.principal,
+            );
+            let record = self
+                .store
+                .create_table(record)
+                .await
+                .map_err(catalog_error)?;
+            Ok(table_status(&self.name, &record))
+        }
+
+        async fn get_table(
+            &self,
+            database: &SailNamespace,
+            table: &str,
+        ) -> CatalogResult<TableStatus> {
+            let ident = self.ident(database, table)?;
+            let receipt = self
+                .authorize_table(CatalogAction::TableLoad, ident.clone())
+                .await?;
+            let capability =
+                TableLoadCapability::from_receipt(receipt, ident.clone()).map_err(catalog_error)?;
+            let record = self
+                .store
+                .load_table(capability.table())
+                .await
+                .map_err(catalog_error)?;
+            Ok(table_status(&self.name, &record))
+        }
+
+        async fn list_tables(&self, database: &SailNamespace) -> CatalogResult<Vec<TableStatus>> {
+            self.authorize_catalog(CatalogAction::NamespaceList).await?;
+            let namespace = lakecat_namespace(database)?;
+            Ok(self
+                .store
+                .list_tables(&self.warehouse)
+                .await
+                .map_err(catalog_error)?
+                .into_iter()
+                .filter(|record| record.ident.namespace == namespace)
+                .map(|record| table_status(&self.name, &record))
+                .collect())
+        }
+
+        async fn drop_table(
+            &self,
+            database: &SailNamespace,
+            table: &str,
+            _options: DropTableOptions,
+        ) -> CatalogResult<()> {
+            let ident = self.ident(database, table)?;
+            let receipt = self
+                .authorize_table(CatalogAction::TableDrop, ident.clone())
+                .await?;
+            let capability =
+                TableDropCapability::from_receipt(receipt, ident.clone()).map_err(catalog_error)?;
+            self.store
+                .soft_delete_table(
+                    capability.table(),
+                    capability.receipt().principal.clone(),
+                    Some(serde_json::to_value(capability.receipt()).map_err(catalog_error)?),
+                )
+                .await
+                .map_err(catalog_error)?;
+            Ok(())
+        }
+
+        async fn alter_table(
+            &self,
+            _database: &SailNamespace,
+            _table: &str,
+            _options: AlterTableOptions,
+        ) -> CatalogResult<()> {
+            Err(CatalogError::NotSupported(
+                "LakeCat Sail table alter is not implemented".to_string(),
+            ))
+        }
+
+        async fn commit_table(
+            &self,
+            database: &SailNamespace,
+            table: &str,
+            options: CommitTableOptions,
+        ) -> CatalogResult<TableStatus> {
+            if options.format != "iceberg" {
+                return Err(CatalogError::NotSupported(format!(
+                    "LakeCat Sail provider only commits Iceberg tables, got {}",
+                    options.format
+                )));
+            }
+            let ident = self.ident(database, table)?;
+            let receipt = self
+                .authorize_table(CatalogAction::TableCommit, ident.clone())
+                .await?;
+            let capability = TableCommitCapability::from_receipt(receipt, ident.clone())
+                .map_err(catalog_error)?;
+            let current = self
+                .store
+                .load_table(capability.table())
+                .await
+                .map_err(catalog_error)?;
+            let plan = self
+                .sail
+                .prepare_commit(CommitPreparationRequest {
+                    table: capability.table().clone(),
+                    principal: capability.receipt().principal.clone(),
+                    current_metadata_location: current.metadata_location.clone(),
+                    new_metadata_location: current.metadata_location.clone(),
+                    current_metadata: current.metadata.clone(),
+                    new_metadata: None,
+                    requirements: options.requirements,
+                    updates: options.updates,
+                })
+                .await
+                .map_err(catalog_error)?;
+            let updated = self
+                .store
+                .commit_table(
+                    capability.table(),
+                    TableCommit {
+                        requirements: plan.requirements,
+                        updates: plan.updates,
+                        expected_previous_metadata_location: current.metadata_location,
+                        new_metadata_location: plan.new_metadata_location,
+                        new_metadata: Some(plan.new_metadata),
+                        idempotency_key: None,
+                        principal: capability.receipt().principal.clone(),
+                        authorization_receipt: Some(
+                            serde_json::to_value(capability.receipt()).map_err(catalog_error)?,
+                        ),
+                    },
+                )
+                .await
+                .map_err(catalog_error)?;
+            Ok(table_status(&self.name, &updated))
+        }
+
+        async fn get_table_commits(
+            &self,
+            _database: &SailNamespace,
+            _table: &str,
+            options: GetTableCommitsOptions,
+        ) -> CatalogResult<GetTableCommitsResponse> {
+            Err(CatalogError::NotSupported(format!(
+                "LakeCat Sail commit discovery for {} tables is not implemented",
+                options.format
+            )))
+        }
+
+        async fn create_view(
+            &self,
+            _database: &SailNamespace,
+            _view: &str,
+            _options: CreateViewOptions,
+        ) -> CatalogResult<TableStatus> {
+            Err(CatalogError::NotSupported(
+                "LakeCat Sail views are not implemented".to_string(),
+            ))
+        }
+
+        async fn get_view(
+            &self,
+            _database: &SailNamespace,
+            _view: &str,
+        ) -> CatalogResult<TableStatus> {
+            Err(CatalogError::NotSupported(
+                "LakeCat Sail views are not implemented".to_string(),
+            ))
+        }
+
+        async fn list_views(&self, _database: &SailNamespace) -> CatalogResult<Vec<TableStatus>> {
+            Ok(Vec::new())
+        }
+
+        async fn drop_view(
+            &self,
+            _database: &SailNamespace,
+            _view: &str,
+            _options: DropViewOptions,
+        ) -> CatalogResult<()> {
+            Err(CatalogError::NotSupported(
+                "LakeCat Sail views are not implemented".to_string(),
+            ))
+        }
+    }
+
+    fn lakecat_namespace(namespace: &SailNamespace) -> CatalogResult<Namespace> {
+        let parts: Vec<String> = namespace.clone().into();
+        Namespace::new(parts).map_err(catalog_error)
+    }
+
+    fn starts_with_namespace(namespace: &Namespace, prefix: &Namespace) -> bool {
+        namespace.parts().starts_with(prefix.parts())
+    }
+
+    fn database_status(catalog: &str, namespace: &Namespace) -> DatabaseStatus {
+        DatabaseStatus {
+            catalog: catalog.to_string(),
+            database: namespace.parts().to_vec(),
+            comment: None,
+            location: None,
+            properties: Vec::new(),
+        }
+    }
+
+    fn table_status(catalog: &str, record: &TableRecord) -> TableStatus {
+        TableStatus {
+            catalog: Some(catalog.to_string()),
+            database: record.ident.namespace.parts().to_vec(),
+            name: record.ident.name.as_str().to_string(),
+            kind: TableKind::Table {
+                columns: Vec::new(),
+                comment: None,
+                constraints: Vec::new(),
+                location: Some(record.location.clone()),
+                format: "iceberg".to_string(),
+                partition_by: Vec::new(),
+                sort_by: Vec::new(),
+                bucket_by: None,
+                properties: vec![
+                    ("lakecat:table-id".to_string(), record.ident.stable_id()),
+                    ("lakecat:version".to_string(), record.version.to_string()),
+                ],
+                is_external: true,
+            },
+        }
+    }
+
+    fn catalog_error(error: impl std::fmt::Display) -> CatalogError {
+        let message = error.to_string();
+        if message.contains("not found") {
+            CatalogError::NotFound(CatalogObject::Table, message)
+        } else if message.contains("already exists") {
+            CatalogError::AlreadyExists(CatalogObject::Table, message)
+        } else if message.contains("conflict") {
+            CatalogError::Conflict(message)
+        } else if message.contains("not supported") {
+            CatalogError::NotSupported(message)
+        } else {
+            CatalogError::External(message)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::DeferredSailCatalogEngine;
+        use lakecat_security::AllowAllGovernanceEngine;
+        use lakecat_store::MemoryCatalogStore;
+        use sail_catalog::provider::CatalogProvider;
+
+        #[tokio::test]
+        async fn provider_resolves_governed_tables_in_process() {
+            let provider = LakeCatCatalogProvider::new(
+                "lakecat",
+                WarehouseName::new("local").unwrap(),
+                MemoryCatalogStore::new(),
+                DeferredSailCatalogEngine::new(),
+                AllowAllGovernanceEngine::new(),
+                Principal::anonymous(),
+            );
+            let namespace = SailNamespace::try_from(vec!["default"]).unwrap();
+            provider
+                .create_database(
+                    &namespace,
+                    CreateDatabaseOptions {
+                        comment: None,
+                        location: None,
+                        if_not_exists: true,
+                        properties: Vec::new(),
+                    },
+                )
+                .await
+                .unwrap();
+            let created = provider
+                .create_table(
+                    &namespace,
+                    "events",
+                    CreateTableOptions {
+                        columns: Vec::new(),
+                        comment: None,
+                        constraints: Vec::new(),
+                        location: Some("file:///tmp/events".to_string()),
+                        format: "iceberg".to_string(),
+                        partition_by: Vec::new(),
+                        sort_by: Vec::new(),
+                        bucket_by: None,
+                        if_not_exists: false,
+                        replace: false,
+                        properties: Vec::new(),
+                        is_external: true,
+                        is_write_precondition: false,
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(created.name, "events");
+            assert_eq!(
+                provider.get_table(&namespace, "events").await.unwrap().name,
+                "events"
+            );
+            assert_eq!(provider.list_tables(&namespace).await.unwrap().len(), 1);
+            provider
+                .commit_table(
+                    &namespace,
+                    "events",
+                    CommitTableOptions {
+                        format: "iceberg".to_string(),
+                        requirements: Vec::new(),
+                        updates: vec![json!({"action": "metadata-only"})],
+                    },
+                )
+                .await
+                .unwrap();
+            provider
+                .drop_table(
+                    &namespace,
+                    "events",
+                    DropTableOptions {
+                        if_exists: false,
+                        purge: false,
+                    },
+                )
+                .await
+                .unwrap();
+            assert!(provider.get_table(&namespace, "events").await.is_err());
+        }
+    }
+}
+
 #[cfg(feature = "sail-local")]
 pub mod sail_integration {
     use std::sync::Arc;
