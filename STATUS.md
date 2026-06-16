@@ -6,37 +6,36 @@ Updated: 2026-06-16
 
 - LakeCat is on `master`.
 - Latest committed LakeCat slice before this continuation:
-  `a700fc0 Add pluggable credential issuer`.
-- Current working slice adds a `typesec-local` credential issuer that gates
-  `typesec://` secret-ref resolution through TypeSec `credentials.issue` policy
-  checks before returning scoped short-lived credential config.
+  `617d33c Gate credential issuance through TypeSec`.
+- Current working slice adds Iceberg default sort-order projection to the
+  in-process Sail provider, preserving `CreateTableOptions.sort_by` as Iceberg
+  sort-order metadata and projecting loaded table metadata back to Sail
+  `TableStatus.sort_by`.
 - Graph-related implementation is still intentionally kept out of LakeCat unless
   it is a bounded outbox/projection concern. Reusable graph taxonomy and graph
   mechanics belong in `/Users/alexy/src/grust`.
 - Sail remains the target for planner/table-status work, but `/Users/alexy/src/sail`
   has separate graph-extension WIP and should not be edited casually.
 
-## In Progress In This Commit
+## Completed In This Commit
 
-- `lakecat-service/typesec-local` now depends on the TypeSec facade directly.
-- `TypeSecCredentialIssuer` checks `credentials.issue` against the requesting
-  principal and `typesec://` secret-ref resource.
-- `SecretRefCredentialResolver` is an injected boundary for resolving a
-  policy-approved secret reference into scoped short-lived credential config.
-- The service binary installs a no-op TypeSec issuer when `typesec-local` is
-  enabled, preserving safe defaults until a real resolver backend is configured.
-- Feature-gated tests cover allowed issuance and denied issuance.
+- `LakeCatCatalogProvider::create_table` now writes Iceberg `sort-orders` from
+  Sail `CreateTableOptions.sort_by`.
+- `table_status` now resolves the current/default Iceberg sort order through the
+  current schema and populates Sail `CatalogTableSort` values.
+- The in-process provider test now round-trips ascending and descending sort
+  fields through LakeCat metadata.
 
-## Verification To Run Before Commit
+## Verification Completed
 
 - `cargo fmt`
-- `cargo test -p lakecat-service -- --nocapture`
+- `cargo test -p lakecat-sail --features catalog-provider provider_resolves_governed_tables_in_process -- --nocapture`
 - `cargo test --workspace`
 - `cargo test --workspace --all-features`
 - `git diff --check`
 
 ## Next Recommended Slice
 
-Implement real external secret-store resolver backends for `typesec://` profiles
-and OIDC/cloud federation, keeping raw long-lived secret material out of LakeCat
-catalog state.
+Continue the Sail `TableStatus` conversion with nested types, identifier fields,
+and constraints, then upstream reusable Iceberg metadata conversion helpers into
+Sail once the sibling Sail WIP is stable.

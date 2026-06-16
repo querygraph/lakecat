@@ -246,8 +246,8 @@ pub mod catalog_provider {
         Namespace as SailNamespace, TableCommitInfo,
     };
     use sail_common_datafusion::catalog::{
-        CatalogPartitionField, DatabaseStatus, PartitionTransform, TableColumnStatus, TableKind,
-        TableStatus,
+        CatalogPartitionField, CatalogTableSort, DatabaseStatus, PartitionTransform,
+        TableColumnStatus, TableKind, TableStatus,
     };
     use serde_json::json;
 
@@ -442,6 +442,11 @@ pub mod catalog_provider {
                 "partition-specs": [{
                     "spec-id": 0,
                     "fields": partition_spec_fields(&options.columns, &options.partition_by),
+                }],
+                "default-sort-order-id": 1,
+                "sort-orders": [{
+                    "order-id": 1,
+                    "fields": sort_order_fields(&options.columns, &options.sort_by),
                 }],
                 "properties": options.properties,
                 "lakecat:sail-provider": self.name,
@@ -707,7 +712,7 @@ pub mod catalog_provider {
                 location: Some(record.location.clone()),
                 format: "iceberg".to_string(),
                 partition_by: table_partition_fields(record),
-                sort_by: Vec::new(),
+                sort_by: table_sort_fields(record),
                 bucket_by: None,
                 properties: vec![
                     ("lakecat:table-id".to_string(), record.ident.stable_id()),
@@ -815,6 +820,31 @@ pub mod catalog_provider {
             .unwrap_or_default()
     }
 
+    fn table_sort_fields(record: &TableRecord) -> Vec<CatalogTableSort> {
+        let Some(order) = current_sort_order(&record.metadata) else {
+            return Vec::new();
+        };
+        let Some(fields) = order.get("fields").and_then(serde_json::Value::as_array) else {
+            return Vec::new();
+        };
+        let id_to_name = schema_id_to_name(&record.metadata);
+        fields
+            .iter()
+            .filter_map(|field| {
+                let source_id = field
+                    .get("source-id")
+                    .and_then(serde_json::Value::as_i64)
+                    .and_then(|id| i32::try_from(id).ok())?;
+                let column = id_to_name.get(&source_id)?.clone();
+                let ascending = !field
+                    .get("direction")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|direction| direction.eq_ignore_ascii_case("desc"));
+                Some(CatalogTableSort { column, ascending })
+            })
+            .collect()
+    }
+
     fn current_partition_spec(metadata: &serde_json::Value) -> Option<&serde_json::Value> {
         let specs = metadata.get("partition-specs")?.as_array()?;
         let default_spec_id = metadata
@@ -827,6 +857,20 @@ pub mod catalog_provider {
                 })
             })
             .or_else(|| specs.last())
+    }
+
+    fn current_sort_order(metadata: &serde_json::Value) -> Option<&serde_json::Value> {
+        let orders = metadata.get("sort-orders")?.as_array()?;
+        let default_order_id = metadata
+            .get("default-sort-order-id")
+            .and_then(serde_json::Value::as_i64);
+        default_order_id
+            .and_then(|id| {
+                orders.iter().find(|order| {
+                    order.get("order-id").and_then(serde_json::Value::as_i64) == Some(id)
+                })
+            })
+            .or_else(|| orders.last())
     }
 
     fn schema_id_to_name(metadata: &serde_json::Value) -> std::collections::BTreeMap<i32, String> {
@@ -917,6 +961,34 @@ pub mod catalog_provider {
                     "field-id": i32::try_from(idx + 1000).unwrap_or(i32::MAX),
                     "name": name,
                     "transform": transform,
+                }))
+            })
+            .collect()
+    }
+
+    fn sort_order_fields(
+        columns: &[sail_catalog::provider::CreateTableColumnOptions],
+        sort_by: &[CatalogTableSort],
+    ) -> Vec<serde_json::Value> {
+        let column_ids = columns
+            .iter()
+            .enumerate()
+            .map(|(idx, column)| {
+                (
+                    column.name.as_str(),
+                    i32::try_from(idx + 1).unwrap_or(i32::MAX),
+                )
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        sort_by
+            .iter()
+            .filter_map(|field| {
+                let source_id = *column_ids.get(field.column.as_str())?;
+                Some(json!({
+                    "source-id": source_id,
+                    "transform": "identity",
+                    "direction": if field.ascending { "asc" } else { "desc" },
+                    "null-order": if field.ascending { "nulls-first" } else { "nulls-last" },
                 }))
             })
             .collect()
@@ -1078,7 +1150,16 @@ pub mod catalog_provider {
                             column: "event_id".to_string(),
                             transform: None,
                         }],
-                        sort_by: Vec::new(),
+                        sort_by: vec![
+                            CatalogTableSort {
+                                column: "event_id".to_string(),
+                                ascending: true,
+                            },
+                            CatalogTableSort {
+                                column: "count".to_string(),
+                                ascending: false,
+                            },
+                        ],
                         bucket_by: None,
                         if_not_exists: false,
                         replace: false,
@@ -1095,6 +1176,7 @@ pub mod catalog_provider {
             let TableKind::Table {
                 columns,
                 partition_by,
+                sort_by,
                 ..
             } = loaded.kind
             else {
@@ -1116,6 +1198,19 @@ pub mod catalog_provider {
                     column: "event_id".to_string(),
                     transform: None,
                 }]
+            );
+            assert_eq!(
+                sort_by,
+                vec![
+                    CatalogTableSort {
+                        column: "event_id".to_string(),
+                        ascending: true,
+                    },
+                    CatalogTableSort {
+                        column: "count".to_string(),
+                        ascending: false,
+                    },
+                ]
             );
             assert_eq!(provider.list_tables(&namespace).await.unwrap().len(), 1);
             provider

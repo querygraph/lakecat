@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added Iceberg default sort-order projection to the in-process Sail provider
+  so LakeCat `TableStatus.sort_by` reflects Iceberg sort metadata.
 - Added a `typesec-local` credential issuer that gates `typesec://` secret-ref
   credential resolution through TypeSec `credentials.issue` policy checks before
   returning scoped short-lived credential config.
