@@ -43,8 +43,8 @@ Sail already has the right insertion points:
 LakeCat now also has a feature-gated in-process `LakeCatCatalogProvider` bridge
 that implements Sail's `CatalogProvider` trait over the governed LakeCat store.
 That gives Sail a REST-free path for namespace/table resolution and catalog
-commits while keeping reusable planning and table-status improvements pointed
-back at Sail.
+commits, including pointer-log-backed commit discovery, while keeping reusable
+planning and table-status improvements pointed back at Sail.
 
 QueryGraph already has Rust modules for Sail, Croissant, CDIF, ODRL, DID,
 lineage, and lakehouse stories. LakeCat should become the catalog substrate

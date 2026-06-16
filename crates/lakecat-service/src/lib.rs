@@ -1335,6 +1335,17 @@ mod tests {
             ))
         }
 
+        async fn table_commit_records(
+            &self,
+            _ident: &TableIdent,
+            _start_version: u64,
+            _end_version: Option<u64>,
+        ) -> lakecat_core::LakeCatResult<Vec<lakecat_store::TableCommitRecord>> {
+            Err(LakeCatError::NotSupported(
+                "recording store does not list table commits".to_string(),
+            ))
+        }
+
         async fn soft_delete_table(
             &self,
             _ident: &TableIdent,

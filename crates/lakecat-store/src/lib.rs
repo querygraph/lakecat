@@ -28,6 +28,12 @@ pub trait CatalogStore: Send + Sync + 'static {
         ident: &TableIdent,
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord>;
+    async fn table_commit_records(
+        &self,
+        ident: &TableIdent,
+        start_version: u64,
+        end_version: Option<u64>,
+    ) -> LakeCatResult<Vec<TableCommitRecord>>;
     async fn soft_delete_table(
         &self,
         ident: &TableIdent,
@@ -586,6 +592,23 @@ impl CatalogStore for MemoryCatalogStore {
             );
         }
         Ok(table)
+    }
+
+    async fn table_commit_records(
+        &self,
+        ident: &TableIdent,
+        start_version: u64,
+        end_version: Option<u64>,
+    ) -> LakeCatResult<Vec<TableCommitRecord>> {
+        let state = self.state.read().await;
+        Ok(state
+            .commits
+            .iter()
+            .filter(|commit| &commit.table == ident)
+            .filter(|commit| commit.sequence_number >= start_version)
+            .filter(|commit| end_version.is_none_or(|end| commit.sequence_number <= end))
+            .cloned()
+            .collect())
     }
 
     async fn soft_delete_table(
@@ -1436,6 +1459,36 @@ pub mod turso_store {
             Ok(table)
         }
 
+        async fn table_commit_records(
+            &self,
+            ident: &TableIdent,
+            start_version: u64,
+            end_version: Option<u64>,
+        ) -> LakeCatResult<Vec<TableCommitRecord>> {
+            let conn = self.connect()?;
+            let end_version = end_version.unwrap_or(i64::MAX as u64);
+            let mut rows = conn
+                .query(
+                    "select record_json from metadata_pointer_log
+                     where table_key = ?1
+                       and sequence_number >= ?2
+                       and sequence_number <= ?3
+                     order by sequence_number",
+                    (
+                        table_key(ident),
+                        checked_i64(start_version, "start version")?,
+                        checked_i64(end_version, "end version")?,
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+            let mut commits = Vec::new();
+            while let Some(row) = rows.next().await.map_err(turso_error)? {
+                commits.push(decode_json(row_string(&row, 0)?)?);
+            }
+            Ok(commits)
+        }
+
         async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {
             let conn = self.connect()?;
             let event_id = content_hash_json(&serde_json::json!({
@@ -1929,6 +1982,17 @@ pub mod turso_store {
 
             let commit_count = store.count_rows("metadata_pointer_log").await.unwrap();
             assert_eq!(commit_count, 1);
+            let commit_records = store.table_commit_records(&ident, 1, None).await.unwrap();
+            assert_eq!(commit_records.len(), 1);
+            assert_eq!(commit_records[0].sequence_number, 1);
+            assert_eq!(
+                commit_records[0].new_metadata_location.as_deref(),
+                Some("file:///tmp/events/metadata/00001.json")
+            );
+            assert_eq!(
+                store.table_commit_records(&ident, 2, None).await.unwrap(),
+                vec![]
+            );
             let audit_count = store.count_rows("audit_events").await.unwrap();
             assert_eq!(audit_count, 1);
             let outbox_count = store.count_rows("outbox_events").await.unwrap();

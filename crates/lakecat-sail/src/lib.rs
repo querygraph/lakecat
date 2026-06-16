@@ -242,7 +242,7 @@ pub mod catalog_provider {
         AlterTableOptions, CatalogProvider, CommitTableOptions, CreateDatabaseOptions,
         CreateTableOptions, CreateViewOptions, DropDatabaseOptions, DropTableOptions,
         DropViewOptions, GetTableCommitsOptions, GetTableCommitsResponse,
-        Namespace as SailNamespace,
+        Namespace as SailNamespace, TableCommitInfo,
     };
     use sail_common_datafusion::catalog::{DatabaseStatus, TableKind, TableStatus};
     use serde_json::json;
@@ -567,14 +567,54 @@ pub mod catalog_provider {
 
         async fn get_table_commits(
             &self,
-            _database: &SailNamespace,
-            _table: &str,
+            database: &SailNamespace,
+            table: &str,
             options: GetTableCommitsOptions,
         ) -> CatalogResult<GetTableCommitsResponse> {
-            Err(CatalogError::NotSupported(format!(
-                "LakeCat Sail commit discovery for {} tables is not implemented",
-                options.format
-            )))
+            if options.format != "iceberg" {
+                return Err(CatalogError::NotSupported(format!(
+                    "LakeCat Sail provider only discovers Iceberg commits, got {}",
+                    options.format
+                )));
+            }
+            let start_version = u64::try_from(options.start_version).map_err(|_| {
+                CatalogError::InvalidArgument(
+                    "LakeCat Sail commit discovery requires a non-negative start version"
+                        .to_string(),
+                )
+            })?;
+            let end_version = options
+                .end_version
+                .map(|version| {
+                    u64::try_from(version).map_err(|_| {
+                        CatalogError::InvalidArgument(
+                            "LakeCat Sail commit discovery requires a non-negative end version"
+                                .to_string(),
+                        )
+                    })
+                })
+                .transpose()?;
+            let ident = self.ident(database, table)?;
+            let records = self
+                .store
+                .table_commit_records(&ident, 0, None)
+                .await
+                .map_err(catalog_error)?;
+            let latest_table_version = records
+                .iter()
+                .map(|record| record.sequence_number)
+                .max()
+                .unwrap_or(0);
+            let commits = records
+                .into_iter()
+                .filter(|record| record.sequence_number >= start_version)
+                .filter(|record| end_version.is_none_or(|end| record.sequence_number <= end))
+                .map(table_commit_info)
+                .collect::<CatalogResult<Vec<_>>>()?;
+            Ok(GetTableCommitsResponse {
+                latest_table_version: checked_i64(latest_table_version, "latest table version")?,
+                commits,
+            })
         }
 
         async fn create_view(
@@ -654,6 +694,36 @@ pub mod catalog_provider {
                 is_external: true,
             },
         }
+    }
+
+    fn table_commit_info(
+        record: lakecat_store::TableCommitRecord,
+    ) -> CatalogResult<TableCommitInfo> {
+        let metadata_location = record
+            .new_metadata_location
+            .or(record.previous_metadata_location)
+            .unwrap_or_else(|| format!("lakecat-commit-{}", record.sequence_number));
+        Ok(TableCommitInfo {
+            version: checked_i64(record.sequence_number, "commit sequence number")?,
+            timestamp: record.committed_at.timestamp_millis(),
+            file_name: metadata_file_name(&metadata_location),
+            file_size: 0,
+            file_modification_timestamp: record.committed_at.timestamp_millis(),
+        })
+    }
+
+    fn metadata_file_name(location: &str) -> String {
+        location
+            .rsplit(['/', '\\'])
+            .next()
+            .filter(|name| !name.is_empty())
+            .unwrap_or(location)
+            .to_string()
+    }
+
+    fn checked_i64(value: u64, name: &str) -> CatalogResult<i64> {
+        i64::try_from(value)
+            .map_err(|_| CatalogError::InvalidArgument(format!("{name} exceeds i64 range")))
     }
 
     fn catalog_error(error: impl std::fmt::Display) -> CatalogError {
@@ -742,6 +812,38 @@ pub mod catalog_provider {
                 )
                 .await
                 .unwrap();
+            let commits = provider
+                .get_table_commits(
+                    &namespace,
+                    "events",
+                    GetTableCommitsOptions {
+                        format: "iceberg".to_string(),
+                        table_uri: "file:///tmp/events".to_string(),
+                        start_version: 1,
+                        end_version: None,
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(commits.latest_table_version, 1);
+            assert_eq!(commits.commits.len(), 1);
+            assert_eq!(commits.commits[0].version, 1);
+            assert_eq!(commits.commits[0].file_name, "lakecat-commit-1");
+            let filtered = provider
+                .get_table_commits(
+                    &namespace,
+                    "events",
+                    GetTableCommitsOptions {
+                        format: "iceberg".to_string(),
+                        table_uri: "file:///tmp/events".to_string(),
+                        start_version: 2,
+                        end_version: None,
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(filtered.latest_table_version, 1);
+            assert_eq!(filtered.commits, vec![]);
             provider
                 .drop_table(
                     &namespace,
