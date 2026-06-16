@@ -50,6 +50,7 @@ pub trait CatalogStore: Send + Sync + 'static {
         &self,
         profile: StorageProfile,
     ) -> LakeCatResult<StorageProfile> {
+        profile.validate()?;
         Ok(profile)
     }
     async fn list_storage_profiles(
@@ -209,6 +210,20 @@ impl StorageProfile {
             secret_ref,
             public_config,
         })
+    }
+
+    pub fn validate(&self) -> LakeCatResult<()> {
+        if let Some(secret_ref) = self.secret_ref.as_deref() {
+            validate_secret_ref(secret_ref)?;
+        }
+        if matches!(self.issuance_mode, CredentialIssuanceMode::ShortLivedSecretRef)
+            && self.secret_ref.is_none()
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "short-lived-secret-ref issuance mode requires a secret reference".to_string(),
+            ));
+        }
+        Ok(())
     }
 
     pub fn inferred_for_table(table: &TableRecord) -> Self {
@@ -694,6 +709,7 @@ impl CatalogStore for MemoryCatalogStore {
         &self,
         profile: StorageProfile,
     ) -> LakeCatResult<StorageProfile> {
+        profile.validate()?;
         let mut state = self.state.write().await;
         state.storage_profiles.insert(
             storage_profile_key(&profile.warehouse, &profile.profile_id),
@@ -856,10 +872,21 @@ fn validate_secret_ref(secret_ref: &str) -> LakeCatResult<()> {
         )));
     }
     let normalized = trimmed.to_ascii_lowercase();
-    if normalized.contains("password=")
-        || normalized.contains("secret=")
-        || normalized.contains("token=")
-        || normalized.contains("credential=")
+    let embedded_secret_patterns = [
+        "password=",
+        "secret=",
+        "token=",
+        "credential=",
+        "api_key=",
+        "apikey=",
+        "access_key=",
+        "private_key=",
+        "pass=",
+        "auth=",
+    ];
+    if embedded_secret_patterns
+        .iter()
+        .any(|pattern| normalized.contains(pattern))
     {
         return Err(LakeCatError::InvalidArgument(
             "storage profile secret reference must not embed raw secret material".to_string(),
@@ -1645,6 +1672,7 @@ pub mod turso_store {
             &self,
             profile: StorageProfile,
         ) -> LakeCatResult<StorageProfile> {
+            profile.validate()?;
             let conn = self.connect()?;
             conn.execute(
                 "insert into storage_profiles (
