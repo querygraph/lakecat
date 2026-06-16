@@ -443,11 +443,15 @@ pub mod catalog_provider {
                     "spec-id": 0,
                     "fields": partition_spec_fields(&options.columns, &options.partition_by),
                 }],
-                "default-sort-order-id": 1,
-                "sort-orders": [{
-                    "order-id": 1,
-                    "fields": sort_order_fields(&options.columns, &options.sort_by),
-                }],
+                "default-sort-order-id": if options.sort_by.is_empty() { 0 } else { 1 },
+                "sort-orders": if options.sort_by.is_empty() {
+                    json!([{"order-id": 0, "fields": []}])
+                } else {
+                    json!([
+                        {"order-id": 0, "fields": []},
+                        {"order-id": 1, "fields": sort_order_fields(&options.columns, &options.sort_by)},
+                    ])
+                },
                 "properties": options.properties,
                 "lakecat:sail-provider": self.name,
             });
@@ -836,10 +840,14 @@ pub mod catalog_provider {
                     .and_then(serde_json::Value::as_i64)
                     .and_then(|id| i32::try_from(id).ok())?;
                 let column = id_to_name.get(&source_id)?.clone();
-                let ascending = !field
+                let direction = field
                     .get("direction")
-                    .and_then(serde_json::Value::as_str)
-                    .is_some_and(|direction| direction.eq_ignore_ascii_case("desc"));
+                    .and_then(serde_json::Value::as_str)?;
+                let ascending = match direction.to_ascii_lowercase().as_str() {
+                    "asc" | "ascending" => true,
+                    "desc" | "descending" => false,
+                    _ => return None,
+                };
                 Some(CatalogTableSort { column, ascending })
             })
             .collect()
@@ -1269,6 +1277,121 @@ pub mod catalog_provider {
                 .await
                 .unwrap();
             assert!(provider.get_table(&namespace, "events").await.is_err());
+        }
+
+        #[tokio::test]
+        async fn unsorted_table_uses_sort_order_id_zero() {
+            let provider = LakeCatCatalogProvider::new(
+                "lakecat",
+                WarehouseName::new("local").unwrap(),
+                MemoryCatalogStore::new(),
+                DeferredSailCatalogEngine::new(),
+                AllowAllGovernanceEngine::new(),
+                Principal::anonymous(),
+            );
+            let namespace = SailNamespace::try_from(vec!["default"]).unwrap();
+            provider
+                .create_database(
+                    &namespace,
+                    CreateDatabaseOptions {
+                        comment: None,
+                        location: None,
+                        if_not_exists: true,
+                        properties: Vec::new(),
+                    },
+                )
+                .await
+                .unwrap();
+            let created = provider
+                .create_table(
+                    &namespace,
+                    "unsorted",
+                    CreateTableOptions {
+                        columns: vec![sail_catalog::provider::CreateTableColumnOptions {
+                            name: "id".to_string(),
+                            data_type: DataType::Int64,
+                            nullable: false,
+                            comment: None,
+                            default: None,
+                            generated_always_as: None,
+                            identity: None,
+                        }],
+                        comment: None,
+                        constraints: Vec::new(),
+                        location: Some("file:///tmp/unsorted".to_string()),
+                        format: "iceberg".to_string(),
+                        partition_by: Vec::new(),
+                        sort_by: Vec::new(),
+                        bucket_by: None,
+                        if_not_exists: false,
+                        replace: false,
+                        properties: Vec::new(),
+                        is_external: true,
+                        is_write_precondition: false,
+                    },
+                )
+                .await
+                .unwrap();
+            let TableKind::Table { sort_by, .. } = created.kind else {
+                panic!("expected table kind")
+            };
+            assert!(sort_by.is_empty(), "unsorted table should have no sort fields");
+            let loaded = provider.get_table(&namespace, "unsorted").await.unwrap();
+            let TableKind::Table { sort_by: loaded_sort, .. } = loaded.kind else {
+                panic!("expected table kind")
+            };
+            assert!(loaded_sort.is_empty(), "round-tripped unsorted table should have no sort fields");
+        }
+
+        fn make_table_record(metadata: serde_json::Value) -> lakecat_store::TableRecord {
+            let ident = lakecat_core::TableIdent::new(
+                lakecat_core::WarehouseName::new("test").unwrap(),
+                lakecat_core::Namespace::new(vec!["default".to_string()]).unwrap(),
+                lakecat_core::TableName::new("t").unwrap(),
+            );
+            lakecat_store::TableRecord::new(ident, "file:///tmp/t".to_string(), None, metadata, Principal::anonymous())
+        }
+
+        #[test]
+        fn descending_long_form_parses_correctly() {
+            let metadata = serde_json::json!({
+                "schemas": [{"schema-id": 1, "fields": [
+                    {"id": 1, "name": "ts", "type": "long", "required": false},
+                ]}],
+                "current-schema-id": 1,
+                "sort-orders": [{
+                    "order-id": 1,
+                    "fields": [
+                        {"source-id": 1, "transform": "identity", "direction": "DESCENDING", "null-order": "nulls-last"},
+                    ],
+                }],
+                "default-sort-order-id": 1,
+            });
+            let record = make_table_record(metadata);
+            let sort_fields = table_sort_fields(&record);
+            assert_eq!(sort_fields.len(), 1);
+            assert_eq!(sort_fields[0].column, "ts");
+            assert!(!sort_fields[0].ascending, "DESCENDING should map to ascending=false");
+        }
+
+        #[test]
+        fn missing_direction_skips_sort_field() {
+            let metadata = serde_json::json!({
+                "schemas": [{"schema-id": 1, "fields": [
+                    {"id": 1, "name": "id", "type": "int", "required": false},
+                ]}],
+                "current-schema-id": 1,
+                "sort-orders": [{
+                    "order-id": 1,
+                    "fields": [
+                        {"source-id": 1, "transform": "identity"},
+                    ],
+                }],
+                "default-sort-order-id": 1,
+            });
+            let record = make_table_record(metadata);
+            let sort_fields = table_sort_fields(&record);
+            assert!(sort_fields.is_empty(), "field with no direction should be skipped, not treated as ascending");
         }
     }
 }
