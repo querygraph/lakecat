@@ -548,9 +548,11 @@ young (pre-1.0). Two things to verify on the pinned version before the durable
 commit hangs on it:
 
 1. **Real CAS, not just a transaction.** The store has the transaction scaffold but
-   not the compare-against-expected-previous swap. Add `UPDATE tables SET … WHERE
-   table_key = ? AND metadata_location = :prev` and treat `rows_affected == 0` as a
-   concurrency conflict. A transaction alone is not a CAS.
+   now compares against the expected previous pointer and updates through
+   `UPDATE tables SET … WHERE table_key = ? AND metadata_location = :prev`;
+   `rows_affected == 0` is a concurrency conflict. The service currently keeps
+   the new pointer equal to the current pointer until object metadata writes are
+   implemented, while store tests exercise real pointer movement.
 2. **Isolation actually holds** under concurrent commits to the same table.
 
 Keep the schema portable, but treat the Rust `turso` crate as the selected path
@@ -569,8 +571,8 @@ only once **P2** gives it a governed path to run on.
 - **P1 — persistence + durable commit spine.** `TursoCatalogStore`;
   Sail-assembled metadata → `object_store` write → pointer CAS → idempotency/audit/
   pointer-log/outbox in one txn. (Milestones 2–3; Findings 3, 4, 10.) *Turso
-  store plus pointer-log/idempotency/audit/outbox rows are started; object-store
-  metadata write, CAS semantics, and outbox drain remain.*
+  store plus pointer-log/idempotency/audit/outbox rows and CAS semantics are
+  started; object-store metadata write and outbox drain remain.*
 - **P2 — finish governance: capability model + governed read path.** Promote the
   boolean receipt to `Capability<Action, Resource>`; route agent reads through
   governed scan-planning; persist the receipt with the audit row. (Milestones 1, 5;

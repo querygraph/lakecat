@@ -65,6 +65,8 @@ impl TableRecord {
 pub struct TableCommit {
     pub requirements: Vec<Value>,
     pub updates: Vec<Value>,
+    pub expected_previous_metadata_location: Option<String>,
+    pub new_metadata_location: Option<String>,
     pub idempotency_key: Option<String>,
     pub principal: Principal,
 }
@@ -182,8 +184,10 @@ impl CatalogStore for MemoryCatalogStore {
         }
 
         let request_hash = content_hash_json(&serde_json::json!({
-            "requirements": commit.requirements,
-            "updates": commit.updates,
+            "requirements": &commit.requirements,
+            "updates": &commit.updates,
+            "expected_previous_metadata_location": &commit.expected_previous_metadata_location,
+            "new_metadata_location": &commit.new_metadata_location,
         }))?;
         let (
             previous_metadata_location,
@@ -200,13 +204,20 @@ impl CatalogStore for MemoryCatalogStore {
                     name: ident.stable_id(),
                 })?;
             let previous_metadata_location = table.metadata_location.clone();
+            if previous_metadata_location != commit.expected_previous_metadata_location {
+                return Err(LakeCatError::Conflict(format!(
+                    "metadata pointer changed for {}",
+                    ident.stable_id()
+                )));
+            }
+            table.metadata_location = commit.new_metadata_location.clone();
             table.version += 1;
             table.updated_at = Utc::now();
             table.metadata["lakecat:version"] = serde_json::json!(table.version);
             table.metadata["lakecat:last-request-hash"] = serde_json::json!(request_hash);
             (
                 previous_metadata_location,
-                table.metadata_location.clone(),
+                commit.new_metadata_location.clone(),
                 table.version,
                 table.updated_at,
                 table.clone(),
@@ -495,26 +506,48 @@ pub mod turso_store {
             let request_hash = content_hash_json(&serde_json::json!({
                 "requirements": &commit.requirements,
                 "updates": &commit.updates,
+                "expected_previous_metadata_location": &commit.expected_previous_metadata_location,
+                "new_metadata_location": &commit.new_metadata_location,
             }))?;
+            if previous_metadata_location != commit.expected_previous_metadata_location {
+                return Err(LakeCatError::Conflict(format!(
+                    "metadata pointer changed for {}",
+                    ident.stable_id()
+                )));
+            }
+            table.metadata_location = commit.new_metadata_location.clone();
             table.version += 1;
             table.updated_at = Utc::now();
             table.metadata["lakecat:version"] = serde_json::json!(table.version);
             table.metadata["lakecat:last-request-hash"] = serde_json::json!(request_hash);
 
-            tx.execute(
-                "update tables
+            let updated_rows = tx
+                .execute(
+                    "update tables
                  set metadata_location = ?2, version = ?3, record_json = ?4, updated_at = ?5
-                 where table_key = ?1",
-                (
-                    table_key(ident),
-                    table.metadata_location.as_deref(),
-                    checked_i64(table.version, "table version")?,
-                    encode_json(&table)?,
-                    table.updated_at.to_rfc3339(),
-                ),
-            )
-            .await
-            .map_err(turso_error)?;
+                 where table_key = ?1
+                   and (
+                     (metadata_location is null and ?6 is null)
+                     or metadata_location = ?7
+                   )",
+                    (
+                        table_key(ident),
+                        table.metadata_location.as_deref(),
+                        checked_i64(table.version, "table version")?,
+                        encode_json(&table)?,
+                        table.updated_at.to_rfc3339(),
+                        commit.expected_previous_metadata_location.as_deref(),
+                        commit.expected_previous_metadata_location.as_deref(),
+                    ),
+                )
+                .await
+                .map_err(turso_error)?;
+            if updated_rows == 0 {
+                return Err(LakeCatError::Conflict(format!(
+                    "metadata pointer changed for {}",
+                    ident.stable_id()
+                )));
+            }
 
             let record = TableCommitRecord {
                 table: ident.clone(),
@@ -762,11 +795,19 @@ pub mod turso_store {
             let commit = TableCommit {
                 requirements: vec![],
                 updates: vec![serde_json::json!({"action": "noop"})],
+                expected_previous_metadata_location: Some(
+                    "file:///tmp/events/metadata/00000.json".to_string(),
+                ),
+                new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
                 idempotency_key: Some("commit-1".to_string()),
                 principal: Principal::anonymous(),
             };
             let committed = store.commit_table(&ident, commit.clone()).await.unwrap();
             assert_eq!(committed.version, 1);
+            assert_eq!(
+                committed.metadata_location.as_deref(),
+                Some("file:///tmp/events/metadata/00001.json")
+            );
             let replayed = store.commit_table(&ident, commit).await.unwrap();
             assert_eq!(replayed.version, 1);
 
@@ -776,6 +817,47 @@ pub mod turso_store {
             assert_eq!(audit_count, 1);
             let outbox_count = store.count_rows("outbox_events").await.unwrap();
             assert_eq!(outbox_count, 1);
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_stale_metadata_pointer_commits() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(warehouse, namespace, TableName::new("events").unwrap());
+            let table = TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            );
+            store.create_table(table).await.unwrap();
+
+            let err = store
+                .commit_table(
+                    &ident,
+                    TableCommit {
+                        requirements: vec![],
+                        updates: vec![serde_json::json!({"action": "noop"})],
+                        expected_previous_metadata_location: Some(
+                            "file:///tmp/events/metadata/stale.json".to_string(),
+                        ),
+                        new_metadata_location: Some(
+                            "file:///tmp/events/metadata/00001.json".to_string(),
+                        ),
+                        idempotency_key: None,
+                        principal: Principal::anonymous(),
+                    },
+                )
+                .await
+                .expect_err("stale metadata pointer must conflict");
+
+            assert!(matches!(err, LakeCatError::Conflict(_)));
+            assert_eq!(store.load_table(&ident).await.unwrap().version, 0);
+            assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 0);
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
+            assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);
         }
     }
 }

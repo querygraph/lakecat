@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added metadata pointer compare-and-swap enforcement to Turso commits, including
+  expected previous pointer tracking, pointer movement, idempotent replay, and a
+  stale-pointer conflict regression test.
 - Scaffolded LakeCat as a Rust workspace for an Iceberg-compatible catalog and
   QueryGraph foundation.
 - Added REST catalog handlers, typed principal resolution, and integration seams

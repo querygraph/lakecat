@@ -274,12 +274,13 @@ async fn commit_table(
     )
     .await?;
     let current = state.store.load_table(&ident).await?;
+    let current_metadata_location = current.metadata_location.clone();
     let commit_plan = state
         .sail
         .prepare_commit(CommitPreparationRequest {
             table: ident.clone(),
             principal: principal.clone(),
-            current_metadata_location: current.metadata_location,
+            current_metadata_location: current_metadata_location.clone(),
             current_metadata: current.metadata,
             requirements: request.requirements,
             updates: request.updates,
@@ -292,6 +293,8 @@ async fn commit_table(
             TableCommit {
                 requirements: commit_plan.requirements,
                 updates: commit_plan.updates,
+                expected_previous_metadata_location: current_metadata_location.clone(),
+                new_metadata_location: current_metadata_location,
                 idempotency_key: None,
                 principal: principal.clone(),
             },
