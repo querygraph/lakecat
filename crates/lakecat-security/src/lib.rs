@@ -77,6 +77,9 @@ pub struct CanLoadTable;
 pub struct CanCommitTable;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanDropTable;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanPlanScan;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,6 +106,7 @@ pub struct CanListNamespaces;
 pub type TableCreateCapability = Capability<CanCreateTable, TableIdent>;
 pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
 pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
+pub type TableDropCapability = Capability<CanDropTable, TableIdent>;
 pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
 pub type CredentialsVendCapability = Capability<CanVendCredentials, TableIdent>;
 pub type StorageProfileManageCapability = Capability<CanManageStorageProfiles, ()>;
@@ -135,6 +139,16 @@ impl TableLoadCapability {
 impl TableCommitCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
         table_capability_from_receipt(receipt, table, CatalogAction::TableCommit, "commit table")
+    }
+
+    pub fn table(&self) -> &TableIdent {
+        self.resource()
+    }
+}
+
+impl TableDropCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
+        table_capability_from_receipt(receipt, table, CatalogAction::TableDrop, "drop table")
     }
 
     pub fn table(&self) -> &TableIdent {
@@ -352,6 +366,23 @@ mod tests {
             TableCommitCapability::from_receipt(commit_receipt, capability.table().clone())
                 .expect("matching commit receipt should mint capability");
         assert_eq!(commit_capability.table(), capability.table());
+
+        let drop_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:writer".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::TableDrop,
+            table: Some(capability.table().clone()),
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            checked_at: Utc::now(),
+        };
+        let drop_capability =
+            TableDropCapability::from_receipt(drop_receipt, capability.table().clone())
+                .expect("matching drop receipt should mint capability");
+        assert_eq!(drop_capability.table(), capability.table());
 
         let create_receipt = AuthorizationReceipt {
             principal: Principal {

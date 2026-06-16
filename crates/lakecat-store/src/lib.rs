@@ -28,6 +28,12 @@ pub trait CatalogStore: Send + Sync + 'static {
         ident: &TableIdent,
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord>;
+    async fn soft_delete_table(
+        &self,
+        ident: &TableIdent,
+        principal: Principal,
+        authorization_receipt: Option<Value>,
+    ) -> LakeCatResult<TableRecord>;
     async fn upsert_storage_profile(
         &self,
         profile: StorageProfile,
@@ -129,6 +135,16 @@ pub struct TableCommitRecord {
     pub principal: Principal,
     pub request_hash: String,
     pub committed_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SoftDeleteRecord {
+    pub table: TableIdent,
+    pub metadata_location: Option<String>,
+    pub version: u64,
+    pub principal: Principal,
+    pub authorization_receipt: Option<Value>,
+    pub deleted_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -407,6 +423,7 @@ struct MemoryState {
     idempotency: BTreeMap<String, TableRecord>,
     storage_profiles: BTreeMap<String, StorageProfile>,
     policy_bindings: BTreeMap<String, PolicyBinding>,
+    soft_deletes: BTreeMap<String, SoftDeleteRecord>,
 }
 
 #[async_trait]
@@ -440,6 +457,7 @@ impl CatalogStore for MemoryCatalogStore {
             .tables
             .values()
             .filter(|table| table.ident.warehouse == *warehouse)
+            .filter(|table| !state.soft_deletes.contains_key(&table_key(&table.ident)))
             .cloned()
             .collect())
     }
@@ -470,6 +488,7 @@ impl CatalogStore for MemoryCatalogStore {
         state
             .tables
             .get(&table_key(ident))
+            .filter(|_| !state.soft_deletes.contains_key(&table_key(ident)))
             .cloned()
             .ok_or_else(|| LakeCatError::NotFound {
                 object: "table",
@@ -484,6 +503,12 @@ impl CatalogStore for MemoryCatalogStore {
     ) -> LakeCatResult<TableRecord> {
         let mut state = self.state.write().await;
         let key = table_key(ident);
+        if state.soft_deletes.contains_key(&key) {
+            return Err(LakeCatError::NotFound {
+                object: "table",
+                name: ident.stable_id(),
+            });
+        }
         if let Some(idempotency_key) = &commit.idempotency_key {
             let idem_key = format!("{}:{idempotency_key}", ident.stable_id());
             if let Some(record) = state.idempotency.get(&idem_key) {
@@ -554,6 +579,42 @@ impl CatalogStore for MemoryCatalogStore {
                 table.clone(),
             );
         }
+        Ok(table)
+    }
+
+    async fn soft_delete_table(
+        &self,
+        ident: &TableIdent,
+        principal: Principal,
+        authorization_receipt: Option<Value>,
+    ) -> LakeCatResult<TableRecord> {
+        let mut state = self.state.write().await;
+        let key = table_key(ident);
+        if state.soft_deletes.contains_key(&key) {
+            return Err(LakeCatError::NotFound {
+                object: "table",
+                name: ident.stable_id(),
+            });
+        }
+        let table = state
+            .tables
+            .get(&key)
+            .cloned()
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "table",
+                name: ident.stable_id(),
+            })?;
+        state.soft_deletes.insert(
+            key,
+            SoftDeleteRecord {
+                table: ident.clone(),
+                metadata_location: table.metadata_location.clone(),
+                version: table.version,
+                principal,
+                authorization_receipt,
+                deleted_at: Utc::now(),
+            },
+        );
         Ok(table)
     }
 
@@ -748,9 +809,9 @@ pub mod turso_store {
     use turso::{Connection, Database, Row, Value as TursoValue};
 
     use crate::{
-        CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, StorageProfile, TableCommit,
-        TableCommitRecord, TableRecord, policy_binding_key, policy_bindings_for_table,
-        storage_profile_key, storage_profile_match, table_key,
+        CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, SoftDeleteRecord,
+        StorageProfile, TableCommit, TableCommitRecord, TableRecord, policy_binding_key,
+        policy_bindings_for_table, storage_profile_key, storage_profile_match, table_key,
     };
 
     #[derive(Debug, Clone)]
@@ -858,8 +919,11 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select record_json from tables
+                    "select record_json from tables t
                      where warehouse = ?1
+                       and not exists (
+                         select 1 from soft_deletes d where d.table_key = t.table_key
+                       )
                      order by namespace_path, table_name",
                     (warehouse.as_str(),),
                 )
@@ -924,7 +988,11 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select record_json from tables where table_key = ?1",
+                    "select record_json from tables t
+                     where t.table_key = ?1
+                       and not exists (
+                         select 1 from soft_deletes d where d.table_key = t.table_key
+                       )",
                     (table_key(ident),),
                 )
                 .await
@@ -965,7 +1033,11 @@ pub mod turso_store {
 
             let mut rows = tx
                 .query(
-                    "select record_json from tables where table_key = ?1",
+                    "select record_json from tables t
+                     where t.table_key = ?1
+                       and not exists (
+                         select 1 from soft_deletes d where d.table_key = t.table_key
+                       )",
                     (table_key(ident),),
                 )
                 .await
@@ -1126,6 +1198,119 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             }
 
+            tx.commit().await.map_err(turso_error)?;
+            Ok(table)
+        }
+
+        async fn soft_delete_table(
+            &self,
+            ident: &TableIdent,
+            principal: lakecat_core::Principal,
+            authorization_receipt: Option<JsonValue>,
+        ) -> LakeCatResult<TableRecord> {
+            let mut conn = self.connect()?;
+            let tx = conn.transaction().await.map_err(turso_error)?;
+            let mut rows = tx
+                .query(
+                    "select record_json from tables t
+                     where t.table_key = ?1
+                       and not exists (
+                         select 1 from soft_deletes d where d.table_key = t.table_key
+                       )",
+                    (table_key(ident),),
+                )
+                .await
+                .map_err(turso_error)?;
+            let Some(row) = rows.next().await.map_err(turso_error)? else {
+                return Err(LakeCatError::NotFound {
+                    object: "table",
+                    name: ident.stable_id(),
+                });
+            };
+            let table: TableRecord = decode_json(row_string(&row, 0)?)?;
+            let deleted_at = Utc::now();
+            let record = SoftDeleteRecord {
+                table: ident.clone(),
+                metadata_location: table.metadata_location.clone(),
+                version: table.version,
+                principal: principal.clone(),
+                authorization_receipt,
+                deleted_at,
+            };
+            tx.execute(
+                "insert into soft_deletes (
+                    table_key, warehouse, namespace_path, table_name,
+                    metadata_location, version, principal_json,
+                    authorization_receipt_json, record_json, deleted_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                (
+                    table_key(ident),
+                    ident.warehouse.as_str(),
+                    ident.namespace.path(),
+                    ident.name.as_str(),
+                    table.metadata_location.as_deref(),
+                    checked_i64(table.version, "table version")?,
+                    encode_json(&principal)?,
+                    record
+                        .authorization_receipt
+                        .as_ref()
+                        .map(encode_json)
+                        .transpose()?,
+                    encode_json(&record)?,
+                    deleted_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
+
+            let audit_payload = serde_json::json!({
+                "event-type": "table.deleted",
+                "table": ident,
+                "soft-delete": record,
+                "authorization-receipt": record.authorization_receipt,
+            });
+            let audit_event_id = content_hash_json(&audit_payload)?;
+            tx.execute(
+                "insert into audit_events (
+                    event_id, event_type, table_key, principal_json,
+                    request_hash, event_json, created_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                (
+                    audit_event_id.as_str(),
+                    "table.deleted",
+                    table_key(ident),
+                    encode_json(&principal)?,
+                    audit_event_id.as_str(),
+                    encode_json(&audit_payload)?,
+                    deleted_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
+            let outbox_payload = serde_json::json!({
+                "audit-event-id": audit_event_id,
+                "event-type": "table.deleted",
+                "table": ident,
+                "soft-delete": audit_payload["soft-delete"].clone(),
+                "authorization-receipt": audit_payload["authorization-receipt"].clone(),
+            });
+            tx.execute(
+                "insert into outbox_events (
+                    event_id, sink, event_type, payload_json, created_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5)",
+                (
+                    content_hash_json(&outbox_payload)?,
+                    "lakecat.lineage-and-graph",
+                    "table.deleted",
+                    encode_json(&outbox_payload)?,
+                    deleted_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
             tx.commit().await.map_err(turso_error)?;
             Ok(table)
         }
@@ -1435,6 +1620,20 @@ pub mod turso_store {
         )",
         "create index if not exists idx_policy_bindings_warehouse
             on policy_bindings (warehouse, policy_id)",
+        "create table if not exists soft_deletes (
+            table_key text primary key,
+            warehouse text not null,
+            namespace_path text not null,
+            table_name text not null,
+            metadata_location text,
+            version integer not null,
+            principal_json text not null,
+            authorization_receipt_json text,
+            record_json text not null,
+            deleted_at text not null
+        )",
+        "create index if not exists idx_soft_deletes_warehouse
+            on soft_deletes (warehouse, namespace_path, table_name)",
     ];
 
     fn encode_json(value: impl serde::Serialize) -> LakeCatResult<String> {
@@ -2164,6 +2363,54 @@ pub mod turso_store {
                 active[0].odrl["uid"],
                 serde_json::json!("policy:agent-read")
             );
+        }
+
+        #[tokio::test]
+        async fn turso_store_soft_deletes_tables_from_normal_catalog_reads() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace,
+                TableName::new("events").unwrap(),
+            );
+            let table = TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            );
+            store.create_table(table).await.unwrap();
+            assert_eq!(store.list_tables(&warehouse).await.unwrap().len(), 1);
+
+            let deleted = store
+                .soft_delete_table(
+                    &ident,
+                    Principal::anonymous(),
+                    Some(serde_json::json!({
+                        "engine": "typesec",
+                        "allowed": true,
+                        "action": "table-drop"
+                    })),
+                )
+                .await
+                .unwrap();
+            assert_eq!(deleted.ident, ident);
+            assert!(matches!(
+                store.load_table(&ident).await,
+                Err(LakeCatError::NotFound { .. })
+            ));
+            assert_eq!(store.list_tables(&warehouse).await.unwrap(), vec![]);
+            assert_eq!(store.count_rows("soft_deletes").await.unwrap(), 1);
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 1);
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 1);
+            assert_eq!(pending[0].event_type, "table.deleted");
         }
     }
 }

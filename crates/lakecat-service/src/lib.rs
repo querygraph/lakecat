@@ -32,7 +32,7 @@ use lakecat_security::{
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
     NamespaceCreateCapability, NamespaceListCapability, PolicyManageCapability,
     StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
-    TableLoadCapability, TableScanCapability,
+    TableDropCapability, TableLoadCapability, TableScanCapability,
 };
 use lakecat_store::{
     CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, PolicyBinding,
@@ -104,7 +104,7 @@ pub fn app(state: LakeCatState) -> Router {
         )
         .route(
             "/catalog/v1/namespaces/{namespace}/tables/{table}",
-            get(load_table),
+            get(load_table).delete(delete_table),
         )
         .route(
             "/catalog/v1/namespaces/{namespace}/tables/{table}/commit",
@@ -305,6 +305,28 @@ async fn load_table(
         )?)
         .await?;
     Ok(Json(load_table_response(table)))
+}
+
+async fn delete_table(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((namespace, table)): Path<(String, String)>,
+) -> Result<StatusCode, LakeCatHttpError> {
+    let principal = request_principal(&headers)?;
+    let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
+    let capability = authorize_table_drop(&state, principal, ident).await?;
+    let ident = capability.table().clone();
+    state
+        .store
+        .soft_delete_table(
+            &ident,
+            capability.receipt().principal.clone(),
+            Some(serde_json::to_value(capability.receipt()).map_err(|err| {
+                LakeCatError::Internal(format!("failed to encode drop receipt: {err}"))
+            })?),
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn load_credentials(
@@ -834,6 +856,7 @@ fn outbox_table_projection(event_type: &str) -> Option<(GraphAction, LineageEven
             Some((GraphAction::PlannedScan, LineageEventType::TableScanPlanned))
         }
         "table.commit" => Some((GraphAction::Committed, LineageEventType::TableCommitted)),
+        "table.deleted" => Some((GraphAction::Deleted, LineageEventType::TableDeleted)),
         _ => None,
     }
 }
@@ -1050,6 +1073,21 @@ async fn authorize_table_commit(
     Ok(TableCommitCapability::from_receipt(receipt, table)?)
 }
 
+async fn authorize_table_drop(
+    state: &LakeCatState,
+    principal: Principal,
+    table: TableIdent,
+) -> Result<TableDropCapability, LakeCatHttpError> {
+    let receipt = authorize(
+        state,
+        principal,
+        CatalogAction::TableDrop,
+        Some(table.clone()),
+    )
+    .await?;
+    Ok(TableDropCapability::from_receipt(receipt, table)?)
+}
+
 async fn authorize_table_scan(
     state: &LakeCatState,
     principal: Principal,
@@ -1241,6 +1279,17 @@ mod tests {
         ) -> lakecat_core::LakeCatResult<TableRecord> {
             Err(LakeCatError::NotSupported(
                 "recording store does not commit tables".to_string(),
+            ))
+        }
+
+        async fn soft_delete_table(
+            &self,
+            _ident: &TableIdent,
+            _principal: Principal,
+            _authorization_receipt: Option<serde_json::Value>,
+        ) -> lakecat_core::LakeCatResult<TableRecord> {
+            Err(LakeCatError::NotSupported(
+                "recording store does not delete tables".to_string(),
             ))
         }
 
@@ -1942,6 +1991,47 @@ mod tests {
             .unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["storage-credentials"], serde_json::json!([]));
+    }
+
+    #[tokio::test]
+    async fn delete_table_soft_deletes_from_catalog_reads() {
+        let app = test_app();
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"current-schema-id":1,"schemas":[{"schema-id":1,"fields":[{"id":1,"name":"event_id","type":"string","required":true}]}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let delete = Request::builder()
+            .method(Method::DELETE)
+            .uri("/catalog/v1/namespaces/default/tables/events")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(delete).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        let load = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/namespaces/default/tables/events")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(load).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let delete_again = Request::builder()
+            .method(Method::DELETE)
+            .uri("/catalog/v1/namespaces/default/tables/events")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(delete_again).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

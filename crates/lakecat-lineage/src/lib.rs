@@ -45,6 +45,7 @@ pub enum LineageEventType {
     TableLoaded,
     TableScanPlanned,
     TableCommitted,
+    TableDeleted,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -117,7 +118,9 @@ impl LineageSink for HashOnlyLineageSink {
 
 fn lineage_inputs(event: &LineageEvent) -> Vec<Value> {
     match event.event_type {
-        LineageEventType::TableLoaded | LineageEventType::TableScanPlanned => event
+        LineageEventType::TableLoaded
+        | LineageEventType::TableScanPlanned
+        | LineageEventType::TableDeleted => event
             .table
             .as_ref()
             .map(|table| vec![open_lineage_dataset(table, &event.payload)])
@@ -187,6 +190,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::TableLoaded => "table-loaded",
         LineageEventType::TableScanPlanned => "table-scan-planned",
         LineageEventType::TableCommitted => "table-committed",
+        LineageEventType::TableDeleted => "table-deleted",
     }
 }
 

@@ -25,6 +25,7 @@ impl Default for CatalogConfigResponse {
                 "GET /catalog/v1/namespaces".to_string(),
                 "POST /catalog/v1/namespaces".to_string(),
                 "GET /catalog/v1/namespaces/{namespace}/tables/{table}".to_string(),
+                "DELETE /catalog/v1/namespaces/{namespace}/tables/{table}".to_string(),
                 "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit".to_string(),
                 "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan".to_string(),
                 "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks"

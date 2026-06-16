@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added governed table soft deletion, including catalog `DELETE` handling,
+  memory/Turso soft-delete records, hidden deleted tables in normal reads, and
+  durable audit/outbox projection for `table.deleted`.
 - Reconciled the architecture and OPUS1 working-plan docs with the governed
   ODRL policy-binding management implementation.
 - Added governed policy-binding management for ODRL documents, with memory/Turso
