@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reconciled the OPUS1 working-plan and architecture docs with the current
+  implementation status for Turso CAS commits, local object metadata writes,
+  durable outbox draining, OpenLineage projection, and remaining storage-profile,
+  Sail Tier-1, TypeDID, and Grust-taxonomy work.
 - Added catalog-level OpenLineage projection in `lakecat-lineage`, including
   OpenLineage event hashing in the default lineage sink for outbox-drained
   table and namespace operations.

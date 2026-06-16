@@ -55,8 +55,8 @@ LakeCat service
   |-- REST compatibility and OpenAPI conformance
   |-- tenants, projects, warehouses, namespaces, tables, views
   |-- TypeSec checks and credential vending
-  |-- Grust semantic graph updates
-  |-- OpenLineage / audit events
+  |-- durable audit/outbox events
+  |-- outbox-drained Grust and OpenLineage projections
   |
   | privileged in-process / gRPC path
   v
@@ -141,8 +141,8 @@ Keep these in LakeCat:
 - Namespace and table lifecycle policy, including soft deletion and restore.
 - Governance checks before load, scan-plan, commit, register, drop, and
   credential vending.
-- Thin graph sink calls and lineage side effects after successful state
-  transitions.
+- Durable audit/outbox recording, plus thin graph and lineage sink calls when
+  draining committed events after successful state transitions.
 - QueryGraph semantic projections over catalog objects.
 
 ## Entity Model
@@ -244,7 +244,8 @@ Commit handling should be optimistic, idempotent, and auditable:
 5. Persist new metadata file through the storage profile.
 6. Atomically compare-and-swap the table metadata pointer in `lakecat-store`.
 7. Store the idempotency record and response.
-8. Emit graph, lineage, audit, and QueryGraph semantic updates.
+8. Record audit/outbox events with the committed transaction, then drain graph,
+   lineage, and QueryGraph semantic projections from that durable outbox.
 
 The compare-and-swap record should include:
 
@@ -272,8 +273,12 @@ Current implementation status: `lakecat-store` has an opt-in `turso-local`
 feature with a Turso-backed `TursoCatalogStore` for namespaces, tables, metadata
 pointer history, idempotency records, audit events, and outbox rows. The service
 binary uses it when built with `turso-local` and `LAKECAT_TURSO_PATH` is set.
-Warehouse/storage-profile management, soft deletes, policy bindings, object
-metadata writes, pointer CAS, and outbox draining remain pending.
+Table commits now write local `file://` metadata objects when commit plans carry
+new metadata, advance table pointers through compare-and-swap, persist
+idempotency/audit/outbox records, and expose a service-level drain that projects
+committed events to graph and lineage sinks. Warehouse/storage-profile
+management, soft deletes, policy bindings, remote object-store profiles, and
+short-lived credential issuance remain pending.
 
 Required tables:
 
@@ -339,8 +344,11 @@ Edge labels:
 - `ATTESTED_BY`
 
 Grust should own graph schema, typed/untyped graph operations, indexing, and
-traversals. LakeCat should only translate catalog events into graph mutations
-and expose graph reads needed by QueryGraph.
+traversals. LakeCat should only translate committed catalog events into bounded
+semantic graph mutations, send them through the durable outbox, and expose graph
+reads needed by QueryGraph. High-cardinality file and manifest facts should stay
+queryable as Iceberg/Sail metadata-as-data unless Grust provides a reusable
+taxonomy and storage strategy for them.
 
 ## TypeSec Governance
 
@@ -433,12 +441,16 @@ querygraph import-lakecat --catalog http://localhost:8181/catalog \
    endpoint backed by memory or opt-in Turso.
 3. Move or expose shared REST models and idempotency helpers in Sail.
 4. Wire LakeCat to Sail's Iceberg commit validation and table-status conversion.
-5. Add TypeSec policy checks for load, commit, and credential vending.
-6. Add Grust graph emission for namespace/table/snapshot/commit events.
+5. Add TypeSec policy checks for load, commit, scan planning, graph reads, and
+   credential-vending requests.
+6. Add durable outbox delivery for namespace/table/scan/commit graph and
+   lineage projections.
 7. Add remote scan planning through Sail and return Iceberg scan tasks.
 8. Add QueryGraph bootstrap/export with Croissant, CDIF, policies, and lineage.
-9. Add Postgres store, soft deletion, warehouse profiles, and OIDC.
-10. Add v4-ready metadata extension tests as the Iceberg v4 spec settles.
+9. Add warehouse storage profiles, short-lived credential issuance, soft
+   deletion, policy management APIs, and OIDC.
+10. Push reusable catalog graph taxonomy into Grust and consume it from LakeCat.
+11. Add v4-ready metadata extension tests as the Iceberg v4 spec settles.
 
 ## Non-Goals
 

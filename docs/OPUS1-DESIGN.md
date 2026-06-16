@@ -499,11 +499,11 @@ append a dated entry per slice; keep the finding-status table current.
 | --- | --- | --- | --- |
 | 1 | Red default-feature tests | **CLOSED** | default workspace tests pass; Sail-specific service assertions are gated |
 | 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added; catalog config, namespace create/list, table create/load/commit, scan planning, task materialization, credential-vending requests, and QueryGraph bootstrap now require typed capabilities; catalog/namespace/table/scan/bootstrap/credential events and commit receipts persist in Turso audit/outbox; real storage-profile credential issuance still pending |
-| 3 | No durable / CAS commit | **OPEN** | |
-| 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, and outbox; full management schema/object writes/CAS pending |
+| 3 | No durable / CAS commit | **CLOSED for local durable spine** | Turso commits now write local `file://` metadata when provided by the Sail-facing plan, advance pointers with expected-previous compare-and-swap, persist idempotency/audit/outbox rows, and have a concurrent writer regression |
+| 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, outbox, object-write-aware commits, and outbox delivery; full management schema, storage profiles, soft deletes, policy bindings, and credential issuance remain pending |
 | 5 | Service can't activate real engines | **CLOSED** | `sail-local` / `typesec-local` / `grust-local` passthroughs now in `lakecat-service` |
 | 6 | Sail used as struct library, not planner | **OPEN** | Tier 1 (`CatalogProvider`) not started |
-| 7 | Plan ↔ implementation drift | **OPEN** | |
+| 7 | Plan ↔ implementation drift | **PARTIAL** | architecture and OPUS working-plan docs now track the committed Turso CAS/object-write/outbox/OpenLineage slices; remaining drift risk is around Sail Tier 1, Grust taxonomy placement, and storage-profile credential issuance |
 | 8 | Grust graph is a placeholder taxonomy | **OPEN** | |
 | 9 | `list_namespaces` fabricates `default` | **CLOSED** | memory and Turso stores return an empty list until namespace creation |
 | 10 | Side effects coupled to request path | **CLOSED** | Turso outbox and service drain/projection API exist; catalog handlers record durable events and no longer emit graph/lineage inline |
@@ -524,14 +524,17 @@ writing bounds.
 
 ### Latest implementation slice — Turso persistence spine
 
-**Status: implemented, partial P1.** Added `lakecat-store/turso-local` with a
-Turso `TursoCatalogStore` for namespaces, table records, metadata pointer log,
-idempotency records, audit events, and outbox events. The service binary can use
-it when built with `turso-local` and `LAKECAT_TURSO_PATH` is set. This closes the
-"no persistence backend" gap for local durable demos using the Rust Turso crate,
-but it is not yet the full durable commit contract: object-store metadata writes,
-pointer CAS against an expected previous location, policy/audit receipt
-persistence for every privileged path, and outbox draining remain P1/P2 work.
+**Status: implemented for the local durable spine, partial P1 overall.** Added
+`lakecat-store/turso-local` with a Turso `TursoCatalogStore` for namespaces, table
+records, metadata pointer log, idempotency records, audit events, and outbox
+events. The service binary can use it when built with `turso-local` and
+`LAKECAT_TURSO_PATH` is set. Since the first Turso slice, LakeCat now writes local
+`file://` metadata objects when the Sail-facing commit plan carries new metadata,
+advances table pointers with expected-previous compare-and-swap, persists
+authorization/audit/outbox receipts across privileged catalog paths, and drains
+committed outbox events into graph and lineage sinks. The remaining P1/P2 work is
+the management/storage-profile layer: warehouse profiles, remote object-store
+credential issuance, soft deletes, policy bindings, and operator APIs.
 
 ### Reviewer note — endorse the Turso pivot, with a gate (2026-06-16)
 
@@ -575,11 +578,12 @@ only once **P2** gives it a governed path to run on.
 - **P1 — persistence + durable commit spine.** `TursoCatalogStore`;
   Sail-assembled metadata → `object_store` write → pointer CAS → idempotency/audit/
   pointer-log/outbox in one txn. (Milestones 2–3; Findings 3, 4, 10.) *Turso
-  store plus pointer-log/idempotency/audit/outbox rows and CAS semantics are
-  started; local object-store metadata writes are started; a typed store-level
-  outbox drain API and service-level graph/lineage projection are started; catalog
-  handlers now rely on durable outbox delivery instead of inline graph/lineage
-  side effects.*
+  store plus pointer-log/idempotency/audit/outbox rows, CAS semantics, local
+  object metadata writes, a typed store-level outbox drain API, and service-level
+  graph/lineage projection are now implemented for the local durable spine;
+  catalog handlers rely on durable outbox delivery instead of inline
+  graph/lineage side effects. Storage-profile management and remote credential
+  issuance remain outstanding.*
 - **P2 — finish governance: capability model + governed read path.** Promote the
   boolean receipt to `Capability<Action, Resource>`; route agent reads through
   governed scan-planning; persist the receipt with the audit row. (Milestones 1, 5;
