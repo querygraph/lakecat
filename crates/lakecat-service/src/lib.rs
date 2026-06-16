@@ -488,6 +488,25 @@ async fn fetch_scan_tasks(
     let table = state.store.load_table(capability.table()).await?;
     let fetched = fetch_scan_tasks_with_capability(&state, &capability, table, request).await?;
     let ident = capability.table().clone();
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "table.scan-tasks-fetched",
+            Some(ident.clone()),
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "table.scan-tasks-fetched",
+                "table": ident,
+                "authorization-receipt": capability.receipt(),
+                "planned-by": fetched.planned_by,
+                "snapshot-id": fetched.snapshot_id,
+                "plan-task": fetched.plan_task,
+                "file-scan-task-count": fetched.file_scan_tasks.len(),
+                "delete-file-count": fetched.delete_files.len(),
+                "child-plan-task-count": fetched.plan_tasks.len(),
+            }),
+        )?)
+        .await?;
     Ok(Json(FetchScanTasksResponse {
         table: TableIdentifier::from_ident(&ident),
         planned_by: fetched.planned_by,

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added durable audit/outbox recording for governed scan-task fetches, carrying
+  the table-scan capability receipt, plan-task token, and materialized task
+  counts.
 - Added durable Turso audit/outbox recording for governed scan planning events,
   including the typed table-scan authorization receipt and Sail plan summary.
 - Required the typed table-scan capability for fetch-scan-tasks as well as scan

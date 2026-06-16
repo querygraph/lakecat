@@ -1167,6 +1167,50 @@ pub mod turso_store {
                 pending[0].payload["payload"]["scan-task-count"],
                 serde_json::json!(2)
             );
+
+            store
+                .record_audit_event(
+                    CatalogAuditEvent::new(
+                        "table.scan-tasks-fetched",
+                        Some(ident.clone()),
+                        Principal::anonymous(),
+                        serde_json::json!({
+                            "event-type": "table.scan-tasks-fetched",
+                            "table": ident,
+                            "authorization-receipt": {
+                                "engine": "typesec",
+                                "allowed": true,
+                                "action": "table-plan-scan"
+                            },
+                            "planned-by": "lakecat-sail",
+                            "plan-task": "lakecat:plan:abc",
+                            "file-scan-task-count": 3,
+                            "delete-file-count": 1
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 2);
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 2);
+            let fetched = pending
+                .iter()
+                .find(|event| event.event_type == "table.scan-tasks-fetched")
+                .expect("scan task fetch event");
+            assert_eq!(
+                fetched.payload["payload"]["file-scan-task-count"],
+                serde_json::json!(3)
+            );
+            assert_eq!(
+                fetched.payload["payload"]["authorization-receipt"]["engine"],
+                serde_json::json!("typesec")
+            );
         }
 
         #[tokio::test]
