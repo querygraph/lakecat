@@ -281,6 +281,7 @@ async fn commit_table(
             table: ident.clone(),
             principal: principal.clone(),
             current_metadata_location: current_metadata_location.clone(),
+            new_metadata_location: request.metadata_location,
             current_metadata: current.metadata,
             requirements: request.requirements,
             updates: request.updates,
@@ -294,7 +295,7 @@ async fn commit_table(
                 requirements: commit_plan.requirements,
                 updates: commit_plan.updates,
                 expected_previous_metadata_location: current_metadata_location.clone(),
-                new_metadata_location: current_metadata_location,
+                new_metadata_location: commit_plan.new_metadata_location,
                 idempotency_key: None,
                 principal: principal.clone(),
             },
@@ -771,6 +772,56 @@ mod tests {
                 serde_json::json!("sail_iceberg::io::load_manifest_list")
             );
         }
+    }
+
+    #[tokio::test]
+    async fn commit_can_advance_metadata_location_extension() {
+        let app = test_app();
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"table-uuid":"11111111-1111-1111-1111-111111111111","location":"file:///tmp/events","last-sequence-number":7,"last-updated-ms":1710000000000,"last-column-id":1,"schemas":[{"type":"struct","schema-id":1,"fields":[{"id":1,"name":"id","type":"string","required":true,"doc":"Event identifier."}]}],"current-schema-id":1,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"current-snapshot-id":42,"snapshots":[{"snapshot-id":42,"sequence-number":7,"timestamp-ms":1710000000000,"manifest-list":"file:///tmp/events/metadata/snap-42.avro","summary":{"operation":"append"},"schema-id":1}],"snapshot-log":[{"timestamp-ms":1710000000000,"snapshot-id":42}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let commit = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/commit")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"requirements":[],"updates":[],"metadata-location":"file:///tmp/events/metadata/00001.json"}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(commit).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            payload["metadata-location"],
+            serde_json::json!("file:///tmp/events/metadata/00001.json")
+        );
+
+        let load = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/namespaces/default/tables/events")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(load).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            payload["metadata-location"],
+            serde_json::json!("file:///tmp/events/metadata/00001.json")
+        );
     }
 
     #[cfg(feature = "sail-local")]

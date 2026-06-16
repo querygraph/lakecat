@@ -109,11 +109,13 @@ impl TableIdentifier {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
 pub struct CommitTableRequest {
     #[serde(default)]
     pub requirements: Vec<Value>,
     #[serde(default)]
     pub updates: Vec<Value>,
+    pub metadata_location: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

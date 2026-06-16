@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a LakeCat `metadata-location` commit extension that the Sail-facing
+  commit plan validates alongside standard Iceberg REST requirements and threads
+  through Turso pointer CAS; aligned the local Grust path dependency with the
+  current Grust 0.9 workspace.
 - Added metadata pointer compare-and-swap enforcement to Turso commits, including
   expected previous pointer tracking, pointer movement, idempotent replay, and a
   stale-pointer conflict regression test.

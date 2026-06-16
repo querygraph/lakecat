@@ -44,5 +44,5 @@ lakecat-sail = { path = "crates/lakecat-sail" }
 lakecat-security = { path = "crates/lakecat-security" }
 lakecat-store = { path = "crates/lakecat-store" }
 
-grust-graph = { package = "grust-graph", path = "../grust/crates/grust", version = "0.8.4", default-features = false }
+grust-graph = { package = "grust-graph", path = "../grust/crates/grust", version = "0.9.0", default-features = false }
 typesec = { path = "../typesec/crates/typesec", version = "0.7.0", default-features = false }

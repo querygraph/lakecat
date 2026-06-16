@@ -20,6 +20,7 @@ pub struct CommitPreparationRequest {
     pub table: TableIdent,
     pub principal: Principal,
     pub current_metadata_location: Option<String>,
+    pub new_metadata_location: Option<String>,
     pub current_metadata: Value,
     pub requirements: Vec<Value>,
     pub updates: Vec<Value>,
@@ -30,6 +31,7 @@ pub struct CommitPlan {
     pub prepared_by: String,
     pub requirements: Vec<Value>,
     pub updates: Vec<Value>,
+    pub new_metadata_location: Option<String>,
     pub metadata_patch: Value,
 }
 
@@ -158,10 +160,15 @@ impl DeferredSailCatalogEngine {
 #[async_trait]
 impl SailCatalogEngine for DeferredSailCatalogEngine {
     async fn prepare_commit(&self, request: CommitPreparationRequest) -> LakeCatResult<CommitPlan> {
+        let new_metadata_location = request
+            .new_metadata_location
+            .clone()
+            .or_else(|| request.current_metadata_location.clone());
         Ok(CommitPlan {
             prepared_by: "lakecat-sail-deferred".to_string(),
             requirements: request.requirements,
             updates: request.updates,
+            new_metadata_location,
             metadata_patch: serde_json::json!({
                 "lakecat:sail-delegation": "deferred",
                 "lakecat:sail-target": "sail-catalog + sail-iceberg",
@@ -283,16 +290,22 @@ pub mod sail_integration {
                 .as_array()
                 .cloned()
                 .unwrap_or_default();
+            let new_metadata_location = request
+                .new_metadata_location
+                .clone()
+                .or_else(|| request.current_metadata_location.clone());
             Ok(CommitPlan {
                 prepared_by: "sail-rest-models".to_string(),
                 requirements,
                 updates,
+                new_metadata_location: new_metadata_location.clone(),
                 metadata_patch: json!({
                     "lakecat:sail-delegation": "sail-catalog-iceberg-rest-models",
                     "lakecat:format-support": IcebergFormatSupport::default(),
                     "lakecat:sail-metadata": metadata_summary,
                     "lakecat:validated-requirements": validated_requirements,
-                    "metadata-location": request.current_metadata_location,
+                    "previous-metadata-location": request.current_metadata_location,
+                    "new-metadata-location": new_metadata_location,
                 }),
             })
         }
@@ -2445,6 +2458,7 @@ pub mod sail_integration {
                     current_metadata_location: Some(
                         "file:///tmp/events/metadata/00000.json".to_string(),
                     ),
+                    new_metadata_location: None,
                     current_metadata: sample_metadata(3),
                     requirements: vec![
                         json!({
@@ -2469,6 +2483,45 @@ pub mod sail_integration {
                 plan.metadata_patch["lakecat:validated-requirements"],
                 json!(3)
             );
+            assert_eq!(
+                plan.new_metadata_location.as_deref(),
+                Some("file:///tmp/events/metadata/00000.json")
+            );
+        }
+
+        #[tokio::test]
+        async fn commit_plan_accepts_lakecat_metadata_location_extension() {
+            let engine = SailRestModelCatalogEngine;
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let plan = engine
+                .prepare_commit(CommitPreparationRequest {
+                    table,
+                    principal: Principal::anonymous(),
+                    current_metadata_location: Some(
+                        "file:///tmp/events/metadata/00000.json".to_string(),
+                    ),
+                    new_metadata_location: Some(
+                        "file:///tmp/events/metadata/00001.json".to_string(),
+                    ),
+                    current_metadata: sample_metadata(3),
+                    requirements: Vec::new(),
+                    updates: Vec::new(),
+                })
+                .await
+                .expect("metadata location extension should plan");
+
+            assert_eq!(
+                plan.new_metadata_location.as_deref(),
+                Some("file:///tmp/events/metadata/00001.json")
+            );
+            assert_eq!(
+                plan.metadata_patch["new-metadata-location"],
+                json!("file:///tmp/events/metadata/00001.json")
+            );
         }
 
         #[tokio::test]
@@ -2486,6 +2539,7 @@ pub mod sail_integration {
                     current_metadata_location: Some(
                         "file:///tmp/events/metadata/00000.json".to_string(),
                     ),
+                    new_metadata_location: None,
                     current_metadata: sample_metadata(3),
                     requirements: vec![json!({
                         "type": "assert-current-schema-id",

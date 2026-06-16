@@ -550,9 +550,9 @@ commit hangs on it:
 1. **Real CAS, not just a transaction.** The store has the transaction scaffold but
    now compares against the expected previous pointer and updates through
    `UPDATE tables SET … WHERE table_key = ? AND metadata_location = :prev`;
-   `rows_affected == 0` is a concurrency conflict. The service currently keeps
-   the new pointer equal to the current pointer until object metadata writes are
-   implemented, while store tests exercise real pointer movement.
+   `rows_affected == 0` is a concurrency conflict. The service can now advance
+   the pointer from a Sail-facing LakeCat `metadata-location` commit extension;
+   full object metadata writes are still pending.
 2. **Isolation actually holds** under concurrent commits to the same table.
 
 Keep the schema portable, but treat the Rust `turso` crate as the selected path
