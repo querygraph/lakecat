@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a service-level outbox drain that projects durable
+  `lakecat.lineage-and-graph` events into the graph and lineage sinks and marks
+  them delivered after successful sink projection.
 - Added typed catalog-config and namespace capabilities plus durable
   `catalog.config-read`, `namespace.created`, and `namespace.listed`
   audit/outbox events for the remaining catalog-scope read/write paths.

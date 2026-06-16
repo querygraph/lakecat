@@ -506,7 +506,7 @@ append a dated entry per slice; keep the finding-status table current.
 | 7 | Plan ↔ implementation drift | **OPEN** | |
 | 8 | Grust graph is a placeholder taxonomy | **OPEN** | |
 | 9 | `list_namespaces` fabricates `default` | **CLOSED** | memory and Turso stores return an empty list until namespace creation |
-| 10 | Side effects coupled to request path | **OPEN** | needs outbox |
+| 10 | Side effects coupled to request path | **PARTIAL** | Turso outbox and service drain/projection API exist; handlers still emit inline while drain adoption is wired |
 | 11 | Plan tokens unauthenticated / leak paths | **MOSTLY MITIGATED** | now table-bound + path re-validated; not yet HMAC-signed |
 | 12 | v4 = JSON passthrough, thin coverage | **OPEN (by design)** | keep behind capability flag |
 
@@ -576,7 +576,8 @@ only once **P2** gives it a governed path to run on.
   pointer-log/outbox in one txn. (Milestones 2–3; Findings 3, 4, 10.) *Turso
   store plus pointer-log/idempotency/audit/outbox rows and CAS semantics are
   started; local object-store metadata writes are started; a typed store-level
-  outbox drain API is started, with sink projection still pending.*
+  outbox drain API and service-level graph/lineage projection are started, with
+  handler adoption still pending.*
 - **P2 — finish governance: capability model + governed read path.** Promote the
   boolean receipt to `Capability<Action, Resource>`; route agent reads through
   governed scan-planning; persist the receipt with the audit row. (Milestones 1, 5;

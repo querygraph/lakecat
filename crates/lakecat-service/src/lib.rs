@@ -30,7 +30,9 @@ use lakecat_security::{
     NamespaceListCapability, TableCommitCapability, TableCreateCapability, TableLoadCapability,
     TableScanCapability,
 };
-use lakecat_store::{CatalogAuditEvent, CatalogStore, TableCommit, TableRecord, table_ident};
+use lakecat_store::{
+    CatalogAuditEvent, CatalogStore, OutboxEvent, TableCommit, TableRecord, table_ident,
+};
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStoreExt, PutPayload};
@@ -117,6 +119,19 @@ pub fn app(state: LakeCatState) -> Router {
         )
         .route("/querygraph/v1/bootstrap", get(querygraph_bootstrap))
         .with_state(state)
+}
+
+pub async fn drain_outbox_once(state: &LakeCatState, limit: usize) -> Result<usize, LakeCatError> {
+    let events = state
+        .store
+        .pending_outbox_events(Some("lakecat.lineage-and-graph"), limit)
+        .await?;
+    let mut delivered = Vec::with_capacity(events.len());
+    for event in events {
+        project_outbox_event(state, &event).await?;
+        delivered.push(event.event_id);
+    }
+    state.store.mark_outbox_delivered(&delivered).await
 }
 
 async fn get_config(
@@ -634,6 +649,91 @@ async fn querygraph_bootstrap(
     )?))
 }
 
+async fn project_outbox_event(
+    state: &LakeCatState,
+    event: &OutboxEvent,
+) -> Result<(), LakeCatError> {
+    let event_payload = event
+        .payload
+        .get("payload")
+        .unwrap_or(&event.payload)
+        .clone();
+    let table = outbox_table(event)?;
+    let principal = outbox_principal(event)?;
+    if let Some((graph_action, lineage_type)) = outbox_table_projection(event.event_type.as_str()) {
+        if let Some(table) = table.clone() {
+            state
+                .graph
+                .emit(GraphEvent::table(
+                    graph_action,
+                    table.clone(),
+                    event_payload.clone(),
+                ))
+                .await?;
+            state
+                .lineage
+                .emit(LineageEvent::new(
+                    lineage_type,
+                    principal,
+                    Some(table),
+                    event_payload,
+                ))
+                .await?;
+        }
+    } else if event.event_type == "namespace.created" {
+        state
+            .lineage
+            .emit(LineageEvent::new(
+                LineageEventType::NamespaceCreated,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+    }
+    Ok(())
+}
+
+fn outbox_table(event: &OutboxEvent) -> Result<Option<TableIdent>, LakeCatError> {
+    event
+        .payload
+        .get("table")
+        .filter(|table| !table.is_null())
+        .map(|table| {
+            serde_json::from_value(table.clone()).map_err(|err| {
+                LakeCatError::Internal(format!("failed to decode outbox table: {err}"))
+            })
+        })
+        .transpose()
+}
+
+fn outbox_principal(event: &OutboxEvent) -> Result<Principal, LakeCatError> {
+    for pointer in [
+        "/payload/authorization-receipt/principal",
+        "/authorization-receipt/principal",
+        "/commit/principal",
+    ] {
+        if let Some(principal) = event.payload.pointer(pointer) {
+            return serde_json::from_value(principal.clone()).map_err(|err| {
+                LakeCatError::Internal(format!("failed to decode outbox principal: {err}"))
+            });
+        }
+    }
+    Ok(Principal::anonymous())
+}
+
+fn outbox_table_projection(event_type: &str) -> Option<(GraphAction, LineageEventType)> {
+    match event_type {
+        "table.created" => Some((GraphAction::Created, LineageEventType::TableCreated)),
+        "table.loaded" => Some((GraphAction::Loaded, LineageEventType::TableLoaded)),
+        "table.scan-planned" => {
+            Some((GraphAction::PlannedScan, LineageEventType::TableScanPlanned))
+        }
+        "table.commit" => Some((GraphAction::Committed, LineageEventType::TableCommitted)),
+        _ => None,
+    }
+}
+
 fn load_table_response(table: TableRecord) -> LoadTableResponse {
     LoadTableResponse {
         identifier: TableIdentifier::from_ident(&table.ident),
@@ -830,13 +930,130 @@ mod tests {
     use async_trait::async_trait;
     use axum::body::Body;
     use http::{Method, Request, StatusCode};
-    use lakecat_store::MemoryCatalogStore;
+    use lakecat_lineage::LineageReceipt;
+    use lakecat_store::{MemoryCatalogStore, OutboxEvent};
     use tokio::sync::Mutex;
     use tower::ServiceExt;
 
     #[derive(Debug, Default)]
     struct RecordingGovernance {
         principals: Mutex<Vec<Principal>>,
+    }
+
+    #[derive(Debug, Default)]
+    struct RecordingGraph {
+        events: Mutex<Vec<GraphEvent>>,
+    }
+
+    #[async_trait]
+    impl CatalogGraphSink for RecordingGraph {
+        async fn emit(&self, event: GraphEvent) -> lakecat_core::LakeCatResult<()> {
+            self.events.lock().await.push(event);
+            Ok(())
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct RecordingLineage {
+        events: Mutex<Vec<LineageEvent>>,
+    }
+
+    #[async_trait]
+    impl LineageSink for RecordingLineage {
+        async fn emit(&self, event: LineageEvent) -> lakecat_core::LakeCatResult<LineageReceipt> {
+            self.events.lock().await.push(event);
+            Ok(LineageReceipt {
+                event_hash: "recorded".to_string(),
+                sink: "recording".to_string(),
+            })
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct RecordingOutboxStore {
+        events: Mutex<Vec<OutboxEvent>>,
+        delivered: Mutex<Vec<String>>,
+    }
+
+    #[async_trait]
+    impl CatalogStore for RecordingOutboxStore {
+        async fn create_namespace(
+            &self,
+            _warehouse: &WarehouseName,
+            _namespace: Namespace,
+        ) -> lakecat_core::LakeCatResult<()> {
+            Err(LakeCatError::NotSupported(
+                "recording store does not create namespaces".to_string(),
+            ))
+        }
+
+        async fn list_namespaces(
+            &self,
+            _warehouse: &WarehouseName,
+        ) -> lakecat_core::LakeCatResult<Vec<Namespace>> {
+            Err(LakeCatError::NotSupported(
+                "recording store does not list namespaces".to_string(),
+            ))
+        }
+
+        async fn list_tables(
+            &self,
+            _warehouse: &WarehouseName,
+        ) -> lakecat_core::LakeCatResult<Vec<TableRecord>> {
+            Err(LakeCatError::NotSupported(
+                "recording store does not list tables".to_string(),
+            ))
+        }
+
+        async fn create_table(
+            &self,
+            _table: TableRecord,
+        ) -> lakecat_core::LakeCatResult<TableRecord> {
+            Err(LakeCatError::NotSupported(
+                "recording store does not create tables".to_string(),
+            ))
+        }
+
+        async fn load_table(
+            &self,
+            _ident: &TableIdent,
+        ) -> lakecat_core::LakeCatResult<TableRecord> {
+            Err(LakeCatError::NotSupported(
+                "recording store does not load tables".to_string(),
+            ))
+        }
+
+        async fn commit_table(
+            &self,
+            _ident: &TableIdent,
+            _commit: TableCommit,
+        ) -> lakecat_core::LakeCatResult<TableRecord> {
+            Err(LakeCatError::NotSupported(
+                "recording store does not commit tables".to_string(),
+            ))
+        }
+
+        async fn pending_outbox_events(
+            &self,
+            sink: Option<&str>,
+            limit: usize,
+        ) -> lakecat_core::LakeCatResult<Vec<OutboxEvent>> {
+            let events = self.events.lock().await;
+            Ok(events
+                .iter()
+                .filter(|event| sink.is_none_or(|sink| event.sink == sink))
+                .take(limit)
+                .cloned()
+                .collect())
+        }
+
+        async fn mark_outbox_delivered(
+            &self,
+            event_ids: &[String],
+        ) -> lakecat_core::LakeCatResult<usize> {
+            self.delivered.lock().await.extend_from_slice(event_ids);
+            Ok(event_ids.len())
+        }
     }
 
     #[async_trait]
@@ -924,6 +1141,67 @@ mod tests {
         let principals = governance.principals.lock().await;
         assert_eq!(principals[0].subject, "alice@example.com");
         assert_eq!(principals[0].kind, PrincipalKind::Human);
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_projects_table_events_to_sinks() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-1".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.created".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-1",
+                    "event-type": "table.created",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-create",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        assert_eq!(drain_outbox_once(&state, 10).await.unwrap(), 1);
+
+        let graph_events = graph.events.lock().await;
+        assert_eq!(graph_events.len(), 1);
+        assert_eq!(graph_events[0].action, GraphAction::Created);
+        let lineage_events = lineage.events.lock().await;
+        assert_eq!(lineage_events.len(), 1);
+        assert_eq!(lineage_events[0].event_type, LineageEventType::TableCreated);
+        assert_eq!(
+            store.delivered.lock().await.as_slice(),
+            &["evt-1".to_string()]
+        );
     }
 
     #[tokio::test]
