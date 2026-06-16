@@ -181,15 +181,6 @@ async fn create_namespace(
             }),
         )?)
         .await?;
-    state
-        .lineage
-        .emit(LineageEvent::new(
-            LineageEventType::NamespaceCreated,
-            principal,
-            None,
-            json!({ "namespace": namespace.parts(), "warehouse": state.warehouse.as_str() }),
-        ))
-        .await?;
     Ok(Json(NamespaceResponse::from_namespace(&namespace)))
 }
 
@@ -259,23 +250,6 @@ async fn create_table(
             }),
         )?)
         .await?;
-    state
-        .graph
-        .emit(GraphEvent::table(
-            GraphAction::Created,
-            ident.clone(),
-            json!({ "warehouse": state.warehouse.as_str() }),
-        ))
-        .await?;
-    state
-        .lineage
-        .emit(LineageEvent::new(
-            LineageEventType::TableCreated,
-            principal,
-            Some(ident),
-            json!({ "metadata_location": table.metadata_location }),
-        ))
-        .await?;
     Ok(Json(load_table_response(table)))
 }
 
@@ -304,23 +278,6 @@ async fn load_table(
                 "version": table.version,
             }),
         )?)
-        .await?;
-    state
-        .graph
-        .emit(GraphEvent::table(
-            GraphAction::Loaded,
-            ident.clone(),
-            json!({ "metadata_location": table.metadata_location }),
-        ))
-        .await?;
-    state
-        .lineage
-        .emit(LineageEvent::new(
-            LineageEventType::TableLoaded,
-            principal,
-            Some(ident),
-            json!({ "version": table.version }),
-        ))
         .await?;
     Ok(Json(load_table_response(table)))
 }
@@ -371,25 +328,6 @@ async fn commit_table(
                 )?),
             },
         )
-        .await?;
-    let ident = capability.table().clone();
-    let principal = capability.receipt().principal.clone();
-    state
-        .graph
-        .emit(GraphEvent::table(
-            GraphAction::Committed,
-            ident.clone(),
-            json!({ "version": table.version, "prepared_by": commit_plan.prepared_by }),
-        ))
-        .await?;
-    state
-        .lineage
-        .emit(LineageEvent::new(
-            LineageEventType::TableCommitted,
-            principal,
-            Some(ident),
-            json!({ "version": table.version, "sail": commit_plan.metadata_patch }),
-        ))
         .await?;
     Ok(Json(CommitTableResponse {
         metadata_location: table.metadata_location,
@@ -466,23 +404,6 @@ async fn plan_table_scan(
                 "scan-task-count": scan.scan_tasks.len(),
             }),
         )?)
-        .await?;
-    state
-        .graph
-        .emit(GraphEvent::table(
-            GraphAction::PlannedScan,
-            ident.clone(),
-            json!({ "planned_by": scan.planned_by, "snapshot_id": scan.snapshot_id }),
-        ))
-        .await?;
-    state
-        .lineage
-        .emit(LineageEvent::new(
-            LineageEventType::TableScanPlanned,
-            principal,
-            Some(ident.clone()),
-            json!({ "planned_by": scan.planned_by, "scan_tasks": scan.scan_tasks.len() }),
-        ))
         .await?;
     Ok(Json(PlanTableScanResponse {
         table: TableIdentifier::from_ident(&ident),

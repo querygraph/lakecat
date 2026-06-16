@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Removed inline graph and lineage side effects from catalog request handlers;
+  durable outbox events are now the delivery path for table/namespace
+  graph-lineage projections.
 - Added a service-level outbox drain that projects durable
   `lakecat.lineage-and-graph` events into the graph and lineage sinks and marks
   them delivered after successful sink projection.
