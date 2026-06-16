@@ -231,6 +231,7 @@ pub fn validate_lakecat_metadata_format(metadata: &Value) -> LakeCatResult<Icebe
 pub mod catalog_provider {
     use std::sync::Arc;
 
+    use arrow_schema::{DataType, TimeUnit};
     use lakecat_core::{Namespace, Principal, TableIdent, TableName, WarehouseName};
     use lakecat_security::{
         AuthorizationRequest, CatalogAction, GovernanceEngine, TableCommitCapability,
@@ -244,7 +245,9 @@ pub mod catalog_provider {
         DropViewOptions, GetTableCommitsOptions, GetTableCommitsResponse,
         Namespace as SailNamespace, TableCommitInfo,
     };
-    use sail_common_datafusion::catalog::{DatabaseStatus, TableKind, TableStatus};
+    use sail_common_datafusion::catalog::{
+        DatabaseStatus, TableColumnStatus, TableKind, TableStatus,
+    };
     use serde_json::json;
 
     use crate::{CommitPreparationRequest, SailCatalogEngine};
@@ -421,6 +424,19 @@ pub mod catalog_provider {
             let metadata = json!({
                 "format-version": 3,
                 "location": location,
+                "current-schema-id": 1,
+                "schemas": [{
+                    "schema-id": 1,
+                    "fields": options.columns.iter().enumerate().map(|(idx, column)| {
+                        json!({
+                            "id": i32::try_from(idx + 1).unwrap_or(i32::MAX),
+                            "name": column.name,
+                            "type": datafusion_type_to_iceberg(&column.data_type),
+                            "required": !column.nullable,
+                            "doc": column.comment,
+                        })
+                    }).collect::<Vec<_>>()
+                }],
                 "properties": options.properties,
                 "lakecat:sail-provider": self.name,
             });
@@ -679,7 +695,7 @@ pub mod catalog_provider {
             database: record.ident.namespace.parts().to_vec(),
             name: record.ident.name.as_str().to_string(),
             kind: TableKind::Table {
-                columns: Vec::new(),
+                columns: table_columns(record),
                 comment: None,
                 constraints: Vec::new(),
                 location: Some(record.location.clone()),
@@ -693,6 +709,100 @@ pub mod catalog_provider {
                 ],
                 is_external: true,
             },
+        }
+    }
+
+    fn table_columns(record: &TableRecord) -> Vec<TableColumnStatus> {
+        current_schema(&record.metadata)
+            .and_then(|schema| schema.get("fields").and_then(serde_json::Value::as_array))
+            .map(|fields| {
+                fields
+                    .iter()
+                    .filter_map(table_column_status)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    }
+
+    fn current_schema(metadata: &serde_json::Value) -> Option<&serde_json::Value> {
+        let schemas = metadata.get("schemas")?.as_array()?;
+        let current_schema_id = metadata
+            .get("current-schema-id")
+            .and_then(serde_json::Value::as_i64);
+        current_schema_id
+            .and_then(|id| {
+                schemas.iter().find(|schema| {
+                    schema.get("schema-id").and_then(serde_json::Value::as_i64) == Some(id)
+                })
+            })
+            .or_else(|| schemas.last())
+    }
+
+    fn table_column_status(field: &serde_json::Value) -> Option<TableColumnStatus> {
+        let name = field.get("name")?.as_str()?.to_string();
+        Some(TableColumnStatus {
+            name,
+            data_type: iceberg_type_to_datafusion(field.get("type")?),
+            nullable: !field
+                .get("required")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+            comment: field
+                .get("doc")
+                .and_then(serde_json::Value::as_str)
+                .map(ToString::to_string),
+            default: None,
+            generated_always_as: None,
+            identity: None,
+            is_partition: false,
+            is_bucket: false,
+            is_cluster: false,
+        })
+    }
+
+    fn iceberg_type_to_datafusion(value: &serde_json::Value) -> DataType {
+        match value {
+            serde_json::Value::String(kind) => primitive_iceberg_type(kind),
+            serde_json::Value::Object(object) => object
+                .get("type")
+                .and_then(serde_json::Value::as_str)
+                .map(primitive_iceberg_type)
+                .unwrap_or(DataType::Utf8),
+            _ => DataType::Utf8,
+        }
+    }
+
+    fn primitive_iceberg_type(kind: &str) -> DataType {
+        match kind {
+            "boolean" => DataType::Boolean,
+            "int" => DataType::Int32,
+            "long" => DataType::Int64,
+            "float" => DataType::Float32,
+            "double" => DataType::Float64,
+            "date" => DataType::Date32,
+            "time" => DataType::Time64(TimeUnit::Microsecond),
+            "timestamp" | "timestamptz" => DataType::Timestamp(TimeUnit::Microsecond, None),
+            "binary" | "fixed" => DataType::Binary,
+            "string" | "uuid" => DataType::Utf8,
+            _ if kind.starts_with("decimal") => DataType::Decimal128(38, 18),
+            _ => DataType::Utf8,
+        }
+    }
+
+    fn datafusion_type_to_iceberg(data_type: &DataType) -> &'static str {
+        match data_type {
+            DataType::Boolean => "boolean",
+            DataType::Int8 | DataType::Int16 | DataType::Int32 => "int",
+            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 => "int",
+            DataType::Int64 | DataType::UInt64 => "long",
+            DataType::Float16 | DataType::Float32 => "float",
+            DataType::Float64 => "double",
+            DataType::Date32 | DataType::Date64 => "date",
+            DataType::Time32(_) | DataType::Time64(_) => "time",
+            DataType::Timestamp(_, _) => "timestamp",
+            DataType::Binary | DataType::LargeBinary | DataType::FixedSizeBinary(_) => "binary",
+            DataType::Decimal128(_, _) | DataType::Decimal256(_, _) => "decimal(38,18)",
+            _ => "string",
         }
     }
 
@@ -777,7 +887,26 @@ pub mod catalog_provider {
                     &namespace,
                     "events",
                     CreateTableOptions {
-                        columns: Vec::new(),
+                        columns: vec![
+                            sail_catalog::provider::CreateTableColumnOptions {
+                                name: "event_id".to_string(),
+                                data_type: DataType::Utf8,
+                                nullable: false,
+                                comment: Some("Event identifier".to_string()),
+                                default: None,
+                                generated_always_as: None,
+                                identity: None,
+                            },
+                            sail_catalog::provider::CreateTableColumnOptions {
+                                name: "count".to_string(),
+                                data_type: DataType::Int32,
+                                nullable: true,
+                                comment: None,
+                                default: None,
+                                generated_always_as: None,
+                                identity: None,
+                            },
+                        ],
                         comment: None,
                         constraints: Vec::new(),
                         location: Some("file:///tmp/events".to_string()),
@@ -795,10 +924,19 @@ pub mod catalog_provider {
                 .await
                 .unwrap();
             assert_eq!(created.name, "events");
-            assert_eq!(
-                provider.get_table(&namespace, "events").await.unwrap().name,
-                "events"
-            );
+            let loaded = provider.get_table(&namespace, "events").await.unwrap();
+            assert_eq!(loaded.name, "events");
+            let TableKind::Table { columns, .. } = loaded.kind else {
+                panic!("expected Sail table status")
+            };
+            assert_eq!(columns.len(), 2);
+            assert_eq!(columns[0].name, "event_id");
+            assert_eq!(columns[0].data_type, DataType::Utf8);
+            assert!(!columns[0].nullable);
+            assert_eq!(columns[0].comment.as_deref(), Some("Event identifier"));
+            assert_eq!(columns[1].name, "count");
+            assert_eq!(columns[1].data_type, DataType::Int32);
+            assert!(columns[1].nullable);
             assert_eq!(provider.list_tables(&namespace).await.unwrap().len(), 1);
             provider
                 .commit_table(

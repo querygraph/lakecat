@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added Iceberg current-schema column projection to the in-process Sail provider
+  so LakeCat tables expose useful Sail `TableStatus` columns.
 - Added Sail `CatalogProvider::get_table_commits` support backed by LakeCat's
   memory/Turso metadata pointer log.
 - Added a feature-gated in-process Sail `CatalogProvider` bridge that lets Sail

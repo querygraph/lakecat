@@ -8,6 +8,7 @@ repository.workspace = true
 [features]
 default = []
 catalog-provider = [
+    "dep:arrow-schema",
     "dep:lakecat-security",
     "dep:lakecat-store",
     "dep:sail-catalog",
@@ -17,6 +18,7 @@ sail-local = ["dep:hex", "dep:hmac", "dep:object_store", "dep:sail-catalog-icebe
 
 [dependencies]
 async-trait = { workspace = true }
+arrow-schema = { workspace = true, optional = true }
 lakecat-core = { workspace = true }
 lakecat-security = { workspace = true, optional = true }
 lakecat-store = { workspace = true, optional = true }
