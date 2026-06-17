@@ -47,6 +47,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: querygraph/grust
+          ref: codex/cypher-write
           path: grust
 
       - name: Checkout TypeSec

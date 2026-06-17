@@ -297,11 +297,13 @@ implemented. Credential vending now goes through a `CredentialIssuer` integratio
 hook on the service state: the default issuer is conservative, while the
 `typesec-local` issuer gates `typesec://` secret-ref resolution through TypeSec
 `credentials.issue` checks before returning scoped short-lived credential config.
-Cloud-specific resolver backends can plug into that boundary without storing raw
-secrets in catalog state. Governed management endpoints can now upsert and list
-warehouse storage profiles, and Turso persists those profiles for longest-prefix
-credential selection. Real external secret-store resolver backends remain
-pending. Governed table lifecycle now records
+For local and CI-style deployments, `typesec://env/VARIABLE` resolves credential
+config from process environment after authorization; raw values still never live
+in catalog rows. Cloud-specific resolver backends can plug into that boundary
+without storing raw secrets in catalog state. Governed management endpoints can
+now upsert and list warehouse storage profiles, and Turso persists those
+profiles for longest-prefix credential selection. Production external
+secret-store resolver backends remain pending. Governed table lifecycle now records
 soft-delete rows, hides deleted tables from normal catalog reads, restores
 soft-deleted tables through a governed management endpoint, and emits
 `table.deleted` / `table.restored` audit/outbox events. Governed policy
@@ -479,8 +481,8 @@ querygraph import-lakecat --catalog http://localhost:8181/catalog \
    lineage projections.
 7. Add remote scan planning through Sail and return Iceberg scan tasks.
 8. Add QueryGraph bootstrap/export with Croissant, CDIF, policies, and lineage.
-9. Add external secret-store resolver backends and OIDC-aware credential
-   issuance.
+9. Add production external secret-store resolver backends and OIDC-aware
+   credential issuance.
 10. Push reusable catalog graph taxonomy into Grust and consume it from LakeCat.
 11. Add v4-ready metadata extension tests as the Iceberg v4 spec settles.
 

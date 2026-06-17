@@ -102,7 +102,9 @@ pub mod typesec_credential_issuer {
     use lakecat_api::{ConfigEntry, StorageCredential};
     use lakecat_core::{LakeCatError, LakeCatResult};
     use lakecat_store::CredentialIssuanceMode;
+    use serde_json::Value;
     use typesec::{PolicyEngine, PolicyResult, ResourceId, SubjectId};
+    use url::Url;
 
     use crate::{CredentialIssuanceRequest, CredentialIssuer};
 
@@ -129,6 +131,13 @@ pub mod typesec_credential_issuer {
 
         pub fn allow_all_demo() -> Arc<Self> {
             Self::new(Arc::new(AllowAllPolicy), Arc::new(NoopSecretRefResolver))
+        }
+
+        pub fn allow_all_with_env_resolver() -> Arc<Self> {
+            Self::new(
+                Arc::new(AllowAllPolicy),
+                EnvironmentSecretRefCredentialResolver::new(),
+            )
         }
     }
 
@@ -226,6 +235,106 @@ pub mod typesec_credential_issuer {
                 prefix: request.profile.location_prefix.clone(),
                 config: config.clone(),
             }])
+        }
+    }
+
+    pub struct EnvironmentSecretRefCredentialResolver {
+        reader: Arc<dyn Fn(&str) -> Result<String, std::env::VarError> + Send + Sync>,
+    }
+
+    impl EnvironmentSecretRefCredentialResolver {
+        pub fn new() -> Arc<Self> {
+            Arc::new(Self {
+                reader: Arc::new(|name: &str| std::env::var(name)),
+            })
+        }
+
+        #[cfg(test)]
+        pub fn with_reader(
+            reader: impl Fn(&str) -> Result<String, std::env::VarError> + Send + Sync + 'static,
+        ) -> Arc<Self> {
+            Arc::new(Self {
+                reader: Arc::new(reader),
+            })
+        }
+    }
+
+    #[async_trait]
+    impl SecretRefCredentialResolver for EnvironmentSecretRefCredentialResolver {
+        async fn resolve(
+            &self,
+            request: &CredentialIssuanceRequest,
+        ) -> LakeCatResult<Vec<StorageCredential>> {
+            let Some(secret_ref) = request.profile.secret_ref.as_deref() else {
+                return Ok(Vec::new());
+            };
+            let variable = env_secret_variable(secret_ref)?;
+            let raw = (self.reader)(&variable).map_err(|err| {
+                LakeCatError::InvalidArgument(format!(
+                    "failed to resolve environment credential secret {variable}: {err}"
+                ))
+            })?;
+            Ok(vec![StorageCredential {
+                prefix: request.profile.location_prefix.clone(),
+                config: config_entries_from_secret_json(&raw)?,
+            }])
+        }
+    }
+
+    pub(crate) fn env_secret_variable(secret_ref: &str) -> LakeCatResult<String> {
+        let url = Url::parse(secret_ref).map_err(|err| {
+            LakeCatError::InvalidArgument(format!("invalid TypeSec secret ref URI: {err}"))
+        })?;
+        if url.scheme() != "typesec" || url.host_str() != Some("env") {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "environment resolver requires secret refs like typesec://env/VARIABLE, got {secret_ref}"
+            )));
+        }
+        let variable = url.path().trim_start_matches('/');
+        if variable.is_empty()
+            || !variable
+                .chars()
+                .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
+        {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "environment credential variable must be non-empty and use A-Z, 0-9, or _: {variable}"
+            )));
+        }
+        Ok(variable.to_string())
+    }
+
+    pub(crate) fn config_entries_from_secret_json(raw: &str) -> LakeCatResult<Vec<ConfigEntry>> {
+        let value: Value = serde_json::from_str(raw).map_err(|err| {
+            LakeCatError::InvalidArgument(format!(
+                "environment credential secret must be JSON: {err}"
+            ))
+        })?;
+        match value {
+            Value::Object(object) => object
+                .into_iter()
+                .map(|(key, value)| {
+                    let Some(value) = value.as_str() else {
+                        return Err(LakeCatError::InvalidArgument(format!(
+                            "credential config value for {key} must be a string"
+                        )));
+                    };
+                    Ok(ConfigEntry::new(key, value))
+                })
+                .collect(),
+            Value::Array(entries) => entries
+                .into_iter()
+                .map(|entry| {
+                    serde_json::from_value(entry).map_err(|err| {
+                        LakeCatError::InvalidArgument(format!(
+                            "credential config entries must match ConfigEntry JSON shape: {err}"
+                        ))
+                    })
+                })
+                .collect(),
+            _ => Err(LakeCatError::InvalidArgument(
+                "environment credential secret must be a JSON object or ConfigEntry array"
+                    .to_string(),
+            )),
         }
     }
 }
@@ -2756,24 +2865,26 @@ mod tests {
     #[cfg(feature = "typesec-local")]
     #[tokio::test]
     async fn typesec_credential_issuer_gates_secret_ref_resolution() {
-        use std::collections::BTreeMap;
-
         use crate::typesec_credential_issuer::{
-            StaticSecretRefCredentialResolver, TypeSecCredentialIssuer,
+            EnvironmentSecretRefCredentialResolver, TypeSecCredentialIssuer,
         };
 
         let issuer = TypeSecCredentialIssuer::new(
             Arc::new(AllowCredentialIssuePolicy {
                 subject: "did:example:agent".to_string(),
-                resource: "typesec://lakecat/local/s3-events".to_string(),
+                resource: "typesec://env/LAKECAT_S3_EVENTS_CREDENTIALS".to_string(),
             }),
-            StaticSecretRefCredentialResolver::new(BTreeMap::from([(
-                "typesec://lakecat/local/s3-events".to_string(),
-                vec![
-                    ConfigEntry::new("lakecat.credential-kind", "typesec-short-lived"),
-                    ConfigEntry::new("aws.session-token", "temporary-typesec-token"),
-                ],
-            )])),
+            EnvironmentSecretRefCredentialResolver::with_reader(|name| {
+                if name == "LAKECAT_S3_EVENTS_CREDENTIALS" {
+                    Ok(serde_json::json!({
+                        "lakecat.credential-kind": "typesec-env-short-lived",
+                        "aws.session-token": "temporary-typesec-token"
+                    })
+                    .to_string())
+                } else {
+                    Err(std::env::VarError::NotPresent)
+                }
+            }),
         );
         let app = app(LakeCatState::new(
             WarehouseName::new("local").unwrap(),
@@ -2790,7 +2901,7 @@ mod tests {
                     "location-prefix": "s3://lakecat-demo/events",
                     "provider": "s3",
                     "issuance-mode": "short-lived-secret-ref",
-                    "secret-ref": "typesec://lakecat/local/s3-events"
+                    "secret-ref": "typesec://env/LAKECAT_S3_EVENTS_CREDENTIALS"
                 })
                 .to_string(),
             ))
@@ -2825,7 +2936,7 @@ mod tests {
         assert_eq!(credentials.len(), 1);
         let config = credentials[0]["config"].as_array().unwrap();
         assert!(config.iter().any(|entry| {
-            entry["key"] == "lakecat.credential-kind" && entry["value"] == "typesec-short-lived"
+            entry["key"] == "lakecat.credential-kind" && entry["value"] == "typesec-env-short-lived"
         }));
 
         let denied = Request::builder()
@@ -2836,6 +2947,45 @@ mod tests {
             .unwrap();
         let response = app.oneshot(denied).await.unwrap();
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[test]
+    fn environment_secret_resolver_parses_supported_secret_shapes() {
+        use crate::typesec_credential_issuer::{
+            config_entries_from_secret_json, env_secret_variable,
+        };
+
+        assert_eq!(
+            env_secret_variable("typesec://env/LAKECAT_S3_EVENTS").unwrap(),
+            "LAKECAT_S3_EVENTS"
+        );
+        assert!(env_secret_variable("typesec://env/lowercase").is_err());
+        assert!(env_secret_variable("typesec://vault/path").is_err());
+
+        let object_entries = config_entries_from_secret_json(
+            r#"{"aws.session-token":"temporary-token","aws.region":"us-west-2"}"#,
+        )
+        .unwrap();
+        assert!(
+            object_entries
+                .iter()
+                .any(|entry| entry.key == "aws.session-token" && entry.value == "temporary-token")
+        );
+
+        let array_entries = config_entries_from_secret_json(
+            r#"[{"key":"lakecat.credential-kind","value":"typesec-env-short-lived"}]"#,
+        )
+        .unwrap();
+        assert_eq!(
+            array_entries,
+            vec![ConfigEntry::new(
+                "lakecat.credential-kind",
+                "typesec-env-short-lived"
+            )]
+        );
+
+        assert!(config_entries_from_secret_json(r#"{"aws.session-token":123}"#).is_err());
     }
 
     #[tokio::test]

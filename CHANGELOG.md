@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Fixed GitHub Actions to check out the Grust branch that matches LakeCat's
+  `grust-graph` 0.9.0 path dependency, preventing CI from testing against the
+  older default-branch Grust 0.8.1 checkout.
+- Added an environment-backed `typesec://env/VARIABLE` secret-ref resolver for
+  the `typesec-local` credential issuer, letting TypeSec-authorized local runs
+  vend scoped short-lived credential config without storing raw secrets in
+  catalog rows.
 - Rejected unsupported Sail `UNIQUE` table constraints in the in-process Iceberg
   provider instead of silently dropping them from generated LakeCat metadata.
 - Added nested Iceberg type projection to the in-process Sail provider,

@@ -67,7 +67,9 @@ fn configured_governance_engine() -> Arc<dyn GovernanceEngine> {
 
 #[cfg(feature = "typesec-local")]
 fn configured_credential_issuer() -> Arc<dyn CredentialIssuer> {
-    lakecat_service::typesec_credential_issuer::TypeSecCredentialIssuer::allow_all_demo()
+    let issuer =
+        lakecat_service::typesec_credential_issuer::TypeSecCredentialIssuer::allow_all_with_env_resolver();
+    issuer
 }
 
 #[cfg(not(feature = "typesec-local"))]
