@@ -134,9 +134,13 @@ pub mod typesec_credential_issuer {
         }
 
         pub fn allow_all_with_env_resolver() -> Arc<Self> {
+            Self::allow_all_with_secret_ref_resolver()
+        }
+
+        pub fn allow_all_with_secret_ref_resolver() -> Arc<Self> {
             Self::new(
                 Arc::new(AllowAllPolicy),
-                EnvironmentSecretRefCredentialResolver::new(),
+                ExternalSecretRefCredentialResolver::new(),
             )
         }
     }
@@ -160,12 +164,7 @@ pub mod typesec_credential_issuer {
                     "short-lived credential issuance requires a secret reference".to_string(),
                 ));
             };
-            if !secret_ref.starts_with("typesec://") {
-                return Err(LakeCatError::InvalidArgument(format!(
-                    "unsupported secret-ref scheme for TypeSec credential issuance: \
-                     expected typesec://, got {secret_ref}"
-                )));
-            }
+            secret_ref_provider(secret_ref)?;
             let subject = SubjectId::from(request.authorization_receipt.principal.subject.clone());
             let resource = ResourceId::from(secret_ref.to_string());
             let decision = self.engine.check(&subject, "credentials.issue", &resource);
@@ -238,6 +237,43 @@ pub mod typesec_credential_issuer {
         }
     }
 
+    pub struct ExternalSecretRefCredentialResolver {
+        env: Arc<EnvironmentSecretRefCredentialResolver>,
+    }
+
+    impl ExternalSecretRefCredentialResolver {
+        pub fn new() -> Arc<Self> {
+            Arc::new(Self {
+                env: EnvironmentSecretRefCredentialResolver::new(),
+            })
+        }
+
+        #[cfg(test)]
+        pub fn with_env_reader(
+            reader: impl Fn(&str) -> Result<String, std::env::VarError> + Send + Sync + 'static,
+        ) -> Arc<Self> {
+            Arc::new(Self {
+                env: EnvironmentSecretRefCredentialResolver::with_reader(reader),
+            })
+        }
+    }
+
+    #[async_trait]
+    impl SecretRefCredentialResolver for ExternalSecretRefCredentialResolver {
+        async fn resolve(
+            &self,
+            request: &CredentialIssuanceRequest,
+        ) -> LakeCatResult<Vec<StorageCredential>> {
+            let Some(secret_ref) = request.profile.secret_ref.as_deref() else {
+                return Ok(Vec::new());
+            };
+            match secret_ref_provider(secret_ref)? {
+                SecretRefProvider::TypeSecEnv => self.env.resolve(request).await,
+                provider => Err(provider_not_configured(provider, secret_ref)),
+            }
+        }
+    }
+
     pub struct EnvironmentSecretRefCredentialResolver {
         reader: Arc<dyn Fn(&str) -> Result<String, std::env::VarError> + Send + Sync>,
     }
@@ -279,6 +315,54 @@ pub mod typesec_credential_issuer {
                 config: config_entries_from_secret_json(&raw)?,
             }])
         }
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum SecretRefProvider {
+        TypeSecEnv,
+        TypeSec,
+        Vault,
+        AwsSecretsManager,
+        GcpSecretManager,
+        AzureKeyVault,
+    }
+
+    impl SecretRefProvider {
+        pub(crate) fn as_str(self) -> &'static str {
+            match self {
+                Self::TypeSecEnv => "typesec-env",
+                Self::TypeSec => "typesec",
+                Self::Vault => "vault",
+                Self::AwsSecretsManager => "aws-secrets-manager",
+                Self::GcpSecretManager => "gcp-secret-manager",
+                Self::AzureKeyVault => "azure-key-vault",
+            }
+        }
+    }
+
+    pub(crate) fn secret_ref_provider(secret_ref: &str) -> LakeCatResult<SecretRefProvider> {
+        let url = Url::parse(secret_ref).map_err(|err| {
+            LakeCatError::InvalidArgument(format!("invalid credential secret ref URI: {err}"))
+        })?;
+        match url.scheme() {
+            "typesec" if url.host_str() == Some("env") => Ok(SecretRefProvider::TypeSecEnv),
+            "typesec" => Ok(SecretRefProvider::TypeSec),
+            "vault" => Ok(SecretRefProvider::Vault),
+            "aws-sm" => Ok(SecretRefProvider::AwsSecretsManager),
+            "gcp-sm" => Ok(SecretRefProvider::GcpSecretManager),
+            "azure-kv" => Ok(SecretRefProvider::AzureKeyVault),
+            scheme => Err(LakeCatError::InvalidArgument(format!(
+                "unsupported credential secret-ref scheme for TypeSec-gated issuance: {scheme}"
+            ))),
+        }
+    }
+
+    fn provider_not_configured(provider: SecretRefProvider, secret_ref: &str) -> LakeCatError {
+        LakeCatError::InvalidArgument(format!(
+            "credential secret resolver for {} is not configured; keep governed reads on Sail \
+             or configure a production secret-store backend for {secret_ref}",
+            provider.as_str()
+        ))
     }
 
     pub(crate) fn env_secret_variable(secret_ref: &str) -> LakeCatResult<String> {
@@ -2950,10 +3034,80 @@ mod tests {
     }
 
     #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_gates_production_secret_refs_before_dispatch() {
+        use crate::typesec_credential_issuer::{
+            ExternalSecretRefCredentialResolver, TypeSecCredentialIssuer,
+        };
+
+        let principal = Principal::new("did:example:agent", PrincipalKind::Agent).unwrap();
+        let table = TableRecord::new(
+            table_ident("local", "default", "events").unwrap(),
+            "s3://lakecat-demo/events/tenant-a".to_string(),
+            Some("s3://lakecat-demo/events/tenant-a/metadata/00000.json".to_string()),
+            serde_json::json!({"format-version":3}),
+            principal.clone(),
+        );
+        let profile = StorageProfile::new(
+            "s3-events",
+            WarehouseName::new("local").unwrap(),
+            "s3://lakecat-demo/events",
+            StorageProvider::S3,
+            CredentialIssuanceMode::ShortLivedSecretRef,
+            Some("vault://secret/data/lakecat/s3-events".to_string()),
+            Default::default(),
+        )
+        .unwrap();
+        let request = CredentialIssuanceRequest {
+            table,
+            profile,
+            authorization_receipt: AuthorizationReceipt {
+                principal,
+                action: CatalogAction::CredentialsVend,
+                table: Some(table_ident("local", "default", "events").unwrap()),
+                allowed: true,
+                engine: "test".to_string(),
+                policy_hash: None,
+                context: serde_json::json!({}),
+                checked_at: chrono::Utc::now(),
+            },
+        };
+
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:agent".to_string(),
+                resource: "vault://secret/data/lakecat/s3-events".to_string(),
+            }),
+            ExternalSecretRefCredentialResolver::new(),
+        );
+        let err = issuer.issue(request.clone()).await.unwrap_err();
+        assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+        assert!(
+            err.to_string()
+                .contains("credential secret resolver for vault is not configured")
+        );
+
+        let denied = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:other".to_string(),
+                resource: "vault://secret/data/lakecat/s3-events".to_string(),
+            }),
+            ExternalSecretRefCredentialResolver::new(),
+        );
+        let err = denied.issue(request).await.unwrap_err();
+        assert!(matches!(err, LakeCatError::Conflict(_)));
+        assert!(
+            err.to_string()
+                .contains("TypeSec denied credential issuance")
+        );
+    }
+
+    #[cfg(feature = "typesec-local")]
     #[test]
     fn environment_secret_resolver_parses_supported_secret_shapes() {
         use crate::typesec_credential_issuer::{
-            config_entries_from_secret_json, env_secret_variable,
+            SecretRefProvider, config_entries_from_secret_json, env_secret_variable,
+            secret_ref_provider,
         };
 
         assert_eq!(
@@ -2962,6 +3116,27 @@ mod tests {
         );
         assert!(env_secret_variable("typesec://env/lowercase").is_err());
         assert!(env_secret_variable("typesec://vault/path").is_err());
+        assert_eq!(
+            secret_ref_provider("typesec://env/LAKECAT_S3_EVENTS").unwrap(),
+            SecretRefProvider::TypeSecEnv
+        );
+        assert_eq!(
+            secret_ref_provider("vault://secret/data/lakecat/s3-events").unwrap(),
+            SecretRefProvider::Vault
+        );
+        assert_eq!(
+            secret_ref_provider("aws-sm://lakecat/s3-events").unwrap(),
+            SecretRefProvider::AwsSecretsManager
+        );
+        assert_eq!(
+            secret_ref_provider("gcp-sm://lakecat/s3-events").unwrap(),
+            SecretRefProvider::GcpSecretManager
+        );
+        assert_eq!(
+            secret_ref_provider("azure-kv://lakecat/s3-events").unwrap(),
+            SecretRefProvider::AzureKeyVault
+        );
+        assert!(secret_ref_provider("file:///tmp/raw-secret").is_err());
 
         let object_entries = config_entries_from_secret_json(
             r#"{"aws.session-token":"temporary-token","aws.region":"us-west-2"}"#,

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added TypeSec-gated production secret-ref dispatch for credential vending:
+  `vault://`, `aws-sm://`, `gcp-sm://`, and `azure-kv://` references are now
+  authorized against TypeSec by exact URI before failing with explicit
+  "provider backend not configured" errors, while `typesec://env/VARIABLE`
+  remains the local resolver path.
 - Documented the cloud CI publish gate: LakeCat should rebuild in GitHub Actions
   against published Grust and TypeSec crates after their release chain lands,
   instead of pinning CI to unpublished sibling checkout states.
