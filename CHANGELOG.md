@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Verified the LakeCat-generated QGLake bundle through QueryGraph's
+  `lakecat-import` path, which now checks the outer bundle hash and writes a
+  QueryGraph import plan without moving graph ingest mechanics into LakeCat.
 - Added `lakecat-cli qglake-fixture`, a repeatable live-service setup command
   that creates a demo namespace/table, storage profile, ODRL policy binding, and
   verified QueryGraph bootstrap bundle through LakeCat APIs.

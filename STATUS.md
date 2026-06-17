@@ -6,7 +6,7 @@ Updated: 2026-06-17
 
 - LakeCat is on `master`.
 - Latest committed LakeCat slice before this continuation:
-  `8d02771 Add LakeCat CLI admin setup commands`.
+  `b4987d0 Add QGLake live fixture command`.
 - Cloud CI remains gated on the publish chain: wait for Grust to publish the
   needed crates, then for TypeSec to publish its matching crates, then rebuild
   LakeCat in GitHub Actions against published crates rather than pinning CI to
@@ -22,11 +22,12 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
-- Added `lakecat-cli qglake-fixture`, a live-service setup command that creates a
-  demo namespace/table, local storage profile, ODRL policy binding, and verified
-  QueryGraph bootstrap bundle through LakeCat APIs.
-- This gives LakeCat a repeatable QGLake fixture path against a Turso-backed
-  local service without putting graph traversal or taxonomy work in LakeCat.
+- Verified the LakeCat-generated QGLake bundle through QueryGraph's
+  `lakecat-import` path.
+- QueryGraph now checks the outer LakeCat bundle hash, validates the graph
+  envelope shape, and writes an import plan for downstream graph ingestion.
+- No graph taxonomy, traversal, or ingest mechanics moved into LakeCat; reusable
+  graph work remains targeted at Grust.
 
 ## Verification Completed
 
@@ -42,11 +43,16 @@ Updated: 2026-06-17
 - QueryGraph verifier:
   `cargo run -- lakecat-verify --bundle /Users/alexy/src/lakecat/target/qglake-live/lakecat-bootstrap.json`
   in `/Users/alexy/src/querygraph/qg-rust`
+- QueryGraph importer:
+  `cargo run -- lakecat-import --bundle /Users/alexy/src/lakecat/target/qglake-live/lakecat-bootstrap.json --output .querygraph/lakecat/import-plan.json`
+  in `/Users/alexy/src/querygraph/qg-rust`
+- QueryGraph tests: `cargo test` in `/Users/alexy/src/querygraph/qg-rust`
 - `cargo test --workspace`
 - `cargo test --workspace --all-features`
 - `git diff --check`
 
 ## Next Recommended Slice
 
-Feed the LakeCat-generated QGLake bootstrap bundle into QueryGraph's verifier
-and importer path, then promote any reusable graph-ingest pieces into Grust.
+Promote reusable LakeCat catalog graph ingest/taxonomy helpers into Grust, then
+have QueryGraph consume them from Grust instead of growing importer-specific
+graph mechanics.
