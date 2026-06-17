@@ -498,9 +498,9 @@ append a dated entry per slice; keep the finding-status table current.
 | # | Finding | Status | Evidence / note |
 | --- | --- | --- | --- |
 | 1 | Red default-feature tests | **CLOSED** | default workspace tests pass; Sail-specific service assertions are gated |
-| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added with sanitized `lakecat.request-identity.v1` envelopes on authorization receipts; catalog config, namespace create/list, table create/load/commit, scan planning, task materialization, credential-vending requests, and QueryGraph bootstrap now require typed capabilities; catalog/namespace/table/scan/bootstrap/credential events and commit receipts persist in Turso audit/outbox; storage-profile modeling, a pluggable credential issuer, a TypeSec-gated secret-ref issuer path, an environment-backed `typesec://env/VARIABLE` resolver, and fail-closed dispatch for `vault://`, `aws-sm://`, `gcp-sm://`, and `azure-kv://` refs are started, but real TypeDID verification and production secret-store SDK resolver backends are still pending |
+| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added with sanitized `lakecat.request-identity.v1` envelopes on authorization receipts; catalog config, namespace create/list, table create/load/commit, scan planning, task materialization, credential-vending requests, and QueryGraph bootstrap now require typed capabilities; catalog/namespace/table/scan/bootstrap/credential events and commit receipts persist in Turso audit/outbox; storage-profile modeling, a pluggable credential issuer, a TypeSec-gated secret-ref issuer path, an environment-backed `typesec://env/VARIABLE` resolver, TypeSec-authorized Vault resolution for `vault://`, and fail-closed dispatch for `aws-sm://`, `gcp-sm://`, and `azure-kv://` refs are started, but real TypeDID verification and remaining production secret-store SDK resolver backends are still pending |
 | 3 | No durable / CAS commit | **CLOSED for local durable spine** | Turso commits now write local `file://` metadata when provided by the Sail-facing plan, advance pointers with expected-previous compare-and-swap, persist idempotency/audit/outbox rows, and have a concurrent writer regression |
-| 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, outbox, object-write-aware commits, outbox delivery, typed inferred storage profiles, governed managed warehouse storage profiles with external secret references, a service credential-issuer hook, a TypeSec-gated secret-ref issuer path with environment-backed resolution for local runs and fail-closed production-provider dispatch, governed ODRL policy bindings, and governed table soft delete/restore; production secret-store SDK resolver backends remain pending |
+| 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, outbox, object-write-aware commits, outbox delivery, typed inferred storage profiles, governed managed warehouse storage profiles with external secret references, a service credential-issuer hook, a TypeSec-gated secret-ref issuer path with environment-backed resolution for local runs, Vault resolution, and fail-closed production-provider dispatch, governed ODRL policy bindings, and governed table soft delete/restore; production secret-store SDK resolver coverage beyond Vault remains pending |
 | 5 | Service can't activate real engines | **CLOSED** | `sail-local` / `typesec-local` / `grust-local` passthroughs now in `lakecat-service` |
 | 6 | Sail used as struct library, not planner | **STARTED** | `lakecat-sail/catalog-provider` now exposes a governed in-process Sail `CatalogProvider` over LakeCat namespaces/tables/commits, pointer-log-backed commit discovery, and basic Iceberg current-schema/nested-type/partition/sort-order/identifier-field `TableStatus`; unsupported UNIQUE constraints are rejected instead of dropped; Sail helper upstreaming and deeper planner fusion remain pending |
 | 7 | Plan ↔ implementation drift | **PARTIAL** | architecture and OPUS working-plan docs now track the committed Turso CAS/object-write/outbox/OpenLineage/storage-profile and in-process Sail provider slices; remaining drift risk is around Grust taxonomy placement and remote credential issuance |
@@ -543,11 +543,11 @@ authorization context before TypeSec runs. Governed table lifecycle now hides
 soft-deleted tables from normal catalog reads, restores them through a governed
 management endpoint, and emits `table.deleted` / `table.restored` audit/outbox
 events. A `typesec://env/VARIABLE` resolver now provides a local external-secret
-backend for TypeSec-authorized short-lived config, and `vault://`, `aws-sm://`,
-`gcp-sm://`, and `azure-kv://` refs now reach TypeSec authorization before
-failing closed when no provider backend is configured. The remaining P1/P2 work
-is production secret-store SDK integration, TypeDID verification, and broader
-operator APIs.
+backend for TypeSec-authorized short-lived config, `vault://` refs can resolve
+through a Vault HTTP backend after TypeSec authorization, and `aws-sm://`,
+`gcp-sm://`, and `azure-kv://` refs now fail closed when no provider backend is
+configured. The remaining P1/P2 work is broader production secret-store SDK
+integration, TypeDID verification, and broader operator APIs.
 
 ### Reviewer note — endorse the Turso pivot, with a gate (2026-06-16)
 
@@ -598,12 +598,13 @@ only once **P2** gives it a governed path to run on.
   graph/lineage side effects. Typed inferred storage profiles, governed
   storage-profile management endpoints, external secret references, a pluggable
   credential issuer, a TypeSec-gated `typesec://` issuer path, an
-  environment-backed `typesec://env/VARIABLE` resolver, fail-closed dispatch for
-  Vault/AWS/GCP/Azure secret-ref schemes, and Turso-backed longest-prefix
-  profile selection are started. Governed ODRL policy-binding management is
-  started and active table bindings flow into authorization context. Governed
-  table soft delete/restore is started; real external production secret-store
-  SDK resolver backends remain outstanding.*
+  environment-backed `typesec://env/VARIABLE` resolver, Vault secret-ref
+  resolution, fail-closed dispatch for AWS/GCP/Azure secret-ref schemes, and
+  Turso-backed longest-prefix profile selection are started. Governed ODRL
+  policy-binding management is started and active table bindings flow into
+  authorization context. Governed table soft delete/restore is started; real
+  external production secret-store SDK resolver coverage beyond Vault remains
+  outstanding.*
 - **P2 — finish governance: capability model + governed read path.** Promote the
   boolean receipt to `Capability<Action, Resource>`; route agent reads through
   governed scan-planning; persist the receipt with the audit row. (Milestones 1, 5;

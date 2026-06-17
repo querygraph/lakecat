@@ -10,7 +10,7 @@ default = []
 grust-local = ["dep:grust-graph", "lakecat-graph/grust-local"]
 sail-local = ["lakecat-sail/sail-local"]
 turso-local = ["lakecat-store/turso-local"]
-typesec-local = ["dep:typesec", "lakecat-security/typesec-local"]
+typesec-local = ["dep:reqwest", "dep:typesec", "lakecat-security/typesec-local"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -27,6 +27,7 @@ lakecat-store = { workspace = true }
 chrono = { workspace = true }
 grust-graph = { workspace = true, optional = true, features = ["memory"] }
 object_store = { workspace = true }
+reqwest = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

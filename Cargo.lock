@@ -3699,6 +3699,7 @@ dependencies = [
  "lakecat-security",
  "lakecat-store",
  "object_store",
+ "reqwest",
  "sail-catalog-iceberg",
  "sail-iceberg",
  "serde",

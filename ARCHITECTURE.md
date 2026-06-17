@@ -302,11 +302,14 @@ config from process environment after authorization; raw values still never live
 in catalog rows. Cloud-specific resolver backends can plug into that boundary
 without storing raw secrets in catalog state. Production secret-ref URI schemes
 (`vault://`, `aws-sm://`, `gcp-sm://`, and `azure-kv://`) now dispatch through
-the same TypeSec authorization boundary and fail closed with explicit
-not-configured errors until real provider SDK resolvers are enabled. Governed
-management endpoints can now upsert and list warehouse storage profiles, and Turso persists those
-profiles for longest-prefix credential selection. Production external
-secret-store resolver backends remain pending. Governed table lifecycle now records
+the same TypeSec authorization boundary. `vault://` refs can resolve through a
+Vault HTTP backend when `LAKECAT_VAULT_ADDR` / `LAKECAT_VAULT_TOKEN` (or the
+standard `VAULT_ADDR` / `VAULT_TOKEN`) are configured; the remaining production
+providers fail closed with explicit not-configured errors until their SDK
+resolvers are enabled. Governed management endpoints can now upsert and list
+warehouse storage profiles, and Turso persists those profiles for
+longest-prefix credential selection. Production external secret-store resolver
+backend coverage beyond Vault remains pending. Governed table lifecycle now records
 soft-delete rows, hides deleted tables from normal catalog reads, restores
 soft-deleted tables through a governed management endpoint, and emits
 `table.deleted` / `table.restored` audit/outbox events. Governed policy

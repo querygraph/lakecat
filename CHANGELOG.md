@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added the first production external secret-store backend: TypeSec-authorized
+  `vault://` credential refs can now resolve through Vault HTTP using
+  `LAKECAT_VAULT_ADDR` / `LAKECAT_VAULT_TOKEN` (or `VAULT_ADDR` /
+  `VAULT_TOKEN`) without storing raw secrets in catalog rows.
 - Disabled automatic GitHub Actions CI triggers while LakeCat waits for the
   Grust and TypeSec published-crate chain; CI is now manual-only until the cloud
   dependency graph is known to work.

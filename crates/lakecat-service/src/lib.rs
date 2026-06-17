@@ -239,12 +239,14 @@ pub mod typesec_credential_issuer {
 
     pub struct ExternalSecretRefCredentialResolver {
         env: Arc<EnvironmentSecretRefCredentialResolver>,
+        vault: Option<Arc<VaultSecretRefCredentialResolver>>,
     }
 
     impl ExternalSecretRefCredentialResolver {
         pub fn new() -> Arc<Self> {
             Arc::new(Self {
                 env: EnvironmentSecretRefCredentialResolver::new(),
+                vault: VaultSecretRefCredentialResolver::from_env(),
             })
         }
 
@@ -254,6 +256,15 @@ pub mod typesec_credential_issuer {
         ) -> Arc<Self> {
             Arc::new(Self {
                 env: EnvironmentSecretRefCredentialResolver::with_reader(reader),
+                vault: None,
+            })
+        }
+
+        #[cfg(test)]
+        pub fn with_vault(vault: Arc<VaultSecretRefCredentialResolver>) -> Arc<Self> {
+            Arc::new(Self {
+                env: EnvironmentSecretRefCredentialResolver::new(),
+                vault: Some(vault),
             })
         }
     }
@@ -269,8 +280,142 @@ pub mod typesec_credential_issuer {
             };
             match secret_ref_provider(secret_ref)? {
                 SecretRefProvider::TypeSecEnv => self.env.resolve(request).await,
+                SecretRefProvider::Vault => {
+                    let Some(vault) = &self.vault else {
+                        return Err(provider_not_configured(
+                            SecretRefProvider::Vault,
+                            secret_ref,
+                        ));
+                    };
+                    vault.resolve(request).await
+                }
                 provider => Err(provider_not_configured(provider, secret_ref)),
             }
+        }
+    }
+
+    pub struct VaultSecretRefCredentialResolver {
+        address: Url,
+        token: String,
+        namespace: Option<String>,
+        client: Arc<dyn VaultSecretClient>,
+    }
+
+    impl VaultSecretRefCredentialResolver {
+        pub fn from_env() -> Option<Arc<Self>> {
+            let address = std::env::var("LAKECAT_VAULT_ADDR")
+                .or_else(|_| std::env::var("VAULT_ADDR"))
+                .ok()?;
+            let token = std::env::var("LAKECAT_VAULT_TOKEN")
+                .or_else(|_| std::env::var("VAULT_TOKEN"))
+                .ok()?;
+            let namespace = std::env::var("LAKECAT_VAULT_NAMESPACE")
+                .or_else(|_| std::env::var("VAULT_NAMESPACE"))
+                .ok();
+            Self::new(
+                address,
+                token,
+                namespace,
+                Arc::new(ReqwestVaultSecretClient),
+            )
+            .ok()
+        }
+
+        pub fn new(
+            address: impl AsRef<str>,
+            token: impl Into<String>,
+            namespace: Option<String>,
+            client: Arc<dyn VaultSecretClient>,
+        ) -> LakeCatResult<Arc<Self>> {
+            let address = Url::parse(address.as_ref()).map_err(|err| {
+                LakeCatError::InvalidArgument(format!("invalid Vault address: {err}"))
+            })?;
+            let token = token.into();
+            if token.trim().is_empty() {
+                return Err(LakeCatError::InvalidArgument(
+                    "Vault token must not be empty".to_string(),
+                ));
+            }
+            Ok(Arc::new(Self {
+                address,
+                token,
+                namespace,
+                client,
+            }))
+        }
+
+        fn secret_url(&self, secret_ref: &str) -> LakeCatResult<String> {
+            let path = vault_secret_path(secret_ref)?;
+            let mut base = self.address.clone();
+            base.set_path(&format!(
+                "{}/{}",
+                base.path().trim_end_matches('/'),
+                path.trim_start_matches('/')
+            ));
+            base.set_query(None);
+            base.set_fragment(None);
+            Ok(base.to_string())
+        }
+    }
+
+    #[async_trait]
+    impl SecretRefCredentialResolver for VaultSecretRefCredentialResolver {
+        async fn resolve(
+            &self,
+            request: &CredentialIssuanceRequest,
+        ) -> LakeCatResult<Vec<StorageCredential>> {
+            let Some(secret_ref) = request.profile.secret_ref.as_deref() else {
+                return Ok(Vec::new());
+            };
+            let url = self.secret_url(secret_ref)?;
+            let secret = self
+                .client
+                .read_secret(&url, &self.token, self.namespace.as_deref())
+                .await?;
+            Ok(vec![StorageCredential {
+                prefix: request.profile.location_prefix.clone(),
+                config: config_entries_from_vault_secret_json(secret)?,
+            }])
+        }
+    }
+
+    #[async_trait]
+    pub trait VaultSecretClient: Send + Sync + 'static {
+        async fn read_secret(
+            &self,
+            url: &str,
+            token: &str,
+            namespace: Option<&str>,
+        ) -> LakeCatResult<Value>;
+    }
+
+    struct ReqwestVaultSecretClient;
+
+    #[async_trait]
+    impl VaultSecretClient for ReqwestVaultSecretClient {
+        async fn read_secret(
+            &self,
+            url: &str,
+            token: &str,
+            namespace: Option<&str>,
+        ) -> LakeCatResult<Value> {
+            let client = reqwest::Client::new();
+            let mut request = client.get(url).header("X-Vault-Token", token);
+            if let Some(namespace) = namespace {
+                request = request.header("X-Vault-Namespace", namespace);
+            }
+            let response = request.send().await.map_err(|err| {
+                LakeCatError::InvalidArgument(format!("failed to read Vault secret: {err}"))
+            })?;
+            let status = response.status();
+            if !status.is_success() {
+                return Err(LakeCatError::InvalidArgument(format!(
+                    "Vault secret read failed with status {status}"
+                )));
+            }
+            response.json::<Value>().await.map_err(|err| {
+                LakeCatError::InvalidArgument(format!("Vault secret response must be JSON: {err}"))
+            })
         }
     }
 
@@ -363,6 +508,57 @@ pub mod typesec_credential_issuer {
              or configure a production secret-store backend for {secret_ref}",
             provider.as_str()
         ))
+    }
+
+    pub(crate) fn vault_secret_path(secret_ref: &str) -> LakeCatResult<String> {
+        let url = Url::parse(secret_ref)
+            .map_err(|err| LakeCatError::InvalidArgument(format!("invalid Vault URI: {err}")))?;
+        if url.scheme() != "vault" {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "Vault resolver requires vault:// secret refs, got {secret_ref}"
+            )));
+        }
+        let Some(mount) = url.host_str() else {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "Vault secret ref must include a mount name: {secret_ref}"
+            )));
+        };
+        let path = url.path().trim_start_matches('/');
+        if path.is_empty() {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "Vault secret ref must include a secret path: {secret_ref}"
+            )));
+        }
+        Ok(format!("v1/{mount}/{path}"))
+    }
+
+    pub(crate) fn config_entries_from_vault_secret_json(
+        value: Value,
+    ) -> LakeCatResult<Vec<ConfigEntry>> {
+        let payload = value
+            .get("data")
+            .and_then(|data| data.get("data").or(Some(data)))
+            .ok_or_else(|| {
+                LakeCatError::InvalidArgument(
+                    "Vault secret response must contain a data object".to_string(),
+                )
+            })?;
+        let Some(object) = payload.as_object() else {
+            return Err(LakeCatError::InvalidArgument(
+                "Vault secret data must be a JSON object".to_string(),
+            ));
+        };
+        object
+            .iter()
+            .map(|(key, value)| {
+                let Some(value) = value.as_str() else {
+                    return Err(LakeCatError::InvalidArgument(format!(
+                        "Vault credential config value for {key} must be a string"
+                    )));
+                };
+                Ok(ConfigEntry::new(key.clone(), value.to_string()))
+            })
+            .collect()
     }
 
     pub(crate) fn env_secret_variable(secret_ref: &str) -> LakeCatResult<String> {
@@ -1760,6 +1956,33 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "typesec-local")]
+    #[derive(Debug, Default)]
+    struct MockVaultSecretClient {
+        requests: Mutex<Vec<(String, String, Option<String>)>>,
+        response: Mutex<Option<serde_json::Value>>,
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[async_trait]
+    impl crate::typesec_credential_issuer::VaultSecretClient for MockVaultSecretClient {
+        async fn read_secret(
+            &self,
+            url: &str,
+            token: &str,
+            namespace: Option<&str>,
+        ) -> lakecat_core::LakeCatResult<serde_json::Value> {
+            self.requests.lock().await.push((
+                url.to_string(),
+                token.to_string(),
+                namespace.map(ToString::to_string),
+            ));
+            self.response.lock().await.clone().ok_or_else(|| {
+                LakeCatError::InvalidArgument("mock Vault response missing".to_string())
+            })
+        }
+    }
+
     #[derive(Debug, Default)]
     struct RecordingOutboxStore {
         events: Mutex<Vec<OutboxEvent>>,
@@ -3103,11 +3326,99 @@ mod tests {
     }
 
     #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_resolves_vault_secret_refs_after_authorization() {
+        use crate::typesec_credential_issuer::{
+            ExternalSecretRefCredentialResolver, TypeSecCredentialIssuer,
+            VaultSecretRefCredentialResolver,
+        };
+
+        let principal = Principal::new("did:example:agent", PrincipalKind::Agent).unwrap();
+        let table = TableRecord::new(
+            table_ident("local", "default", "events").unwrap(),
+            "s3://lakecat-demo/events/tenant-a".to_string(),
+            Some("s3://lakecat-demo/events/tenant-a/metadata/00000.json".to_string()),
+            serde_json::json!({"format-version":3}),
+            principal.clone(),
+        );
+        let profile = StorageProfile::new(
+            "s3-events",
+            WarehouseName::new("local").unwrap(),
+            "s3://lakecat-demo/events",
+            StorageProvider::S3,
+            CredentialIssuanceMode::ShortLivedSecretRef,
+            Some("vault://secret/data/lakecat/s3-events".to_string()),
+            Default::default(),
+        )
+        .unwrap();
+        let request = CredentialIssuanceRequest {
+            table,
+            profile,
+            authorization_receipt: AuthorizationReceipt {
+                principal,
+                action: CatalogAction::CredentialsVend,
+                table: Some(table_ident("local", "default", "events").unwrap()),
+                allowed: true,
+                engine: "test".to_string(),
+                policy_hash: None,
+                context: serde_json::json!({}),
+                checked_at: chrono::Utc::now(),
+            },
+        };
+        let vault_client = Arc::new(MockVaultSecretClient::default());
+        *vault_client.response.lock().await = Some(serde_json::json!({
+            "data": {
+                "data": {
+                    "lakecat.credential-kind": "vault-short-lived",
+                    "aws.session-token": "temporary-vault-token"
+                },
+                "metadata": {
+                    "version": 7
+                }
+            }
+        }));
+        let vault = VaultSecretRefCredentialResolver::new(
+            "https://vault.example.test/",
+            "vault-token",
+            Some("lakecat/admin".to_string()),
+            vault_client.clone(),
+        )
+        .unwrap();
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:agent".to_string(),
+                resource: "vault://secret/data/lakecat/s3-events".to_string(),
+            }),
+            ExternalSecretRefCredentialResolver::with_vault(vault),
+        );
+
+        let credentials = issuer.issue(request).await.unwrap();
+        assert_eq!(credentials.len(), 1);
+        assert_eq!(credentials[0].prefix, "s3://lakecat-demo/events");
+        assert!(credentials[0].config.iter().any(|entry| {
+            entry.key == "lakecat.credential-kind" && entry.value == "vault-short-lived"
+        }));
+        assert!(credentials[0].config.iter().any(|entry| {
+            entry.key == "aws.session-token" && entry.value == "temporary-vault-token"
+        }));
+
+        let requests = vault_client.requests.lock().await;
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            requests[0].0,
+            "https://vault.example.test/v1/secret/data/lakecat/s3-events"
+        );
+        assert_eq!(requests[0].1, "vault-token");
+        assert_eq!(requests[0].2.as_deref(), Some("lakecat/admin"));
+    }
+
+    #[cfg(feature = "typesec-local")]
     #[test]
     fn environment_secret_resolver_parses_supported_secret_shapes() {
         use crate::typesec_credential_issuer::{
-            SecretRefProvider, config_entries_from_secret_json, env_secret_variable,
-            secret_ref_provider,
+            SecretRefProvider, config_entries_from_secret_json,
+            config_entries_from_vault_secret_json, env_secret_variable, secret_ref_provider,
+            vault_secret_path,
         };
 
         assert_eq!(
@@ -3123,6 +3434,10 @@ mod tests {
         assert_eq!(
             secret_ref_provider("vault://secret/data/lakecat/s3-events").unwrap(),
             SecretRefProvider::Vault
+        );
+        assert_eq!(
+            vault_secret_path("vault://secret/data/lakecat/s3-events").unwrap(),
+            "v1/secret/data/lakecat/s3-events"
         );
         assert_eq!(
             secret_ref_provider("aws-sm://lakecat/s3-events").unwrap(),
@@ -3161,6 +3476,31 @@ mod tests {
         );
 
         assert!(config_entries_from_secret_json(r#"{"aws.session-token":123}"#).is_err());
+
+        let vault_entries = config_entries_from_vault_secret_json(serde_json::json!({
+            "data": {
+                "data": {
+                    "aws.session-token": "temporary-token",
+                    "aws.region": "us-west-2"
+                }
+            }
+        }))
+        .unwrap();
+        assert!(
+            vault_entries
+                .iter()
+                .any(|entry| entry.key == "aws.session-token" && entry.value == "temporary-token")
+        );
+        assert!(
+            config_entries_from_vault_secret_json(serde_json::json!({
+                "data": {
+                    "data": {
+                        "aws.session-token": 123
+                    }
+                }
+            }))
+            .is_err()
+        );
     }
 
     #[tokio::test]
