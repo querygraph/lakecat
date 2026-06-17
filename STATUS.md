@@ -6,11 +6,10 @@ Updated: 2026-06-16
 
 - LakeCat is on `master`.
 - Latest committed LakeCat slice before this continuation:
-  `69d5a5a Changelog entries for code-review fixes`.
-- Current working slice adds Iceberg identifier-field projection to the
-  in-process Sail provider, preserving Sail primary-key constraints as Iceberg
-  schema `identifier-field-ids` and projecting loaded identifier fields back to
-  Sail `CatalogTableConstraint::PrimaryKey`.
+  `bee2986 Project Iceberg identifier fields into Sail status`.
+- Current working slice adds nested Iceberg type projection to the in-process
+  Sail provider, preserving struct/list/map metadata as Arrow/DataFusion nested
+  types and allocating Iceberg nested field ids when Sail creates metadata.
 - Graph-related implementation is still intentionally kept out of LakeCat unless
   it is a bounded outbox/projection concern. Reusable graph taxonomy and graph
   mechanics belong in `/Users/alexy/src/grust`.
@@ -19,23 +18,24 @@ Updated: 2026-06-16
 
 ## Completed In This Commit
 
-- `LakeCatCatalogProvider::create_table` writes Iceberg
-  `identifier-field-ids` from Sail primary-key constraints.
-- `table_status` resolves Iceberg identifier field ids through the current schema
-  and populates Sail primary-key constraints.
-- The in-process provider test round-trips primary-key constraints through
-  LakeCat metadata.
+- `iceberg_type_to_datafusion` now parses Iceberg `struct`, `list`, and `map`
+  type objects instead of falling back to UTF-8.
+- `datafusion_type_to_iceberg` now emits nested Iceberg type objects with stable
+  nested field ids when creating tables through the Sail provider.
+- The provider test now round-trips a nested struct/list column while preserving
+  partition, sort, and primary-key projections.
+- A focused nested-type test covers Iceberg struct/list/map parsing.
 
 ## Verification Completed
 
 - `cargo fmt`
-- `cargo test -p lakecat-sail --features catalog-provider provider_resolves_governed_tables_in_process -- --nocapture`
+- `cargo test -p lakecat-sail --features catalog-provider catalog_provider::tests -- --nocapture`
 - `cargo test --workspace`
 - `cargo test --workspace --all-features`
 - `git diff --check`
 
 ## Next Recommended Slice
 
-Continue the Sail `TableStatus` conversion with nested Iceberg types and any
-remaining constraint forms, then upstream reusable Iceberg metadata conversion
-helpers into Sail once the sibling Sail WIP is stable.
+Continue the Sail `TableStatus` conversion with remaining constraint forms and
+then upstream reusable Iceberg metadata conversion helpers into Sail once the
+sibling Sail WIP is stable.

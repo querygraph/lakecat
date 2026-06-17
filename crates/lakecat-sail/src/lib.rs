@@ -231,7 +231,7 @@ pub fn validate_lakecat_metadata_format(metadata: &Value) -> LakeCatResult<Icebe
 pub mod catalog_provider {
     use std::sync::Arc;
 
-    use arrow_schema::{DataType, TimeUnit};
+    use arrow_schema::{DataType, Field, Fields, TimeUnit};
     use lakecat_core::{Namespace, Principal, TableIdent, TableName, WarehouseName};
     use lakecat_security::{
         AuthorizationRequest, CatalogAction, GovernanceEngine, TableCommitCapability,
@@ -422,28 +422,23 @@ pub mod catalog_provider {
                     "LakeCat Sail table creation requires a location".to_string(),
                 )
             })?;
-            let identifier_field_ids = identifier_field_ids(&options.columns, &options.constraints);
+            let (fields, column_ids, last_column_id) =
+                iceberg_fields_from_columns(&options.columns);
+            let identifier_field_ids = identifier_field_ids(&column_ids, &options.constraints);
             let metadata = json!({
                 "format-version": 3,
+                "last-column-id": last_column_id,
                 "location": location,
                 "current-schema-id": 1,
                 "schemas": [{
                     "schema-id": 1,
                     "identifier-field-ids": identifier_field_ids,
-                    "fields": options.columns.iter().enumerate().map(|(idx, column)| {
-                        json!({
-                            "id": i32::try_from(idx + 1).unwrap_or(i32::MAX),
-                            "name": column.name,
-                            "type": datafusion_type_to_iceberg(&column.data_type),
-                            "required": !column.nullable,
-                            "doc": column.comment,
-                        })
-                    }).collect::<Vec<_>>()
+                    "fields": fields,
                 }],
                 "default-spec-id": 0,
                 "partition-specs": [{
                     "spec-id": 0,
-                    "fields": partition_spec_fields(&options.columns, &options.partition_by),
+                    "fields": partition_spec_fields(&column_ids, &options.partition_by),
                 }],
                 "default-sort-order-id": if options.sort_by.is_empty() { 0 } else { 1 },
                 "sort-orders": if options.sort_by.is_empty() {
@@ -451,7 +446,7 @@ pub mod catalog_provider {
                 } else {
                     json!([
                         {"order-id": 0, "fields": []},
-                        {"order-id": 1, "fields": sort_order_fields(&options.columns, &options.sort_by)},
+                        {"order-id": 1, "fields": sort_order_fields(&column_ids, &options.sort_by)},
                     ])
                 },
                 "properties": options.properties,
@@ -933,13 +928,76 @@ pub mod catalog_provider {
     fn iceberg_type_to_datafusion(value: &serde_json::Value) -> DataType {
         match value {
             serde_json::Value::String(kind) => primitive_iceberg_type(kind),
-            serde_json::Value::Object(object) => object
-                .get("type")
-                .and_then(serde_json::Value::as_str)
-                .map(primitive_iceberg_type)
-                .unwrap_or(DataType::Utf8),
+            serde_json::Value::Object(object) => {
+                match object.get("type").and_then(serde_json::Value::as_str) {
+                    Some("struct") => DataType::Struct(Fields::from(
+                        object
+                            .get("fields")
+                            .and_then(serde_json::Value::as_array)
+                            .map(|fields| {
+                                fields
+                                    .iter()
+                                    .filter_map(iceberg_nested_field_to_datafusion)
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default(),
+                    )),
+                    Some("list") => {
+                        let element_type = object
+                            .get("element")
+                            .map(iceberg_type_to_datafusion)
+                            .unwrap_or(DataType::Utf8);
+                        let element_required = object
+                            .get("element-required")
+                            .and_then(serde_json::Value::as_bool)
+                            .unwrap_or(false);
+                        DataType::List(Arc::new(Field::new_list_field(
+                            element_type,
+                            !element_required,
+                        )))
+                    }
+                    Some("map") => {
+                        let key_type = object
+                            .get("key")
+                            .map(iceberg_type_to_datafusion)
+                            .unwrap_or(DataType::Utf8);
+                        let value_type = object
+                            .get("value")
+                            .map(iceberg_type_to_datafusion)
+                            .unwrap_or(DataType::Utf8);
+                        let value_required = object
+                            .get("value-required")
+                            .and_then(serde_json::Value::as_bool)
+                            .unwrap_or(false);
+                        DataType::Map(
+                            Arc::new(Field::new(
+                                "entries",
+                                DataType::Struct(Fields::from(vec![
+                                    Field::new("key", key_type, false),
+                                    Field::new("value", value_type, !value_required),
+                                ])),
+                                false,
+                            )),
+                            false,
+                        )
+                    }
+                    Some(kind) => primitive_iceberg_type(kind),
+                    None => DataType::Utf8,
+                }
+            }
             _ => DataType::Utf8,
         }
+    }
+
+    fn iceberg_nested_field_to_datafusion(field: &serde_json::Value) -> Option<Field> {
+        Some(Field::new(
+            field.get("name")?.as_str()?,
+            iceberg_type_to_datafusion(field.get("type")?),
+            !field
+                .get("required")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+        ))
     }
 
     fn primitive_iceberg_type(kind: &str) -> DataType {
@@ -959,42 +1017,111 @@ pub mod catalog_provider {
         }
     }
 
-    fn datafusion_type_to_iceberg(data_type: &DataType) -> &'static str {
+    fn datafusion_type_to_iceberg(
+        data_type: &DataType,
+        next_field_id: &mut i32,
+    ) -> serde_json::Value {
         match data_type {
-            DataType::Boolean => "boolean",
-            DataType::Int8 | DataType::Int16 | DataType::Int32 => "int",
-            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 => "int",
-            DataType::Int64 | DataType::UInt64 => "long",
-            DataType::Float16 | DataType::Float32 => "float",
-            DataType::Float64 => "double",
-            DataType::Date32 | DataType::Date64 => "date",
-            DataType::Time32(_) | DataType::Time64(_) => "time",
-            DataType::Timestamp(_, _) => "timestamp",
-            DataType::Binary | DataType::LargeBinary | DataType::FixedSizeBinary(_) => "binary",
-            DataType::Decimal128(_, _) | DataType::Decimal256(_, _) => "decimal(38,18)",
-            _ => "string",
+            DataType::Boolean => json!("boolean"),
+            DataType::Int8 | DataType::Int16 | DataType::Int32 => json!("int"),
+            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 => json!("int"),
+            DataType::Int64 | DataType::UInt64 => json!("long"),
+            DataType::Float16 | DataType::Float32 => json!("float"),
+            DataType::Float64 => json!("double"),
+            DataType::Date32 | DataType::Date64 => json!("date"),
+            DataType::Time32(_) | DataType::Time64(_) => json!("time"),
+            DataType::Timestamp(_, _) => json!("timestamp"),
+            DataType::Binary | DataType::LargeBinary | DataType::FixedSizeBinary(_) => {
+                json!("binary")
+            }
+            DataType::Decimal128(_, _) | DataType::Decimal256(_, _) => json!("decimal(38,18)"),
+            DataType::Struct(fields) => json!({
+                "type": "struct",
+                "fields": fields
+                    .iter()
+                    .map(|field| iceberg_nested_field_from_arrow(field, next_field_id))
+                    .collect::<Vec<_>>(),
+            }),
+            DataType::List(field) | DataType::LargeList(field) => {
+                let element_id = allocate_field_id(next_field_id);
+                json!({
+                    "type": "list",
+                    "element-id": element_id,
+                    "element": datafusion_type_to_iceberg(field.data_type(), next_field_id),
+                    "element-required": !field.is_nullable(),
+                })
+            }
+            DataType::Map(entry, _) => {
+                let (key_type, value_type, value_required) =
+                    map_entry_types(entry).unwrap_or((DataType::Utf8, DataType::Utf8, false));
+                let key_id = allocate_field_id(next_field_id);
+                let value_id = allocate_field_id(next_field_id);
+                json!({
+                    "type": "map",
+                    "key-id": key_id,
+                    "key": datafusion_type_to_iceberg(&key_type, next_field_id),
+                    "value-id": value_id,
+                    "value": datafusion_type_to_iceberg(&value_type, next_field_id),
+                    "value-required": value_required,
+                })
+            }
+            _ => json!("string"),
         }
     }
 
+    fn iceberg_field_from_column(
+        column: &sail_catalog::provider::CreateTableColumnOptions,
+        next_field_id: &mut i32,
+    ) -> serde_json::Value {
+        json!({
+            "id": allocate_field_id(next_field_id),
+            "name": column.name,
+            "type": datafusion_type_to_iceberg(&column.data_type, next_field_id),
+            "required": !column.nullable,
+            "doc": column.comment,
+        })
+    }
+
+    fn iceberg_nested_field_from_arrow(
+        field: &Field,
+        next_field_id: &mut i32,
+    ) -> serde_json::Value {
+        json!({
+            "id": allocate_field_id(next_field_id),
+            "name": field.name(),
+            "type": datafusion_type_to_iceberg(field.data_type(), next_field_id),
+            "required": !field.is_nullable(),
+        })
+    }
+
+    fn allocate_field_id(next_field_id: &mut i32) -> i32 {
+        let field_id = *next_field_id;
+        *next_field_id = (*next_field_id).saturating_add(1);
+        field_id
+    }
+
+    fn map_entry_types(entry: &Field) -> Option<(DataType, DataType, bool)> {
+        let DataType::Struct(fields) = entry.data_type() else {
+            return None;
+        };
+        let key = fields.iter().find(|field| field.name() == "key")?;
+        let value = fields.iter().find(|field| field.name() == "value")?;
+        Some((
+            key.data_type().clone(),
+            value.data_type().clone(),
+            !value.is_nullable(),
+        ))
+    }
+
     fn partition_spec_fields(
-        columns: &[sail_catalog::provider::CreateTableColumnOptions],
+        column_ids: &std::collections::BTreeMap<String, i32>,
         partition_by: &[CatalogPartitionField],
     ) -> Vec<serde_json::Value> {
-        let column_ids = columns
-            .iter()
-            .enumerate()
-            .map(|(idx, column)| {
-                (
-                    column.name.as_str(),
-                    i32::try_from(idx + 1).unwrap_or(i32::MAX),
-                )
-            })
-            .collect::<std::collections::BTreeMap<_, _>>();
         partition_by
             .iter()
             .enumerate()
             .filter_map(|(idx, field)| {
-                let source_id = *column_ids.get(field.column.as_str())?;
+                let source_id = *column_ids.get(&field.column)?;
                 let (transform, name) = partition_transform_to_iceberg(field);
                 Some(json!({
                     "source-id": source_id,
@@ -1007,23 +1134,13 @@ pub mod catalog_provider {
     }
 
     fn sort_order_fields(
-        columns: &[sail_catalog::provider::CreateTableColumnOptions],
+        column_ids: &std::collections::BTreeMap<String, i32>,
         sort_by: &[CatalogTableSort],
     ) -> Vec<serde_json::Value> {
-        let column_ids = columns
-            .iter()
-            .enumerate()
-            .map(|(idx, column)| {
-                (
-                    column.name.as_str(),
-                    i32::try_from(idx + 1).unwrap_or(i32::MAX),
-                )
-            })
-            .collect::<std::collections::BTreeMap<_, _>>();
         sort_by
             .iter()
             .filter_map(|field| {
-                let source_id = *column_ids.get(field.column.as_str())?;
+                let source_id = *column_ids.get(&field.column)?;
                 Some(json!({
                     "source-id": source_id,
                     "transform": "identity",
@@ -1035,19 +1152,9 @@ pub mod catalog_provider {
     }
 
     fn identifier_field_ids(
-        columns: &[sail_catalog::provider::CreateTableColumnOptions],
+        column_ids: &std::collections::BTreeMap<String, i32>,
         constraints: &[CatalogTableConstraint],
     ) -> Vec<i32> {
-        let column_ids = columns
-            .iter()
-            .enumerate()
-            .map(|(idx, column)| {
-                (
-                    column.name.as_str(),
-                    i32::try_from(idx + 1).unwrap_or(i32::MAX),
-                )
-            })
-            .collect::<std::collections::BTreeMap<_, _>>();
         constraints
             .iter()
             .filter_map(|constraint| match constraint {
@@ -1057,9 +1164,33 @@ pub mod catalog_provider {
             .flat_map(|columns| {
                 columns
                     .iter()
-                    .filter_map(|column| column_ids.get(column.as_str()).copied())
+                    .filter_map(|column| column_ids.get(column).copied())
             })
             .collect()
+    }
+
+    fn iceberg_fields_from_columns(
+        columns: &[sail_catalog::provider::CreateTableColumnOptions],
+    ) -> (
+        Vec<serde_json::Value>,
+        std::collections::BTreeMap<String, i32>,
+        i32,
+    ) {
+        let mut next_field_id = 1_i32;
+        let fields = columns
+            .iter()
+            .map(|column| iceberg_field_from_column(column, &mut next_field_id))
+            .collect::<Vec<_>>();
+        let column_ids = fields
+            .iter()
+            .filter_map(|field| {
+                Some((
+                    field.get("name")?.as_str()?.to_string(),
+                    i32::try_from(field.get("id")?.as_i64()?).ok()?,
+                ))
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        (fields, column_ids, next_field_id - 1)
     }
 
     fn partition_transform_to_iceberg(field: &CatalogPartitionField) -> (String, String) {
@@ -1201,6 +1332,25 @@ pub mod catalog_provider {
                                 identity: None,
                             },
                             sail_catalog::provider::CreateTableColumnOptions {
+                                name: "payload".to_string(),
+                                data_type: DataType::Struct(Fields::from(vec![
+                                    Field::new("region", DataType::Utf8, true),
+                                    Field::new(
+                                        "scores",
+                                        DataType::List(Arc::new(Field::new_list_field(
+                                            DataType::Int32,
+                                            false,
+                                        ))),
+                                        true,
+                                    ),
+                                ])),
+                                nullable: true,
+                                comment: None,
+                                default: None,
+                                generated_always_as: None,
+                                identity: None,
+                            },
+                            sail_catalog::provider::CreateTableColumnOptions {
                                 name: "count".to_string(),
                                 data_type: DataType::Int32,
                                 nullable: true,
@@ -1254,16 +1404,30 @@ pub mod catalog_provider {
             else {
                 panic!("expected Sail table status")
             };
-            assert_eq!(columns.len(), 2);
+            assert_eq!(columns.len(), 3);
             assert_eq!(columns[0].name, "event_id");
             assert_eq!(columns[0].data_type, DataType::Utf8);
             assert!(!columns[0].nullable);
             assert!(columns[0].is_partition);
             assert_eq!(columns[0].comment.as_deref(), Some("Event identifier"));
-            assert_eq!(columns[1].name, "count");
-            assert_eq!(columns[1].data_type, DataType::Int32);
+            assert_eq!(columns[1].name, "payload");
             assert!(columns[1].nullable);
             assert!(!columns[1].is_partition);
+            match &columns[1].data_type {
+                DataType::Struct(fields) => {
+                    assert_eq!(fields.len(), 2);
+                    assert_eq!(fields[0].name(), "region");
+                    assert_eq!(fields[0].data_type(), &DataType::Utf8);
+                    assert!(fields[0].is_nullable());
+                    assert_eq!(fields[1].name(), "scores");
+                    assert!(matches!(fields[1].data_type(), DataType::List(_)));
+                }
+                other => panic!("expected nested payload struct, got {other:?}"),
+            }
+            assert_eq!(columns[2].name, "count");
+            assert_eq!(columns[2].data_type, DataType::Int32);
+            assert!(columns[2].nullable);
+            assert!(!columns[2].is_partition);
             assert_eq!(
                 constraints,
                 vec![CatalogTableConstraint::PrimaryKey {
@@ -1485,6 +1649,52 @@ pub mod catalog_provider {
                 sort_fields.is_empty(),
                 "field with no direction should be skipped, not treated as ascending"
             );
+        }
+
+        #[test]
+        fn nested_iceberg_types_project_to_arrow_types() {
+            let struct_type = iceberg_type_to_datafusion(&serde_json::json!({
+                "type": "struct",
+                "fields": [
+                    {"id": 1, "name": "region", "type": "string", "required": true},
+                    {"id": 2, "name": "scores", "type": {
+                        "type": "list",
+                        "element-id": 3,
+                        "element": "int",
+                        "element-required": false
+                    }, "required": false}
+                ]
+            }));
+            let DataType::Struct(fields) = struct_type else {
+                panic!("expected struct projection")
+            };
+            assert_eq!(fields.len(), 2);
+            assert_eq!(fields[0].name(), "region");
+            assert!(!fields[0].is_nullable());
+            assert_eq!(fields[1].name(), "scores");
+            assert!(fields[1].is_nullable());
+            assert!(matches!(fields[1].data_type(), DataType::List(_)));
+
+            let map_type = iceberg_type_to_datafusion(&serde_json::json!({
+                "type": "map",
+                "key-id": 4,
+                "key": "string",
+                "value-id": 5,
+                "value": "long",
+                "value-required": false
+            }));
+            let DataType::Map(entry, false) = map_type else {
+                panic!("expected map projection")
+            };
+            let DataType::Struct(entry_fields) = entry.data_type() else {
+                panic!("expected map entry struct")
+            };
+            assert_eq!(entry_fields[0].name(), "key");
+            assert_eq!(entry_fields[0].data_type(), &DataType::Utf8);
+            assert!(!entry_fields[0].is_nullable());
+            assert_eq!(entry_fields[1].name(), "value");
+            assert_eq!(entry_fields[1].data_type(), &DataType::Int64);
+            assert!(entry_fields[1].is_nullable());
         }
     }
 }

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added nested Iceberg type projection to the in-process Sail provider,
+  including struct/list/map parsing into Arrow/DataFusion types and nested field
+  id allocation when Sail creates Iceberg metadata.
 - Added Iceberg identifier-field projection to the in-process Sail provider:
   Sail primary-key constraints are now written as Iceberg schema
   `identifier-field-ids`, and loaded Iceberg identifier fields are exposed as
