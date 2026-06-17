@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Clarified `STATUS.md` to track the latest pushed implementation slice instead
+  of making status-only commits self-referential.
 - Updated `STATUS.md` after pushing the TypeDID verifier slice to LakeCat and
   the supporting TypeSec attestation commit to TypeSec.
 - Recorded the TypeSec-backed TypeDID verifier slice and supporting TypeSec

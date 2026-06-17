@@ -5,10 +5,11 @@ Updated: 2026-06-17
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed and pushed LakeCat slice:
-  `f68cc05 Record TypeDID verifier status`.
-- Implementation commit for the TypeDID verifier slice:
+- Latest committed and pushed LakeCat implementation slice:
   `cf0d9e7 Verify TypeDID envelopes through TypeSec`.
+- Status commits recording the pushed verifier work:
+  `f68cc05 Record TypeDID verifier status` and
+  `d720dc4 Record pushed TypeDID verifier status`.
 - Supporting TypeSec attestation commit exists locally in `/Users/alexy/src/typesec`
   and is pushed as `0ec164a Add TypeDID verification attestations`.
 - Supporting Sail helper commit exists locally in `/Users/alexy/src/sail` as
