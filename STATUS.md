@@ -5,13 +5,12 @@ Updated: 2026-06-17
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed LakeCat slice:
+- Latest committed and pushed LakeCat slice:
+  `f68cc05 Record TypeDID verifier status`.
+- Implementation commit for the TypeDID verifier slice:
   `cf0d9e7 Verify TypeDID envelopes through TypeSec`.
-- Latest pushed LakeCat slice before this status update:
-  `922e537 Record scan planning helper status`; `cf0d9e7` is ready to push
-  after this status commit.
 - Supporting TypeSec attestation commit exists locally in `/Users/alexy/src/typesec`
-  as `0ec164a Add TypeDID verification attestations`.
+  and is pushed as `0ec164a Add TypeDID verification attestations`.
 - Supporting Sail helper commit exists locally in `/Users/alexy/src/sail` as
   `68631016 Expose Iceberg table status conversion`. Pushing to
   `lakehq/sail` is blocked for this machine/account: HTTPS has no configured

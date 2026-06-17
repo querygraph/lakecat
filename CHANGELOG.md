@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Updated `STATUS.md` after pushing the TypeDID verifier slice to LakeCat and
+  the supporting TypeSec attestation commit to TypeSec.
 - Recorded the TypeSec-backed TypeDID verifier slice and supporting TypeSec
   attestation commit in `STATUS.md`.
 - Added a TypeSec-backed TypeDID envelope verifier seam for `typesec-local`:
