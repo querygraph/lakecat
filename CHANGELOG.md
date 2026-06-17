@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Recorded the Grust Cypher and TypeSec 0.8 reconciliation commit in
+  `STATUS.md`.
 - Updated LakeCat's local TypeSec baseline to `typesec` 0.8.0 and enabled
   Grust's `cypher` facade feature for `grust-local`, with a boundary test that
   runs a Grust Cypher mutation over LakeCat's catalog graph projection without

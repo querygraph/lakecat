@@ -5,14 +5,16 @@ Updated: 2026-06-17
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed and pushed LakeCat implementation slice:
+- Latest committed LakeCat implementation slice:
+  `c04f833 Reconcile Grust Cypher and TypeSec 0.8`.
+- Latest pushed LakeCat implementation slice before this checkpoint:
   `cf0d9e7 Verify TypeDID envelopes through TypeSec`.
 - Status commits recording the pushed verifier work:
   `f68cc05 Record TypeDID verifier status` and
   `d720dc4 Record pushed TypeDID verifier status`.
 - Supporting TypeSec attestation commit exists locally in `/Users/alexy/src/typesec`
   and is pushed as `0ec164a Add TypeDID verification attestations`.
-- Current local dependency reconciliation is in progress: LakeCat now targets
+- Current local dependency reconciliation is complete: LakeCat now targets
   `typesec` 0.8.0 and Grust 0.9.0 with the `cypher` facade feature enabled for
   `grust-local`.
 - Supporting Sail helper commit exists locally in `/Users/alexy/src/sail` as
