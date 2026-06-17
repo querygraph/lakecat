@@ -1819,7 +1819,9 @@ pub mod sail_integration {
     use hmac::{Hmac, Mac};
     use lakecat_core::{LakeCatError, LakeCatResult, TableIdent};
     use object_store::local::LocalFileSystem;
-    use sail_catalog_iceberg::models;
+    use sail_catalog_iceberg::{
+        completed_planning_with_id_result_from_values, fetch_scan_tasks_result_from_values, models,
+    };
     use sail_iceberg::io::{StoreContext, load_manifest, load_manifest_list};
     use sail_iceberg::spec::{
         DataContentType, DataFile as SailDataFile, DataFileFormat, Datum, DeleteFileIndex,
@@ -1956,6 +1958,14 @@ pub mod sail_integration {
                 .or(request.snapshot_id)
                 .or(metadata_summary.current_snapshot_id);
             let plan_task_count = scan_tasks.len();
+            let plan_task_tokens = plan_task_tokens_from_values(&scan_tasks)?;
+            completed_planning_with_id_result_from_values(
+                None,
+                plan_task_tokens,
+                Vec::new(),
+                Vec::new(),
+            )
+            .map_err(iceberg_rest_model_error)?;
             let scan_request = json!({
                 "snapshot-id": planned_snapshot_id,
                 "select": (!request.projection.is_empty()).then_some(request.projection.clone()),
@@ -2020,6 +2030,12 @@ pub mod sail_integration {
                 ),
                 None => (Vec::new(), Vec::new(), vec![scan_task_value(task)?]),
             };
+            fetch_scan_tasks_result_from_values(
+                plan_task_tokens_from_values(&plan_tasks)?,
+                file_scan_tasks.clone(),
+                delete_files.clone(),
+            )
+            .map_err(iceberg_rest_model_error)?;
             Ok(FetchScanTasksPlan {
                 planned_by: "sail-rest-models".to_string(),
                 plan_task: request.plan_task,
@@ -2042,6 +2058,28 @@ pub mod sail_integration {
                 })),
             })
         }
+    }
+
+    fn plan_task_tokens_from_values(tasks: &[Value]) -> LakeCatResult<Vec<String>> {
+        tasks
+            .iter()
+            .map(|task| {
+                task.get("plan-task")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string)
+                    .ok_or_else(|| {
+                        LakeCatError::Internal(
+                            "Sail-generated Iceberg plan task is missing plan-task".to_string(),
+                        )
+                    })
+            })
+            .collect()
+    }
+
+    fn iceberg_rest_model_error(error: impl std::fmt::Display) -> LakeCatError {
+        LakeCatError::Internal(format!(
+            "Sail generated an invalid Iceberg REST planning payload: {error}"
+        ))
     }
 
     pub fn validate_sail_table_metadata(metadata: &Value) -> LakeCatResult<IcebergFormatSupport> {

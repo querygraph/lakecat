@@ -502,7 +502,7 @@ append a dated entry per slice; keep the finding-status table current.
 | 3 | No durable / CAS commit | **CLOSED for local durable spine** | Turso commits now write local `file://` metadata when provided by the Sail-facing plan, advance pointers with expected-previous compare-and-swap, persist idempotency/audit/outbox rows, and have a concurrent writer regression |
 | 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, outbox, object-write-aware commits, outbox delivery, typed inferred storage profiles, governed managed warehouse storage profiles with external secret references, a service credential-issuer hook, a TypeSec-gated secret-ref issuer path with environment-backed resolution for local runs, Vault resolution, and fail-closed production-provider dispatch, governed ODRL policy bindings, and governed table soft delete/restore; production secret-store SDK resolver coverage beyond Vault remains pending |
 | 5 | Service can't activate real engines | **CLOSED** | `sail-local` / `typesec-local` / `grust-local` passthroughs now in `lakecat-service` |
-| 6 | Sail used as struct library, not planner | **STARTED** | `lakecat-sail/catalog-provider` now exposes a governed in-process Sail `CatalogProvider` over LakeCat namespaces/tables/commits, pointer-log-backed commit discovery, and stable Iceberg metadata-to-`TableStatus` conversion through an exported `sail-catalog-iceberg` helper; unsupported UNIQUE constraints are rejected instead of dropped; deeper planner fusion remains pending |
+| 6 | Sail used as struct library, not planner | **STARTED** | `lakecat-sail/catalog-provider` now exposes a governed in-process Sail `CatalogProvider` over LakeCat namespaces/tables/commits, pointer-log-backed commit discovery, stable Iceberg metadata-to-`TableStatus` conversion through an exported `sail-catalog-iceberg` helper, and Sail-owned Iceberg REST planning-result compatibility checks for scan/fetch output; unsupported UNIQUE constraints are rejected instead of dropped; deeper planner fusion remains pending |
 | 7 | Plan ↔ implementation drift | **PARTIAL** | architecture and OPUS working-plan docs now track the committed Turso CAS/object-write/outbox/OpenLineage/storage-profile and in-process Sail provider slices; remaining drift risk is around Grust taxonomy placement and remote credential issuance |
 | 8 | Grust graph is a placeholder taxonomy | **STARTED** | The reusable LakeCat graph envelope importer and catalog-event taxonomy helper now live in Grust; LakeCat's `grust-local` sink adapts outbox events into Grust-owned event/warehouse/namespace/table graph projections. Richer graph schemas and traversal remain Grust work. |
 | 9 | `list_namespaces` fabricates `default` | **CLOSED** | memory and Turso stores return an empty list until namespace creation |
@@ -625,8 +625,11 @@ only once **P2** gives it a governed path to run on.
   `get_table_commits` served from the metadata pointer log and basic Iceberg
   current-schema, nested types, partition fields, sort order, and identifier
   fields projected into Sail `TableStatus` through an exported
-  `sail-catalog-iceberg` helper, with unsupported `UNIQUE` constraints rejected
-  rather than silently dropped. The next step is continuing planner fusion.*
+  `sail-catalog-iceberg` helper. Sail also now exports Iceberg REST
+  planning-result helpers that LakeCat uses to validate its Sail-backed
+  scan-planning and fetch-scan-tasks standard payloads before adding LakeCat
+  extension fields, with unsupported `UNIQUE` constraints rejected rather than
+  silently dropped. The next step is continuing planner fusion.*
 - **P4 — typed Grust catalog graph + outbox**, then **OpenLineage + TypeDID**.
   (Milestones 7–8; Findings 8, 10.) *Started for catalog-level OpenLineage:
   outbox-drained namespace/table lineage events now project to OpenLineage-shaped

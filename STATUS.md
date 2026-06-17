@@ -5,12 +5,15 @@ Updated: 2026-06-17
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed and pushed LakeCat slice:
-  `f06d8e0 Reuse Sail Iceberg table status helper`.
+- Latest committed and pushed LakeCat slice before this continuation:
+  `f1028f6 Record Sail helper push status`.
 - Supporting Sail helper commit exists locally in `/Users/alexy/src/sail` as
   `68631016 Expose Iceberg table status conversion`. Pushing to
   `lakehq/sail` is blocked for this machine/account: HTTPS has no configured
   credential prompt, and SSH reports permission denied for `alexy`.
+- Additional supporting Sail helper commit exists locally as
+  `fdb3b657 Expose Iceberg planning result helpers`; it has the same upstream
+  push blocker until Sail repository credentials/permissions are resolved.
 - Cloud CI remains gated on the publish chain: wait for Grust to publish the
   needed crates, then for TypeSec to publish its matching crates, then rebuild
   LakeCat in GitHub Actions against published crates rather than pinning CI to
@@ -31,6 +34,9 @@ Updated: 2026-06-17
 - Updated LakeCat's in-process Sail `CatalogProvider` to use the Sail helper for
   stable Iceberg metadata and keep only LakeCat-specific properties plus the v4
   extension fallback local.
+- Added Sail-owned Iceberg REST planning-result helpers and updated LakeCat's
+  Sail-backed scan planning/fetch path to validate generated standard response
+  payloads through them before returning LakeCat extension fields.
 - Added a reusable LakeCat catalog-event graph taxonomy helper to Grust, covering
   catalog events, warehouses, namespaces, and tables with stable containment
   edges.
@@ -71,6 +77,16 @@ Updated: 2026-06-17
   `cargo test -p sail-catalog-iceberg test_get_table -- --nocapture`
 - LakeCat Sail catalog-provider tests:
   `cargo test -p lakecat-sail --features catalog-provider catalog_provider -- --nocapture`
+- Sail Iceberg planning helper tests:
+  `cargo test -p sail-catalog-iceberg planning -- --nocapture`
+- LakeCat Sail scan-planning tests:
+  `cargo test -p lakecat-sail --features sail-local validates_scan_with_sail_rest_models -- --nocapture`
+  and
+  `cargo test -p lakecat-sail --features sail-local expands_local_manifest_list_with_sail_io -- --nocapture`
+- LakeCat service Sail scan/fetch tests:
+  `cargo test -p lakecat-service --features sail-local fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens -- --nocapture`
+  and
+  `cargo test -p lakecat-service --features sail-local create_load_commit_and_plan_table_round_trips_through_integrations -- --nocapture`
 - LakeCat graph tests: `cargo test -p lakecat-graph --features grust-local`
 - LakeCat service outbox test:
   `cargo test -p lakecat-service --features grust-local outbox_drain_projects_table_events_to_sinks -- --nocapture`
