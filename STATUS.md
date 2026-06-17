@@ -6,10 +6,10 @@ Updated: 2026-06-16
 
 - LakeCat is on `master`.
 - Latest committed LakeCat slice before this continuation:
-  `bee2986 Project Iceberg identifier fields into Sail status`.
-- Current working slice adds nested Iceberg type projection to the in-process
-  Sail provider, preserving struct/list/map metadata as Arrow/DataFusion nested
-  types and allocating Iceberg nested field ids when Sail creates metadata.
+  `30f4221 Project nested Iceberg types into Sail status`.
+- Current working slice hardens Sail constraint handling in the in-process
+  Iceberg provider by rejecting unsupported `UNIQUE` constraints instead of
+  silently dropping them from generated metadata.
 - Graph-related implementation is still intentionally kept out of LakeCat unless
   it is a bounded outbox/projection concern. Reusable graph taxonomy and graph
   mechanics belong in `/Users/alexy/src/grust`.
@@ -18,13 +18,14 @@ Updated: 2026-06-16
 
 ## Completed In This Commit
 
-- `iceberg_type_to_datafusion` now parses Iceberg `struct`, `list`, and `map`
-  type objects instead of falling back to UTF-8.
-- `datafusion_type_to_iceberg` now emits nested Iceberg type objects with stable
-  nested field ids when creating tables through the Sail provider.
-- The provider test now round-trips a nested struct/list column while preserving
-  partition, sort, and primary-key projections.
-- A focused nested-type test covers Iceberg struct/list/map parsing.
+- `LakeCatCatalogProvider::create_table` validates table constraints before
+  building Iceberg metadata.
+- Sail `PrimaryKey` constraints continue to map to Iceberg
+  `identifier-field-ids`.
+- Sail `Unique` constraints now return `CatalogError::InvalidArgument`, avoiding
+  silent constraint loss.
+- A provider test covers the rejected-unique path and verifies the table is not
+  created.
 
 ## Verification Completed
 
@@ -36,6 +37,6 @@ Updated: 2026-06-16
 
 ## Next Recommended Slice
 
-Continue the Sail `TableStatus` conversion with remaining constraint forms and
-then upstream reusable Iceberg metadata conversion helpers into Sail once the
-sibling Sail WIP is stable.
+Upstream the Iceberg metadata-to-`TableStatus` conversion helpers into Sail once
+the sibling Sail WIP is stable, then use those helpers from LakeCat instead of
+maintaining a parallel conversion path.

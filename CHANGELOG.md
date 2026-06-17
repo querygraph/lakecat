@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Rejected unsupported Sail `UNIQUE` table constraints in the in-process Iceberg
+  provider instead of silently dropping them from generated LakeCat metadata.
 - Added nested Iceberg type projection to the in-process Sail provider,
   including struct/list/map parsing into Arrow/DataFusion types and nested field
   id allocation when Sail creates Iceberg metadata.

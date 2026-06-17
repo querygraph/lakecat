@@ -422,6 +422,7 @@ pub mod catalog_provider {
                     "LakeCat Sail table creation requires a location".to_string(),
                 )
             })?;
+            validate_constraints_supported(&options.constraints)?;
             let (fields, column_ids, last_column_id) =
                 iceberg_fields_from_columns(&options.columns);
             let identifier_field_ids = identifier_field_ids(&column_ids, &options.constraints);
@@ -1169,6 +1170,18 @@ pub mod catalog_provider {
             .collect()
     }
 
+    fn validate_constraints_supported(constraints: &[CatalogTableConstraint]) -> CatalogResult<()> {
+        if constraints
+            .iter()
+            .any(|constraint| matches!(constraint, CatalogTableConstraint::Unique { .. }))
+        {
+            return Err(CatalogError::InvalidArgument(
+                "LakeCat Iceberg table creation does not support UNIQUE constraints".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     fn iceberg_fields_from_columns(
         columns: &[sail_catalog::provider::CreateTableColumnOptions],
     ) -> (
@@ -1585,6 +1598,71 @@ pub mod catalog_provider {
             assert!(
                 loaded_sort.is_empty(),
                 "round-tripped unsorted table should have no sort fields"
+            );
+        }
+
+        #[tokio::test]
+        async fn unique_constraints_are_rejected_instead_of_dropped() {
+            let provider = LakeCatCatalogProvider::new(
+                "lakecat",
+                WarehouseName::new("local").unwrap(),
+                MemoryCatalogStore::new(),
+                DeferredSailCatalogEngine::new(),
+                AllowAllGovernanceEngine::new(),
+                Principal::anonymous(),
+            );
+            let namespace = SailNamespace::try_from(vec!["default"]).unwrap();
+            provider
+                .create_database(
+                    &namespace,
+                    CreateDatabaseOptions {
+                        comment: None,
+                        location: None,
+                        if_not_exists: true,
+                        properties: Vec::new(),
+                    },
+                )
+                .await
+                .unwrap();
+            let error = provider
+                .create_table(
+                    &namespace,
+                    "unique_events",
+                    CreateTableOptions {
+                        columns: vec![sail_catalog::provider::CreateTableColumnOptions {
+                            name: "event_id".to_string(),
+                            data_type: DataType::Utf8,
+                            nullable: false,
+                            comment: None,
+                            default: None,
+                            generated_always_as: None,
+                            identity: None,
+                        }],
+                        comment: None,
+                        constraints: vec![CatalogTableConstraint::Unique {
+                            name: Some("unique_event_id".to_string()),
+                            columns: vec!["event_id".to_string()],
+                        }],
+                        location: Some("file:///tmp/unique-events".to_string()),
+                        format: "iceberg".to_string(),
+                        partition_by: Vec::new(),
+                        sort_by: Vec::new(),
+                        bucket_by: None,
+                        if_not_exists: false,
+                        replace: false,
+                        properties: Vec::new(),
+                        is_external: true,
+                        is_write_precondition: false,
+                    },
+                )
+                .await
+                .expect_err("unique constraints should not be silently dropped");
+            assert!(matches!(error, CatalogError::InvalidArgument(_)));
+            assert!(
+                provider
+                    .get_table(&namespace, "unique_events")
+                    .await
+                    .is_err()
             );
         }
 
