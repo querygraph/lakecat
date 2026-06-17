@@ -96,7 +96,7 @@ crates/
   lakecat-lineage     OpenLineage, audit event hashes, replay/export
   lakecat-querygraph  Croissant/CDIF/OSI/ODRL/OpenLineage bootstrap projections
   lakecat-service     axum server, middleware, auth, metrics
-  lakecat-cli         admin, conformance, local demo, QueryGraph bootstrap
+  lakecat-cli         admin, conformance, local demo, QueryGraph bootstrap export
 ```
 
 The service should use `axum`, `tokio`, `serde`, `tower`, `tracing`,

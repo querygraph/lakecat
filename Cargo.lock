@@ -3597,6 +3597,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lakecat-cli"
+version = "0.1.0"
+dependencies = [
+ "lakecat-core",
+ "lakecat-querygraph",
+ "reqwest",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "lakecat-core"
 version = "0.1.0"
 dependencies = [

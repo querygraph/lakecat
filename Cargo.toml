@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/lakecat-api",
+    "crates/lakecat-cli",
     "crates/lakecat-core",
     "crates/lakecat-graph",
     "crates/lakecat-lineage",

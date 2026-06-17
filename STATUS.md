@@ -6,7 +6,7 @@ Updated: 2026-06-17
 
 - LakeCat is on `master`.
 - Latest committed LakeCat slice before this continuation:
-  `7b2a7cc Resolve Vault credential refs through TypeSec`.
+  `20d87a2 Add QueryGraph bootstrap manifest hashes`.
 - Cloud CI remains gated on the publish chain: wait for Grust to publish the
   needed crates, then for TypeSec to publish its matching crates, then rebuild
   LakeCat in GitHub Actions against published crates rather than pinning CI to
@@ -22,22 +22,24 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
-- QueryGraph bootstrap bundles now include a `manifest` with schema version,
-  producer, standards list, OpenLineage hash, and per-table hashes for the
-  Croissant, CDIF, OSI, and ODRL artifacts.
-- The manifest is a verification contract for QueryGraph importers. It does not
-  move graph taxonomy or traversal behavior into LakeCat.
+- Added a `lakecat-cli` crate with `bootstrap-export`, an operator command that
+  fetches `/querygraph/v1/bootstrap`, verifies the LakeCat manifest hashes, and
+  writes the bundle for QueryGraph import.
+- Moved reusable QueryGraph bootstrap manifest verification into
+  `lakecat-querygraph` so LakeCat tools and importers use one contract.
 
 ## Verification Completed
 
+- `cargo fmt --all -- --check` (passes with existing stable-rustfmt warnings for
+  nightly-only `imports_granularity` / `group_imports` config keys)
+- `cargo check -p lakecat-cli`
 - `cargo test -p lakecat-querygraph`
 - `cargo test --workspace`
 - `cargo test --workspace --all-features`
-- `cargo fmt --all -- --check` (passes with existing stable-rustfmt warnings for
-  nightly-only `imports_granularity` / `group_imports` config keys)
 - `git diff --check`
 
 ## Next Recommended Slice
 
-Teach QueryGraph's Rust importer to consume and verify the LakeCat bootstrap
-manifest, while keeping graph taxonomy and traversal behavior in Grust.
+Add a small `lakecat-cli` conformance/admin path for local Turso-backed demos, or
+continue tightening runtime config so the service can be started predictably with
+explicit warehouse, bind address, and integration choices.

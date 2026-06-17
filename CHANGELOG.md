@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a `lakecat-cli bootstrap-export` command that fetches
+  `/querygraph/v1/bootstrap`, verifies the manifest hashes with the reusable
+  `lakecat-querygraph` verifier, and writes the bundle for QueryGraph import.
 - Added a QueryGraph bootstrap manifest with stable per-table hashes for the
   Croissant, CDIF, OSI, ODRL, and OpenLineage artifacts LakeCat exports, giving
   QueryGraph an import-verification contract without moving graph logic into

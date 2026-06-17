@@ -57,6 +57,76 @@ impl QueryGraphBootstrap {
             open_lineage,
         })
     }
+
+    pub fn verify_manifest(&self) -> LakeCatResult<QueryGraphBootstrapVerification> {
+        if self.manifest.schema_version != "lakecat.querygraph.bootstrap.v1" {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "unsupported QueryGraph bootstrap manifest schema {}",
+                self.manifest.schema_version
+            )));
+        }
+        if self.manifest.table_artifacts.len() != self.tables.len() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap manifest lists {} table artifacts for {} tables",
+                self.manifest.table_artifacts.len(),
+                self.tables.len()
+            )));
+        }
+
+        let open_lineage_hash = content_hash_json(&self.open_lineage)?;
+        if self.manifest.open_lineage_hash != open_lineage_hash {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap OpenLineage hash mismatch: manifest {}, computed {}",
+                self.manifest.open_lineage_hash, open_lineage_hash
+            )));
+        }
+
+        for table in &self.tables {
+            let expected = self
+                .manifest
+                .table_artifacts
+                .iter()
+                .find(|artifact| artifact.stable_id == table.stable_id)
+                .ok_or_else(|| {
+                    lakecat_core::LakeCatError::InvalidArgument(format!(
+                        "QueryGraph bootstrap manifest is missing table {}",
+                        table.stable_id
+                    ))
+                })?;
+            expected.verify(table)?;
+        }
+
+        let bundle_hash = self.computed_bundle_hash()?;
+        if self.bundle_hash != bundle_hash {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap bundle hash mismatch: manifest {}, computed {}",
+                self.bundle_hash, bundle_hash
+            )));
+        }
+
+        Ok(QueryGraphBootstrapVerification {
+            warehouse: self.warehouse.as_str().to_string(),
+            table_count: self.tables.len(),
+            verified_tables: self
+                .tables
+                .iter()
+                .map(|table| table.stable_id.clone())
+                .collect(),
+            bundle_hash,
+            open_lineage_hash,
+            standards: self.manifest.standards.clone(),
+        })
+    }
+
+    fn computed_bundle_hash(&self) -> LakeCatResult<String> {
+        content_hash_json(&json!({
+            "warehouse": self.warehouse.as_str(),
+            "manifest": self.manifest,
+            "tables": self.tables,
+            "graph": self.graph,
+            "openLineage": self.open_lineage,
+        }))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -114,6 +184,25 @@ impl QueryGraphTableArtifactHashes {
             odrl_hash: content_hash_json(&table.odrl)?,
         })
     }
+
+    fn verify(&self, table: &QueryGraphTableProjection) -> LakeCatResult<()> {
+        verify_hash("Croissant", &self.croissant_hash, &table.croissant)?;
+        verify_hash("CDIF", &self.cdif_hash, &table.cdif)?;
+        verify_hash("OSI", &self.osi_hash, &table.osi)?;
+        verify_hash("ODRL", &self.odrl_hash, &table.odrl)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct QueryGraphBootstrapVerification {
+    pub warehouse: String,
+    pub table_count: usize,
+    pub verified_tables: Vec<String>,
+    pub bundle_hash: String,
+    pub open_lineage_hash: String,
+    pub standards: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -542,6 +631,16 @@ fn safe_sql_name(value: &str) -> String {
     }
 }
 
+fn verify_hash(label: &str, expected: &str, value: &Value) -> LakeCatResult<()> {
+    let computed = content_hash_json(value)?;
+    if expected != computed {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QueryGraph bootstrap {label} hash mismatch: manifest {expected}, computed {computed}"
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -624,5 +723,38 @@ mod tests {
                 .any(|edge| edge.label == "GOVERNED_BY")
         );
         assert_eq!(bundle.open_lineage["eventType"], "COMPLETE");
+        let verification = bundle.verify_manifest().unwrap();
+        assert_eq!(verification.table_count, 1);
+        assert_eq!(verification.bundle_hash, bundle.bundle_hash);
+    }
+
+    #[test]
+    fn verification_rejects_querygraph_bundle_hash_mismatch() {
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            Namespace::new(vec!["default".to_string()]).unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let table = TableRecord::new(
+            ident,
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            json!({
+                "format-version": 3,
+                "current-schema-id": 1,
+                "schemas": [{
+                    "schema-id": 1,
+                    "fields": [{"id": 1, "name": "event_id", "type": "string"}]
+                }]
+            }),
+            Principal::anonymous(),
+        );
+        let mut bundle =
+            QueryGraphBootstrap::from_tables(WarehouseName::new("local").unwrap(), vec![table])
+                .unwrap();
+        bundle.bundle_hash = "sha256:bad".to_string();
+
+        let err = bundle.verify_manifest().unwrap_err();
+        assert!(err.to_string().contains("bundle hash mismatch"));
     }
 }
