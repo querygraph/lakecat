@@ -552,7 +552,17 @@ attestation into LakeCat authorization context. The remaining P1/P2 work is
 broader production secret-store SDK integration, production TypeDID
 resolver/key configuration, and broader operator APIs.
 
-### Latest implementation slice — Grust Cypher and TypeSec 0.8 reconciliation
+### Latest implementation slice — QueryGraph OSI boundary cleanup
+
+**Status: started for the bootstrap boundary.** LakeCat's QueryGraph bundle now
+emits an `lakecat.querygraph.osi-handoff.v1` artifact instead of an
+authoritative OSI semantic model. The handoff carries stable Iceberg table and
+field anchors, points imports at governed Sail planning through LakeCat, and
+states that QueryGraph owns metrics, dimensions, joins, ontology claims, and
+business semantic names. The manifest still hashes the handoff so QueryGraph can
+verify import integrity without LakeCat becoming the semantic-model owner.
+
+### Previous implementation slice — Grust Cypher and TypeSec 0.8 reconciliation
 
 **Status: started for the local dependency baseline.** LakeCat now targets
 TypeSec 0.8.0 and enables Grust's `cypher` facade feature as part of
@@ -662,8 +672,10 @@ only once **P2** gives it a governed path to run on.
 - **P5 — QueryGraph end-to-end.** `querygraph import-lakecat`; QGLake "Resilience
   Desk" as the acceptance test. (Milestone 9.) *Started with a LakeCat
   bootstrap manifest that gives QueryGraph stable hashes for Croissant, CDIF,
-  OSI, ODRL, and OpenLineage artifacts before graph loading or policy
-  verification.*
+  an OSI handoff, ODRL, and OpenLineage artifacts before graph loading or policy
+  verification. LakeCat now avoids publishing authoritative OSI metrics,
+  dimensions, joins, ontology claims, or business semantic names; those belong
+  in QueryGraph.*
 - **Deferred — Tier-0 pruning depth and typed v4.** Good but diminishing-returns
   until P1–P3 land; HMAC-signed plan-task tokens are now implemented for new
   Sail scan-planning tokens. (Milestone 10; Finding 12.)

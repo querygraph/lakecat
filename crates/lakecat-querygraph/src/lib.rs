@@ -151,7 +151,7 @@ impl QueryGraphBundleManifest {
                 "Iceberg REST".to_string(),
                 "Croissant".to_string(),
                 "CDIF".to_string(),
-                "OSI".to_string(),
+                "OSI handoff".to_string(),
                 "ODRL".to_string(),
                 "OpenLineage".to_string(),
             ],
@@ -227,7 +227,7 @@ impl QueryGraphTableProjection {
         let odrl = odrl_policy(&stable_id);
         let croissant = croissant_dataset(&table, &stable_id, &fields);
         let cdif = cdif_resource(&table, &stable_id, &fields, odrl.clone());
-        let osi = osi_document(&table, &fields);
+        let osi = osi_handoff(&table, &stable_id, &fields);
         Self {
             ident: table.ident,
             stable_id,
@@ -431,42 +431,46 @@ fn cdif_resource(
     })
 }
 
-fn osi_document(table: &TableRecord, fields: &[IcebergFieldProjection]) -> Value {
+fn osi_handoff(table: &TableRecord, stable_id: &str, fields: &[IcebergFieldProjection]) -> Value {
     json!({
-        "version": "0.2.0.dev0",
-        "semantic_model": {
-            "name": safe_sql_name(&format!("lakecat_{}_{}", table.ident.namespace.path(), table.ident.name.as_str())),
-            "description": format!("Open Semantic Interchange model for {}.", table.ident.stable_id()),
-            "ai_context": "Use Sail planning through LakeCat and obey TypeSec/ODRL rights before any agent reads table data.",
-            "datasets": [{
-                "name": safe_sql_name(table.ident.name.as_str()),
-                "source": format!("sail.{}.{}", safe_sql_name(&table.ident.namespace.path()), safe_sql_name(table.ident.name.as_str())),
-                "description": format!("Governed Iceberg table at {}.", table.location),
-                "ai_context": "This dataset is backed by Iceberg metadata and planned through Sail.",
-                "fields": fields.iter().map(|field| {
-                    json!({
-                        "name": safe_sql_name(&field.name),
-                        "description": field.description,
-                        "semantic_type": field.semantic_type,
-                        "expression": {
-                            "dialects": [{
-                                "dialect": "SAIL_SQL",
-                                "expression": field.name
-                            }]
-                        }
-                    })
-                }).collect::<Vec<_>>()
-            }],
-            "metrics": [],
-            "ontology_terms": fields
-                .iter()
-                .filter_map(|field| field.semantic_type.as_ref())
-                .map(|term| json!({
-                    "id": term,
-                    "label": term,
-                    "source": "iceberg-schema"
-                }))
-                .collect::<Vec<_>>()
+        "schemaVersion": "lakecat.querygraph.osi-handoff.v1",
+        "standard": "Open Semantic Interchange",
+        "ownership": {
+            "authoritativeSystem": "QueryGraph",
+            "lakecatRole": "catalog-discovery-handoff"
+        },
+        "dataset": {
+            "stableId": stable_id,
+            "name": safe_sql_name(table.ident.name.as_str()),
+            "warehouse": table.ident.warehouse.as_str(),
+            "namespace": table.ident.namespace.path(),
+            "location": table.location,
+            "metadataLocation": table.metadata_location,
+            "source": {
+                "type": "iceberg-rest",
+                "catalog": "lakecat",
+                "governedPlanner": "sail",
+                "table": table.ident.stable_id()
+            },
+            "fields": fields.iter().map(|field| {
+                json!({
+                    "id": field.id,
+                    "name": field.name,
+                    "dataType": field.data_type,
+                    "required": field.required,
+                    "description": field.description,
+                    "semanticType": field.semantic_type
+                })
+            }).collect::<Vec<_>>()
+        },
+        "policy": {
+            "odrlPolicyId": format!("{stable_id}#odrl"),
+            "governance": "TypeSec capabilities and ODRL constraints are enforced by LakeCat before governed Sail planning."
+        },
+        "queryGraphImport": {
+            "semanticModelStatus": "delegated",
+            "expectedOwner": "QueryGraph",
+            "notes": "LakeCat does not publish metrics, dimensions, measures, joins, or business ontology claims as authoritative OSI semantics."
         }
     })
 }
@@ -722,6 +726,19 @@ mod tests {
                 .iter()
                 .any(|edge| edge.label == "GOVERNED_BY")
         );
+        assert_eq!(
+            bundle.tables[0].osi["schemaVersion"],
+            "lakecat.querygraph.osi-handoff.v1"
+        );
+        assert_eq!(
+            bundle.tables[0].osi["ownership"]["authoritativeSystem"],
+            "QueryGraph"
+        );
+        assert_eq!(
+            bundle.tables[0].osi["queryGraphImport"]["semanticModelStatus"],
+            "delegated"
+        );
+        assert!(bundle.tables[0].osi.get("semantic_model").is_none());
         assert_eq!(bundle.open_lineage["eventType"], "COMPLETE");
         let verification = bundle.verify_manifest().unwrap();
         assert_eq!(verification.table_count, 1);

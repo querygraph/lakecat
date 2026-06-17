@@ -5,10 +5,19 @@ Updated: 2026-06-17
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed and pushed LakeCat implementation slice:
-  `c5db54c Install protoc in manual CI`.
-- Current working slice: keep fixing the manual-only cloud gate while automatic
-  push/PR CI stays disabled. LakeCat now carries a temporary CI bridge under
+- Latest committed and pushed LakeCat implementation slice before the current
+  working changes: `22827ee Use absolute Sail patch paths in manual CI`.
+- Current working slice: QueryGraph OSI boundary cleanup. LakeCat's bootstrap
+  bundle now emits an `lakecat.querygraph.osi-handoff.v1` artifact with stable
+  dataset/field anchors and governed Sail/LakeCat source metadata, while leaving
+  authoritative OSI metrics, dimensions, joins, ontology claims, and business
+  semantic names to QueryGraph.
+- Manual cloud gate status: run `27722995692` was started only after local
+  workflow reproduction. It is still in progress as of this update; the Sail
+  patch bridge step is passing and completed rows include `typesec-local
+  security`, `grust-local graph`, `grust cypher boundary`, and `turso-local
+  store`. Automatic push/PR CI remains disabled.
+- LakeCat carries a temporary CI bridge under
   `ci/sail-patches/` that applies local Sail helper commits `68631016` and
   `fdb3b657`, plus the generated-model module export LakeCat service tests use,
   to the `lakehq/sail@main` checkout before building. The bridge now supplies
@@ -43,6 +52,14 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
+- Changed the QueryGraph bootstrap OSI artifact from a LakeCat-authored semantic
+  model into a QueryGraph-owned OSI handoff. The handoff keeps the manifest hash
+  contract and stable field anchors, but no longer publishes LakeCat-owned OSI
+  metrics, dimensions, joins, ontology claims, business semantic names, or SQL
+  field expressions.
+- Updated architecture and OPUS working-plan docs so LakeCat is the catalog
+  discovery substrate for OSI import while QueryGraph owns rich semantic model
+  authorship.
 - Fixed the Sail patch bridge to pass `git am` committer identity in GitHub
   Actions after run `27722483267` failed before tests with "Committer identity
   unknown".
@@ -127,6 +144,11 @@ Updated: 2026-06-17
   `cargo test -p lakecat-graph --features grust-local grust_cypher_can_query_lakecat_catalog_projection_boundary -- --nocapture`,
   `cargo test -p lakecat-store --features turso-local`, and
   `cargo test --workspace --all-features`.
+- QueryGraph OSI handoff focused checks passed:
+  `cargo fmt -p lakecat-querygraph -- --check`,
+  `cargo test -p lakecat-querygraph`,
+  `cargo test -p lakecat-service querygraph_bootstrap_projects_catalog_tables`,
+  and `git diff --check`.
 - LakeCat focused Sail-local service test passed:
   `cargo test -p lakecat-service --features sail-local fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens -- --nocapture`.
 - Manual GitHub Actions run `27720360961` after pushing TypeSec 0.8 reached the

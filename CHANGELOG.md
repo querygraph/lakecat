@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Changed the QueryGraph bootstrap OSI artifact from a LakeCat-authored semantic
+  model into a stable OSI handoff: LakeCat now publishes dataset/field anchors
+  and governed Sail/LakeCat source metadata while leaving metrics, dimensions,
+  joins, ontology claims, and authoritative semantic names to QueryGraph.
 - Fixed the temporary Sail patch bridge to pass absolute patch paths to
   `git am` after `git -C sail` changes directories.
 - Fixed the temporary Sail patch bridge path for the GitHub Actions workspace
