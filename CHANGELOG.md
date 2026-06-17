@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a QueryGraph bootstrap manifest with stable per-table hashes for the
+  Croissant, CDIF, OSI, ODRL, and OpenLineage artifacts LakeCat exports, giving
+  QueryGraph an import-verification contract without moving graph logic into
+  LakeCat.
 - Added the first production external secret-store backend: TypeSec-authorized
   `vault://` credential refs can now resolve through Vault HTTP using
   `LAKECAT_VAULT_ADDR` / `LAKECAT_VAULT_TOKEN` (or `VAULT_ADDR` /

@@ -635,7 +635,10 @@ only once **P2** gives it a governed path to run on.
   captured on receipts, but verification/attestation and typed Grust graph
   taxonomy remain pending.*
 - **P5 — QueryGraph end-to-end.** `querygraph import-lakecat`; QGLake "Resilience
-  Desk" as the acceptance test. (Milestone 9.)
+  Desk" as the acceptance test. (Milestone 9.) *Started with a LakeCat
+  bootstrap manifest that gives QueryGraph stable hashes for Croissant, CDIF,
+  OSI, ODRL, and OpenLineage artifacts before graph loading or policy
+  verification.*
 - **Deferred — Tier-0 pruning depth and typed v4.** Good but diminishing-returns
   until P1–P3 land; HMAC-signed plan-task tokens are now implemented for new
   Sail scan-planning tokens. (Milestone 10; Finding 12.)

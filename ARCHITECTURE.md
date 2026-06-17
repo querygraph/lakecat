@@ -448,6 +448,11 @@ querygraph import-lakecat --catalog http://localhost:8181/catalog \
   --warehouse local --build-bundle --load-graph --verify-policy
 ```
 
+Current LakeCat bootstrap bundles include a `manifest` that hashes each emitted
+Croissant, CDIF, OSI, ODRL, and OpenLineage artifact. QueryGraph importers should
+verify those hashes before loading the semantic bundle or asking Grust to ingest
+catalog graph projections.
+
 ## Lakekeeper Lessons To Adopt
 
 - Separate standards-compatible catalog API from management API.

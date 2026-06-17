@@ -10,6 +10,7 @@ pub struct QueryGraphBootstrap {
     pub warehouse: WarehouseName,
     pub generated_at: DateTime<Utc>,
     pub bundle_hash: String,
+    pub manifest: QueryGraphBundleManifest,
     pub tables: Vec<QueryGraphTableProjection>,
     pub graph: QueryGraphCatalogGraph,
     pub open_lineage: Value,
@@ -27,8 +28,10 @@ impl QueryGraphBootstrap {
             .collect::<Vec<_>>();
         let graph = QueryGraphCatalogGraph::from_tables(&tables);
         let open_lineage = bootstrap_open_lineage(&warehouse, &tables, generated_at);
+        let manifest = QueryGraphBundleManifest::from_parts(&tables, &open_lineage)?;
         let bundle_payload = json!({
             "warehouse": warehouse.as_str(),
+            "manifest": manifest,
             "tables": tables,
             "graph": graph,
             "openLineage": open_lineage,
@@ -48,9 +51,67 @@ impl QueryGraphBootstrap {
             warehouse,
             generated_at,
             bundle_hash,
+            manifest,
             tables,
             graph,
             open_lineage,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct QueryGraphBundleManifest {
+    pub schema_version: String,
+    pub producer: String,
+    pub standards: Vec<String>,
+    pub table_artifacts: Vec<QueryGraphTableArtifactHashes>,
+    pub open_lineage_hash: String,
+}
+
+impl QueryGraphBundleManifest {
+    fn from_parts(
+        tables: &[QueryGraphTableProjection],
+        open_lineage: &Value,
+    ) -> LakeCatResult<Self> {
+        Ok(Self {
+            schema_version: "lakecat.querygraph.bootstrap.v1".to_string(),
+            producer: "https://querygraph.ai/lakecat".to_string(),
+            standards: vec![
+                "Iceberg REST".to_string(),
+                "Croissant".to_string(),
+                "CDIF".to_string(),
+                "OSI".to_string(),
+                "ODRL".to_string(),
+                "OpenLineage".to_string(),
+            ],
+            table_artifacts: tables
+                .iter()
+                .map(QueryGraphTableArtifactHashes::from_table)
+                .collect::<LakeCatResult<Vec<_>>>()?,
+            open_lineage_hash: content_hash_json(open_lineage)?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct QueryGraphTableArtifactHashes {
+    pub stable_id: String,
+    pub croissant_hash: String,
+    pub cdif_hash: String,
+    pub osi_hash: String,
+    pub odrl_hash: String,
+}
+
+impl QueryGraphTableArtifactHashes {
+    fn from_table(table: &QueryGraphTableProjection) -> LakeCatResult<Self> {
+        Ok(Self {
+            stable_id: table.stable_id.clone(),
+            croissant_hash: content_hash_json(&table.croissant)?,
+            cdif_hash: content_hash_json(&table.cdif)?,
+            osi_hash: content_hash_json(&table.osi)?,
+            odrl_hash: content_hash_json(&table.odrl)?,
         })
     }
 }
@@ -521,6 +582,36 @@ mod tests {
 
         assert_eq!(bundle.tables.len(), 1);
         assert_eq!(bundle.tables[0].format_version, Some(3));
+        assert_eq!(
+            bundle.manifest.schema_version,
+            "lakecat.querygraph.bootstrap.v1"
+        );
+        assert_eq!(bundle.manifest.table_artifacts.len(), 1);
+        assert_eq!(
+            bundle.manifest.table_artifacts[0].stable_id,
+            bundle.tables[0].stable_id
+        );
+        assert_eq!(
+            bundle.manifest.table_artifacts[0].croissant_hash,
+            content_hash_json(&bundle.tables[0].croissant).unwrap()
+        );
+        assert_eq!(
+            bundle.manifest.table_artifacts[0].cdif_hash,
+            content_hash_json(&bundle.tables[0].cdif).unwrap()
+        );
+        assert_eq!(
+            bundle.manifest.table_artifacts[0].osi_hash,
+            content_hash_json(&bundle.tables[0].osi).unwrap()
+        );
+        assert_eq!(
+            bundle.manifest.table_artifacts[0].odrl_hash,
+            content_hash_json(&bundle.tables[0].odrl).unwrap()
+        );
+        assert_eq!(
+            bundle.manifest.open_lineage_hash,
+            content_hash_json(&bundle.open_lineage).unwrap()
+        );
+        assert!(bundle.manifest.standards.iter().any(|item| item == "CDIF"));
         assert_eq!(
             bundle.tables[0].cdif["dct:accessRights"]["odrl:policy"]["@type"],
             "odrl:Policy"
