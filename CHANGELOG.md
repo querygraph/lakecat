@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added `GOAL.md` as the durable working goal for continuing LakeCat from the
+  current design documents and repository state.
 - Updated `STATUS.md` after pushing the Grust Cypher and TypeSec 0.8
   reconciliation slice.
 - Recorded the Grust Cypher and TypeSec 0.8 reconciliation commit in
