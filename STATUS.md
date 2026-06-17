@@ -6,7 +6,7 @@ Updated: 2026-06-17
 
 - LakeCat is on `master`.
 - Latest committed LakeCat slice before this continuation:
-  `8861183 Record Grust graph import handoff`.
+  `2b5bdc9 Use Grust catalog event graph projection`.
 - Cloud CI remains gated on the publish chain: wait for Grust to publish the
   needed crates, then for TypeSec to publish its matching crates, then rebuild
   LakeCat in GitHub Actions against published crates rather than pinning CI to
@@ -22,6 +22,11 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
+- Exported Sail's Iceberg REST `LoadTableResult` to `TableStatus` conversion as
+  a reusable `sail-catalog-iceberg` helper.
+- Updated LakeCat's in-process Sail `CatalogProvider` to use the Sail helper for
+  stable Iceberg metadata and keep only LakeCat-specific properties plus the v4
+  extension fallback local.
 - Added a reusable LakeCat catalog-event graph taxonomy helper to Grust, covering
   catalog events, warehouses, namespaces, and tables with stable containment
   edges.
@@ -58,6 +63,10 @@ Updated: 2026-06-17
   `cargo run -- lakecat-import --bundle /Users/alexy/src/lakecat/target/qglake-live/lakecat-bootstrap.json --output .querygraph/lakecat/import-plan.json`
   in `/Users/alexy/src/querygraph/qg-rust`
 - Grust facade tests: `cargo test -p grust-graph`
+- Sail Iceberg catalog test:
+  `cargo test -p sail-catalog-iceberg test_get_table -- --nocapture`
+- LakeCat Sail catalog-provider tests:
+  `cargo test -p lakecat-sail --features catalog-provider catalog_provider -- --nocapture`
 - LakeCat graph tests: `cargo test -p lakecat-graph --features grust-local`
 - LakeCat service outbox test:
   `cargo test -p lakecat-service --features grust-local outbox_drain_projects_table_events_to_sinks -- --nocapture`

@@ -245,6 +245,7 @@ pub mod catalog_provider {
         DropViewOptions, GetTableCommitsOptions, GetTableCommitsResponse,
         Namespace as SailNamespace, TableCommitInfo,
     };
+    use sail_catalog_iceberg::{LoadTableResult, load_table_result_to_status};
     use sail_common_datafusion::catalog::{
         CatalogPartitionField, CatalogTableConstraint, CatalogTableSort, DatabaseStatus,
         PartitionTransform, TableColumnStatus, TableKind, TableStatus,
@@ -703,6 +704,22 @@ pub mod catalog_provider {
     }
 
     fn table_status(catalog: &str, record: &TableRecord) -> TableStatus {
+        if let Some(mut status) = sail_table_status(catalog, record) {
+            if let TableKind::Table {
+                location,
+                properties,
+                ..
+            } = &mut status.kind
+            {
+                if location.is_none() {
+                    *location = Some(record.location.clone());
+                }
+                properties.push(("lakecat:table-id".to_string(), record.ident.stable_id()));
+                properties.push(("lakecat:version".to_string(), record.version.to_string()));
+            }
+            return status;
+        }
+
         TableStatus {
             catalog: Some(catalog.to_string()),
             database: record.ident.namespace.parts().to_vec(),
@@ -723,6 +740,23 @@ pub mod catalog_provider {
                 is_external: true,
             },
         }
+    }
+
+    fn sail_table_status(catalog: &str, record: &TableRecord) -> Option<TableStatus> {
+        let metadata = serde_json::from_value(record.metadata.clone()).ok()?;
+        let database = SailNamespace::try_from(record.ident.namespace.parts().to_vec()).ok()?;
+        load_table_result_to_status(
+            catalog,
+            record.ident.name.as_str(),
+            &database,
+            LoadTableResult {
+                metadata_location: record.metadata_location.clone(),
+                metadata: Box::new(metadata),
+                config: None,
+                storage_credentials: None,
+            },
+        )
+        .ok()
     }
 
     fn table_columns(record: &TableRecord) -> Vec<TableColumnStatus> {

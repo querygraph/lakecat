@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reused Sail's exported Iceberg `LoadTableResult` to `TableStatus` helper in
+  the in-process LakeCat `CatalogProvider`, leaving only LakeCat-specific
+  stable-id/version properties and v4 extension fallback logic local.
 - Switched the `grust-local` catalog graph sink to Grust's LakeCat
   catalog-event projection helper, preserving outbox event ids as graph event
   vertices and keeping graph taxonomy out of LakeCat.

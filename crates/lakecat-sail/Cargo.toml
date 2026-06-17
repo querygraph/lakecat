@@ -12,6 +12,7 @@ catalog-provider = [
     "dep:lakecat-security",
     "dep:lakecat-store",
     "dep:sail-catalog",
+    "dep:sail-catalog-iceberg",
     "dep:sail-common-datafusion",
 ]
 sail-local = ["dep:hex", "dep:hmac", "dep:object_store", "dep:sail-catalog-iceberg", "dep:sail-iceberg", "dep:sha2", "dep:url", "dep:uuid"]
