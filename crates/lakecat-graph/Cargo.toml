@@ -12,7 +12,10 @@ grust-local = ["dep:grust-graph"]
 [dependencies]
 async-trait = { workspace = true }
 chrono = { workspace = true }
-grust-graph = { workspace = true, optional = true, features = ["memory"] }
+grust-graph = { workspace = true, optional = true, features = ["cypher", "memory"] }
 lakecat-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Updated LakeCat's local TypeSec baseline to `typesec` 0.8.0 and enabled
+  Grust's `cypher` facade feature for `grust-local`, with a boundary test that
+  runs a Grust Cypher mutation over LakeCat's catalog graph projection without
+  adding graph query logic to LakeCat.
 - Clarified `STATUS.md` to track the latest pushed implementation slice instead
   of making status-only commits self-referential.
 - Updated `STATUS.md` after pushing the TypeDID verifier slice to LakeCat and

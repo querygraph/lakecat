@@ -2646,10 +2646,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "grust-cypher"
+version = "0.9.0"
+dependencies = [
+ "async-trait",
+ "grust-core",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "grust-graph"
 version = "0.9.0"
 dependencies = [
  "grust-core",
+ "grust-cypher",
  "grust-memory",
  "serde_json",
 ]
@@ -3752,6 +3764,7 @@ dependencies = [
  "lakecat-core",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -7305,7 +7318,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "typesec"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "typesec-core",
  "typesec-integrations",
@@ -7313,7 +7326,7 @@ dependencies = [
 
 [[package]]
 name = "typesec-core"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "chrono",
  "serde",
@@ -7324,7 +7337,7 @@ dependencies = [
 
 [[package]]
 name = "typesec-integrations"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "chacha20poly1305",
  "chrono",

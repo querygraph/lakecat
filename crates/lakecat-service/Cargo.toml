@@ -25,7 +25,7 @@ lakecat-sail = { workspace = true }
 lakecat-security = { workspace = true }
 lakecat-store = { workspace = true }
 chrono = { workspace = true }
-grust-graph = { workspace = true, optional = true, features = ["memory"] }
+grust-graph = { workspace = true, optional = true, features = ["cypher", "memory"] }
 object_store = { workspace = true }
 reqwest = { workspace = true, optional = true }
 serde = { workspace = true }

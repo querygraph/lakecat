@@ -503,8 +503,8 @@ append a dated entry per slice; keep the finding-status table current.
 | 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, outbox, object-write-aware commits, outbox delivery, typed inferred storage profiles, governed managed warehouse storage profiles with external secret references, a service credential-issuer hook, a TypeSec-gated secret-ref issuer path with environment-backed resolution for local runs, Vault resolution, and fail-closed production-provider dispatch, governed ODRL policy bindings, and governed table soft delete/restore; production secret-store SDK resolver coverage beyond Vault remains pending |
 | 5 | Service can't activate real engines | **CLOSED** | `sail-local` / `typesec-local` / `grust-local` passthroughs now in `lakecat-service` |
 | 6 | Sail used as struct library, not planner | **STARTED** | `lakecat-sail/catalog-provider` now exposes a governed in-process Sail `CatalogProvider` over LakeCat namespaces/tables/commits, pointer-log-backed commit discovery, stable Iceberg metadata-to-`TableStatus` conversion through an exported `sail-catalog-iceberg` helper, and Sail-owned Iceberg REST planning-result compatibility checks for scan/fetch output; unsupported UNIQUE constraints are rejected instead of dropped; deeper planner fusion remains pending |
-| 7 | Plan ↔ implementation drift | **PARTIAL** | architecture and OPUS working-plan docs now track the committed Turso CAS/object-write/outbox/OpenLineage/storage-profile and in-process Sail provider slices; remaining drift risk is around Grust taxonomy placement and remote credential issuance |
-| 8 | Grust graph is a placeholder taxonomy | **STARTED** | The reusable LakeCat graph envelope importer and catalog-event taxonomy helper now live in Grust; LakeCat's `grust-local` sink adapts outbox events into Grust-owned event/warehouse/namespace/table graph projections. Richer graph schemas and traversal remain Grust work. |
+| 7 | Plan ↔ implementation drift | **PARTIAL** | architecture and OPUS working-plan docs now track the committed Turso CAS/object-write/outbox/OpenLineage/storage-profile, in-process Sail provider, TypeSec 0.8.0, and Grust 0.9.0 + Cypher slices; remaining drift risk is around production credential issuance and QueryGraph end-to-end acceptance |
+| 8 | Grust graph is a placeholder taxonomy | **STARTED** | The reusable LakeCat graph envelope importer and catalog-event taxonomy helper now live in Grust; LakeCat's `grust-local` sink adapts outbox events into Grust-owned event/warehouse/namespace/table graph projections, and a boundary test verifies Grust Cypher can consume the projection. Richer graph schemas, traversal, and query behavior remain Grust work. |
 | 9 | `list_namespaces` fabricates `default` | **CLOSED** | memory and Turso stores return an empty list until namespace creation |
 | 10 | Side effects coupled to request path | **CLOSED** | Turso outbox and service drain/projection API exist; catalog handlers record durable events and no longer emit graph/lineage inline |
 | 11 | Plan tokens unauthenticated / leak paths | **CLOSED** | new structured Sail plan-task tokens are table-bound, path re-validated, and HMAC-signed; legacy unsigned structured tokens remain decodable for compatibility |
@@ -551,6 +551,17 @@ protected envelopes and pass only the verified DID subject plus an audit-safe
 attestation into LakeCat authorization context. The remaining P1/P2 work is
 broader production secret-store SDK integration, production TypeDID
 resolver/key configuration, and broader operator APIs.
+
+### Latest implementation slice — Grust Cypher and TypeSec 0.8 reconciliation
+
+**Status: started for the local dependency baseline.** LakeCat now targets
+TypeSec 0.8.0 and enables Grust's `cypher` facade feature as part of
+`grust-local`. The LakeCat graph crate still owns only the catalog-facing sink
+boundary and event adapter; it does not parse Cypher or implement traversal. A
+new boundary test writes the Grust-owned LakeCat catalog projection to
+`MemoryGraphStore` and runs a Grust Cypher mutation/return over the table node,
+proving QueryGraph can build on the Grust graph surface without LakeCat becoming
+a graph engine.
 
 ### Reviewer note — endorse the Turso pivot, with a gate (2026-06-16)
 
@@ -643,9 +654,11 @@ only once **P2** gives it a governed path to run on.
   captured on receipts. Grust now owns reusable LakeCat graph envelope ingestion
   and a catalog-event taxonomy helper for event, warehouse, namespace, and table
   projections; LakeCat's `grust-local` sink only adapts outbox events into that
-  helper. TypeDID verification/attestation is started through TypeSec's
-  audit-safe attestation API; richer typed graph schema work remains Grust
-  work.*
+  helper. LakeCat now enables Grust's `cypher` facade feature under
+  `grust-local` and verifies the catalog projection can be consumed through
+  Grust Cypher. TypeDID verification/attestation is started through TypeSec's
+  audit-safe attestation API; richer typed graph schema, traversal, and query
+  behavior remain Grust work.*
 - **P5 — QueryGraph end-to-end.** `querygraph import-lakecat`; QGLake "Resilience
   Desk" as the acceptance test. (Milestone 9.) *Started with a LakeCat
   bootstrap manifest that gives QueryGraph stable hashes for Croissant, CDIF,

@@ -12,6 +12,9 @@ Updated: 2026-06-17
   `d720dc4 Record pushed TypeDID verifier status`.
 - Supporting TypeSec attestation commit exists locally in `/Users/alexy/src/typesec`
   and is pushed as `0ec164a Add TypeDID verification attestations`.
+- Current local dependency reconciliation is in progress: LakeCat now targets
+  `typesec` 0.8.0 and Grust 0.9.0 with the `cypher` facade feature enabled for
+  `grust-local`.
 - Supporting Sail helper commit exists locally in `/Users/alexy/src/sail` as
   `68631016 Expose Iceberg table status conversion`. Pushing to
   `lakehq/sail` is blocked for this machine/account: HTTPS has no configured
@@ -19,13 +22,9 @@ Updated: 2026-06-17
 - Additional supporting Sail helper commit exists locally as
   `fdb3b657 Expose Iceberg planning result helpers`; it has the same upstream
   push blocker until Sail repository credentials/permissions are resolved.
-- Cloud CI remains gated on the publish chain: wait for Grust to publish the
-  needed crates, then for TypeSec to publish its matching crates, then rebuild
-  LakeCat in GitHub Actions against published crates rather than pinning CI to
-  unpublished sibling checkout states.
-- Automatic GitHub Actions CI is disabled while that publish gate is open. The
-  workflow is manual-only via `workflow_dispatch` until the cloud dependency
-  graph is locally reproduced and known to work.
+- Cloud CI remains manual-only. The local dependency chain is being reconciled
+  first against Grust 0.9.0 (`grust-cypher` included) and TypeSec 0.8.0; automatic
+  GitHub Actions should stay disabled until the same graph is green in the cloud.
 - Graph-related implementation is still intentionally kept out of LakeCat unless
   it is a bounded outbox/projection concern. Reusable graph taxonomy and graph
   mechanics belong in `/Users/alexy/src/grust`.
@@ -34,6 +33,11 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
+- Bumped the LakeCat TypeSec path dependency to 0.8.0.
+- Enabled Grust's `cypher` facade feature for `grust-local` graph integration.
+- Added a LakeCat graph boundary test that writes the Grust-owned catalog graph
+  projection to `MemoryGraphStore` and verifies Grust Cypher can mutate/query it
+  without LakeCat owning Cypher parsing, traversal, or graph execution.
 - Added a `typesec-local` TypeDID verifier seam in LakeCat service that asks
   TypeSec to open and verify protected TypeDID envelopes.
 - Authorization now upgrades anonymous or matching supplied request identity to
@@ -69,6 +73,16 @@ Updated: 2026-06-17
 
 ## Verification Completed
 
+- `cargo fmt -p lakecat-graph -p lakecat-service -- --check`
+- `cargo test -p lakecat-graph --features grust-local grust_cypher_can_query_lakecat_catalog_projection_boundary -- --nocapture`
+- `cargo test -p lakecat-graph --features grust-local -- --nocapture`
+- `cargo test --workspace`
+- `cargo test -p lakecat-service --features typesec-local -- --nocapture`
+- `cargo test --workspace --all-features`
+- Grust focused check in `/Users/alexy/src/grust`:
+  `cargo test -p grust-graph --features cypher,memory lakecat -- --nocapture`
+- TypeSec focused check in `/Users/alexy/src/typesec`:
+  `cargo test -p typesec-integrations typedid_verified_message_exposes_audit_safe_attestation -- --nocapture`
 - `cargo fmt -p lakecat-service -- --check`
 - `cargo fmt -p typesec-integrations -p typesec -- --check`
 - `cargo test -p typesec-integrations typedid_verified_message_exposes_audit_safe_attestation -- --nocapture`
@@ -118,6 +132,7 @@ Updated: 2026-06-17
 
 ## Next Recommended Slice
 
-Wait for the Grust and TypeSec publish chain, then rebuild LakeCat cloud CI
-against the published crates before re-enabling automatic GitHub Actions
-triggers.
+Finish the local dependency reconciliation by running the default and
+all-feature LakeCat gates against Grust 0.9.0 plus TypeSec 0.8.0, then update the
+cloud workflow only after the same dependency graph is known to build outside the
+local sibling checkout.

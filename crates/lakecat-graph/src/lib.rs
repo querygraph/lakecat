@@ -178,7 +178,10 @@ pub mod grust_integration {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use grust_graph::GraphIndex;
+        use grust_graph::{
+            CypherMutationOptions, GraphIndex, GraphStore, MemoryGraphStore, Value,
+            execute_cypher_mutation_returning_with_options_on_store,
+        };
         use lakecat_core::{Namespace, TableIdent, TableName, WarehouseName};
 
         #[test]
@@ -204,6 +207,41 @@ pub mod grust_integration {
                     .any(|edge| edge.label.as_str() == "AFFECTS_TABLE")
             );
             GraphIndex::new(&graph).expect("event graph should be valid");
+        }
+
+        #[tokio::test]
+        async fn grust_cypher_can_query_lakecat_catalog_projection_boundary() {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let table_id = table.stable_id();
+            let event = GraphEvent::table(
+                GraphAction::Created,
+                table,
+                serde_json::json!({"kind":"test"}),
+            )
+            .with_event_id("lakecat:outbox:evt-1");
+            let graph = graph_event_to_grust(&event);
+            let store = MemoryGraphStore::new();
+            store.put_graph(&graph).await.expect("catalog graph write");
+
+            let result = execute_cypher_mutation_returning_with_options_on_store(
+                &store,
+                &format!(
+                    "MATCH (t:Table {{id: '{table_id}'}}) SET t.querygraph_ready = true RETURN t.id AS id, t.querygraph_ready AS ready"
+                ),
+                CypherMutationOptions::default(),
+            )
+            .await
+            .expect("Grust Cypher mutation over LakeCat graph");
+
+            assert_eq!(result.table.columns, vec!["id", "ready"]);
+            assert_eq!(
+                result.table.rows,
+                vec![vec![Value::String(table_id), Value::Bool(true)]]
+            );
         }
     }
 }
