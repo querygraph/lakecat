@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Recorded the manual CI run after the `protoc` fix: the remaining cloud
+  failures are due to LakeCat depending on local Sail helper commits that are
+  not present in the workflow's `lakehq/sail@main` checkout.
 - Added `protobuf-compiler` installation to the manual GitHub Actions workflow
   so Sail's `prost-build` code generation can find `protoc` in cloud test
   jobs.

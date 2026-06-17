@@ -6,12 +6,13 @@ Updated: 2026-06-17
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `057b725 Scope manual CI formatting to LakeCat`.
+  `c5db54c Install protoc in manual CI`.
 - Current working slice: keep fixing the manual-only cloud gate while automatic
-  push/PR CI stays disabled. Run `27720360961` proved the TypeSec 0.8 path
-  dependency resolution issue is fixed after pushing TypeSec `e05460f`, and the
-  remaining failed rows now stop because the Ubuntu runner lacks `protoc` for
-  Sail's `prost-build` step.
+  push/PR CI stays disabled. Run `27720653125` proved the `protoc` runner setup
+  issue is fixed, and the remaining failed rows now stop because LakeCat depends
+  on Sail helper exports that exist only in local `/Users/alexy/src/sail`
+  commits `68631016` and `fdb3b657`, while the workflow checks out
+  `lakehq/sail@main`.
 - Status commit recording the pushed Grust Cypher reconciliation:
   `e6ca9e0 Record Grust Cypher reconciliation status`.
 - Status commits recording the pushed verifier work:
@@ -40,6 +41,9 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
+- Recorded that manual run `27720653125` moved past formatting, TypeSec 0.8
+  resolution, and `protoc`, and is now blocked on unpublished Sail helper
+  commits.
 - Added `protobuf-compiler` installation to the manual GitHub Actions workflow
   so Sail's `prost-build` custom build can find `protoc` on Ubuntu runners.
 - Scoped the manual GitHub Actions formatting check to the LakeCat workspace
@@ -93,6 +97,14 @@ Updated: 2026-06-17
   matrix tests. Passing rows: `grust-local graph`, `grust cypher boundary`,
   `typesec-local security`, and `turso-local store`. Failed rows now all report
   missing `protoc` from Sail's `sail-common-datafusion` build script.
+- Manual GitHub Actions run `27720653125` after installing `protobuf-compiler`
+  proved `protoc` is no longer missing. Passing rows: `grust cypher boundary`,
+  `grust-local graph`, `typesec-local security`, and `turso-local store`.
+  Failed rows now report missing Sail helper exports such as
+  `LoadTableResult`, `load_table_result_to_status`,
+  `completed_planning_with_id_result_from_values`, and
+  `fetch_scan_tasks_result_from_values` from the cloud `lakehq/sail@main`
+  checkout.
 - `cargo fmt -p lakecat-api -p lakecat-cli -p lakecat-core -p lakecat-graph -p lakecat-lineage -p lakecat-querygraph -p lakecat-sail -p lakecat-security -p lakecat-service -p lakecat-store -- --check`
 - `git diff --check`
 - `cargo test -p lakecat-service --features typesec-local -- --nocapture`
@@ -157,7 +169,7 @@ Updated: 2026-06-17
 
 ## Next Recommended Slice
 
-Rerun the manual GitHub Actions workflow after the `protobuf-compiler` install
-step is pushed. Keep push/PR triggers disabled until the cloud matrix is green,
-then decide whether to re-enable automatic CI or keep the workflow manual during
-the sibling-crate publish cycle.
+Unblock the Sail helper dependency for cloud CI. Either push the local Sail
+helper commits `68631016` and `fdb3b657` to a branch GitHub Actions can check
+out, or stop depending on those helpers until they are available upstream. Keep
+push/PR triggers disabled until the cloud matrix is green.
