@@ -5,8 +5,13 @@ Updated: 2026-06-17
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed and pushed LakeCat slice:
-  `3a50130 Validate scan planning with Sail REST helpers`.
+- Latest committed LakeCat slice:
+  `cf0d9e7 Verify TypeDID envelopes through TypeSec`.
+- Latest pushed LakeCat slice before this status update:
+  `922e537 Record scan planning helper status`; `cf0d9e7` is ready to push
+  after this status commit.
+- Supporting TypeSec attestation commit exists locally in `/Users/alexy/src/typesec`
+  as `0ec164a Add TypeDID verification attestations`.
 - Supporting Sail helper commit exists locally in `/Users/alexy/src/sail` as
   `68631016 Expose Iceberg table status conversion`. Pushing to
   `lakehq/sail` is blocked for this machine/account: HTTPS has no configured
@@ -29,6 +34,13 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
+- Added a `typesec-local` TypeDID verifier seam in LakeCat service that asks
+  TypeSec to open and verify protected TypeDID envelopes.
+- Authorization now upgrades anonymous or matching supplied request identity to
+  the verified DID subject and attaches only an audit-safe attestation plus
+  envelope hash to the authorization context.
+- TypeSec now exposes `TypeDidAttestation` from verified TypeDID messages so
+  LakeCat can persist receipts without raw plaintext payloads or signatures.
 - Exported Sail's Iceberg REST `LoadTableResult` to `TableStatus` conversion as
   a reusable `sail-catalog-iceberg` helper.
 - Updated LakeCat's in-process Sail `CatalogProvider` to use the Sail helper for
@@ -57,6 +69,15 @@ Updated: 2026-06-17
 
 ## Verification Completed
 
+- `cargo fmt -p lakecat-service -- --check`
+- `cargo fmt -p typesec-integrations -p typesec -- --check`
+- `cargo test -p typesec-integrations typedid_verified_message_exposes_audit_safe_attestation -- --nocapture`
+- `cargo test -p typesec-integrations typedid_signature_covers_conversation_metadata -- --nocapture`
+- `cargo test -p lakecat-service --features typesec-local typesec_typedid_envelope_verification_updates_authorization_context -- --nocapture`
+- `cargo test -p lakecat-service --features typesec-local -- --nocapture`
+- `cargo test -p lakecat-service --all-features`
+- `cargo test --workspace --all-features`
+- `git diff --check`
 - `cargo fmt --all -- --check` (passes with existing stable-rustfmt warnings for
   nightly-only `imports_granularity` / `group_imports` config keys)
 - `cargo check -p lakecat-cli`

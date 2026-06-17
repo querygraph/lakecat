@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Recorded the TypeSec-backed TypeDID verifier slice and supporting TypeSec
+  attestation commit in `STATUS.md`.
 - Added a TypeSec-backed TypeDID envelope verifier seam for `typesec-local`:
   LakeCat can now verify a protected TypeDID envelope through TypeSec, authorize
   as the verified DID subject, and persist only audit-safe attestation context
