@@ -7,9 +7,10 @@ Updated: 2026-06-17
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `c04f833 Reconcile Grust Cypher and TypeSec 0.8`.
-- Current working slice: expand the manual-only CI matrix so the cloud gate
-  exercises the same TypeSec service and Grust Cypher boundaries that passed
-  locally, while keeping automatic CI disabled.
+- Current working slice: fix the manual-only cloud gate after run
+  `27714203065` failed in `cargo fmt --all -- --check` before tests ran because
+  rustfmt also checked sibling Grust/Sail/TypeSec path dependencies. Keep
+  automatic CI disabled.
 - Status commit recording the pushed Grust Cypher reconciliation:
   `e6ca9e0 Record Grust Cypher reconciliation status`.
 - Status commits recording the pushed verifier work:
@@ -38,6 +39,9 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
+- Scoped the manual GitHub Actions formatting check to the LakeCat workspace
+  packages instead of `cargo fmt --all`, so sibling checkout formatting does not
+  fail LakeCat's cloud gate before the matrix tests start.
 - Expanded manual GitHub Actions coverage to include
   `cargo test -p lakecat-service --features typesec-local`.
 - Added an explicit manual CI row for the Grust Cypher catalog-graph boundary
@@ -82,6 +86,8 @@ Updated: 2026-06-17
 
 ## Verification Completed
 
+- `cargo fmt -p lakecat-api -p lakecat-cli -p lakecat-core -p lakecat-graph -p lakecat-lineage -p lakecat-querygraph -p lakecat-sail -p lakecat-security -p lakecat-service -p lakecat-store -- --check`
+- `git diff --check`
 - `cargo test -p lakecat-service --features typesec-local -- --nocapture`
 - `cargo test -p lakecat-graph --features grust-local grust_cypher_can_query_lakecat_catalog_projection_boundary -- --nocapture`
 - `git diff --check`
@@ -144,7 +150,7 @@ Updated: 2026-06-17
 
 ## Next Recommended Slice
 
-Run the manual GitHub Actions workflow against the updated Grust 0.9.0 plus
-TypeSec 0.8.0 dependency graph. Keep push/PR triggers disabled until that cloud
-run is green, then decide whether to re-enable automatic CI or keep the workflow
+Rerun the manual GitHub Actions workflow after the LakeCat-scoped formatting fix.
+Keep push/PR triggers disabled until that cloud run reaches the matrix tests and
+is green, then decide whether to re-enable automatic CI or keep the workflow
 manual during the sibling-crate publish cycle.

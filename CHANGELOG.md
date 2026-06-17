@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Scoped the manual GitHub Actions formatting check to LakeCat workspace
+  packages so sibling Grust/Sail/TypeSec rustfmt drift cannot fail the LakeCat
+  cloud gate before tests run.
 - Expanded the manual-only GitHub Actions matrix to cover the current
   TypeSec 0.8 service path and the Grust Cypher catalog-graph boundary without
   re-enabling automatic push/PR triggers.
