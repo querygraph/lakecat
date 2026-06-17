@@ -3600,6 +3600,7 @@ dependencies = [
 name = "lakecat-cli"
 version = "0.1.0"
 dependencies = [
+ "lakecat-api",
  "lakecat-core",
  "lakecat-querygraph",
  "reqwest",

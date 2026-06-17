@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added predictable local runtime controls for the service binary:
+  `LAKECAT_WAREHOUSE` and `LAKECAT_BIND_ADDR`, plus a `lakecat-cli config`
+  command that validates and prints the Iceberg REST config response.
 - Added a `lakecat-cli bootstrap-export` command that fetches
   `/querygraph/v1/bootstrap`, verifies the manifest hashes with the reusable
   `lakecat-querygraph` verifier, and writes the bundle for QueryGraph import.

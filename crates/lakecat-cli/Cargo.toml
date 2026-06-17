@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+lakecat-api = { workspace = true }
 lakecat-core = { workspace = true }
 lakecat-querygraph = { workspace = true }
 reqwest = { workspace = true }

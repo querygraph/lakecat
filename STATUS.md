@@ -6,7 +6,7 @@ Updated: 2026-06-17
 
 - LakeCat is on `master`.
 - Latest committed LakeCat slice before this continuation:
-  `20d87a2 Add QueryGraph bootstrap manifest hashes`.
+  `0792077 Add LakeCat bootstrap export CLI`.
 - Cloud CI remains gated on the publish chain: wait for Grust to publish the
   needed crates, then for TypeSec to publish its matching crates, then rebuild
   LakeCat in GitHub Actions against published crates rather than pinning CI to
@@ -22,24 +22,24 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
-- Added a `lakecat-cli` crate with `bootstrap-export`, an operator command that
-  fetches `/querygraph/v1/bootstrap`, verifies the LakeCat manifest hashes, and
-  writes the bundle for QueryGraph import.
-- Moved reusable QueryGraph bootstrap manifest verification into
-  `lakecat-querygraph` so LakeCat tools and importers use one contract.
+- Added predictable local runtime controls for the service binary:
+  `LAKECAT_WAREHOUSE` and `LAKECAT_BIND_ADDR`.
+- Added `lakecat-cli config`, a smoke-test command that fetches
+  `/catalog/v1/config`, validates the Iceberg REST config response, and prints
+  it as JSON.
 
 ## Verification Completed
 
 - `cargo fmt --all -- --check` (passes with existing stable-rustfmt warnings for
   nightly-only `imports_granularity` / `group_imports` config keys)
-- `cargo check -p lakecat-cli`
-- `cargo test -p lakecat-querygraph`
+- `cargo test -p lakecat-cli`
+- `cargo check -p lakecat-service`
 - `cargo test --workspace`
 - `cargo test --workspace --all-features`
 - `git diff --check`
 
 ## Next Recommended Slice
 
-Add a small `lakecat-cli` conformance/admin path for local Turso-backed demos, or
-continue tightening runtime config so the service can be started predictably with
-explicit warehouse, bind address, and integration choices.
+Add CLI admin commands for local Turso-backed demos, starting with storage
+profile and ODRL policy-binding upsert/list flows, so QGLake acceptance setup can
+be scripted without bespoke curl snippets.

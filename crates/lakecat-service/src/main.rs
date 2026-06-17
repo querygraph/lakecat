@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use lakecat_core::WarehouseName;
 use lakecat_graph::CatalogGraphSink;
@@ -13,10 +13,8 @@ use lakecat_store::{CatalogStore, MemoryCatalogStore};
 
 #[tokio::main]
 async fn main() {
-    let state = LakeCatState::new(
-        WarehouseName::new("local").expect("valid default warehouse"),
-        configured_store().await,
-    );
+    let config = ServiceConfig::from_env().expect("configure LakeCat service");
+    let state = LakeCatState::new(config.warehouse.clone(), configured_store().await);
     let state = {
         let sail = state.sail.clone();
         state
@@ -28,12 +26,35 @@ async fn main() {
             )
             .with_credential_issuer(configured_credential_issuer())
     };
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8181")
+    let listener = tokio::net::TcpListener::bind(config.bind_addr)
         .await
         .expect("bind LakeCat service");
     axum::serve(listener, app(state))
         .await
         .expect("serve LakeCat service");
+}
+
+struct ServiceConfig {
+    warehouse: WarehouseName,
+    bind_addr: SocketAddr,
+}
+
+impl ServiceConfig {
+    fn from_env() -> lakecat_core::LakeCatResult<Self> {
+        let warehouse = std::env::var("LAKECAT_WAREHOUSE").unwrap_or_else(|_| "local".to_string());
+        let bind_addr = std::env::var("LAKECAT_BIND_ADDR")
+            .unwrap_or_else(|_| "127.0.0.1:8181".to_string())
+            .parse::<SocketAddr>()
+            .map_err(|err| {
+                lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "invalid LAKECAT_BIND_ADDR: {err}"
+                ))
+            })?;
+        Ok(Self {
+            warehouse: WarehouseName::new(warehouse)?,
+            bind_addr,
+        })
+    }
 }
 
 async fn configured_store() -> Arc<dyn CatalogStore> {

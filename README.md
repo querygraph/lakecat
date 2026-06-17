@@ -32,7 +32,16 @@ HTTP handlers resolve principals from `x-lakecat-principal`,
 governance engine; absent credentials remain anonymous for local compatibility.
 The service binary exposes `sail-local`, `typesec-local`, `grust-local`, and
 `turso-local` feature gates so local real integrations can be activated without
-code edits. With the `turso-local` feature, `LAKECAT_TURSO_PATH` selects a
+code edits. `LAKECAT_WAREHOUSE` selects the served warehouse, and
+`LAKECAT_BIND_ADDR` selects the listen address; defaults are `local` and
+`127.0.0.1:8181`. With the `turso-local` feature, `LAKECAT_TURSO_PATH` selects a
 Turso-backed `TursoCatalogStore` for namespaces, table records, metadata pointer
 history, audit/outbox rows, and idempotent commit replay; without it the binary
 keeps the in-memory store.
+
+Useful local checks:
+
+```bash
+cargo run -p lakecat-cli -- config
+cargo run -p lakecat-cli -- bootstrap-export --output lakecat-bootstrap.json
+```
