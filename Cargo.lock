@@ -3604,6 +3604,7 @@ dependencies = [
  "lakecat-core",
  "lakecat-querygraph",
  "reqwest",
+ "serde",
  "serde_json",
  "tokio",
 ]

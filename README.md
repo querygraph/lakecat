@@ -43,5 +43,17 @@ Useful local checks:
 
 ```bash
 cargo run -p lakecat-cli -- config
+cargo run -p lakecat-cli -- storage-profile-list
+cargo run -p lakecat-cli -- storage-profile-upsert \
+  --profile local-events \
+  --location-prefix file:///tmp/events \
+  --provider file \
+  --issuance-mode local-file-no-secret
+cargo run -p lakecat-cli -- policy-list
+cargo run -p lakecat-cli -- policy-upsert \
+  --policy agent-read \
+  --namespace default \
+  --table events \
+  --odrl-file ./policy.odrl.json
 cargo run -p lakecat-cli -- bootstrap-export --output lakecat-bootstrap.json
 ```

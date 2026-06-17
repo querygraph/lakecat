@@ -10,5 +10,6 @@ lakecat-api = { workspace = true }
 lakecat-core = { workspace = true }
 lakecat-querygraph = { workspace = true }
 reqwest = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `lakecat-cli` admin commands for local governed demo setup:
+  storage-profile list/upsert and ODRL policy-binding list/upsert now call the
+  management API using the same typed payloads as the service.
 - Added predictable local runtime controls for the service binary:
   `LAKECAT_WAREHOUSE` and `LAKECAT_BIND_ADDR`, plus a `lakecat-cli config`
   command that validates and prints the Iceberg REST config response.

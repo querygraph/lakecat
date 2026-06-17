@@ -6,7 +6,7 @@ Updated: 2026-06-17
 
 - LakeCat is on `master`.
 - Latest committed LakeCat slice before this continuation:
-  `0792077 Add LakeCat bootstrap export CLI`.
+  `554df03 Add LakeCat runtime config controls`.
 - Cloud CI remains gated on the publish chain: wait for Grust to publish the
   needed crates, then for TypeSec to publish its matching crates, then rebuild
   LakeCat in GitHub Actions against published crates rather than pinning CI to
@@ -22,24 +22,24 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
-- Added predictable local runtime controls for the service binary:
-  `LAKECAT_WAREHOUSE` and `LAKECAT_BIND_ADDR`.
-- Added `lakecat-cli config`, a smoke-test command that fetches
-  `/catalog/v1/config`, validates the Iceberg REST config response, and prints
-  it as JSON.
+- Added `lakecat-cli` admin commands for local governed demo setup:
+  `storage-profile-list`, `storage-profile-upsert`, `policy-list`, and
+  `policy-upsert`.
+- The commands call LakeCat management endpoints using typed API payloads, so
+  Turso-backed QGLake setup can be scripted without bespoke curl snippets.
 
 ## Verification Completed
 
 - `cargo fmt --all -- --check` (passes with existing stable-rustfmt warnings for
   nightly-only `imports_granularity` / `group_imports` config keys)
+- `cargo check -p lakecat-cli`
 - `cargo test -p lakecat-cli`
-- `cargo check -p lakecat-service`
 - `cargo test --workspace`
 - `cargo test --workspace --all-features`
 - `git diff --check`
 
 ## Next Recommended Slice
 
-Add CLI admin commands for local Turso-backed demos, starting with storage
-profile and ODRL policy-binding upsert/list flows, so QGLake acceptance setup can
-be scripted without bespoke curl snippets.
+Use the CLI against a live local LakeCat service with a Turso store to produce a
+repeatable QGLake bootstrap fixture, then feed the exported bundle into
+QueryGraph's verifier/import path.
