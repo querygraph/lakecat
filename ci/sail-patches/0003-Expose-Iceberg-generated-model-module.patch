@@ -1,0 +1,25 @@
+From 087a24198aa843d55149ddcafaf7cf6f5a9bb4db Mon Sep 17 00:00:00 2001
+From: Alexy Khrabrov <deliverable@gmail.com>
+Date: Wed, 17 Jun 2026 14:57:35 -0700
+Subject: [PATCH] Expose Iceberg generated model module
+
+---
+ crates/sail-catalog-iceberg/src/lib.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/crates/sail-catalog-iceberg/src/lib.rs b/crates/sail-catalog-iceberg/src/lib.rs
+index 0b072401..95980f73 100644
+--- a/crates/sail-catalog-iceberg/src/lib.rs
++++ b/crates/sail-catalog-iceberg/src/lib.rs
+@@ -15,7 +15,7 @@
+ #![expect(clippy::all)]
+ 
+ pub mod apis;
+-mod models;
++pub mod models;
+ mod planning;
+ mod provider;
+ 
+-- 
+2.52.0
+

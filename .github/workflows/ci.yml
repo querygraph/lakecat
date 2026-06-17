@@ -43,6 +43,9 @@ jobs:
           repository: lakehq/sail
           path: sail
 
+      - name: Apply LakeCat Sail helper patches
+        run: git -C sail am ../lakecat/ci/sail-patches/*.patch
+
       - name: Checkout Grust
         uses: actions/checkout@v4
         with:

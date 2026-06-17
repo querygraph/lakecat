@@ -8,11 +8,11 @@ Updated: 2026-06-17
 - Latest committed and pushed LakeCat implementation slice:
   `c5db54c Install protoc in manual CI`.
 - Current working slice: keep fixing the manual-only cloud gate while automatic
-  push/PR CI stays disabled. Run `27720653125` proved the `protoc` runner setup
-  issue is fixed, and the remaining failed rows now stop because LakeCat depends
-  on Sail helper exports that exist only in local `/Users/alexy/src/sail`
-  commits `68631016` and `fdb3b657`, while the workflow checks out
-  `lakehq/sail@main`.
+  push/PR CI stays disabled. LakeCat now carries a temporary CI bridge under
+  `ci/sail-patches/` that applies local Sail helper commits `68631016` and
+  `fdb3b657`, plus the generated-model module export LakeCat service tests use,
+  to the `lakehq/sail@main` checkout before building, until those APIs are
+  available from an upstream Sail branch.
 - Status commit recording the pushed Grust Cypher reconciliation:
   `e6ca9e0 Record Grust Cypher reconciliation status`.
 - Status commits recording the pushed verifier work:
@@ -41,6 +41,10 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
+- Added `ci/sail-patches/` with the Sail helper/model API patches LakeCat
+  already depends on locally.
+- Updated manual GitHub Actions to apply those patches to the Sail checkout
+  before building LakeCat.
 - Recorded that manual run `27720653125` moved past formatting, TypeSec 0.8
   resolution, and `protoc`, and is now blocked on unpublished Sail helper
   commits.
@@ -93,6 +97,12 @@ Updated: 2026-06-17
 
 ## Verification Completed
 
+- Applied `ci/sail-patches/*.patch` with `git am` to a clean temporary Sail
+  checkout at `7a34be78`.
+- Temporary patched Sail checkout passed:
+  `cargo test -p sail-catalog-iceberg planning -- --nocapture`.
+- LakeCat focused Sail-local service test passed:
+  `cargo test -p lakecat-service --features sail-local fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens -- --nocapture`.
 - Manual GitHub Actions run `27720360961` after pushing TypeSec 0.8 reached the
   matrix tests. Passing rows: `grust-local graph`, `grust cypher boundary`,
   `typesec-local security`, and `turso-local store`. Failed rows now all report
@@ -169,7 +179,7 @@ Updated: 2026-06-17
 
 ## Next Recommended Slice
 
-Unblock the Sail helper dependency for cloud CI. Either push the local Sail
-helper commits `68631016` and `fdb3b657` to a branch GitHub Actions can check
-out, or stop depending on those helpers until they are available upstream. Keep
-push/PR triggers disabled until the cloud matrix is green.
+Rerun the manual GitHub Actions workflow after pushing the Sail patch bridge.
+If the matrix is green, keep automatic push/PR triggers disabled until the Sail
+helper commits can be checked out from a real upstream branch, then remove the
+temporary `ci/sail-patches/` bridge.

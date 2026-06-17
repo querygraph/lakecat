@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a temporary manual-CI bridge that applies the LakeCat-required Sail
+  helper/model API patches to the `lakehq/sail` checkout before building,
+  keeping the helper implementation in Sail-shaped patches until those commits
+  are available from an upstream branch.
 - Recorded the manual CI run after the `protoc` fix: the remaining cloud
   failures are due to LakeCat depending on local Sail helper commits that are
   not present in the workflow's `lakehq/sail@main` checkout.
