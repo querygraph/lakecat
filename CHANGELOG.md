@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Documented the cloud CI publish gate: LakeCat should rebuild in GitHub Actions
+  against published Grust and TypeSec crates after their release chain lands,
+  instead of pinning CI to unpublished sibling checkout states.
 - Fixed GitHub Actions to check out the Grust branch that matches LakeCat's
   `grust-graph` 0.9.0 path dependency, preventing CI from testing against the
   older default-branch Grust 0.8.1 checkout.

@@ -6,11 +6,11 @@ Updated: 2026-06-17
 
 - LakeCat is on `master`.
 - Latest committed LakeCat slice before this continuation:
-  `0bae214 Reject unsupported Sail unique constraints`.
-- Current working slice adds an environment-backed `typesec://env/VARIABLE`
-  secret-ref resolver for the `typesec-local` credential issuer, so local
-  TypeSec-authorized credential vending can resolve external config without
-  storing raw secrets in LakeCat catalog rows.
+  `2da207f Add TypeSec env secret resolver`.
+- Current working slice documents the cloud CI gate: wait for Grust to publish
+  the needed crates, then for TypeSec to publish its matching crates, then
+  rebuild LakeCat in GitHub Actions against published crates rather than
+  pinning CI to unpublished sibling checkout states.
 - Graph-related implementation is still intentionally kept out of LakeCat unless
   it is a bounded outbox/projection concern. Reusable graph taxonomy and graph
   mechanics belong in `/Users/alexy/src/grust`.
@@ -29,6 +29,9 @@ Updated: 2026-06-17
   mutating process environment.
 - GitHub Actions now checks out Grust `codex/cypher-write`, matching LakeCat's
   `grust-graph` 0.9.0 path dependency instead of the older default branch.
+- Cloud CI is not considered fixed yet: the next cloud rebuild should happen
+  after Grust publishes the needed crates and TypeSec publishes its matching
+  crate release.
 
 ## Verification Completed
 
@@ -40,6 +43,15 @@ Updated: 2026-06-17
 - Local CI-layout dependency resolution with sibling `lakecat`, `grust`, `sail`,
   and `typesec` checkouts under `/tmp/lakecat-ci-repro.0hBHY7`:
   `cargo metadata --format-version 1 --no-deps`
+- TypeSec local pre-push check:
+  `cargo fmt --all -- --check`
+- TypeSec full workspace tests are still blocked locally by the pre-existing
+  `typesec-rbac` dependency on `grust-graph ^0.7.0` while the local Grust
+  checkout is 0.9.0.
+- Clean temp GitHub-layout checkouts under `/tmp/lakecat-ci-repro.QRY62g`
+  confirmed reachable sibling versions before pivoting away from CI pinning:
+  Grust `0.9.0`, TypeSec `0.7.0`, Sail `0.6.4`; `cargo fmt --all -- --check`
+  passed there with stable-rustfmt warnings about nightly-only config keys.
 - `git diff --check`
 
 ## Next Recommended Slice
