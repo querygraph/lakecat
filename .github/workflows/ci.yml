@@ -20,8 +20,12 @@ jobs:
             command: cargo test -p lakecat-service --features sail-local
           - name: typesec-local security
             command: cargo test -p lakecat-security --features typesec-local
+          - name: typesec-local service
+            command: cargo test -p lakecat-service --features typesec-local
           - name: grust-local graph
             command: cargo test -p lakecat-graph --features grust-local
+          - name: grust cypher boundary
+            command: cargo test -p lakecat-graph --features grust-local grust_cypher_can_query_lakecat_catalog_projection_boundary -- --nocapture
           - name: turso-local store
             command: cargo test -p lakecat-store --features turso-local
           - name: all features workspace

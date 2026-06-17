@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expanded the manual-only GitHub Actions matrix to cover the current
+  TypeSec 0.8 service path and the Grust Cypher catalog-graph boundary without
+  re-enabling automatic push/PR triggers.
 - Added `GOAL.md` as the durable working goal for continuing LakeCat from the
   current design documents and repository state.
 - Updated `STATUS.md` after pushing the Grust Cypher and TypeSec 0.8

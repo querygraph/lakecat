@@ -7,6 +7,9 @@ Updated: 2026-06-17
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `c04f833 Reconcile Grust Cypher and TypeSec 0.8`.
+- Current working slice: expand the manual-only CI matrix so the cloud gate
+  exercises the same TypeSec service and Grust Cypher boundaries that passed
+  locally, while keeping automatic CI disabled.
 - Status commit recording the pushed Grust Cypher reconciliation:
   `e6ca9e0 Record Grust Cypher reconciliation status`.
 - Status commits recording the pushed verifier work:
@@ -24,9 +27,9 @@ Updated: 2026-06-17
 - Additional supporting Sail helper commit exists locally as
   `fdb3b657 Expose Iceberg planning result helpers`; it has the same upstream
   push blocker until Sail repository credentials/permissions are resolved.
-- Cloud CI remains manual-only. The local dependency chain is being reconciled
-  first against Grust 0.9.0 (`grust-cypher` included) and TypeSec 0.8.0; automatic
-  GitHub Actions should stay disabled until the same graph is green in the cloud.
+- Cloud CI remains manual-only. The local dependency chain is green against
+  Grust 0.9.0 (`grust-cypher` included) and TypeSec 0.8.0; automatic GitHub
+  Actions should stay disabled until the same graph is green in the cloud.
 - Graph-related implementation is still intentionally kept out of LakeCat unless
   it is a bounded outbox/projection concern. Reusable graph taxonomy and graph
   mechanics belong in `/Users/alexy/src/grust`.
@@ -35,6 +38,10 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
+- Expanded manual GitHub Actions coverage to include
+  `cargo test -p lakecat-service --features typesec-local`.
+- Added an explicit manual CI row for the Grust Cypher catalog-graph boundary
+  test.
 - Bumped the LakeCat TypeSec path dependency to 0.8.0.
 - Enabled Grust's `cypher` facade feature for `grust-local` graph integration.
 - Added a LakeCat graph boundary test that writes the Grust-owned catalog graph
@@ -75,6 +82,9 @@ Updated: 2026-06-17
 
 ## Verification Completed
 
+- `cargo test -p lakecat-service --features typesec-local -- --nocapture`
+- `cargo test -p lakecat-graph --features grust-local grust_cypher_can_query_lakecat_catalog_projection_boundary -- --nocapture`
+- `git diff --check`
 - `cargo fmt -p lakecat-graph -p lakecat-service -- --check`
 - `cargo test -p lakecat-graph --features grust-local grust_cypher_can_query_lakecat_catalog_projection_boundary -- --nocapture`
 - `cargo test -p lakecat-graph --features grust-local -- --nocapture`
@@ -134,7 +144,7 @@ Updated: 2026-06-17
 
 ## Next Recommended Slice
 
-Finish the local dependency reconciliation by running the default and
-all-feature LakeCat gates against Grust 0.9.0 plus TypeSec 0.8.0, then update the
-cloud workflow only after the same dependency graph is known to build outside the
-local sibling checkout.
+Run the manual GitHub Actions workflow against the updated Grust 0.9.0 plus
+TypeSec 0.8.0 dependency graph. Keep push/PR triggers disabled until that cloud
+run is green, then decide whether to re-enable automatic CI or keep the workflow
+manual during the sibling-crate publish cycle.
