@@ -6,7 +6,7 @@ Updated: 2026-06-17
 
 - LakeCat is on `master`.
 - Latest committed LakeCat slice before this continuation:
-  `fd6e0b7 Record QueryGraph LakeCat import handoff`.
+  `8861183 Record Grust graph import handoff`.
 - Cloud CI remains gated on the publish chain: wait for Grust to publish the
   needed crates, then for TypeSec to publish its matching crates, then rebuild
   LakeCat in GitHub Actions against published crates rather than pinning CI to
@@ -22,6 +22,11 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
+- Added a reusable LakeCat catalog-event graph taxonomy helper to Grust, covering
+  catalog events, warehouses, namespaces, and tables with stable containment
+  edges.
+- Updated LakeCat's `grust-local` graph sink to call the Grust helper and pass
+  durable outbox event ids into graph event vertices.
 - Added a reusable LakeCat catalog graph adapter to Grust in commit
   `15952a9 Add LakeCat catalog graph adapter`.
 - Updated QueryGraph in commit `657fd6a Validate LakeCat imports with Grust`
@@ -53,9 +58,11 @@ Updated: 2026-06-17
   `cargo run -- lakecat-import --bundle /Users/alexy/src/lakecat/target/qglake-live/lakecat-bootstrap.json --output .querygraph/lakecat/import-plan.json`
   in `/Users/alexy/src/querygraph/qg-rust`
 - Grust facade tests: `cargo test -p grust-graph`
+- LakeCat graph tests: `cargo test -p lakecat-graph --features grust-local`
+- LakeCat service outbox test:
+  `cargo test -p lakecat-service --features grust-local outbox_drain_projects_table_events_to_sinks -- --nocapture`
 - Grust Sail compile check: `cargo check -p grust-sail`
 - QueryGraph tests: `cargo test` in `/Users/alexy/src/querygraph/qg-rust`
-- `cargo test --workspace`
 - `cargo test --workspace --all-features`
 - `git diff --check`
 

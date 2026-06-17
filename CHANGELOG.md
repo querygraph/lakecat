@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Switched the `grust-local` catalog graph sink to Grust's LakeCat
+  catalog-event projection helper, preserving outbox event ids as graph event
+  vertices and keeping graph taxonomy out of LakeCat.
 - Promoted reusable LakeCat catalog graph envelope ingestion into Grust and
   updated QueryGraph to validate LakeCat imports through the Grust adapter
   instead of growing graph mechanics in LakeCat.

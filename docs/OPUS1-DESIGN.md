@@ -504,7 +504,7 @@ append a dated entry per slice; keep the finding-status table current.
 | 5 | Service can't activate real engines | **CLOSED** | `sail-local` / `typesec-local` / `grust-local` passthroughs now in `lakecat-service` |
 | 6 | Sail used as struct library, not planner | **STARTED** | `lakecat-sail/catalog-provider` now exposes a governed in-process Sail `CatalogProvider` over LakeCat namespaces/tables/commits, pointer-log-backed commit discovery, and basic Iceberg current-schema/nested-type/partition/sort-order/identifier-field `TableStatus`; unsupported UNIQUE constraints are rejected instead of dropped; Sail helper upstreaming and deeper planner fusion remain pending |
 | 7 | Plan ↔ implementation drift | **PARTIAL** | architecture and OPUS working-plan docs now track the committed Turso CAS/object-write/outbox/OpenLineage/storage-profile and in-process Sail provider slices; remaining drift risk is around Grust taxonomy placement and remote credential issuance |
-| 8 | Grust graph is a placeholder taxonomy | **OPEN** | |
+| 8 | Grust graph is a placeholder taxonomy | **STARTED** | The reusable LakeCat graph envelope importer and catalog-event taxonomy helper now live in Grust; LakeCat's `grust-local` sink adapts outbox events into Grust-owned event/warehouse/namespace/table graph projections. Richer graph schemas and traversal remain Grust work. |
 | 9 | `list_namespaces` fabricates `default` | **CLOSED** | memory and Turso stores return an empty list until namespace creation |
 | 10 | Side effects coupled to request path | **CLOSED** | Turso outbox and service drain/projection API exist; catalog handlers record durable events and no longer emit graph/lineage inline |
 | 11 | Plan tokens unauthenticated / leak paths | **CLOSED** | new structured Sail plan-task tokens are table-bound, path re-validated, and HMAC-signed; legacy unsigned structured tokens remain decodable for compatibility |
@@ -632,8 +632,11 @@ only once **P2** gives it a governed path to run on.
   (Milestones 7–8; Findings 8, 10.) *Started for catalog-level OpenLineage:
   outbox-drained namespace/table lineage events now project to OpenLineage-shaped
   payloads and hash receipts in `lakecat-lineage`; TypeDID request envelopes are
-  captured on receipts, but verification/attestation and typed Grust graph
-  taxonomy remain pending.*
+  captured on receipts. Grust now owns reusable LakeCat graph envelope ingestion
+  and a catalog-event taxonomy helper for event, warehouse, namespace, and table
+  projections; LakeCat's `grust-local` sink only adapts outbox events into that
+  helper. TypeDID verification/attestation and richer typed graph schema work
+  remain pending.*
 - **P5 — QueryGraph end-to-end.** `querygraph import-lakecat`; QGLake "Resilience
   Desk" as the acceptance test. (Milestone 9.) *Started with a LakeCat
   bootstrap manifest that gives QueryGraph stable hashes for Croissant, CDIF,

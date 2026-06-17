@@ -1397,11 +1397,10 @@ async fn project_outbox_event(
         if let Some(table) = table.clone() {
             state
                 .graph
-                .emit(GraphEvent::table(
-                    graph_action,
-                    table.clone(),
-                    event_payload.clone(),
-                ))
+                .emit(
+                    GraphEvent::table(graph_action, table.clone(), event_payload.clone())
+                        .with_event_id(event.event_id.clone()),
+                )
                 .await?;
             state
                 .lineage
@@ -2328,6 +2327,7 @@ mod tests {
         let graph_events = graph.events.lock().await;
         assert_eq!(graph_events.len(), 1);
         assert_eq!(graph_events[0].action, GraphAction::Created);
+        assert_eq!(graph_events[0].event_id.as_deref(), Some("evt-1"));
         let lineage_events = lineage.events.lock().await;
         assert_eq!(lineage_events.len(), 1);
         assert_eq!(lineage_events[0].event_type, LineageEventType::TableCreated);

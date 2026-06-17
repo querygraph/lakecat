@@ -13,6 +13,7 @@ pub trait CatalogGraphSink: Send + Sync + 'static {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GraphEvent {
+    pub event_id: Option<String>,
     pub subject: String,
     pub label: GraphNodeLabel,
     pub action: GraphAction,
@@ -24,6 +25,7 @@ pub struct GraphEvent {
 impl GraphEvent {
     pub fn table(action: GraphAction, table: TableIdent, properties: Value) -> Self {
         Self {
+            event_id: None,
             subject: table.stable_id(),
             label: GraphNodeLabel::Table,
             action,
@@ -31,6 +33,11 @@ impl GraphEvent {
             properties,
             emitted_at: Utc::now(),
         }
+    }
+
+    pub fn with_event_id(mut self, event_id: impl Into<String>) -> Self {
+        self.event_id = Some(event_id.into());
+        self
     }
 }
 
@@ -121,32 +128,20 @@ pub mod grust_integration {
     }
 
     pub fn graph_event_to_grust(event: &GraphEvent) -> Graph {
-        let mut builder = Graph::builder();
-        let event_id = format!("lakecat:event:{}", event.subject);
-        let _ = builder
-            .node("CatalogEvent", event_id.clone())
-            .prop("subject", event.subject.clone())
-            .prop("label", graph_label_name(&event.label))
-            .prop("action", graph_action_name(&event.action))
-            .prop("emitted_at", event.emitted_at.to_rfc3339())
-            .prop("properties", event.properties.clone())
-            .finish();
-
-        if let Some(table) = &event.table {
-            let table_id = table.stable_id();
-            let _ = builder
-                .node("Table", table_id.clone())
-                .prop("warehouse", table.warehouse.as_str())
-                .prop("namespace", table.namespace.path())
-                .prop("name", table.name.as_str())
-                .finish();
-            let _ = builder
-                .edge("EMITTED", event_id, table_id)
-                .prop("action", graph_action_name(&event.action))
-                .finish();
-        }
-
-        builder.build()
+        grust_graph::lakecat_catalog_event_graph(&LakeCatCatalogEvent {
+            event_id: event.event_id.clone(),
+            subject: event.subject.clone(),
+            label: graph_label_name(&event.label).to_string(),
+            action: graph_action_name(&event.action).to_string(),
+            emitted_at: event.emitted_at.to_rfc3339(),
+            properties: event.properties.clone(),
+            table: event.table.as_ref().map(|table| LakeCatTableRef {
+                stable_id: table.stable_id(),
+                warehouse: table.warehouse.as_str().to_string(),
+                namespace: table.namespace.parts().to_vec(),
+                name: table.name.as_str().to_string(),
+            }),
+        })
     }
 
     fn graph_label_name(label: &GraphNodeLabel) -> &'static str {
@@ -197,10 +192,17 @@ pub mod grust_integration {
                 GraphAction::Created,
                 table,
                 serde_json::json!({"kind":"test"}),
-            );
+            )
+            .with_event_id("lakecat:outbox:evt-1");
             let graph = graph_event_to_grust(&event);
-            assert_eq!(graph.nodes.len(), 2);
-            assert_eq!(graph.edges.len(), 1);
+            assert_eq!(graph.nodes.len(), 4);
+            assert_eq!(graph.edges.len(), 3);
+            assert!(
+                graph
+                    .edges
+                    .iter()
+                    .any(|edge| edge.label.as_str() == "AFFECTS_TABLE")
+            );
             GraphIndex::new(&graph).expect("event graph should be valid");
         }
     }
