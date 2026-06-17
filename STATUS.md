@@ -6,17 +6,20 @@ Updated: 2026-06-17
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `22827ee Use absolute Sail patch paths in manual CI`.
-- Current working slice: QueryGraph OSI boundary cleanup. LakeCat's bootstrap
-  bundle now emits an `lakecat.querygraph.osi-handoff.v1` artifact with stable
-  dataset/field anchors and governed Sail/LakeCat source metadata, while leaving
-  authoritative OSI metrics, dimensions, joins, ontology claims, and business
-  semantic names to QueryGraph.
+  working changes: `8fe1762 Make OSI bootstrap a QueryGraph handoff`.
+- Current working slice: first governed read restriction. LakeCat now derives a
+  typed `ReadRestriction` from enforced policy bindings, carries it in
+  table-scan authorization receipts, and intersects requested scan columns with
+  allowed policy columns before calling Sail.
 - Manual cloud gate status: run `27722995692` was started only after local
-  workflow reproduction. It is still in progress as of this update; the Sail
-  patch bridge step is passing and completed rows include `typesec-local
-  security`, `grust-local graph`, `grust cypher boundary`, and `turso-local
-  store`. Automatic push/PR CI remains disabled.
+  workflow reproduction. It completed with all focused rows green, including
+  default workspace, `sail-local service`, `typesec-local service`,
+  `typesec-local security`, `grust-local graph`, `grust cypher boundary`, and
+  `turso-local store`. The only failing row was `all features workspace`, where
+  `lakecat-sail::sail_integration::tests::preserves_filter_context_and_prunes_loaded_file_bounds`
+  panicked on an unwrap in the cloud checkout at `22827ee`; the same focused
+  command passes locally on the current worktree. Automatic push/PR CI remains
+  disabled.
 - LakeCat carries a temporary CI bridge under
   `ci/sail-patches/` that applies local Sail helper commits `68631016` and
   `fdb3b657`, plus the generated-model module export LakeCat service tests use,
@@ -52,6 +55,21 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
+- Added `ReadRestriction` to `lakecat-security` and exposed it through
+  `TableScanCapability` so the scan capability carries the server-owned
+  restriction from the authorization receipt.
+- Parsed a minimal enforceable ODRL subset from active policy bindings:
+  `allowed-columns` / `allowedColumns` at the policy root, in
+  `lakecat:read-restriction`, or in ODRL constraints, plus purpose and policy
+  hashes.
+- Applied allowed-column restrictions before Sail scan planning. Empty client
+  projection under a restriction now means the allowed columns, and client
+  projection can only narrow within those columns.
+- Added tests proving scan authorization carries the restriction and that a
+  `sail-local` scan requesting `event_id,payload` is narrowed to `event_id`
+  before Sail receives it.
+- Added the OPUS2 review/design docs to the tracked design record and updated
+  the OPUS2 plan with this first restriction slice.
 - Changed the QueryGraph bootstrap OSI artifact from a LakeCat-authored semantic
   model into a QueryGraph-owned OSI handoff. The handoff keeps the manifest hash
   contract and stable field anchors, but no longer publishes LakeCat-owned OSI
@@ -125,6 +143,17 @@ Updated: 2026-06-17
 
 ## Verification Completed
 
+- Governed read restriction focused checks passed:
+  `cargo fmt -p lakecat-security -p lakecat-service -- --check`,
+  `cargo test -p lakecat-security`,
+  `cargo test -p lakecat-service table_scan_authorization_carries_policy_read_restriction`,
+  `cargo test -p lakecat-service effective_projection_cannot_widen_policy_columns`,
+  `cargo test -p lakecat-service --features sail-local scan_planning_applies_policy_column_restriction_before_sail -- --nocapture`,
+  `cargo test -p lakecat-sail --all-features preserves_filter_context_and_prunes_loaded_file_bounds -- --nocapture`,
+  `cargo test -p lakecat-service`,
+  `cargo test -p lakecat-service --all-features`,
+  `cargo test --workspace --all-features`,
+  and `git diff --check`.
 - Applied `ci/sail-patches/*.patch` with `git am` to a clean temporary Sail
   checkout at `7a34be78`.
 - Temporary patched Sail checkout passed:

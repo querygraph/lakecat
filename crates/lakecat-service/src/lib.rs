@@ -17,7 +17,7 @@ use lakecat_api::{
 };
 use lakecat_core::{
     LakeCatError, Namespace, Principal, PrincipalKind, TableIdent, TableName, WarehouseName,
-    content_hash_bytes,
+    content_hash_bytes, content_hash_json,
 };
 use lakecat_graph::{CatalogGraphSink, GraphAction, GraphEvent, NoopCatalogGraphSink};
 use lakecat_lineage::{HashOnlyLineageSink, LineageEvent, LineageEventType, LineageSink};
@@ -31,7 +31,7 @@ use lakecat_sail::{
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
-    NamespaceCreateCapability, NamespaceListCapability, PolicyManageCapability,
+    NamespaceCreateCapability, NamespaceListCapability, PolicyManageCapability, ReadRestriction,
     StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
     TableDropCapability, TableLoadCapability, TableRestoreCapability, TableScanCapability,
 };
@@ -1316,14 +1316,23 @@ async fn plan_scan_with_capability(
     request: PlanTableScanRequest,
 ) -> Result<(lakecat_sail::ScanPlan, serde_json::Value), LakeCatHttpError> {
     request.validate_scan_mode()?;
-    let projection = request.projected_fields();
-    let filters = request.filter_values();
+    let requested_projection = request.projected_fields();
+    let restriction = capability.read_restriction()?;
+    let projection = effective_projection(&requested_projection, &restriction)?;
+    let mut filters = request.filter_values();
+    if let Some(row_predicate) = restriction.row_predicate.clone() {
+        filters.push(row_predicate);
+    }
+    let stats_fields = effective_stats_fields(&request.stats_fields, &restriction);
     let scan_request_extensions = json!({
         "case-sensitive": request.case_sensitive,
         "use-snapshot-schema": request.use_snapshot_schema,
         "start-snapshot-id": request.start_snapshot_id,
         "end-snapshot-id": request.end_snapshot_id,
-        "stats-fields": request.stats_fields,
+        "requested-projection": requested_projection,
+        "effective-projection": projection,
+        "read-restriction": restriction,
+        "stats-fields": stats_fields,
     });
     let scan = state
         .sail
@@ -1610,6 +1619,195 @@ fn policy_binding_response(binding: &PolicyBinding) -> PolicyBindingResponse {
     }
 }
 
+fn read_restriction_from_policy_bindings(
+    bindings: &[PolicyBinding],
+) -> Result<ReadRestriction, LakeCatError> {
+    let mut restriction = ReadRestriction::unrestricted();
+    for binding in bindings {
+        let policy_hash = content_hash_json(&binding.odrl)?;
+        restriction.policy_hashes.push(policy_hash);
+        if let Some(columns) = allowed_columns_from_odrl(&binding.odrl)? {
+            restriction.allowed_columns = Some(match restriction.allowed_columns.take() {
+                Some(existing) => intersect_columns(&existing, &columns),
+                None => columns,
+            });
+        }
+        if restriction.purpose.is_none() {
+            restriction.purpose = purpose_from_odrl(&binding.odrl);
+        }
+        if restriction.max_credential_ttl_seconds.is_none() {
+            restriction.max_credential_ttl_seconds = ttl_from_odrl(&binding.odrl);
+        }
+    }
+    Ok(restriction)
+}
+
+fn allowed_columns_from_odrl(odrl: &Value) -> Result<Option<Vec<String>>, LakeCatError> {
+    for value in [
+        odrl.get("allowed-columns"),
+        odrl.get("allowedColumns"),
+        odrl.get("columns"),
+        odrl.get("lakecat:read-restriction")
+            .and_then(|value| value.get("allowed-columns")),
+        odrl.get("lakecat:read-restriction")
+            .and_then(|value| value.get("allowedColumns")),
+        odrl.get("read-restriction")
+            .and_then(|value| value.get("allowed-columns")),
+        odrl.get("readRestriction")
+            .and_then(|value| value.get("allowedColumns")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        return Ok(Some(string_list(value, "ODRL allowed columns")?));
+    }
+
+    let mut columns = Vec::new();
+    for constraint in odrl_constraints(odrl) {
+        let left = constraint
+            .get("leftOperand")
+            .or_else(|| constraint.get("left-operand"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if matches!(
+            left,
+            "column" | "columns" | "allowed-columns" | "allowedColumns" | "lakecat:allowed-columns"
+        ) && let Some(value) = constraint
+            .get("rightOperand")
+            .or_else(|| constraint.get("right-operand"))
+        {
+            columns.extend(string_list(value, "ODRL allowed columns")?);
+        }
+    }
+    if columns.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(dedup_columns(columns)))
+    }
+}
+
+fn purpose_from_odrl(odrl: &Value) -> Option<String> {
+    odrl.get("purpose")
+        .and_then(Value::as_str)
+        .map(ToString::to_string)
+        .or_else(|| {
+            odrl_constraints(odrl).into_iter().find_map(|constraint| {
+                let left = constraint
+                    .get("leftOperand")
+                    .or_else(|| constraint.get("left-operand"))
+                    .and_then(Value::as_str)?;
+                if left == "purpose" {
+                    constraint
+                        .get("rightOperand")
+                        .or_else(|| constraint.get("right-operand"))
+                        .and_then(Value::as_str)
+                        .map(ToString::to_string)
+                } else {
+                    None
+                }
+            })
+        })
+}
+
+fn ttl_from_odrl(odrl: &Value) -> Option<u64> {
+    odrl.get("max-credential-ttl-seconds")
+        .or_else(|| odrl.get("maxCredentialTtlSeconds"))
+        .and_then(Value::as_u64)
+}
+
+fn odrl_constraints(odrl: &Value) -> Vec<&Value> {
+    let mut constraints = Vec::new();
+    for permission in values_as_slice(odrl.get("permission")) {
+        constraints.extend(values_as_slice(permission.get("constraint")));
+    }
+    constraints.extend(values_as_slice(odrl.get("constraint")));
+    constraints
+}
+
+fn values_as_slice(value: Option<&Value>) -> Vec<&Value> {
+    match value {
+        Some(Value::Array(values)) => values.iter().collect(),
+        Some(value) => vec![value],
+        None => Vec::new(),
+    }
+}
+
+fn string_list(value: &Value, label: &str) -> Result<Vec<String>, LakeCatError> {
+    let raw = match value {
+        Value::Array(values) => values
+            .iter()
+            .map(|item| {
+                item.as_str().map(ToString::to_string).ok_or_else(|| {
+                    LakeCatError::InvalidArgument(format!("{label} must be strings"))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        Value::String(value) => vec![value.clone()],
+        _ => {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "{label} must be a string or string array"
+            )));
+        }
+    };
+    Ok(dedup_columns(raw))
+}
+
+fn dedup_columns(columns: Vec<String>) -> Vec<String> {
+    let mut out = Vec::with_capacity(columns.len());
+    for column in columns {
+        if !out.iter().any(|existing| existing == &column) {
+            out.push(column);
+        }
+    }
+    out
+}
+
+fn intersect_columns(left: &[String], right: &[String]) -> Vec<String> {
+    left.iter()
+        .filter(|column| right.iter().any(|allowed| allowed == *column))
+        .cloned()
+        .collect()
+}
+
+fn effective_projection(
+    requested_projection: &[String],
+    restriction: &ReadRestriction,
+) -> Result<Vec<String>, LakeCatError> {
+    let Some(allowed_columns) = restriction.allowed_columns.as_ref() else {
+        return Ok(requested_projection.to_vec());
+    };
+    if allowed_columns.is_empty() {
+        return Err(LakeCatError::Conflict(
+            "read restriction leaves no columns available for scan planning".to_string(),
+        ));
+    }
+    if requested_projection.is_empty() {
+        return Ok(allowed_columns.clone());
+    }
+    let projection = requested_projection
+        .iter()
+        .filter(|column| allowed_columns.iter().any(|allowed| allowed == *column))
+        .cloned()
+        .collect::<Vec<_>>();
+    if projection.is_empty() {
+        return Err(LakeCatError::Conflict(
+            "requested projection is outside the governed read restriction".to_string(),
+        ));
+    }
+    Ok(projection)
+}
+
+fn effective_stats_fields(requested: &[String], restriction: &ReadRestriction) -> Vec<String> {
+    let Some(allowed_columns) = restriction.allowed_columns.as_ref() else {
+        return requested.to_vec();
+    };
+    requested
+        .iter()
+        .filter(|column| allowed_columns.iter().any(|allowed| allowed == *column))
+        .cloned()
+        .collect()
+}
+
 fn management_warehouse(
     state: &LakeCatState,
     warehouse: String,
@@ -1755,20 +1953,32 @@ async fn authorize(
     } else {
         Vec::new()
     };
+    let read_restriction =
+        if matches!(action, CatalogAction::TablePlanScan) && !policy_bindings.is_empty() {
+            Some(read_restriction_from_policy_bindings(&policy_bindings)?)
+        } else {
+            None
+        };
+    let mut context = json!({
+        "warehouse": state.warehouse.as_str(),
+        "request-identity": identity.envelope,
+        "policy-bindings": policy_bindings
+            .iter()
+            .map(policy_binding_response)
+            .collect::<Vec<_>>(),
+    });
+    if let Some(restriction) = read_restriction {
+        context["read-restriction"] = serde_json::to_value(restriction).map_err(|err| {
+            LakeCatError::Internal(format!("failed to encode read restriction: {err}"))
+        })?;
+    }
     let receipt = state
         .governance
         .authorize(AuthorizationRequest {
             principal: identity.principal,
             action,
             table,
-            context: json!({
-                "warehouse": state.warehouse.as_str(),
-                "request-identity": identity.envelope,
-                "policy-bindings": policy_bindings
-                    .iter()
-                    .map(policy_binding_response)
-                    .collect::<Vec<_>>(),
-            }),
+            context,
         })
         .await?;
     if receipt.allowed {
@@ -3821,6 +4031,171 @@ mod tests {
         assert_eq!(
             load_context["policy-bindings"][0]["odrl"]["uid"],
             serde_json::json!("policy:agent-read")
+        );
+    }
+
+    #[tokio::test]
+    async fn table_scan_authorization_carries_policy_read_restriction() {
+        let store = MemoryCatalogStore::new();
+        let governance = Arc::new(RecordingGovernance::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                governance.clone(),
+                NoopCatalogGraphSink::new(),
+                HashOnlyLineageSink::new(),
+            );
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            Namespace::new(vec!["default".to_string()]).unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        store
+            .upsert_policy_binding(
+                PolicyBinding::new(
+                    "agent-columns",
+                    WarehouseName::new("local").unwrap(),
+                    Some(ident.namespace.clone()),
+                    Some(ident.name.clone()),
+                    true,
+                    serde_json::json!({
+                        "uid": "policy:agent-columns",
+                        "lakecat:read-restriction": {
+                            "allowed-columns": ["event_id"]
+                        },
+                        "permission": [{
+                            "action": "read",
+                            "constraint": [{
+                                "leftOperand": "purpose",
+                                "operator": "eq",
+                                "rightOperand": "resilience-demo"
+                            }]
+                        }]
+                    }),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let capability = authorize_table_scan(
+            &state,
+            RequestIdentity {
+                principal: Principal::new("did:example:agent", PrincipalKind::Agent).unwrap(),
+                envelope: serde_json::json!({"type": "test"}),
+                typedid_envelope: None,
+            },
+            ident,
+        )
+        .await
+        .unwrap();
+        let restriction = capability.read_restriction().unwrap();
+        assert_eq!(
+            restriction.allowed_columns.as_deref(),
+            Some(&["event_id".to_string()][..])
+        );
+        assert_eq!(restriction.purpose.as_deref(), Some("resilience-demo"));
+        assert_eq!(restriction.policy_hashes.len(), 1);
+
+        let contexts = governance.contexts.lock().await;
+        assert_eq!(
+            contexts[0]["read-restriction"]["allowed-columns"][0],
+            serde_json::json!("event_id")
+        );
+    }
+
+    #[test]
+    fn effective_projection_cannot_widen_policy_columns() {
+        let restriction = ReadRestriction {
+            allowed_columns: Some(vec!["event_id".to_string()]),
+            ..ReadRestriction::unrestricted()
+        };
+        assert_eq!(
+            effective_projection(&[], &restriction).unwrap(),
+            vec!["event_id".to_string()]
+        );
+        assert_eq!(
+            effective_projection(
+                &["event_id".to_string(), "payload".to_string()],
+                &restriction
+            )
+            .unwrap(),
+            vec!["event_id".to_string()]
+        );
+        assert!(effective_projection(&["payload".to_string()], &restriction).is_err());
+    }
+
+    #[cfg(feature = "sail-local")]
+    #[tokio::test]
+    async fn scan_planning_applies_policy_column_restriction_before_sail() {
+        let app = test_app();
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/policies/agent-columns")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "namespace": ["default"],
+                    "table": "events",
+                    "enforced": true,
+                    "odrl": {
+                        "uid": "policy:agent-columns",
+                        "lakecat:read-restriction": {
+                            "allowed-columns": ["event_id"]
+                        }
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"table-uuid":"11111111-1111-1111-1111-111111111111","location":"file:///tmp/events","last-sequence-number":7,"last-updated-ms":1710000000000,"last-column-id":2,"schemas":[{"type":"struct","schema-id":1,"fields":[{"id":1,"name":"event_id","type":"string","required":true},{"id":2,"name":"payload","type":"string","required":false}]}],"current-schema-id":1,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"current-snapshot-id":42,"snapshots":[{"snapshot-id":42,"sequence-number":7,"timestamp-ms":1710000000000,"manifest-list":"file:///tmp/events/metadata/snap-42.avro","summary":{"operation":"append"},"schema-id":1}],"snapshot-log":[{"timestamp-ms":1710000000000,"snapshot-id":42}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let plan = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/plan")
+            .header("content-type", "application/json")
+            .header("x-lakecat-agent-did", "did:example:agent")
+            .body(Body::from(
+                serde_json::json!({
+                    "select": ["event_id", "payload"],
+                    "case-sensitive": true
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(plan).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            body["residual-filter"]["select"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:scan-request"]["requested-projection"],
+            serde_json::json!(["event_id", "payload"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:scan-request"]["effective-projection"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:scan-request"]["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
         );
     }
 

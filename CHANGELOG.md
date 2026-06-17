@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added the first server-owned governed read restriction: enforced policy
+  bindings can now provide allowed scan columns, table-scan capabilities carry
+  the resulting `ReadRestriction`, and scan planning intersects client
+  projection with the policy before calling Sail.
 - Changed the QueryGraph bootstrap OSI artifact from a LakeCat-authored semantic
   model into a stable OSI handoff: LakeCat now publishes dataset/field anchors
   and governed Sail/LakeCat source metadata while leaving metrics, dimensions,

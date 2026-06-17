@@ -52,6 +52,34 @@ pub struct AuthorizationReceipt {
     pub checked_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ReadRestriction {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_columns: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_predicate: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub purpose: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_credential_ttl_seconds: Option<u64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub policy_hashes: Vec<String>,
+}
+
+impl ReadRestriction {
+    pub fn unrestricted() -> Self {
+        Self::default()
+    }
+
+    pub fn is_unrestricted(&self) -> bool {
+        self.allowed_columns.is_none()
+            && self.row_predicate.is_none()
+            && self.purpose.is_none()
+            && self.max_credential_ttl_seconds.is_none()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Capability<Action, Resource> {
     receipt: AuthorizationReceipt,
@@ -184,6 +212,17 @@ impl TableScanCapability {
 
     pub fn table(&self) -> &TableIdent {
         self.resource()
+    }
+
+    pub fn read_restriction(&self) -> LakeCatResult<ReadRestriction> {
+        match self.receipt().context.get("read-restriction") {
+            Some(value) => serde_json::from_value(value.clone()).map_err(|err| {
+                LakeCatError::InvalidArgument(format!(
+                    "authorization receipt carries invalid read restriction: {err}"
+                ))
+            }),
+            None => Ok(ReadRestriction::unrestricted()),
+        }
     }
 }
 
