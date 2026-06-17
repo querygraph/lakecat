@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `lakecat-cli qglake-fixture`, a repeatable live-service setup command
+  that creates a demo namespace/table, storage profile, ODRL policy binding, and
+  verified QueryGraph bootstrap bundle through LakeCat APIs.
 - Added `lakecat-cli` admin commands for local governed demo setup:
   storage-profile list/upsert and ODRL policy-binding list/upsert now call the
   management API using the same typed payloads as the service.

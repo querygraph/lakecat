@@ -55,5 +55,7 @@ cargo run -p lakecat-cli -- policy-upsert \
   --namespace default \
   --table events \
   --odrl-file ./policy.odrl.json
+cargo run -p lakecat-cli -- qglake-fixture \
+  --output target/qglake/lakecat-bootstrap.json
 cargo run -p lakecat-cli -- bootstrap-export --output lakecat-bootstrap.json
 ```

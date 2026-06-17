@@ -1,9 +1,9 @@
 use std::{collections::BTreeMap, fs, path::PathBuf};
 
 use lakecat_api::{
-    CatalogConfigResponse, ListPolicyBindingsResponse, ListStorageProfilesResponse,
-    PolicyBindingResponse, StorageProfileResponse, UpsertPolicyBindingRequest,
-    UpsertStorageProfileRequest,
+    CatalogConfigResponse, CreateNamespaceRequest, CreateTableRequest, ListPolicyBindingsResponse,
+    ListStorageProfilesResponse, LoadTableResponse, NamespaceResponse, PolicyBindingResponse,
+    StorageProfileResponse, UpsertPolicyBindingRequest, UpsertStorageProfileRequest,
 };
 use lakecat_querygraph::QueryGraphBootstrap;
 use serde::{Serialize, de::DeserializeOwned};
@@ -102,6 +102,28 @@ async fn run() -> lakecat_core::LakeCatResult<()> {
             )
             .await?,
         ),
+        Command::QglakeFixture {
+            catalog,
+            warehouse,
+            namespace,
+            table,
+            location,
+            metadata_location,
+            output,
+            principal,
+        } => {
+            qglake_fixture(
+                catalog,
+                warehouse,
+                namespace,
+                table,
+                location,
+                metadata_location,
+                output,
+                principal,
+            )
+            .await
+        }
     }
 }
 
@@ -210,6 +232,25 @@ async fn put_json<B: Serialize, T: DeserializeOwned>(
     decode_json_response(response, label).await
 }
 
+async fn post_json<B: Serialize, T: DeserializeOwned>(
+    catalog: &str,
+    path: &str,
+    principal: Option<&str>,
+    label: &str,
+    body: &B,
+) -> lakecat_core::LakeCatResult<T> {
+    let endpoint = format!("{}{}", catalog.trim_end_matches('/'), path);
+    let client = reqwest::Client::new();
+    let mut request = client.post(endpoint).json(body);
+    if let Some(principal) = principal {
+        request = request.header("x-lakecat-principal", principal);
+    }
+    let response = request.send().await.map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!("failed to request {label}: {err}"))
+    })?;
+    decode_json_response(response, label).await
+}
+
 async fn decode_json_response<T: DeserializeOwned>(
     response: reqwest::Response,
     label: &str,
@@ -237,6 +278,130 @@ fn print_json<T: Serialize>(value: &T) -> lakecat_core::LakeCatResult<()> {
     })?;
     println!("{pretty}");
     Ok(())
+}
+
+async fn qglake_fixture(
+    catalog: String,
+    warehouse: String,
+    namespace: Vec<String>,
+    table: String,
+    location: String,
+    metadata_location: String,
+    output: PathBuf,
+    principal: Option<String>,
+) -> lakecat_core::LakeCatResult<()> {
+    let principal = principal.as_deref();
+    let namespace_path = namespace.join(".");
+    let storage_profile = format!("{table}-local");
+    let policy = format!("{table}-agent-read");
+
+    let _: NamespaceResponse = post_json(
+        &catalog,
+        "/catalog/v1/namespaces",
+        principal,
+        "namespace create",
+        &CreateNamespaceRequest {
+            namespace: namespace.clone(),
+        },
+    )
+    .await?;
+    let _: LoadTableResponse = post_json(
+        &catalog,
+        &format!("/catalog/v1/namespaces/{namespace_path}/tables"),
+        principal,
+        "table create",
+        &CreateTableRequest {
+            name: table.clone(),
+            location: location.clone(),
+            metadata_location: Some(metadata_location),
+            metadata: qglake_table_metadata(),
+        },
+    )
+    .await?;
+    let _: StorageProfileResponse = put_json(
+        &catalog,
+        &format!("/management/v1/warehouses/{warehouse}/storage-profiles/{storage_profile}"),
+        principal,
+        "storage profile upsert",
+        &UpsertStorageProfileRequest {
+            location_prefix: location,
+            provider: "file".to_string(),
+            issuance_mode: "local-file-no-secret".to_string(),
+            secret_ref: None,
+            public_config: BTreeMap::from([("lakecat.fixture".to_string(), "qglake".to_string())]),
+        },
+    )
+    .await?;
+    let _: PolicyBindingResponse = put_json(
+        &catalog,
+        &format!("/management/v1/warehouses/{warehouse}/policies/{policy}"),
+        principal,
+        "policy upsert",
+        &UpsertPolicyBindingRequest {
+            namespace: Some(namespace),
+            table: Some(table.clone()),
+            enforced: true,
+            odrl: qglake_odrl_policy(&table),
+        },
+    )
+    .await?;
+
+    bootstrap_export(catalog, output, principal.map(ToString::to_string)).await
+}
+
+fn qglake_table_metadata() -> Value {
+    json!({
+        "format-version": 3,
+        "current-schema-id": 1,
+        "schemas": [{
+            "schema-id": 1,
+            "fields": [
+                {
+                    "id": 1,
+                    "name": "event_id",
+                    "type": "string",
+                    "required": true,
+                    "doc": "Event identifier.",
+                    "semantic-type": "https://schema.org/identifier"
+                },
+                {
+                    "id": 2,
+                    "name": "occurred_at",
+                    "type": "timestamp",
+                    "required": false,
+                    "doc": "Event timestamp.",
+                    "semantic-type": "https://schema.org/DateTime"
+                },
+                {
+                    "id": 3,
+                    "name": "severity",
+                    "type": "string",
+                    "required": false,
+                    "doc": "Operational severity."
+                }
+            ]
+        }]
+    })
+}
+
+fn qglake_odrl_policy(table: &str) -> Value {
+    json!({
+        "@context": {
+            "odrl": "http://www.w3.org/ns/odrl/2/",
+            "typesec": "https://typesec.ai/ns#"
+        },
+        "uid": format!("lakecat:qglake:{table}:agent-read"),
+        "type": "odrl:Set",
+        "permission": [{
+            "target": table,
+            "action": "odrl:read",
+            "constraint": [{
+                "leftOperand": "typesec:capability",
+                "operator": "odrl:eq",
+                "rightOperand": "catalog.table.plan_scan"
+            }]
+        }]
+    })
 }
 
 enum Command {
@@ -280,6 +445,16 @@ enum Command {
         public_config: BTreeMap<String, String>,
         principal: Option<String>,
     },
+    QglakeFixture {
+        catalog: String,
+        warehouse: String,
+        namespace: Vec<String>,
+        table: String,
+        location: String,
+        metadata_location: String,
+        output: PathBuf,
+        principal: Option<String>,
+    },
 }
 
 impl Command {
@@ -295,6 +470,7 @@ impl Command {
             "policy-upsert" => parse_policy_upsert(args),
             "storage-profile-list" => parse_storage_profile_list(args),
             "storage-profile-upsert" => parse_storage_profile_upsert(args),
+            "qglake-fixture" => parse_qglake_fixture(args),
             _ => Err(usage_error()),
         }
     }
@@ -459,6 +635,43 @@ fn parse_storage_profile_upsert(
     })
 }
 
+fn parse_qglake_fixture(
+    args: impl Iterator<Item = String>,
+) -> lakecat_core::LakeCatResult<Command> {
+    let mut common = CommonArgs::default();
+    let mut namespace = vec!["default".to_string()];
+    let mut table = "events".to_string();
+    let mut location = "file:///tmp/lakecat-qglake/events".to_string();
+    let mut metadata_location = "file:///tmp/lakecat-qglake/events/metadata/00000.json".to_string();
+    let mut output = PathBuf::from("target/qglake/lakecat-bootstrap.json");
+    let mut args = args.peekable();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--catalog" => common.catalog = next_arg(&mut args, "--catalog")?,
+            "--warehouse" => common.warehouse = next_arg(&mut args, "--warehouse")?,
+            "--principal" => common.principal = Some(next_arg(&mut args, "--principal")?),
+            "--namespace" => namespace = parse_namespace(&next_arg(&mut args, "--namespace")?),
+            "--table" => table = next_arg(&mut args, "--table")?,
+            "--location" => location = next_arg(&mut args, "--location")?,
+            "--metadata-location" => {
+                metadata_location = next_arg(&mut args, "--metadata-location")?
+            }
+            "--output" => output = PathBuf::from(next_arg(&mut args, "--output")?),
+            _ => return Err(usage_error()),
+        }
+    }
+    Ok(Command::QglakeFixture {
+        catalog: common.catalog,
+        warehouse: common.warehouse,
+        namespace,
+        table,
+        location,
+        metadata_location,
+        output,
+        principal: common.principal,
+    })
+}
+
 struct CommonArgs {
     catalog: String,
     warehouse: String,
@@ -541,7 +754,7 @@ fn next_arg(
 
 fn usage_error() -> lakecat_core::LakeCatError {
     lakecat_core::LakeCatError::InvalidArgument(
-        "usage: lakecat-cli <config|bootstrap-export|storage-profile-list|storage-profile-upsert|policy-list|policy-upsert> [options]"
+        "usage: lakecat-cli <config|bootstrap-export|storage-profile-list|storage-profile-upsert|policy-list|policy-upsert|qglake-fixture> [options]"
             .to_string(),
     )
 }
@@ -656,6 +869,31 @@ mod tests {
                 assert!(!enforced);
             }
             _ => panic!("expected policy-upsert command"),
+        }
+    }
+
+    #[test]
+    fn parses_qglake_fixture_command_defaults() {
+        let command = Command::parse(["qglake-fixture".to_string()]).unwrap();
+        match command {
+            Command::QglakeFixture {
+                warehouse,
+                namespace,
+                table,
+                location,
+                output,
+                ..
+            } => {
+                assert_eq!(warehouse, "local");
+                assert_eq!(namespace, vec!["default".to_string()]);
+                assert_eq!(table, "events");
+                assert_eq!(location, "file:///tmp/lakecat-qglake/events");
+                assert_eq!(
+                    output,
+                    PathBuf::from("target/qglake/lakecat-bootstrap.json")
+                );
+            }
+            _ => panic!("expected qglake-fixture command"),
         }
     }
 }
