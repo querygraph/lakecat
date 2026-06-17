@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added Iceberg identifier-field projection to the in-process Sail provider:
+  Sail primary-key constraints are now written as Iceberg schema
+  `identifier-field-ids`, and loaded Iceberg identifier fields are exposed as
+  Sail `CatalogTableConstraint::PrimaryKey`.
 - Fixed `validate_secret_ref` not re-running on the `upsert_storage_profile`
   path: all three store implementations (no-op default, in-memory, Turso) now
   call `StorageProfile::validate()` before persisting, closing the bypass where

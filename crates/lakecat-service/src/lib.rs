@@ -1213,10 +1213,7 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
         if let Some(token) = authorization.strip_prefix("Bearer ") {
             let token_sha256 = content_hash_bytes(token.as_bytes());
             (
-                Principal::new(
-                    format!("bearer:{token_sha256}"),
-                    PrincipalKind::Service,
-                )?,
+                Principal::new(format!("bearer:{token_sha256}"), PrincipalKind::Service)?,
                 "authorization",
                 Some(token_sha256),
             )
@@ -1761,7 +1758,10 @@ mod tests {
         let identity = request_identity(&headers).expect("identity should parse");
         assert_eq!(identity.principal.subject, "did:example:typedid-only");
         assert_eq!(identity.principal.kind, PrincipalKind::Agent);
-        assert_eq!(identity.envelope["source"], serde_json::json!("x-lakecat-typedid"));
+        assert_eq!(
+            identity.envelope["source"],
+            serde_json::json!("x-lakecat-typedid")
+        );
         assert_eq!(
             identity.envelope["typedid"],
             serde_json::json!("did:example:typedid-only")
@@ -1776,7 +1776,10 @@ mod tests {
         let identity = request_identity(&headers).expect("identity should parse");
         assert_eq!(identity.principal.subject, "did:example:agent");
         assert_eq!(identity.principal.kind, PrincipalKind::Agent);
-        assert_eq!(identity.envelope["source"], serde_json::json!("x-lakecat-agent-did"));
+        assert_eq!(
+            identity.envelope["source"],
+            serde_json::json!("x-lakecat-agent-did")
+        );
     }
 
     #[tokio::test]

@@ -6,11 +6,11 @@ Updated: 2026-06-16
 
 - LakeCat is on `master`.
 - Latest committed LakeCat slice before this continuation:
-  `617d33c Gate credential issuance through TypeSec`.
-- Current working slice adds Iceberg default sort-order projection to the
-  in-process Sail provider, preserving `CreateTableOptions.sort_by` as Iceberg
-  sort-order metadata and projecting loaded table metadata back to Sail
-  `TableStatus.sort_by`.
+  `69d5a5a Changelog entries for code-review fixes`.
+- Current working slice adds Iceberg identifier-field projection to the
+  in-process Sail provider, preserving Sail primary-key constraints as Iceberg
+  schema `identifier-field-ids` and projecting loaded identifier fields back to
+  Sail `CatalogTableConstraint::PrimaryKey`.
 - Graph-related implementation is still intentionally kept out of LakeCat unless
   it is a bounded outbox/projection concern. Reusable graph taxonomy and graph
   mechanics belong in `/Users/alexy/src/grust`.
@@ -19,12 +19,12 @@ Updated: 2026-06-16
 
 ## Completed In This Commit
 
-- `LakeCatCatalogProvider::create_table` now writes Iceberg `sort-orders` from
-  Sail `CreateTableOptions.sort_by`.
-- `table_status` now resolves the current/default Iceberg sort order through the
-  current schema and populates Sail `CatalogTableSort` values.
-- The in-process provider test now round-trips ascending and descending sort
-  fields through LakeCat metadata.
+- `LakeCatCatalogProvider::create_table` writes Iceberg
+  `identifier-field-ids` from Sail primary-key constraints.
+- `table_status` resolves Iceberg identifier field ids through the current schema
+  and populates Sail primary-key constraints.
+- The in-process provider test round-trips primary-key constraints through
+  LakeCat metadata.
 
 ## Verification Completed
 
@@ -36,6 +36,6 @@ Updated: 2026-06-16
 
 ## Next Recommended Slice
 
-Continue the Sail `TableStatus` conversion with nested types, identifier fields,
-and constraints, then upstream reusable Iceberg metadata conversion helpers into
-Sail once the sibling Sail WIP is stable.
+Continue the Sail `TableStatus` conversion with nested Iceberg types and any
+remaining constraint forms, then upstream reusable Iceberg metadata conversion
+helpers into Sail once the sibling Sail WIP is stable.

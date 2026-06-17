@@ -216,8 +216,10 @@ impl StorageProfile {
         if let Some(secret_ref) = self.secret_ref.as_deref() {
             validate_secret_ref(secret_ref)?;
         }
-        if matches!(self.issuance_mode, CredentialIssuanceMode::ShortLivedSecretRef)
-            && self.secret_ref.is_none()
+        if matches!(
+            self.issuance_mode,
+            CredentialIssuanceMode::ShortLivedSecretRef
+        ) && self.secret_ref.is_none()
         {
             return Err(LakeCatError::InvalidArgument(
                 "short-lived-secret-ref issuance mode requires a secret reference".to_string(),

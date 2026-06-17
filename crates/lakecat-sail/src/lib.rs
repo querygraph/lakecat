@@ -246,8 +246,8 @@ pub mod catalog_provider {
         Namespace as SailNamespace, TableCommitInfo,
     };
     use sail_common_datafusion::catalog::{
-        CatalogPartitionField, CatalogTableSort, DatabaseStatus, PartitionTransform,
-        TableColumnStatus, TableKind, TableStatus,
+        CatalogPartitionField, CatalogTableConstraint, CatalogTableSort, DatabaseStatus,
+        PartitionTransform, TableColumnStatus, TableKind, TableStatus,
     };
     use serde_json::json;
 
@@ -422,12 +422,14 @@ pub mod catalog_provider {
                     "LakeCat Sail table creation requires a location".to_string(),
                 )
             })?;
+            let identifier_field_ids = identifier_field_ids(&options.columns, &options.constraints);
             let metadata = json!({
                 "format-version": 3,
                 "location": location,
                 "current-schema-id": 1,
                 "schemas": [{
                     "schema-id": 1,
+                    "identifier-field-ids": identifier_field_ids,
                     "fields": options.columns.iter().enumerate().map(|(idx, column)| {
                         json!({
                             "id": i32::try_from(idx + 1).unwrap_or(i32::MAX),
@@ -712,7 +714,7 @@ pub mod catalog_provider {
             kind: TableKind::Table {
                 columns: table_columns(record),
                 comment: None,
-                constraints: Vec::new(),
+                constraints: table_constraints(record),
                 location: Some(record.location.clone()),
                 format: "iceberg".to_string(),
                 partition_by: table_partition_fields(record),
@@ -840,9 +842,7 @@ pub mod catalog_provider {
                     .and_then(serde_json::Value::as_i64)
                     .and_then(|id| i32::try_from(id).ok())?;
                 let column = id_to_name.get(&source_id)?.clone();
-                let direction = field
-                    .get("direction")
-                    .and_then(serde_json::Value::as_str)?;
+                let direction = field.get("direction").and_then(serde_json::Value::as_str)?;
                 let ascending = match direction.to_ascii_lowercase().as_str() {
                     "asc" | "ascending" => true,
                     "desc" | "descending" => false,
@@ -851,6 +851,38 @@ pub mod catalog_provider {
                 Some(CatalogTableSort { column, ascending })
             })
             .collect()
+    }
+
+    fn table_constraints(record: &TableRecord) -> Vec<CatalogTableConstraint> {
+        let Some(schema) = current_schema(&record.metadata) else {
+            return Vec::new();
+        };
+        let Some(ids) = schema
+            .get("identifier-field-ids")
+            .and_then(serde_json::Value::as_array)
+        else {
+            return Vec::new();
+        };
+        if ids.is_empty() {
+            return Vec::new();
+        }
+        let id_to_name = schema_id_to_name(&record.metadata);
+        let columns = ids
+            .iter()
+            .filter_map(|id| {
+                id.as_i64()
+                    .and_then(|id| i32::try_from(id).ok())
+                    .and_then(|id| id_to_name.get(&id).cloned())
+            })
+            .collect::<Vec<_>>();
+        if columns.is_empty() {
+            Vec::new()
+        } else {
+            vec![CatalogTableConstraint::PrimaryKey {
+                name: None,
+                columns,
+            }]
+        }
     }
 
     fn current_partition_spec(metadata: &serde_json::Value) -> Option<&serde_json::Value> {
@@ -998,6 +1030,34 @@ pub mod catalog_provider {
                     "direction": if field.ascending { "asc" } else { "desc" },
                     "null-order": if field.ascending { "nulls-first" } else { "nulls-last" },
                 }))
+            })
+            .collect()
+    }
+
+    fn identifier_field_ids(
+        columns: &[sail_catalog::provider::CreateTableColumnOptions],
+        constraints: &[CatalogTableConstraint],
+    ) -> Vec<i32> {
+        let column_ids = columns
+            .iter()
+            .enumerate()
+            .map(|(idx, column)| {
+                (
+                    column.name.as_str(),
+                    i32::try_from(idx + 1).unwrap_or(i32::MAX),
+                )
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        constraints
+            .iter()
+            .filter_map(|constraint| match constraint {
+                CatalogTableConstraint::PrimaryKey { columns, .. } => Some(columns),
+                CatalogTableConstraint::Unique { .. } => None,
+            })
+            .flat_map(|columns| {
+                columns
+                    .iter()
+                    .filter_map(|column| column_ids.get(column.as_str()).copied())
             })
             .collect()
     }
@@ -1151,7 +1211,10 @@ pub mod catalog_provider {
                             },
                         ],
                         comment: None,
-                        constraints: Vec::new(),
+                        constraints: vec![CatalogTableConstraint::PrimaryKey {
+                            name: None,
+                            columns: vec!["event_id".to_string()],
+                        }],
                         location: Some("file:///tmp/events".to_string()),
                         format: "iceberg".to_string(),
                         partition_by: vec![CatalogPartitionField {
@@ -1183,6 +1246,7 @@ pub mod catalog_provider {
             assert_eq!(loaded.name, "events");
             let TableKind::Table {
                 columns,
+                constraints,
                 partition_by,
                 sort_by,
                 ..
@@ -1200,6 +1264,13 @@ pub mod catalog_provider {
             assert_eq!(columns[1].data_type, DataType::Int32);
             assert!(columns[1].nullable);
             assert!(!columns[1].is_partition);
+            assert_eq!(
+                constraints,
+                vec![CatalogTableConstraint::PrimaryKey {
+                    name: None,
+                    columns: vec!["event_id".to_string()],
+                }]
+            );
             assert_eq!(
                 partition_by,
                 vec![CatalogPartitionField {
@@ -1335,12 +1406,22 @@ pub mod catalog_provider {
             let TableKind::Table { sort_by, .. } = created.kind else {
                 panic!("expected table kind")
             };
-            assert!(sort_by.is_empty(), "unsorted table should have no sort fields");
+            assert!(
+                sort_by.is_empty(),
+                "unsorted table should have no sort fields"
+            );
             let loaded = provider.get_table(&namespace, "unsorted").await.unwrap();
-            let TableKind::Table { sort_by: loaded_sort, .. } = loaded.kind else {
+            let TableKind::Table {
+                sort_by: loaded_sort,
+                ..
+            } = loaded.kind
+            else {
                 panic!("expected table kind")
             };
-            assert!(loaded_sort.is_empty(), "round-tripped unsorted table should have no sort fields");
+            assert!(
+                loaded_sort.is_empty(),
+                "round-tripped unsorted table should have no sort fields"
+            );
         }
 
         fn make_table_record(metadata: serde_json::Value) -> lakecat_store::TableRecord {
@@ -1349,7 +1430,13 @@ pub mod catalog_provider {
                 lakecat_core::Namespace::new(vec!["default".to_string()]).unwrap(),
                 lakecat_core::TableName::new("t").unwrap(),
             );
-            lakecat_store::TableRecord::new(ident, "file:///tmp/t".to_string(), None, metadata, Principal::anonymous())
+            lakecat_store::TableRecord::new(
+                ident,
+                "file:///tmp/t".to_string(),
+                None,
+                metadata,
+                Principal::anonymous(),
+            )
         }
 
         #[test]
@@ -1371,7 +1458,10 @@ pub mod catalog_provider {
             let sort_fields = table_sort_fields(&record);
             assert_eq!(sort_fields.len(), 1);
             assert_eq!(sort_fields[0].column, "ts");
-            assert!(!sort_fields[0].ascending, "DESCENDING should map to ascending=false");
+            assert!(
+                !sort_fields[0].ascending,
+                "DESCENDING should map to ascending=false"
+            );
         }
 
         #[test]
@@ -1391,7 +1481,10 @@ pub mod catalog_provider {
             });
             let record = make_table_record(metadata);
             let sort_fields = table_sort_fields(&record);
-            assert!(sort_fields.is_empty(), "field with no direction should be skipped, not treated as ascending");
+            assert!(
+                sort_fields.is_empty(),
+                "field with no direction should be skipped, not treated as ascending"
+            );
         }
     }
 }
