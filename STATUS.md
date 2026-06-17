@@ -6,7 +6,7 @@ Updated: 2026-06-17
 
 - LakeCat is on `master`.
 - Latest committed LakeCat slice before this continuation:
-  `b4987d0 Add QGLake live fixture command`.
+  `fd6e0b7 Record QueryGraph LakeCat import handoff`.
 - Cloud CI remains gated on the publish chain: wait for Grust to publish the
   needed crates, then for TypeSec to publish its matching crates, then rebuild
   LakeCat in GitHub Actions against published crates rather than pinning CI to
@@ -22,10 +22,16 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
+- Added a reusable LakeCat catalog graph adapter to Grust in commit
+  `15952a9 Add LakeCat catalog graph adapter`.
+- Updated QueryGraph in commit `657fd6a Validate LakeCat imports with Grust`
+  so `lakecat-import` validates LakeCat graph envelopes with Grust and reports
+  graph size from the validated graph.
 - Verified the LakeCat-generated QGLake bundle through QueryGraph's
   `lakecat-import` path.
 - QueryGraph now checks the outer LakeCat bundle hash, validates the graph
-  envelope shape, and writes an import plan for downstream graph ingestion.
+  envelope through Grust, and writes an import plan for downstream graph
+  ingestion.
 - No graph taxonomy, traversal, or ingest mechanics moved into LakeCat; reusable
   graph work remains targeted at Grust.
 
@@ -46,6 +52,8 @@ Updated: 2026-06-17
 - QueryGraph importer:
   `cargo run -- lakecat-import --bundle /Users/alexy/src/lakecat/target/qglake-live/lakecat-bootstrap.json --output .querygraph/lakecat/import-plan.json`
   in `/Users/alexy/src/querygraph/qg-rust`
+- Grust facade tests: `cargo test -p grust-graph`
+- Grust Sail compile check: `cargo check -p grust-sail`
 - QueryGraph tests: `cargo test` in `/Users/alexy/src/querygraph/qg-rust`
 - `cargo test --workspace`
 - `cargo test --workspace --all-features`
@@ -53,6 +61,6 @@ Updated: 2026-06-17
 
 ## Next Recommended Slice
 
-Promote reusable LakeCat catalog graph ingest/taxonomy helpers into Grust, then
-have QueryGraph consume them from Grust instead of growing importer-specific
-graph mechanics.
+Wait for the Grust and TypeSec publish chain, then rebuild LakeCat cloud CI
+against the published crates before re-enabling automatic GitHub Actions
+triggers.

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Promoted reusable LakeCat catalog graph envelope ingestion into Grust and
+  updated QueryGraph to validate LakeCat imports through the Grust adapter
+  instead of growing graph mechanics in LakeCat.
 - Verified the LakeCat-generated QGLake bundle through QueryGraph's
   `lakecat-import` path, which now checks the outer bundle hash and writes a
   QueryGraph import plan without moving graph ingest mechanics into LakeCat.
