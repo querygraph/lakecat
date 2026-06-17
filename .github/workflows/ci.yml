@@ -44,7 +44,11 @@ jobs:
           path: sail
 
       - name: Apply LakeCat Sail helper patches
-        run: git -C sail am ../lakecat/ci/sail-patches/*.patch
+        run: >
+          git -C sail
+          -c user.name=lakecat-ci
+          -c user.email=lakecat-ci@users.noreply.github.com
+          am ../lakecat/ci/sail-patches/*.patch
 
       - name: Checkout Grust
         uses: actions/checkout@v4

@@ -11,8 +11,9 @@ Updated: 2026-06-17
   push/PR CI stays disabled. LakeCat now carries a temporary CI bridge under
   `ci/sail-patches/` that applies local Sail helper commits `68631016` and
   `fdb3b657`, plus the generated-model module export LakeCat service tests use,
-  to the `lakehq/sail@main` checkout before building, until those APIs are
-  available from an upstream Sail branch.
+  to the `lakehq/sail@main` checkout before building. The bridge now supplies
+  a local `git am` committer identity for GitHub Actions and should be removed
+  once those APIs are available from an upstream Sail branch.
 - Status commit recording the pushed Grust Cypher reconciliation:
   `e6ca9e0 Record Grust Cypher reconciliation status`.
 - Status commits recording the pushed verifier work:
@@ -41,6 +42,9 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
+- Fixed the Sail patch bridge to pass `git am` committer identity in GitHub
+  Actions after run `27722483267` failed before tests with "Committer identity
+  unknown".
 - Added `ci/sail-patches/` with the Sail helper/model API patches LakeCat
   already depends on locally.
 - Updated manual GitHub Actions to apply those patches to the Sail checkout
@@ -100,6 +104,9 @@ Updated: 2026-06-17
 - Applied `ci/sail-patches/*.patch` with `git am` to a clean temporary Sail
   checkout at `7a34be78`.
 - Temporary patched Sail checkout passed:
+  `cargo test -p sail-catalog-iceberg planning -- --nocapture`.
+- Current `lakehq/sail@ceab87693f8e37f50d855ba6cf479c3a169ccc95` accepted the
+  patch series with the identity-configured `git am` command and passed:
   `cargo test -p sail-catalog-iceberg planning -- --nocapture`.
 - LakeCat focused Sail-local service test passed:
   `cargo test -p lakecat-service --features sail-local fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens -- --nocapture`.

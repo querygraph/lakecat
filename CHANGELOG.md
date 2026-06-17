@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed the temporary Sail patch bridge to supply an explicit `git am`
+  committer identity in GitHub Actions.
 - Added a temporary manual-CI bridge that applies the LakeCat-required Sail
   helper/model API patches to the `lakehq/sail` checkout before building,
   keeping the helper implementation in Sail-shaped patches until those commits
