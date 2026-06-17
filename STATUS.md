@@ -6,18 +6,19 @@ Updated: 2026-06-17
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `c04f833 Reconcile Grust Cypher and TypeSec 0.8`.
-- Current working slice: fix the manual-only cloud gate after run
-  `27714203065` failed in `cargo fmt --all -- --check` before tests ran because
-  rustfmt also checked sibling Grust/Sail/TypeSec path dependencies. Keep
-  automatic CI disabled.
+  `057b725 Scope manual CI formatting to LakeCat`.
+- Current working slice: keep fixing the manual-only cloud gate while automatic
+  push/PR CI stays disabled. Run `27720360961` proved the TypeSec 0.8 path
+  dependency resolution issue is fixed after pushing TypeSec `e05460f`, and the
+  remaining failed rows now stop because the Ubuntu runner lacks `protoc` for
+  Sail's `prost-build` step.
 - Status commit recording the pushed Grust Cypher reconciliation:
   `e6ca9e0 Record Grust Cypher reconciliation status`.
 - Status commits recording the pushed verifier work:
   `f68cc05 Record TypeDID verifier status` and
   `d720dc4 Record pushed TypeDID verifier status`.
-- Supporting TypeSec attestation commit exists locally in `/Users/alexy/src/typesec`
-  and is pushed as `0ec164a Add TypeDID verification attestations`.
+- Supporting TypeSec commits are pushed through
+  `e05460f Prepare Typesec 0.8.0 release`.
 - Current local dependency reconciliation is complete: LakeCat now targets
   `typesec` 0.8.0 and Grust 0.9.0 with the `cypher` facade feature enabled for
   `grust-local`.
@@ -39,6 +40,8 @@ Updated: 2026-06-17
 
 ## Completed In This Commit
 
+- Added `protobuf-compiler` installation to the manual GitHub Actions workflow
+  so Sail's `prost-build` custom build can find `protoc` on Ubuntu runners.
 - Scoped the manual GitHub Actions formatting check to the LakeCat workspace
   packages instead of `cargo fmt --all`, so sibling checkout formatting does not
   fail LakeCat's cloud gate before the matrix tests start.
@@ -86,6 +89,10 @@ Updated: 2026-06-17
 
 ## Verification Completed
 
+- Manual GitHub Actions run `27720360961` after pushing TypeSec 0.8 reached the
+  matrix tests. Passing rows: `grust-local graph`, `grust cypher boundary`,
+  `typesec-local security`, and `turso-local store`. Failed rows now all report
+  missing `protoc` from Sail's `sail-common-datafusion` build script.
 - `cargo fmt -p lakecat-api -p lakecat-cli -p lakecat-core -p lakecat-graph -p lakecat-lineage -p lakecat-querygraph -p lakecat-sail -p lakecat-security -p lakecat-service -p lakecat-store -- --check`
 - `git diff --check`
 - `cargo test -p lakecat-service --features typesec-local -- --nocapture`
@@ -150,7 +157,7 @@ Updated: 2026-06-17
 
 ## Next Recommended Slice
 
-Rerun the manual GitHub Actions workflow after the LakeCat-scoped formatting fix.
-Keep push/PR triggers disabled until that cloud run reaches the matrix tests and
-is green, then decide whether to re-enable automatic CI or keep the workflow
-manual during the sibling-crate publish cycle.
+Rerun the manual GitHub Actions workflow after the `protobuf-compiler` install
+step is pushed. Keep push/PR triggers disabled until the cloud matrix is green,
+then decide whether to re-enable automatic CI or keep the workflow manual during
+the sibling-crate publish cycle.

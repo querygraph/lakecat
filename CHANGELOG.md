@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `protobuf-compiler` installation to the manual GitHub Actions workflow
+  so Sail's `prost-build` code generation can find `protoc` in cloud test
+  jobs.
 - Scoped the manual GitHub Actions formatting check to LakeCat workspace
   packages so sibling Grust/Sail/TypeSec rustfmt drift cannot fail the LakeCat
   cloud gate before tests run.
