@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed the temporary Sail patch bridge path for the GitHub Actions workspace
+  layout.
 - Fixed the temporary Sail patch bridge to supply an explicit `git am`
   committer identity in GitHub Actions.
 - Added a temporary manual-CI bridge that applies the LakeCat-required Sail

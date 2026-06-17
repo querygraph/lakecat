@@ -12,8 +12,9 @@ Updated: 2026-06-17
   `ci/sail-patches/` that applies local Sail helper commits `68631016` and
   `fdb3b657`, plus the generated-model module export LakeCat service tests use,
   to the `lakehq/sail@main` checkout before building. The bridge now supplies
-  a local `git am` committer identity for GitHub Actions and should be removed
-  once those APIs are available from an upstream Sail branch.
+  a local `git am` committer identity and uses the GitHub Actions workspace path
+  for patch files; it should be removed once those APIs are available from an
+  upstream Sail branch.
 - Status commit recording the pushed Grust Cypher reconciliation:
   `e6ca9e0 Record Grust Cypher reconciliation status`.
 - Status commits recording the pushed verifier work:
@@ -45,6 +46,9 @@ Updated: 2026-06-17
 - Fixed the Sail patch bridge to pass `git am` committer identity in GitHub
   Actions after run `27722483267` failed before tests with "Committer identity
   unknown".
+- Fixed the Sail patch bridge path after run `27722686028` failed before tests
+  because `../lakecat/ci/sail-patches/*.patch` did not exist from the Actions
+  workspace root.
 - Added `ci/sail-patches/` with the Sail helper/model API patches LakeCat
   already depends on locally.
 - Updated manual GitHub Actions to apply those patches to the Sail checkout
