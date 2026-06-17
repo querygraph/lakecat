@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Disabled automatic GitHub Actions CI triggers while LakeCat waits for the
+  Grust and TypeSec published-crate chain; CI is now manual-only until the cloud
+  dependency graph is known to work.
 - Added TypeSec-gated production secret-ref dispatch for credential vending:
   `vault://`, `aws-sm://`, `gcp-sm://`, and `azure-kv://` references are now
   authorized against TypeSec by exact URI before failing with explicit
