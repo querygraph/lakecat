@@ -5,8 +5,8 @@ Updated: 2026-06-17
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed and pushed LakeCat slice before this continuation:
-  `f1028f6 Record Sail helper push status`.
+- Latest committed and pushed LakeCat slice:
+  `3a50130 Validate scan planning with Sail REST helpers`.
 - Supporting Sail helper commit exists locally in `/Users/alexy/src/sail` as
   `68631016 Expose Iceberg table status conversion`. Pushing to
   `lakehq/sail` is blocked for this machine/account: HTTPS has no configured

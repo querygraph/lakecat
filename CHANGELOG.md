@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Recorded the pushed scan-planning helper integration commit in `STATUS.md`.
 - Validated LakeCat's Sail-backed scan-planning and fetch-scan-tasks output
   through Sail's exported Iceberg REST planning-result helpers, keeping the
   standard response shape Sail-owned while LakeCat retains its extension fields.
