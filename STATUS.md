@@ -5,10 +5,10 @@ Updated: 2026-06-17
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed LakeCat implementation slice:
+- Latest committed and pushed LakeCat implementation slice:
   `c04f833 Reconcile Grust Cypher and TypeSec 0.8`.
-- Latest pushed LakeCat implementation slice before this checkpoint:
-  `cf0d9e7 Verify TypeDID envelopes through TypeSec`.
+- Status commit recording the pushed Grust Cypher reconciliation:
+  `e6ca9e0 Record Grust Cypher reconciliation status`.
 - Status commits recording the pushed verifier work:
   `f68cc05 Record TypeDID verifier status` and
   `d720dc4 Record pushed TypeDID verifier status`.

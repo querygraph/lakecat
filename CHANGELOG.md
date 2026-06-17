@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Updated `STATUS.md` after pushing the Grust Cypher and TypeSec 0.8
+  reconciliation slice.
 - Recorded the Grust Cypher and TypeSec 0.8 reconciliation commit in
   `STATUS.md`.
 - Updated LakeCat's local TypeSec baseline to `typesec` 0.8.0 and enabled
