@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a TypeSec-backed TypeDID envelope verifier seam for `typesec-local`:
+  LakeCat can now verify a protected TypeDID envelope through TypeSec, authorize
+  as the verified DID subject, and persist only audit-safe attestation context
+  plus envelope hashes without raw payloads or signatures.
 - Recorded the pushed scan-planning helper integration commit in `STATUS.md`.
 - Validated LakeCat's Sail-backed scan-planning and fetch-scan-tasks output
   through Sail's exported Iceberg REST planning-result helpers, keeping the

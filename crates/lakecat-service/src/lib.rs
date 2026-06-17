@@ -52,8 +52,38 @@ pub struct LakeCatState {
     pub sail: Arc<dyn SailCatalogEngine>,
     pub governance: Arc<dyn GovernanceEngine>,
     pub credential_issuer: Arc<dyn CredentialIssuer>,
+    pub typedid_verifier: Arc<dyn TypeDidVerifier>,
     pub graph: Arc<dyn CatalogGraphSink>,
     pub lineage: Arc<dyn LineageSink>,
+}
+
+#[async_trait]
+pub trait TypeDidVerifier: Send + Sync + 'static {
+    async fn verify(&self, envelope_json: &str) -> Result<TypeDidVerification, LakeCatError>;
+}
+
+#[derive(Debug, Clone)]
+pub struct TypeDidVerification {
+    pub principal: Principal,
+    pub attestation: Value,
+}
+
+#[derive(Debug, Default)]
+pub struct ConservativeTypeDidVerifier;
+
+impl ConservativeTypeDidVerifier {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self)
+    }
+}
+
+#[async_trait]
+impl TypeDidVerifier for ConservativeTypeDidVerifier {
+    async fn verify(&self, _envelope_json: &str) -> Result<TypeDidVerification, LakeCatError> {
+        Err(LakeCatError::NotSupported(
+            "TypeDID envelope verification requires the typesec-local integration".to_string(),
+        ))
+    }
 }
 
 #[async_trait]
@@ -619,6 +649,46 @@ pub mod typesec_credential_issuer {
     }
 }
 
+#[cfg(feature = "typesec-local")]
+pub mod typesec_typedid {
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+    use lakecat_core::{LakeCatError, LakeCatResult, Principal, PrincipalKind};
+    use typesec::{DidEnvelope, TypeDidGateway};
+
+    use crate::{TypeDidVerification, TypeDidVerifier};
+
+    pub struct TypeSecTypeDidVerifier {
+        gateway: Arc<TypeDidGateway>,
+    }
+
+    impl TypeSecTypeDidVerifier {
+        pub fn new(gateway: Arc<TypeDidGateway>) -> Arc<Self> {
+            Arc::new(Self { gateway })
+        }
+    }
+
+    #[async_trait]
+    impl TypeDidVerifier for TypeSecTypeDidVerifier {
+        async fn verify(&self, envelope_json: &str) -> LakeCatResult<TypeDidVerification> {
+            let envelope: DidEnvelope = serde_json::from_str(envelope_json).map_err(|err| {
+                LakeCatError::InvalidArgument(format!("invalid TypeDID envelope JSON: {err}"))
+            })?;
+            let verified = self.gateway.open_message(&envelope).map_err(|err| {
+                LakeCatError::Conflict(format!("TypeSec rejected TypeDID envelope: {err}"))
+            })?;
+            let attestation = verified.attestation();
+            Ok(TypeDidVerification {
+                principal: Principal::new(attestation.subject.to_string(), PrincipalKind::Agent)?,
+                attestation: serde_json::to_value(attestation).map_err(|err| {
+                    LakeCatError::Internal(format!("failed to encode TypeDID attestation: {err}"))
+                })?,
+            })
+        }
+    }
+}
+
 impl LakeCatState {
     pub fn new(warehouse: WarehouseName, store: Arc<dyn CatalogStore>) -> Self {
         Self {
@@ -627,6 +697,7 @@ impl LakeCatState {
             sail: default_sail_engine(),
             governance: AllowAllGovernanceEngine::new(),
             credential_issuer: ConservativeCredentialIssuer::new(),
+            typedid_verifier: ConservativeTypeDidVerifier::new(),
             graph: NoopCatalogGraphSink::new(),
             lineage: HashOnlyLineageSink::new(),
         }
@@ -648,6 +719,11 @@ impl LakeCatState {
 
     pub fn with_credential_issuer(mut self, credential_issuer: Arc<dyn CredentialIssuer>) -> Self {
         self.credential_issuer = credential_issuer;
+        self
+    }
+
+    pub fn with_typedid_verifier(mut self, typedid_verifier: Arc<dyn TypeDidVerifier>) -> Self {
+        self.typedid_verifier = typedid_verifier;
         self
     }
 }
@@ -1553,6 +1629,7 @@ fn management_warehouse(
 struct RequestIdentity {
     principal: Principal,
     envelope: Value,
+    typedid_envelope: Option<String>,
 }
 
 fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpError> {
@@ -1575,6 +1652,7 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
     let explicit_typedid = header("x-lakecat-typedid")?;
     let typedid = explicit_typedid.or(agent_did);
     let typedid_proof = header("x-lakecat-typedid-proof")?;
+    let typedid_envelope = header("x-lakecat-typedid-envelope")?;
     let delegation = header("x-lakecat-agent-delegation")?;
     let signed_summary = header("x-lakecat-agent-summary-signature")?;
     let authorization = header("authorization")?;
@@ -1621,6 +1699,8 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
         "source": source,
         "agent-did": agent_did,
         "typedid": typedid,
+        "typedid-envelope-sha256": typedid_envelope
+            .map(|value| content_hash_bytes(value.as_bytes())),
         "typedid-proof-sha256": typedid_proof.map(|value| content_hash_bytes(value.as_bytes())),
         "agent-delegation-sha256": delegation.map(|value| content_hash_bytes(value.as_bytes())),
         "agent-summary-signature-sha256": signed_summary
@@ -1633,7 +1713,34 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
     Ok(RequestIdentity {
         principal,
         envelope,
+        typedid_envelope: typedid_envelope.map(ToString::to_string),
     })
+}
+
+async fn verify_typedid_identity(
+    state: &LakeCatState,
+    mut identity: RequestIdentity,
+) -> Result<RequestIdentity, LakeCatHttpError> {
+    let Some(envelope_json) = identity.typedid_envelope.as_deref() else {
+        return Ok(identity);
+    };
+    let verification = state.typedid_verifier.verify(envelope_json).await?;
+    if identity.principal.kind != PrincipalKind::Anonymous
+        && identity.principal != verification.principal
+    {
+        return Err(LakeCatError::Conflict(format!(
+            "TypeDID verified subject {} does not match supplied principal {}",
+            verification.principal.subject, identity.principal.subject
+        ))
+        .into());
+    }
+    identity.principal = verification.principal.clone();
+    identity.envelope["principal"] = json!(verification.principal);
+    identity.envelope["source"] = json!("x-lakecat-typedid-envelope");
+    identity.envelope["typedid"] = json!(identity.principal.subject);
+    identity.envelope["attestation-state"] = json!("verified");
+    identity.envelope["typedid-attestation"] = verification.attestation;
+    Ok(identity)
 }
 
 async fn authorize(
@@ -1642,6 +1749,7 @@ async fn authorize(
     action: CatalogAction,
     table: Option<TableIdent>,
 ) -> Result<AuthorizationReceipt, LakeCatHttpError> {
+    let identity = verify_typedid_identity(state, identity).await?;
     let policy_bindings = if let Some(table) = table.as_ref() {
         state.store.policy_bindings_for_table(table).await?
     } else {
@@ -2127,6 +2235,10 @@ mod tests {
     fn request_identity_hashes_typedid_envelope_material() {
         let mut headers = HeaderMap::new();
         headers.insert("x-lakecat-agent-did", "did:example:agent".parse().unwrap());
+        headers.insert(
+            "x-lakecat-typedid-envelope",
+            r#"{"protected":"typedid-envelope"}"#.parse().unwrap(),
+        );
         headers.insert("x-lakecat-typedid-proof", "signed-proof".parse().unwrap());
         headers.insert(
             "x-lakecat-agent-delegation",
@@ -2146,6 +2258,12 @@ mod tests {
             serde_json::json!(content_hash_bytes("signed-proof".as_bytes()))
         );
         assert_eq!(
+            identity.envelope["typedid-envelope-sha256"],
+            serde_json::json!(content_hash_bytes(
+                r#"{"protected":"typedid-envelope"}"#.as_bytes()
+            ))
+        );
+        assert_eq!(
             identity.envelope["agent-delegation-sha256"],
             serde_json::json!(content_hash_bytes("delegation-token".as_bytes()))
         );
@@ -2159,8 +2277,116 @@ mod tests {
         );
         let envelope = identity.envelope.to_string();
         assert!(!envelope.contains("signed-proof"));
+        assert!(!envelope.contains("protected"));
         assert!(!envelope.contains("delegation-token"));
         assert!(!envelope.contains("summary-secret"));
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_typedid_envelope_verification_updates_authorization_context() {
+        use typesec::integrations::{
+            DidMessageBody, StaticDidResolver, TypeDidConversation, TypeDidMode, TypeDidProfile,
+        };
+        use typesec::{Did, DidEnvelope, Ed25519DidKey, Ed25519DidKeyStore, TypeDidGateway};
+
+        let agent_key = Ed25519DidKey::from_seed(b"lakecat-agent-ed25519");
+        let lakecat_key = Ed25519DidKey::from_seed(b"lakecat-service-ed25519");
+        let agent = Did::key(agent_key.signing_public());
+        let lakecat = Did::key(lakecat_key.signing_public());
+        let resolver = StaticDidResolver::new()
+            .with_document(agent_key.document(agent.clone()))
+            .with_document(lakecat_key.document(lakecat.clone()));
+        let keys = Ed25519DidKeyStore::new()
+            .with_key(agent.clone(), agent_key)
+            .with_key(lakecat.clone(), lakecat_key);
+        let envelope = DidEnvelope::typedid(
+            "lakecat-typedid-1",
+            agent.clone(),
+            lakecat.clone(),
+            DidMessageBody::agent_message("lakecat:catalog:config", "internal"),
+            TypeDidConversation::new(
+                "lakecat-config",
+                TypeDidMode::RequestReply,
+                TypeDidProfile::ed25519_x25519_chacha20().id,
+                "https",
+            ),
+            b"secret agent payload",
+            &resolver,
+            &keys,
+        )
+        .expect("typedid envelope");
+        let envelope_json = serde_json::to_string(&envelope).expect("typedid envelope json");
+        let envelope_signature = envelope.signature.clone();
+        let gateway = Arc::new(TypeDidGateway::new(
+            Arc::new(resolver),
+            Arc::new(keys),
+            lakecat,
+        ));
+        let governance = Arc::new(RecordingGovernance::default());
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_integrations(
+            default_sail_engine(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        )
+        .with_typedid_verifier(crate::typesec_typedid::TypeSecTypeDidVerifier::new(gateway)));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/config")
+                    .header("x-lakecat-typedid-envelope", envelope_json.clone())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let principals = governance.principals.lock().await;
+        assert_eq!(principals[0].subject, agent.to_string());
+        assert_eq!(principals[0].kind, PrincipalKind::Agent);
+        drop(principals);
+
+        let contexts = governance.contexts.lock().await;
+        let request_identity = &contexts[0]["request-identity"];
+        assert_eq!(
+            request_identity["source"],
+            serde_json::json!("x-lakecat-typedid-envelope")
+        );
+        assert_eq!(
+            request_identity["typedid"],
+            serde_json::json!(agent.to_string())
+        );
+        assert_eq!(
+            request_identity["attestation-state"],
+            serde_json::json!("verified")
+        );
+        assert_eq!(
+            request_identity["typedid-envelope-sha256"],
+            serde_json::json!(content_hash_bytes(envelope_json.as_bytes()))
+        );
+        assert_eq!(
+            request_identity["typedid-attestation"]["subject"],
+            serde_json::json!(agent.to_string())
+        );
+        assert_eq!(
+            request_identity["typedid-attestation"]["envelope_id"],
+            serde_json::json!("lakecat-typedid-1")
+        );
+        assert_eq!(
+            request_identity["typedid-attestation"]["resource"],
+            serde_json::json!("lakecat:catalog:config")
+        );
+        let rendered = request_identity.to_string();
+        assert!(!rendered.contains("secret agent payload"));
+        assert!(!rendered.contains(&envelope_signature));
     }
 
     #[test]

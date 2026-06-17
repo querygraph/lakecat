@@ -498,7 +498,7 @@ append a dated entry per slice; keep the finding-status table current.
 | # | Finding | Status | Evidence / note |
 | --- | --- | --- | --- |
 | 1 | Red default-feature tests | **CLOSED** | default workspace tests pass; Sail-specific service assertions are gated |
-| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added with sanitized `lakecat.request-identity.v1` envelopes on authorization receipts; catalog config, namespace create/list, table create/load/commit, scan planning, task materialization, credential-vending requests, and QueryGraph bootstrap now require typed capabilities; catalog/namespace/table/scan/bootstrap/credential events and commit receipts persist in Turso audit/outbox; storage-profile modeling, a pluggable credential issuer, a TypeSec-gated secret-ref issuer path, an environment-backed `typesec://env/VARIABLE` resolver, TypeSec-authorized Vault resolution for `vault://`, and fail-closed dispatch for `aws-sm://`, `gcp-sm://`, and `azure-kv://` refs are started, but real TypeDID verification and remaining production secret-store SDK resolver backends are still pending |
+| 2 | No auth / real principal | **PARTIAL** | principal/TypeDID/bearer header resolution added with sanitized `lakecat.request-identity.v1` envelopes on authorization receipts; catalog config, namespace create/list, table create/load/commit, scan planning, task materialization, credential-vending requests, and QueryGraph bootstrap now require typed capabilities; catalog/namespace/table/scan/bootstrap/credential events and commit receipts persist in Turso audit/outbox; storage-profile modeling, a pluggable credential issuer, a TypeSec-gated secret-ref issuer path, an environment-backed `typesec://env/VARIABLE` resolver, TypeSec-authorized Vault resolution for `vault://`, and fail-closed dispatch for `aws-sm://`, `gcp-sm://`, and `azure-kv://` refs are started; TypeDID verification has a `typesec-local` verifier seam backed by TypeSec's gateway and audit-safe attestation API, while production resolver/key configuration and remaining production secret-store SDK resolver backends are still pending |
 | 3 | No durable / CAS commit | **CLOSED for local durable spine** | Turso commits now write local `file://` metadata when provided by the Sail-facing plan, advance pointers with expected-previous compare-and-swap, persist idempotency/audit/outbox rows, and have a concurrent writer regression |
 | 4 | No persistence backend | **PARTIAL** | Turso `TursoCatalogStore` exists for namespaces, tables, pointer log, idempotency, audit, outbox, object-write-aware commits, outbox delivery, typed inferred storage profiles, governed managed warehouse storage profiles with external secret references, a service credential-issuer hook, a TypeSec-gated secret-ref issuer path with environment-backed resolution for local runs, Vault resolution, and fail-closed production-provider dispatch, governed ODRL policy bindings, and governed table soft delete/restore; production secret-store SDK resolver coverage beyond Vault remains pending |
 | 5 | Service can't activate real engines | **CLOSED** | `sail-local` / `typesec-local` / `grust-local` passthroughs now in `lakecat-service` |
@@ -546,8 +546,11 @@ events. A `typesec://env/VARIABLE` resolver now provides a local external-secret
 backend for TypeSec-authorized short-lived config, `vault://` refs can resolve
 through a Vault HTTP backend after TypeSec authorization, and `aws-sm://`,
 `gcp-sm://`, and `azure-kv://` refs now fail closed when no provider backend is
-configured. The remaining P1/P2 work is broader production secret-store SDK
-integration, TypeDID verification, and broader operator APIs.
+configured. A feature-gated TypeSec TypeDID verifier seam can now verify
+protected envelopes and pass only the verified DID subject plus an audit-safe
+attestation into LakeCat authorization context. The remaining P1/P2 work is
+broader production secret-store SDK integration, production TypeDID
+resolver/key configuration, and broader operator APIs.
 
 ### Reviewer note — endorse the Turso pivot, with a gate (2026-06-16)
 
@@ -615,8 +618,11 @@ only once **P2** gives it a governed path to run on.
   table-create / metadata-read / scan-planning / scan-task-fetch /
   credential-vending / QueryGraph-bootstrap audit/outbox records. Authorization
   receipts now carry a sanitized request-identity envelope for TypeDID/agent,
-  bearer-token, delegation, and signed-summary material; real TypeDID signature
-  verification remains pending in the TypeSec integration.*
+  bearer-token, delegation, and signed-summary material. `typesec-local` can
+  verify a protected TypeDID envelope through TypeSec, replace an anonymous or
+  matching supplied principal with the verified DID subject, and attach only an
+  audit-safe attestation plus envelope hash to the authorization context;
+  production resolver/key configuration remains pending.*
 - **P3 — Sail Tier 1 (`CatalogProvider`).** Start "free" via Sail's
   `IcebergRestCatalogProvider` over REST, then the in-process `LakeCatCatalogProvider`
   so policy + plan fuse. (Milestone 6; Finding 6.) *Started with a feature-gated
@@ -637,8 +643,9 @@ only once **P2** gives it a governed path to run on.
   captured on receipts. Grust now owns reusable LakeCat graph envelope ingestion
   and a catalog-event taxonomy helper for event, warehouse, namespace, and table
   projections; LakeCat's `grust-local` sink only adapts outbox events into that
-  helper. TypeDID verification/attestation and richer typed graph schema work
-  remain pending.*
+  helper. TypeDID verification/attestation is started through TypeSec's
+  audit-safe attestation API; richer typed graph schema work remains Grust
+  work.*
 - **P5 — QueryGraph end-to-end.** `querygraph import-lakecat`; QGLake "Resilience
   Desk" as the acceptance test. (Milestone 9.) *Started with a LakeCat
   bootstrap manifest that gives QueryGraph stable hashes for Croissant, CDIF,
