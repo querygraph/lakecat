@@ -5,8 +5,12 @@ Updated: 2026-06-17
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed LakeCat slice before this continuation:
-  `2b5bdc9 Use Grust catalog event graph projection`.
+- Latest committed and pushed LakeCat slice:
+  `f06d8e0 Reuse Sail Iceberg table status helper`.
+- Supporting Sail helper commit exists locally in `/Users/alexy/src/sail` as
+  `68631016 Expose Iceberg table status conversion`. Pushing to
+  `lakehq/sail` is blocked for this machine/account: HTTPS has no configured
+  credential prompt, and SSH reports permission denied for `alexy`.
 - Cloud CI remains gated on the publish chain: wait for Grust to publish the
   needed crates, then for TypeSec to publish its matching crates, then rebuild
   LakeCat in GitHub Actions against published crates rather than pinning CI to

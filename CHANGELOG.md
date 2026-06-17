@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Recorded the pushed LakeCat helper-reuse commit and the blocked Sail upstream
+  push status in `STATUS.md`.
 - Reused Sail's exported Iceberg `LoadTableResult` to `TableStatus` helper in
   the in-process LakeCat `CatalogProvider`, leaving only LakeCat-specific
   stable-id/version properties and v4 extension fallback logic local.
