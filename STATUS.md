@@ -12,9 +12,9 @@ Updated: 2026-06-17
   `ci/sail-patches/` that applies local Sail helper commits `68631016` and
   `fdb3b657`, plus the generated-model module export LakeCat service tests use,
   to the `lakehq/sail@main` checkout before building. The bridge now supplies
-  a local `git am` committer identity and uses the GitHub Actions workspace path
-  for patch files; it should be removed once those APIs are available from an
-  upstream Sail branch.
+  a local `git am` committer identity and passes absolute patch paths so
+  `git -C sail` can apply them; it should be removed once those APIs are
+  available from an upstream Sail branch.
 - Status commit recording the pushed Grust Cypher reconciliation:
   `e6ca9e0 Record Grust Cypher reconciliation status`.
 - Status commits recording the pushed verifier work:
@@ -49,6 +49,9 @@ Updated: 2026-06-17
 - Fixed the Sail patch bridge path after run `27722686028` failed before tests
   because `../lakecat/ci/sail-patches/*.patch` did not exist from the Actions
   workspace root.
+- Fixed the Sail patch bridge again after run `27722752741` showed that
+  `git -C sail` resolves expanded relative patch paths from inside the Sail
+  checkout; the workflow now computes an absolute `PATCH_DIR`.
 - Added `ci/sail-patches/` with the Sail helper/model API patches LakeCat
   already depends on locally.
 - Updated manual GitHub Actions to apply those patches to the Sail checkout
@@ -112,6 +115,18 @@ Updated: 2026-06-17
 - Current `lakehq/sail@ceab87693f8e37f50d855ba6cf479c3a169ccc95` accepted the
   patch series with the identity-configured `git am` command and passed:
   `cargo test -p sail-catalog-iceberg planning -- --nocapture`.
+- A GitHub Actions-shaped temporary directory with sibling `sail/` and
+  `lakecat/` paths successfully applied the patch series using the workflow's
+  absolute `PATCH_DIR` shell block.
+- Local workflow matrix commands passed before rerunning any cloud gate:
+  `cargo test --workspace`,
+  `cargo test -p lakecat-service --features sail-local`,
+  `cargo test -p lakecat-security --features typesec-local`,
+  `cargo test -p lakecat-service --features typesec-local`,
+  `cargo test -p lakecat-graph --features grust-local`,
+  `cargo test -p lakecat-graph --features grust-local grust_cypher_can_query_lakecat_catalog_projection_boundary -- --nocapture`,
+  `cargo test -p lakecat-store --features turso-local`, and
+  `cargo test --workspace --all-features`.
 - LakeCat focused Sail-local service test passed:
   `cargo test -p lakecat-service --features sail-local fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens -- --nocapture`.
 - Manual GitHub Actions run `27720360961` after pushing TypeSec 0.8 reached the

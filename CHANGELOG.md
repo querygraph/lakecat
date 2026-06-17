@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed the temporary Sail patch bridge to pass absolute patch paths to
+  `git am` after `git -C sail` changes directories.
 - Fixed the temporary Sail patch bridge path for the GitHub Actions workspace
   layout.
 - Fixed the temporary Sail patch bridge to supply an explicit `git am`
