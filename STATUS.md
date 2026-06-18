@@ -6,6 +6,31 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `be713f4 Require QGLake delete manifest evidence`.
+- Paused after pushing the QGLake delete-manifest acceptance slice. The QGLake
+  fixture now writes a position-delete manifest beside the data manifest, and
+  governed `fetchScanTasks` acceptance requires Sail to attach delete-file refs
+  to data tasks while treating delete-manifest child tasks as terminal governed
+  delete-file work.
+- Local verification for the pushed QGLake delete-manifest acceptance slice was
+  green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_fetch_scan_tasks_verifier`;
+  `cargo test -p lakecat-cli qglake_delete_manifest_fetch_scan_tasks_verifier`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-cli`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test --workspace --all-features`;
+  `cargo fmt -p lakecat-cli -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service --all-features`.
+- This status commit records the pushed QGLake delete-manifest acceptance slice.
+- Separate docs/book LakeSail-to-LakeCat rename work remains in the worktree and
+  was intentionally not included in the QGLake implementation commit.
+- Previous implementation slice:
   `ff08e77 Project credential replay into OpenLineage`.
 - Paused after pushing the QGLake credential OpenLineage replay slice.
   `credentials.vend-attempted` outbox replay now emits LakeCat
