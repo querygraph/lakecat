@@ -6,13 +6,13 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `b36231e Project principals to graph`.
-- Current working slice: column and snapshot graph projection from table
-  metadata graph summaries. Table create/load audit payloads now carry compact
+  `40863e0 Project table metadata graph anchors`.
+- Paused after pushing column and snapshot graph projection from table metadata
+  graph summaries. Table create/load audit payloads now carry compact
   current-schema/current-snapshot graph summaries, and durable outbox replay
   emits stable catalog-facing `Column` and `Snapshot` graph events when those
   summaries are present.
-- Local verification for the current slice is green:
+- Local verification for the pushed slice was green:
   `cargo fmt -p lakecat-graph -p lakecat-service`;
   `cargo fmt -p lakecat-graph -p lakecat-service -p lakecat-api -- --check`;
   `git diff --check`;
