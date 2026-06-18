@@ -7,6 +7,7 @@ use lakecat_api::{
     PlanTableScanResponse, PolicyBindingResponse, StorageProfileResponse, TableIdentifier,
     UpsertPolicyBindingRequest, UpsertStorageProfileRequest,
 };
+use lakecat_core::content_hash_json;
 use lakecat_querygraph::{QueryGraphBootstrap, QueryGraphBootstrapVerification};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
@@ -771,7 +772,28 @@ fn verify_qglake_scan_plan(plan: &PlanTableScanResponse) -> lakecat_core::LakeCa
             extension["read-restriction"]["row-predicate"].clone()
         )));
     }
+    let expected_policy_hash = qglake_policy_hash(plan.table.name.as_str())?;
+    let policy_hashes = extension["read-restriction"]["policy-hashes"]
+        .as_array()
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(
+                "qglake governed scan read restriction did not include policy hashes".to_string(),
+            )
+        })?;
+    if !policy_hashes
+        .iter()
+        .any(|hash| hash.as_str() == Some(expected_policy_hash.as_str()))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake governed scan did not bind to expected ODRL policy hash {expected_policy_hash}: {}",
+            extension["read-restriction"]["policy-hashes"].clone()
+        )));
+    }
     Ok(())
+}
+
+fn qglake_policy_hash(table: &str) -> lakecat_core::LakeCatResult<String> {
+    content_hash_json(&qglake_odrl_policy(table))
 }
 
 async fn verify_qglake_credentials_blocked(
@@ -1623,6 +1645,46 @@ mod tests {
 
     #[test]
     fn qglake_scan_plan_verifier_requires_governed_projection() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let plan = PlanTableScanResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "lakecat-sail".to_string(),
+            status: "completed".to_string(),
+            snapshot_id: None,
+            plan_tasks: Vec::new(),
+            lakecat_plan_tasks: Vec::new(),
+            file_scan_tasks: Vec::new(),
+            delete_files: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:scan-request": {
+                    "requested-projection": [
+                        "event_id",
+                        "occurred_at",
+                        "severity",
+                        "raw_payload"
+                    ],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        verify_qglake_scan_plan(&plan).unwrap();
+    }
+
+    #[test]
+    fn qglake_scan_plan_verifier_requires_policy_hash_binding() {
         let plan = PlanTableScanResponse {
             table: lakecat_api::TableIdentifier {
                 namespace: vec!["default".to_string()],
@@ -1656,7 +1718,12 @@ mod tests {
             })),
         };
 
-        verify_qglake_scan_plan(&plan).unwrap();
+        let err = verify_qglake_scan_plan(&plan)
+            .expect_err("QGLake governed scan should require a policy hash binding");
+        assert!(
+            err.to_string()
+                .contains("read restriction did not include policy hashes")
+        );
     }
 
     #[test]

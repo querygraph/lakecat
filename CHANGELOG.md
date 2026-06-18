@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required the QGLake governed scan verifier to prove the enforced
+  `ReadRestriction` carries the expected ODRL policy hash, so acceptance now
+  binds projection and row-filter enforcement to the bootstrapped policy
+  document.
 - Added durable typed view columns and wired the in-process Sail
   `CatalogProvider` view bridge to create, load, list, and drop LakeCat
   `ViewRecord` values with `TableKind::View` status conversion for QueryGraph
