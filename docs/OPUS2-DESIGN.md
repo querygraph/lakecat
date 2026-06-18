@@ -143,7 +143,7 @@ build is reproducible off this machine.
 | F4 | Metadata written before CAS; no orphan handling/retry | MEDIUM | STARTED — local orphan cleanup |
 | F5 | Scans bypass the in-process provider | MEDIUM | STARTED — REST `sail-local` plan and fetch routes now use provider seams |
 | F6 | Catalog graph is event breadcrumbs | MEDIUM | STARTED — bounded taxonomy replays through Grust |
-| F7 | Single warehouse; no Project/Server/View entities | LOW | STARTED — Project/Warehouse records and registered warehouse-prefixed routing |
+| F7 | Tenancy hierarchy durable but not fully routed | LOW | STARTED — Server/Project/Warehouse/View records and registered warehouse-prefixed routing |
 | F8 | Production secret backends unexercised | LOW | OPEN (fails closed) |
 | F9 | v4 JSON passthrough | LOW | OPEN by design |
 | F10 | Sibling deps local-only; CI manual | LOW (process) | OPEN |
@@ -261,21 +261,23 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
 - **P5 — Tenancy (F7) + production credentials (F8).** Project/Warehouse as
   stored entities with management endpoints; real Vault/AWS/GCP/Azure resolvers
   behind the TypeSec gate. Needed for multi-tenant deployment, not for the demo.
-  *Started: governed project and warehouse list/upsert management endpoints now
-  persist durable `ProjectRecord` and `WarehouseRecord` values in memory and
-  Turso stores, `project.upserted` / `warehouse.upserted` outbox replay emits
-  catalog-facing Project and Warehouse graph anchors, management routes now use
-  the requested warehouse instead of the configured default, and Iceberg REST
-  routes now accept a warehouse prefix only after resolving a durable
-  `WarehouseRecord`, while keeping the unprefixed default-warehouse
-  compatibility path; credential-vend attempts with fine-grained restrictions
-  now fail closed into governed Sail-planned reads before any secret resolver is
-  called; governed view list/upsert management endpoints now persist durable
-  `ViewRecord` values in memory and Turso and emit audited `view.*` events;
-  QueryGraph bootstrap now exports those stored views with manifest-covered OSI
-  hashes, view-aware graph edges, and OpenLineage view counts.
-  Server entities, standard Iceberg view REST semantics, and richer
-  project-scoped routing remain pending.*
+  *Started: governed server, project, and warehouse list/upsert management
+  endpoints now persist durable `ServerRecord`, `ProjectRecord`, and
+  `WarehouseRecord` values in memory and Turso stores; `project.upserted` /
+  `warehouse.upserted` outbox replay emits catalog-facing Project and Warehouse
+  graph anchors; server writes emit audited `server.*` events while leaving
+  reusable graph hierarchy work to Grust; management routes now use the requested
+  warehouse instead of the configured default, and Iceberg REST routes now accept
+  a warehouse prefix only after resolving a durable `WarehouseRecord`, while
+  keeping the unprefixed default-warehouse compatibility path; credential-vend
+  attempts with fine-grained restrictions now fail closed into governed
+  Sail-planned reads before any secret resolver is called; governed view
+  list/upsert management endpoints now persist durable `ViewRecord` values in
+  memory and Turso and emit audited `view.*` events; QueryGraph bootstrap now
+  exports those stored views with manifest-covered OSI hashes, view-aware graph
+  edges, and OpenLineage view counts. Standard Iceberg view REST semantics,
+  explicit Server > Project > Warehouse attachment, and richer project-scoped
+  routing remain pending.*
 - **P6 — Reproducibility (F10) + typed v4 (F9).** Land the Sail helper commits
   upstream (or pin a published Sail) and re-enable automatic CI; converge on
   typed v4 metadata once `sail-iceberg` provides it.

@@ -10,12 +10,13 @@ use lakecat_api::{
     CatalogConfigResponse, CommitTableRequest, CommitTableResponse, ConfigEntry,
     CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest,
     FetchScanTasksResponse, LineageDrainResponse, ListNamespacesResponse,
-    ListPolicyBindingsResponse, ListProjectsResponse, ListStorageProfilesResponse,
-    ListViewsResponse, ListWarehousesResponse, LoadCredentialsResponse, LoadTableResponse,
-    NamespaceResponse, PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse,
-    ProjectResponse, StorageCredential, StorageProfileResponse, TableIdentifier,
-    UpsertPolicyBindingRequest, UpsertProjectRequest, UpsertStorageProfileRequest,
-    UpsertViewRequest, UpsertWarehouseRequest, ViewResponse, WarehouseResponse,
+    ListPolicyBindingsResponse, ListProjectsResponse, ListServersResponse,
+    ListStorageProfilesResponse, ListViewsResponse, ListWarehousesResponse,
+    LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
+    PlanTableScanResponse, PolicyBindingResponse, ProjectResponse, ServerResponse,
+    StorageCredential, StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest,
+    UpsertProjectRequest, UpsertServerRequest, UpsertStorageProfileRequest, UpsertViewRequest,
+    UpsertWarehouseRequest, ViewResponse, WarehouseResponse,
 };
 use lakecat_core::{
     LakeCatError, Namespace, Principal, PrincipalKind, TableIdent, TableName, WarehouseName,
@@ -39,15 +40,15 @@ use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
     LineageReadCapability, NamespaceCreateCapability, NamespaceListCapability,
-    PolicyManageCapability, ProjectManageCapability, ReadRestriction,
+    PolicyManageCapability, ProjectManageCapability, ReadRestriction, ServerManageCapability,
     StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
     TableDropCapability, TableLoadCapability, TableRestoreCapability, TableScanCapability,
     ViewManageCapability, WarehouseManageCapability,
 };
 use lakecat_store::{
     CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, PolicyBinding,
-    ProjectRecord, StorageProfile, StorageProvider, TableCommit, TableRecord, ViewRecord,
-    WarehouseRecord, table_ident,
+    ProjectRecord, ServerRecord, StorageProfile, StorageProvider, TableCommit, TableRecord,
+    ViewRecord, WarehouseRecord, table_ident,
 };
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStore, ObjectStoreExt, PutPayload};
@@ -857,6 +858,11 @@ pub fn app(state: LakeCatState) -> Router {
             post(upsert_policy_binding).put(upsert_policy_binding),
         )
         .route("/management/v1/lineage/drain", post(drain_lineage_outbox))
+        .route("/management/v1/servers", get(list_servers))
+        .route(
+            "/management/v1/servers/{server}",
+            post(upsert_server).put(upsert_server),
+        )
         .route("/querygraph/v1/bootstrap", get(querygraph_bootstrap))
         .with_state(state)
 }
@@ -1457,6 +1463,62 @@ async fn list_projects(
     Ok(Json(ListProjectsResponse {
         projects: projects.iter().map(project_response).collect(),
     }))
+}
+
+async fn list_servers(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+) -> Result<Json<ListServersResponse>, LakeCatHttpError> {
+    let capability = authorize_server_manage(&state, request_identity(&headers)?).await?;
+    let servers = state.store.list_servers().await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "server.listed",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "server.listed",
+                "server-count": servers.len(),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(ListServersResponse {
+        servers: servers.iter().map(server_response).collect(),
+    }))
+}
+
+async fn upsert_server(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path(server): Path<String>,
+    Json(request): Json<UpsertServerRequest>,
+) -> Result<Json<ServerResponse>, LakeCatHttpError> {
+    let capability = authorize_server_manage(&state, request_identity(&headers)?).await?;
+    let record = ServerRecord::new(
+        server,
+        request.display_name,
+        request.endpoint_url,
+        request.properties,
+        capability.receipt().principal.clone(),
+    )?;
+    let record = state.store.upsert_server(record).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "server.upserted",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "server.upserted",
+                "server-id": record.server_id.as_str(),
+                "server-record": server_response(&record),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(server_response(&record)))
 }
 
 async fn upsert_project(
@@ -2726,6 +2788,15 @@ fn warehouse_response(record: &WarehouseRecord) -> WarehouseResponse {
     }
 }
 
+fn server_response(record: &ServerRecord) -> ServerResponse {
+    ServerResponse {
+        server_id: record.server_id.clone(),
+        display_name: record.display_name.clone(),
+        endpoint_url: record.endpoint_url.clone(),
+        properties: record.properties.clone(),
+    }
+}
+
 fn project_response(record: &ProjectRecord) -> ProjectResponse {
     ProjectResponse {
         project_id: record.project_id.clone(),
@@ -3143,6 +3214,14 @@ async fn authorize_project_manage(
 ) -> Result<ProjectManageCapability, LakeCatHttpError> {
     let receipt = authorize(state, identity, CatalogAction::ProjectManage, None).await?;
     Ok(ProjectManageCapability::from_receipt(receipt)?)
+}
+
+async fn authorize_server_manage(
+    state: &LakeCatState,
+    identity: RequestIdentity,
+) -> Result<ServerManageCapability, LakeCatHttpError> {
+    let receipt = authorize(state, identity, CatalogAction::ServerManage, None).await?;
+    Ok(ServerManageCapability::from_receipt(receipt)?)
 }
 
 async fn authorize_storage_profile_manage(
@@ -5321,6 +5400,58 @@ mod tests {
             .unwrap();
         let response = app.oneshot(load).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn management_servers_are_durable_management_entities() {
+        let app = test_app();
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/servers/lakecat-local")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "display-name": "Local LakeCat",
+                    "endpoint-url": "http://127.0.0.1:8181",
+                    "properties": {
+                        "deployment": "local"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["server-id"], serde_json::json!("lakecat-local"));
+        assert_eq!(body["display-name"], serde_json::json!("Local LakeCat"));
+        assert_eq!(
+            body["endpoint-url"],
+            serde_json::json!("http://127.0.0.1:8181")
+        );
+        assert_eq!(body["properties"]["deployment"], serde_json::json!("local"));
+
+        let list = Request::builder()
+            .method(Method::GET)
+            .uri("/management/v1/servers")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(list).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["servers"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            body["servers"][0]["server-id"],
+            serde_json::json!("lakecat-local")
+        );
     }
 
     #[tokio::test]

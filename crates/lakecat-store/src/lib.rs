@@ -34,6 +34,13 @@ pub trait CatalogStore: Send + Sync + 'static {
         start_version: u64,
         end_version: Option<u64>,
     ) -> LakeCatResult<Vec<TableCommitRecord>>;
+    async fn upsert_server(&self, server: ServerRecord) -> LakeCatResult<ServerRecord> {
+        server.validate()?;
+        Ok(server)
+    }
+    async fn list_servers(&self) -> LakeCatResult<Vec<ServerRecord>> {
+        Ok(Vec::new())
+    }
     async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
         project.validate()?;
         Ok(project)
@@ -187,6 +194,58 @@ pub struct TableCommitRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idempotency_key_sha256: Option<String>,
     pub committed_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ServerRecord {
+    pub server_id: String,
+    pub display_name: Option<String>,
+    pub endpoint_url: Option<String>,
+    pub properties: BTreeMap<String, String>,
+    pub created: AuditStamp,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl ServerRecord {
+    pub fn new(
+        server_id: impl Into<String>,
+        display_name: Option<String>,
+        endpoint_url: Option<String>,
+        properties: BTreeMap<String, String>,
+        principal: Principal,
+    ) -> LakeCatResult<Self> {
+        let created = AuditStamp::now(principal);
+        let record = Self {
+            server_id: server_id.into(),
+            display_name,
+            endpoint_url,
+            properties,
+            updated_at: created.at,
+            created,
+        };
+        record.validate()?;
+        Ok(record)
+    }
+
+    pub fn validate(&self) -> LakeCatResult<()> {
+        validate_project_id(&self.server_id)?;
+        if let Some(display_name) = self.display_name.as_deref()
+            && display_name.trim().is_empty()
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "server display name must not be empty".to_string(),
+            ));
+        }
+        if let Some(endpoint_url) = self.endpoint_url.as_deref()
+            && endpoint_url.trim().is_empty()
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "server endpoint URL must not be empty".to_string(),
+            ));
+        }
+        validate_public_config(&self.properties)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -653,6 +712,7 @@ impl MemoryCatalogStore {
 
 #[derive(Debug, Default)]
 struct MemoryState {
+    servers: BTreeMap<String, ServerRecord>,
     projects: BTreeMap<String, ProjectRecord>,
     warehouses: BTreeMap<String, WarehouseRecord>,
     namespaces: BTreeMap<String, BTreeSet<Namespace>>,
@@ -864,6 +924,22 @@ impl CatalogStore for MemoryCatalogStore {
             .filter(|commit| end_version.is_none_or(|end| commit.sequence_number <= end))
             .cloned()
             .collect())
+    }
+
+    async fn upsert_server(&self, server: ServerRecord) -> LakeCatResult<ServerRecord> {
+        server.validate()?;
+        let mut state = self.state.write().await;
+        state
+            .servers
+            .insert(server.server_id.clone(), server.clone());
+        Ok(server)
+    }
+
+    async fn list_servers(&self) -> LakeCatResult<Vec<ServerRecord>> {
+        let state = self.state.read().await;
+        let mut servers = state.servers.values().cloned().collect::<Vec<_>>();
+        servers.sort_by(|left, right| left.server_id.cmp(&right.server_id));
+        Ok(servers)
     }
 
     async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
@@ -1328,6 +1404,34 @@ mod memory_tests {
     use super::*;
 
     #[tokio::test]
+    async fn memory_store_persists_server_records() {
+        let store = MemoryCatalogStore::new();
+        assert_eq!(store.list_servers().await.unwrap(), vec![]);
+
+        let record = ServerRecord::new(
+            "lakecat-local",
+            Some("Local LakeCat".to_string()),
+            Some("http://127.0.0.1:8181".to_string()),
+            BTreeMap::from([("deployment".to_string(), "local".to_string())]),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_server(record).await.unwrap();
+
+        let updated = ServerRecord::new(
+            "lakecat-local",
+            Some("Local QueryGraph LakeCat".to_string()),
+            Some("http://127.0.0.1:8182".to_string()),
+            BTreeMap::from([("deployment".to_string(), "dev".to_string())]),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_server(updated.clone()).await.unwrap();
+
+        assert_eq!(store.list_servers().await.unwrap(), vec![updated]);
+    }
+
+    #[tokio::test]
     async fn memory_store_persists_warehouse_records() {
         let store = MemoryCatalogStore::new();
         assert_eq!(store.list_warehouses().await.unwrap(), vec![]);
@@ -1515,7 +1619,7 @@ pub mod turso_store {
     use turso::{Connection, Database, Row, Value as TursoValue};
 
     use crate::{
-        CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, ProjectRecord,
+        CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, ProjectRecord, ServerRecord,
         SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord, ViewRecord,
         WarehouseRecord, policy_binding_key, policy_bindings_for_table, storage_profile_key,
         storage_profile_match, table_key, view_key,
@@ -2161,6 +2265,49 @@ pub mod turso_store {
             Ok(commits)
         }
 
+        async fn upsert_server(&self, server: ServerRecord) -> LakeCatResult<ServerRecord> {
+            server.validate()?;
+            let conn = self.connect()?;
+            conn.execute(
+                "insert into servers (
+                    server_id, display_name, endpoint_url, record_json, updated_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5)
+                 on conflict(server_id) do update set
+                    display_name = excluded.display_name,
+                    endpoint_url = excluded.endpoint_url,
+                    record_json = excluded.record_json,
+                    updated_at = excluded.updated_at",
+                (
+                    server.server_id.as_str(),
+                    server.display_name.as_deref(),
+                    server.endpoint_url.as_deref(),
+                    encode_json(&server)?,
+                    server.updated_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
+            Ok(server)
+        }
+
+        async fn list_servers(&self) -> LakeCatResult<Vec<ServerRecord>> {
+            let conn = self.connect()?;
+            let mut rows = conn
+                .query(
+                    "select record_json from servers
+                     order by server_id",
+                    (),
+                )
+                .await
+                .map_err(turso_error)?;
+            let mut servers = Vec::new();
+            while let Some(row) = rows.next().await.map_err(turso_error)? {
+                servers.push(decode_json(row_string(&row, 0)?)?);
+            }
+            Ok(servers)
+        }
+
         async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
             project.validate()?;
             let conn = self.connect()?;
@@ -2551,6 +2698,13 @@ pub mod turso_store {
     }
 
     const TURSO_MIGRATION: &[&str] = &[
+        "create table if not exists servers (
+            server_id text primary key,
+            display_name text,
+            endpoint_url text,
+            record_json text not null,
+            updated_at text not null
+        )",
         "create table if not exists projects (
             project_id text primary key,
             display_name text,
@@ -2778,9 +2932,39 @@ pub mod turso_store {
 
         use lakecat_core::{Principal, TableName};
 
-        use crate::{CredentialIssuanceMode, PolicyBinding, StorageProvider, ViewRecord};
+        use crate::{
+            CredentialIssuanceMode, PolicyBinding, ServerRecord, StorageProvider, ViewRecord,
+        };
 
         use super::*;
+
+        #[tokio::test]
+        async fn turso_store_persists_server_records() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            assert_eq!(store.list_servers().await.unwrap(), vec![]);
+
+            let record = ServerRecord::new(
+                "lakecat-local",
+                Some("Local LakeCat".to_string()),
+                Some("http://127.0.0.1:8181".to_string()),
+                BTreeMap::from([("deployment".to_string(), "local".to_string())]),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_server(record).await.unwrap();
+
+            let updated = ServerRecord::new(
+                "lakecat-local",
+                Some("Local QueryGraph LakeCat".to_string()),
+                Some("http://127.0.0.1:8182".to_string()),
+                BTreeMap::from([("deployment".to_string(), "dev".to_string())]),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_server(updated.clone()).await.unwrap();
+
+            assert_eq!(store.list_servers().await.unwrap(), vec![updated]);
+        }
 
         #[tokio::test]
         async fn turso_store_persists_warehouse_records() {

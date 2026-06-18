@@ -34,6 +34,7 @@ pub enum CatalogAction {
     TableDrop,
     TableRestore,
     CredentialsVend,
+    ServerManage,
     ProjectManage,
     WarehouseManage,
     StorageProfileManage,
@@ -434,6 +435,9 @@ pub struct CanPlanScan;
 pub struct CanVendCredentials;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanManageServers;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanManageProjects;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -470,6 +474,7 @@ pub type TableDropCapability = Capability<CanDropTable, TableIdent>;
 pub type TableRestoreCapability = Capability<CanRestoreTable, TableIdent>;
 pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
 pub type CredentialsVendCapability = Capability<CanVendCredentials, TableIdent>;
+pub type ServerManageCapability = Capability<CanManageServers, ()>;
 pub type ProjectManageCapability = Capability<CanManageProjects, ()>;
 pub type WarehouseManageCapability = Capability<CanManageWarehouses, ()>;
 pub type StorageProfileManageCapability = Capability<CanManageStorageProfiles, ()>;
@@ -580,6 +585,12 @@ impl CredentialsVendCapability {
             }),
             None => Ok(ReadRestriction::unrestricted()),
         }
+    }
+}
+
+impl ServerManageCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
+        catalog_capability_from_receipt(receipt, CatalogAction::ServerManage, "manage servers")
     }
 }
 
@@ -1077,6 +1088,21 @@ mod tests {
         };
         assert!(NamespaceListCapability::from_receipt(namespace_list_receipt).is_ok());
 
+        let server_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:operator".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::ServerManage,
+            table: None,
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            context: serde_json::json!({}),
+            checked_at: Utc::now(),
+        };
+        assert!(ServerManageCapability::from_receipt(server_receipt).is_ok());
+
         let project_receipt = AuthorizationReceipt {
             principal: Principal {
                 subject: "agent:operator".to_string(),
@@ -1460,6 +1486,7 @@ pub fn action_name(action: &CatalogAction) -> &'static str {
         CatalogAction::TableDrop => "table.drop",
         CatalogAction::TableRestore => "table.restore",
         CatalogAction::CredentialsVend => "credentials.vend",
+        CatalogAction::ServerManage => "server.manage",
         CatalogAction::ProjectManage => "project.manage",
         CatalogAction::WarehouseManage => "warehouse.manage",
         CatalogAction::StorageProfileManage => "storage_profile.manage",

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added governed durable server records with management list/upsert endpoints,
+  memory/Turso persistence, and audited `server.*` events, starting the
+  architecture's Server > Project > Warehouse hierarchy.
 - Added stored view projections to QueryGraph bootstrap bundles, including
   manifest view artifact hashes, view-aware graph edges, OpenLineage view counts,
   service-level export, and verification coverage.

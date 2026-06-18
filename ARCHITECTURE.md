@@ -316,12 +316,14 @@ also upsert and list durable semantic view records in memory and Turso, giving
 QueryGraph a stable catalog-owned view entity before standard Iceberg view REST
 semantics are wired. QueryGraph bootstrap now exports those stored views with
 manifest-covered OSI handoff hashes, view-aware graph edges, and OpenLineage view
-counts. Governed table lifecycle now records soft-delete rows, hides deleted
-tables from normal catalog reads, restores soft-deleted tables through a governed
-management endpoint, and emits `table.deleted` / `table.restored` audit/outbox
-events. Governed policy management endpoints can now upsert/list enforced ODRL
-policy bindings, and active table bindings are attached to authorization context
-before TypeSec runs.
+counts. Governed management endpoints now also upsert and list durable server
+records in memory and Turso, establishing the Server > Project > Warehouse
+control-plane hierarchy without changing standard table access. Governed table
+lifecycle now records soft-delete rows, hides deleted tables from normal catalog
+reads, restores soft-deleted tables through a governed management endpoint, and
+emits `table.deleted` / `table.restored` audit/outbox events. Governed policy
+management endpoints can now upsert/list enforced ODRL policy bindings, and
+active table bindings are attached to authorization context before TypeSec runs.
 
 Required tables:
 

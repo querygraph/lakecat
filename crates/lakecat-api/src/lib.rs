@@ -45,6 +45,8 @@ impl Default for CatalogConfigResponse {
                     .to_string(),
                 "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials"
                     .to_string(),
+                "GET /management/v1/servers".to_string(),
+                "PUT /management/v1/servers/{server}".to_string(),
                 "GET /management/v1/projects".to_string(),
                 "PUT /management/v1/projects/{project}".to_string(),
                 "GET /management/v1/warehouses".to_string(),
@@ -128,6 +130,30 @@ pub struct LoadTableResponse {
 #[serde(rename_all = "kebab-case")]
 pub struct LoadCredentialsResponse {
     pub storage_credentials: Vec<StorageCredential>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct UpsertServerRequest {
+    pub display_name: Option<String>,
+    pub endpoint_url: Option<String>,
+    #[serde(default)]
+    pub properties: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ServerResponse {
+    pub server_id: String,
+    pub display_name: Option<String>,
+    pub endpoint_url: Option<String>,
+    pub properties: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ListServersResponse {
+    pub servers: Vec<ServerResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

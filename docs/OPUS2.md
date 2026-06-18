@@ -101,7 +101,7 @@ though every seam it needs now exists.
 | 4 | No persistence backend | **CLOSED (Turso spine)** — namespaces, tables, pointer log, idempotency, audit, outbox, storage profiles, policy bindings, soft-delete |
 | 5 | Service can't activate real engines | **CLOSED** — `sail-local`/`typesec-local`/`grust-local` passthroughs + CLI wiring |
 | 6 | Sail used as struct library | **PARTIAL** — in-process `CatalogProvider` (Tier 1) for catalog ops; scans still walk manifests in-process (see F5) |
-| 7 | Plan ↔ impl drift; no CLI | **PARTIAL** — CLI landed, `CatalogAction` expanded, stable IDs aligned; entity hierarchy (Server/Project/Warehouse, views) still absent (see F7) |
+| 7 | Plan ↔ impl drift; no CLI | **PARTIAL** — CLI landed, `CatalogAction` expanded, stable IDs aligned; Server/Project/Warehouse plus semantic views are durable management entities; standard Iceberg view REST and richer hierarchy routing remain (see F7) |
 | 8 | Grust graph placeholder | **PARTIAL** — taxonomy + ingestion moved into Grust; emission is still event→table breadcrumbs (see F6) |
 | 9 | `list_namespaces` fabricates default | **CLOSED** — memory + Turso return empty |
 | 10 | Side effects coupled to request | **CLOSED** — transactional outbox + drain |
@@ -244,25 +244,27 @@ Snapshot/Policy/Principal/ScanPlan/Commit), keeping file-granularity
 cardinality discipline OPUS1-DESIGN argued. The graph mechanics stay in Grust;
 LakeCat owns only the catalog-domain event→typed-graph mapping.
 
-### F7. (LOW) Single hardcoded warehouse; no Server/Project/Warehouse/View entities
+### F7. (LOW) Tenancy hierarchy is durable but not fully routed
 
 **File:** `crates/lakecat-service/src/main.rs`; `management_warehouse` (line
 ~1613) only checks equality with the one configured warehouse.
 
-Storage profiles, policy bindings, projects, warehouses, and semantic views are
-now first-class durable management entities. LakeCat can resolve warehouse
-prefixes from stored `WarehouseRecord` values instead of only trusting the
-configured default, and governed view list/upsert endpoints persist `ViewRecord`
-values in memory and Turso. QueryGraph bootstrap now exports those views with
-manifest-covered OSI hashes, view-aware graph edges, and OpenLineage view
-counts. The remaining tenancy gap is narrower but real: Server entities,
-standard Iceberg view REST semantics, and richer project-scoped routing are not
-modeled yet.
+Storage profiles, policy bindings, servers, projects, warehouses, and semantic
+views are now first-class durable management entities. LakeCat can resolve
+warehouse prefixes from stored `WarehouseRecord` values instead of only trusting
+the configured default. Governed server list/upsert endpoints persist
+`ServerRecord` values in memory and Turso with audited `server.*` events, and
+governed view list/upsert endpoints persist `ViewRecord` values in memory and
+Turso. QueryGraph bootstrap now exports those views with manifest-covered OSI
+hashes, view-aware graph edges, and OpenLineage view counts. The remaining
+tenancy gap is narrower but real: standard Iceberg view REST semantics, richer
+project-scoped routing, and explicit project/warehouse attachment to the server
+hierarchy are not fully modeled yet.
 
-**Fix:** introduce Server and Iceberg-compatible view REST entities around the
-existing Project/Warehouse/View records; keep the served catalog scoped to a
-stored warehouse and then add project-scoped routing without changing standard
-table access semantics.
+**Fix:** introduce Iceberg-compatible view REST entities around the existing
+View records; keep the served catalog scoped to a stored warehouse and then add
+project-scoped routing plus explicit Server > Project > Warehouse attachment
+without changing standard table access semantics.
 
 ### F8. (LOW) Production secret-store backends fail closed but are unexercised
 
