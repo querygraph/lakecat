@@ -6,6 +6,30 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `d4fc1f3 Project control-plane upserts into lineage`.
+- Paused after implementing the control-plane outbox lineage slice.
+  `policy-binding.upserted`, `project.upserted`, and `warehouse.upserted`
+  outbox replay now emit LakeCat lineage/OpenLineage receipts alongside their
+  Grust-facing graph anchors, so management/tenancy control-plane mutations
+  carry replayable lineage evidence from the durable outbox.
+- Local verification for the control-plane outbox lineage slice was green:
+  `cargo fmt -p lakecat-lineage -p lakecat-service`;
+  `cargo fmt -p lakecat-lineage -p lakecat-service -- --check`;
+  `cargo test -p lakecat-lineage projects_control_plane_upserts_to_openlineage_outputs`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `cargo test -p lakecat-service outbox_drain_projects_warehouse_upserts_to_graph`;
+  `cargo test -p lakecat-service outbox_drain_projects_project_upserts_to_graph`;
+  `cargo test -p lakecat-lineage`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
+- Push remains intentionally paused in this thread because `master` also
+  contains the separate docs/book commit `5b7b8cf Version LakeCat book outputs`
+  from the other task, and the user asked this task not to interfere with that
+  work.
+- Previous committed LakeCat implementation slice:
   `cad81d2 Expose lineage drain authorization proof`.
 - Paused after committing the lineage-drain authorization proof slice.
   `/management/v1/lineage/drain` now returns compact request-level
@@ -23,9 +47,6 @@ Updated: 2026-06-18
   `cargo test --workspace`;
   `cargo test --workspace --all-features`;
   `git diff --check`.
-- Push is intentionally paused in this thread because `master` also contains
-  the separate docs/book commit `5b7b8cf Version LakeCat book outputs` from the
-  other task, and the user asked this task not to interfere with that work.
 - Previous pushed implementation slice:
   `be713f4 Require QGLake delete manifest evidence`.
 - The QGLake fixture writes a position-delete manifest beside the data manifest,
