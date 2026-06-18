@@ -6,6 +6,21 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `d9c8ac7 Require QGLake fetched data files`.
+- Paused after pushing the QGLake fetched-data-file proof slice. The
+  `lakecat-cli qglake-fixture` governed `fetchScanTasks` verifier now rejects
+  placeholder scan-task JSON and requires at least one fetched file scan task to
+  carry an Iceberg REST `data-file.file-path`, proving acceptance sees actual
+  data-file work from Sail manifest expansion.
+- Local verification for the pushed QGLake fetched-data-file proof slice was
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_fetch_scan_tasks_verifier`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens --features sail-local,turso-local`.
+- This status commit records the pushed QGLake fetched-data-file proof slice.
+- Previous implementation slice:
   `e02045b Require QGLake fetched scan work`.
 - Paused after pushing the QGLake fetched-scan-work proof slice. The
   `lakecat-cli qglake-fixture` governed `fetchScanTasks` verifier now rejects
