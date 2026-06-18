@@ -431,7 +431,7 @@ async fn qglake_fixture(
     verify_qglake_bootstrap_bundle(&bundle, &namespace, &table)?;
     write_bootstrap_bundle(&output, &bundle, &verification)?;
     let drain = drain_lineage_outbox(&catalog, principal).await?;
-    verify_qglake_lineage_drain(&drain)?;
+    verify_qglake_lineage_drain(&drain, &verification)?;
     println!("drained {} lineage/outbox event(s)", drain.delivered);
     Ok(())
 }
@@ -1291,7 +1291,10 @@ fn verify_qglake_credentials_response(
     )))
 }
 
-fn verify_qglake_lineage_drain(drain: &LineageDrainResponse) -> lakecat_core::LakeCatResult<()> {
+fn verify_qglake_lineage_drain(
+    drain: &LineageDrainResponse,
+    verification: &QueryGraphBootstrapVerification,
+) -> lakecat_core::LakeCatResult<()> {
     if drain.delivered == 0 {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain delivered no outbox events".to_string(),
@@ -1331,9 +1334,26 @@ fn verify_qglake_lineage_drain(drain: &LineageDrainResponse) -> lakecat_core::La
             "qglake lineage drain replay evidence is missing QueryGraph hashes".to_string(),
         ));
     }
+    if bootstrap.bundle_hash.as_deref() != Some(verification.bundle_hash.as_str())
+        || bootstrap.graph_hash.as_deref() != Some(verification.graph_hash.as_str())
+        || bootstrap.open_lineage_hash.as_deref() != Some(verification.open_lineage_hash.as_str())
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain replay evidence does not match the accepted QueryGraph bundle"
+                .to_string(),
+        ));
+    }
     if bootstrap.table_artifact_count == 0 {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain replay evidence has no QueryGraph table artifacts".to_string(),
+        ));
+    }
+    if bootstrap.table_artifact_count != verification.table_count
+        || bootstrap.view_artifact_count != verification.view_count
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain replay artifact counts do not match the accepted QueryGraph bundle"
+                .to_string(),
         ));
     }
     if bootstrap.replay_event_hashes.is_empty()
@@ -3373,52 +3393,65 @@ mod tests {
 
     #[test]
     fn qglake_lineage_drain_verifier_requires_delivered_events() {
-        let err = verify_qglake_lineage_drain(&LineageDrainResponse {
-            delivered: 0,
-            event_types: Vec::new(),
-            graph_events: 0,
-            lineage_events: 0,
-            events: Vec::new(),
-        })
+        let verification = qglake_lineage_verification();
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 0,
+                event_types: Vec::new(),
+                graph_events: 0,
+                lineage_events: 0,
+                events: Vec::new(),
+            },
+            &verification,
+        )
         .expect_err("QGLake lineage drain should reject zero deliveries");
         assert!(
             err.to_string()
                 .contains("qglake lineage drain delivered no outbox events")
         );
 
-        let err = verify_qglake_lineage_drain(&LineageDrainResponse {
-            delivered: 1,
-            event_types: vec!["querygraph.bootstrap".to_string()],
-            graph_events: 0,
-            lineage_events: 0,
-            events: Vec::new(),
-        })
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 0,
+                lineage_events: 0,
+                events: Vec::new(),
+            },
+            &verification,
+        )
         .expect_err("QGLake lineage drain should reject missing lineage emissions");
         assert!(
             err.to_string()
                 .contains("qglake lineage drain emitted no lineage events")
         );
 
-        let err = verify_qglake_lineage_drain(&LineageDrainResponse {
-            delivered: 1,
-            event_types: vec!["table.scan-planned".to_string()],
-            graph_events: 1,
-            lineage_events: 1,
-            events: Vec::new(),
-        })
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["table.scan-planned".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                events: Vec::new(),
+            },
+            &verification,
+        )
         .expect_err("QGLake lineage drain should require bootstrap replay");
         assert!(
             err.to_string()
                 .contains("qglake lineage drain did not replay querygraph.bootstrap")
         );
 
-        let err = verify_qglake_lineage_drain(&LineageDrainResponse {
-            delivered: 1,
-            event_types: vec!["querygraph.bootstrap".to_string()],
-            graph_events: 1,
-            lineage_events: 1,
-            events: Vec::new(),
-        })
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                events: Vec::new(),
+            },
+            &verification,
+        )
         .expect_err("QGLake lineage drain should require bootstrap evidence");
         assert!(
             err.to_string().contains(
@@ -3426,50 +3459,128 @@ mod tests {
             )
         );
 
-        let err = verify_qglake_lineage_drain(&LineageDrainResponse {
-            delivered: 1,
-            event_types: vec!["querygraph.bootstrap".to_string()],
-            graph_events: 1,
-            lineage_events: 1,
-            events: vec![LineageDrainEventSummary {
-                event_id: "evt-bootstrap".to_string(),
-                event_type: "querygraph.bootstrap".to_string(),
-                bundle_hash: Some("sha256:bundle".to_string()),
-                graph_hash: Some("sha256:graph".to_string()),
-                open_lineage_hash: Some("sha256:openlineage".to_string()),
-                table_artifact_count: 1,
-                view_artifact_count: 0,
-                replay_event_hashes: Vec::new(),
-                replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
-            }],
-        })
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                events: vec![LineageDrainEventSummary {
+                    event_id: "evt-bootstrap".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    bundle_hash: Some("sha256:bundle".to_string()),
+                    graph_hash: Some("sha256:graph".to_string()),
+                    open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    table_artifact_count: 1,
+                    view_artifact_count: 0,
+                    replay_event_hashes: Vec::new(),
+                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                }],
+            },
+            &verification,
+        )
         .expect_err("QGLake lineage drain should require sink receipt evidence");
         assert!(
             err.to_string()
                 .contains("qglake lineage drain replay evidence is missing sink receipt hashes")
         );
 
-        verify_qglake_lineage_drain(&LineageDrainResponse {
-            delivered: 2,
-            event_types: vec![
-                "table.scan-planned".to_string(),
-                "querygraph.bootstrap".to_string(),
-            ],
-            graph_events: 1,
-            lineage_events: 2,
-            events: vec![LineageDrainEventSummary {
-                event_id: "evt-bootstrap".to_string(),
-                event_type: "querygraph.bootstrap".to_string(),
-                bundle_hash: Some("sha256:bundle".to_string()),
-                graph_hash: Some("sha256:graph".to_string()),
-                open_lineage_hash: Some("sha256:openlineage".to_string()),
-                table_artifact_count: 1,
-                view_artifact_count: 0,
-                replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
-            }],
-        })
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                events: vec![LineageDrainEventSummary {
+                    event_id: "evt-bootstrap".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    bundle_hash: Some("sha256:other-bundle".to_string()),
+                    graph_hash: Some("sha256:graph".to_string()),
+                    open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    table_artifact_count: 1,
+                    view_artifact_count: 0,
+                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
+                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                }],
+            },
+            &verification,
+        )
+        .expect_err("QGLake lineage drain should reject mismatched replay hashes");
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay evidence does not match the accepted QueryGraph bundle"
+        ));
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                events: vec![LineageDrainEventSummary {
+                    event_id: "evt-bootstrap".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    bundle_hash: Some("sha256:bundle".to_string()),
+                    graph_hash: Some("sha256:graph".to_string()),
+                    open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    table_artifact_count: 2,
+                    view_artifact_count: 0,
+                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
+                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                }],
+            },
+            &verification,
+        )
+        .expect_err("QGLake lineage drain should reject mismatched artifact counts");
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay artifact counts do not match the accepted QueryGraph bundle"
+        ));
+
+        verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 2,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 2,
+                events: vec![LineageDrainEventSummary {
+                    event_id: "evt-bootstrap".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    bundle_hash: Some("sha256:bundle".to_string()),
+                    graph_hash: Some("sha256:graph".to_string()),
+                    open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    table_artifact_count: 1,
+                    view_artifact_count: 0,
+                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
+                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                }],
+            },
+            &verification,
+        )
         .expect("QGLake lineage drain should accept delivered outbox events");
+    }
+
+    fn qglake_lineage_verification() -> QueryGraphBootstrapVerification {
+        QueryGraphBootstrapVerification {
+            warehouse: "local".to_string(),
+            table_count: 1,
+            view_count: 0,
+            verified_tables: vec!["local.default.events".to_string()],
+            verified_views: Vec::new(),
+            bundle_hash: "sha256:bundle".to_string(),
+            graph_hash: "sha256:graph".to_string(),
+            open_lineage_hash: "sha256:openlineage".to_string(),
+            standards: vec![
+                "Iceberg REST".to_string(),
+                "Croissant".to_string(),
+                "CDIF".to_string(),
+                "OSI handoff".to_string(),
+                "ODRL".to_string(),
+                "Grust catalog graph".to_string(),
+                "OpenLineage".to_string(),
+            ],
+        }
     }
 
     fn qglake_querygraph_projection(

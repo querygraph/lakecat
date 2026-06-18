@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound QGLake lineage-drain acceptance to the exact QueryGraph bootstrap bundle
+  it accepted, rejecting replay evidence whose bundle, graph, OpenLineage, or
+  artifact-count hashes drift from the exported handoff.
 - Exposed compact lineage-drain replay evidence for QueryGraph bootstrap events
   and required QGLake acceptance to verify bundle, graph, OpenLineage, table
   artifact, and sink receipt hashes.
