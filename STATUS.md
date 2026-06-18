@@ -6,6 +6,25 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `570b973 Mirror QueryGraph artifact hashes in OpenLineage`.
+- Paused after pushing the QueryGraph OpenLineage artifact-hash proof slice. The
+  QueryGraph bootstrap OpenLineage `queryGraph_semanticBundle` facet now carries
+  the manifest's graph hash plus table/view artifact hashes, and the
+  `lakecat-cli qglake-fixture` bootstrap verifier rejects bundles whose
+  OpenLineage hash evidence diverges from the manifest before accepting the
+  handoff.
+- Local verification for the pushed QueryGraph OpenLineage artifact-hash proof
+  slice was green:
+  `cargo fmt -p lakecat-querygraph -p lakecat-cli`;
+  `cargo test -p lakecat-querygraph`;
+  `cargo test -p lakecat-cli qglake_bootstrap`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo fmt -p lakecat-cli -p lakecat-querygraph -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`.
+- This status commit records the pushed QueryGraph OpenLineage artifact-hash
+  proof slice.
+- Previous implementation slice:
   `107ea6c Verify QGLake bootstrap manifest hashes`.
 - Paused after pushing the QGLake bootstrap manifest-hash proof slice. The
   `lakecat-cli qglake-fixture` bootstrap verifier now runs the QueryGraph bundle
