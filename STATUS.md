@@ -6,6 +6,26 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `94847d8 Expose QGLake lineage replay evidence`.
+- Paused after pushing the QGLake lineage replay evidence slice. The management
+  lineage-drain response now exposes compact per-event replay evidence for
+  QueryGraph bootstrap events: bundle, graph, OpenLineage, table/view artifact
+  counts, and sink receipt hashes. The QGLake lineage-drain verifier now
+  rejects bootstrap replay that lacks QueryGraph hashes, table artifact
+  evidence, or OpenLineage-facing sink receipt hashes.
+- Local verification for the pushed QGLake lineage replay evidence slice was
+  green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`.
+- This status commit records the pushed QGLake lineage replay evidence slice.
+- Previous implementation slice:
   `d5ec6d4 Persist QueryGraph artifact hashes in outbox`.
 - Paused after pushing the QueryGraph bootstrap outbox artifact-hash proof
   slice. The `querygraph.bootstrap` audit/outbox payload now persists the
