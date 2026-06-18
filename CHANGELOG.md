@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Wired the in-process Sail `CatalogProvider` namespace drop path to LakeCat's
+  governed durable namespace deletion, including typed `namespace.drop`
+  capability validation, `if_exists` handling, and explicit rejection of
+  unsupported cascading drops.
 - Required the QGLake governed scan verifier to prove the enforced
   `ReadRestriction` carries the expected ODRL policy hash, so acceptance now
   binds projection and row-filter enforcement to the bootstrapped policy

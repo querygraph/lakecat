@@ -283,12 +283,13 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   durable typed columns, warehouse-prefixed catalog REST aliases now list, load,
   upsert, and drop those durable views, and the in-process Sail provider can
   create/load/list/drop them as `TableKind::View` statuses; governed namespace
-  load/drop is now wired on unprefixed and warehouse-prefixed Iceberg REST paths,
-  with non-empty guards across tables, views, and policy bindings plus audited
-  `namespace.dropped` graph/lineage projection; QueryGraph bootstrap now exports
-  those stored views with manifest-covered OSI hashes, typed view columns,
-  view-aware graph edges, and OpenLineage view counts. Full Iceberg view
-  version/commit semantics remain pending.*
+  load/drop is now wired on unprefixed and warehouse-prefixed Iceberg REST paths
+  and through the in-process Sail `CatalogProvider` `drop_database` path, with
+  non-empty guards across tables, views, and policy bindings plus audited
+  `namespace.dropped` graph/lineage projection on the REST path; QueryGraph
+  bootstrap now exports those stored views with manifest-covered OSI hashes,
+  typed view columns, view-aware graph edges, and OpenLineage view counts. Full
+  Iceberg view version/commit semantics remain pending.*
 - **P6 — Reproducibility (F10) + typed v4 (F9).** Land the Sail helper commits
   upstream (or pin a published Sail) and re-enable automatic CI; converge on
   typed v4 metadata once `sail-iceberg` provides it.

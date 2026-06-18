@@ -238,9 +238,10 @@ pub mod catalog_provider {
     use arrow_schema::{DataType, Field, Fields, TimeUnit};
     use lakecat_core::{LakeCatError, Namespace, Principal, TableIdent, TableName, WarehouseName};
     use lakecat_security::{
-        AuthorizationRequest, CatalogAction, GovernanceEngine, ReadRestriction,
-        TableCommitCapability, TableCreateCapability, TableDropCapability, TableLoadCapability,
-        TableScanCapability, ViewDropCapability, ViewLoadCapability, ViewManageCapability,
+        AuthorizationRequest, CatalogAction, GovernanceEngine, NamespaceDropCapability,
+        ReadRestriction, TableCommitCapability, TableCreateCapability, TableDropCapability,
+        TableLoadCapability, TableScanCapability, ViewDropCapability, ViewLoadCapability,
+        ViewManageCapability,
     };
     use lakecat_store::{
         CatalogStore, PolicyBinding, TableCommit, TableRecord, ViewColumnRecord, ViewRecord,
@@ -584,12 +585,24 @@ pub mod catalog_provider {
 
         async fn drop_database(
             &self,
-            _database: &SailNamespace,
-            _options: DropDatabaseOptions,
+            database: &SailNamespace,
+            options: DropDatabaseOptions,
         ) -> CatalogResult<()> {
-            Err(CatalogError::NotSupported(
-                "LakeCat namespace drop is not implemented".to_string(),
-            ))
+            let receipt = self.authorize_catalog(CatalogAction::NamespaceDrop).await?;
+            let _capability =
+                NamespaceDropCapability::from_receipt(receipt).map_err(catalog_error)?;
+            let namespace = lakecat_namespace(database)?;
+            let DropDatabaseOptions { if_exists, cascade } = options;
+            if cascade {
+                return Err(CatalogError::NotSupported(
+                    "LakeCat Sail namespace drop does not support cascade".to_string(),
+                ));
+            }
+            match self.store.drop_namespace(&self.warehouse, &namespace).await {
+                Ok(_) => Ok(()),
+                Err(error) if if_exists && error.to_string().contains("not found") => Ok(()),
+                Err(error) => Err(catalog_error(error)),
+            }
         }
 
         async fn create_table(
@@ -1950,6 +1963,66 @@ pub mod catalog_provider {
                 .await
                 .unwrap();
             assert!(provider.get_table(&namespace, "events").await.is_err());
+        }
+
+        #[tokio::test]
+        async fn provider_drops_durable_namespaces() {
+            let provider = LakeCatCatalogProvider::new(
+                "lakecat",
+                WarehouseName::new("local").unwrap(),
+                MemoryCatalogStore::new(),
+                DeferredSailCatalogEngine::new(),
+                AllowAllGovernanceEngine::new(),
+                Principal::anonymous(),
+            );
+            let namespace = SailNamespace::try_from(vec!["default"]).unwrap();
+            provider
+                .create_database(
+                    &namespace,
+                    CreateDatabaseOptions {
+                        comment: None,
+                        location: None,
+                        if_not_exists: true,
+                        properties: Vec::new(),
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(provider.list_databases(None).await.unwrap().len(), 1);
+
+            provider
+                .drop_database(
+                    &namespace,
+                    DropDatabaseOptions {
+                        if_exists: false,
+                        cascade: false,
+                    },
+                )
+                .await
+                .unwrap();
+            assert!(provider.list_databases(None).await.unwrap().is_empty());
+            provider
+                .drop_database(
+                    &namespace,
+                    DropDatabaseOptions {
+                        if_exists: true,
+                        cascade: false,
+                    },
+                )
+                .await
+                .unwrap();
+
+            let cascade_error = provider
+                .drop_database(
+                    &namespace,
+                    DropDatabaseOptions {
+                        if_exists: true,
+                        cascade: true,
+                    },
+                )
+                .await
+                .expect_err("LakeCat provider should reject cascading namespace drops");
+            assert!(matches!(cascade_error, CatalogError::NotSupported(_)));
         }
 
         #[tokio::test]
