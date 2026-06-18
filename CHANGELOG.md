@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake bootstrap acceptance to verify every table and view artifact
+  listed in the QueryGraph manifest has matching OpenLineage semantic-bundle
+  hash evidence, not only the selected fixture table.
 - Added QueryGraph artifact-hash evidence to the bootstrap OpenLineage semantic
   bundle facet and required QGLake bootstrap acceptance to verify those hashes
   against the manifest.
