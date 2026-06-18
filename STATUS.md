@@ -6,6 +6,34 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `6148f26 Require QGLake view tombstone receipts`.
+- Latest committed status slice:
+  `a79a95d Record view tombstone status`.
+- Paused after binding QGLake lineage-drain acceptance to view tombstone
+  receipt evidence. The QGLake fixture now creates a transient catalog view,
+  accepts a QueryGraph bootstrap containing that view, drops the view, reads the
+  governed view-version receipt chain, and then requires lineage-drain replay
+  to include `view.dropped` plus `view.version-receipts-listed` evidence with a
+  non-empty tombstone receipt hash. LakeCat projects the receipt-chain read as
+  lineage evidence only, leaving reusable graph topology to Grust.
+- Local verification for the QGLake view tombstone acceptance slice was green:
+  `cargo fmt -p lakecat-cli -p lakecat-service -p lakecat-lineage -p lakecat-api`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-service outbox_drain_projects_view_events_to_graph_and_lineage`;
+  `cargo test -p lakecat-lineage projects_control_plane_upserts_to_openlineage_outputs`;
+  `cargo fmt -p lakecat-cli -p lakecat-service -p lakecat-lineage -p lakecat-api -- --check`;
+  `cargo test -p lakecat-lineage`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `aeb266e Record view drop tombstones`.
 - Latest committed goal-guidance/docs slice:
   `e9bd014 Mirror agent guidance into goal`.
@@ -2132,10 +2160,10 @@ Updated: 2026-06-18
 
 ## Next Recommended Slice
 
-Continue the local-first view semantics track by choosing the next catalog-bound
-bridge toward Iceberg view history: either bind QueryGraph/QGLake acceptance to
-drop/tombstone receipt evidence or, if the work becomes a reusable typed view
-history model, push that model into Sail first and consume it through LakeCat's
-existing seams. Keep CI manual-only until local gates are green and the
-temporary Sail patch bridge can be replaced by an upstream branch or published
-Sail helper crate.
+Continue the local-first view semantics track by choosing the next narrow
+catalog-bound bridge toward Iceberg view history: either expose a compact
+management/QueryGraph read for active-plus-tombstoned view receipt chains, or,
+if the work becomes a reusable typed view history model, push that model into
+Sail first and consume it through LakeCat's existing seams. Keep CI manual-only
+until local gates are green and the temporary Sail patch bridge can be replaced
+by an upstream branch or published Sail helper crate.
