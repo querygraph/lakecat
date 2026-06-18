@@ -3782,6 +3782,7 @@ dependencies = [
  "lakecat-api",
  "lakecat-core",
  "lakecat-querygraph",
+ "lakecat-security",
  "reqwest",
  "serde",
  "serde_json",

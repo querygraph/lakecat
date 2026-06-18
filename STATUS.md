@@ -6,17 +6,17 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `f185667 Surface governed scan restrictions in lineage`.
-- Current working slice: governed scan-task fetch audit and lineage payloads.
-  When active policy bindings produce a `ReadRestriction`,
-  `table.scan-tasks-fetched` audit/outbox payloads now surface the effective
-  `read-restriction`, storage location, and metadata location at top level, and
-  the fetched scan-task event flows through the existing graph/OpenLineage scan
-  projection sink path for QueryGraph consumers.
+  working changes: `012dd9c Surface scan task fetch restrictions`.
+- Current working slice: QGLake fixture governed restriction. The live
+  `lakecat-cli qglake-fixture` setup now installs a policy with an explicit
+  `lakecat:read-restriction` containing allowed columns, a row predicate, and a
+  300 second credential TTL, while the fixture table includes a restricted
+  `raw_payload` column so governed Sail planning has something concrete to
+  narrow before QueryGraph import.
 - Local verification for the current slice is green:
-  `cargo test -p lakecat-service scan_tasks_fetched_audit_payload_surfaces_policy_context -- --nocapture`;
-  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_fixture -- --nocapture`;
   `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-cli`;
   `cargo test -p lakecat-service`;
   `cargo test -p lakecat-service --all-features`;
   `cargo test -p lakecat-store --features turso-local`;
@@ -66,6 +66,11 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added a `raw_payload` column to the QGLake fixture table metadata and kept it
+  outside the fixture policy's allowed agent columns.
+- Extended the QGLake fixture policy with `lakecat:read-restriction` allowed
+  columns, row predicate, and max credential TTL, verified through
+  `ReadRestriction::from_odrl_policies`.
 - Surfaced governed scan-task fetch `read-restriction`, storage location, and
   metadata location in the top-level `table.scan-tasks-fetched` audit/outbox
   payload.

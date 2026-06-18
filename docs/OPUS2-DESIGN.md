@@ -198,7 +198,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   `querygraph import-lakecat` and run the broker demo: supervisor delegates to
   specialists that plan scans *through LakeCat*, each gated + restricted, each
   recorded via OpenLineage + DID, synthesis over signed summaries only. This is
-  the GOAL's acceptance target; P1 is the only thing it's missing.
+  the GOAL's acceptance target; P1 is the only thing it's missing. *Started:
+  `lakecat-cli qglake-fixture` now creates a table with a restricted
+  `raw_payload` column and installs a parser-verified
+  `lakecat:read-restriction` so the live fixture exercises projection
+  narrowing, row predicates, and credential TTL before QueryGraph import.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond

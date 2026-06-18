@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-fixture` install an enforceable
+  `lakecat:read-restriction` with allowed columns, row predicate, and credential
+  TTL, plus a restricted raw payload column so the fixture proves governed
+  projection narrowing.
 - Surfaced governed scan-task fetch `read-restriction`, storage location, and
   metadata location at the top level of `table.scan-tasks-fetched` audit/outbox
   payloads, and routed fetched scan-task events through the existing graph and

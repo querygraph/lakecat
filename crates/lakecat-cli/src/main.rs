@@ -378,6 +378,13 @@ fn qglake_table_metadata() -> Value {
                     "type": "string",
                     "required": false,
                     "doc": "Operational severity."
+                },
+                {
+                    "id": 4,
+                    "name": "raw_payload",
+                    "type": "string",
+                    "required": false,
+                    "doc": "Raw event payload reserved for governed human/debug workflows."
                 }
             ]
         }]
@@ -388,10 +395,20 @@ fn qglake_odrl_policy(table: &str) -> Value {
     json!({
         "@context": {
             "odrl": "http://www.w3.org/ns/odrl/2/",
+            "lakecat": "https://querygraph.ai/lakecat/ns#",
             "typesec": "https://typesec.ai/ns#"
         },
         "uid": format!("lakecat:qglake:{table}:agent-read"),
         "type": "odrl:Set",
+        "lakecat:read-restriction": {
+            "allowed-columns": ["event_id", "occurred_at", "severity"],
+            "row-predicate": {
+                "type": "not_eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "max-credential-ttl-seconds": 300
+        },
         "permission": [{
             "target": table,
             "action": "odrl:read",
@@ -895,5 +912,54 @@ mod tests {
             }
             _ => panic!("expected qglake-fixture command"),
         }
+    }
+
+    #[test]
+    fn qglake_fixture_metadata_contains_restricted_raw_payload_column() {
+        let metadata = qglake_table_metadata();
+        let fields = metadata["schemas"][0]["fields"].as_array().unwrap();
+        assert!(fields.iter().any(|field| field["name"] == "raw_payload"));
+    }
+
+    #[test]
+    fn qglake_fixture_policy_installs_read_restriction() {
+        let policy = qglake_odrl_policy("events");
+        assert_eq!(
+            policy["lakecat:read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id", "occurred_at", "severity"])
+        );
+        assert_eq!(
+            policy["lakecat:read-restriction"]["row-predicate"],
+            serde_json::json!({
+                "type": "not_eq",
+                "term": "severity",
+                "value": "debug"
+            })
+        );
+        assert_eq!(
+            policy["lakecat:read-restriction"]["max-credential-ttl-seconds"],
+            serde_json::json!(300)
+        );
+        let restriction = lakecat_security::ReadRestriction::from_odrl_policies([&policy])
+            .expect("qglake policy should parse as LakeCat read restriction");
+        assert_eq!(
+            restriction.allowed_columns.as_deref(),
+            Some(
+                &[
+                    "event_id".to_string(),
+                    "occurred_at".to_string(),
+                    "severity".to_string()
+                ][..]
+            )
+        );
+        assert_eq!(
+            restriction.row_predicate,
+            Some(serde_json::json!({
+                "type": "not_eq",
+                "term": "severity",
+                "value": "debug"
+            }))
+        );
+        assert_eq!(restriction.max_credential_ttl_seconds, Some(300));
     }
 }
