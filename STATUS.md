@@ -6,11 +6,11 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `e6de2fe Record QGLake drain delivery status`.
-- Current working slice: governed lineage-drain receipt summaries for QGLake
-  acceptance. The drain response now includes delivered event types plus graph
-  and lineage projection counts, and `lakecat-cli qglake-fixture` now requires
-  the drain to replay `querygraph.bootstrap` into lineage.
+  `8fae407 Summarize QGLake lineage drain receipts`.
+- Current working slice: paused after governed lineage-drain receipt summaries
+  for QGLake acceptance. The drain response now includes delivered event types
+  plus graph and lineage projection counts, and `lakecat-cli qglake-fixture`
+  now requires the drain to replay `querygraph.bootstrap` into lineage.
 - Local verification for the current slice is green:
   `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
   `git diff --check`;
