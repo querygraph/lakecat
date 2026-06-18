@@ -239,7 +239,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   store idempotency record instead of creating a second pointer-log row; reused
   keys with different request hashes now return conflict; failed pointer commits
   now clean up newly written local metadata objects when they do not become the
-  table's metadata pointer.*
+  table's metadata pointer; metadata object writes and cleanup now route through
+  `object_store::parse_url_opts`, preserving local `file://` behavior while
+  moving the writer toward configured object-store backends.*
 - **P4 — Semantic catalog graph (F6).** Emit the bounded typed taxonomy
   (Namespace/Table/Column/Snapshot/Policy/Principal/ScanPlan/Commit) through the
   outbox into Grust; keep file-granularity as metadata-as-data. Then OpenLineage

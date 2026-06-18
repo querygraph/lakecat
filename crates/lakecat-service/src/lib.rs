@@ -48,9 +48,8 @@ use lakecat_store::{
     ProjectRecord, StorageProfile, StorageProvider, TableCommit, TableRecord, WarehouseRecord,
     table_ident,
 };
-use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
-use object_store::{ObjectStoreExt, PutPayload};
+use object_store::{ObjectStore, ObjectStoreExt, PutPayload};
 use serde_json::{Value, json};
 use url::Url;
 
@@ -1718,7 +1717,19 @@ async fn commit_table_in_warehouse(
 #[derive(Debug, Clone)]
 struct PlannedMetadataWrite {
     location: String,
-    object_path: ObjectPath,
+}
+
+fn metadata_object_store(
+    location: &str,
+) -> Result<(Box<dyn ObjectStore>, ObjectPath), LakeCatError> {
+    let url = Url::parse(location).map_err(|err| {
+        LakeCatError::InvalidArgument(format!("invalid metadata location '{location}': {err}"))
+    })?;
+    object_store::parse_url_opts(&url, std::env::vars()).map_err(|err| {
+        LakeCatError::InvalidArgument(format!(
+            "metadata object location '{location}' is not supported or is not configured: {err}"
+        ))
+    })
 }
 
 async fn write_planned_metadata(
@@ -1730,26 +1741,9 @@ async fn write_planned_metadata(
     let Some(location) = commit_plan.new_metadata_location.as_deref() else {
         return Ok(None);
     };
-    let url = Url::parse(location).map_err(|err| {
-        LakeCatError::InvalidArgument(format!("invalid metadata location '{location}': {err}"))
-    })?;
-    if url.scheme() != "file" {
-        return Err(LakeCatError::NotSupported(format!(
-            "metadata object writes currently support file:// locations, not {}",
-            url.scheme()
-        )));
-    }
-    let path = url.to_file_path().map_err(|_| {
-        LakeCatError::InvalidArgument(format!(
-            "metadata location is not a valid file URL: {location}"
-        ))
-    })?;
-    let object_path = ObjectPath::from_absolute_path(&path).map_err(|err| {
-        LakeCatError::InvalidArgument(format!("invalid metadata object path '{location}': {err}"))
-    })?;
+    let (store, object_path) = metadata_object_store(location)?;
     let payload = serde_json::to_vec_pretty(&commit_plan.new_metadata)
         .map_err(|err| LakeCatError::Internal(format!("failed to encode metadata JSON: {err}")))?;
-    let store = LocalFileSystem::new();
     store
         .put(&object_path, PutPayload::from(payload))
         .await
@@ -1760,7 +1754,6 @@ async fn write_planned_metadata(
         })?;
     Ok(Some(PlannedMetadataWrite {
         location: location.to_string(),
-        object_path,
     }))
 }
 
@@ -1774,8 +1767,8 @@ async fn cleanup_planned_metadata(
     if previous_metadata_location == Some(write.location.as_str()) {
         return Ok(());
     }
-    let store = LocalFileSystem::new();
-    store.delete(&write.object_path).await.map_err(|err| {
+    let (store, object_path) = metadata_object_store(&write.location)?;
+    store.delete(&object_path).await.map_err(|err| {
         LakeCatError::Internal(format!(
             "failed to clean up uncommitted metadata object '{}': {err}",
             write.location

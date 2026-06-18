@@ -286,10 +286,12 @@ Current implementation status: `lakecat-store` has an opt-in `turso-local`
 feature with a Turso-backed `TursoCatalogStore` for namespaces, tables, metadata
 pointer history, idempotency records, audit events, and outbox rows. The service
 binary uses it when built with `turso-local` and `LAKECAT_TURSO_PATH` is set.
-Table commits now write local `file://` metadata objects when commit plans carry
-new metadata, advance table pointers through compare-and-swap, persist
-idempotency/audit/outbox records, and expose a service-level drain that projects
-committed events to graph and lineage sinks. A typed storage-profile model now
+Table commits now write metadata objects through the Rust `object_store` URL
+dispatch seam when commit plans carry new metadata, advance table pointers
+through compare-and-swap, persist idempotency/audit/outbox records, and expose a
+service-level drain that projects committed events to graph and lineage sinks.
+The local `file://` path remains the verified default, while configured remote
+stores can plug into the same writer boundary. A typed storage-profile model now
 drives conservative credential responses: embedded `file://` tables can return
 scoped no-secret profile hints, while remote object stores can reference external
 secret stores and still return no credentials until short-lived issuance is

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Routed commit metadata object writes and orphan cleanup through
+  `object_store::parse_url_opts`, keeping local `file://` behavior while moving
+  the commit writer toward configured object-store backends.
 - Made `lakecat-cli qglake-fixture` probe the restricted table's
   `loadCredentials` response and fail unless LakeCat withholds raw credentials,
   proving QGLake acceptance uses governed Sail-planned reads for restricted data.

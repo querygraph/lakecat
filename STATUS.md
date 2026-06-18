@@ -7,9 +7,9 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `ce4b82b Verify QGLake credential blocking`.
-- Paused after pushing QGLake credential-blocking verification. The fixture now
-  proves restricted QGLake tables do not receive raw credentials before it
-  exports the QueryGraph bootstrap bundle and drains lineage.
+- Current working slice routes commit metadata writes and stale-write cleanup
+  through the Rust `object_store` URL seam instead of hardcoding the local
+  filesystem writer.
 - Local verification for the pushed QGLake credential-blocking slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `cargo fmt -p lakecat-cli -- --check`;
@@ -138,6 +138,9 @@ Updated: 2026-06-18
 
 ## Completed In Latest Implementation Slice
 
+- Routed commit metadata object writes and stale-write cleanup through
+  `object_store::parse_url_opts`, preserving local `file://` behavior while
+  opening the writer boundary for configured object-store backends.
 - Extended `lakecat-cli qglake-fixture` to prove the restricted QGLake table does
   not receive raw credentials, keeping the acceptance path on governed
   Sail-planned reads.
