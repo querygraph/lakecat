@@ -5,13 +5,33 @@ Updated: 2026-06-18
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed and pushed LakeCat implementation slice:
+- Latest committed LakeCat implementation slice:
+  `cad81d2 Expose lineage drain authorization proof`.
+- Paused after committing the lineage-drain authorization proof slice.
+  `/management/v1/lineage/drain` now returns compact request-level
+  lineage-read authorization evidence, the CLI prints that proof, and QGLake
+  lineage-drain acceptance requires the drain request itself to carry principal,
+  principal-kind, authorization-receipt hash, and request-identity state.
+- Local verification for the lineage-drain authorization proof slice was green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
+- Push is intentionally paused in this thread because `master` also contains
+  the separate docs/book commit `5b7b8cf Version LakeCat book outputs` from the
+  other task, and the user asked this task not to interfere with that work.
+- Previous pushed implementation slice:
   `be713f4 Require QGLake delete manifest evidence`.
-- Paused after pushing the QGLake delete-manifest acceptance slice. The QGLake
-  fixture now writes a position-delete manifest beside the data manifest, and
-  governed `fetchScanTasks` acceptance requires Sail to attach delete-file refs
-  to data tasks while treating delete-manifest child tasks as terminal governed
-  delete-file work.
+- The QGLake fixture writes a position-delete manifest beside the data manifest,
+  and governed `fetchScanTasks` acceptance requires Sail to attach delete-file
+  refs to data tasks while treating delete-manifest child tasks as terminal
+  governed delete-file work.
 - Local verification for the pushed QGLake delete-manifest acceptance slice was
   green:
   `cargo fmt -p lakecat-cli`;
@@ -27,9 +47,8 @@ Updated: 2026-06-18
   `cargo test --workspace --all-features`;
   `cargo fmt -p lakecat-cli -p lakecat-service -p lakecat-api -- --check`;
   `cargo test -p lakecat-service --all-features`.
-- This status commit records the pushed QGLake delete-manifest acceptance slice.
-- Separate docs/book LakeSail-to-LakeCat rename work remains in the worktree and
-  was intentionally not included in the QGLake implementation commit.
+- This earlier status commit records the pushed QGLake delete-manifest
+  acceptance slice.
 - Previous implementation slice:
   `ff08e77 Project credential replay into OpenLineage`.
 - Paused after pushing the QGLake credential OpenLineage replay slice.
