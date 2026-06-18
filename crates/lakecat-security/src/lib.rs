@@ -81,6 +81,10 @@ impl ReadRestriction {
             && self.max_credential_ttl_seconds.is_none()
     }
 
+    pub fn requires_governed_read(&self) -> bool {
+        self.allowed_columns.is_some() || self.row_predicate.is_some()
+    }
+
     pub fn from_odrl_policies<'a>(
         policies: impl IntoIterator<Item = &'a Value>,
     ) -> LakeCatResult<Self> {
@@ -560,6 +564,17 @@ impl CredentialsVendCapability {
 
     pub fn table(&self) -> &TableIdent {
         self.resource()
+    }
+
+    pub fn read_restriction(&self) -> LakeCatResult<ReadRestriction> {
+        match self.receipt().context.get("read-restriction") {
+            Some(value) => serde_json::from_value(value.clone()).map_err(|err| {
+                LakeCatError::InvalidArgument(format!(
+                    "authorization receipt carries invalid read restriction: {err}"
+                ))
+            }),
+            None => Ok(ReadRestriction::unrestricted()),
+        }
     }
 }
 

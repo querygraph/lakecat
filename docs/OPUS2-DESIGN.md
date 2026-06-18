@@ -137,7 +137,7 @@ build is reproducible off this machine.
 
 | # | Finding | Severity | Status |
 | --- | --- | --- | --- |
-| F1 | Governed read gates but does not mask | HIGH | OPEN — critical path |
+| F1 | Governed read gates but does not mask | HIGH | STARTED — fine-grained restrictions now block raw credential bypass |
 | F2 | ODRL transported, not interpreted; `Delegate` → deny | HIGH | STARTED — shared restriction parser plus TypeSec RBAC policy loading |
 | F3 | Commit idempotency unreachable from REST | MEDIUM | STARTED — REST header replay + mismatch guard wired |
 | F4 | Metadata written before CAS; no orphan handling/retry | MEDIUM | STARTED — local orphan cleanup |
@@ -170,9 +170,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   2. Carry the effective restriction in `TableScanCapability` and record it in
      the audit receipt (`policy_hash` includes the binding's ODRL hash).
      *Started: scan and credential-vend receipts now carry `read-restriction`
-     with allowed columns and policy hashes; `table.scan-planned` audit/outbox
-     payloads surface the effective restriction plus storage/metadata locations
-     for OpenLineage and graph consumers; `table.scan-tasks-fetched` now
+     with allowed columns and policy hashes; credential-vend capabilities expose
+     the same restriction and LakeCat now withholds raw credentials when row or
+     column restrictions require a governed Sail-planned read; `table.scan-planned`
+     audit/outbox payloads surface the effective restriction plus storage/metadata
+     locations for OpenLineage and graph consumers; `table.scan-tasks-fetched` now
      surfaces the same governed context and routes through the scan projection
      sink path; governed credential-vend receipts are marked as raw-credential
      exceptions, and the `credentials.vend-attempted` audit/outbox payload
@@ -262,8 +264,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   the requested warehouse instead of the configured default, and Iceberg REST
   routes now accept a warehouse prefix only after resolving a durable
   `WarehouseRecord`, while keeping the unprefixed default-warehouse
-  compatibility path. Server/View entities and richer project-scoped routing
-  remain pending.*
+  compatibility path; credential-vend attempts with fine-grained restrictions
+  now fail closed into governed Sail-planned reads before any secret resolver is
+  called. Server/View entities and richer project-scoped routing remain
+  pending.*
 - **P6 — Reproducibility (F10) + typed v4 (F9).** Land the Sail helper commits
   upstream (or pin a published Sail) and re-enable automatic CI; converge on
   typed v4 metadata once `sail-iceberg` provides it.

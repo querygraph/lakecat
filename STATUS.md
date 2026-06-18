@@ -7,10 +7,9 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `e445f1e Require registered warehouse prefixes`.
-- Paused after pushing registered warehouse-prefix enforcement. Prefixed
-  Iceberg REST catalog handlers now resolve a durable `WarehouseRecord` before
-  catalog access, while unprefixed routes remain the default-warehouse
-  compatibility path for standard clients.
+- Current working slice blocks raw credential vending when policy-derived row or
+  column restrictions require governed Sail-planned reads, so agents cannot use
+  `loadCredentials` to bypass fine-grained restrictions.
 - Local verification for the pushed registered-prefix slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
@@ -117,6 +116,9 @@ Updated: 2026-06-18
 
 ## Completed In Latest Implementation Slice
 
+- Blocked raw credential vending for authorization receipts that carry
+  fine-grained row or column read restrictions, and audited the blocked attempt
+  with the same policy context.
 - Required warehouse-prefixed Iceberg REST catalog routes to resolve a stored
   warehouse record before catalog state changes or loads.
 - Added warehouse-prefixed Iceberg REST catalog routes while preserving

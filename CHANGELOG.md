@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Blocked raw credential vending when an authorization receipt carries
+  fine-grained row or column read restrictions, forcing those principals through
+  governed Sail-planned reads and auditing the blocked credential attempt.
 - Required warehouse-prefixed Iceberg REST catalog routes to resolve a durable
   `WarehouseRecord`, preventing catalog operations under unregistered warehouse
   prefixes while preserving unprefixed default-warehouse compatibility.

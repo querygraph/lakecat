@@ -1222,22 +1222,33 @@ async fn load_credentials_in_warehouse(
     let capability = authorize_credentials_vend(&state, identity, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
     let storage_profile = state.store.storage_profile_for_table(&table).await?;
-    let storage_credentials = state
-        .credential_issuer
-        .issue(CredentialIssuanceRequest {
-            table: table.clone(),
-            profile: storage_profile.clone(),
-            authorization_receipt: capability.receipt().clone(),
-        })
-        .await?;
+    let read_restriction = capability.read_restriction()?;
+    let credential_block_reason = read_restriction
+        .requires_governed_read()
+        .then_some("fine-grained read restriction requires Sail-planned reads");
+    let storage_credentials = if credential_block_reason.is_some() {
+        Vec::new()
+    } else {
+        state
+            .credential_issuer
+            .issue(CredentialIssuanceRequest {
+                table: table.clone(),
+                profile: storage_profile.clone(),
+                authorization_receipt: capability.receipt().clone(),
+            })
+            .await?
+    };
     let ident = capability.table().clone();
-    let audit_payload = credentials_vend_audit_payload(
+    let mut audit_payload = credentials_vend_audit_payload(
         &ident,
         &table,
         &storage_profile,
         storage_credentials.len(),
         capability.receipt(),
     );
+    if let Some(reason) = credential_block_reason {
+        audit_payload["lakecat:credential-block-reason"] = json!(reason);
+    }
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -2862,11 +2873,13 @@ async fn authorize(
             .collect::<Vec<_>>(),
     });
     if let Some(restriction) = read_restriction {
+        let raw_exception = matches!(action, CatalogAction::CredentialsVend)
+            .then(|| raw_credential_exception_context(&restriction));
         context["read-restriction"] = serde_json::to_value(restriction).map_err(|err| {
             LakeCatError::Internal(format!("failed to encode read restriction: {err}"))
         })?;
-        if matches!(action, CatalogAction::CredentialsVend) {
-            context["lakecat:raw-credential-exception"] = json!(true);
+        if let Some(raw_exception) = raw_exception {
+            context["lakecat:raw-credential-exception"] = raw_exception;
         }
     }
     let receipt = state
@@ -2883,6 +2896,19 @@ async fn authorize(
     } else {
         Err(LakeCatError::Conflict("authorization denied".to_string()).into())
     }
+}
+
+fn raw_credential_exception_context(restriction: &ReadRestriction) -> Value {
+    let allowed = !restriction.requires_governed_read();
+    json!({
+        "requested": true,
+        "allowed": allowed,
+        "reason": if allowed {
+            "restriction is compatible with short-lived credential vending"
+        } else {
+            "fine-grained read restriction requires Sail-planned reads"
+        },
+    })
 }
 
 async fn authorize_table_create(
@@ -6023,7 +6049,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn credential_vend_authorization_carries_policy_read_restriction() {
+    async fn credential_vend_blocks_raw_credentials_for_fine_grained_restriction() {
         let store = MemoryCatalogStore::new();
         let issuer = Arc::new(RecordingCredentialIssuer::default());
         let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
@@ -6084,21 +6110,35 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(response.0.storage_credentials.len(), 1);
+        assert_eq!(response.0.storage_credentials.len(), 0);
 
         let requests = issuer.requests.lock().await;
-        let receipt = &requests[0].authorization_receipt;
-        assert_eq!(receipt.action, CatalogAction::CredentialsVend);
+        assert!(requests.is_empty());
+        drop(requests);
+
+        let outbox = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        let event = outbox
+            .iter()
+            .find(|event| event.event_type == "credentials.vend-attempted")
+            .expect("credentials vend audit event");
+        let receipt = &event.payload["payload"]["authorization-receipt"];
         assert_eq!(
-            receipt.context["lakecat:raw-credential-exception"],
-            serde_json::json!(true)
+            receipt["action"],
+            serde_json::json!(CatalogAction::CredentialsVend)
         );
         assert_eq!(
-            receipt.context["read-restriction"]["allowed-columns"],
+            receipt["context"]["lakecat:raw-credential-exception"]["allowed"],
+            serde_json::json!(false)
+        );
+        assert_eq!(
+            receipt["context"]["read-restriction"]["allowed-columns"],
             serde_json::json!(["event_id"])
         );
         assert_eq!(
-            receipt.context["read-restriction"]["row-predicate"],
+            receipt["context"]["read-restriction"]["row-predicate"],
             serde_json::json!({
                 "type": "eq",
                 "term": "event_id",
@@ -6106,8 +6146,16 @@ mod tests {
             })
         );
         assert_eq!(
-            receipt.context["read-restriction"]["max-credential-ttl-seconds"],
+            receipt["context"]["read-restriction"]["max-credential-ttl-seconds"],
             serde_json::json!(300)
+        );
+        assert_eq!(
+            event.payload["payload"]["credential-count"],
+            serde_json::json!(0)
+        );
+        assert_eq!(
+            event.payload["payload"]["lakecat:credential-block-reason"],
+            serde_json::json!("fine-grained read restriction requires Sail-planned reads")
         );
     }
 
@@ -6143,15 +6191,19 @@ mod tests {
                     },
                     "max-credential-ttl-seconds": 300
                 },
-                "lakecat:raw-credential-exception": true
+                "lakecat:raw-credential-exception": {
+                    "requested": true,
+                    "allowed": false,
+                    "reason": "fine-grained read restriction requires Sail-planned reads"
+                }
             }),
             checked_at: chrono::Utc::now(),
         };
 
         let payload = credentials_vend_audit_payload(&ident, &table, &profile, 1, &receipt);
         assert_eq!(
-            payload["lakecat:raw-credential-exception"],
-            serde_json::json!(true)
+            payload["lakecat:raw-credential-exception"]["allowed"],
+            serde_json::json!(false)
         );
         assert_eq!(
             payload["read-restriction"]["allowed-columns"],
