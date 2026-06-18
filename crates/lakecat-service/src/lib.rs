@@ -978,6 +978,11 @@ fn lineage_drain_event_summary(
             .get("view-artifacts")
             .and_then(Value::as_array)
             .map_or(0, Vec::len),
+        policy_binding_count: payload
+            .get("policy-binding-count")
+            .and_then(Value::as_u64)
+            .and_then(|count| usize::try_from(count).ok())
+            .unwrap_or_default(),
         standards: payload
             .get("standards")
             .and_then(Value::as_array)
@@ -4819,6 +4824,7 @@ mod tests {
         );
         assert_eq!(bootstrap_summary.table_artifact_count, 1);
         assert_eq!(bootstrap_summary.view_artifact_count, 1);
+        assert_eq!(bootstrap_summary.policy_binding_count, 1);
         assert_eq!(
             bootstrap_summary.standards,
             vec!["OpenLineage".to_string(), "Grust catalog graph".to_string()]
@@ -5285,6 +5291,10 @@ mod tests {
         );
         assert_eq!(
             payload["events"][0]["view-artifact-count"],
+            serde_json::json!(1)
+        );
+        assert_eq!(
+            payload["events"][0]["policy-binding-count"],
             serde_json::json!(1)
         );
         assert_eq!(

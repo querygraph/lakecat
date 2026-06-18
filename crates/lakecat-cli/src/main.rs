@@ -436,7 +436,12 @@ async fn qglake_fixture(
     verify_qglake_bootstrap_bundle(&bundle, &namespace, &table)?;
     write_bootstrap_bundle(&output, &bundle, &verification)?;
     let drain = drain_lineage_outbox(&catalog, principal).await?;
-    verify_qglake_lineage_drain(&drain, &verification, principal)?;
+    verify_qglake_lineage_drain(
+        &drain,
+        &verification,
+        principal,
+        qglake_policy_binding_count(&bundle),
+    )?;
     println!("drained {} lineage/outbox event(s)", drain.delivered);
     Ok(())
 }
@@ -1300,6 +1305,7 @@ fn verify_qglake_lineage_drain(
     drain: &LineageDrainResponse,
     verification: &QueryGraphBootstrapVerification,
     principal: Option<&str>,
+    expected_policy_binding_count: usize,
 ) -> lakecat_core::LakeCatResult<()> {
     if drain.delivered == 0 {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
@@ -1379,6 +1385,12 @@ fn verify_qglake_lineage_drain(
                 .to_string(),
         ));
     }
+    if bootstrap.policy_binding_count != expected_policy_binding_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain replay policy binding count does not match the accepted QueryGraph bundle"
+                .to_string(),
+        ));
+    }
     if bootstrap.lineage_events == 0 {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain bootstrap replay emitted no lineage projection".to_string(),
@@ -1401,6 +1413,14 @@ fn verify_qglake_lineage_drain(
 
 fn standards_set(standards: &[String]) -> BTreeSet<&str> {
     standards.iter().map(String::as_str).collect()
+}
+
+fn qglake_policy_binding_count(bundle: &QueryGraphBootstrap) -> usize {
+    bundle
+        .tables
+        .iter()
+        .map(|table| table.policy_bindings.len())
+        .sum()
 }
 
 fn qglake_table_metadata(
@@ -3436,6 +3456,7 @@ mod tests {
             },
             &verification,
             Some("did:example:agent"),
+            1,
         )
         .expect_err("QGLake lineage drain should reject zero deliveries");
         assert!(
@@ -3453,6 +3474,7 @@ mod tests {
             },
             &verification,
             Some("did:example:agent"),
+            1,
         )
         .expect_err("QGLake lineage drain should reject missing lineage emissions");
         assert!(
@@ -3470,6 +3492,7 @@ mod tests {
             },
             &verification,
             Some("did:example:agent"),
+            1,
         )
         .expect_err("QGLake lineage drain should reject missing graph emissions");
         assert!(
@@ -3487,6 +3510,7 @@ mod tests {
             },
             &verification,
             Some("did:example:agent"),
+            1,
         )
         .expect_err("QGLake lineage drain should require bootstrap replay");
         assert!(
@@ -3504,6 +3528,7 @@ mod tests {
             },
             &verification,
             Some("did:example:agent"),
+            1,
         )
         .expect_err("QGLake lineage drain should require bootstrap evidence");
         assert!(
@@ -3529,6 +3554,7 @@ mod tests {
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     replay_event_hashes: Vec::new(),
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
@@ -3536,6 +3562,7 @@ mod tests {
             },
             &verification,
             Some("did:example:agent"),
+            1,
         )
         .expect_err("QGLake lineage drain should require sink receipt evidence");
         assert!(
@@ -3560,6 +3587,7 @@ mod tests {
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
@@ -3567,6 +3595,7 @@ mod tests {
             },
             &verification,
             Some("did:example:agent"),
+            1,
         )
         .expect_err("QGLake lineage drain should reject mismatched replay hashes");
         assert!(err.to_string().contains(
@@ -3590,6 +3619,7 @@ mod tests {
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
@@ -3597,6 +3627,7 @@ mod tests {
             },
             &verification,
             Some("did:example:agent"),
+            1,
         )
         .expect_err("QGLake lineage drain should reject mismatched replay principal");
         assert!(err.to_string().contains(
@@ -3620,6 +3651,7 @@ mod tests {
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
                     table_artifact_count: 2,
                     view_artifact_count: 0,
+                    policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
@@ -3627,6 +3659,7 @@ mod tests {
             },
             &verification,
             Some("did:example:agent"),
+            1,
         )
         .expect_err("QGLake lineage drain should reject mismatched artifact counts");
         assert!(err.to_string().contains(
@@ -3650,6 +3683,7 @@ mod tests {
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    policy_binding_count: 1,
                     standards: vec!["OpenLineage".to_string()],
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
@@ -3657,10 +3691,43 @@ mod tests {
             },
             &verification,
             Some("did:example:agent"),
+            1,
         )
         .expect_err("QGLake lineage drain should reject mismatched replay standards");
         assert!(err.to_string().contains(
             "qglake lineage drain replay standards do not match the accepted QueryGraph bundle"
+        ));
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                events: vec![LineageDrainEventSummary {
+                    event_id: "evt-bootstrap".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    principal_subject: Some("did:example:agent".to_string()),
+                    graph_events: 0,
+                    lineage_events: 1,
+                    bundle_hash: Some("sha256:bundle".to_string()),
+                    graph_hash: Some("sha256:graph".to_string()),
+                    open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    table_artifact_count: 1,
+                    view_artifact_count: 0,
+                    policy_binding_count: 0,
+                    standards: qglake_lineage_standards(),
+                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
+                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                }],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject mismatched policy binding counts");
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay policy binding count does not match the accepted QueryGraph bundle"
         ));
 
         let err = verify_qglake_lineage_drain(
@@ -3680,6 +3747,7 @@ mod tests {
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
@@ -3687,6 +3755,7 @@ mod tests {
             },
             &verification,
             Some("did:example:agent"),
+            1,
         )
         .expect_err("QGLake lineage drain should reject missing bootstrap lineage projection");
         assert!(
@@ -3714,6 +3783,7 @@ mod tests {
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
@@ -3721,6 +3791,7 @@ mod tests {
             },
             &verification,
             Some("did:example:agent"),
+            1,
         )
         .expect("QGLake lineage drain should accept delivered outbox events");
     }
