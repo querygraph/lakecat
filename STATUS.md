@@ -6,11 +6,25 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `ce4b82b Verify QGLake credential blocking`.
+- Paused after pushing QGLake credential-blocking verification. The fixture now
+  proves restricted QGLake tables do not receive raw credentials before it
+  exports the QueryGraph bootstrap bundle and drains lineage.
+- Local verification for the pushed QGLake credential-blocking slice was green:
+  `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-service credential_vend_blocks_raw_credentials_for_fine_grained_restriction -- --nocapture`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed QGLake credential-blocking verification.
+- Previous implementation slice:
   `109e0dd Block credential bypass for restricted reads`.
-- Current working slice extends `lakecat-cli qglake-fixture` so QGLake
-  acceptance probes `loadCredentials` for the restricted table and fails unless
-  LakeCat withholds raw credentials.
-- Local verification for the pushed credential-bypass hardening slice was green:
+- Local verification for the previous credential-bypass hardening slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-service credential_vend_blocks_raw_credentials_for_fine_grained_restriction -- --nocapture`;
@@ -21,9 +35,6 @@ Updated: 2026-06-18
   `cargo test -p lakecat-service --all-features`;
   `cargo test --workspace`;
   `cargo test --workspace --all-features`.
-- This status commit records the pushed credential-bypass hardening.
-- Previous implementation slice:
-  `e445f1e Require registered warehouse prefixes`.
 - Local verification for the previous registered-prefix slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
