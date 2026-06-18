@@ -833,12 +833,13 @@ curl -s -X PUT \
 ```
 
 This is not Iceberg business metadata glued onto a table. It is catalog state
-about a view object. LakeCat records `view.upserted`, `view.loaded`, and
-`view.dropped` audit events. Outbox replay projects those changes and reads to
-a catalog-facing View graph event and a LakeCat OpenLineage view dataset
-receipt. QueryGraph bootstrap can then include views with OSI hashes,
-view-aware graph edges, and OpenLineage view counts. The lineage-drain summary
-also carries compact view replay identity:
+about a view object. LakeCat records `view.listed`, `view.upserted`,
+`view.loaded`, and `view.dropped` audit events. Outbox replay projects listing
+reads to namespace-scoped graph and OpenLineage evidence, and projects
+single-view changes and reads to catalog-facing View graph events plus
+LakeCat OpenLineage view dataset receipts. QueryGraph bootstrap can then
+include views with OSI hashes, view-aware graph edges, and OpenLineage view
+counts. The lineage-drain summary also carries compact view replay identity:
 
 ```json
 {
@@ -853,6 +854,11 @@ also carries compact view replay identity:
   "replay-open-lineage-hashes": ["sha256:..."]
 }
 ```
+
+A `view.listed` replay is intentionally namespace-scoped. It records the
+warehouse, namespace, view count, graph and lineage projection counts, and
+receipt hashes for the list read without fabricating a single
+`view-stable-id`.
 
 QGLake acceptance compares that `view-stable-id` with the accepted QueryGraph
 bootstrap view artifacts. That closes a small but important gap: the bootstrap

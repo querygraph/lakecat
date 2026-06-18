@@ -2975,6 +2975,31 @@ async fn project_outbox_event(
             ))
             .await?;
         receipt.record_lineage(lineage_receipt);
+    } else if event.event_type == "view.listed" {
+        let (warehouse, namespace) = outbox_namespace(event, &state.warehouse)?;
+        state
+            .graph
+            .emit(
+                GraphEvent::namespace(
+                    GraphAction::Loaded,
+                    warehouse,
+                    namespace,
+                    event_payload.clone(),
+                )
+                .with_event_id(event.event_id.clone()),
+            )
+            .await?;
+        receipt.graph_events += 1;
+        let lineage_receipt = state
+            .lineage
+            .emit(LineageEvent::new(
+                LineageEventType::ViewListed,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "policy-binding.upserted" {
         let (warehouse, policy_id) = outbox_policy_binding(event, &state.warehouse)?;
         state
@@ -5699,6 +5724,30 @@ mod tests {
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![
                 OutboxEvent {
+                    event_id: "evt-view-list".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "view.listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-view-list",
+                        "event-type": "view.listed",
+                        "payload": {
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "view-count": 1,
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "view-load",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            }
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
                     event_id: "evt-view-upsert".to_string(),
                     sink: "lakecat.lineage-and-graph".to_string(),
                     event_type: "view.upserted".to_string(),
@@ -5748,36 +5797,38 @@ mod tests {
             );
 
         let drain = drain_outbox_once(&state, 10).await.unwrap();
-        assert_eq!(drain.delivered, 3);
+        assert_eq!(drain.delivered, 4);
         assert_eq!(
             drain.event_types,
             vec![
+                "view.listed".to_string(),
                 "view.upserted".to_string(),
                 "view.loaded".to_string(),
                 "view.dropped".to_string()
             ]
         );
-        assert_eq!(drain.graph_events, 6);
-        assert_eq!(drain.lineage_events, 3);
+        assert_eq!(drain.graph_events, 8);
+        assert_eq!(drain.lineage_events, 4);
         assert_eq!(
             store.delivered.lock().await.as_slice(),
             &[
+                "evt-view-list".to_string(),
                 "evt-view-upsert".to_string(),
                 "evt-view-load".to_string(),
                 "evt-view-drop".to_string()
             ]
         );
-        assert_eq!(drain.events.len(), 3);
+        assert_eq!(drain.events.len(), 4);
         assert_eq!(
-            drain.events[0].view_stable_id.as_deref(),
+            drain.events[1].view_stable_id.as_deref(),
             Some("lakecat:view:local:default:events_view")
         );
-        assert_eq!(drain.events[0].view_warehouse.as_deref(), Some("local"));
-        assert_eq!(drain.events[0].view_namespace, vec!["default"]);
-        assert_eq!(drain.events[0].view_name.as_deref(), Some("events_view"));
+        assert_eq!(drain.events[1].view_warehouse.as_deref(), Some("local"));
+        assert_eq!(drain.events[1].view_namespace, vec!["default"]);
+        assert_eq!(drain.events[1].view_name.as_deref(), Some("events_view"));
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 6);
+        assert_eq!(graph_events.len(), 8);
         let view_events = graph_events
             .iter()
             .filter(|event| event.label == GraphNodeLabel::View)
@@ -5790,15 +5841,21 @@ mod tests {
         );
         assert_eq!(view_events[1].action, GraphAction::Loaded);
         assert_eq!(view_events[2].action, GraphAction::Deleted);
+        assert!(graph_events.iter().any(|event| {
+            event.label == GraphNodeLabel::Namespace
+                && event.action == GraphAction::Loaded
+                && event.event_id.as_deref() == Some("evt-view-list")
+        }));
         drop(graph_events);
 
         let lineage_events = lineage.events.lock().await;
-        assert_eq!(lineage_events.len(), 3);
-        assert_eq!(lineage_events[0].event_type, LineageEventType::ViewUpserted);
-        assert_eq!(lineage_events[1].event_type, LineageEventType::ViewLoaded);
-        assert_eq!(lineage_events[2].event_type, LineageEventType::ViewDropped);
+        assert_eq!(lineage_events.len(), 4);
+        assert_eq!(lineage_events[0].event_type, LineageEventType::ViewListed);
+        assert_eq!(lineage_events[1].event_type, LineageEventType::ViewUpserted);
+        assert_eq!(lineage_events[2].event_type, LineageEventType::ViewLoaded);
+        assert_eq!(lineage_events[3].event_type, LineageEventType::ViewDropped);
         assert_eq!(
-            lineage_events[0].payload["view"]["name"],
+            lineage_events[1].payload["view"]["name"],
             serde_json::json!("events_view")
         );
     }

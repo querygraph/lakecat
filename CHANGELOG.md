@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Replayed `view.listed` outbox events into namespace-scoped catalog graph
+  events and LakeCat OpenLineage receipts so standard view listing reads carry
+  durable replay evidence without pretending a list response is a single view.
 - Expanded `GOAL.md` with the permanent LakeCat agent guidance: current design
   sources, Turso preference, Iceberg compatibility rules, sibling-repo
   ownership boundaries, feature-gate expectations, and local verification gates.

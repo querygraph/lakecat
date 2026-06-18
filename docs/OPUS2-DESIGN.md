@@ -309,14 +309,16 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   load/drop is now wired on unprefixed and warehouse-prefixed Iceberg REST paths
   and through the in-process Sail `CatalogProvider` `drop_database` path, with
   non-empty guards across tables, views, and policy bindings plus audited
-  `namespace.dropped` graph/lineage projection on the REST path; `view.upserted`,
-  `view.loaded`, and `view.dropped` outbox replay now emits catalog-facing View
-  graph events and LakeCat OpenLineage receipts, and lineage-drain summaries
-  expose compact view warehouse/namespace/name/stable-id evidence for QGLake
-  acceptance while leaving reusable view graph topology to Grust; QueryGraph
-  bootstrap now exports those stored views with manifest-covered OSI hashes,
-  typed view columns, view-aware graph edges, and OpenLineage view counts. Full
-  Iceberg view version/commit semantics remain pending.*
+  `namespace.dropped` graph/lineage projection on the REST path; `view.listed`
+  replay emits namespace-scoped graph and OpenLineage evidence, while
+  `view.upserted`, `view.loaded`, and `view.dropped` outbox replay emits
+  catalog-facing View graph events and LakeCat OpenLineage receipts; lineage
+  drain summaries expose compact view warehouse/namespace/name/stable-id
+  evidence for QGLake acceptance while leaving reusable view graph topology to
+  Grust; QueryGraph bootstrap now exports those stored views with
+  manifest-covered OSI hashes, typed view columns, view-aware graph edges, and
+  OpenLineage view counts. Full Iceberg view version/commit semantics remain
+  pending.*
 - **P6 — Reproducibility (F10) + typed v4 (F9).** Land the Sail helper commits
   upstream (or pin a published Sail) and re-enable automatic CI; converge on
   typed v4 metadata once `sail-iceberg` provides it.

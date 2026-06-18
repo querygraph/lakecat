@@ -54,6 +54,7 @@ pub enum LineageEventType {
     TableRestored,
     ViewDropped,
     ViewLoaded,
+    ViewListed,
     ViewUpserted,
     WarehouseUpserted,
     CredentialsVendAttempted,
@@ -229,13 +230,14 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
         })],
         LineageEventType::ViewDropped
         | LineageEventType::ViewLoaded
+        | LineageEventType::ViewListed
         | LineageEventType::ViewUpserted => vec![json!({
-            "namespace": "lakecat.view",
-            "name": event
-                .payload
-                .pointer("/view/name")
-                .and_then(Value::as_str)
-                .unwrap_or("unknown"),
+            "namespace": if event.event_type == LineageEventType::ViewListed {
+                "lakecat.view-list"
+            } else {
+                "lakecat.view"
+            },
+            "name": view_lineage_output_name(event),
             "facets": {
                 "lakecat_view": {
                     "_producer": "https://querygraph.ai/lakecat",
@@ -311,6 +313,21 @@ fn open_lineage_dataset(table: &TableIdent, payload: &Value) -> Value {
     })
 }
 
+fn view_lineage_output_name(event: &LineageEvent) -> String {
+    if let Some(name) = event.payload.pointer("/view/name").and_then(Value::as_str) {
+        return name.to_string();
+    }
+    match event.payload.get("namespace") {
+        Some(Value::Array(parts)) => parts
+            .iter()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>()
+            .join("."),
+        Some(Value::String(path)) => path.clone(),
+        _ => "unknown".to_string(),
+    }
+}
+
 fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
     match event_type {
         LineageEventType::NamespaceCreated => "namespace-created",
@@ -327,6 +344,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::TableRestored => "table-restored",
         LineageEventType::ViewDropped => "view-dropped",
         LineageEventType::ViewLoaded => "view-loaded",
+        LineageEventType::ViewListed => "view-listed",
         LineageEventType::ViewUpserted => "view-upserted",
         LineageEventType::WarehouseUpserted => "warehouse-upserted",
         LineageEventType::CredentialsVendAttempted => "credentials-vend-attempted",
@@ -584,6 +602,35 @@ mod tests {
         assert_eq!(
             view["outputs"][0]["facets"]["lakecat_view"]["namespace"],
             json!(["default"])
+        );
+
+        let view_list = open_lineage_event(&LineageEvent::new(
+            LineageEventType::ViewListed,
+            Principal::anonymous(),
+            None,
+            json!({
+                "warehouse": "local",
+                "namespace": ["default"],
+                "view-count": 2
+            }),
+        ));
+        assert_eq!(view_list["job"]["name"], json!("view-listed"));
+        assert_eq!(
+            view_list["outputs"][0]["namespace"],
+            json!("lakecat.view-list")
+        );
+        assert_eq!(view_list["outputs"][0]["name"], json!("default"));
+        assert_eq!(
+            view_list["outputs"][0]["facets"]["lakecat_view"]["warehouse"],
+            json!("local")
+        );
+        assert_eq!(
+            view_list["outputs"][0]["facets"]["lakecat_view"]["namespace"],
+            json!(["default"])
+        );
+        assert_eq!(
+            view_list["outputs"][0]["facets"]["lakecat_view"]["payload"]["view-count"],
+            json!(2)
         );
 
         let warehouse = open_lineage_event(&LineageEvent::new(
