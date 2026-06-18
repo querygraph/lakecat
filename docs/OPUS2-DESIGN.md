@@ -160,10 +160,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
      `Delegate` onto RBAC instead of denying. *Started for allowed-columns and
      purpose extraction from enforced policy bindings; row-predicate extraction
      is now started for nested LakeCat restriction fields and ODRL constraints;
-     the parser/composer now lives in `lakecat-security` so the REST route and
-     future provider scan path share one governance primitive; TypeSec
-     delegate-to-fallback composition is wired at the LakeCat governance wrapper
-     seam.*
+     the parser/composer and restriction-application helpers now live in
+     `lakecat-security` so the REST route and future provider scan path share
+     one governance primitive; TypeSec delegate-to-fallback composition is wired
+     at the LakeCat governance wrapper seam.*
   2. Carry the effective restriction in `TableScanCapability` and record it in
      the audit receipt (`policy_hash` includes the binding's ODRL hash).
      *Started: scan receipts now carry `read-restriction` with allowed columns
@@ -173,7 +173,8 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
      *Started: scan planning intersects client projection with allowed columns,
      appends policy-derived row predicates before calling Sail, and
      revalidates fetch-scan-tasks tokens against the current server-derived
-     restriction; RBAC policy loading and provider read routing remain open.*
+     restriction through shared `ReadRestriction` methods; RBAC policy loading
+     and provider read routing remain open.*
   *Smallest end-to-end version landed first: a single allowed-columns list is
   enforced on one table, proven by a test where an agent asks for two columns
   and Sail receives one.*

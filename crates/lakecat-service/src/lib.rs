@@ -1367,12 +1367,12 @@ async fn plan_scan_with_capability(
     request.validate_scan_mode()?;
     let requested_projection = request.projected_fields();
     let restriction = capability.read_restriction()?;
-    let projection = effective_projection(&requested_projection, &restriction)?;
+    let projection = restriction.effective_projection(&requested_projection)?;
     let mut filters = request.filter_values();
     if let Some(row_predicate) = restriction.row_predicate.clone() {
         filters.push(row_predicate);
     }
-    let stats_fields = effective_stats_fields(&request.stats_fields, &restriction);
+    let stats_fields = restriction.effective_stats_fields(&request.stats_fields);
     let scan_request_extensions = json!({
         "case-sensitive": request.case_sensitive,
         "use-snapshot-schema": request.use_snapshot_schema,
@@ -1460,8 +1460,8 @@ async fn fetch_scan_tasks_with_capability(
             metadata_location: table.metadata_location,
             table_metadata: table.metadata,
             plan_task: request.plan_task,
-            required_projection: effective_projection(&[], &restriction)?,
-            required_filters: mandatory_filters(&restriction),
+            required_projection: restriction.effective_projection(&[])?,
+            required_filters: restriction.mandatory_filters(),
         })
         .await?)
 }
@@ -1675,49 +1675,6 @@ fn read_restriction_from_policy_bindings(
     bindings: &[PolicyBinding],
 ) -> Result<ReadRestriction, LakeCatError> {
     ReadRestriction::from_odrl_policies(bindings.iter().map(|binding| &binding.odrl))
-}
-
-fn effective_projection(
-    requested_projection: &[String],
-    restriction: &ReadRestriction,
-) -> Result<Vec<String>, LakeCatError> {
-    let Some(allowed_columns) = restriction.allowed_columns.as_ref() else {
-        return Ok(requested_projection.to_vec());
-    };
-    if allowed_columns.is_empty() {
-        return Err(LakeCatError::Conflict(
-            "read restriction leaves no columns available for scan planning".to_string(),
-        ));
-    }
-    if requested_projection.is_empty() {
-        return Ok(allowed_columns.clone());
-    }
-    let projection = requested_projection
-        .iter()
-        .filter(|column| allowed_columns.iter().any(|allowed| allowed == *column))
-        .cloned()
-        .collect::<Vec<_>>();
-    if projection.is_empty() {
-        return Err(LakeCatError::Conflict(
-            "requested projection is outside the governed read restriction".to_string(),
-        ));
-    }
-    Ok(projection)
-}
-
-fn effective_stats_fields(requested: &[String], restriction: &ReadRestriction) -> Vec<String> {
-    let Some(allowed_columns) = restriction.allowed_columns.as_ref() else {
-        return requested.to_vec();
-    };
-    requested
-        .iter()
-        .filter(|column| allowed_columns.iter().any(|allowed| allowed == *column))
-        .cloned()
-        .collect()
-}
-
-fn mandatory_filters(restriction: &ReadRestriction) -> Vec<serde_json::Value> {
-    restriction.row_predicate.iter().cloned().collect()
 }
 
 fn management_warehouse(
@@ -4133,18 +4090,20 @@ mod tests {
             ..ReadRestriction::unrestricted()
         };
         assert_eq!(
-            effective_projection(&[], &restriction).unwrap(),
+            restriction.effective_projection(&[]).unwrap(),
             vec!["event_id".to_string()]
         );
         assert_eq!(
-            effective_projection(
-                &["event_id".to_string(), "payload".to_string()],
-                &restriction
-            )
-            .unwrap(),
+            restriction
+                .effective_projection(&["event_id".to_string(), "payload".to_string()])
+                .unwrap(),
             vec!["event_id".to_string()]
         );
-        assert!(effective_projection(&["payload".to_string()], &restriction).is_err());
+        assert!(
+            restriction
+                .effective_projection(&["payload".to_string()])
+                .is_err()
+        );
     }
 
     #[cfg(feature = "sail-local")]

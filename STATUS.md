@@ -6,12 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `8090862 Reject mismatched idempotency retries`.
-- Current working slice: reusable security read-restriction parsing. ODRL
-  allowed-column, row-predicate, purpose, credential-TTL, and policy-hash
-  composition now lives in `lakecat-security` instead of the REST service, so
-  the future in-process provider scan route can reuse the same governance
-  primitive without duplicating policy parsing.
+  working changes: `8d46f5c Share ODRL read restrictions from security`.
+- Current working slice: reusable read-restriction application. Governed
+  projection narrowing, stats-field narrowing, and mandatory row-filter
+  extraction now live on `ReadRestriction` in `lakecat-security`, so the future
+  in-process provider scan route can reuse both policy parsing and policy
+  application without REST-service helper copies.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -112,6 +112,12 @@ Updated: 2026-06-18
   columns by intersection, row predicates by `and`, and purpose/credential TTL
   into one `ReadRestriction`, plus a negative guard for non-object row
   predicates.
+- Moved effective projection narrowing, stats-field narrowing, and mandatory
+  row-filter extraction from `lakecat-service` into reusable `ReadRestriction`
+  methods.
+- Updated REST scan planning and fetch-scan-tasks to call the shared
+  `ReadRestriction` methods while preserving the existing governed Sail request
+  behavior.
 - Parsed a minimal enforceable ODRL subset from active policy bindings:
   `allowed-columns` / `allowedColumns` at the policy root, in
   `lakecat:read-restriction`, or in ODRL constraints, plus purpose and policy
@@ -202,6 +208,15 @@ Updated: 2026-06-18
   `cargo test -p lakecat-security read_restriction -- --nocapture`,
   `cargo test -p lakecat-security`,
   `cargo test -p lakecat-service table_scan_authorization_carries_policy_read_restriction -- --nocapture`, and
+  `cargo test -p lakecat-service --features sail-local scan_planning_applies_policy_column_restriction_before_sail -- --nocapture`,
+  `git diff --check`, and
+  `cargo test --workspace --all-features`.
+- Reusable read-restriction application checks passed:
+  `cargo fmt -p lakecat-security -p lakecat-service -- --check`,
+  `cargo test -p lakecat-security read_restriction -- --nocapture`,
+  `cargo test -p lakecat-security`,
+  `cargo test -p lakecat-service`,
+  `cargo test -p lakecat-service effective_projection_cannot_widen_policy_columns -- --nocapture`, and
   `cargo test -p lakecat-service --features sail-local scan_planning_applies_policy_column_restriction_before_sail -- --nocapture`,
   `git diff --check`, and
   `cargo test --workspace --all-features`.

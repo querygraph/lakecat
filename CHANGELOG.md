@@ -36,6 +36,9 @@
   the REST service and future in-process provider scan path share one
   governance primitive for allowed columns, row predicates, purpose, TTL, and
   policy hashes.
+- Moved governed projection narrowing, stats-field narrowing, and mandatory
+  row-filter extraction onto `ReadRestriction`, keeping the scan restriction
+  application logic reusable outside the REST service.
 - Changed the QueryGraph bootstrap OSI artifact from a LakeCat-authored semantic
   model into a stable OSI handoff: LakeCat now publishes dataset/field anchors
   and governed Sail/LakeCat source metadata while leaving metrics, dimensions,

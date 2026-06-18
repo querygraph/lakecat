@@ -107,6 +107,49 @@ impl ReadRestriction {
         }
         Ok(restriction)
     }
+
+    pub fn effective_projection(
+        &self,
+        requested_projection: &[String],
+    ) -> LakeCatResult<Vec<String>> {
+        let Some(allowed_columns) = self.allowed_columns.as_ref() else {
+            return Ok(requested_projection.to_vec());
+        };
+        if allowed_columns.is_empty() {
+            return Err(LakeCatError::Conflict(
+                "read restriction leaves no columns available for scan planning".to_string(),
+            ));
+        }
+        if requested_projection.is_empty() {
+            return Ok(allowed_columns.clone());
+        }
+        let projection = requested_projection
+            .iter()
+            .filter(|column| allowed_columns.iter().any(|allowed| allowed == *column))
+            .cloned()
+            .collect::<Vec<_>>();
+        if projection.is_empty() {
+            return Err(LakeCatError::Conflict(
+                "requested projection is outside the governed read restriction".to_string(),
+            ));
+        }
+        Ok(projection)
+    }
+
+    pub fn effective_stats_fields(&self, requested: &[String]) -> Vec<String> {
+        let Some(allowed_columns) = self.allowed_columns.as_ref() else {
+            return requested.to_vec();
+        };
+        requested
+            .iter()
+            .filter(|column| allowed_columns.iter().any(|allowed| allowed == *column))
+            .cloned()
+            .collect()
+    }
+
+    pub fn mandatory_filters(&self) -> Vec<Value> {
+        self.row_predicate.iter().cloned().collect()
+    }
 }
 
 fn allowed_columns_from_odrl(odrl: &Value) -> LakeCatResult<Option<Vec<String>>> {
@@ -647,6 +690,41 @@ mod tests {
             err.to_string()
                 .contains("ODRL row predicate must be an Iceberg expression object")
         );
+    }
+
+    #[test]
+    fn read_restriction_narrows_projection_stats_and_filters() {
+        let row_predicate = serde_json::json!({
+            "type": "equal",
+            "term": "region",
+            "value": "west"
+        });
+        let restriction = ReadRestriction {
+            allowed_columns: Some(vec!["event_id".to_string(), "severity".to_string()]),
+            row_predicate: Some(row_predicate.clone()),
+            ..ReadRestriction::unrestricted()
+        };
+
+        assert_eq!(
+            restriction.effective_projection(&[]).unwrap(),
+            vec!["event_id".to_string(), "severity".to_string()]
+        );
+        assert_eq!(
+            restriction
+                .effective_projection(&["event_id".to_string(), "payload".to_string()])
+                .unwrap(),
+            vec!["event_id".to_string()]
+        );
+        assert!(
+            restriction
+                .effective_projection(&["payload".to_string()])
+                .is_err()
+        );
+        assert_eq!(
+            restriction.effective_stats_fields(&["payload".to_string(), "severity".to_string()]),
+            vec!["severity".to_string()]
+        );
+        assert_eq!(restriction.mandatory_filters(), vec![row_predicate]);
     }
 
     #[test]
