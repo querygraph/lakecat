@@ -6,6 +6,29 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `0a1a596 Summarize management list replay counts`.
+- Paused after adding compact management-list replay evidence to lineage-drain
+  event summaries. Replayed policy-binding, project, server, storage-profile,
+  and warehouse list events now expose typed count/scope fields in the drain
+  response so QueryGraph can verify durable control-plane read evidence without
+  parsing raw lineage payloads or depending on list-specific graph nodes in
+  LakeCat.
+- Local verification for the management-list summary slice was green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-service outbox_drain_projects_management_list_reads_to_lineage`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test -p lakecat-cli`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `0a0e414 Replay management list reads into lineage`.
 - Paused after adding lineage replay for management list outbox events.
   `policy-binding.listed`, `project.listed`, `server.listed`,
