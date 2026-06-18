@@ -29,7 +29,7 @@ use lakecat_graph::{CatalogGraphSink, GraphAction, GraphEvent, NoopCatalogGraphS
 use lakecat_lineage::{
     HashOnlyLineageSink, LineageEvent, LineageEventType, LineageReceipt, LineageSink,
 };
-use lakecat_querygraph::QueryGraphBootstrap;
+use lakecat_querygraph::{QueryGraphBootstrap, QueryGraphViewReceiptEvidence};
 #[cfg(not(feature = "sail-local"))]
 use lakecat_sail::DeferredSailCatalogEngine;
 #[cfg(not(feature = "sail-local"))]
@@ -2997,7 +2997,8 @@ async fn querygraph_bootstrap(
         state.warehouse.clone(),
         table_policy_bindings,
         views,
-    )?;
+    )?
+    .with_view_receipt_evidence(view_version_receipts)?;
     let verification = bundle.verify_manifest()?;
     state
         .store
@@ -3015,7 +3016,19 @@ async fn querygraph_bootstrap(
                 "verified-tables": verification.verified_tables,
                 "verified-views": verification.verified_views,
                 "verified-view-versions": verification.verified_view_versions,
-                "view-version-receipts": view_version_receipts,
+                "view-version-receipts": verification
+                    .verified_view_receipt_hashes
+                    .iter()
+                    .map(|(stable_id, receipt_hash)| json!({
+                        "stable-id": stable_id,
+                        "view-version": verification
+                            .verified_view_versions
+                            .get(stable_id)
+                            .copied()
+                            .unwrap_or_default(),
+                        "receipt-hash": receipt_hash,
+                    }))
+                    .collect::<Vec<_>>(),
                 "bundle-hash": verification.bundle_hash,
                 "graph-hash": verification.graph_hash,
                 "open-lineage-hash": verification.open_lineage_hash,
@@ -3032,7 +3045,7 @@ async fn querygraph_bootstrap(
 async fn querygraph_view_version_receipts(
     state: &LakeCatState,
     views: &[ViewRecord],
-) -> LakeCatResult<Vec<Value>> {
+) -> LakeCatResult<Vec<QueryGraphViewReceiptEvidence>> {
     let mut receipts = Vec::new();
     for view in views {
         let version_receipts = state
@@ -3048,11 +3061,18 @@ async fn querygraph_view_version_receipts(
                 content_hash_json(&serde_json::to_value(receipt).map_err(|err| {
                     LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
                 })?)?;
-            receipts.push(json!({
-                "stable-id": receipt.stable_id,
-                "view-version": receipt.view_version,
-                "receipt-hash": receipt_hash,
-            }));
+            receipts.push(QueryGraphViewReceiptEvidence {
+                stable_id: receipt.stable_id.clone(),
+                view_version: receipt.view_version,
+                receipt_hash,
+            });
+        } else {
+            return Err(LakeCatError::Internal(format!(
+                "querygraph bootstrap view {}.{} is missing receipt evidence for version {}",
+                view.namespace.path(),
+                view.name.as_str(),
+                view.view_version
+            )));
         }
     }
     Ok(receipts)
@@ -8096,6 +8116,24 @@ mod tests {
         assert_eq!(
             body["manifest"]["view-artifacts"].as_array().unwrap().len(),
             1
+        );
+        assert_eq!(
+            body["manifest"]["querygraph-import"]["view-receipt-evidence"][0]["stable-id"],
+            body["views"][0]["stable-id"]
+        );
+        assert_eq!(
+            body["manifest"]["querygraph-import"]["view-receipt-evidence"][0]["view-version"],
+            body["views"][0]["view-version"]
+        );
+        assert!(
+            body["manifest"]["querygraph-import"]["view-receipt-evidence"][0]["receipt-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert!(
+            body["manifest"]["querygraph-import"]["view-receipt-evidence-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
         );
         assert!(
             body["graph"]["edges"]

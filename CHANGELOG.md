@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added view receipt evidence to the QueryGraph import compatibility contract,
+  making view-bearing bootstrap verification require a compact receipt hash for
+  each exported view version.
 - Made QGLake consume the namespace-level `view-version-receipt-chains` read
   after dropping its transient view and reject lineage drains that do not replay
   the chain read as compact tombstone evidence.

@@ -121,6 +121,28 @@ impl QueryGraphBootstrap {
         })
     }
 
+    pub fn with_view_receipt_evidence(
+        mut self,
+        evidence: Vec<QueryGraphViewReceiptEvidence>,
+    ) -> LakeCatResult<Self> {
+        validate_view_receipt_evidence(&self.views, &evidence)?;
+        let evidence_hash = if evidence.is_empty() {
+            None
+        } else {
+            Some(view_receipt_evidence_hash(&evidence)?)
+        };
+        let import_contract = self.manifest.querygraph_import.as_mut().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(
+                "QueryGraph bootstrap manifest is missing querygraph-import compatibility contract"
+                    .to_string(),
+            )
+        })?;
+        import_contract.view_receipt_evidence = evidence;
+        import_contract.view_receipt_evidence_hash = evidence_hash;
+        self.bundle_hash = self.computed_bundle_hash()?;
+        Ok(self)
+    }
+
     pub fn verify_manifest(&self) -> LakeCatResult<QueryGraphBootstrapVerification> {
         if self.manifest.schema_version != "lakecat.querygraph.bootstrap.v1" {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -219,6 +241,24 @@ impl QueryGraphBootstrap {
                 import_contract.graph_hash, self.manifest.graph_hash
             )));
         }
+        validate_view_receipt_evidence(&self.views, &import_contract.view_receipt_evidence)?;
+        if import_contract.view_receipt_evidence.is_empty() {
+            if import_contract.view_receipt_evidence_hash.is_some() {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(
+                    "QueryGraph bootstrap import contract has a receipt evidence hash without receipt evidence"
+                        .to_string(),
+                ));
+            }
+        } else {
+            let evidence_hash = view_receipt_evidence_hash(&import_contract.view_receipt_evidence)?;
+            if import_contract.view_receipt_evidence_hash.as_deref() != Some(evidence_hash.as_str())
+            {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "QueryGraph bootstrap import receipt evidence hash mismatch: manifest {:?}, computed {}",
+                    import_contract.view_receipt_evidence_hash, evidence_hash
+                )));
+            }
+        }
 
         let bundle_hash = self.computed_bundle_hash()?;
         if self.bundle_hash != bundle_hash {
@@ -246,6 +286,11 @@ impl QueryGraphBootstrap {
                 .views
                 .iter()
                 .map(|view| (view.stable_id.clone(), view.view_version))
+                .collect(),
+            verified_view_receipt_hashes: import_contract
+                .view_receipt_evidence
+                .iter()
+                .map(|evidence| (evidence.stable_id.clone(), evidence.receipt_hash.clone()))
                 .collect(),
             bundle_hash,
             graph_hash,
@@ -308,6 +353,10 @@ pub struct QueryGraphImportCompatibility {
     pub table_only_bundle_hash: String,
     pub view_count: usize,
     pub graph_hash: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub view_receipt_evidence: Vec<QueryGraphViewReceiptEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view_receipt_evidence_hash: Option<String>,
 }
 
 impl QueryGraphImportCompatibility {
@@ -330,8 +379,73 @@ impl QueryGraphImportCompatibility {
             )?,
             view_count,
             graph_hash: manifest.graph_hash.clone(),
+            view_receipt_evidence: Vec::new(),
+            view_receipt_evidence_hash: None,
         })
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct QueryGraphViewReceiptEvidence {
+    pub stable_id: String,
+    pub view_version: u64,
+    pub receipt_hash: String,
+}
+
+fn validate_view_receipt_evidence(
+    views: &[QueryGraphViewProjection],
+    evidence: &[QueryGraphViewReceiptEvidence],
+) -> LakeCatResult<()> {
+    if views.is_empty() {
+        if evidence.is_empty() {
+            return Ok(());
+        }
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "QueryGraph bootstrap import contract carries view receipt evidence for a bundle without views"
+                .to_string(),
+        ));
+    }
+    if evidence.len() != views.len() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QueryGraph bootstrap import contract lists {} view receipt evidence record(s) for {} view artifact(s)",
+            evidence.len(),
+            views.len()
+        )));
+    }
+    for view in views {
+        let Some(record) = evidence
+            .iter()
+            .find(|record| record.stable_id == view.stable_id)
+        else {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap import contract is missing view receipt evidence for {}",
+                view.stable_id
+            )));
+        };
+        if record.view_version != view.view_version {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap import contract view receipt evidence for {} has version {}, expected {}",
+                view.stable_id, record.view_version, view.view_version
+            )));
+        }
+        if record.receipt_hash.is_empty() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap import contract view receipt evidence for {} is missing a receipt hash",
+                view.stable_id
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn view_receipt_evidence_hash(evidence: &[QueryGraphViewReceiptEvidence]) -> LakeCatResult<String> {
+    let value = serde_json::to_value(evidence).map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to encode QueryGraph view receipt evidence: {err}"
+        ))
+    })?;
+    content_hash_json(&value)
 }
 
 fn querygraph_bootstrap_standards() -> Vec<String> {
@@ -494,6 +608,8 @@ pub struct QueryGraphBootstrapVerification {
     pub verified_views: Vec<String>,
     #[serde(default)]
     pub verified_view_versions: BTreeMap<String, u64>,
+    #[serde(default)]
+    pub verified_view_receipt_hashes: BTreeMap<String, String>,
     pub bundle_hash: String,
     pub graph_hash: String,
     pub open_lineage_hash: String,
@@ -1403,6 +1519,12 @@ mod tests {
             Vec::new(),
             vec![view],
         )
+        .unwrap()
+        .with_view_receipt_evidence(vec![QueryGraphViewReceiptEvidence {
+            stable_id: "lakecat:view:local:default:active_customers".to_string(),
+            view_version: 1,
+            receipt_hash: "sha256:view-version-receipt".to_string(),
+        }])
         .unwrap();
 
         assert_eq!(bundle.tables.len(), 0);
@@ -1462,6 +1584,62 @@ mod tests {
                 .verified_view_versions
                 .get(&bundle.views[0].stable_id),
             Some(&1)
+        );
+        assert_eq!(
+            verification
+                .verified_view_receipt_hashes
+                .get(&bundle.views[0].stable_id)
+                .map(String::as_str),
+            Some("sha256:view-version-receipt")
+        );
+        let expected_evidence_hash = view_receipt_evidence_hash(
+            &bundle
+                .manifest
+                .querygraph_import
+                .as_ref()
+                .unwrap()
+                .view_receipt_evidence,
+        )
+        .unwrap();
+        assert_eq!(
+            bundle
+                .manifest
+                .querygraph_import
+                .as_ref()
+                .unwrap()
+                .view_receipt_evidence_hash
+                .as_deref(),
+            Some(expected_evidence_hash.as_str())
+        );
+    }
+
+    #[test]
+    fn verification_rejects_missing_view_receipt_evidence() {
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = Namespace::new(vec!["default".to_string()]).unwrap();
+        let view = ViewRecord::new(
+            warehouse.clone(),
+            namespace,
+            TableName::new("active_customers").unwrap(),
+            "select id from customers where active",
+            "sql",
+            Some(1),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+
+        let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
+            warehouse,
+            Vec::new(),
+            vec![view],
+        )
+        .unwrap();
+
+        let err = bundle.verify_manifest().unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("view receipt evidence record(s) for 1 view artifact")
         );
     }
 

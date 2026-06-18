@@ -1101,6 +1101,52 @@ fn verify_qglake_querygraph_import_contract(
             bundle.views.len()
         )));
     }
+    if bundle.views.is_empty() {
+        if !import_contract.view_receipt_evidence.is_empty()
+            || import_contract.view_receipt_evidence_hash.is_some()
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "QGLake bootstrap QueryGraph import contract carried view receipt evidence without views"
+                    .to_string(),
+            ));
+        }
+    } else {
+        if import_contract.view_receipt_evidence.len() != bundle.views.len() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap QueryGraph import contract listed {} view receipt evidence record(s) for {} view(s)",
+                import_contract.view_receipt_evidence.len(),
+                bundle.views.len()
+            )));
+        }
+        if import_contract
+            .view_receipt_evidence_hash
+            .as_deref()
+            .map_or(true, str::is_empty)
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "QGLake bootstrap QueryGraph import contract did not include a view receipt evidence hash"
+                    .to_string(),
+            ));
+        }
+        for view in &bundle.views {
+            let Some(evidence) = import_contract
+                .view_receipt_evidence
+                .iter()
+                .find(|evidence| evidence.stable_id == view.stable_id)
+            else {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "QGLake bootstrap QueryGraph import contract is missing receipt evidence for {}",
+                    view.stable_id
+                )));
+            };
+            if evidence.view_version != view.view_version || evidence.receipt_hash.is_empty() {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "QGLake bootstrap QueryGraph import contract receipt evidence for {} did not match the accepted view version",
+                    view.stable_id
+                )));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -6386,6 +6432,10 @@ mod tests {
             vec!["lakecat:view:local:default:active_customers".to_string()];
         verification.verified_view_versions =
             BTreeMap::from([("lakecat:view:local:default:active_customers".to_string(), 1)]);
+        verification.verified_view_receipt_hashes = BTreeMap::from([(
+            "lakecat:view:local:default:active_customers".to_string(),
+            "sha256:view-version-receipt".to_string(),
+        )]);
         verification
     }
 
@@ -6397,6 +6447,7 @@ mod tests {
             verified_tables: vec!["local.default.events".to_string()],
             verified_views: Vec::new(),
             verified_view_versions: BTreeMap::new(),
+            verified_view_receipt_hashes: BTreeMap::new(),
             bundle_hash: "sha256:bundle".to_string(),
             graph_hash: "sha256:graph".to_string(),
             open_lineage_hash: "sha256:openlineage".to_string(),
@@ -6980,6 +7031,8 @@ mod tests {
             ),
             view_count: 0,
             graph_hash: manifest.graph_hash.clone(),
+            view_receipt_evidence: Vec::new(),
+            view_receipt_evidence_hash: None,
         });
         let bundle_hash = content_hash_json(&serde_json::json!({
             "warehouse": warehouse.as_str(),

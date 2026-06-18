@@ -999,7 +999,29 @@ The bundle contains catalog tables, views, policy bindings, graph artifacts,
 OpenLineage artifacts, Croissant/CDIF/OSI/ODRL projections, and a manifest that
 hashes what was emitted. The manifest is the import contract. QueryGraph can
 refuse a bundle whose graph hash, OpenLineage hash, table artifact hash, view
-artifact hash, or QueryGraph import-compatibility hash does not match.
+artifact hash, or QueryGraph import-compatibility hash does not match. For
+view-bearing bundles, the import contract also carries compact receipt evidence
+for each exported view version:
+
+```json
+{
+  "querygraph-import": {
+    "schema-version": "lakecat.querygraph.import-compat.v1",
+    "view-count": 1,
+    "view-receipt-evidence": [
+      {
+        "stable-id": "lakecat:view:local:default:events_view",
+        "view-version": 1,
+        "receipt-hash": "sha256:..."
+      }
+    ],
+    "view-receipt-evidence-hash": "sha256:..."
+  }
+}
+```
+
+That gives QueryGraph a manifest-covered way to reject a view bootstrap that
+lost the catalog receipt chain before the richer graph import begins.
 
 This gives the semantic layer a responsible starting point. LakeCat says:
 
