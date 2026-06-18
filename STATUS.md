@@ -6,11 +6,25 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `a6669e5 Export views in QueryGraph bootstrap`.
+- Paused after pushing stored view projections through QueryGraph bootstrap with
+  manifest-covered view artifact hashes, view-aware graph edges, OpenLineage view
+  counts, service-level export, and verification coverage.
+- Local verification for the pushed QueryGraph view-bootstrap slice was green:
+  `cargo fmt -p lakecat-cli -p lakecat-querygraph -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-querygraph projects_catalog_views_into_querygraph_bundle -- --nocapture`;
+  `cargo test -p lakecat-service querygraph_bootstrap_projects_catalog_views -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_bootstrap -- --nocapture`;
+  `cargo test -p lakecat-querygraph`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed QueryGraph view-bootstrap slice.
+- Previous implementation slice:
   `1c3cfb8 Add governed durable view records`.
-- Current working slice exports stored views through QueryGraph bootstrap with
-  manifest-covered view artifact hashes, view-aware graph edges, and OpenLineage
-  view counts.
-- Local verification for the pushed governed-view slice was green:
+- Local verification for the previous governed-view slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-service -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-store memory_store_persists_view_records`;
@@ -24,8 +38,7 @@ Updated: 2026-06-18
   `cargo test -p lakecat-service --all-features`;
   `cargo test --workspace`;
   `cargo test --workspace --all-features`.
-- This status commit records the pushed governed-view slice.
-- Previous implementation slice:
+- Prior implementation slice:
   `d905f27 Route commit metadata through object_store`.
 - Local verification for the previous object-store metadata writer slice was green:
   `cargo fmt -p lakecat-service`;
