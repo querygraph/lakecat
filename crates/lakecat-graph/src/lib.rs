@@ -23,6 +23,19 @@ pub struct GraphEvent {
 }
 
 impl GraphEvent {
+    pub fn project(action: GraphAction, project_id: impl Into<String>, properties: Value) -> Self {
+        let project_id = project_id.into();
+        Self {
+            event_id: None,
+            subject: project_stable_id(&project_id),
+            label: GraphNodeLabel::Project,
+            action,
+            table: None,
+            properties,
+            emitted_at: Utc::now(),
+        }
+    }
+
     pub fn table(action: GraphAction, table: TableIdent, properties: Value) -> Self {
         Self {
             event_id: None,
@@ -166,6 +179,10 @@ impl GraphEvent {
     }
 }
 
+pub fn project_stable_id(project_id: &str) -> String {
+    format!("lakecat:project:{project_id}")
+}
+
 pub fn warehouse_stable_id(warehouse: &WarehouseName) -> String {
     format!("lakecat:warehouse:{}", warehouse.as_str())
 }
@@ -256,6 +273,19 @@ impl CatalogGraphSink for NoopCatalogGraphSink {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_event_uses_stable_catalog_subject() {
+        let event = GraphEvent::project(
+            GraphAction::Upserted,
+            "default",
+            serde_json::json!({"kind": "test"}),
+        );
+
+        assert_eq!(event.label, GraphNodeLabel::Project);
+        assert_eq!(event.subject, "lakecat:project:default");
+        assert!(event.table.is_none());
+    }
 
     #[test]
     fn namespace_event_uses_stable_catalog_subject() {
@@ -565,6 +595,26 @@ pub mod grust_integration {
                 Some(&Value::String("Warehouse".to_string()))
             );
             GraphIndex::new(&graph).expect("warehouse event graph should be valid");
+        }
+
+        #[test]
+        fn converts_project_event_to_valid_grust_graph_event() {
+            let event = GraphEvent::project(
+                GraphAction::Upserted,
+                "default",
+                serde_json::json!({"project-id":"default"}),
+            )
+            .with_event_id("lakecat:outbox:project");
+            let graph = graph_event_to_grust(&event);
+
+            assert_eq!(graph.nodes.len(), 1);
+            assert_eq!(graph.edges.len(), 0);
+            assert_eq!(graph.nodes[0].label.as_str(), "CatalogEvent");
+            assert_eq!(
+                graph.nodes[0].props.get("label"),
+                Some(&Value::String("Project".to_string()))
+            );
+            GraphIndex::new(&graph).expect("project event graph should be valid");
         }
 
         #[test]

@@ -34,6 +34,13 @@ pub trait CatalogStore: Send + Sync + 'static {
         start_version: u64,
         end_version: Option<u64>,
     ) -> LakeCatResult<Vec<TableCommitRecord>>;
+    async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
+        project.validate()?;
+        Ok(project)
+    }
+    async fn list_projects(&self) -> LakeCatResult<Vec<ProjectRecord>> {
+        Ok(Vec::new())
+    }
     async fn upsert_warehouse(&self, warehouse: WarehouseRecord) -> LakeCatResult<WarehouseRecord> {
         warehouse.validate()?;
         Ok(warehouse)
@@ -159,6 +166,48 @@ pub struct TableCommitRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idempotency_key_sha256: Option<String>,
     pub committed_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProjectRecord {
+    pub project_id: String,
+    pub display_name: Option<String>,
+    pub properties: BTreeMap<String, String>,
+    pub created: AuditStamp,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl ProjectRecord {
+    pub fn new(
+        project_id: impl Into<String>,
+        display_name: Option<String>,
+        properties: BTreeMap<String, String>,
+        principal: Principal,
+    ) -> LakeCatResult<Self> {
+        let created = AuditStamp::now(principal);
+        let record = Self {
+            project_id: project_id.into(),
+            display_name,
+            properties,
+            updated_at: created.at,
+            created,
+        };
+        record.validate()?;
+        Ok(record)
+    }
+
+    pub fn validate(&self) -> LakeCatResult<()> {
+        validate_project_id(&self.project_id)?;
+        if let Some(display_name) = self.display_name.as_deref()
+            && display_name.trim().is_empty()
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "project display name must not be empty".to_string(),
+            ));
+        }
+        validate_public_config(&self.properties)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -521,6 +570,7 @@ impl MemoryCatalogStore {
 
 #[derive(Debug, Default)]
 struct MemoryState {
+    projects: BTreeMap<String, ProjectRecord>,
     warehouses: BTreeMap<String, WarehouseRecord>,
     namespaces: BTreeMap<String, BTreeSet<Namespace>>,
     tables: BTreeMap<String, TableRecord>,
@@ -730,6 +780,22 @@ impl CatalogStore for MemoryCatalogStore {
             .filter(|commit| end_version.is_none_or(|end| commit.sequence_number <= end))
             .cloned()
             .collect())
+    }
+
+    async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
+        project.validate()?;
+        let mut state = self.state.write().await;
+        state
+            .projects
+            .insert(project.project_id.clone(), project.clone());
+        Ok(project)
+    }
+
+    async fn list_projects(&self) -> LakeCatResult<Vec<ProjectRecord>> {
+        let state = self.state.read().await;
+        let mut projects = state.projects.values().cloned().collect::<Vec<_>>();
+        projects.sort_by(|left, right| left.project_id.cmp(&right.project_id));
+        Ok(projects)
     }
 
     async fn upsert_warehouse(&self, warehouse: WarehouseRecord) -> LakeCatResult<WarehouseRecord> {
@@ -1164,6 +1230,32 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_persists_project_records() {
+        let store = MemoryCatalogStore::new();
+        assert_eq!(store.list_projects().await.unwrap(), vec![]);
+
+        let record = ProjectRecord::new(
+            "default",
+            Some("Default Project".to_string()),
+            BTreeMap::from([("owner".to_string(), "querygraph".to_string())]),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_project(record).await.unwrap();
+
+        let updated = ProjectRecord::new(
+            "default",
+            Some("QueryGraph Project".to_string()),
+            BTreeMap::from([("owner".to_string(), "lakecat".to_string())]),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_project(updated.clone()).await.unwrap();
+
+        assert_eq!(store.list_projects().await.unwrap(), vec![updated]);
+    }
+
+    #[tokio::test]
     async fn memory_store_records_and_marks_audit_outbox_events() {
         let store = MemoryCatalogStore::new();
         let ident = TableIdent::new(
@@ -1246,10 +1338,10 @@ pub mod turso_store {
     use turso::{Connection, Database, Row, Value as TursoValue};
 
     use crate::{
-        CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, SoftDeleteRecord,
-        StorageProfile, TableCommit, TableCommitRecord, TableRecord, WarehouseRecord,
-        policy_binding_key, policy_bindings_for_table, storage_profile_key, storage_profile_match,
-        table_key,
+        CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, ProjectRecord,
+        SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord,
+        WarehouseRecord, policy_binding_key, policy_bindings_for_table, storage_profile_key,
+        storage_profile_match, table_key,
     };
 
     #[derive(Debug, Clone)]
@@ -1892,6 +1984,47 @@ pub mod turso_store {
             Ok(commits)
         }
 
+        async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
+            project.validate()?;
+            let conn = self.connect()?;
+            conn.execute(
+                "insert into projects (
+                    project_id, display_name, record_json, updated_at
+                 )
+                 values (?1, ?2, ?3, ?4)
+                 on conflict(project_id) do update set
+                    display_name = excluded.display_name,
+                    record_json = excluded.record_json,
+                    updated_at = excluded.updated_at",
+                (
+                    project.project_id.as_str(),
+                    project.display_name.as_deref(),
+                    encode_json(&project)?,
+                    project.updated_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
+            Ok(project)
+        }
+
+        async fn list_projects(&self) -> LakeCatResult<Vec<ProjectRecord>> {
+            let conn = self.connect()?;
+            let mut rows = conn
+                .query(
+                    "select record_json from projects
+                     order by project_id",
+                    (),
+                )
+                .await
+                .map_err(turso_error)?;
+            let mut projects = Vec::new();
+            while let Some(row) = rows.next().await.map_err(turso_error)? {
+                projects.push(decode_json(row_string(&row, 0)?)?);
+            }
+            Ok(projects)
+        }
+
         async fn upsert_warehouse(
             &self,
             warehouse: WarehouseRecord,
@@ -2167,6 +2300,12 @@ pub mod turso_store {
     }
 
     const TURSO_MIGRATION: &[&str] = &[
+        "create table if not exists projects (
+            project_id text primary key,
+            display_name text,
+            record_json text not null,
+            updated_at text not null
+        )",
         "create table if not exists warehouses (
             warehouse text primary key,
             project_id text not null,
@@ -2408,6 +2547,32 @@ pub mod turso_store {
             store.upsert_warehouse(updated.clone()).await.unwrap();
 
             assert_eq!(store.list_warehouses().await.unwrap(), vec![updated]);
+        }
+
+        #[tokio::test]
+        async fn turso_store_persists_project_records() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            assert_eq!(store.list_projects().await.unwrap(), vec![]);
+
+            let record = ProjectRecord::new(
+                "default",
+                Some("Default Project".to_string()),
+                BTreeMap::from([("owner".to_string(), "querygraph".to_string())]),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_project(record).await.unwrap();
+
+            let updated = ProjectRecord::new(
+                "default",
+                Some("QueryGraph Project".to_string()),
+                BTreeMap::from([("owner".to_string(), "lakecat".to_string())]),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_project(updated.clone()).await.unwrap();
+
+            assert_eq!(store.list_projects().await.unwrap(), vec![updated]);
         }
 
         #[tokio::test]

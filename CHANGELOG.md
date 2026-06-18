@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added durable project records with governed management list/upsert endpoints,
+  Turso persistence, and outbox-drained `Project` graph anchors for QueryGraph
+  tenancy bootstrap.
 - Added durable warehouse records with management list/upsert endpoints,
   TypeSec-governed warehouse management authorization, Turso persistence, and
   outbox-drained `Warehouse` graph anchors for QueryGraph tenancy bootstrap.

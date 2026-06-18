@@ -5,21 +5,21 @@ Updated: 2026-06-18
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed and pushed LakeCat implementation slice:
-  `d467bdd Add durable warehouse management`.
-- Paused after pushing durable warehouse management entities. LakeCat now has
-  governed warehouse list/upsert management endpoints, memory/Turso
-  `WarehouseRecord` persistence, and `warehouse.upserted` outbox replay to a
-  catalog-facing `Warehouse` graph anchor for QueryGraph tenancy bootstrap.
-- Local verification for the pushed slice was green:
+- Latest committed and pushed LakeCat implementation slice before this working
+  unit: `d467bdd Add durable warehouse management`.
+- Current working slice adds durable project management entities. LakeCat now has
+  governed project list/upsert management endpoints, memory/Turso
+  `ProjectRecord` persistence, and `project.upserted` outbox replay to a
+  catalog-facing `Project` graph anchor for QueryGraph tenancy bootstrap.
+- Local verification for this working slice is green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service`;
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
-  `cargo test -p lakecat-store memory_store_persists_warehouse_records`;
-  `cargo test -p lakecat-store --features turso-local turso_store_persists_warehouse_records`;
-  `cargo test -p lakecat-service management_warehouses_are_durable_management_entities -- --nocapture`;
-  `cargo test -p lakecat-service outbox_drain_projects_warehouse_upserts_to_graph -- --nocapture`;
-  `cargo test -p lakecat-graph --features grust-local converts_warehouse_event_to_valid_grust_graph_event`;
+  `cargo test -p lakecat-store memory_store_persists_project_records`;
+  `cargo test -p lakecat-store --features turso-local turso_store_persists_project_records`;
+  `cargo test -p lakecat-service management_projects_are_durable_management_entities -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_project_upserts_to_graph -- --nocapture`;
+  `cargo test -p lakecat-graph --features grust-local converts_project_event_to_valid_grust_graph_event`;
   `cargo test -p lakecat-store`;
   `cargo test -p lakecat-security`;
   `cargo test -p lakecat-graph`;
@@ -30,6 +30,10 @@ Updated: 2026-06-18
   `cargo test -p lakecat-service --all-features`;
   `cargo test --workspace`;
   `cargo test --workspace --all-features`.
+- The `grust-local` gates required local syntax repairs in the dirty sibling
+  `/Users/alexy/src/grust/crates/grust-cypher/src/lib.rs` checkout around the
+  current return-projection helper edits. LakeCat did not stage the sibling Grust
+  repo.
 - The all-feature service/workspace gates required another one-line local Grust
   fix in `/Users/alexy/src/grust/crates/grust-cypher/src/lib.rs`: a stale
   recursive `evaluate_scalar_return_projection` call still passed
@@ -84,6 +88,11 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added governed project list/upsert management endpoints and a
+  `ProjectManage` capability action.
+- Added durable `ProjectRecord` persistence to memory and Turso stores.
+- Added catalog-facing Project graph events and durable `project.upserted`
+  outbox replay to the graph sink.
 - Added governed warehouse list/upsert management endpoints and a
   `WarehouseManage` capability action.
 - Added durable `WarehouseRecord` persistence to memory and Turso stores.

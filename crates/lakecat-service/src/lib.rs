@@ -10,11 +10,11 @@ use lakecat_api::{
     CatalogConfigResponse, CommitTableRequest, CommitTableResponse, ConfigEntry,
     CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest,
     FetchScanTasksResponse, LineageDrainResponse, ListNamespacesResponse,
-    ListPolicyBindingsResponse, ListStorageProfilesResponse, ListWarehousesResponse,
-    LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
-    PlanTableScanResponse, PolicyBindingResponse, StorageCredential, StorageProfileResponse,
-    TableIdentifier, UpsertPolicyBindingRequest, UpsertStorageProfileRequest,
-    UpsertWarehouseRequest, WarehouseResponse,
+    ListPolicyBindingsResponse, ListProjectsResponse, ListStorageProfilesResponse,
+    ListWarehousesResponse, LoadCredentialsResponse, LoadTableResponse, NamespaceResponse,
+    PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse, ProjectResponse,
+    StorageCredential, StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest,
+    UpsertProjectRequest, UpsertStorageProfileRequest, UpsertWarehouseRequest, WarehouseResponse,
 };
 use lakecat_core::{
     LakeCatError, Namespace, Principal, PrincipalKind, TableIdent, TableName, WarehouseName,
@@ -38,13 +38,15 @@ use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
     LineageReadCapability, NamespaceCreateCapability, NamespaceListCapability,
-    PolicyManageCapability, ReadRestriction, StorageProfileManageCapability, TableCommitCapability,
-    TableCreateCapability, TableDropCapability, TableLoadCapability, TableRestoreCapability,
-    TableScanCapability, WarehouseManageCapability,
+    PolicyManageCapability, ProjectManageCapability, ReadRestriction,
+    StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
+    TableDropCapability, TableLoadCapability, TableRestoreCapability, TableScanCapability,
+    WarehouseManageCapability,
 };
 use lakecat_store::{
     CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, PolicyBinding,
-    StorageProfile, StorageProvider, TableCommit, TableRecord, WarehouseRecord, table_ident,
+    ProjectRecord, StorageProfile, StorageProvider, TableCommit, TableRecord, WarehouseRecord,
+    table_ident,
 };
 use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
@@ -784,6 +786,11 @@ pub fn app(state: LakeCatState) -> Router {
             "/management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/restore",
             post(restore_table),
         )
+        .route("/management/v1/projects", get(list_projects))
+        .route(
+            "/management/v1/projects/{project}",
+            post(upsert_project).put(upsert_project),
+        )
         .route("/management/v1/warehouses", get(list_warehouses))
         .route(
             "/management/v1/warehouses/{warehouse}",
@@ -1241,6 +1248,61 @@ async fn list_warehouses(
     Ok(Json(ListWarehousesResponse {
         warehouses: warehouses.iter().map(warehouse_response).collect(),
     }))
+}
+
+async fn list_projects(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+) -> Result<Json<ListProjectsResponse>, LakeCatHttpError> {
+    let capability = authorize_project_manage(&state, request_identity(&headers)?).await?;
+    let projects = state.store.list_projects().await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "project.listed",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "project.listed",
+                "project-count": projects.len(),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(ListProjectsResponse {
+        projects: projects.iter().map(project_response).collect(),
+    }))
+}
+
+async fn upsert_project(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path(project): Path<String>,
+    Json(request): Json<UpsertProjectRequest>,
+) -> Result<Json<ProjectResponse>, LakeCatHttpError> {
+    let capability = authorize_project_manage(&state, request_identity(&headers)?).await?;
+    let record = ProjectRecord::new(
+        project,
+        request.display_name,
+        request.properties,
+        capability.receipt().principal.clone(),
+    )?;
+    let record = state.store.upsert_project(record).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "project.upserted",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "project.upserted",
+                "project-id": record.project_id.as_str(),
+                "project-record": project_response(&record),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(project_response(&record)))
 }
 
 async fn upsert_warehouse(
@@ -1938,6 +2000,16 @@ async fn project_outbox_event(
             )
             .await?;
         receipt.graph_events += 1;
+    } else if event.event_type == "project.upserted" {
+        let project_id = outbox_project(event)?;
+        state
+            .graph
+            .emit(
+                GraphEvent::project(GraphAction::Upserted, project_id, event_payload.clone())
+                    .with_event_id(event.event_id.clone()),
+            )
+            .await?;
+        receipt.graph_events += 1;
     } else if event.event_type == "warehouse.upserted" {
         let warehouse = outbox_warehouse(event, &state.warehouse)?;
         state
@@ -2169,6 +2241,26 @@ fn outbox_policy_binding(
     Ok((warehouse, policy_id))
 }
 
+fn outbox_project(event: &OutboxEvent) -> Result<String, LakeCatError> {
+    let payload = event.payload.get("payload").unwrap_or(&event.payload);
+    payload
+        .get("project-id")
+        .or_else(|| {
+            payload
+                .get("project-record")
+                .and_then(|record| record.get("project-id"))
+        })
+        .and_then(Value::as_str)
+        .filter(|project_id| !project_id.is_empty())
+        .map(ToString::to_string)
+        .ok_or_else(|| {
+            LakeCatError::Internal(format!(
+                "outbox event {} is missing project payload",
+                event.event_id
+            ))
+        })
+}
+
 fn outbox_warehouse(
     event: &OutboxEvent,
     default_warehouse: &WarehouseName,
@@ -2289,6 +2381,14 @@ fn warehouse_response(record: &WarehouseRecord) -> WarehouseResponse {
         warehouse: record.warehouse.as_str().to_string(),
         project_id: record.project_id.clone(),
         storage_root: record.storage_root.clone(),
+        properties: record.properties.clone(),
+    }
+}
+
+fn project_response(record: &ProjectRecord) -> ProjectResponse {
+    ProjectResponse {
+        project_id: record.project_id.clone(),
+        display_name: record.display_name.clone(),
         properties: record.properties.clone(),
     }
 }
@@ -2665,6 +2765,14 @@ async fn authorize_warehouse_manage(
 ) -> Result<WarehouseManageCapability, LakeCatHttpError> {
     let receipt = authorize(state, identity, CatalogAction::WarehouseManage, None).await?;
     Ok(WarehouseManageCapability::from_receipt(receipt)?)
+}
+
+async fn authorize_project_manage(
+    state: &LakeCatState,
+    identity: RequestIdentity,
+) -> Result<ProjectManageCapability, LakeCatHttpError> {
+    let receipt = authorize(state, identity, CatalogAction::ProjectManage, None).await?;
+    Ok(ProjectManageCapability::from_receipt(receipt)?)
 }
 
 async fn authorize_storage_profile_manage(
@@ -3736,6 +3844,72 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_projects_project_upserts_to_graph() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-project".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "project.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-project",
+                    "event-type": "project.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "project-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "project-id": "default",
+                        "project-record": {
+                            "project-id": "default",
+                            "display-name": "Default Project",
+                            "properties": {"owner": "querygraph"}
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage,
+            );
+
+        let drain = drain_outbox_once(&state, 10).await.unwrap();
+        assert_eq!(drain.delivered, 1);
+        assert_eq!(drain.event_types, vec!["project.upserted".to_string()]);
+        assert_eq!(drain.graph_events, 2);
+        assert_eq!(drain.lineage_events, 0);
+        assert_eq!(
+            store.delivered.lock().await.as_slice(),
+            &["evt-project".to_string()]
+        );
+
+        let graph_events = graph.events.lock().await;
+        assert_eq!(graph_events.len(), 2);
+        assert_eq!(graph_events[0].label, GraphNodeLabel::Principal);
+        assert_eq!(graph_events[0].subject, "lakecat:principal:agent:operator");
+        assert_eq!(graph_events[1].label, GraphNodeLabel::Project);
+        assert_eq!(graph_events[1].subject, "lakecat:project:default");
+        assert_eq!(graph_events[1].event_id.as_deref(), Some("evt-project"));
+        assert_eq!(
+            graph_events[1].properties["project-record"]["display-name"],
+            serde_json::json!("Default Project")
+        );
+    }
+
+    #[tokio::test]
     async fn lineage_drain_endpoint_replays_querygraph_bootstrap_outbox() {
         let principal = Principal {
             subject: "did:example:agent".to_string(),
@@ -4652,6 +4826,57 @@ mod tests {
             .unwrap();
         let response = app.oneshot(wrong_warehouse).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn management_projects_are_durable_management_entities() {
+        let app = test_app();
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/projects/default")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "display-name": "Default Project",
+                    "properties": {
+                        "owner": "querygraph"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["project-id"], serde_json::json!("default"));
+        assert_eq!(body["display-name"], serde_json::json!("Default Project"));
+        assert_eq!(body["properties"]["owner"], serde_json::json!("querygraph"));
+
+        let list = Request::builder()
+            .method(Method::GET)
+            .uri("/management/v1/projects")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(list).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["projects"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            body["projects"][0]["project-id"],
+            serde_json::json!("default")
+        );
+        assert_eq!(
+            body["projects"][0]["display-name"],
+            serde_json::json!("Default Project")
+        );
     }
 
     #[tokio::test]

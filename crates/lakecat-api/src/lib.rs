@@ -31,6 +31,8 @@ impl Default for CatalogConfigResponse {
                 "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks"
                     .to_string(),
                 "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials".to_string(),
+                "GET /management/v1/projects".to_string(),
+                "PUT /management/v1/projects/{project}".to_string(),
                 "GET /management/v1/warehouses".to_string(),
                 "PUT /management/v1/warehouses/{warehouse}".to_string(),
                 "POST /management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/restore"
@@ -108,6 +110,28 @@ pub struct LoadTableResponse {
 #[serde(rename_all = "kebab-case")]
 pub struct LoadCredentialsResponse {
     pub storage_credentials: Vec<StorageCredential>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct UpsertProjectRequest {
+    pub display_name: Option<String>,
+    #[serde(default)]
+    pub properties: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ProjectResponse {
+    pub project_id: String,
+    pub display_name: Option<String>,
+    pub properties: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ListProjectsResponse {
+    pub projects: Vec<ProjectResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
