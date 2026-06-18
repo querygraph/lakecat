@@ -956,6 +956,9 @@ fn lineage_drain_event_summary(
             .pointer("/authorization-receipt/principal/subject")
             .and_then(Value::as_str)
             .map(str::to_string),
+        authorization_receipt_hash: payload
+            .get("authorization-receipt")
+            .and_then(|receipt| content_hash_json(receipt).ok()),
         graph_events: receipt.graph_events,
         lineage_events: receipt.lineage_events,
         bundle_hash: payload
@@ -4808,6 +4811,12 @@ mod tests {
             bootstrap_summary.principal_subject.as_deref(),
             Some("agent:writer")
         );
+        assert!(
+            bootstrap_summary
+                .authorization_receipt_hash
+                .as_deref()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
         assert_eq!(bootstrap_summary.graph_events, 1);
         assert_eq!(bootstrap_summary.lineage_events, 1);
         assert_eq!(
@@ -5270,6 +5279,11 @@ mod tests {
         assert_eq!(
             payload["events"][0]["principal-subject"],
             serde_json::json!("did:example:agent")
+        );
+        assert!(
+            payload["events"][0]["authorization-receipt-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
         );
         assert_eq!(payload["events"][0]["graph-events"], serde_json::json!(1));
         assert_eq!(payload["events"][0]["lineage-events"], serde_json::json!(1));

@@ -1357,6 +1357,16 @@ fn verify_qglake_lineage_drain(
             "qglake lineage drain replay principal did not match accepted principal {expected_principal}"
         )));
     }
+    if bootstrap
+        .authorization_receipt_hash
+        .as_deref()
+        .map_or(true, str::is_empty)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain replay evidence is missing authorization receipt hash"
+                .to_string(),
+        ));
+    }
     if bootstrap.bundle_hash.as_deref() != Some(verification.bundle_hash.as_str())
         || bootstrap.graph_hash.as_deref() != Some(verification.graph_hash.as_str())
         || bootstrap.open_lineage_hash.as_deref() != Some(verification.open_lineage_hash.as_str())
@@ -3547,6 +3557,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3580,6 +3591,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:other-bundle".to_string()),
@@ -3612,6 +3624,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:other".to_string()),
+                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3644,6 +3657,40 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    authorization_receipt_hash: None,
+                    graph_events: 0,
+                    lineage_events: 1,
+                    bundle_hash: Some("sha256:bundle".to_string()),
+                    graph_hash: Some("sha256:graph".to_string()),
+                    open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    table_artifact_count: 1,
+                    view_artifact_count: 0,
+                    policy_binding_count: 1,
+                    standards: qglake_lineage_standards(),
+                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
+                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                }],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject missing authorization receipt proof");
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay evidence is missing authorization receipt hash"
+        ));
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                events: vec![LineageDrainEventSummary {
+                    event_id: "evt-bootstrap".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    principal_subject: Some("did:example:agent".to_string()),
+                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3676,6 +3723,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3708,6 +3756,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3740,6 +3789,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     graph_events: 0,
                     lineage_events: 0,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3776,6 +3826,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
