@@ -6,6 +6,26 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `69a43b9 Verify QGLake credential replay evidence`.
+- Paused after pushing the QGLake credential replay-evidence slice.
+  Lineage-drain event summaries now expose compact credential-vend evidence:
+  credential count, block reason, and raw-credential-exception decision/reason.
+  QGLake lineage-drain acceptance now rejects replay that omits either the
+  restricted agent/anonymous credential block or the trusted-human audited raw
+  credential exception.
+- Local verification for the pushed QGLake credential replay-evidence slice was
+  green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
+- This status commit records the pushed QGLake credential replay-evidence slice.
+- Previous implementation slice:
   `9166806 Prove QGLake human credential contrast`.
 - Paused after pushing the QGLake human/agent credential contrast slice.
   `loadCredentials` now honors the audited raw-credential exception in the
