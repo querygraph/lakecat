@@ -6,11 +6,11 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `429a08c Add governed scan row predicates`.
-- Current working slice: governed fetch-token reapplication. Sail plan-task
-  tokens now carry effective projection as well as filters, and
-  `fetch-scan-tasks` revalidates decoded tokens against the current
-  server-derived restriction before expansion.
+  working changes: `ee37279 Reapply governed scan restrictions on fetch`.
+- Current working slice: TypeSec delegate fallback composition. LakeCat's
+  TypeSec governance wrapper now exposes a TypeSec-owned priority fallback
+  composition path so a delegated primary policy decision can fall through to an
+  RBAC-style fallback instead of being treated as an implicit catalog denial.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -73,6 +73,13 @@ Updated: 2026-06-18
 - Added a negative guard that legacy/no-projection plan-task tokens cannot
   satisfy a governed projection, preventing empty projection from widening to
   all columns during fetch.
+- Added `TypeSecGovernanceEngine::with_fallback`, backed by TypeSec's
+  `ComposedEngine` with `PriorityOrder`, so LakeCat can compose ODRL-style
+  delegation onto an RBAC-style fallback without implementing local policy
+  semantics.
+- Added a `typesec-local` test proving a delegated primary policy allows
+  authorization through a fallback engine while preserving the authorization
+  context and policy hash.
 - Parsed a minimal enforceable ODRL subset from active policy bindings:
   `allowed-columns` / `allowedColumns` at the policy root, in
   `lakecat:read-restriction`, or in ODRL constraints, plus purpose and policy
@@ -158,6 +165,13 @@ Updated: 2026-06-18
 
 ## Verification Completed
 
+- TypeSec delegate fallback focused checks passed:
+  `cargo fmt -p lakecat-security -- --check`,
+  `cargo test -p lakecat-security --features typesec-local delegates_to_typesec_fallback_policy_engine -- --nocapture`,
+  `cargo test -p lakecat-security --features typesec-local delegates_authorization_to_typesec_policy_engine -- --nocapture`,
+  `cargo test -p lakecat-security --features typesec-local`,
+  `git diff --check`, and
+  `cargo test --workspace --all-features`.
 - Governed row-predicate focused checks passed:
   `cargo fmt -p lakecat-service -- --check`,
   `cargo test -p lakecat-service table_scan_authorization_carries_policy_read_restriction`,

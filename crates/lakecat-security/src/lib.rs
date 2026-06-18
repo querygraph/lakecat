@@ -629,7 +629,9 @@ pub mod typesec_integration {
     use async_trait::async_trait;
     use chrono::Utc;
     use lakecat_core::{LakeCatResult, content_hash_json};
-    use typesec::{PolicyEngine, PolicyResult, ResourceId, SubjectId};
+    use typesec::{
+        CombineStrategy, ComposedEngine, PolicyEngine, PolicyResult, ResourceId, SubjectId,
+    };
 
     use crate::{
         AuthorizationReceipt, AuthorizationRequest, GovernanceEngine, action_name, resource_name,
@@ -642,6 +644,18 @@ pub mod typesec_integration {
     impl TypeSecGovernanceEngine {
         pub fn new(engine: Arc<dyn PolicyEngine>) -> Arc<Self> {
             Arc::new(Self { engine })
+        }
+
+        pub fn with_fallback(
+            primary: Arc<dyn PolicyEngine>,
+            fallback: Arc<dyn PolicyEngine>,
+        ) -> Arc<Self> {
+            Arc::new(Self {
+                engine: Arc::new(ComposedEngine::new(
+                    vec![primary, fallback],
+                    CombineStrategy::PriorityOrder,
+                )),
+            })
         }
 
         pub fn allow_all() -> Arc<Self> {
@@ -715,6 +729,7 @@ pub mod typesec_integration {
         use crate::{AuthorizationRequest, CatalogAction};
 
         struct AllowRead;
+        struct DelegateToRbac;
 
         impl PolicyEngine for AllowRead {
             fn check(
@@ -728,6 +743,17 @@ pub mod typesec_integration {
                 } else {
                     PolicyResult::Deny("not granted".to_string())
                 }
+            }
+        }
+
+        impl PolicyEngine for DelegateToRbac {
+            fn check(
+                &self,
+                _subject: &SubjectId,
+                _action: &str,
+                _resource: &ResourceId,
+            ) -> PolicyResult {
+                PolicyResult::delegate("odrl", "rbac decides base access")
             }
         }
 
@@ -749,6 +775,33 @@ pub mod typesec_integration {
             assert!(receipt.allowed);
             assert_eq!(receipt.engine, "typesec");
             assert!(receipt.policy_hash.is_some());
+        }
+
+        #[tokio::test]
+        async fn delegates_to_typesec_fallback_policy_engine() {
+            let engine = TypeSecGovernanceEngine::with_fallback(
+                Arc::new(DelegateToRbac),
+                Arc::new(AllowRead),
+            );
+            let receipt = engine
+                .authorize(AuthorizationRequest {
+                    principal: Principal {
+                        subject: "agent:reader".to_string(),
+                        kind: PrincipalKind::Agent,
+                    },
+                    action: CatalogAction::TableLoad,
+                    table: None,
+                    context: serde_json::json!({"read-restriction": {"allowed-columns": ["id"]}}),
+                })
+                .await
+                .expect("authorization should run through TypeSec fallback");
+            assert!(receipt.allowed);
+            assert_eq!(receipt.engine, "typesec");
+            assert!(receipt.policy_hash.is_some());
+            assert_eq!(
+                receipt.context["read-restriction"]["allowed-columns"][0],
+                serde_json::json!("id")
+            );
         }
     }
 }

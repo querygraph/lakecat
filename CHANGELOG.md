@@ -12,6 +12,10 @@
 - Bound Sail plan-task tokens to the governed read surface by embedding the
   effective projection alongside filters and revalidating `fetch-scan-tasks`
   against the current server-derived restriction before expanding plan tasks.
+- Added a TypeSec-backed governance composition hook so LakeCat can use
+  TypeSec's priority fallback semantics, letting delegated ODRL-style policy
+  decisions fall through to an RBAC-style policy engine instead of becoming an
+  implicit catalog denial.
 - Changed the QueryGraph bootstrap OSI artifact from a LakeCat-authored semantic
   model into a stable OSI handoff: LakeCat now publishes dataset/field anchors
   and governed Sail/LakeCat source metadata while leaving metrics, dimensions,
