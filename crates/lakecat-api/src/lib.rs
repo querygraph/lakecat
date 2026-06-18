@@ -159,6 +159,7 @@ pub struct ListServersResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct UpsertProjectRequest {
+    pub server_id: Option<String>,
     pub display_name: Option<String>,
     #[serde(default)]
     pub properties: BTreeMap<String, String>,
@@ -168,6 +169,7 @@ pub struct UpsertProjectRequest {
 #[serde(rename_all = "kebab-case")]
 pub struct ProjectResponse {
     pub project_id: String,
+    pub server_id: Option<String>,
     pub display_name: Option<String>,
     pub properties: BTreeMap<String, String>,
 }

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added optional `server-id` attachment for durable project records, with
+  memory/Turso validation that rejects projects pointing at missing servers and
+  management responses that expose the Server > Project link.
 - Added governed durable server records with management list/upsert endpoints,
   memory/Turso persistence, and audited `server.*` events, starting the
   architecture's Server > Project > Warehouse hierarchy.

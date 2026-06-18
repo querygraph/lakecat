@@ -254,17 +254,18 @@ views are now first-class durable management entities. LakeCat can resolve
 warehouse prefixes from stored `WarehouseRecord` values instead of only trusting
 the configured default. Governed server list/upsert endpoints persist
 `ServerRecord` values in memory and Turso with audited `server.*` events, and
-governed view list/upsert endpoints persist `ViewRecord` values in memory and
-Turso. QueryGraph bootstrap now exports those views with manifest-covered OSI
-hashes, view-aware graph edges, and OpenLineage view counts. The remaining
-tenancy gap is narrower but real: standard Iceberg view REST semantics, richer
-project-scoped routing, and explicit project/warehouse attachment to the server
-hierarchy are not fully modeled yet.
+durable project records can now attach to stored servers. Governed view
+list/upsert endpoints persist `ViewRecord` values in memory and Turso.
+QueryGraph bootstrap now exports those views with manifest-covered OSI hashes,
+view-aware graph edges, and OpenLineage view counts. The remaining tenancy gap is
+narrower but real: standard Iceberg view REST semantics, richer project-scoped
+routing, and explicit warehouse/project validation through the full hierarchy
+are not fully modeled yet.
 
 **Fix:** introduce Iceberg-compatible view REST entities around the existing
 View records; keep the served catalog scoped to a stored warehouse and then add
-project-scoped routing plus explicit Server > Project > Warehouse attachment
-without changing standard table access semantics.
+project-scoped routing plus explicit warehouse-to-project validation without
+changing standard table access semantics.
 
 ### F8. (LOW) Production secret-store backends fail closed but are unexercised
 

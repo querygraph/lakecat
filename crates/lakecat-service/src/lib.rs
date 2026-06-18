@@ -1530,6 +1530,7 @@ async fn upsert_project(
     let capability = authorize_project_manage(&state, request_identity(&headers)?).await?;
     let record = ProjectRecord::new(
         project,
+        request.server_id,
         request.display_name,
         request.properties,
         capability.receipt().principal.clone(),
@@ -2800,6 +2801,7 @@ fn server_response(record: &ServerRecord) -> ServerResponse {
 fn project_response(record: &ProjectRecord) -> ProjectResponse {
     ProjectResponse {
         project_id: record.project_id.clone(),
+        server_id: record.server_id.clone(),
         display_name: record.display_name.clone(),
         properties: record.properties.clone(),
     }
@@ -5555,6 +5557,21 @@ mod tests {
     #[tokio::test]
     async fn management_projects_are_durable_management_entities() {
         let app = test_app();
+        let upsert_server = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/servers/lakecat-local")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "display-name": "Local LakeCat"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert_server).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
         let upsert = Request::builder()
             .method(Method::PUT)
             .uri("/management/v1/projects/default")
@@ -5562,6 +5579,7 @@ mod tests {
             .header("x-lakecat-principal", "operator@example.com")
             .body(Body::from(
                 serde_json::json!({
+                    "server-id": "lakecat-local",
                     "display-name": "Default Project",
                     "properties": {
                         "owner": "querygraph"
@@ -5577,6 +5595,7 @@ mod tests {
             .unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["project-id"], serde_json::json!("default"));
+        assert_eq!(body["server-id"], serde_json::json!("lakecat-local"));
         assert_eq!(body["display-name"], serde_json::json!("Default Project"));
         assert_eq!(body["properties"]["owner"], serde_json::json!("querygraph"));
 
@@ -5586,7 +5605,7 @@ mod tests {
             .header("x-lakecat-principal", "operator@example.com")
             .body(Body::empty())
             .unwrap();
-        let response = app.oneshot(list).await.unwrap();
+        let response = app.clone().oneshot(list).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
@@ -5598,9 +5617,29 @@ mod tests {
             serde_json::json!("default")
         );
         assert_eq!(
+            body["projects"][0]["server-id"],
+            serde_json::json!("lakecat-local")
+        );
+        assert_eq!(
             body["projects"][0]["display-name"],
             serde_json::json!("Default Project")
         );
+
+        let missing_server = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/projects/orphaned")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "server-id": "missing-server",
+                    "display-name": "Orphaned Project"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(missing_server).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

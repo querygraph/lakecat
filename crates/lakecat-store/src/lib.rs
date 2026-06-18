@@ -251,6 +251,7 @@ impl ServerRecord {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProjectRecord {
     pub project_id: String,
+    pub server_id: Option<String>,
     pub display_name: Option<String>,
     pub properties: BTreeMap<String, String>,
     pub created: AuditStamp,
@@ -260,6 +261,7 @@ pub struct ProjectRecord {
 impl ProjectRecord {
     pub fn new(
         project_id: impl Into<String>,
+        server_id: Option<String>,
         display_name: Option<String>,
         properties: BTreeMap<String, String>,
         principal: Principal,
@@ -267,6 +269,7 @@ impl ProjectRecord {
         let created = AuditStamp::now(principal);
         let record = Self {
             project_id: project_id.into(),
+            server_id,
             display_name,
             properties,
             updated_at: created.at,
@@ -278,6 +281,9 @@ impl ProjectRecord {
 
     pub fn validate(&self) -> LakeCatResult<()> {
         validate_project_id(&self.project_id)?;
+        if let Some(server_id) = self.server_id.as_deref() {
+            validate_project_id(server_id)?;
+        }
         if let Some(display_name) = self.display_name.as_deref()
             && display_name.trim().is_empty()
         {
@@ -945,6 +951,14 @@ impl CatalogStore for MemoryCatalogStore {
     async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
         project.validate()?;
         let mut state = self.state.write().await;
+        if let Some(server_id) = project.server_id.as_deref()
+            && !state.servers.contains_key(server_id)
+        {
+            return Err(LakeCatError::NotFound {
+                object: "server",
+                name: server_id.to_string(),
+            });
+        }
         state
             .projects
             .insert(project.project_id.clone(), project.clone());
@@ -1475,15 +1489,30 @@ mod memory_tests {
 
         let record = ProjectRecord::new(
             "default",
+            Some("lakecat-local".to_string()),
             Some("Default Project".to_string()),
             BTreeMap::from([("owner".to_string(), "querygraph".to_string())]),
             Principal::anonymous(),
         )
         .unwrap();
+        store
+            .upsert_server(
+                ServerRecord::new(
+                    "lakecat-local",
+                    Some("Local LakeCat".to_string()),
+                    None,
+                    BTreeMap::new(),
+                    Principal::anonymous(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
         store.upsert_project(record).await.unwrap();
 
         let updated = ProjectRecord::new(
             "default",
+            Some("lakecat-local".to_string()),
             Some("QueryGraph Project".to_string()),
             BTreeMap::from([("owner".to_string(), "lakecat".to_string())]),
             Principal::anonymous(),
@@ -1492,6 +1521,20 @@ mod memory_tests {
         store.upsert_project(updated.clone()).await.unwrap();
 
         assert_eq!(store.list_projects().await.unwrap(), vec![updated]);
+
+        let missing_server = ProjectRecord::new(
+            "orphaned",
+            Some("missing-server".to_string()),
+            Some("Orphaned Project".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        assert!(matches!(
+            store.upsert_project(missing_server).await,
+            Err(LakeCatError::NotFound { object, name })
+                if object == "server" && name == "missing-server"
+        ));
     }
 
     #[tokio::test]
@@ -2311,6 +2354,21 @@ pub mod turso_store {
         async fn upsert_project(&self, project: ProjectRecord) -> LakeCatResult<ProjectRecord> {
             project.validate()?;
             let conn = self.connect()?;
+            if let Some(server_id) = project.server_id.as_deref() {
+                let mut rows = conn
+                    .query(
+                        "select 1 from servers where server_id = ?1 limit 1",
+                        (server_id,),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                if rows.next().await.map_err(turso_error)?.is_none() {
+                    return Err(LakeCatError::NotFound {
+                        object: "server",
+                        name: server_id.to_string(),
+                    });
+                }
+            }
             conn.execute(
                 "insert into projects (
                     project_id, display_name, record_json, updated_at
@@ -3010,15 +3068,30 @@ pub mod turso_store {
 
             let record = ProjectRecord::new(
                 "default",
+                Some("lakecat-local".to_string()),
                 Some("Default Project".to_string()),
                 BTreeMap::from([("owner".to_string(), "querygraph".to_string())]),
                 Principal::anonymous(),
             )
             .unwrap();
+            store
+                .upsert_server(
+                    ServerRecord::new(
+                        "lakecat-local",
+                        Some("Local LakeCat".to_string()),
+                        None,
+                        BTreeMap::new(),
+                        Principal::anonymous(),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
             store.upsert_project(record).await.unwrap();
 
             let updated = ProjectRecord::new(
                 "default",
+                Some("lakecat-local".to_string()),
                 Some("QueryGraph Project".to_string()),
                 BTreeMap::from([("owner".to_string(), "lakecat".to_string())]),
                 Principal::anonymous(),
@@ -3027,6 +3100,20 @@ pub mod turso_store {
             store.upsert_project(updated.clone()).await.unwrap();
 
             assert_eq!(store.list_projects().await.unwrap(), vec![updated]);
+
+            let missing_server = ProjectRecord::new(
+                "orphaned",
+                Some("missing-server".to_string()),
+                Some("Orphaned Project".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            assert!(matches!(
+                store.upsert_project(missing_server).await,
+                Err(LakeCatError::NotFound { object, name })
+                    if object == "server" && name == "missing-server"
+            ));
         }
 
         #[tokio::test]
