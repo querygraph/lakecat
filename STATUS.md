@@ -6,11 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `de46d7e Share governed scan restriction application`.
-- Current working slice: LakeSail book artifact reconciliation. The previously
-  recorded `docs/book/` publishing pipeline and stable PDF/EPUB/MOBI artifacts
-  are being checked in so the repository matches the changelog and the
-  "everything checked in" workflow.
+  working changes: `e1d0869 Add LakeSail book artifacts`.
+- Current working slice: provider-side governed scan authorization. The
+  in-process `LakeCatCatalogProvider` can now mint `TableScanCapability`
+  receipts carrying stored policy-binding context and shared `ReadRestriction`
+  data, giving future provider-routed read planning the same governance surface
+  REST scan planning uses.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -121,6 +122,12 @@ Updated: 2026-06-18
   and stable generated PDF/EPUB/MOBI deliverables under `docs/book/`.
 - Kept the generated versioned Kindle EPUB symlink ignored by `.gitignore` while
   validating that it points to the stable `lakesail.epub` deliverable.
+- Added `LakeCatCatalogProvider::authorize_table_scan`, which reads table policy
+  bindings from the catalog store, composes a shared `ReadRestriction`, and
+  returns a `TableScanCapability` carrying the restriction in the authorization
+  receipt context.
+- Added a provider test proving stored ODRL policy bindings are visible through
+  the provider scan capability and preserve the Sail-provider context.
 - Parsed a minimal enforceable ODRL subset from active policy bindings:
   `allowed-columns` / `allowedColumns` at the policy root, in
   `lakecat:read-restriction`, or in ODRL constraints, plus purpose and policy
@@ -211,6 +218,14 @@ Updated: 2026-06-18
   `pdftotext -f 1 -l 1 docs/book/dist/lakesail.pdf -`,
   `pdftotext -f 2 -l 2 docs/book/dist/lakesail.pdf -`, and
   `readlink 'docs/book/dist/lakesail (0.1.0).epub'`.
+- Provider-side governed scan authorization checks passed:
+  `cargo fmt -p lakecat-sail -- --check`,
+  `cargo test -p lakecat-sail --features catalog-provider provider_scan_authorization_carries_policy_restriction -- --nocapture`, and
+  `cargo test -p lakecat-sail --features catalog-provider provider_resolves_governed_tables_in_process -- --nocapture`,
+  `cargo test -p lakecat-sail --features catalog-provider`,
+  `cargo test -p lakecat-sail --all-features`,
+  `git diff --check`, and
+  `cargo test --workspace --all-features`.
 - Reusable read-restriction parser checks passed:
   `cargo fmt -p lakecat-security -p lakecat-service -- --check`,
   `cargo test -p lakecat-security read_restriction -- --nocapture`,

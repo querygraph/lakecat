@@ -238,10 +238,11 @@ pub mod catalog_provider {
     use arrow_schema::{DataType, Field, Fields, TimeUnit};
     use lakecat_core::{Namespace, Principal, TableIdent, TableName, WarehouseName};
     use lakecat_security::{
-        AuthorizationRequest, CatalogAction, GovernanceEngine, TableCommitCapability,
-        TableCreateCapability, TableDropCapability, TableLoadCapability,
+        AuthorizationRequest, CatalogAction, GovernanceEngine, ReadRestriction,
+        TableCommitCapability, TableCreateCapability, TableDropCapability, TableLoadCapability,
+        TableScanCapability,
     };
-    use lakecat_store::{CatalogStore, TableCommit, TableRecord};
+    use lakecat_store::{CatalogStore, PolicyBinding, TableCommit, TableRecord};
     use sail_catalog::error::{CatalogError, CatalogObject, CatalogResult};
     use sail_catalog::provider::{
         AlterTableOptions, CatalogProvider, CommitTableOptions, CreateDatabaseOptions,
@@ -299,13 +300,27 @@ pub mod catalog_provider {
             action: CatalogAction,
             table: TableIdent,
         ) -> CatalogResult<lakecat_security::AuthorizationReceipt> {
+            self.authorize_table_with_context(
+                action,
+                table,
+                json!({"lakecat:sail-provider": self.name}),
+            )
+            .await
+        }
+
+        async fn authorize_table_with_context(
+            &self,
+            action: CatalogAction,
+            table: TableIdent,
+            context: serde_json::Value,
+        ) -> CatalogResult<lakecat_security::AuthorizationReceipt> {
             let receipt = self
                 .governance
                 .authorize(AuthorizationRequest {
                     principal: self.principal.clone(),
                     action,
                     table: Some(table),
-                    context: json!({"lakecat:sail-provider": self.name}),
+                    context,
                 })
                 .await
                 .map_err(catalog_error)?;
@@ -315,6 +330,44 @@ pub mod catalog_provider {
                 ));
             }
             Ok(receipt)
+        }
+
+        pub async fn authorize_table_scan(
+            &self,
+            database: &SailNamespace,
+            table: &str,
+        ) -> CatalogResult<TableScanCapability> {
+            let ident = self.ident(database, table)?;
+            let policy_bindings = self
+                .store
+                .policy_bindings_for_table(&ident)
+                .await
+                .map_err(catalog_error)?;
+            let read_restriction = if policy_bindings.is_empty() {
+                None
+            } else {
+                Some(
+                    ReadRestriction::from_odrl_policies(
+                        policy_bindings.iter().map(|binding| &binding.odrl),
+                    )
+                    .map_err(catalog_error)?,
+                )
+            };
+            let mut context = json!({
+                "lakecat:sail-provider": self.name,
+                "policy-bindings": policy_bindings
+                    .iter()
+                    .map(policy_binding_context)
+                    .collect::<Vec<_>>(),
+            });
+            if let Some(restriction) = read_restriction {
+                context["read-restriction"] =
+                    serde_json::to_value(restriction).map_err(catalog_error)?;
+            }
+            let receipt = self
+                .authorize_table_with_context(CatalogAction::TablePlanScan, ident.clone(), context)
+                .await?;
+            TableScanCapability::from_receipt(receipt, ident).map_err(catalog_error)
         }
 
         async fn authorize_catalog(
@@ -706,6 +759,23 @@ pub mod catalog_provider {
             location: None,
             properties: Vec::new(),
         }
+    }
+
+    fn policy_binding_context(binding: &PolicyBinding) -> serde_json::Value {
+        json!({
+            "policy-id": binding.policy_id,
+            "warehouse": binding.warehouse.as_str(),
+            "namespace": binding
+                .namespace
+                .as_ref()
+                .map(|namespace| namespace.parts().to_vec()),
+            "table": binding
+                .table
+                .as_ref()
+                .map(|table| table.as_str().to_string()),
+            "enforced": binding.enforced,
+            "odrl": binding.odrl,
+        })
     }
 
     fn table_status(catalog: &str, record: &TableRecord) -> TableStatus {
@@ -1564,6 +1634,76 @@ pub mod catalog_provider {
                 .await
                 .unwrap();
             assert!(provider.get_table(&namespace, "events").await.is_err());
+        }
+
+        #[tokio::test]
+        async fn provider_scan_authorization_carries_policy_restriction() {
+            let store = MemoryCatalogStore::new();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let table_name = TableName::new("events").unwrap();
+            store
+                .upsert_policy_binding(
+                    PolicyBinding::new(
+                        "policy-provider-scan",
+                        warehouse.clone(),
+                        Some(namespace.clone()),
+                        Some(table_name.clone()),
+                        true,
+                        json!({
+                            "uid": "policy:provider-scan",
+                            "purpose": "provider-routing",
+                            "lakecat:read-restriction": {
+                                "allowed-columns": ["event_id"],
+                                "row-predicate": {
+                                    "type": "equal",
+                                    "term": "region",
+                                    "value": "west"
+                                }
+                            }
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            let provider = LakeCatCatalogProvider::new(
+                "lakecat",
+                warehouse,
+                store,
+                DeferredSailCatalogEngine::new(),
+                AllowAllGovernanceEngine::new(),
+                Principal::anonymous(),
+            );
+            let sail_namespace = SailNamespace::try_from(vec!["default"]).unwrap();
+
+            let capability = provider
+                .authorize_table_scan(&sail_namespace, "events")
+                .await
+                .unwrap();
+            let restriction = capability.read_restriction().unwrap();
+
+            assert_eq!(
+                restriction.allowed_columns,
+                Some(vec!["event_id".to_string()])
+            );
+            assert_eq!(restriction.purpose.as_deref(), Some("provider-routing"));
+            assert_eq!(
+                restriction.row_predicate,
+                Some(json!({
+                    "type": "equal",
+                    "term": "region",
+                    "value": "west"
+                }))
+            );
+            assert_eq!(
+                capability.receipt().context["policy-bindings"][0]["policy-id"],
+                json!("policy-provider-scan")
+            );
+            assert_eq!(
+                capability.receipt().context["lakecat:sail-provider"],
+                json!("lakecat")
+            );
         }
 
         #[tokio::test]

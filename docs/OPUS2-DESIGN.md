@@ -173,8 +173,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
      *Started: scan planning intersects client projection with allowed columns,
      appends policy-derived row predicates before calling Sail, and
      revalidates fetch-scan-tasks tokens against the current server-derived
-     restriction through shared `ReadRestriction` methods; RBAC policy loading
-     and provider read routing remain open.*
+     restriction through shared `ReadRestriction` methods; the in-process
+     provider can now mint scan capabilities with stored policy-binding context;
+     RBAC policy loading and full provider read-plan routing remain open.*
   *Smallest end-to-end version landed first: a single allowed-columns list is
   enforced on one table, proven by a test where an agent asks for two columns
   and Sail receives one.*

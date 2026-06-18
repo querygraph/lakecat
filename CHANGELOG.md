@@ -39,6 +39,10 @@
 - Moved governed projection narrowing, stats-field narrowing, and mandatory
   row-filter extraction onto `ReadRestriction`, keeping the scan restriction
   application logic reusable outside the REST service.
+- Added a `LakeCatCatalogProvider::authorize_table_scan` seam that mints
+  provider-side scan capabilities with policy-binding context and shared
+  `ReadRestriction` enforcement, preparing provider-routed reads without
+  duplicating REST policy logic.
 - Changed the QueryGraph bootstrap OSI artifact from a LakeCat-authored semantic
   model into a stable OSI handoff: LakeCat now publishes dataset/field anchors
   and governed Sail/LakeCat source metadata while leaving metrics, dimensions,
