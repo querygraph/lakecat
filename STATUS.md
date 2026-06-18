@@ -6,6 +6,22 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `dadf1ad Verify all QGLake manifest children`.
+- Paused after pushing the QGLake all-manifest-children proof slice. The
+  `lakecat-cli qglake-fixture` governed `fetchScanTasks` verifier now follows
+  every child manifest plan-task token returned by manifest-list expansion and
+  requires each terminal manifest fetch to remain governed and table-local,
+  instead of treating the first child token as representative.
+- Local verification for the pushed QGLake all-manifest-children proof slice
+  was green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_fetch_scan_tasks_verifier`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens --features sail-local,turso-local`;
+  `git diff --check`.
+- This status commit records the pushed QGLake all-manifest-children proof
+  slice.
+- Previous implementation slice:
   `004a27f Verify QGLake leaf manifest fetch`.
 - Paused after pushing the QGLake leaf-manifest fetch proof slice. The
   `lakecat-cli qglake-fixture` governed `fetchScanTasks` verifier now follows
