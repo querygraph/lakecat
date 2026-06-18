@@ -2949,6 +2949,16 @@ async fn project_outbox_event(
             )
             .await?;
         receipt.graph_events += 1;
+        let lineage_receipt = state
+            .lineage
+            .emit(LineageEvent::new(
+                LineageEventType::PolicyBindingUpserted,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "project.upserted" {
         let project_id = outbox_project(event)?;
         state
@@ -2959,6 +2969,16 @@ async fn project_outbox_event(
             )
             .await?;
         receipt.graph_events += 1;
+        let lineage_receipt = state
+            .lineage
+            .emit(LineageEvent::new(
+                LineageEventType::ProjectUpserted,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "warehouse.upserted" {
         let warehouse = outbox_warehouse(event, &state.warehouse)?;
         state
@@ -2969,6 +2989,16 @@ async fn project_outbox_event(
             )
             .await?;
         receipt.graph_events += 1;
+        let lineage_receipt = state
+            .lineage
+            .emit(LineageEvent::new(
+                LineageEventType::WarehouseUpserted,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "table.restored" {
         if let Some(table) = table {
             let lineage_receipt = state
@@ -4935,7 +4965,7 @@ mod tests {
             ]
         );
         assert_eq!(drain.graph_events, 19);
-        assert_eq!(drain.lineage_events, 7);
+        assert_eq!(drain.lineage_events, 8);
         let credential_summary = drain
             .events
             .iter()
@@ -5170,75 +5200,99 @@ mod tests {
             graph_events[18].event_id.as_deref(),
             Some("evt-namespace-drop")
         );
+        let policy_summary = drain
+            .events
+            .iter()
+            .find(|event| event.event_type == "policy-binding.upserted")
+            .expect("policy replay summary should be exposed");
+        assert_eq!(policy_summary.graph_events, 2);
+        assert_eq!(policy_summary.lineage_events, 1);
+        assert_eq!(
+            policy_summary.replay_event_hashes,
+            vec!["recorded".to_string()]
+        );
+        assert_eq!(
+            policy_summary.replay_open_lineage_hashes,
+            vec!["recorded-openlineage".to_string()]
+        );
+
         let lineage_events = lineage.events.lock().await;
-        assert_eq!(lineage_events.len(), 7);
+        assert_eq!(lineage_events.len(), 8);
         assert_eq!(
             lineage_events[0].event_type,
             LineageEventType::NamespaceCreated
         );
-        assert_eq!(lineage_events[1].event_type, LineageEventType::TableCreated);
         assert_eq!(
-            lineage_events[2].event_type,
+            lineage_events[1].event_type,
+            LineageEventType::PolicyBindingUpserted
+        );
+        assert_eq!(
+            lineage_events[1].payload["policy"]["odrl"]["uid"],
+            serde_json::json!("policy:agent-read")
+        );
+        assert_eq!(lineage_events[2].event_type, LineageEventType::TableCreated);
+        assert_eq!(
+            lineage_events[3].event_type,
             LineageEventType::TableScanPlanned
         );
         assert_eq!(
-            lineage_events[2].payload["read-restriction"]["allowed-columns"],
+            lineage_events[3].payload["read-restriction"]["allowed-columns"],
             serde_json::json!(["event_id"])
         );
         assert_eq!(
-            lineage_events[3].event_type,
+            lineage_events[4].event_type,
             LineageEventType::TableCommitted
         );
         assert_eq!(
-            lineage_events[3].payload["commit"]["new_metadata_location"],
+            lineage_events[4].payload["commit"]["new_metadata_location"],
             serde_json::json!("file:///tmp/events/metadata/00001.json")
         );
         assert_eq!(
-            lineage_events[4].event_type,
+            lineage_events[5].event_type,
             LineageEventType::CredentialsVendAttempted
         );
         assert_eq!(
-            lineage_events[4].payload["credential-count"],
+            lineage_events[5].payload["credential-count"],
             serde_json::json!(0)
         );
         assert_eq!(
-            lineage_events[4].payload["lakecat:raw-credential-exception"]["allowed"],
+            lineage_events[5].payload["lakecat:raw-credential-exception"]["allowed"],
             serde_json::json!(false)
         );
         assert_eq!(
-            lineage_events[5].event_type,
+            lineage_events[6].event_type,
             LineageEventType::QueryGraphBootstrap
         );
         assert_eq!(
-            lineage_events[5].payload["authorization-receipt"]["request-identity"]["attestation-state"],
+            lineage_events[6].payload["authorization-receipt"]["request-identity"]["attestation-state"],
             serde_json::json!("verified")
         );
         assert_eq!(
-            lineage_events[5].payload["bundle-hash"],
+            lineage_events[6].payload["bundle-hash"],
             serde_json::json!("sha256:bundle")
         );
         assert_eq!(
-            lineage_events[5].payload["graph-hash"],
+            lineage_events[6].payload["graph-hash"],
             serde_json::json!("sha256:graph")
         );
         assert_eq!(
-            lineage_events[5].payload["open-lineage-hash"],
+            lineage_events[6].payload["open-lineage-hash"],
             serde_json::json!("sha256:openlineage")
         );
         assert_eq!(
-            lineage_events[5].payload["querygraph-import-hash"],
+            lineage_events[6].payload["querygraph-import-hash"],
             serde_json::json!("sha256:querygraph-import")
         );
         assert_eq!(
-            lineage_events[5].payload["table-artifacts"][0]["cdif-hash"],
+            lineage_events[6].payload["table-artifacts"][0]["cdif-hash"],
             serde_json::json!("sha256:cdif")
         );
         assert_eq!(
-            lineage_events[5].payload["view-artifacts"][0]["stable-id"],
+            lineage_events[6].payload["view-artifacts"][0]["stable-id"],
             serde_json::json!("lakecat:view:local:default:active_customers")
         );
         assert_eq!(
-            lineage_events[6].event_type,
+            lineage_events[7].event_type,
             LineageEventType::NamespaceDropped
         );
         assert_eq!(
@@ -5297,14 +5351,14 @@ mod tests {
                 default_sail_engine(),
                 AllowAllGovernanceEngine::new(),
                 graph.clone(),
-                lineage,
+                lineage.clone(),
             );
 
         let drain = drain_outbox_once(&state, 10).await.unwrap();
         assert_eq!(drain.delivered, 1);
         assert_eq!(drain.event_types, vec!["warehouse.upserted".to_string()]);
         assert_eq!(drain.graph_events, 2);
-        assert_eq!(drain.lineage_events, 0);
+        assert_eq!(drain.lineage_events, 1);
         assert_eq!(
             store.delivered.lock().await.as_slice(),
             &["evt-warehouse".to_string()]
@@ -5320,6 +5374,16 @@ mod tests {
         assert_eq!(
             graph_events[1].properties["warehouse-record"]["project-id"],
             serde_json::json!("default")
+        );
+        let lineage_events = lineage.events.lock().await;
+        assert_eq!(lineage_events.len(), 1);
+        assert_eq!(
+            lineage_events[0].event_type,
+            LineageEventType::WarehouseUpserted
+        );
+        assert_eq!(
+            lineage_events[0].payload["warehouse-record"]["storage-root"],
+            serde_json::json!("file:///tmp/lakecat")
         );
     }
 
@@ -5363,14 +5427,14 @@ mod tests {
                 default_sail_engine(),
                 AllowAllGovernanceEngine::new(),
                 graph.clone(),
-                lineage,
+                lineage.clone(),
             );
 
         let drain = drain_outbox_once(&state, 10).await.unwrap();
         assert_eq!(drain.delivered, 1);
         assert_eq!(drain.event_types, vec!["project.upserted".to_string()]);
         assert_eq!(drain.graph_events, 2);
-        assert_eq!(drain.lineage_events, 0);
+        assert_eq!(drain.lineage_events, 1);
         assert_eq!(
             store.delivered.lock().await.as_slice(),
             &["evt-project".to_string()]
@@ -5385,6 +5449,16 @@ mod tests {
         assert_eq!(graph_events[1].event_id.as_deref(), Some("evt-project"));
         assert_eq!(
             graph_events[1].properties["project-record"]["display-name"],
+            serde_json::json!("Default Project")
+        );
+        let lineage_events = lineage.events.lock().await;
+        assert_eq!(lineage_events.len(), 1);
+        assert_eq!(
+            lineage_events[0].event_type,
+            LineageEventType::ProjectUpserted
+        );
+        assert_eq!(
+            lineage_events[0].payload["project-record"]["display-name"],
             serde_json::json!("Default Project")
         );
     }

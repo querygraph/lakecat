@@ -42,12 +42,15 @@ impl LineageEvent {
 pub enum LineageEventType {
     NamespaceCreated,
     NamespaceDropped,
+    PolicyBindingUpserted,
+    ProjectUpserted,
     TableCreated,
     TableLoaded,
     TableScanPlanned,
     TableCommitted,
     TableDeleted,
     TableRestored,
+    WarehouseUpserted,
     CredentialsVendAttempted,
     QueryGraphBootstrap,
 }
@@ -157,6 +160,52 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
                 }
             }
         })],
+        LineageEventType::PolicyBindingUpserted => vec![json!({
+            "namespace": "lakecat.policy",
+            "name": event
+                .payload
+                .pointer("/policy/policy-id")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown"),
+            "facets": {
+                "lakecat_policyBinding": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-policy-binding-facet/0.1.0.json",
+                    "warehouse": event.payload.get("warehouse"),
+                    "payload": event.payload,
+                }
+            }
+        })],
+        LineageEventType::ProjectUpserted => vec![json!({
+            "namespace": "lakecat.project",
+            "name": event
+                .payload
+                .get("project-id")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown"),
+            "facets": {
+                "lakecat_project": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-project-facet/0.1.0.json",
+                    "payload": event.payload,
+                }
+            }
+        })],
+        LineageEventType::WarehouseUpserted => vec![json!({
+            "namespace": "lakecat.warehouse",
+            "name": event
+                .payload
+                .get("warehouse")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown"),
+            "facets": {
+                "lakecat_warehouse": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-warehouse-facet/0.1.0.json",
+                    "payload": event.payload,
+                }
+            }
+        })],
         LineageEventType::QueryGraphBootstrap => vec![json!({
             "namespace": "lakecat.querygraph",
             "name": "bootstrap",
@@ -211,12 +260,15 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
     match event_type {
         LineageEventType::NamespaceCreated => "namespace-created",
         LineageEventType::NamespaceDropped => "namespace-dropped",
+        LineageEventType::PolicyBindingUpserted => "policy-binding-upserted",
+        LineageEventType::ProjectUpserted => "project-upserted",
         LineageEventType::TableCreated => "table-created",
         LineageEventType::TableLoaded => "table-loaded",
         LineageEventType::TableScanPlanned => "table-scan-planned",
         LineageEventType::TableCommitted => "table-committed",
         LineageEventType::TableDeleted => "table-deleted",
         LineageEventType::TableRestored => "table-restored",
+        LineageEventType::WarehouseUpserted => "warehouse-upserted",
         LineageEventType::CredentialsVendAttempted => "credentials-vend-attempted",
         LineageEventType::QueryGraphBootstrap => "querygraph-bootstrap",
     }
@@ -350,6 +402,72 @@ mod tests {
             projected["outputs"][0]["facets"]["queryGraph_bootstrap"]["payload"]["authorization-receipt"]
                 ["request-identity"]["attestation-state"],
             json!("verified")
+        );
+    }
+
+    #[test]
+    fn projects_control_plane_upserts_to_openlineage_outputs() {
+        let policy = open_lineage_event(&LineageEvent::new(
+            LineageEventType::PolicyBindingUpserted,
+            Principal::anonymous(),
+            None,
+            json!({
+                "warehouse": "local",
+                "policy": {
+                    "policy-id": "agent-read",
+                    "odrl": {
+                        "uid": "policy:agent-read"
+                    }
+                }
+            }),
+        ));
+        assert_eq!(policy["job"]["name"], json!("policy-binding-upserted"));
+        assert_eq!(policy["outputs"][0]["namespace"], json!("lakecat.policy"));
+        assert_eq!(policy["outputs"][0]["name"], json!("agent-read"));
+        assert_eq!(
+            policy["outputs"][0]["facets"]["lakecat_policyBinding"]["payload"]["policy"]["odrl"]["uid"],
+            json!("policy:agent-read")
+        );
+
+        let project = open_lineage_event(&LineageEvent::new(
+            LineageEventType::ProjectUpserted,
+            Principal::anonymous(),
+            None,
+            json!({
+                "project-id": "default",
+                "project-record": {
+                    "display-name": "Default Project"
+                }
+            }),
+        ));
+        assert_eq!(project["job"]["name"], json!("project-upserted"));
+        assert_eq!(project["outputs"][0]["namespace"], json!("lakecat.project"));
+        assert_eq!(project["outputs"][0]["name"], json!("default"));
+        assert_eq!(
+            project["outputs"][0]["facets"]["lakecat_project"]["payload"]["project-record"]["display-name"],
+            json!("Default Project")
+        );
+
+        let warehouse = open_lineage_event(&LineageEvent::new(
+            LineageEventType::WarehouseUpserted,
+            Principal::anonymous(),
+            None,
+            json!({
+                "warehouse": "local",
+                "warehouse-record": {
+                    "storage-root": "file:///tmp/lakecat"
+                }
+            }),
+        ));
+        assert_eq!(warehouse["job"]["name"], json!("warehouse-upserted"));
+        assert_eq!(
+            warehouse["outputs"][0]["namespace"],
+            json!("lakecat.warehouse")
+        );
+        assert_eq!(warehouse["outputs"][0]["name"], json!("local"));
+        assert_eq!(
+            warehouse["outputs"][0]["facets"]["lakecat_warehouse"]["payload"]["warehouse-record"]["storage-root"],
+            json!("file:///tmp/lakecat")
         );
     }
 

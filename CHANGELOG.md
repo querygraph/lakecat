@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Projected policy-binding, project, and warehouse upsert outbox events into
+  LakeCat lineage/OpenLineage receipts so control-plane graph anchors also carry
+  replayable lineage evidence.
 - Exposed lineage-drain request authorization proof on the management response,
   printed it in the CLI, and required QGLake lineage-drain acceptance to prove
   the drain itself was gated by lineage-read authorization evidence.
