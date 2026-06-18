@@ -6,17 +6,17 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `0a7d26b Route scan task fetch through provider`.
-- Current working slice: ODRL max credential TTL extraction in the shared
-  `ReadRestriction` parser/composer. LakeCat now accepts TTLs from nested
-  read-restriction objects and ODRL constraints, composes multiple policy TTLs
-  by choosing the shortest governed lifetime, and rejects malformed non-numeric
-  TTLs instead of silently dropping them.
+  working changes: `57ea5b5 Compose ODRL credential TTL restrictions`.
+- Current working slice: `typesec-local` RBAC policy loading for the service
+  binary. `LAKECAT_TYPESEC_RBAC_POLICY` can now point at a TypeSec RBAC YAML
+  file, LakeCat loads it through TypeSec's `RbacEngine`, and invalid/missing
+  policy files fail service startup instead of silently falling back to
+  allow-all. No RBAC semantics moved into LakeCat.
 - Local verification for the current slice is green:
   `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
-  `cargo test -p lakecat-security read_restriction -- --nocapture`;
+  `cargo test -p lakecat-security --features typesec-local rbac -- --nocapture`;
   `cargo test -p lakecat-security --all-features`;
-  `cargo test -p lakecat-service --features sail-local`;
+  `cargo test -p lakecat-service --features typesec-local configured_governance_engine -- --nocapture`;
   `cargo test -p lakecat-service --all-features`;
   `cargo test -p lakecat-store --features turso-local`;
   `cargo test --workspace --all-features`.
@@ -64,6 +64,15 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Enabled the TypeSec RBAC feature for LakeCat's `typesec-local` integration.
+- Added `TypeSecGovernanceEngine::rbac_from_yaml`, a narrow constructor that
+  loads RBAC policy text through TypeSec's `RbacEngine` and returns LakeCat
+  errors on invalid policy documents.
+- Added `LAKECAT_TYPESEC_RBAC_POLICY` support to the service binary so local
+  deployments can boot with a real RBAC fallback policy instead of the
+  allow-all placeholder.
+- Added focused tests proving RBAC policy loading authorizes matching table
+  scan requests and missing/invalid policy files fail closed.
 - Extended `ReadRestriction::from_odrl_policies` to parse max credential TTLs
   from top-level, nested `lakecat:read-restriction` / `readRestriction`, and
   ODRL constraint forms.

@@ -20,7 +20,7 @@ async fn main() {
         state
             .with_integrations(
                 sail,
-                configured_governance_engine(),
+                configured_governance_engine().expect("configure LakeCat governance"),
                 configured_graph_sink(),
                 HashOnlyLineageSink::new(),
             )
@@ -77,13 +77,30 @@ async fn configured_store_inner() -> lakecat_core::LakeCatResult<Arc<dyn Catalog
 }
 
 #[cfg(feature = "typesec-local")]
-fn configured_governance_engine() -> Arc<dyn GovernanceEngine> {
-    lakecat_security::typesec_integration::TypeSecGovernanceEngine::allow_all()
+fn configured_governance_engine() -> lakecat_core::LakeCatResult<Arc<dyn GovernanceEngine>> {
+    configured_governance_engine_from_policy_path(
+        std::env::var("LAKECAT_TYPESEC_RBAC_POLICY").ok().as_deref(),
+    )
 }
 
 #[cfg(not(feature = "typesec-local"))]
-fn configured_governance_engine() -> Arc<dyn GovernanceEngine> {
-    AllowAllGovernanceEngine::new()
+fn configured_governance_engine() -> lakecat_core::LakeCatResult<Arc<dyn GovernanceEngine>> {
+    Ok(AllowAllGovernanceEngine::new())
+}
+
+#[cfg(feature = "typesec-local")]
+fn configured_governance_engine_from_policy_path(
+    policy_path: Option<&str>,
+) -> lakecat_core::LakeCatResult<Arc<dyn GovernanceEngine>> {
+    let Some(policy_path) = policy_path else {
+        return Ok(lakecat_security::typesec_integration::TypeSecGovernanceEngine::allow_all());
+    };
+    let yaml = std::fs::read_to_string(policy_path).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "failed to read LAKECAT_TYPESEC_RBAC_POLICY '{policy_path}': {err}"
+        ))
+    })?;
+    Ok(lakecat_security::typesec_integration::TypeSecGovernanceEngine::rbac_from_yaml(&yaml)?)
 }
 
 #[cfg(feature = "typesec-local")]
@@ -107,4 +124,76 @@ fn configured_graph_sink() -> Arc<dyn CatalogGraphSink> {
 #[cfg(not(feature = "grust-local"))]
 fn configured_graph_sink() -> Arc<dyn CatalogGraphSink> {
     NoopCatalogGraphSink::new()
+}
+
+#[cfg(all(test, feature = "typesec-local"))]
+mod tests {
+    use super::*;
+    use lakecat_core::{Namespace, Principal, PrincipalKind, TableIdent, TableName};
+    use lakecat_security::{AuthorizationRequest, CatalogAction};
+
+    #[tokio::test]
+    async fn configured_governance_engine_loads_rbac_policy_path() {
+        let path = std::env::temp_dir().join(format!(
+            "lakecat-rbac-{}.yaml",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(
+            &path,
+            r#"
+roles:
+  - name: scanner
+    permissions: ["table.plan_scan"]
+    resources: ["lakecat:table:local:default:events"]
+assignments:
+  - subject: "agent:scanner"
+    roles: [scanner]
+"#,
+        )
+        .unwrap();
+
+        let engine = configured_governance_engine_from_policy_path(path.to_str()).unwrap();
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let receipt = engine
+            .authorize(AuthorizationRequest {
+                principal: Principal::new("agent:scanner", PrincipalKind::Agent).unwrap(),
+                action: CatalogAction::TablePlanScan,
+                table: Some(table),
+                context: serde_json::json!({}),
+            })
+            .await
+            .unwrap();
+
+        assert!(receipt.allowed);
+        assert_eq!(receipt.engine, "typesec");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn configured_governance_engine_rejects_missing_rbac_policy_path() {
+        let missing = std::env::temp_dir().join(format!(
+            "lakecat-missing-rbac-policy-{}.yaml",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let error = match configured_governance_engine_from_policy_path(missing.to_str()) {
+            Ok(_) => panic!("missing policy path should fail"),
+            Err(error) => error,
+        };
+
+        assert!(
+            error
+                .to_string()
+                .contains("failed to read LAKECAT_TYPESEC_RBAC_POLICY")
+        );
+    }
 }

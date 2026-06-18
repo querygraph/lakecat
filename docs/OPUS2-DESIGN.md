@@ -138,7 +138,7 @@ build is reproducible off this machine.
 | # | Finding | Severity | Status |
 | --- | --- | --- | --- |
 | F1 | Governed read gates but does not mask | HIGH | OPEN — critical path |
-| F2 | ODRL transported, not interpreted; `Delegate` → deny | HIGH | OPEN — critical path |
+| F2 | ODRL transported, not interpreted; `Delegate` → deny | HIGH | STARTED — shared restriction parser plus TypeSec RBAC policy loading |
 | F3 | Commit idempotency unreachable from REST | MEDIUM | STARTED — REST header replay + mismatch guard wired |
 | F4 | Metadata written before CAS; no orphan handling/retry | MEDIUM | STARTED — local orphan cleanup |
 | F5 | Scans bypass the in-process provider | MEDIUM | STARTED — REST `sail-local` plan and fetch routes now use provider seams |
@@ -165,7 +165,8 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
      restriction-application helpers now live in `lakecat-security` so the REST
      route and provider scan path share one governance primitive; TypeSec
      delegate-to-fallback composition is wired at the LakeCat governance wrapper
-     seam.*
+     seam, and the service binary can now load a TypeSec RBAC YAML fallback
+     policy through `LAKECAT_TYPESEC_RBAC_POLICY`.*
   2. Carry the effective restriction in `TableScanCapability` and record it in
      the audit receipt (`policy_hash` includes the binding's ODRL hash).
      *Started: scan receipts now carry `read-restriction` with allowed columns
@@ -181,7 +182,7 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
      calling Sail, and fetch scan tasks by re-applying mandatory projection and
      filter requirements before Sail expands plan-task tokens; the REST
      `sail-local` planning and fetch endpoints now route through these provider
-     seams, while RBAC policy loading remains open.*
+     seams.*
   *Smallest end-to-end version landed first: a single allowed-columns list is
   enforced on one table, proven by a test where an agent asks for two columns
   and Sail receives one.*

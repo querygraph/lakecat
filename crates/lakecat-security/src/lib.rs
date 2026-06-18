@@ -1131,6 +1131,15 @@ pub mod typesec_integration {
                 engine: Arc::new(AllowAllPolicy),
             })
         }
+
+        pub fn rbac_from_yaml(yaml: &str) -> LakeCatResult<Arc<Self>> {
+            let engine = typesec::RbacEngine::from_yaml(yaml).map_err(|err| {
+                lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "failed to load TypeSec RBAC policy: {err}"
+                ))
+            })?;
+            Ok(Self::new(Arc::new(engine)))
+        }
     }
 
     struct AllowAllPolicy;
@@ -1269,6 +1278,63 @@ pub mod typesec_integration {
             assert_eq!(
                 receipt.context["read-restriction"]["allowed-columns"][0],
                 serde_json::json!("id")
+            );
+        }
+
+        #[tokio::test]
+        async fn loads_rbac_policy_yaml_for_authorization() {
+            let engine = TypeSecGovernanceEngine::rbac_from_yaml(
+                r#"
+roles:
+  - name: scanner
+    permissions: ["table.plan_scan"]
+    resources: ["lakecat:table:local:default:events"]
+assignments:
+  - subject: "agent:scanner"
+    roles: [scanner]
+"#,
+            )
+            .expect("rbac policy should load");
+            let table = lakecat_core::TableIdent::new(
+                lakecat_core::WarehouseName::new("local").unwrap(),
+                "default".parse::<lakecat_core::Namespace>().unwrap(),
+                lakecat_core::TableName::new("events").unwrap(),
+            );
+            let receipt = engine
+                .authorize(AuthorizationRequest {
+                    principal: lakecat_core::Principal::new(
+                        "agent:scanner",
+                        lakecat_core::PrincipalKind::Agent,
+                    )
+                    .unwrap(),
+                    action: CatalogAction::TablePlanScan,
+                    table: Some(table),
+                    context: serde_json::json!({}),
+                })
+                .await
+                .unwrap();
+
+            assert!(receipt.allowed);
+            assert_eq!(receipt.engine, "typesec");
+        }
+
+        #[test]
+        fn rejects_invalid_rbac_policy_yaml() {
+            let error = match TypeSecGovernanceEngine::rbac_from_yaml(
+                r#"
+roles:
+  - name: broken
+    inherits: [missing]
+"#,
+            ) {
+                Ok(_) => panic!("invalid rbac policy should fail closed"),
+                Err(error) => error,
+            };
+
+            assert!(
+                error
+                    .to_string()
+                    .contains("failed to load TypeSec RBAC policy")
             );
         }
     }

@@ -7,7 +7,7 @@ repository.workspace = true
 
 [features]
 default = []
-typesec-local = ["dep:typesec"]
+typesec-local = ["dep:typesec", "typesec/rbac"]
 
 [dependencies]
 async-trait = { workspace = true }

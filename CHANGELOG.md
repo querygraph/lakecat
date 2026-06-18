@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `typesec-local` RBAC policy loading for the service binary via
+  `LAKECAT_TYPESEC_RBAC_POLICY`, using TypeSec's `RbacEngine` through
+  `TypeSecGovernanceEngine` instead of embedding RBAC semantics in LakeCat.
 - Extended `ReadRestriction` ODRL parsing to accept max credential TTL from
   nested read-restriction objects and ODRL constraints, compose multiple TTLs to
   the shortest governed lifetime, and reject malformed non-numeric TTL values.
