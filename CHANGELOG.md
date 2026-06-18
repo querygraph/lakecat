@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Exposed QueryGraph bootstrap standards in lineage-drain replay evidence and
+  required QGLake acceptance to match them against the accepted bootstrap
+  bundle.
 - Added per-event graph and lineage projection counts to lineage-drain evidence
   and required QGLake acceptance to prove the drain replayed graph projections
   plus a bootstrap lineage projection.

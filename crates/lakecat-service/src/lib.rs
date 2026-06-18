@@ -974,6 +974,17 @@ fn lineage_drain_event_summary(
             .get("view-artifacts")
             .and_then(Value::as_array)
             .map_or(0, Vec::len),
+        standards: payload
+            .get("standards")
+            .and_then(Value::as_array)
+            .map(|standards| {
+                standards
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
         replay_event_hashes: receipt.lineage_event_hashes.clone(),
         replay_open_lineage_hashes: receipt.open_lineage_hashes.clone(),
     }
@@ -4801,6 +4812,10 @@ mod tests {
         assert_eq!(bootstrap_summary.table_artifact_count, 1);
         assert_eq!(bootstrap_summary.view_artifact_count, 1);
         assert_eq!(
+            bootstrap_summary.standards,
+            vec!["OpenLineage".to_string(), "Grust catalog graph".to_string()]
+        );
+        assert_eq!(
             bootstrap_summary.replay_event_hashes,
             vec!["recorded".to_string()]
         );
@@ -5259,6 +5274,10 @@ mod tests {
         assert_eq!(
             payload["events"][0]["view-artifact-count"],
             serde_json::json!(1)
+        );
+        assert_eq!(
+            payload["events"][0]["standards"],
+            serde_json::json!(["OpenLineage", "Grust catalog graph"])
         );
         assert_eq!(
             payload["events"][0]["replay-event-hashes"],

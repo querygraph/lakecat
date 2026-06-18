@@ -1,4 +1,9 @@
-use std::{collections::BTreeMap, fs, path::PathBuf, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::PathBuf,
+    sync::Arc,
+};
 
 use lakecat_api::{
     CatalogConfigResponse, CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest,
@@ -1361,6 +1366,12 @@ fn verify_qglake_lineage_drain(
                 .to_string(),
         ));
     }
+    if standards_set(&bootstrap.standards) != standards_set(&verification.standards) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain replay standards do not match the accepted QueryGraph bundle"
+                .to_string(),
+        ));
+    }
     if bootstrap.lineage_events == 0 {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain bootstrap replay emitted no lineage projection".to_string(),
@@ -1379,6 +1390,10 @@ fn verify_qglake_lineage_drain(
         ));
     }
     Ok(())
+}
+
+fn standards_set(standards: &[String]) -> BTreeSet<&str> {
+    standards.iter().map(String::as_str).collect()
 }
 
 fn qglake_table_metadata(
@@ -3501,6 +3516,7 @@ mod tests {
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    standards: qglake_lineage_standards(),
                     replay_event_hashes: Vec::new(),
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -3529,6 +3545,7 @@ mod tests {
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    standards: qglake_lineage_standards(),
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -3556,6 +3573,7 @@ mod tests {
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
                     table_artifact_count: 2,
                     view_artifact_count: 0,
+                    standards: qglake_lineage_standards(),
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -3577,12 +3595,41 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     graph_events: 0,
+                    lineage_events: 1,
+                    bundle_hash: Some("sha256:bundle".to_string()),
+                    graph_hash: Some("sha256:graph".to_string()),
+                    open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    table_artifact_count: 1,
+                    view_artifact_count: 0,
+                    standards: vec!["OpenLineage".to_string()],
+                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
+                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                }],
+            },
+            &verification,
+        )
+        .expect_err("QGLake lineage drain should reject mismatched replay standards");
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay standards do not match the accepted QueryGraph bundle"
+        ));
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                events: vec![LineageDrainEventSummary {
+                    event_id: "evt-bootstrap".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    graph_events: 0,
                     lineage_events: 0,
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    standards: qglake_lineage_standards(),
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -3614,6 +3661,7 @@ mod tests {
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    standards: qglake_lineage_standards(),
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -3643,6 +3691,18 @@ mod tests {
                 "OpenLineage".to_string(),
             ],
         }
+    }
+
+    fn qglake_lineage_standards() -> Vec<String> {
+        vec![
+            "Iceberg REST".to_string(),
+            "Croissant".to_string(),
+            "CDIF".to_string(),
+            "OSI handoff".to_string(),
+            "ODRL".to_string(),
+            "Grust catalog graph".to_string(),
+            "OpenLineage".to_string(),
+        ]
     }
 
     fn qglake_querygraph_projection(

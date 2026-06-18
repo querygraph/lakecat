@@ -369,6 +369,8 @@ pub struct LineageDrainEventSummary {
     #[serde(default)]
     pub view_artifact_count: usize,
     #[serde(default)]
+    pub standards: Vec<String>,
+    #[serde(default)]
     pub replay_event_hashes: Vec<String>,
     #[serde(default)]
     pub replay_open_lineage_hashes: Vec<String>,
