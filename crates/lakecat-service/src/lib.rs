@@ -5898,6 +5898,25 @@ mod tests {
                 .as_str()
                 .is_some_and(|value| !value.is_empty())
         );
+        assert_eq!(
+            body["open-lineage"]["run"]["facets"]["queryGraph_semanticBundle"]["graphHash"],
+            body["manifest"]["graph-hash"]
+        );
+        assert_eq!(
+            body["open-lineage"]["run"]["facets"]["queryGraph_semanticBundle"]["tableArtifacts"][0]
+                ["stableId"],
+            body["manifest"]["table-artifacts"][0]["stable-id"]
+        );
+        assert_eq!(
+            body["open-lineage"]["run"]["facets"]["queryGraph_semanticBundle"]["tableArtifacts"][0]
+                ["croissantHash"],
+            body["manifest"]["table-artifacts"][0]["croissant-hash"]
+        );
+        assert_eq!(
+            body["open-lineage"]["run"]["facets"]["queryGraph_semanticBundle"]["tableArtifacts"][0]
+                ["policyBindingsHash"],
+            body["manifest"]["table-artifacts"][0]["policy-bindings-hash"]
+        );
         assert!(
             body["manifest"]["standards"]
                 .as_array()
@@ -5994,6 +6013,16 @@ mod tests {
         assert_eq!(
             body["open-lineage"]["run"]["facets"]["queryGraph_semanticBundle"]["viewCount"],
             serde_json::json!(1)
+        );
+        assert_eq!(
+            body["open-lineage"]["run"]["facets"]["queryGraph_semanticBundle"]["viewArtifacts"][0]
+                ["stableId"],
+            body["manifest"]["view-artifacts"][0]["stable-id"]
+        );
+        assert_eq!(
+            body["open-lineage"]["run"]["facets"]["queryGraph_semanticBundle"]["viewArtifacts"][0]
+                ["osiHash"],
+            body["manifest"]["view-artifacts"][0]["osi-hash"]
         );
     }
 
