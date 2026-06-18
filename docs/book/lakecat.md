@@ -947,11 +947,36 @@ QueryGraph verify the version chain, including tombstones after the current
 view row is gone, while keeping the richer view history model available for a
 future Sail-owned implementation.
 
+When the caller needs discovery rather than a known view name, the management
+surface can return all view receipt chains in a namespace, including chains for
+views that no longer appear in the active view list:
+
+```sh
+curl -s \
+  http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/view-version-receipt-chains \
+  -H 'x-lakecat-agent-did: did:example:resilience-agent'
+```
+
+```json
+{
+  "chains": [
+    {
+      "stable-id": "lakecat:view:local:default:events_view",
+      "latest-view-version": 1,
+      "latest-operation": "drop",
+      "tombstoned": true,
+      "receipt-count": 2,
+      "receipts": ["..."]
+    }
+  ]
+}
+```
+
 That tombstone read is replayable too. LakeCat projects
-`view.version-receipts-listed` as lineage evidence, not as graph topology. The
-graph taxonomy stays in Grust; LakeCat only proves that the governed read saw
-the tombstone receipt needed to explain why a previously accepted view is now
-deleted.
+`view.version-receipts-listed` and `view.version-receipt-chains-listed` as
+lineage evidence, not as graph topology. The graph taxonomy stays in Grust;
+LakeCat only proves that the governed read saw the tombstone receipt needed to
+explain why a previously accepted view is now deleted.
 
 ### QueryGraph Bootstrap
 

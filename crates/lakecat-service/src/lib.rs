@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -11,13 +12,14 @@ use lakecat_api::{
     CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest,
     FetchScanTasksResponse, LineageDrainEventSummary, LineageDrainResponse, ListNamespacesResponse,
     ListPolicyBindingsResponse, ListProjectsResponse, ListServersResponse,
-    ListStorageProfilesResponse, ListViewVersionReceiptsResponse, ListViewsResponse,
-    ListWarehousesResponse, LoadCredentialsResponse, LoadTableResponse, NamespaceResponse,
-    PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse, ProjectResponse,
-    ServerResponse, StorageCredential, StorageProfileResponse, TableIdentifier,
-    UpsertPolicyBindingRequest, UpsertProjectRequest, UpsertServerRequest,
-    UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest, ViewColumnResponse,
-    ViewResponse, ViewVersionReceiptResponse, WarehouseResponse,
+    ListStorageProfilesResponse, ListViewVersionReceiptChainsResponse,
+    ListViewVersionReceiptsResponse, ListViewsResponse, ListWarehousesResponse,
+    LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
+    PlanTableScanResponse, PolicyBindingResponse, ProjectResponse, ServerResponse,
+    StorageCredential, StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest,
+    UpsertProjectRequest, UpsertServerRequest, UpsertStorageProfileRequest, UpsertViewRequest,
+    UpsertWarehouseRequest, ViewColumnResponse, ViewResponse, ViewVersionReceiptChainResponse,
+    ViewVersionReceiptResponse, WarehouseResponse,
 };
 use lakecat_core::{
     LakeCatError, LakeCatResult, Namespace, Principal, PrincipalKind, TableIdent, TableName,
@@ -884,6 +886,10 @@ pub fn app(state: LakeCatState) -> Router {
         .route(
             "/management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}/version-receipts",
             get(list_view_version_receipts),
+        )
+        .route(
+            "/management/v1/warehouses/{warehouse}/namespaces/{namespace}/view-version-receipt-chains",
+            get(list_view_version_receipt_chains),
         )
         .route(
             "/management/v1/warehouses/{warehouse}/policies",
@@ -2164,6 +2170,53 @@ async fn list_view_version_receipts(
     }))
 }
 
+async fn list_view_version_receipt_chains(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace)): Path<(String, String)>,
+) -> Result<Json<ListViewVersionReceiptChainsResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let namespace = namespace.parse::<Namespace>()?;
+    let capability = authorize_view_load(&state, request_identity(&headers)?).await?;
+    let receipts = state
+        .store
+        .list_namespace_view_version_receipts(&warehouse, &namespace)
+        .await?;
+    let chains = view_version_receipt_chains(&receipts)?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "view.version-receipt-chains-listed",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "view.version-receipt-chains-listed",
+                "warehouse": warehouse.as_str(),
+                "namespace": namespace.parts(),
+                "chain-count": chains.len(),
+                "receipt-count": chains.iter().map(|chain| chain.receipt_count).sum::<usize>(),
+                "tombstone-count": chains.iter().filter(|chain| chain.tombstoned).count(),
+                "receipt-hashes": chains
+                    .iter()
+                    .flat_map(|chain| chain.receipts.iter().map(|receipt| receipt.receipt_hash.clone()))
+                    .collect::<Vec<_>>(),
+                "drop-receipt-hashes": chains
+                    .iter()
+                    .flat_map(|chain| {
+                        chain
+                            .receipts
+                            .iter()
+                            .filter(|receipt| receipt.operation == "drop")
+                            .map(|receipt| receipt.receipt_hash.clone())
+                    })
+                    .collect::<Vec<_>>(),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(ListViewVersionReceiptChainsResponse { chains }))
+}
+
 async fn catalog_load_view(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
@@ -3233,6 +3286,17 @@ async fn project_outbox_event(
             ))
             .await?;
         receipt.record_lineage(lineage_receipt);
+    } else if event.event_type == "view.version-receipt-chains-listed" {
+        let lineage_receipt = state
+            .lineage
+            .emit(LineageEvent::new(
+                LineageEventType::ViewVersionReceiptChainsListed,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "policy-binding.upserted" {
         let (warehouse, policy_id) = outbox_policy_binding(event, &state.warehouse)?;
         state
@@ -3899,6 +3963,51 @@ fn view_version_receipt_response(
         principal_kind: principal_kind_name(&receipt.principal.kind).to_string(),
         recorded_at: receipt.recorded_at.to_rfc3339(),
     })
+}
+
+fn view_version_receipt_chains(
+    receipts: &[ViewVersionReceipt],
+) -> LakeCatResult<Vec<ViewVersionReceiptChainResponse>> {
+    let mut grouped = BTreeMap::<String, Vec<&ViewVersionReceipt>>::new();
+    for receipt in receipts {
+        grouped
+            .entry(receipt.stable_id.clone())
+            .or_default()
+            .push(receipt);
+    }
+
+    grouped
+        .into_values()
+        .filter_map(|mut receipts| {
+            receipts.sort_by(|left, right| {
+                left.view_version
+                    .cmp(&right.view_version)
+                    .then_with(|| left.recorded_at.cmp(&right.recorded_at))
+                    .then_with(|| {
+                        view_version_operation(&left.operation)
+                            .cmp(view_version_operation(&right.operation))
+                    })
+            });
+            let latest = receipts.last().copied()?;
+            let response_receipts = receipts
+                .iter()
+                .map(|receipt| view_version_receipt_response(receipt))
+                .collect::<LakeCatResult<Vec<_>>>();
+            Some(
+                response_receipts.map(|response_receipts| ViewVersionReceiptChainResponse {
+                    stable_id: latest.stable_id.clone(),
+                    warehouse: latest.warehouse.as_str().to_string(),
+                    namespace: latest.namespace.parts().to_vec(),
+                    name: latest.name.as_str().to_string(),
+                    latest_view_version: latest.view_version,
+                    latest_operation: view_version_operation(&latest.operation).to_string(),
+                    tombstoned: latest.operation == ViewVersionOperation::Drop,
+                    receipt_count: response_receipts.len(),
+                    receipts: response_receipts,
+                }),
+            )
+        })
+        .collect()
 }
 
 fn principal_kind_name(kind: &PrincipalKind) -> &'static str {
@@ -6590,6 +6699,34 @@ mod tests {
                     created_at: chrono::Utc::now(),
                     delivered_at: None,
                 },
+                OutboxEvent {
+                    event_id: "evt-view-chains".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "view.version-receipt-chains-listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-view-chains",
+                        "event-type": "view.version-receipt-chains-listed",
+                        "payload": {
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "chain-count": 1,
+                            "receipt-count": 2,
+                            "tombstone-count": 1,
+                            "receipt-hashes": ["sha256:view-upsert-receipt", "sha256:view-drop-receipt"],
+                            "drop-receipt-hashes": ["sha256:view-drop-receipt"],
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "view-load",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            }
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
             ]),
             delivered: Mutex::default(),
         });
@@ -6604,7 +6741,7 @@ mod tests {
             );
 
         let drain = drain_outbox_once(&state, 10).await.unwrap();
-        assert_eq!(drain.delivered, 5);
+        assert_eq!(drain.delivered, 6);
         assert_eq!(
             drain.event_types,
             vec![
@@ -6612,11 +6749,12 @@ mod tests {
                 "view.upserted".to_string(),
                 "view.loaded".to_string(),
                 "view.dropped".to_string(),
-                "view.version-receipts-listed".to_string()
+                "view.version-receipts-listed".to_string(),
+                "view.version-receipt-chains-listed".to_string()
             ]
         );
-        assert_eq!(drain.graph_events, 9);
-        assert_eq!(drain.lineage_events, 5);
+        assert_eq!(drain.graph_events, 10);
+        assert_eq!(drain.lineage_events, 6);
         assert_eq!(
             store.delivered.lock().await.as_slice(),
             &[
@@ -6624,10 +6762,11 @@ mod tests {
                 "evt-view-upsert".to_string(),
                 "evt-view-load".to_string(),
                 "evt-view-drop".to_string(),
-                "evt-view-receipts".to_string()
+                "evt-view-receipts".to_string(),
+                "evt-view-chains".to_string()
             ]
         );
-        assert_eq!(drain.events.len(), 5);
+        assert_eq!(drain.events.len(), 6);
         assert_eq!(
             drain.events[1].view_stable_id.as_deref(),
             Some("lakecat:view:local:default:events_view")
@@ -6644,9 +6783,13 @@ mod tests {
             drain.events[4].view_version_receipt_hashes,
             vec!["sha256:view-drop-receipt".to_string()]
         );
+        assert_eq!(
+            drain.events[5].view_version_receipt_hashes,
+            vec!["sha256:view-drop-receipt".to_string()]
+        );
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 9);
+        assert_eq!(graph_events.len(), 10);
         let view_events = graph_events
             .iter()
             .filter(|event| event.label == GraphNodeLabel::View)
@@ -6667,7 +6810,7 @@ mod tests {
         drop(graph_events);
 
         let lineage_events = lineage.events.lock().await;
-        assert_eq!(lineage_events.len(), 5);
+        assert_eq!(lineage_events.len(), 6);
         assert_eq!(lineage_events[0].event_type, LineageEventType::ViewListed);
         assert_eq!(lineage_events[1].event_type, LineageEventType::ViewUpserted);
         assert_eq!(lineage_events[2].event_type, LineageEventType::ViewLoaded);
@@ -6675,6 +6818,10 @@ mod tests {
         assert_eq!(
             lineage_events[4].event_type,
             LineageEventType::ViewVersionReceiptsListed
+        );
+        assert_eq!(
+            lineage_events[5].event_type,
+            LineageEventType::ViewVersionReceiptChainsListed
         );
         assert_eq!(
             lineage_events[1].payload["view"]["name"],
@@ -8725,6 +8872,35 @@ mod tests {
                 .as_str()
                 .is_some_and(|hash| hash.starts_with("sha256:"))
         );
+
+        let chains_after_drop = Request::builder()
+            .method(Method::GET)
+            .uri("/management/v1/warehouses/local/namespaces/default/view-version-receipt-chains")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(chains_after_drop).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let chains = body["chains"].as_array().unwrap();
+        assert_eq!(chains.len(), 2);
+        let active_chain = chains
+            .iter()
+            .find(|chain| chain["name"] == serde_json::json!("catalog_customers"))
+            .unwrap();
+        assert_eq!(active_chain["tombstoned"], serde_json::json!(true));
+        assert_eq!(active_chain["latest-operation"], serde_json::json!("drop"));
+        let dropped_chain = chains
+            .iter()
+            .find(|chain| chain["name"] == serde_json::json!("active_customers"))
+            .unwrap();
+        assert_eq!(dropped_chain["tombstoned"], serde_json::json!(true));
+        assert_eq!(dropped_chain["latest-view-version"], serde_json::json!(2));
+        assert_eq!(dropped_chain["latest-operation"], serde_json::json!("drop"));
+        assert_eq!(dropped_chain["receipt-count"], serde_json::json!(3));
 
         let list = Request::builder()
             .method(Method::GET)

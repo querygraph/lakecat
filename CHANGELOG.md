@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a namespace-level governed `view-version-receipt-chains` read that
+  groups active and tombstoned view receipt chains for QueryGraph/operators and
+  replays the read as compact lineage evidence.
 - Bound QGLake lineage-drain acceptance to view tombstone receipt evidence by
   replaying governed `view.version-receipts-listed` reads into lineage and
   making the fixture create, bootstrap, drop, and receipt-check a transient

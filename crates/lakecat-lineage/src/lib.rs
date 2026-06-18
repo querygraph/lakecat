@@ -62,6 +62,7 @@ pub enum LineageEventType {
     ViewDropped,
     ViewLoaded,
     ViewListed,
+    ViewVersionReceiptChainsListed,
     ViewVersionReceiptsListed,
     ViewUpserted,
     WarehouseListed,
@@ -322,11 +323,14 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
         LineageEventType::ViewDropped
         | LineageEventType::ViewLoaded
         | LineageEventType::ViewListed
+        | LineageEventType::ViewVersionReceiptChainsListed
         | LineageEventType::ViewVersionReceiptsListed
         | LineageEventType::ViewUpserted => vec![json!({
             "namespace": if matches!(
                 event.event_type,
-                LineageEventType::ViewListed | LineageEventType::ViewVersionReceiptsListed
+                LineageEventType::ViewListed
+                    | LineageEventType::ViewVersionReceiptChainsListed
+                    | LineageEventType::ViewVersionReceiptsListed
             ) {
                 "lakecat.view-list"
             } else {
@@ -477,6 +481,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::ViewDropped => "view-dropped",
         LineageEventType::ViewLoaded => "view-loaded",
         LineageEventType::ViewListed => "view-listed",
+        LineageEventType::ViewVersionReceiptChainsListed => "view-version-receipt-chains-listed",
         LineageEventType::ViewVersionReceiptsListed => "view-version-receipts-listed",
         LineageEventType::ViewUpserted => "view-upserted",
         LineageEventType::WarehouseListed => "warehouse-listed",

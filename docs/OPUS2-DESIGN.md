@@ -336,11 +336,13 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   append a compact tombstone receipt that preserves the last durable view
   version and content hash after the current view row is removed, while leaving
   reusable view graph topology to Grust; governed view receipt-chain reads now
-  replay into lineage so QGLake can create, bootstrap, drop, receipt-check, and
-  drain a transient view while rejecting dropped-view replay that lacks
-  tombstone receipt evidence; QueryGraph bootstrap now exports those stored
-  views with manifest-covered OSI hashes, typed view columns, durable view
-  versions, view-aware graph edges, and OpenLineage view counts, and QGLake
+  replay into lineage, and a namespace-level `view-version-receipt-chains`
+  read groups active and tombstoned chains for QueryGraph/operators so QGLake
+  can create, bootstrap, drop, receipt-check, and drain a transient view while
+  rejecting dropped-view replay that lacks tombstone receipt evidence;
+  QueryGraph bootstrap now exports those stored views with manifest-covered OSI
+  hashes, typed view columns, durable view versions, view-aware graph edges,
+  and OpenLineage view counts, and QGLake
   lineage-drain acceptance rejects replay that does not preserve the accepted
   view version or its compact durable receipt hash. Full Iceberg view history
   and commit semantics remain pending.*

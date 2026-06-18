@@ -163,6 +163,13 @@ pub trait CatalogStore: Send + Sync + 'static {
     ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
         Ok(Vec::new())
     }
+    async fn list_namespace_view_version_receipts(
+        &self,
+        _warehouse: &WarehouseName,
+        _namespace: &Namespace,
+    ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
+        Ok(Vec::new())
+    }
     async fn load_view(
         &self,
         warehouse: &WarehouseName,
@@ -1436,6 +1443,20 @@ impl CatalogStore for MemoryCatalogStore {
             .collect())
     }
 
+    async fn list_namespace_view_version_receipts(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+    ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
+        let state = self.state.read().await;
+        Ok(state
+            .view_version_receipts
+            .iter()
+            .filter(|receipt| receipt.warehouse == *warehouse && receipt.namespace == *namespace)
+            .cloned()
+            .collect())
+    }
+
     async fn load_view(
         &self,
         warehouse: &WarehouseName,
@@ -2185,6 +2206,11 @@ mod memory_tests {
         assert_eq!(receipts[2].previous_view_version, Some(2));
         assert_eq!(receipts[2].operation, ViewVersionOperation::Drop);
         assert_eq!(receipts[2].view_hash, receipts[1].view_hash);
+        let namespace_receipts = store
+            .list_namespace_view_version_receipts(&warehouse, &namespace)
+            .await
+            .unwrap();
+        assert_eq!(namespace_receipts, receipts);
         assert_eq!(
             store.list_views(&warehouse, &namespace).await.unwrap(),
             Vec::<ViewRecord>::new()
@@ -3319,6 +3345,28 @@ pub mod turso_store {
             Ok(receipts)
         }
 
+        async fn list_namespace_view_version_receipts(
+            &self,
+            warehouse: &WarehouseName,
+            namespace: &Namespace,
+        ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
+            let conn = self.connect()?;
+            let mut rows = conn
+                .query(
+                    "select receipt_json from view_version_receipts
+                     where warehouse = ?1 and namespace_path = ?2
+                     order by view_name, view_version, recorded_at, receipt_id",
+                    (warehouse.as_str(), namespace.path().as_str()),
+                )
+                .await
+                .map_err(turso_error)?;
+            let mut receipts = Vec::new();
+            while let Some(row) = rows.next().await.map_err(turso_error)? {
+                receipts.push(decode_json(row_string(&row, 0)?)?);
+            }
+            Ok(receipts)
+        }
+
         async fn load_view(
             &self,
             warehouse: &WarehouseName,
@@ -4220,6 +4268,11 @@ pub mod turso_store {
             assert_eq!(receipts[2].previous_view_version, Some(2));
             assert_eq!(receipts[2].operation, ViewVersionOperation::Drop);
             assert_eq!(receipts[2].view_hash, receipts[1].view_hash);
+            let namespace_receipts = store
+                .list_namespace_view_version_receipts(&warehouse, &namespace)
+                .await
+                .unwrap();
+            assert_eq!(namespace_receipts, receipts);
             assert_eq!(
                 store.list_views(&warehouse, &namespace).await.unwrap(),
                 Vec::<ViewRecord>::new()

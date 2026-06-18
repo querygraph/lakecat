@@ -336,6 +336,26 @@ pub struct ListViewVersionReceiptsResponse {
     pub receipts: Vec<ViewVersionReceiptResponse>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ViewVersionReceiptChainResponse {
+    pub stable_id: String,
+    pub warehouse: String,
+    pub namespace: Vec<String>,
+    pub name: String,
+    pub latest_view_version: u64,
+    pub latest_operation: String,
+    pub tombstoned: bool,
+    pub receipt_count: usize,
+    pub receipts: Vec<ViewVersionReceiptResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ListViewVersionReceiptChainsResponse {
+    pub chains: Vec<ViewVersionReceiptChainResponse>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct UpsertPolicyBindingRequest {
