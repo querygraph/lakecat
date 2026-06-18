@@ -6,6 +6,24 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `107ea6c Verify QGLake bootstrap manifest hashes`.
+- Paused after pushing the QGLake bootstrap manifest-hash proof slice. The
+  `lakecat-cli qglake-fixture` bootstrap verifier now runs the QueryGraph bundle
+  manifest verifier before accepting the handoff, rejecting tampered Croissant,
+  CDIF, OSI handoff, ODRL, graph, OpenLineage, policy-binding, or bundle-hash
+  content after the QGLake-specific semantic checks pass.
+- Local verification for the pushed QGLake bootstrap manifest-hash proof slice
+  was green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_bootstrap`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-querygraph`;
+  `cargo fmt -p lakecat-cli -p lakecat-querygraph -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`.
+- This status commit records the pushed QGLake bootstrap manifest-hash proof
+  slice.
+- Previous implementation slice:
   `5147cfb Verify QGLake OpenLineage job output`.
 - Paused after pushing the QGLake OpenLineage job/output proof slice. The
   `lakecat-cli qglake-fixture` bootstrap verifier now rejects QueryGraph
