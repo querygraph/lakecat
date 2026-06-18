@@ -6,12 +6,19 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `6a73317 Authorize provider scan capabilities`.
-- Current working slice: provider-side governed scan planning. The in-process
-  `LakeCatCatalogProvider` now has a scan-planning seam that authorizes through
-  provider scan capabilities, applies shared `ReadRestriction` projection and
-  mandatory filters, loads the table from the catalog store, and delegates the
-  effective plan request to Sail.
+  working changes: `4ae6ec8 Plan governed scans through provider`.
+- Current working slice: REST `sail-local` scan planning now routes through the
+  in-process `LakeCatCatalogProvider` seam. The service feature enables the
+  provider boundary, authorizes/plans by table identifier through the provider,
+  applies the shared `ReadRestriction` projection/filter path before Sail, and
+  preserves the lightweight direct Sail path for default builds.
+- Local verification for the current slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-sail -- --check`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features sail-local`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-sail --all-features`; and
+  `cargo test --workspace --all-features`.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -56,6 +63,15 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Routed REST `sail-local` scan planning through
+  `LakeCatCatalogProvider::plan_table_scan_for_ident`, so REST planning now
+  uses the provider-owned scan authorization and governed plan seam.
+- Enabled `lakecat-sail/catalog-provider` from the service `sail-local` feature
+  and preserved the direct `ScanPlanningRequest` path for builds without local
+  Sail provider integration.
+- Preserved HTTP error semantics across the provider route by mapping provider
+  invalid-argument, not-found, conflict, and not-supported failures back to
+  LakeCat HTTP errors instead of flattening them to 500s.
 - Added `ReadRestriction` to `lakecat-security` and exposed it through
   `TableScanCapability` so the scan capability carries the server-owned
   restriction from the authorization receipt.

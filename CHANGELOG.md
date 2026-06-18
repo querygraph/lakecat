@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Routed REST `sail-local` scan planning through the in-process
+  `LakeCatCatalogProvider` seam, so the REST endpoint now exercises the same
+  provider-owned authorization and shared `ReadRestriction` projection/filter
+  application before delegating to Sail.
 - Added and tracked the LakeSail book under `docs/book/`, with a TypeSec-style
   publishing pipeline, EPUB metadata validation, and generated PDF/EPUB/MOBI
   artifacts explaining the LakeCat/Sail catalog foundation for QueryGraph.

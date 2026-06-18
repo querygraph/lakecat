@@ -8,7 +8,7 @@ repository.workspace = true
 [features]
 default = []
 grust-local = ["dep:grust-graph", "lakecat-graph/grust-local"]
-sail-local = ["lakecat-sail/sail-local"]
+sail-local = ["lakecat-sail/catalog-provider", "lakecat-sail/sail-local"]
 turso-local = ["lakecat-store/turso-local"]
 typesec-local = ["dep:reqwest", "dep:typesec", "typesec/integrations", "lakecat-security/typesec-local"]
 

@@ -348,9 +348,16 @@ pub mod catalog_provider {
             table: &str,
         ) -> CatalogResult<TableScanCapability> {
             let ident = self.ident(database, table)?;
+            self.authorize_table_scan_for_ident(&ident).await
+        }
+
+        pub async fn authorize_table_scan_for_ident(
+            &self,
+            ident: &TableIdent,
+        ) -> CatalogResult<TableScanCapability> {
             let policy_bindings = self
                 .store
-                .policy_bindings_for_table(&ident)
+                .policy_bindings_for_table(ident)
                 .await
                 .map_err(catalog_error)?;
             let read_restriction = if policy_bindings.is_empty() {
@@ -377,7 +384,7 @@ pub mod catalog_provider {
             let receipt = self
                 .authorize_table_with_context(CatalogAction::TablePlanScan, ident.clone(), context)
                 .await?;
-            TableScanCapability::from_receipt(receipt, ident).map_err(catalog_error)
+            TableScanCapability::from_receipt(receipt, ident.clone()).map_err(catalog_error)
         }
 
         pub async fn plan_table_scan(
@@ -387,6 +394,25 @@ pub mod catalog_provider {
             request: ProviderScanPlanningRequest,
         ) -> CatalogResult<ScanPlan> {
             let capability = self.authorize_table_scan(database, table).await?;
+            self.plan_table_scan_with_capability(capability, request)
+                .await
+        }
+
+        pub async fn plan_table_scan_for_ident(
+            &self,
+            table: &TableIdent,
+            request: ProviderScanPlanningRequest,
+        ) -> CatalogResult<ScanPlan> {
+            let capability = self.authorize_table_scan_for_ident(table).await?;
+            self.plan_table_scan_with_capability(capability, request)
+                .await
+        }
+
+        async fn plan_table_scan_with_capability(
+            &self,
+            capability: TableScanCapability,
+            request: ProviderScanPlanningRequest,
+        ) -> CatalogResult<ScanPlan> {
             let restriction = capability.read_restriction().map_err(catalog_error)?;
             let projection = restriction
                 .effective_projection(&request.projection)
@@ -1439,7 +1465,9 @@ pub mod catalog_provider {
 
     fn catalog_error(error: impl std::fmt::Display) -> CatalogError {
         let message = error.to_string();
-        if message.contains("not found") {
+        if message.contains("invalid argument") {
+            CatalogError::InvalidArgument(message)
+        } else if message.contains("not found") {
             CatalogError::NotFound(CatalogObject::Table, message)
         } else if message.contains("already exists") {
             CatalogError::AlreadyExists(CatalogObject::Table, message)
@@ -1447,6 +1475,8 @@ pub mod catalog_provider {
             CatalogError::Conflict(message)
         } else if message.contains("not supported") {
             CatalogError::NotSupported(message)
+        } else if message.contains("internal error") {
+            CatalogError::Internal(message)
         } else {
             CatalogError::External(message)
         }

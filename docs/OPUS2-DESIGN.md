@@ -141,7 +141,7 @@ build is reproducible off this machine.
 | F2 | ODRL transported, not interpreted; `Delegate` → deny | HIGH | OPEN — critical path |
 | F3 | Commit idempotency unreachable from REST | MEDIUM | STARTED — REST header replay + mismatch guard wired |
 | F4 | Metadata written before CAS; no orphan handling/retry | MEDIUM | STARTED — local orphan cleanup |
-| F5 | Scans bypass the in-process provider | MEDIUM | OPEN — enables F1 |
+| F5 | Scans bypass the in-process provider | MEDIUM | STARTED — REST `sail-local` plan route now uses provider; fetch path remains separate |
 | F6 | Catalog graph is event breadcrumbs | MEDIUM | OPEN — Grust seam ready |
 | F7 | Single warehouse; no Project/Server/View entities | LOW | OPEN |
 | F8 | Production secret backends unexercised | LOW | OPEN (fails closed) |
@@ -176,8 +176,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
      restriction through shared `ReadRestriction` methods; the in-process
      provider can now mint scan capabilities with stored policy-binding context
      and plan governed scans by applying restriction projection/filters before
-     calling Sail; RBAC policy loading and wiring the REST endpoint through this
-     provider plan seam remain open.*
+     calling Sail; the REST `sail-local` planning endpoint now routes through
+     this provider seam, while RBAC policy loading and fetch/read expansion
+     through the provider remain open.*
   *Smallest end-to-end version landed first: a single allowed-columns list is
   enforced on one table, proven by a test where an agent asks for two columns
   and Sail receives one.*

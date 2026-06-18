@@ -24,9 +24,12 @@ use lakecat_lineage::{HashOnlyLineageSink, LineageEvent, LineageEventType, Linea
 use lakecat_querygraph::QueryGraphBootstrap;
 #[cfg(not(feature = "sail-local"))]
 use lakecat_sail::DeferredSailCatalogEngine;
+#[cfg(not(feature = "sail-local"))]
+use lakecat_sail::ScanPlanningRequest;
+#[cfg(feature = "sail-local")]
+use lakecat_sail::catalog_provider::{LakeCatCatalogProvider, ProviderScanPlanningRequest};
 use lakecat_sail::{
-    CommitPreparationRequest, FetchScanTasksRequest as SailFetchScanTasksRequest,
-    SailCatalogEngine, ScanPlanningRequest,
+    CommitPreparationRequest, FetchScanTasksRequest as SailFetchScanTasksRequest, SailCatalogEngine,
 };
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
@@ -1365,13 +1368,12 @@ async fn plan_scan_with_capability(
     request: PlanTableScanRequest,
 ) -> Result<(lakecat_sail::ScanPlan, serde_json::Value), LakeCatHttpError> {
     request.validate_scan_mode()?;
+    #[cfg(feature = "sail-local")]
+    let _ = &table;
     let requested_projection = request.projected_fields();
     let restriction = capability.read_restriction()?;
     let projection = restriction.effective_projection(&requested_projection)?;
-    let mut filters = request.filter_values();
-    if let Some(row_predicate) = restriction.row_predicate.clone() {
-        filters.push(row_predicate);
-    }
+    let filters = request.filter_values();
     let stats_fields = restriction.effective_stats_fields(&request.stats_fields);
     let scan_request_extensions = json!({
         "case-sensitive": request.case_sensitive,
@@ -1383,6 +1385,32 @@ async fn plan_scan_with_capability(
         "read-restriction": restriction,
         "stats-fields": stats_fields,
     });
+    #[cfg(feature = "sail-local")]
+    let scan = {
+        let provider = LakeCatCatalogProvider::new(
+            "lakecat",
+            state.warehouse.clone(),
+            state.store.clone(),
+            state.sail.clone(),
+            state.governance.clone(),
+            capability.receipt().principal.clone(),
+        );
+        provider
+            .plan_table_scan_for_ident(
+                capability.table(),
+                ProviderScanPlanningRequest {
+                    projection: requested_projection,
+                    filters,
+                    limit: request.limit,
+                    snapshot_id: request.snapshot_id,
+                    start_snapshot_id: request.start_snapshot_id,
+                    end_snapshot_id: request.end_snapshot_id,
+                },
+            )
+            .await
+            .map_err(catalog_provider_error)?
+    };
+    #[cfg(not(feature = "sail-local"))]
     let scan = state
         .sail
         .plan_scan(ScanPlanningRequest {
@@ -1391,7 +1419,13 @@ async fn plan_scan_with_capability(
             metadata_location: table.metadata_location.clone(),
             table_metadata: table.metadata.clone(),
             projection,
-            filters,
+            filters: {
+                let mut filters = filters;
+                if let Some(row_predicate) = restriction.row_predicate.clone() {
+                    filters.push(row_predicate);
+                }
+                filters
+            },
             limit: request.limit,
             snapshot_id: request.snapshot_id,
             start_snapshot_id: request.start_snapshot_id,
@@ -1399,6 +1433,26 @@ async fn plan_scan_with_capability(
         })
         .await?;
     Ok((scan, scan_request_extensions))
+}
+
+#[cfg(feature = "sail-local")]
+fn catalog_provider_error(error: impl std::fmt::Display) -> LakeCatHttpError {
+    let message = error.to_string();
+    if message.contains("invalid argument") {
+        LakeCatError::InvalidArgument(message).into()
+    } else if message.contains("not found") {
+        LakeCatError::NotFound {
+            object: "catalog object",
+            name: message,
+        }
+        .into()
+    } else if message.contains("conflict") {
+        LakeCatError::Conflict(message).into()
+    } else if message.contains("not supported") {
+        LakeCatError::NotSupported(message).into()
+    } else {
+        LakeCatError::Internal(format!("LakeCat provider scan planning failed: {message}")).into()
+    }
 }
 
 async fn fetch_scan_tasks(
