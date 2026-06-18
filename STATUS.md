@@ -6,6 +6,32 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `b73f503 Add governed namespace load and drop`.
+- Paused after pushing governed namespace load/drop. Unprefixed and
+  warehouse-prefixed Iceberg REST catalog paths can now load and delete durable
+  namespace state through typed `namespace.load` and `namespace.drop`
+  capabilities. Namespace drops are blocked while tables, views, or scoped
+  policy bindings remain, and audited `namespace.dropped` events replay into
+  graph/lineage projection as deleted namespace events.
+- Local verification for the pushed governed namespace load/drop slice was
+  green:
+  `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-service -p lakecat-lineage -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-security table_capabilities_require_matching_allowed_receipts`;
+  `cargo test -p lakecat-store memory_store_loads_and_drops_namespaces`;
+  `cargo test -p lakecat-store --features turso-local turso_store_loads_and_drops_namespaces`;
+  `cargo test -p lakecat-service namespaces_load_and_drop_through_catalog_routes -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
+  `cargo test -p lakecat-lineage`;
+  `cargo test -p lakecat-store`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-security`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed governed namespace load/drop slice.
+- Previous implementation slice:
   `5d53aea Add governed durable view drop`.
 - Paused after pushing governed durable view deletion. Management and
   warehouse-prefixed catalog REST paths can now delete durable `ViewRecord`
