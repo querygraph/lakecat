@@ -6,6 +6,19 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `28c044e Require QGLake scan policy hash proof`.
+- Paused after pushing the QGLake scan policy-hash proof. The QGLake governed
+  scan verifier now requires the enforced `ReadRestriction` to carry the
+  expected hash of the bootstrapped ODRL policy document, proving the accepted
+  scan is bound to the policy that defined the allowed columns and row
+  predicate rather than merely carrying a lookalike restriction.
+- Local verification for the pushed QGLake scan policy-hash proof was green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake`;
+  `git diff --check`;
+  `cargo test -p lakecat-service scan_planning_applies_policy_column_restriction_before_sail --features sail-local,turso-local`.
+- This status commit records the pushed QGLake scan policy-hash proof slice.
+- Previous implementation slice:
   `cbda084 Add Sail provider view column bridge`.
 - Paused after pushing the Sail provider view-column bridge. `ViewRecord` now
   persists typed view columns in memory and Turso, the management/catalog view
