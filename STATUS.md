@@ -6,6 +6,28 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `9166806 Prove QGLake human credential contrast`.
+- Paused after pushing the QGLake human/agent credential contrast slice.
+  `loadCredentials` now honors the audited raw-credential exception in the
+  authorization receipt: explicit agent DID requests on fine-grained restricted
+  tables receive no raw credentials and stay on governed Sail-planned reads,
+  while trusted human principals can receive the same standard non-secret local
+  credential response with audit evidence recording the exception.
+- Local verification for the pushed QGLake human/agent credential contrast
+  slice was green:
+  `cargo fmt -p lakecat-cli -p lakecat-service`;
+  `cargo test -p lakecat-service credential_vend`;
+  `cargo test -p lakecat-cli qglake_credentials`;
+  `cargo test -p lakecat-cli qglake_trusted_human_credentials_verifier_requires_standard_local_credentials`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`;
+  `cargo fmt -p lakecat-cli -p lakecat-service -- --check`;
+  `git diff --check`.
+- This status commit records the pushed QGLake human/agent credential contrast
+  slice.
+- Previous implementation slice:
   `f1b415a Mirror QueryGraph import hash in OpenLineage`.
 - Paused after pushing the QueryGraph import-hash OpenLineage projection slice.
   `querygraph.bootstrap` now projects bundle, graph, OpenLineage, and
