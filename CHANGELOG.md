@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Extended QGLake governed `fetchScanTasks` acceptance to fetch the child
+  manifest plan-task token and verify terminal manifest expansion still returns
+  governed data-file scan work under the table location.
 - Required the QGLake governed `fetchScanTasks` verifier to prove manifest-list
   expansion returns at least one child Iceberg REST plan-task token and a
   LakeCat manifest child task, keeping acceptance on the standard multi-step

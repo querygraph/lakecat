@@ -922,14 +922,31 @@ async fn verify_qglake_fetch_scan_tasks(
         },
     )
     .await?;
-    verify_qglake_scan_tasks(&fetched, table_location)
+    verify_qglake_scan_tasks(&fetched, table_location)?;
+    let child_plan_task = fetched.plan_tasks.first().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "qglake governed fetchScanTasks did not produce a child plan-task token for manifest fetch verification"
+                .to_string(),
+        )
+    })?;
+    let manifest_fetched = post_json::<_, FetchScanTasksResponse>(
+        catalog,
+        &format!("/catalog/v1/namespaces/{namespace_path}/tables/{table}/tasks"),
+        principal,
+        "qglake governed manifest scan task fetch",
+        &FetchScanTasksRequest {
+            plan_task: child_plan_task.clone(),
+        },
+    )
+    .await?;
+    verify_qglake_leaf_scan_tasks(&manifest_fetched, table_location)
 }
 
 fn verify_qglake_scan_tasks(
     fetched: &FetchScanTasksResponse,
     table_location: &str,
 ) -> lakecat_core::LakeCatResult<()> {
-    verify_qglake_sail_planner("fetchScanTasks", &fetched.planned_by)?;
+    verify_qglake_scan_task_common(fetched, table_location)?;
     if fetched.plan_tasks.is_empty() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake governed fetchScanTasks did not expose a child Iceberg REST plan-task token"
@@ -945,6 +962,34 @@ fn verify_qglake_scan_tasks(
             "qglake governed fetchScanTasks did not include a manifest child task".to_string(),
         ));
     }
+    Ok(())
+}
+
+fn verify_qglake_leaf_scan_tasks(
+    fetched: &FetchScanTasksResponse,
+    table_location: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    verify_qglake_scan_task_common(fetched, table_location)?;
+    if !fetched.plan_tasks.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake governed manifest fetchScanTasks unexpectedly exposed {} child plan-task token(s)",
+            fetched.plan_tasks.len()
+        )));
+    }
+    if !fetched.lakecat_plan_tasks.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake governed manifest fetchScanTasks unexpectedly included {} LakeCat child task(s)",
+            fetched.lakecat_plan_tasks.len()
+        )));
+    }
+    Ok(())
+}
+
+fn verify_qglake_scan_task_common(
+    fetched: &FetchScanTasksResponse,
+    table_location: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    verify_qglake_sail_planner("fetchScanTasks", &fetched.planned_by)?;
     if fetched.file_scan_tasks.is_empty() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake governed fetchScanTasks produced no file scan tasks".to_string(),
@@ -2427,6 +2472,83 @@ mod tests {
             "manifest-list": "file:///tmp/lakecat-qglake/events/metadata/snap-42.avro",
             "manifest-path": "file:///tmp/lakecat-qglake/events/metadata/manifest-42.avro"
         })]
+    }
+
+    #[test]
+    fn qglake_leaf_fetch_scan_tasks_verifier_accepts_terminal_manifest_expansion() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            plan_task: "lakecat:sail-json-hmac:manifest".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![serde_json::json!({
+                "data-file": {
+                    "file-path": "file:///tmp/lakecat-qglake/events/data/part-1.parquet"
+                }
+            })],
+            delete_files: Vec::new(),
+            plan_tasks: Vec::new(),
+            lakecat_plan_tasks: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        verify_qglake_leaf_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect("QGLake leaf manifest fetch should be terminal and governed");
+    }
+
+    #[test]
+    fn qglake_leaf_fetch_scan_tasks_verifier_rejects_more_child_tasks() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            plan_task: "lakecat:sail-json-hmac:manifest".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![serde_json::json!({
+                "data-file": {
+                    "file-path": "file:///tmp/lakecat-qglake/events/data/part-1.parquet"
+                }
+            })],
+            delete_files: Vec::new(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:unexpected".to_string()],
+            lakecat_plan_tasks: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_leaf_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake leaf manifest fetch should be terminal");
+        assert!(err.to_string().contains("unexpectedly exposed"));
     }
 
     #[test]
