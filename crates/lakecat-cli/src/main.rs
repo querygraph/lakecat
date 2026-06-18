@@ -640,9 +640,36 @@ fn verify_qglake_bootstrap_bundle(
                 table
             ))
         })?;
+    verify_qglake_bootstrap_standards(bundle)?;
     verify_qglake_bootstrap_projection(projection, namespace, table)?;
     verify_qglake_bootstrap_graph(bundle, projection)?;
     verify_qglake_bootstrap_open_lineage(bundle, projection)
+}
+
+fn verify_qglake_bootstrap_standards(
+    bundle: &QueryGraphBootstrap,
+) -> lakecat_core::LakeCatResult<()> {
+    for expected in [
+        "Iceberg REST",
+        "Croissant",
+        "CDIF",
+        "OSI handoff",
+        "ODRL",
+        "Grust catalog graph",
+        "OpenLineage",
+    ] {
+        if !bundle
+            .manifest
+            .standards
+            .iter()
+            .any(|standard| standard == expected)
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap manifest did not advertise required standard {expected}"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn verify_qglake_bootstrap_projection(
@@ -2194,6 +2221,29 @@ mod tests {
     }
 
     #[test]
+    fn qglake_bootstrap_verifier_requires_manifest_standards() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let mut bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        bundle
+            .manifest
+            .standards
+            .retain(|standard| standard != "CDIF");
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect_err("QGLake bootstrap should reject missing QueryGraph standards");
+        assert!(err.to_string().contains("required standard CDIF"));
+    }
+
+    #[test]
     fn qglake_bootstrap_verifier_accepts_policy_and_openlineage_export() {
         let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
         let output = serde_json::json!({
@@ -3077,7 +3127,15 @@ mod tests {
             manifest: lakecat_querygraph::QueryGraphBundleManifest {
                 schema_version: "lakecat.querygraph.bootstrap.v1".to_string(),
                 producer: "https://querygraph.ai/lakecat".to_string(),
-                standards: vec!["ODRL".to_string(), "OpenLineage".to_string()],
+                standards: vec![
+                    "Iceberg REST".to_string(),
+                    "Croissant".to_string(),
+                    "CDIF".to_string(),
+                    "OSI handoff".to_string(),
+                    "ODRL".to_string(),
+                    "Grust catalog graph".to_string(),
+                    "OpenLineage".to_string(),
+                ],
                 table_artifacts: Vec::new(),
                 view_artifacts: Vec::new(),
                 graph_hash: "test".to_string(),

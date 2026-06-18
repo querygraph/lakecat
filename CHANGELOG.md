@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake bootstrap acceptance to prove the QueryGraph manifest
+  advertises the expected Iceberg REST, Croissant, CDIF, OSI handoff, ODRL,
+  Grust catalog graph, and OpenLineage standards before writing the bundle.
 - Extended QGLake governed `fetchScanTasks` acceptance to follow every child
   manifest plan-task token returned by manifest-list expansion, proving each
   terminal manifest fetch remains governed.
