@@ -56,6 +56,12 @@ update the docs as part of the logical unit.
   target. LakeCat should naturally support QueryGraph bootstrap, QGLake flows,
   Croissant/CDIF/OSI/ODRL/OpenLineage projection, and governed agent access
   without importing QueryGraph.
+- Keep OSI, OpenLineage, Croissant, ODRL, and TypeSec integration as a
+  catalog-facing contract in LakeCat and a richer QueryGraph integration layer
+  outside the catalog core. LakeCat should emit, persist, and verify the
+  receipts and projections that make those standards replayable; QueryGraph can
+  own higher-level semantic composition, agent workflows, and plugin/add-on
+  behavior over those contracts.
 - Treat the LakeCat book as part of the development workflow, not a side
   artifact. Keep growing it as implementation lands, with substantial
   end-to-end examples that show how the catalog participates in real user
@@ -127,6 +133,15 @@ For each logical unit:
 5. Run focused tests plus the relevant LakeCat gates from `AGENTS.md`.
 6. Commit only the files belonging to that logical unit, then push when local
    verification is green.
+
+Do not rely on cloud CI as the first proof that a unit works. CI should remain
+manual-only until the local gates are known to pass, and failed cloud runs must
+not substitute for local diagnosis.
+
+When implementation touches graph, governance, or engine semantics, first ask
+whether the reusable work belongs in Grust, TypeSec, or Sail. LakeCat should
+keep the catalog-facing seam, receipts, and compatibility behavior; the sibling
+repo should receive the reusable capability.
 
 ## Verification Preference
 
