@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Stamped governed scan and credential-vend authorization receipts with a
+  deterministic top-level `policy_hash` derived from enforced
+  `ReadRestriction` policy hashes, preserving any underlying governance-engine
+  hash as an input.
 - Surfaced the re-applied governed `ReadRestriction` in Iceberg REST
   `fetchScanTasks` responses and extended the QGLake verifier to require the
   governed scan to produce a plan-task token whose fetch response carries the

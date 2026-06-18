@@ -350,7 +350,9 @@ pub mod catalog_provider {
                     "LakeCat governance denied Sail catalog operation".to_string(),
                 ));
             }
-            Ok(receipt)
+            receipt
+                .with_read_restriction_policy_hash()
+                .map_err(catalog_error)
         }
 
         pub async fn authorize_table_scan(
@@ -2216,6 +2218,10 @@ pub mod catalog_provider {
             assert_eq!(
                 capability.receipt().context["lakecat:sail-provider"],
                 json!("lakecat")
+            );
+            assert!(
+                capability.receipt().policy_hash.is_some(),
+                "provider scan receipt should summarize enforced policy hashes"
             );
         }
 

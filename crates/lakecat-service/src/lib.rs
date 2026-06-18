@@ -3473,7 +3473,7 @@ async fn authorize(
         })
         .await?;
     if receipt.allowed {
-        Ok(receipt)
+        Ok(receipt.with_read_restriction_policy_hash()?)
     } else {
         Err(LakeCatError::Conflict("authorization denied".to_string()).into())
     }
@@ -7446,6 +7446,10 @@ mod tests {
             }))
         );
         assert_eq!(restriction.policy_hashes.len(), 1);
+        assert!(
+            capability.receipt().policy_hash.is_some(),
+            "governed scan receipt should summarize enforced policy hashes"
+        );
 
         let contexts = governance.contexts.lock().await;
         assert_eq!(
@@ -7539,6 +7543,10 @@ mod tests {
             .find(|event| event.event_type == "credentials.vend-attempted")
             .expect("credentials vend audit event");
         let receipt = &event.payload["payload"]["authorization-receipt"];
+        assert!(
+            receipt["policy_hash"].as_str().is_some(),
+            "governed credential receipt should summarize enforced policy hashes"
+        );
         assert_eq!(
             receipt["action"],
             serde_json::json!(CatalogAction::CredentialsVend)

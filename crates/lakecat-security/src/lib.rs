@@ -60,6 +60,31 @@ pub struct AuthorizationReceipt {
     pub checked_at: DateTime<Utc>,
 }
 
+impl AuthorizationReceipt {
+    pub fn with_read_restriction_policy_hash(mut self) -> LakeCatResult<Self> {
+        let Some(restriction) = self.context.get("read-restriction") else {
+            return Ok(self);
+        };
+        let restriction: ReadRestriction =
+            serde_json::from_value(restriction.clone()).map_err(|err| {
+                LakeCatError::InvalidArgument(format!(
+                    "authorization receipt carries invalid read restriction: {err}"
+                ))
+            })?;
+        if restriction.policy_hashes.is_empty() {
+            return Ok(self);
+        }
+        self.policy_hash = Some(content_hash_json(&json!({
+            "engine": self.engine,
+            "governance-policy-hash": self.policy_hash,
+            "read-restriction-policy-hashes": restriction.policy_hashes,
+            "action": self.action,
+            "table": self.table,
+        }))?);
+        Ok(self)
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ReadRestriction {
@@ -1296,6 +1321,44 @@ mod tests {
             checked_at: Utc::now(),
         };
         assert!(TableRestoreCapability::from_receipt(restore_receipt, table).is_ok());
+    }
+
+    #[test]
+    fn authorization_receipt_hashes_enforced_read_restriction_policies() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let policy_hash = content_hash_json(&json!({
+            "uid": "policy:agent-read",
+            "lakecat:read-restriction": {"allowed-columns": ["event_id"]}
+        }))
+        .unwrap();
+        let receipt = AuthorizationReceipt {
+            principal: Principal::anonymous(),
+            action: CatalogAction::TablePlanScan,
+            table: Some(table),
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            context: json!({
+                "read-restriction": {
+                    "allowed-columns": ["event_id"],
+                    "policy-hashes": [policy_hash.clone()]
+                }
+            }),
+            checked_at: Utc::now(),
+        }
+        .with_read_restriction_policy_hash()
+        .unwrap();
+
+        let receipt_policy_hash = receipt.policy_hash.as_deref().expect("receipt policy hash");
+        assert_ne!(receipt_policy_hash, policy_hash);
+        assert_eq!(
+            receipt.context["read-restriction"]["policy-hashes"][0],
+            policy_hash
+        );
     }
 }
 

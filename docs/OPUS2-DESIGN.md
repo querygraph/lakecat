@@ -108,7 +108,7 @@ The boundaries OPUS1-DESIGN drew held under 2.5× growth — keep them:
 | Graph schema, taxonomy, traversal, Cypher, stores | **Grust** | ✅ taxonomy + ingestion + Cypher boundary moved into Grust |
 | Iceberg models, status conversion, planning helpers, manifest IO | **Sail** | ✅ conversion + planning helpers exported; ⚠️ commits blocked from upstream push (OPUS2 F10) |
 | TypeDID envelopes, attestation, agent trust mesh, signed summaries | **TypeSec / QueryGraph** | ✅ attestation API in TypeSec; verifier seam in LakeCat |
-| Identity, capability gate, pointer CAS, audit, outbox, **the restriction** | **LakeCat** | ✅ gate; ⛔ restriction |
+| Identity, capability gate, pointer CAS, audit, outbox, **the restriction** | **LakeCat** | ✅ gate + enforced restriction proof |
 | Event → typed-graph mapping (catalog-domain) | **LakeCat (thin)** | ⚠️ still breadcrumbs (OPUS2 F6) |
 | OSI semantic model, cross-run lineage aggregation | **QueryGraph** | n/a (above LakeCat) |
 
@@ -170,7 +170,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   2. Carry the effective restriction in `TableScanCapability` and record it in
      the audit receipt (`policy_hash` includes the binding's ODRL hash).
      *Started: scan and credential-vend receipts now carry `read-restriction`
-     with allowed columns and policy hashes; credential-vend capabilities expose
+     with allowed columns and policy hashes, and LakeCat stamps the receipt's
+     top-level `policy_hash` from those enforced ODRL hashes while preserving
+     the governance engine hash as an input; credential-vend capabilities expose
      the same restriction and LakeCat now withholds raw credentials when row or
      column restrictions require a governed Sail-planned read; `table.scan-planned`
      audit/outbox payloads surface the effective restriction plus storage/metadata
