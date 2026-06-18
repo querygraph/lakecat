@@ -6,6 +6,24 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `14326c3 Bind QGLake replay standards`.
+- Paused after pushing the QGLake replay-standards slice. The lineage-drain
+  event summary now exposes QueryGraph bootstrap standards, the service tests
+  pin those replayed standards in direct and HTTP drain responses, and the
+  QGLake lineage-drain verifier rejects replay evidence whose standards do not
+  match the accepted bootstrap bundle.
+- Local verification for the pushed QGLake replay-standards slice was green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`.
+- This status commit records the pushed QGLake replay-standards slice.
+- Previous implementation slice:
   `605696e Expose QGLake projection replay counts`.
 - Paused after pushing the QGLake projection replay-count slice. The
   lineage-drain event summary now exposes per-event graph and lineage
