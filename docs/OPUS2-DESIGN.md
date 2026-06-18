@@ -158,7 +158,8 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   1. Parse the enforceable ODRL subset of a `PolicyBinding` into a typed
      `ReadRestriction { columns, row_predicate, purpose, max_ttl }`; compose
      `Delegate` onto RBAC instead of denying. *Started for allowed-columns and
-     purpose extraction from enforced policy bindings.*
+     purpose extraction from enforced policy bindings; row-predicate extraction
+     is now started for nested LakeCat restriction fields and ODRL constraints.*
   2. Carry the effective restriction in `TableScanCapability` and record it in
      the audit receipt (`policy_hash` includes the binding's ODRL hash).
      *Started: scan receipts now carry `read-restriction` with allowed columns
@@ -166,8 +167,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   3. Apply it as a mandatory projection/filter through a Sail-planned read that
      flows through `LakeCatCatalogProvider`; re-apply on `fetch-scan-tasks`.
      *Started: scan planning intersects client projection with allowed columns
-     before calling Sail; row predicates, Delegate→RBAC composition, provider
-     read routing, and fetch-token reapplication remain open.*
+     and appends policy-derived row predicates before calling Sail;
+     Delegate→RBAC composition, provider read routing, and fetch-token
+     reapplication remain open.*
   *Smallest end-to-end version landed first: a single allowed-columns list is
   enforced on one table, proven by a test where an agent asks for two columns
   and Sail receives one.*

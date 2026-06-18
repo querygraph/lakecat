@@ -1632,6 +1632,12 @@ fn read_restriction_from_policy_bindings(
                 None => columns,
             });
         }
+        if let Some(row_predicate) = row_predicate_from_odrl(&binding.odrl)? {
+            restriction.row_predicate = Some(match restriction.row_predicate.take() {
+                Some(existing) => and_row_predicates(existing, row_predicate),
+                None => row_predicate,
+            });
+        }
         if restriction.purpose.is_none() {
             restriction.purpose = purpose_from_odrl(&binding.odrl);
         }
@@ -1684,6 +1690,67 @@ fn allowed_columns_from_odrl(odrl: &Value) -> Result<Option<Vec<String>>, LakeCa
     } else {
         Ok(Some(dedup_columns(columns)))
     }
+}
+
+fn row_predicate_from_odrl(odrl: &Value) -> Result<Option<Value>, LakeCatError> {
+    for value in [
+        odrl.get("row-predicate"),
+        odrl.get("rowPredicate"),
+        odrl.get("lakecat:row-predicate"),
+        odrl.get("lakecat:read-restriction")
+            .and_then(|value| value.get("row-predicate")),
+        odrl.get("lakecat:read-restriction")
+            .and_then(|value| value.get("rowPredicate")),
+        odrl.get("read-restriction")
+            .and_then(|value| value.get("row-predicate")),
+        odrl.get("readRestriction")
+            .and_then(|value| value.get("rowPredicate")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        return Ok(Some(row_predicate_value(value)?));
+    }
+
+    let mut predicate = None;
+    for constraint in odrl_constraints(odrl) {
+        let left = constraint
+            .get("leftOperand")
+            .or_else(|| constraint.get("left-operand"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if matches!(
+            left,
+            "row-predicate" | "rowPredicate" | "lakecat:row-predicate"
+        ) && let Some(value) = constraint
+            .get("rightOperand")
+            .or_else(|| constraint.get("right-operand"))
+        {
+            let next = row_predicate_value(value)?;
+            predicate = Some(match predicate {
+                Some(existing) => and_row_predicates(existing, next),
+                None => next,
+            });
+        }
+    }
+    Ok(predicate)
+}
+
+fn row_predicate_value(value: &Value) -> Result<Value, LakeCatError> {
+    match value {
+        Value::Object(_) => Ok(value.clone()),
+        _ => Err(LakeCatError::InvalidArgument(
+            "ODRL row predicate must be an Iceberg expression object".to_string(),
+        )),
+    }
+}
+
+fn and_row_predicates(left: Value, right: Value) -> Value {
+    json!({
+        "type": "and",
+        "left": left,
+        "right": right,
+    })
 }
 
 fn purpose_from_odrl(odrl: &Value) -> Option<String> {
@@ -4061,7 +4128,12 @@ mod tests {
                     serde_json::json!({
                         "uid": "policy:agent-columns",
                         "lakecat:read-restriction": {
-                            "allowed-columns": ["event_id"]
+                            "allowed-columns": ["event_id"],
+                            "row-predicate": {
+                                "type": "eq",
+                                "term": "event_id",
+                                "value": "evt-1"
+                            }
                         },
                         "permission": [{
                             "action": "read",
@@ -4095,12 +4167,28 @@ mod tests {
             Some(&["event_id".to_string()][..])
         );
         assert_eq!(restriction.purpose.as_deref(), Some("resilience-demo"));
+        assert_eq!(
+            restriction.row_predicate,
+            Some(serde_json::json!({
+                "type": "eq",
+                "term": "event_id",
+                "value": "evt-1"
+            }))
+        );
         assert_eq!(restriction.policy_hashes.len(), 1);
 
         let contexts = governance.contexts.lock().await;
         assert_eq!(
             contexts[0]["read-restriction"]["allowed-columns"][0],
             serde_json::json!("event_id")
+        );
+        assert_eq!(
+            contexts[0]["read-restriction"]["row-predicate"],
+            serde_json::json!({
+                "type": "eq",
+                "term": "event_id",
+                "value": "evt-1"
+            })
         );
     }
 
@@ -4141,7 +4229,12 @@ mod tests {
                     "odrl": {
                         "uid": "policy:agent-columns",
                         "lakecat:read-restriction": {
-                            "allowed-columns": ["event_id"]
+                            "allowed-columns": ["event_id"],
+                            "row-predicate": {
+                                "type": "eq",
+                                "term": "event_id",
+                                "value": "evt-1"
+                            }
                         }
                     }
                 })
@@ -4196,6 +4289,22 @@ mod tests {
         assert_eq!(
             body["residual-filter"]["lakecat:scan-request"]["read-restriction"]["allowed-columns"],
             serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:scan-request"]["read-restriction"]["row-predicate"],
+            serde_json::json!({
+                "type": "eq",
+                "term": "event_id",
+                "value": "evt-1"
+            })
+        );
+        assert_eq!(
+            body["residual-filter"]["filters-accepted-by-sail"][0]["filter"],
+            serde_json::json!({
+                "type": "eq",
+                "term": "event_id",
+                "value": "evt-1"
+            })
         );
     }
 

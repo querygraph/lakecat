@@ -1,16 +1,16 @@
 # LakeCat Status
 
-Updated: 2026-06-17
+Updated: 2026-06-18
 
 ## Current State
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `8fe1762 Make OSI bootstrap a QueryGraph handoff`.
-- Current working slice: first governed read restriction. LakeCat now derives a
-  typed `ReadRestriction` from enforced policy bindings, carries it in
-  table-scan authorization receipts, and intersects requested scan columns with
-  allowed policy columns before calling Sail.
+  working changes: `73ae316 Add governed scan column restrictions`.
+- Current working slice: governed row predicates. LakeCat now derives row
+  predicates from enforced ODRL policy bindings, carries them in the typed
+  `ReadRestriction`, composes multiple predicates with `and`, and appends them
+  as mandatory Sail scan filters.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -58,6 +58,13 @@ Updated: 2026-06-17
 - Added `ReadRestriction` to `lakecat-security` and exposed it through
   `TableScanCapability` so the scan capability carries the server-owned
   restriction from the authorization receipt.
+- Added governed row-predicate extraction from enforced ODRL policy bindings,
+  including nested `lakecat:read-restriction` fields and ODRL row-predicate
+  constraints.
+- Composed multiple enforced row predicates with `and` so additional bindings
+  can only narrow the governed read surface.
+- Proved Sail receives the policy-derived row predicate as an accepted scan
+  filter while column projection is also narrowed by policy.
 - Parsed a minimal enforceable ODRL subset from active policy bindings:
   `allowed-columns` / `allowedColumns` at the policy root, in
   `lakecat:read-restriction`, or in ODRL constraints, plus purpose and policy
@@ -143,6 +150,11 @@ Updated: 2026-06-17
 
 ## Verification Completed
 
+- Governed row-predicate focused checks passed:
+  `cargo fmt -p lakecat-service -- --check`,
+  `cargo test -p lakecat-service table_scan_authorization_carries_policy_read_restriction`,
+  and
+  `cargo test -p lakecat-service --features sail-local scan_planning_applies_policy_column_restriction_before_sail -- --nocapture`.
 - Governed read restriction focused checks passed:
   `cargo fmt -p lakecat-security -p lakecat-service -- --check`,
   `cargo test -p lakecat-security`,
