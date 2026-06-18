@@ -10,9 +10,11 @@ lakecat-api = { workspace = true }
 lakecat-core = { workspace = true }
 lakecat-querygraph = { workspace = true }
 reqwest = { workspace = true }
+sail-iceberg = { path = "../../../sail/crates/sail-iceberg" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 chrono = { workspace = true }

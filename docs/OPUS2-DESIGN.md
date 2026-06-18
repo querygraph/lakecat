@@ -28,10 +28,10 @@ Iceberg pristine at the boundary; innovate inside.
 │  ┌───────────────────────────────────────────────────────────────┐   │
 │  │  CONTROL PLANE   ✅ built: identity · Capability<A,R> · pointer │   │
 │  │     CAS · idempotency(store) · audit · outbox                  │   │
-│  │     ⛔ missing: ODRL→restriction · masked plan                  │   │
+│  │     ✅ built: ODRL→restriction · governed plan/fetch proof       │   │
 │  │  ┌─────────────────────────────────────────────────────────┐ │   │
 │  │  │  ENGINE (Sail)  ✅ Tier-1 provider for commits           │ │   │
-│  │  │     ⛔ reads still walk manifests in-process             │ │   │
+│  │  │     ⛔ more read execution belongs upstream in Sail      │ │   │
 │  │  │  ┌───────────────────────────────────────────────────┐  │ │   │
 │  │  │  │  ICEBERG FLOOR ✅ pristine: metadata/manifests/REST│  │ │   │
 │  │  │  └───────────────────────────────────────────────────┘  │ │   │
@@ -213,7 +213,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   preserves the row predicate and policy hash; the fixture now also requires a
   plan-task token, posts that token to `fetchScanTasks`, and fails unless the
   fetch response carries the re-applied restriction with the same policy hash
-  proof; the fixture now also probes `loadCredentials` for the
+  proof; the fixture now writes fetchable local Iceberg manifest metadata for
+  the bootstrap table so that acceptance exercises real plan-task expansion
+  instead of a schema-only table; the fixture now also probes `loadCredentials` for the
   restricted table and fails unless LakeCat withholds raw credentials, proving
   agents stay on the governed Sail-planned read path; rerunning the
   fixture now accepts existing namespace/table resources only after validating
@@ -306,9 +308,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
 
 LakeCat crossed the line OPUS1 drew: it is a real, governance-gated,
 durably-committing Iceberg catalog with the seams pointed the right way and the
-boundaries intact. The design bet is being vindicated by the code. The remaining
-distance to the GOAL is short and specific — build *the restriction* and drive it
-through a Sail-planned read, then let the QGLake broker prove that a governed
-catalog can give agents strictly less than humans while staying byte-compatible
-with every standard Iceberg client. Everything needed for that now exists; what's
-left is to connect it.
+boundaries intact. The design bet is being vindicated by the code. The
+restriction is now parsed from ODRL, carried into governed scan/credential
+receipts, and re-applied through plan-task fetch. The remaining distance to the
+GOAL is short and specific — push more read execution upstream into Sail, keep
+QGLake's acceptance fixture on real manifest-backed metadata, and prove that a
+governed catalog can give agents strictly less than humans while staying
+byte-compatible with every standard Iceberg client.

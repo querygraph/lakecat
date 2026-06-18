@@ -3785,9 +3785,11 @@ dependencies = [
  "lakecat-querygraph",
  "lakecat-security",
  "reqwest",
+ "sail-iceberg",
  "serde",
  "serde_json",
  "tokio",
+ "url",
 ]
 
 [[package]]

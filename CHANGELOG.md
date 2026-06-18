@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-fixture` create fetchable local Iceberg manifest
+  metadata for its bootstrap table, so the QGLake acceptance verifier exercises
+  a real plan-task token and governed `fetchScanTasks` proof instead of a
+  schema-only table.
 - Stamped governed scan and credential-vend authorization receipts with a
   deterministic top-level `policy_hash` derived from enforced
   `ReadRestriction` policy hashes, preserving any underlying governance-engine

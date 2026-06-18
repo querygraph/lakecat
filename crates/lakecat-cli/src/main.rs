@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fs, path::PathBuf};
+use std::{collections::BTreeMap, fs, path::PathBuf, sync::Arc};
 
 use lakecat_api::{
     CatalogConfigResponse, CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest,
@@ -10,8 +10,13 @@ use lakecat_api::{
 };
 use lakecat_core::content_hash_json;
 use lakecat_querygraph::{QueryGraphBootstrap, QueryGraphBootstrapVerification};
+use sail_iceberg::spec::{
+    DataContentType, DataFile, DataFileFormat, FormatVersion, ManifestContentType, ManifestFile,
+    ManifestListWriter, ManifestMetadata, ManifestWriterBuilder, TableMetadata,
+};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
+use url::Url;
 
 #[tokio::main]
 async fn main() {
@@ -485,7 +490,7 @@ async fn ensure_qglake_table(
             name: table.to_string(),
             location: location.to_string(),
             metadata_location: Some(metadata_location.to_string()),
-            metadata: qglake_table_metadata(),
+            metadata: qglake_table_metadata(location, metadata_location)?,
         },
     )
     .await?;
@@ -543,6 +548,18 @@ fn verify_qglake_existing_table(
             "existing QGLake table does not include restricted raw_payload column".to_string(),
         ));
     }
+    if response.metadata["current-snapshot-id"].as_i64().is_none() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "existing QGLake table does not include a current snapshot for governed scan planning"
+                .to_string(),
+        ));
+    }
+    if !metadata_has_manifest_list(&response.metadata) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "existing QGLake table does not include a snapshot manifest list for fetchScanTasks"
+                .to_string(),
+        ));
+    }
     Ok(())
 }
 
@@ -553,6 +570,14 @@ fn metadata_has_field(metadata: &Value, field_name: &str) -> bool {
         .flatten()
         .flat_map(|schema| schema["fields"].as_array().into_iter().flatten())
         .any(|field| field["name"] == field_name)
+}
+
+fn metadata_has_manifest_list(metadata: &Value) -> bool {
+    metadata["snapshots"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|snapshot| snapshot["manifest-list"].as_str().is_some())
 }
 
 fn verify_qglake_bootstrap_bundle(
@@ -919,11 +944,47 @@ fn verify_qglake_lineage_drain(drain: &LineageDrainResponse) -> lakecat_core::La
     Ok(())
 }
 
-fn qglake_table_metadata() -> Value {
-    json!({
+fn qglake_table_metadata(
+    location: &str,
+    metadata_location: &str,
+) -> lakecat_core::LakeCatResult<Value> {
+    let metadata_file = file_url_path(metadata_location, "QGLake metadata location")?;
+    let metadata_dir = metadata_file.parent().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake metadata location has no parent directory: {metadata_location}"
+        ))
+    })?;
+    fs::create_dir_all(metadata_dir).map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to create QGLake metadata directory {metadata_dir:?}: {err}"
+        ))
+    })?;
+
+    let table_dir = file_url_path(location, "QGLake table location")?;
+    let data_dir = table_dir.join("data");
+    fs::create_dir_all(&data_dir).map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to create QGLake data directory {data_dir:?}: {err}"
+        ))
+    })?;
+
+    let manifest_list_path = metadata_dir.join("snap-42.avro");
+    let manifest_path = metadata_dir.join("manifest-1.avro");
+    let data_file_path = data_dir.join("part-1.parquet");
+    let manifest_list = file_path_url(&manifest_list_path, "QGLake manifest list")?;
+    let manifest = file_path_url(&manifest_path, "QGLake data manifest")?;
+    let data_file = file_path_url(&data_file_path, "QGLake data file")?;
+
+    let metadata = json!({
         "format-version": 3,
+        "table-uuid": "22222222-2222-2222-2222-222222222222",
+        "location": location,
+        "last-sequence-number": 7,
+        "last-updated-ms": 1710000000000_i64,
+        "last-column-id": 4,
         "current-schema-id": 1,
         "schemas": [{
+            "type": "struct",
             "schema-id": 1,
             "fields": [
                 {
@@ -957,8 +1018,172 @@ fn qglake_table_metadata() -> Value {
                     "doc": "Raw event payload reserved for governed human/debug workflows."
                 }
             ]
+        }],
+        "partition-specs": [{"spec-id": 0, "fields": []}],
+        "default-spec-id": 0,
+        "current-snapshot-id": 42,
+        "snapshots": [{
+            "snapshot-id": 42,
+            "sequence-number": 7,
+            "timestamp-ms": 1710000000000_i64,
+            "manifest-list": manifest_list,
+            "summary": {"operation": "append"},
+            "schema-id": 1
+        }],
+        "snapshot-log": [{
+            "timestamp-ms": 1710000000000_i64,
+            "snapshot-id": 42
         }]
-    })
+    });
+
+    write_qglake_manifest_files(
+        &metadata,
+        &manifest_path,
+        &manifest,
+        &manifest_list_path,
+        &data_file,
+    )?;
+    Ok(metadata)
+}
+
+fn write_qglake_manifest_files(
+    metadata: &Value,
+    manifest_path: &std::path::Path,
+    manifest: &str,
+    manifest_list_path: &std::path::Path,
+    data_file: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let table_metadata =
+        TableMetadata::from_json(&serde_json::to_vec(metadata).map_err(|err| {
+            lakecat_core::LakeCatError::Internal(format!(
+                "failed to encode QGLake table metadata for manifest writer: {err}"
+            ))
+        })?)
+        .map_err(|err| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake fixture metadata is not valid Iceberg metadata: {err}"
+            ))
+        })?;
+    let manifest_metadata = ManifestMetadata::new(
+        Arc::new(
+            table_metadata
+                .current_schema()
+                .ok_or_else(|| {
+                    lakecat_core::LakeCatError::InvalidArgument(
+                        "QGLake fixture metadata has no current schema".to_string(),
+                    )
+                })?
+                .clone(),
+        ),
+        table_metadata.current_schema_id,
+        table_metadata
+            .default_partition_spec()
+            .ok_or_else(|| {
+                lakecat_core::LakeCatError::InvalidArgument(
+                    "QGLake fixture metadata has no default partition spec".to_string(),
+                )
+            })?
+            .clone(),
+        FormatVersion::V2,
+        ManifestContentType::Data,
+    );
+    let mut manifest_writer = ManifestWriterBuilder::new(Some(42), None, manifest_metadata).build();
+    manifest_writer.add(DataFile {
+        content: DataContentType::Data,
+        file_path: data_file.to_string(),
+        file_format: DataFileFormat::Parquet,
+        partition: Vec::new(),
+        record_count: 3,
+        file_size_in_bytes: 256,
+        column_sizes: Default::default(),
+        value_counts: Default::default(),
+        null_value_counts: Default::default(),
+        nan_value_counts: Default::default(),
+        lower_bounds: Default::default(),
+        upper_bounds: Default::default(),
+        block_size_in_bytes: None,
+        key_metadata: None,
+        split_offsets: Vec::new(),
+        equality_ids: Vec::new(),
+        sort_order_id: None,
+        first_row_id: None,
+        partition_spec_id: 0,
+        referenced_data_file: None,
+        content_offset: None,
+        content_size_in_bytes: None,
+    });
+    fs::write(
+        manifest_path,
+        manifest_writer.to_avro_bytes_v2().map_err(|err| {
+            lakecat_core::LakeCatError::Internal(format!(
+                "failed to encode QGLake data manifest: {err}"
+            ))
+        })?,
+    )
+    .map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to write QGLake data manifest {manifest_path:?}: {err}"
+        ))
+    })?;
+
+    let mut list_writer = ManifestListWriter::new();
+    list_writer.append(
+        ManifestFile::builder()
+            .with_manifest_path(manifest)
+            .with_manifest_length(10)
+            .with_partition_spec_id(0)
+            .with_content(ManifestContentType::Data)
+            .with_sequence_number(7)
+            .with_min_sequence_number(7)
+            .with_added_snapshot_id(42)
+            .with_file_counts(1, 0, 0)
+            .with_row_counts(3, 0, 0)
+            .build()
+            .map_err(|err| {
+                lakecat_core::LakeCatError::Internal(format!(
+                    "failed to build QGLake manifest-list entry: {err}"
+                ))
+            })?,
+    );
+    fs::write(
+        manifest_list_path,
+        list_writer.to_bytes(FormatVersion::V2).map_err(|err| {
+            lakecat_core::LakeCatError::Internal(format!(
+                "failed to encode QGLake manifest list: {err}"
+            ))
+        })?,
+    )
+    .map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to write QGLake manifest list {manifest_list_path:?}: {err}"
+        ))
+    })?;
+    Ok(())
+}
+
+fn file_url_path(value: &str, label: &str) -> lakecat_core::LakeCatResult<PathBuf> {
+    Url::parse(value)
+        .map_err(|err| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} must be a file URL for local fixture generation: {value}: {err}"
+            ))
+        })?
+        .to_file_path()
+        .map_err(|_| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} must be a file URL for local fixture generation: {value}"
+            ))
+        })
+}
+
+fn file_path_url(path: &std::path::Path, label: &str) -> lakecat_core::LakeCatResult<String> {
+    Url::from_file_path(path)
+        .map_err(|_| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} path cannot be converted to a file URL: {path:?}"
+            ))
+        })
+        .map(|url| url.to_string())
 }
 
 fn qglake_odrl_policy(table: &str) -> Value {
@@ -1534,9 +1759,19 @@ mod tests {
 
     #[test]
     fn qglake_fixture_metadata_contains_restricted_raw_payload_column() {
-        let metadata = qglake_table_metadata();
+        let (location, metadata_location) = qglake_test_fixture_urls("metadata");
+        let metadata = qglake_table_metadata(&location, &metadata_location).unwrap();
         let fields = metadata["schemas"][0]["fields"].as_array().unwrap();
         assert!(fields.iter().any(|field| field["name"] == "raw_payload"));
+        assert!(metadata_has_manifest_list(&metadata));
+        assert!(
+            file_url_path(
+                metadata["snapshots"][0]["manifest-list"].as_str().unwrap(),
+                "test"
+            )
+            .unwrap()
+            .exists()
+        );
     }
 
     #[test]
@@ -1560,13 +1795,14 @@ mod tests {
 
     #[test]
     fn qglake_existing_table_verifier_accepts_matching_fixture_table() {
+        let (location, metadata_location) = qglake_test_fixture_urls("matching");
         let response = LoadTableResponse {
             identifier: TableIdentifier {
                 namespace: vec!["default".to_string()],
                 name: "events".to_string(),
             },
-            metadata_location: Some("file:///tmp/lakecat-qglake/events/metadata.json".to_string()),
-            metadata: qglake_table_metadata(),
+            metadata_location: Some(metadata_location.clone()),
+            metadata: qglake_table_metadata(&location, &metadata_location).unwrap(),
             config: Vec::new(),
         };
 
@@ -1574,14 +1810,15 @@ mod tests {
             &response,
             &["default".to_string()],
             "events",
-            "file:///tmp/lakecat-qglake/events/metadata.json",
+            &metadata_location,
         )
         .expect("matching QGLake fixture table should be accepted");
     }
 
     #[test]
     fn qglake_existing_table_verifier_rejects_drifted_fixture_table() {
-        let mut metadata = qglake_table_metadata();
+        let (location, metadata_location) = qglake_test_fixture_urls("drifted");
+        let mut metadata = qglake_table_metadata(&location, &metadata_location).unwrap();
         metadata["schemas"][0]["fields"]
             .as_array_mut()
             .unwrap()
@@ -1591,7 +1828,7 @@ mod tests {
                 namespace: vec!["default".to_string()],
                 name: "events".to_string(),
             },
-            metadata_location: Some("file:///tmp/lakecat-qglake/events/metadata.json".to_string()),
+            metadata_location: Some(metadata_location.clone()),
             metadata,
             config: Vec::new(),
         };
@@ -1600,10 +1837,23 @@ mod tests {
             &response,
             &["default".to_string()],
             "events",
-            "file:///tmp/lakecat-qglake/events/metadata.json",
+            &metadata_location,
         )
         .expect_err("drifted QGLake fixture table should be rejected");
         assert!(err.to_string().contains("raw_payload"));
+    }
+
+    fn qglake_test_fixture_urls(name: &str) -> (String, String) {
+        let root = std::env::temp_dir().join(format!(
+            "lakecat-qglake-cli-{name}-{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        let table_dir = root.join("events");
+        let metadata_file = table_dir.join("metadata").join("00000.json");
+        (
+            Url::from_directory_path(&table_dir).unwrap().to_string(),
+            Url::from_file_path(metadata_file).unwrap().to_string(),
+        )
     }
 
     #[test]
