@@ -956,6 +956,10 @@ fn lineage_drain_event_summary(
             .pointer("/authorization-receipt/principal/subject")
             .and_then(Value::as_str)
             .map(str::to_string),
+        principal_kind: payload
+            .pointer("/authorization-receipt/principal/kind")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         authorization_receipt_hash: payload
             .get("authorization-receipt")
             .and_then(|receipt| content_hash_json(receipt).ok()),
@@ -4815,6 +4819,7 @@ mod tests {
             bootstrap_summary.principal_subject.as_deref(),
             Some("agent:writer")
         );
+        assert_eq!(bootstrap_summary.principal_kind.as_deref(), Some("agent"));
         assert!(
             bootstrap_summary
                 .authorization_receipt_hash
@@ -5287,6 +5292,10 @@ mod tests {
         assert_eq!(
             payload["events"][0]["principal-subject"],
             serde_json::json!("did:example:agent")
+        );
+        assert_eq!(
+            payload["events"][0]["principal-kind"],
+            serde_json::json!("agent")
         );
         assert!(
             payload["events"][0]["authorization-receipt-hash"]

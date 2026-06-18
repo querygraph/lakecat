@@ -155,12 +155,18 @@ async fn fetch_bootstrap_bundle(
     catalog: &str,
     principal: Option<&str>,
 ) -> lakecat_core::LakeCatResult<(QueryGraphBootstrap, QueryGraphBootstrapVerification)> {
+    fetch_bootstrap_bundle_with_identity(catalog, principal, RequestIdentityMode::Principal).await
+}
+
+async fn fetch_bootstrap_bundle_with_identity(
+    catalog: &str,
+    principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
+) -> lakecat_core::LakeCatResult<(QueryGraphBootstrap, QueryGraphBootstrapVerification)> {
     let endpoint = format!("{}/querygraph/v1/bootstrap", catalog.trim_end_matches('/'));
     let client = reqwest::Client::new();
     let mut request = client.get(endpoint);
-    if let Some(principal) = principal {
-        request = request.header("x-lakecat-principal", principal);
-    }
+    request = identity_mode.apply(request, principal);
     let response = request.send().await.map_err(|err| {
         lakecat_core::LakeCatError::Internal(format!("failed to request bootstrap bundle: {err}"))
     })?;
@@ -244,10 +250,19 @@ async fn drain_lineage_outbox(
     catalog: &str,
     principal: Option<&str>,
 ) -> lakecat_core::LakeCatResult<LineageDrainResponse> {
-    post_json::<_, LineageDrainResponse>(
+    drain_lineage_outbox_with_identity(catalog, principal, RequestIdentityMode::Principal).await
+}
+
+async fn drain_lineage_outbox_with_identity(
+    catalog: &str,
+    principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
+) -> lakecat_core::LakeCatResult<LineageDrainResponse> {
+    post_json_with_identity::<_, LineageDrainResponse>(
         catalog,
         "/management/v1/lineage/drain",
         principal,
+        identity_mode,
         "lineage drain",
         &json!({}),
     )
@@ -260,12 +275,27 @@ async fn get_json<T: DeserializeOwned>(
     principal: Option<&str>,
     label: &str,
 ) -> lakecat_core::LakeCatResult<T> {
+    get_json_with_identity(
+        catalog,
+        path,
+        principal,
+        RequestIdentityMode::Principal,
+        label,
+    )
+    .await
+}
+
+async fn get_json_with_identity<T: DeserializeOwned>(
+    catalog: &str,
+    path: &str,
+    principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
+    label: &str,
+) -> lakecat_core::LakeCatResult<T> {
     let endpoint = format!("{}{}", catalog.trim_end_matches('/'), path);
     let client = reqwest::Client::new();
     let mut request = client.get(endpoint);
-    if let Some(principal) = principal {
-        request = request.header("x-lakecat-principal", principal);
-    }
+    request = identity_mode.apply(request, principal);
     let response = request.send().await.map_err(|err| {
         lakecat_core::LakeCatError::Internal(format!("failed to request {label}: {err}"))
     })?;
@@ -279,50 +309,65 @@ async fn put_json<B: Serialize, T: DeserializeOwned>(
     label: &str,
     body: &B,
 ) -> lakecat_core::LakeCatResult<T> {
+    put_json_with_identity(
+        catalog,
+        path,
+        principal,
+        RequestIdentityMode::Principal,
+        label,
+        body,
+    )
+    .await
+}
+
+async fn put_json_with_identity<B: Serialize, T: DeserializeOwned>(
+    catalog: &str,
+    path: &str,
+    principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
+    label: &str,
+    body: &B,
+) -> lakecat_core::LakeCatResult<T> {
     let endpoint = format!("{}{}", catalog.trim_end_matches('/'), path);
     let client = reqwest::Client::new();
     let mut request = client.put(endpoint).json(body);
-    if let Some(principal) = principal {
-        request = request.header("x-lakecat-principal", principal);
-    }
+    request = identity_mode.apply(request, principal);
     let response = request.send().await.map_err(|err| {
         lakecat_core::LakeCatError::Internal(format!("failed to request {label}: {err}"))
     })?;
     decode_json_response(response, label).await
 }
 
-async fn post_json<B: Serialize, T: DeserializeOwned>(
+async fn post_json_with_identity<B: Serialize, T: DeserializeOwned>(
     catalog: &str,
     path: &str,
     principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
     label: &str,
     body: &B,
 ) -> lakecat_core::LakeCatResult<T> {
     let endpoint = format!("{}{}", catalog.trim_end_matches('/'), path);
     let client = reqwest::Client::new();
     let mut request = client.post(endpoint).json(body);
-    if let Some(principal) = principal {
-        request = request.header("x-lakecat-principal", principal);
-    }
+    request = identity_mode.apply(request, principal);
     let response = request.send().await.map_err(|err| {
         lakecat_core::LakeCatError::Internal(format!("failed to request {label}: {err}"))
     })?;
     decode_json_response(response, label).await
 }
 
-async fn post_json_or_conflict<B: Serialize, T: DeserializeOwned>(
+async fn post_json_or_conflict_with_identity<B: Serialize, T: DeserializeOwned>(
     catalog: &str,
     path: &str,
     principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
     label: &str,
     body: &B,
 ) -> lakecat_core::LakeCatResult<Option<T>> {
     let endpoint = format!("{}{}", catalog.trim_end_matches('/'), path);
     let client = reqwest::Client::new();
     let mut request = client.post(endpoint).json(body);
-    if let Some(principal) = principal {
-        request = request.header("x-lakecat-principal", principal);
-    }
+    request = identity_mode.apply(request, principal);
     let response = request.send().await.map_err(|err| {
         lakecat_core::LakeCatError::Internal(format!("failed to request {label}: {err}"))
     })?;
@@ -344,6 +389,28 @@ async fn post_json_or_conflict<B: Serialize, T: DeserializeOwned>(
             "LakeCat {label} response is not the expected JSON payload: {err}"
         ))
     })
+}
+
+#[derive(Debug, Clone, Copy)]
+enum RequestIdentityMode {
+    Principal,
+    AgentDid,
+}
+
+impl RequestIdentityMode {
+    fn apply(
+        self,
+        request: reqwest::RequestBuilder,
+        principal: Option<&str>,
+    ) -> reqwest::RequestBuilder {
+        let Some(principal) = principal else {
+            return request;
+        };
+        match self {
+            Self::Principal => request.header("x-lakecat-principal", principal),
+            Self::AgentDid => request.header("x-lakecat-agent-did", principal),
+        }
+    }
 }
 
 async fn decode_json_response<T: DeserializeOwned>(
@@ -386,11 +453,12 @@ async fn qglake_fixture(
     principal: Option<String>,
 ) -> lakecat_core::LakeCatResult<()> {
     let principal = principal.as_deref();
+    let identity_mode = RequestIdentityMode::AgentDid;
     let namespace_path = namespace.join(".");
     let storage_profile = format!("{table}-local");
     let policy = format!("{table}-agent-read");
 
-    ensure_qglake_namespace(&catalog, &namespace, principal).await?;
+    ensure_qglake_namespace(&catalog, &namespace, principal, identity_mode).await?;
     ensure_qglake_table(
         &catalog,
         &namespace_path,
@@ -399,12 +467,14 @@ async fn qglake_fixture(
         &location,
         &metadata_location,
         principal,
+        identity_mode,
     )
     .await?;
-    let _: StorageProfileResponse = put_json(
+    let _: StorageProfileResponse = put_json_with_identity(
         &catalog,
         &format!("/management/v1/warehouses/{warehouse}/storage-profiles/{storage_profile}"),
         principal,
+        identity_mode,
         "storage profile upsert",
         &UpsertStorageProfileRequest {
             location_prefix: location.clone(),
@@ -416,10 +486,11 @@ async fn qglake_fixture(
     )
     .await?;
 
-    let _: PolicyBindingResponse = put_json(
+    let _: PolicyBindingResponse = put_json_with_identity(
         &catalog,
         &format!("/management/v1/warehouses/{warehouse}/policies/{policy}"),
         principal,
+        identity_mode,
         "policy upsert",
         &UpsertPolicyBindingRequest {
             namespace: Some(namespace.clone()),
@@ -430,12 +501,22 @@ async fn qglake_fixture(
     )
     .await?;
 
-    verify_qglake_governed_scan(&catalog, &namespace_path, &table, &location, principal).await?;
-    verify_qglake_credentials_blocked(&catalog, &namespace_path, &table, principal).await?;
-    let (bundle, verification) = fetch_bootstrap_bundle(&catalog, principal).await?;
+    verify_qglake_governed_scan(
+        &catalog,
+        &namespace_path,
+        &table,
+        &location,
+        principal,
+        identity_mode,
+    )
+    .await?;
+    verify_qglake_credentials_blocked(&catalog, &namespace_path, &table, principal, identity_mode)
+        .await?;
+    let (bundle, verification) =
+        fetch_bootstrap_bundle_with_identity(&catalog, principal, identity_mode).await?;
     verify_qglake_bootstrap_bundle(&bundle, &namespace, &table)?;
     write_bootstrap_bundle(&output, &bundle, &verification)?;
-    let drain = drain_lineage_outbox(&catalog, principal).await?;
+    let drain = drain_lineage_outbox_with_identity(&catalog, principal, identity_mode).await?;
     verify_qglake_lineage_drain(
         &drain,
         &verification,
@@ -450,11 +531,13 @@ async fn ensure_qglake_namespace(
     catalog: &str,
     namespace: &[String],
     principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
 ) -> lakecat_core::LakeCatResult<()> {
-    if post_json_or_conflict::<_, NamespaceResponse>(
+    if post_json_or_conflict_with_identity::<_, NamespaceResponse>(
         catalog,
         "/catalog/v1/namespaces",
         principal,
+        identity_mode,
         "namespace create",
         &CreateNamespaceRequest {
             namespace: namespace.to_vec(),
@@ -466,10 +549,11 @@ async fn ensure_qglake_namespace(
         return Ok(());
     }
 
-    let namespaces = get_json::<ListNamespacesResponse>(
+    let namespaces = get_json_with_identity::<ListNamespacesResponse>(
         catalog,
         "/catalog/v1/namespaces",
         principal,
+        identity_mode,
         "namespace list",
     )
     .await?;
@@ -490,11 +574,13 @@ async fn ensure_qglake_table(
     location: &str,
     metadata_location: &str,
     principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
 ) -> lakecat_core::LakeCatResult<()> {
-    let response = post_json_or_conflict::<_, LoadTableResponse>(
+    let response = post_json_or_conflict_with_identity::<_, LoadTableResponse>(
         catalog,
         &format!("/catalog/v1/namespaces/{namespace_path}/tables"),
         principal,
+        identity_mode,
         "table create",
         &CreateTableRequest {
             name: table.to_string(),
@@ -508,10 +594,11 @@ async fn ensure_qglake_table(
         return verify_qglake_existing_table(&response, namespace, table, metadata_location);
     }
 
-    let response = get_json::<LoadTableResponse>(
+    let response = get_json_with_identity::<LoadTableResponse>(
         catalog,
         &format!("/catalog/v1/namespaces/{namespace_path}/tables/{table}"),
         principal,
+        identity_mode,
         "table load",
     )
     .await?;
@@ -977,11 +1064,13 @@ async fn verify_qglake_governed_scan(
     table: &str,
     table_location: &str,
     principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
 ) -> lakecat_core::LakeCatResult<()> {
-    let plan = post_json::<_, PlanTableScanResponse>(
+    let plan = post_json_with_identity::<_, PlanTableScanResponse>(
         catalog,
         &format!("/catalog/v1/namespaces/{namespace_path}/tables/{table}/plan"),
         principal,
+        identity_mode,
         "qglake governed scan plan",
         &PlanTableScanRequest {
             select: vec![
@@ -1002,6 +1091,7 @@ async fn verify_qglake_governed_scan(
         table,
         table_location,
         principal,
+        identity_mode,
         &plan,
     )
     .await
@@ -1110,6 +1200,7 @@ async fn verify_qglake_fetch_scan_tasks(
     table: &str,
     table_location: &str,
     principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
     plan: &PlanTableScanResponse,
 ) -> lakecat_core::LakeCatResult<()> {
     let plan_task = plan.plan_tasks.first().ok_or_else(|| {
@@ -1118,10 +1209,11 @@ async fn verify_qglake_fetch_scan_tasks(
                 .to_string(),
         )
     })?;
-    let fetched = post_json::<_, FetchScanTasksResponse>(
+    let fetched = post_json_with_identity::<_, FetchScanTasksResponse>(
         catalog,
         &format!("/catalog/v1/namespaces/{namespace_path}/tables/{table}/tasks"),
         principal,
+        identity_mode,
         "qglake governed scan task fetch",
         &FetchScanTasksRequest {
             plan_task: plan_task.clone(),
@@ -1136,10 +1228,11 @@ async fn verify_qglake_fetch_scan_tasks(
         ));
     }
     for child_plan_task in &fetched.plan_tasks {
-        let manifest_fetched = post_json::<_, FetchScanTasksResponse>(
+        let manifest_fetched = post_json_with_identity::<_, FetchScanTasksResponse>(
             catalog,
             &format!("/catalog/v1/namespaces/{namespace_path}/tables/{table}/tasks"),
             principal,
+            identity_mode,
             "qglake governed manifest scan task fetch",
             &FetchScanTasksRequest {
                 plan_task: child_plan_task.clone(),
@@ -1278,11 +1371,13 @@ async fn verify_qglake_credentials_blocked(
     namespace_path: &str,
     table: &str,
     principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
 ) -> lakecat_core::LakeCatResult<()> {
-    let credentials = get_json::<LoadCredentialsResponse>(
+    let credentials = get_json_with_identity::<LoadCredentialsResponse>(
         catalog,
         &format!("/catalog/v1/namespaces/{namespace_path}/tables/{table}/credentials"),
         principal,
+        identity_mode,
         "qglake restricted credentials probe",
     )
     .await?;
@@ -1355,6 +1450,16 @@ fn verify_qglake_lineage_drain(
     if bootstrap.principal_subject.as_deref() != Some(expected_principal) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain replay principal did not match accepted principal {expected_principal}"
+        )));
+    }
+    let expected_principal_kind = if principal.is_some() {
+        "agent"
+    } else {
+        "anonymous"
+    };
+    if bootstrap.principal_kind.as_deref() != Some(expected_principal_kind) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain replay principal kind did not match accepted principal kind {expected_principal_kind}"
         )));
     }
     if bootstrap
@@ -3567,6 +3672,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     graph_events: 0,
@@ -3602,6 +3708,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     graph_events: 0,
@@ -3636,6 +3743,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:other".to_string()),
+                    principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     graph_events: 0,
@@ -3670,6 +3778,42 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    principal_kind: Some("human".to_string()),
+                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    request_identity_state: Some("verified".to_string()),
+                    graph_events: 0,
+                    lineage_events: 1,
+                    bundle_hash: Some("sha256:bundle".to_string()),
+                    graph_hash: Some("sha256:graph".to_string()),
+                    open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    table_artifact_count: 1,
+                    view_artifact_count: 0,
+                    policy_binding_count: 1,
+                    standards: qglake_lineage_standards(),
+                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
+                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                }],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject non-agent replay principals");
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay principal kind did not match accepted principal kind agent"
+        ));
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                events: vec![LineageDrainEventSummary {
+                    event_id: "evt-bootstrap".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    principal_subject: Some("did:example:agent".to_string()),
+                    principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: None,
                     request_identity_state: Some("verified".to_string()),
                     graph_events: 0,
@@ -3704,6 +3848,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: None,
                     graph_events: 0,
@@ -3738,6 +3883,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     graph_events: 0,
@@ -3772,6 +3918,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     graph_events: 0,
@@ -3806,6 +3953,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     graph_events: 0,
@@ -3840,6 +3988,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     graph_events: 0,
@@ -3878,6 +4027,7 @@ mod tests {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
                     principal_subject: Some("did:example:agent".to_string()),
+                    principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     graph_events: 0,

@@ -357,6 +357,8 @@ pub struct LineageDrainEventSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub principal_subject: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub principal_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authorization_receipt_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_identity_state: Option<String>,
