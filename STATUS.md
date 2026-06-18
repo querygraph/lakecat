@@ -5,10 +5,10 @@ Updated: 2026-06-18
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `ae38fba Add governed lineage drain`.
-- Current working slice: memory audit/outbox parity plus QGLake drain
-  verification. The embedded `MemoryCatalogStore` now records catalog audit
+- Latest committed and pushed LakeCat implementation slice:
+  `b5b1797 Verify QGLake lineage drain delivery`.
+- Current working slice: paused after memory audit/outbox parity plus QGLake
+  drain verification. The embedded `MemoryCatalogStore` now records catalog audit
   events into the same `lakecat.lineage-and-graph` outbox envelope used by the
   Turso store, and `lakecat-cli qglake-fixture` now fails if the governed
   lineage drain delivers zero events.
