@@ -6,12 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `d9d50eb Record QueryGraph graph hash status`.
-- Current working slice: QueryGraph bootstrap integrity receipts for lineage.
-  The `querygraph.bootstrap` audit/outbox payload now includes the verified
-  bundle hash, graph hash, OpenLineage hash, standards, and verified table IDs
-  from the bundle manifest.
-- Local verification for the current slice is green:
+  `bf1583b Record QueryGraph bootstrap hash receipts`.
+- Paused after pushing QueryGraph bootstrap integrity receipts for lineage.
+  The `querygraph.bootstrap` audit/outbox payload includes the verified bundle
+  hash, graph hash, OpenLineage hash, standards, and verified table IDs from
+  the bundle manifest.
+- Local verification for the pushed slice was green:
   `cargo fmt -p lakecat-service -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
