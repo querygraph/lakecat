@@ -2,8 +2,9 @@ use std::{collections::BTreeMap, fs, path::PathBuf};
 
 use lakecat_api::{
     CatalogConfigResponse, CreateNamespaceRequest, CreateTableRequest, ListPolicyBindingsResponse,
-    ListStorageProfilesResponse, LoadTableResponse, NamespaceResponse, PolicyBindingResponse,
-    StorageProfileResponse, UpsertPolicyBindingRequest, UpsertStorageProfileRequest,
+    ListStorageProfilesResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
+    PlanTableScanResponse, PolicyBindingResponse, StorageProfileResponse,
+    UpsertPolicyBindingRequest, UpsertStorageProfileRequest,
 };
 use lakecat_querygraph::QueryGraphBootstrap;
 use serde::{Serialize, de::DeserializeOwned};
@@ -346,7 +347,86 @@ async fn qglake_fixture(
     )
     .await?;
 
+    verify_qglake_governed_scan(&catalog, &namespace_path, &table, principal).await?;
     bootstrap_export(catalog, output, principal.map(ToString::to_string)).await
+}
+
+async fn verify_qglake_governed_scan(
+    catalog: &str,
+    namespace_path: &str,
+    table: &str,
+    principal: Option<&str>,
+) -> lakecat_core::LakeCatResult<()> {
+    let plan = post_json::<_, PlanTableScanResponse>(
+        catalog,
+        &format!("/catalog/v1/namespaces/{namespace_path}/tables/{table}/plan"),
+        principal,
+        "qglake governed scan plan",
+        &PlanTableScanRequest {
+            select: vec![
+                "event_id".to_string(),
+                "occurred_at".to_string(),
+                "severity".to_string(),
+                "raw_payload".to_string(),
+            ],
+            case_sensitive: Some(true),
+            ..empty_scan_request()
+        },
+    )
+    .await?;
+    verify_qglake_scan_plan(&plan)
+}
+
+fn empty_scan_request() -> PlanTableScanRequest {
+    PlanTableScanRequest {
+        projection: Vec::new(),
+        select: Vec::new(),
+        filters: Vec::new(),
+        filter: None,
+        limit: None,
+        snapshot_id: None,
+        case_sensitive: None,
+        use_snapshot_schema: None,
+        start_snapshot_id: None,
+        end_snapshot_id: None,
+        stats_fields: Vec::new(),
+    }
+}
+
+fn verify_qglake_scan_plan(plan: &PlanTableScanResponse) -> lakecat_core::LakeCatResult<()> {
+    let extension = plan
+        .residual_filter
+        .as_ref()
+        .and_then(|filter| filter.get("lakecat:scan-request"))
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(
+                "qglake governed scan plan did not include lakecat:scan-request".to_string(),
+            )
+        })?;
+    if extension.get("effective-projection")
+        != Some(&json!(["event_id", "occurred_at", "severity"]))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake governed scan effective projection was not narrowed as expected: {}",
+            extension
+                .get("effective-projection")
+                .cloned()
+                .unwrap_or(Value::Null)
+        )));
+    }
+    if extension["read-restriction"]["row-predicate"]
+        != json!({
+            "type": "not_eq",
+            "term": "severity",
+            "value": "debug"
+        })
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake governed scan row predicate was not enforced as expected: {}",
+            extension["read-restriction"]["row-predicate"].clone()
+        )));
+    }
+    Ok(())
 }
 
 fn qglake_table_metadata() -> Value {
@@ -961,5 +1041,43 @@ mod tests {
             }))
         );
         assert_eq!(restriction.max_credential_ttl_seconds, Some(300));
+    }
+
+    #[test]
+    fn qglake_scan_plan_verifier_requires_governed_projection() {
+        let plan = PlanTableScanResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "lakecat-sail".to_string(),
+            status: "completed".to_string(),
+            snapshot_id: None,
+            plan_tasks: Vec::new(),
+            lakecat_plan_tasks: Vec::new(),
+            file_scan_tasks: Vec::new(),
+            delete_files: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:scan-request": {
+                    "requested-projection": [
+                        "event_id",
+                        "occurred_at",
+                        "severity",
+                        "raw_payload"
+                    ],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        }
+                    }
+                }
+            })),
+        };
+
+        verify_qglake_scan_plan(&plan).unwrap();
     }
 }

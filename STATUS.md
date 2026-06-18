@@ -6,18 +6,16 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `482dda1 Govern QGLake fixture reads`.
-- Current working slice: QueryGraph bootstrap policy-binding export.
-  `/querygraph/v1/bootstrap` now loads table-scoped policy bindings from the
-  catalog store and includes them in each table projection, in the table ODRL
-  artifact, and in a manifest hash, so QueryGraph import sees the actual
-  LakeCat ODRL policy that governs planning instead of only a synthetic
-  placeholder.
+  working changes: `1e3b79e Export policy bindings in bootstrap`.
+- Current working slice: QGLake fixture live governed scan verification.
+  `lakecat-cli qglake-fixture` now performs a live scan-plan request that asks
+  for `raw_payload` and verifies LakeCat narrows the effective projection to the
+  allowed fixture columns while preserving the policy row predicate before
+  exporting the QueryGraph bootstrap bundle.
 - Local verification for the current slice is green:
-  `cargo test -p lakecat-querygraph policy_bindings -- --nocapture`;
-  `cargo test -p lakecat-service querygraph_bootstrap_projects_catalog_tables -- --nocapture`;
+  `cargo test -p lakecat-cli qglake -- --nocapture`;
   `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
-  `cargo test -p lakecat-querygraph`;
+  `cargo test -p lakecat-cli`;
   `cargo test -p lakecat-service`;
   `cargo test -p lakecat-service --all-features`;
   `cargo test -p lakecat-store --features turso-local`;
@@ -67,6 +65,11 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added a live governed scan-plan verification step to
+  `lakecat-cli qglake-fixture` after policy installation and before bootstrap
+  export.
+- Added a fixture verifier test proving `raw_payload` is removed from the
+  effective projection and the row predicate survives in the scan extension.
 - Added `QueryGraphBootstrap::from_tables_with_policy_bindings` and a
   per-table `policy-bindings` projection with its own manifest hash.
 - Changed `/querygraph/v1/bootstrap` to load stored table policy bindings and

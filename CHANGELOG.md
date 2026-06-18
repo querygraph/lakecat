@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a live governed scan-plan verification to `lakecat-cli qglake-fixture`,
+  proving the fixture policy narrows `raw_payload` out of the effective
+  projection and carries the policy row predicate before exporting the bootstrap.
 - Exported stored table-scoped `PolicyBinding` documents through the
   QueryGraph bootstrap table projection and manifest hashes, so `/querygraph/v1/bootstrap`
   carries the actual LakeCat ODRL policy used for governed planning.
