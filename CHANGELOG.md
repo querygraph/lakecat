@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required the QGLake governed `fetchScanTasks` verifier to prove manifest-list
+  expansion returns at least one child Iceberg REST plan-task token and a
+  LakeCat manifest child task, keeping acceptance on the standard multi-step
+  planning path.
 - Required the QGLake governed scan-plan verifier to prove the plan exposes at
   least one Iceberg REST plan-task token and a LakeCat manifest-list plan task,
   ensuring acceptance starts from manifest-backed planning before task fetch.

@@ -930,6 +930,21 @@ fn verify_qglake_scan_tasks(
     table_location: &str,
 ) -> lakecat_core::LakeCatResult<()> {
     verify_qglake_sail_planner("fetchScanTasks", &fetched.planned_by)?;
+    if fetched.plan_tasks.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake governed fetchScanTasks did not expose a child Iceberg REST plan-task token"
+                .to_string(),
+        ));
+    }
+    if !fetched
+        .lakecat_plan_tasks
+        .iter()
+        .any(|task| task["task-type"] == json!("manifest"))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake governed fetchScanTasks did not include a manifest child task".to_string(),
+        ));
+    }
     if fetched.file_scan_tasks.is_empty() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake governed fetchScanTasks produced no file scan tasks".to_string(),
@@ -2406,6 +2421,14 @@ mod tests {
         })]
     }
 
+    fn qglake_manifest_child_plan_tasks() -> Vec<Value> {
+        vec![serde_json::json!({
+            "task-type": "manifest",
+            "manifest-list": "file:///tmp/lakecat-qglake/events/metadata/snap-42.avro",
+            "manifest-path": "file:///tmp/lakecat-qglake/events/metadata/manifest-42.avro"
+        })]
+    }
+
     #[test]
     fn qglake_fetch_scan_tasks_verifier_requires_reapplied_policy_hash_binding() {
         let expected_policy_hash = qglake_policy_hash("events").unwrap();
@@ -2423,8 +2446,8 @@ mod tests {
                 }
             })],
             delete_files: Vec::new(),
-            plan_tasks: Vec::new(),
-            lakecat_plan_tasks: Vec::new(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
             residual_filter: Some(serde_json::json!({
                 "lakecat:fetch-scan-tasks": {
                     "read-restriction": {
@@ -2444,6 +2467,87 @@ mod tests {
     }
 
     #[test]
+    fn qglake_fetch_scan_tasks_verifier_rejects_missing_child_plan_task_token() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            plan_task: "lakecat:sail-json-hmac:test".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![serde_json::json!({
+                "data-file": {
+                    "file-path": "file:///tmp/lakecat-qglake/events/data/part-1.parquet"
+                }
+            })],
+            delete_files: Vec::new(),
+            plan_tasks: Vec::new(),
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake governed fetch should expose child plan-task tokens");
+        assert!(
+            err.to_string()
+                .contains("child Iceberg REST plan-task token")
+        );
+    }
+
+    #[test]
+    fn qglake_fetch_scan_tasks_verifier_rejects_missing_manifest_child_task() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            plan_task: "lakecat:sail-json-hmac:test".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![serde_json::json!({
+                "data-file": {
+                    "file-path": "file:///tmp/lakecat-qglake/events/data/part-1.parquet"
+                }
+            })],
+            delete_files: Vec::new(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: vec![serde_json::json!({"task-type": "metadata-only"})],
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake governed fetch should expose manifest child tasks");
+        assert!(err.to_string().contains("manifest child task"));
+    }
+
+    #[test]
     fn qglake_fetch_scan_tasks_verifier_rejects_non_sail_planner() {
         let expected_policy_hash = qglake_policy_hash("events").unwrap();
         let fetched = FetchScanTasksResponse {
@@ -2460,8 +2564,8 @@ mod tests {
                 }
             })],
             delete_files: Vec::new(),
-            plan_tasks: Vec::new(),
-            lakecat_plan_tasks: Vec::new(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
             residual_filter: Some(serde_json::json!({
                 "lakecat:fetch-scan-tasks": {
                     "read-restriction": {
@@ -2495,8 +2599,8 @@ mod tests {
             snapshot_id: Some(42),
             file_scan_tasks: Vec::new(),
             delete_files: Vec::new(),
-            plan_tasks: Vec::new(),
-            lakecat_plan_tasks: Vec::new(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
             residual_filter: Some(serde_json::json!({
                 "lakecat:fetch-scan-tasks": {
                     "read-restriction": {
@@ -2530,8 +2634,8 @@ mod tests {
             snapshot_id: Some(42),
             file_scan_tasks: vec![serde_json::json!({"placeholder": true})],
             delete_files: Vec::new(),
-            plan_tasks: Vec::new(),
-            lakecat_plan_tasks: Vec::new(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
             residual_filter: Some(serde_json::json!({
                 "lakecat:fetch-scan-tasks": {
                     "read-restriction": {
@@ -2569,8 +2673,8 @@ mod tests {
                 }
             })],
             delete_files: Vec::new(),
-            plan_tasks: Vec::new(),
-            lakecat_plan_tasks: Vec::new(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
             residual_filter: Some(serde_json::json!({
                 "lakecat:fetch-scan-tasks": {
                     "read-restriction": {
@@ -2608,8 +2712,8 @@ mod tests {
                 }
             })],
             delete_files: Vec::new(),
-            plan_tasks: Vec::new(),
-            lakecat_plan_tasks: Vec::new(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
             residual_filter: Some(serde_json::json!({
                 "lakecat:fetch-scan-tasks": {
                     "read-restriction": {
@@ -2651,8 +2755,8 @@ mod tests {
                 }
             })],
             delete_files: Vec::new(),
-            plan_tasks: Vec::new(),
-            lakecat_plan_tasks: Vec::new(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
             residual_filter: Some(serde_json::json!({
                 "lakecat:fetch-scan-tasks": {
                     "read-restriction": {
