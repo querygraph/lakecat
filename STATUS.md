@@ -7,22 +7,27 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `8975d55 Project table commits to graph`.
-- Paused after pushing commit graph projection from the durable outbox.
-  `table.commit` replay now emits a stable catalog-facing `Commit` graph event
-  keyed by table stable ID and committed sequence number while preserving
-  metadata pointer movement and idempotency hash payloads.
-- Local verification for the pushed slice was green:
+- Current working slice: principal graph projection from the durable outbox.
+  Non-anonymous principals resolved from outbox authorization receipts now emit
+  stable catalog-facing `Principal` graph events before the domain-specific
+  graph projection, giving QueryGraph actor anchors for replayed catalog events.
+- Local verification for the current slice is green:
   `cargo fmt -p lakecat-graph -p lakecat-service -p lakecat-api -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-graph`;
   `cargo test -p lakecat-graph --features grust-local`;
   `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
-  `cargo test -p lakecat-service`;
-  `cargo test --workspace`;
   `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service`;
   `cargo test -p lakecat-service --features turso-local`;
   `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
   `cargo test --workspace --all-features`.
+- The all-feature service/workspace gates required a one-token local Grust fix
+  in `/Users/alexy/src/grust/crates/grust-cypher/src/lib.rs`: an accidental
+  duplicated `target` argument inside a `matches!` macro in the current dirty
+  Grust checkout. The Grust repo had broad pre-existing uncommitted edits, so
+  LakeCat did not stage that sibling repo.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -67,6 +72,11 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added principal graph projection to durable outbox drain for non-anonymous
+  resolved principals, while preserving existing domain graph and OpenLineage
+  replay.
+- Added a stable principal subject helper plus default and `grust-local`
+  graph-crate coverage for the catalog-facing principal event shape.
 - Added commit graph projection to durable outbox drain for `table.commit`, while
   preserving the existing table graph and OpenLineage replay.
 - Added a stable commit subject helper plus default and `grust-local`

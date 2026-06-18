@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Projected resolved non-anonymous outbox principals into LakeCat's
+  catalog-facing graph sink as stable `Principal` events, giving QueryGraph
+  actor anchors without moving traversal semantics into LakeCat.
 - Projected `table.commit` outbox events into LakeCat's catalog-facing graph
   sink as stable `Commit` events keyed by table and committed sequence number,
   preserving metadata pointer movement and idempotency hashes for replay.

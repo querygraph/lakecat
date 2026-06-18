@@ -1716,6 +1716,23 @@ async fn project_outbox_event(
     let table = outbox_table(event)?;
     let principal = outbox_principal(event)?;
     let mut receipt = OutboxProjectionReceipt::default();
+    if principal.kind != PrincipalKind::Anonymous {
+        state
+            .graph
+            .emit(
+                GraphEvent::principal(
+                    GraphAction::Loaded,
+                    &principal,
+                    json!({
+                        "event-type": event.event_type,
+                        "principal": principal,
+                    }),
+                )
+                .with_event_id(format!("{}:principal", event.event_id)),
+            )
+            .await?;
+        receipt.graph_events += 1;
+    }
     if let Some((graph_action, lineage_type)) = outbox_table_projection(event.event_type.as_str()) {
         if let Some(table) = table.clone() {
             state
@@ -3208,67 +3225,90 @@ mod tests {
                 "querygraph.bootstrap".to_string()
             ]
         );
-        assert_eq!(drain.graph_events, 7);
+        assert_eq!(drain.graph_events, 13);
         assert_eq!(drain.lineage_events, 5);
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 7);
-        assert_eq!(graph_events[0].label, GraphNodeLabel::Namespace);
+        assert_eq!(graph_events.len(), 13);
+        assert_eq!(graph_events[0].label, GraphNodeLabel::Principal);
+        assert_eq!(graph_events[0].subject, "lakecat:principal:agent:writer");
         assert_eq!(
-            graph_events[0].subject,
-            "lakecat:warehouse:local:namespace:default"
+            graph_events[0].event_id.as_deref(),
+            Some("evt-namespace:principal")
         );
-        assert_eq!(graph_events[0].event_id.as_deref(), Some("evt-namespace"));
         assert_eq!(
-            graph_events[0].properties["authorization-receipt"]["principal"]["subject"],
-            serde_json::json!("agent:writer")
+            graph_events[0].properties["principal"]["kind"],
+            serde_json::json!("agent")
         );
-        assert_eq!(graph_events[1].label, GraphNodeLabel::Policy);
-        assert_eq!(graph_events[1].action, GraphAction::Upserted);
+        assert_eq!(graph_events[1].label, GraphNodeLabel::Namespace);
         assert_eq!(
             graph_events[1].subject,
+            "lakecat:warehouse:local:namespace:default"
+        );
+        assert_eq!(graph_events[1].event_id.as_deref(), Some("evt-namespace"));
+        assert_eq!(
+            graph_events[1].properties["authorization-receipt"]["principal"]["subject"],
+            serde_json::json!("agent:writer")
+        );
+        assert_eq!(graph_events[2].label, GraphNodeLabel::Principal);
+        assert_eq!(
+            graph_events[2].event_id.as_deref(),
+            Some("evt-policy:principal")
+        );
+        assert_eq!(graph_events[3].label, GraphNodeLabel::Policy);
+        assert_eq!(graph_events[3].action, GraphAction::Upserted);
+        assert_eq!(
+            graph_events[3].subject,
             "lakecat:warehouse:local:policy:agent-read"
         );
-        assert_eq!(graph_events[1].event_id.as_deref(), Some("evt-policy"));
+        assert_eq!(graph_events[3].event_id.as_deref(), Some("evt-policy"));
         assert_eq!(
-            graph_events[1].properties["policy"]["odrl"]["uid"],
+            graph_events[3].properties["policy"]["odrl"]["uid"],
             serde_json::json!("policy:agent-read")
         );
-        assert_eq!(graph_events[2].label, GraphNodeLabel::Table);
-        assert_eq!(graph_events[2].action, GraphAction::Created);
-        assert_eq!(graph_events[2].event_id.as_deref(), Some("evt-1"));
-        assert_eq!(graph_events[3].label, GraphNodeLabel::Table);
-        assert_eq!(graph_events[3].action, GraphAction::PlannedScan);
-        assert_eq!(
-            graph_events[3].properties["read-restriction"]["allowed-columns"],
-            serde_json::json!(["event_id"])
-        );
-        assert_eq!(graph_events[4].label, GraphNodeLabel::ScanPlan);
-        assert_eq!(graph_events[4].subject, "lakecat:scan-plan:evt-2");
-        assert_eq!(graph_events[4].event_id.as_deref(), Some("evt-2:scan-plan"));
-        assert_eq!(
-            graph_events[4].properties["read-restriction"]["allowed-columns"],
-            serde_json::json!(["event_id"])
-        );
+        assert_eq!(graph_events[4].label, GraphNodeLabel::Principal);
         assert_eq!(graph_events[5].label, GraphNodeLabel::Table);
-        assert_eq!(graph_events[5].action, GraphAction::Committed);
-        assert_eq!(graph_events[5].event_id.as_deref(), Some("evt-commit"));
+        assert_eq!(graph_events[5].action, GraphAction::Created);
+        assert_eq!(graph_events[5].event_id.as_deref(), Some("evt-1"));
+        assert_eq!(graph_events[6].label, GraphNodeLabel::Principal);
+        assert_eq!(graph_events[7].label, GraphNodeLabel::Table);
+        assert_eq!(graph_events[7].action, GraphAction::PlannedScan);
         assert_eq!(
-            graph_events[5].properties["commit"]["new_metadata_location"],
+            graph_events[7].properties["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(graph_events[8].label, GraphNodeLabel::ScanPlan);
+        assert_eq!(graph_events[8].subject, "lakecat:scan-plan:evt-2");
+        assert_eq!(graph_events[8].event_id.as_deref(), Some("evt-2:scan-plan"));
+        assert_eq!(
+            graph_events[8].properties["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(graph_events[9].label, GraphNodeLabel::Principal);
+        assert_eq!(graph_events[10].label, GraphNodeLabel::Table);
+        assert_eq!(graph_events[10].action, GraphAction::Committed);
+        assert_eq!(graph_events[10].event_id.as_deref(), Some("evt-commit"));
+        assert_eq!(
+            graph_events[10].properties["commit"]["new_metadata_location"],
             serde_json::json!("file:///tmp/events/metadata/00001.json")
         );
-        assert_eq!(graph_events[6].label, GraphNodeLabel::Commit);
+        assert_eq!(graph_events[11].label, GraphNodeLabel::Commit);
         assert_eq!(
-            graph_events[6].subject,
+            graph_events[11].subject,
             "lakecat:commit:lakecat:table:local:default:events:7"
         );
         assert_eq!(
-            graph_events[6].event_id.as_deref(),
+            graph_events[11].event_id.as_deref(),
             Some("evt-commit:commit")
         );
         assert_eq!(
-            graph_events[6].properties["commit"]["idempotency_key_sha256"],
+            graph_events[11].properties["commit"]["idempotency_key_sha256"],
             serde_json::json!("sha256:idempotency")
+        );
+        assert_eq!(graph_events[12].label, GraphNodeLabel::Principal);
+        assert_eq!(
+            graph_events[12].event_id.as_deref(),
+            Some("evt-3:principal")
         );
         let lineage_events = lineage.events.lock().await;
         assert_eq!(lineage_events.len(), 5);
@@ -3368,13 +3408,14 @@ mod tests {
             }]),
             delivered: Mutex::default(),
         });
+        let graph = Arc::new(RecordingGraph::default());
         let lineage = Arc::new(RecordingLineage::default());
         let app = app(
             LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
                 .with_integrations(
                     default_sail_engine(),
                     AllowAllGovernanceEngine::new(),
-                    NoopCatalogGraphSink::new(),
+                    graph.clone(),
                     lineage.clone(),
                 ),
         );
@@ -3401,12 +3442,24 @@ mod tests {
             payload["event-types"],
             serde_json::json!(["querygraph.bootstrap"])
         );
-        assert_eq!(payload["graph-events"], serde_json::json!(0));
+        assert_eq!(payload["graph-events"], serde_json::json!(1));
         assert_eq!(payload["lineage-events"], serde_json::json!(1));
         assert_eq!(
             store.delivered.lock().await.as_slice(),
             &["evt-bootstrap".to_string()]
         );
+        let graph_events = graph.events.lock().await;
+        assert_eq!(graph_events.len(), 1);
+        assert_eq!(graph_events[0].label, GraphNodeLabel::Principal);
+        assert_eq!(
+            graph_events[0].subject,
+            "lakecat:principal:did:example:agent"
+        );
+        assert_eq!(
+            graph_events[0].event_id.as_deref(),
+            Some("evt-bootstrap:principal")
+        );
+        drop(graph_events);
         let lineage_events = lineage.events.lock().await;
         assert_eq!(lineage_events.len(), 1);
         assert_eq!(

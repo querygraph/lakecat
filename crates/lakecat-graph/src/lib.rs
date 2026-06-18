@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use lakecat_core::{LakeCatResult, Namespace, TableIdent, WarehouseName};
+use lakecat_core::{LakeCatResult, Namespace, Principal, TableIdent, WarehouseName};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -100,6 +100,18 @@ impl GraphEvent {
         }
     }
 
+    pub fn principal(action: GraphAction, principal: &Principal, properties: Value) -> Self {
+        Self {
+            event_id: None,
+            subject: principal_stable_id(principal),
+            label: GraphNodeLabel::Principal,
+            action,
+            table: None,
+            properties,
+            emitted_at: Utc::now(),
+        }
+    }
+
     pub fn with_event_id(mut self, event_id: impl Into<String>) -> Self {
         self.event_id = Some(event_id.into());
         self
@@ -128,6 +140,10 @@ pub fn scan_plan_stable_id(plan_id: &str) -> String {
 
 pub fn commit_stable_id(table: &TableIdent, sequence_number: u64) -> String {
     format!("lakecat:commit:{}:{sequence_number}", table.stable_id())
+}
+
+pub fn principal_stable_id(principal: &Principal) -> String {
+    format!("lakecat:principal:{}", principal.subject)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -248,6 +264,21 @@ mod tests {
             "lakecat:commit:lakecat:table:local:default:events:7"
         );
         assert_eq!(event.table.as_ref(), Some(&table));
+    }
+
+    #[test]
+    fn principal_event_uses_stable_catalog_subject() {
+        let principal =
+            Principal::new("did:example:agent", lakecat_core::PrincipalKind::Agent).unwrap();
+        let event = GraphEvent::principal(
+            GraphAction::Loaded,
+            &principal,
+            serde_json::json!({"kind": "test"}),
+        );
+
+        assert_eq!(event.label, GraphNodeLabel::Principal);
+        assert_eq!(event.subject, "lakecat:principal:did:example:agent");
+        assert!(event.table.is_none());
     }
 }
 
@@ -456,6 +487,31 @@ pub mod grust_integration {
                 Some(&Value::String("committed".to_string()))
             );
             GraphIndex::new(&graph).expect("commit event graph should be valid");
+        }
+
+        #[test]
+        fn converts_principal_event_to_valid_grust_graph_event() {
+            let principal = lakecat_core::Principal::new(
+                "did:example:agent",
+                lakecat_core::PrincipalKind::Agent,
+            )
+            .unwrap();
+            let event = GraphEvent::principal(
+                GraphAction::Loaded,
+                &principal,
+                serde_json::json!({"kind":"test"}),
+            )
+            .with_event_id("lakecat:outbox:evt-1:principal");
+            let graph = graph_event_to_grust(&event);
+
+            assert_eq!(graph.nodes.len(), 1);
+            assert_eq!(graph.edges.len(), 0);
+            assert_eq!(graph.nodes[0].label.as_str(), "CatalogEvent");
+            assert_eq!(
+                graph.nodes[0].props.get("label"),
+                Some(&Value::String("Principal".to_string()))
+            );
+            GraphIndex::new(&graph).expect("principal event graph should be valid");
         }
 
         #[tokio::test]

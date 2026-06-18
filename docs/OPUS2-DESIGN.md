@@ -247,8 +247,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   authorization payload; `table.scan-planned` and `table.scan-tasks-fetched`
   replay now emit stable catalog-facing `ScanPlan` graph events with governed
   read restrictions; `table.commit` replay now emits stable catalog-facing
-  `Commit` graph events keyed by table and committed sequence; table events
-  continue through the Grust-owned event graph adapter.*
+  `Commit` graph events keyed by table and committed sequence; non-anonymous
+  resolved principals now replay as stable catalog-facing `Principal` graph
+  events; table events continue through the Grust-owned event graph adapter.*
 - **P5 — Tenancy (F7) + production credentials (F8).** Project/Warehouse as
   stored entities with management endpoints; real Vault/AWS/GCP/Azure resolvers
   behind the TypeSec gate. Needed for multi-tenant deployment, not for the demo.
