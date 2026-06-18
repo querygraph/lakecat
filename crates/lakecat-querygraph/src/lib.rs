@@ -40,7 +40,7 @@ impl QueryGraphBootstrap {
             .collect::<Vec<_>>();
         let graph = QueryGraphCatalogGraph::from_tables(&tables);
         let open_lineage = bootstrap_open_lineage(&warehouse, &tables, generated_at);
-        let manifest = QueryGraphBundleManifest::from_parts(&tables, &open_lineage)?;
+        let manifest = QueryGraphBundleManifest::from_parts(&tables, &graph, &open_lineage)?;
         let bundle_payload = json!({
             "warehouse": warehouse.as_str(),
             "manifest": manifest,
@@ -92,6 +92,13 @@ impl QueryGraphBootstrap {
                 self.manifest.open_lineage_hash, open_lineage_hash
             )));
         }
+        let graph_hash = graph_hash(&self.graph)?;
+        if self.manifest.graph_hash != graph_hash {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap graph hash mismatch: manifest {}, computed {}",
+                self.manifest.graph_hash, graph_hash
+            )));
+        }
 
         for table in &self.tables {
             let expected = self
@@ -125,6 +132,7 @@ impl QueryGraphBootstrap {
                 .map(|table| table.stable_id.clone())
                 .collect(),
             bundle_hash,
+            graph_hash,
             open_lineage_hash,
             standards: self.manifest.standards.clone(),
         })
@@ -148,12 +156,14 @@ pub struct QueryGraphBundleManifest {
     pub producer: String,
     pub standards: Vec<String>,
     pub table_artifacts: Vec<QueryGraphTableArtifactHashes>,
+    pub graph_hash: String,
     pub open_lineage_hash: String,
 }
 
 impl QueryGraphBundleManifest {
     fn from_parts(
         tables: &[QueryGraphTableProjection],
+        graph: &QueryGraphCatalogGraph,
         open_lineage: &Value,
     ) -> LakeCatResult<Self> {
         Ok(Self {
@@ -165,12 +175,14 @@ impl QueryGraphBundleManifest {
                 "CDIF".to_string(),
                 "OSI handoff".to_string(),
                 "ODRL".to_string(),
+                "Grust catalog graph".to_string(),
                 "OpenLineage".to_string(),
             ],
             table_artifacts: tables
                 .iter()
                 .map(QueryGraphTableArtifactHashes::from_table)
                 .collect::<LakeCatResult<Vec<_>>>()?,
+            graph_hash: graph_hash(graph)?,
             open_lineage_hash: content_hash_json(open_lineage)?,
         })
     }
@@ -221,6 +233,15 @@ fn policy_bindings_value(table: &QueryGraphTableProjection) -> LakeCatResult<Val
     })
 }
 
+fn graph_hash(graph: &QueryGraphCatalogGraph) -> LakeCatResult<String> {
+    let value = serde_json::to_value(graph).map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to encode QueryGraph catalog graph: {err}"
+        ))
+    })?;
+    content_hash_json(&value)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct QueryGraphBootstrapVerification {
@@ -228,6 +249,7 @@ pub struct QueryGraphBootstrapVerification {
     pub table_count: usize,
     pub verified_tables: Vec<String>,
     pub bundle_hash: String,
+    pub graph_hash: String,
     pub open_lineage_hash: String,
     pub standards: Vec<String>,
 }
@@ -783,7 +805,18 @@ mod tests {
             bundle.manifest.open_lineage_hash,
             content_hash_json(&bundle.open_lineage).unwrap()
         );
+        assert_eq!(
+            bundle.manifest.graph_hash,
+            graph_hash(&bundle.graph).unwrap()
+        );
         assert!(bundle.manifest.standards.iter().any(|item| item == "CDIF"));
+        assert!(
+            bundle
+                .manifest
+                .standards
+                .iter()
+                .any(|item| item == "Grust catalog graph")
+        );
         assert_eq!(
             bundle.tables[0].cdif["dct:accessRights"]["odrl:policy"]["@type"],
             "odrl:Policy"
@@ -812,6 +845,7 @@ mod tests {
         let verification = bundle.verify_manifest().unwrap();
         assert_eq!(verification.table_count, 1);
         assert_eq!(verification.bundle_hash, bundle.bundle_hash);
+        assert_eq!(verification.graph_hash, bundle.manifest.graph_hash);
     }
 
     #[test]
@@ -903,5 +937,35 @@ mod tests {
 
         let err = bundle.verify_manifest().unwrap_err();
         assert!(err.to_string().contains("bundle hash mismatch"));
+    }
+
+    #[test]
+    fn verification_rejects_querygraph_graph_hash_mismatch() {
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            Namespace::new(vec!["default".to_string()]).unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let table = TableRecord::new(
+            ident,
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            json!({
+                "format-version": 3,
+                "current-schema-id": 1,
+                "schemas": [{
+                    "schema-id": 1,
+                    "fields": [{"id": 1, "name": "event_id", "type": "string"}]
+                }]
+            }),
+            Principal::anonymous(),
+        );
+        let mut bundle =
+            QueryGraphBootstrap::from_tables(WarehouseName::new("local").unwrap(), vec![table])
+                .unwrap();
+        bundle.graph.nodes.clear();
+
+        let err = bundle.verify_manifest().unwrap_err();
+        assert!(err.to_string().contains("graph hash mismatch"));
     }
 }

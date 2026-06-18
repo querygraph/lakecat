@@ -571,6 +571,7 @@ fn verify_qglake_bootstrap_bundle(
             ))
         })?;
     verify_qglake_bootstrap_projection(projection, namespace, table)?;
+    verify_qglake_bootstrap_graph(bundle, projection)?;
     verify_qglake_bootstrap_open_lineage(bundle, projection)
 }
 
@@ -654,6 +655,41 @@ fn verify_qglake_bootstrap_open_lineage(
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "QGLake bootstrap OpenLineage metadata location did not match table projection: {}",
             output["facets"]["queryGraph_catalog"]["metadataLocation"].clone()
+        )));
+    }
+    Ok(())
+}
+
+fn verify_qglake_bootstrap_graph(
+    bundle: &QueryGraphBootstrap,
+    projection: &lakecat_querygraph::QueryGraphTableProjection,
+) -> lakecat_core::LakeCatResult<()> {
+    let table_node = bundle
+        .graph
+        .nodes
+        .iter()
+        .find(|node| node.id == projection.stable_id && node.label == "IcebergTable")
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap graph did not include table node {}",
+                projection.stable_id
+            ))
+        })?;
+    if table_node.properties["metadataLocation"] != json!(projection.metadata_location) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap graph metadata location did not match table projection: {}",
+            table_node.properties["metadataLocation"].clone()
+        )));
+    }
+    let has_namespace_edge = bundle
+        .graph
+        .edges
+        .iter()
+        .any(|edge| edge.to == projection.stable_id && edge.label == "CONTAINS_TABLE");
+    if !has_namespace_edge {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap graph did not connect namespace to table {}",
+            projection.stable_id
         )));
     }
     Ok(())
@@ -1477,6 +1513,26 @@ mod tests {
     }
 
     #[test]
+    fn qglake_bootstrap_verifier_requires_graph_table_anchor() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let mut bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        bundle.graph.nodes.clear();
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect_err("QGLake bootstrap should reject missing graph table anchor");
+        assert!(err.to_string().contains("graph did not include table node"));
+    }
+
+    #[test]
     fn qglake_bootstrap_verifier_accepts_policy_and_openlineage_export() {
         let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
         let output = serde_json::json!({
@@ -1664,6 +1720,7 @@ mod tests {
         tables: Vec<lakecat_querygraph::QueryGraphTableProjection>,
         open_lineage_outputs: Vec<serde_json::Value>,
     ) -> QueryGraphBootstrap {
+        let graph = lakecat_querygraph::QueryGraphCatalogGraph::from_tables(&tables);
         QueryGraphBootstrap {
             warehouse: lakecat_core::WarehouseName::new("local").unwrap(),
             generated_at: chrono::Utc::now(),
@@ -1673,13 +1730,11 @@ mod tests {
                 producer: "https://querygraph.ai/lakecat".to_string(),
                 standards: vec!["ODRL".to_string(), "OpenLineage".to_string()],
                 table_artifacts: Vec::new(),
+                graph_hash: "test".to_string(),
                 open_lineage_hash: "test".to_string(),
             },
             tables,
-            graph: lakecat_querygraph::QueryGraphCatalogGraph {
-                nodes: Vec::new(),
-                edges: Vec::new(),
-            },
+            graph,
             open_lineage: serde_json::json!({
                 "outputs": open_lineage_outputs
             }),

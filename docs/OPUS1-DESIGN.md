@@ -677,13 +677,14 @@ only once **P2** gives it a governed path to run on.
 - **P5 — QueryGraph end-to-end.** `querygraph import-lakecat`; QGLake "Resilience
   Desk" as the acceptance test. (Milestone 9.) *Started with a LakeCat
   bootstrap manifest that gives QueryGraph stable hashes for Croissant, CDIF,
-  an OSI handoff, ODRL, and OpenLineage artifacts before graph loading or policy
-  verification. LakeCat now avoids publishing authoritative OSI metrics,
-  dimensions, joins, ontology claims, or business semantic names; those belong
-  in QueryGraph. The QGLake fixture now verifies governed scan planning,
-  exported policy bindings, OpenLineage output presence, and bootstrap
-  OpenLineage replay before writing the bundle, then drains the lineage/outbox
-  stream through the governed management endpoint.*
+  an OSI handoff, ODRL, the catalog graph, and OpenLineage artifacts before
+  graph loading or policy verification. LakeCat now avoids publishing
+  authoritative OSI metrics, dimensions, joins, ontology claims, or business
+  semantic names; those belong in QueryGraph. The QGLake fixture now verifies
+  governed scan planning, exported policy bindings, graph table anchors,
+  OpenLineage output presence, and bootstrap OpenLineage replay before writing
+  the bundle, then drains the lineage/outbox stream through the governed
+  management endpoint.*
 - **Deferred — Tier-0 pruning depth and typed v4.** Good but diminishing-returns
   until P1–P3 land; HMAC-signed plan-task tokens are now implemented for new
   Sail scan-planning tokens. (Milestone 10; Finding 12.)

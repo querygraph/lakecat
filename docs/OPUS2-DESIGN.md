@@ -209,7 +209,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   namespace/table resources only after validating that they still match the
   expected QGLake fixture shape; the fixture now verifies the exported
   QueryGraph bootstrap contains the enforced QGLake policy binding, restricted
-  ODRL material, and OpenLineage output before writing the bundle;
+  ODRL material, OpenLineage output, and the fixture table's graph node plus
+  namespace edge before writing the bundle; the bootstrap manifest now hashes
+  the catalog graph so QueryGraph import can reject graph projection drift;
   `querygraph.bootstrap` outbox events now project into LakeCat OpenLineage
   output events carrying the bootstrap authorization/request-identity payload
   for QueryGraph replay; LakeCat now exposes a governed lineage-drain

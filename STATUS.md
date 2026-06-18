@@ -6,22 +6,20 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `8fae407 Summarize QGLake lineage drain receipts`.
-- Current working slice: paused after governed lineage-drain receipt summaries
-  for QGLake acceptance. The drain response now includes delivered event types
-  plus graph and lineage projection counts, and `lakecat-cli qglake-fixture`
-  now requires the drain to replay `querygraph.bootstrap` into lineage.
+  `60c6884 Record QGLake drain receipt status`.
+- Current working slice: QueryGraph bootstrap graph integrity for QGLake
+  acceptance. The bootstrap manifest now hashes the catalog graph, manifest
+  verification rejects graph drift, and `lakecat-cli qglake-fixture` now
+  requires the fixture table's graph node and namespace edge before writing the
+  bundle.
 - Local verification for the current slice is green:
-  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo fmt -p lakecat-querygraph -p lakecat-cli -- --check`;
   `git diff --check`;
-  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --nocapture`;
-  `cargo test -p lakecat-cli qglake -- --nocapture`;
-  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
-  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox -- --nocapture`;
+  `cargo test -p lakecat-querygraph -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_bootstrap -- --nocapture`;
   `cargo test -p lakecat-cli`;
-  `cargo test -p lakecat-service`;
-  `cargo test -p lakecat-store --features turso-local`;
-  `cargo test -p lakecat-service --all-features`;
+  `cargo test -p lakecat-querygraph`;
+  `cargo test -p lakecat-service querygraph_bootstrap_projects_catalog_tables -- --nocapture`;
   `cargo test --workspace`;
   `cargo test --workspace --all-features`.
 - Manual cloud gate status: run `27722995692` was started only after local
@@ -68,6 +66,10 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added a QueryGraph bootstrap manifest `graph-hash` and verification failure
+  for graph projection drift.
+- Made `lakecat-cli qglake-fixture` verify the QGLake table graph node and
+  namespace edge before accepting the bootstrap bundle.
 - Extended the lineage drain API response with delivered event types, graph
   event count, and lineage event count.
 - Made `lakecat-cli qglake-fixture` require the drain summary to include

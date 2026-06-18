@@ -449,10 +449,10 @@ querygraph import-lakecat --catalog http://localhost:8181/catalog \
 ```
 
 Current LakeCat bootstrap bundles include a `manifest` that hashes each emitted
-Croissant, CDIF, OSI handoff, ODRL, and OpenLineage artifact. QueryGraph
-importers should verify those hashes before loading the semantic bundle or
-asking Grust to ingest catalog graph projections. LakeCat may publish stable
-dataset and field anchors for OSI import, but QueryGraph owns metrics,
+Croissant, CDIF, OSI handoff, ODRL, catalog graph, and OpenLineage artifact.
+QueryGraph importers should verify those hashes before loading the semantic
+bundle or asking Grust to ingest catalog graph projections. LakeCat may publish
+stable dataset and field anchors for OSI import, but QueryGraph owns metrics,
 dimensions, joins, business ontology, and authoritative semantic names.
 
 ## Lakekeeper Lessons To Adopt

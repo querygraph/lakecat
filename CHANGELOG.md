@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a QueryGraph bootstrap `graph-hash` manifest entry, verified graph hash
+  validation, and made `lakecat-cli qglake-fixture` require the fixture table's
+  graph node and namespace edge before writing the bundle.
 - Extended the governed lineage-drain response with delivered event types plus
   graph and lineage projection counts, and made `lakecat-cli qglake-fixture`
   require `querygraph.bootstrap` lineage replay in the drain summary.
