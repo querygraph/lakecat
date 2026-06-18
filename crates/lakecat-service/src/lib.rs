@@ -11,10 +11,11 @@ use lakecat_api::{
     CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest,
     FetchScanTasksResponse, LineageDrainResponse, ListNamespacesResponse,
     ListPolicyBindingsResponse, ListProjectsResponse, ListStorageProfilesResponse,
-    ListWarehousesResponse, LoadCredentialsResponse, LoadTableResponse, NamespaceResponse,
-    PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse, ProjectResponse,
-    StorageCredential, StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest,
-    UpsertProjectRequest, UpsertStorageProfileRequest, UpsertWarehouseRequest, WarehouseResponse,
+    ListViewsResponse, ListWarehousesResponse, LoadCredentialsResponse, LoadTableResponse,
+    NamespaceResponse, PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse,
+    ProjectResponse, StorageCredential, StorageProfileResponse, TableIdentifier,
+    UpsertPolicyBindingRequest, UpsertProjectRequest, UpsertStorageProfileRequest,
+    UpsertViewRequest, UpsertWarehouseRequest, ViewResponse, WarehouseResponse,
 };
 use lakecat_core::{
     LakeCatError, Namespace, Principal, PrincipalKind, TableIdent, TableName, WarehouseName,
@@ -41,12 +42,12 @@ use lakecat_security::{
     PolicyManageCapability, ProjectManageCapability, ReadRestriction,
     StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
     TableDropCapability, TableLoadCapability, TableRestoreCapability, TableScanCapability,
-    WarehouseManageCapability,
+    ViewManageCapability, WarehouseManageCapability,
 };
 use lakecat_store::{
     CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, PolicyBinding,
-    ProjectRecord, StorageProfile, StorageProvider, TableCommit, TableRecord, WarehouseRecord,
-    table_ident,
+    ProjectRecord, StorageProfile, StorageProvider, TableCommit, TableRecord, ViewRecord,
+    WarehouseRecord, table_ident,
 };
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStore, ObjectStoreExt, PutPayload};
@@ -840,6 +841,14 @@ pub fn app(state: LakeCatState) -> Router {
             post(upsert_storage_profile).put(upsert_storage_profile),
         )
         .route(
+            "/management/v1/warehouses/{warehouse}/namespaces/{namespace}/views",
+            get(list_views),
+        )
+        .route(
+            "/management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}",
+            post(upsert_view).put(upsert_view),
+        )
+        .route(
             "/management/v1/warehouses/{warehouse}/policies",
             get(list_policy_bindings),
         )
@@ -1547,6 +1556,73 @@ async fn upsert_storage_profile(
         )?)
         .await?;
     Ok(Json(storage_profile_response(&storage_profile)))
+}
+
+async fn list_views(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace)): Path<(String, String)>,
+) -> Result<Json<ListViewsResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let namespace = namespace.parse::<Namespace>()?;
+    let capability = authorize_view_manage(&state, request_identity(&headers)?).await?;
+    let views = state.store.list_views(&warehouse, &namespace).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "view.listed",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "view.listed",
+                "warehouse": warehouse.as_str(),
+                "namespace": namespace.parts(),
+                "view-count": views.len(),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(ListViewsResponse {
+        views: views.iter().map(view_response).collect(),
+    }))
+}
+
+async fn upsert_view(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, view)): Path<(String, String, String)>,
+    Json(request): Json<UpsertViewRequest>,
+) -> Result<Json<ViewResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let namespace = namespace.parse::<Namespace>()?;
+    let capability = authorize_view_manage(&state, request_identity(&headers)?).await?;
+    let record = ViewRecord::new(
+        warehouse.clone(),
+        namespace.clone(),
+        TableName::new(view)?,
+        request.sql,
+        request.dialect,
+        request.schema_version,
+        request.properties,
+        capability.receipt().principal.clone(),
+    )?;
+    let record = state.store.upsert_view(record).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "view.upserted",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "view.upserted",
+                "warehouse": warehouse.as_str(),
+                "namespace": namespace.parts(),
+                "view": view_response(&record),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(view_response(&record)))
 }
 
 async fn list_policy_bindings(
@@ -2650,6 +2726,18 @@ fn project_response(record: &ProjectRecord) -> ProjectResponse {
     }
 }
 
+fn view_response(record: &ViewRecord) -> ViewResponse {
+    ViewResponse {
+        warehouse: record.warehouse.as_str().to_string(),
+        namespace: record.namespace.parts().to_vec(),
+        name: record.name.as_str().to_string(),
+        sql: record.sql.clone(),
+        dialect: record.dialect.clone(),
+        schema_version: record.schema_version,
+        properties: record.properties.clone(),
+    }
+}
+
 fn policy_binding_response(binding: &PolicyBinding) -> PolicyBindingResponse {
     PolicyBindingResponse {
         policy_id: binding.policy_id.clone(),
@@ -3055,6 +3143,14 @@ async fn authorize_storage_profile_manage(
 ) -> Result<StorageProfileManageCapability, LakeCatHttpError> {
     let receipt = authorize(state, identity, CatalogAction::StorageProfileManage, None).await?;
     Ok(StorageProfileManageCapability::from_receipt(receipt)?)
+}
+
+async fn authorize_view_manage(
+    state: &LakeCatState,
+    identity: RequestIdentity,
+) -> Result<ViewManageCapability, LakeCatHttpError> {
+    let receipt = authorize(state, identity, CatalogAction::ViewManage, None).await?;
+    Ok(ViewManageCapability::from_receipt(receipt)?)
 }
 
 async fn authorize_policy_manage(
@@ -5302,6 +5398,60 @@ mod tests {
             body["projects"][0]["display-name"],
             serde_json::json!("Default Project")
         );
+    }
+
+    #[tokio::test]
+    async fn management_views_are_durable_management_entities() {
+        let app = test_app();
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/active_customers")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "sql": "select id, email from customers where active",
+                    "dialect": "sql",
+                    "schema-version": 1,
+                    "properties": {
+                        "semantic-domain": "customer"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["warehouse"], serde_json::json!("local"));
+        assert_eq!(body["namespace"], serde_json::json!(["default"]));
+        assert_eq!(body["name"], serde_json::json!("active_customers"));
+        assert_eq!(
+            body["properties"]["semantic-domain"],
+            serde_json::json!("customer")
+        );
+
+        let list = Request::builder()
+            .method(Method::GET)
+            .uri("/management/v1/warehouses/local/namespaces/default/views")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(list).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["views"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            body["views"][0]["name"],
+            serde_json::json!("active_customers")
+        );
+        assert_eq!(body["views"][0]["schema-version"], serde_json::json!(1));
     }
 
     #[tokio::test]

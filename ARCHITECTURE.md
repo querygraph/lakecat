@@ -311,12 +311,15 @@ providers fail closed with explicit not-configured errors until their SDK
 resolvers are enabled. Governed management endpoints can now upsert and list
 warehouse storage profiles, and Turso persists those profiles for
 longest-prefix credential selection. Production external secret-store resolver
-backend coverage beyond Vault remains pending. Governed table lifecycle now records
-soft-delete rows, hides deleted tables from normal catalog reads, restores
-soft-deleted tables through a governed management endpoint, and emits
-`table.deleted` / `table.restored` audit/outbox events. Governed policy
-management endpoints can now upsert/list enforced ODRL policy bindings, and
-active table bindings are attached to authorization context before TypeSec runs.
+backend coverage beyond Vault remains pending. Governed management endpoints can
+also upsert and list durable semantic view records in memory and Turso, giving
+QueryGraph a stable catalog-owned view entity before standard Iceberg view REST
+semantics are wired. Governed table lifecycle now records soft-delete rows,
+hides deleted tables from normal catalog reads, restores soft-deleted tables
+through a governed management endpoint, and emits `table.deleted` /
+`table.restored` audit/outbox events. Governed policy management endpoints can
+now upsert/list enforced ODRL policy bindings, and active table bindings are
+attached to authorization context before TypeSec runs.
 
 Required tables:
 

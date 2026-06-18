@@ -7,9 +7,8 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `d905f27 Route commit metadata through object_store`.
-- Paused after pushing commit metadata object writes and stale-write cleanup
-  through the Rust `object_store` URL seam instead of hardcoding the local
-  filesystem writer.
+- Current working slice adds governed durable view records with management
+  list/upsert endpoints, memory/Turso persistence, and audited `view.*` events.
 - Local verification for the pushed object-store metadata writer slice was green:
   `cargo fmt -p lakecat-service`;
   `cargo fmt -p lakecat-service -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -- --check`;
@@ -152,6 +151,9 @@ Updated: 2026-06-18
 
 ## Completed In Latest Implementation Slice
 
+- Added governed durable view records with management list/upsert endpoints,
+  memory/Turso persistence, and audited `view.*` events as the next
+  Lakekeeper-style catalog entity after Project and Warehouse.
 - Routed commit metadata object writes and stale-write cleanup through
   `object_store::parse_url_opts`, preserving local `file://` behavior while
   opening the writer boundary for configured object-store backends.

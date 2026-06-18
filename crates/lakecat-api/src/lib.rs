@@ -53,6 +53,10 @@ impl Default for CatalogConfigResponse {
                     .to_string(),
                 "GET /management/v1/warehouses/{warehouse}/storage-profiles".to_string(),
                 "PUT /management/v1/warehouses/{warehouse}/storage-profiles/{profile}".to_string(),
+                "GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/views"
+                    .to_string(),
+                "PUT /management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}"
+                    .to_string(),
                 "GET /management/v1/warehouses/{warehouse}/policies".to_string(),
                 "PUT /management/v1/warehouses/{warehouse}/policies/{policy}".to_string(),
             ],
@@ -206,6 +210,40 @@ pub struct StorageProfileResponse {
 #[serde(rename_all = "kebab-case")]
 pub struct ListStorageProfilesResponse {
     pub storage_profiles: Vec<StorageProfileResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct UpsertViewRequest {
+    pub sql: String,
+    #[serde(default = "default_sql_dialect")]
+    pub dialect: String,
+    #[serde(default)]
+    pub schema_version: Option<u64>,
+    #[serde(default)]
+    pub properties: BTreeMap<String, String>,
+}
+
+fn default_sql_dialect() -> String {
+    "sql".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ViewResponse {
+    pub warehouse: String,
+    pub namespace: Vec<String>,
+    pub name: String,
+    pub sql: String,
+    pub dialect: String,
+    pub schema_version: Option<u64>,
+    pub properties: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ListViewsResponse {
+    pub views: Vec<ViewResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

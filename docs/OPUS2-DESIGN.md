@@ -270,8 +270,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   `WarehouseRecord`, while keeping the unprefixed default-warehouse
   compatibility path; credential-vend attempts with fine-grained restrictions
   now fail closed into governed Sail-planned reads before any secret resolver is
-  called. Server/View entities and richer project-scoped routing remain
-  pending.*
+  called; governed view list/upsert management endpoints now persist durable
+  `ViewRecord` values in memory and Turso and emit audited `view.*` events.
+  Server entities, standard Iceberg view REST semantics, and richer
+  project-scoped routing remain pending.*
 - **P6 — Reproducibility (F10) + typed v4 (F9).** Land the Sail helper commits
   upstream (or pin a published Sail) and re-enable automatic CI; converge on
   typed v4 metadata once `sail-iceberg` provides it.

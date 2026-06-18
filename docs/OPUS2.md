@@ -249,16 +249,18 @@ LakeCat owns only the catalog-domain event→typed-graph mapping.
 **File:** `crates/lakecat-service/src/main.rs`; `management_warehouse` (line
 ~1613) only checks equality with the one configured warehouse.
 
-Storage profiles and policy bindings are now first-class, but the tenancy
-hierarchy the architecture specifies (`Server › Project › Warehouse › Namespace`)
-is not modeled — there is one `LAKECAT_WAREHOUSE`, no projects, no warehouse
-provisioning, no views. This is fine for the QGLake single-warehouse demo but
-blocks the multi-tenant Lakekeeper-style separation the GOAL cites.
+Storage profiles, policy bindings, projects, warehouses, and semantic views are
+now first-class durable management entities. LakeCat can resolve warehouse
+prefixes from stored `WarehouseRecord` values instead of only trusting the
+configured default, and governed view list/upsert endpoints persist `ViewRecord`
+values in memory and Turso. The remaining tenancy gap is narrower but real:
+Server entities, standard Iceberg view REST semantics, and richer project-scoped
+routing are not modeled yet.
 
-**Fix:** introduce Project/Warehouse as stored entities with the
-`lakecat:warehouse:{project}:{warehouse}` ID scheme and management endpoints;
-keep the served catalog scoped to a warehouse but resolve it from the store, not
-a constant.
+**Fix:** introduce Server and Iceberg-compatible view REST entities around the
+existing Project/Warehouse/View records; keep the served catalog scoped to a
+stored warehouse and then add project-scoped routing without changing standard
+table access semantics.
 
 ### F8. (LOW) Production secret-store backends fail closed but are unexercised
 

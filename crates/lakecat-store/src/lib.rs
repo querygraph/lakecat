@@ -83,6 +83,17 @@ pub trait CatalogStore: Send + Sync + 'static {
     ) -> LakeCatResult<Vec<StorageProfile>> {
         Ok(Vec::new())
     }
+    async fn upsert_view(&self, view: ViewRecord) -> LakeCatResult<ViewRecord> {
+        view.validate()?;
+        Ok(view)
+    }
+    async fn list_views(
+        &self,
+        _warehouse: &WarehouseName,
+        _namespace: &Namespace,
+    ) -> LakeCatResult<Vec<ViewRecord>> {
+        Ok(Vec::new())
+    }
     async fn upsert_policy_binding(&self, binding: PolicyBinding) -> LakeCatResult<PolicyBinding> {
         Ok(binding)
     }
@@ -258,6 +269,68 @@ impl WarehouseRecord {
         {
             return Err(LakeCatError::InvalidArgument(
                 "warehouse storage root must not be empty".to_string(),
+            ));
+        }
+        validate_public_config(&self.properties)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ViewRecord {
+    pub warehouse: WarehouseName,
+    pub namespace: Namespace,
+    pub name: TableName,
+    pub sql: String,
+    pub dialect: String,
+    pub schema_version: Option<u64>,
+    pub properties: BTreeMap<String, String>,
+    pub created: AuditStamp,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl ViewRecord {
+    pub fn new(
+        warehouse: WarehouseName,
+        namespace: Namespace,
+        name: TableName,
+        sql: impl Into<String>,
+        dialect: impl Into<String>,
+        schema_version: Option<u64>,
+        properties: BTreeMap<String, String>,
+        principal: Principal,
+    ) -> LakeCatResult<Self> {
+        let created = AuditStamp::now(principal);
+        let record = Self {
+            warehouse,
+            namespace,
+            name,
+            sql: sql.into(),
+            dialect: dialect.into(),
+            schema_version,
+            properties,
+            updated_at: created.at,
+            created,
+        };
+        record.validate()?;
+        Ok(record)
+    }
+
+    pub fn validate(&self) -> LakeCatResult<()> {
+        if self.sql.trim().is_empty() {
+            return Err(LakeCatError::InvalidArgument(
+                "view SQL must not be empty".to_string(),
+            ));
+        }
+        let dialect = self.dialect.trim();
+        if dialect.is_empty() {
+            return Err(LakeCatError::InvalidArgument(
+                "view dialect must not be empty".to_string(),
+            ));
+        }
+        if dialect.contains(char::is_whitespace) {
+            return Err(LakeCatError::InvalidArgument(
+                "view dialect must not contain whitespace".to_string(),
             ));
         }
         validate_public_config(&self.properties)?;
@@ -589,6 +662,7 @@ struct MemoryState {
     outbox_events: Vec<OutboxEvent>,
     idempotency: BTreeMap<String, IdempotencyReplay>,
     storage_profiles: BTreeMap<String, StorageProfile>,
+    views: BTreeMap<String, ViewRecord>,
     policy_bindings: BTreeMap<String, PolicyBinding>,
     soft_deletes: BTreeMap<String, SoftDeleteRecord>,
 }
@@ -924,6 +998,29 @@ impl CatalogStore for MemoryCatalogStore {
         Ok(profiles)
     }
 
+    async fn upsert_view(&self, view: ViewRecord) -> LakeCatResult<ViewRecord> {
+        view.validate()?;
+        let mut state = self.state.write().await;
+        state.views.insert(view_key(&view), view.clone());
+        Ok(view)
+    }
+
+    async fn list_views(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+    ) -> LakeCatResult<Vec<ViewRecord>> {
+        let state = self.state.read().await;
+        let mut views = state
+            .views
+            .values()
+            .filter(|view| view.warehouse == *warehouse && view.namespace == *namespace)
+            .cloned()
+            .collect::<Vec<_>>();
+        views.sort_by(|left, right| left.name.as_str().cmp(right.name.as_str()));
+        Ok(views)
+    }
+
     async fn storage_profile_for_table(
         &self,
         table: &TableRecord,
@@ -1032,6 +1129,14 @@ fn table_key(ident: &TableIdent) -> String {
         "{}\u{1f}{}\u{1f}{}",
         ident.warehouse, ident.namespace, ident.name
     )
+}
+
+fn view_key(view: &ViewRecord) -> String {
+    view_key_parts(&view.warehouse, &view.namespace, &view.name)
+}
+
+fn view_key_parts(warehouse: &WarehouseName, namespace: &Namespace, name: &TableName) -> String {
+    format!("{warehouse}\u{1f}{namespace}\u{1f}{name}")
 }
 
 fn audit_event_id(event: &CatalogAuditEvent) -> LakeCatResult<String> {
@@ -1286,6 +1391,48 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_persists_view_records() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        assert_eq!(
+            store.list_views(&warehouse, &namespace).await.unwrap(),
+            vec![]
+        );
+
+        let view = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("active_customers").unwrap(),
+            "select * from customers where active",
+            "sql",
+            Some(1),
+            BTreeMap::from([("owner".to_string(), "querygraph".to_string())]),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_view(view).await.unwrap();
+
+        let updated = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("active_customers").unwrap(),
+            "select id, email from customers where active",
+            "sql",
+            Some(2),
+            BTreeMap::from([("owner".to_string(), "lakecat".to_string())]),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_view(updated.clone()).await.unwrap();
+
+        assert_eq!(
+            store.list_views(&warehouse, &namespace).await.unwrap(),
+            vec![updated]
+        );
+    }
+
+    #[tokio::test]
     async fn memory_store_records_and_marks_audit_outbox_events() {
         let store = MemoryCatalogStore::new();
         let ident = TableIdent::new(
@@ -1369,9 +1516,9 @@ pub mod turso_store {
 
     use crate::{
         CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, ProjectRecord,
-        SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord,
+        SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord, ViewRecord,
         WarehouseRecord, policy_binding_key, policy_bindings_for_table, storage_profile_key,
-        storage_profile_match, table_key,
+        storage_profile_match, table_key, view_key,
     };
 
     #[derive(Debug, Clone)]
@@ -2125,6 +2272,56 @@ pub mod turso_store {
             Ok(warehouses)
         }
 
+        async fn upsert_view(&self, view: ViewRecord) -> LakeCatResult<ViewRecord> {
+            view.validate()?;
+            let conn = self.connect()?;
+            let view_key = view_key(&view);
+            conn.execute(
+                "insert into views (
+                    view_key, warehouse, namespace_path, view_name, dialect, record_json, updated_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 on conflict(view_key) do update set
+                    dialect = excluded.dialect,
+                    record_json = excluded.record_json,
+                    updated_at = excluded.updated_at",
+                (
+                    view_key.as_str(),
+                    view.warehouse.as_str(),
+                    view.namespace.path().as_str(),
+                    view.name.as_str(),
+                    view.dialect.as_str(),
+                    encode_json(&view)?,
+                    view.updated_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
+            Ok(view)
+        }
+
+        async fn list_views(
+            &self,
+            warehouse: &WarehouseName,
+            namespace: &Namespace,
+        ) -> LakeCatResult<Vec<ViewRecord>> {
+            let conn = self.connect()?;
+            let mut rows = conn
+                .query(
+                    "select record_json from views
+                     where warehouse = ?1 and namespace_path = ?2
+                     order by view_name",
+                    (warehouse.as_str(), namespace.path().as_str()),
+                )
+                .await
+                .map_err(turso_error)?;
+            let mut views = Vec::new();
+            while let Some(row) = rows.next().await.map_err(turso_error)? {
+                views.push(decode_json(row_string(&row, 0)?)?);
+            }
+            Ok(views)
+        }
+
         async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {
             let conn = self.connect()?;
             let event_id = content_hash_json(&serde_json::json!({
@@ -2432,6 +2629,17 @@ pub mod turso_store {
         )",
         "create index if not exists idx_storage_profiles_warehouse
             on storage_profiles (warehouse, profile_id)",
+        "create table if not exists views (
+            view_key text primary key,
+            warehouse text not null,
+            namespace_path text not null,
+            view_name text not null,
+            dialect text not null,
+            record_json text not null,
+            updated_at text not null
+        )",
+        "create index if not exists idx_views_warehouse_namespace
+            on views (warehouse, namespace_path, view_name)",
         "create table if not exists policy_bindings (
             policy_key text primary key,
             policy_id text not null,
@@ -2570,7 +2778,7 @@ pub mod turso_store {
 
         use lakecat_core::{Principal, TableName};
 
-        use crate::{CredentialIssuanceMode, PolicyBinding, StorageProvider};
+        use crate::{CredentialIssuanceMode, PolicyBinding, StorageProvider, ViewRecord};
 
         use super::*;
 
@@ -2635,6 +2843,48 @@ pub mod turso_store {
             store.upsert_project(updated.clone()).await.unwrap();
 
             assert_eq!(store.list_projects().await.unwrap(), vec![updated]);
+        }
+
+        #[tokio::test]
+        async fn turso_store_persists_view_records() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            assert_eq!(
+                store.list_views(&warehouse, &namespace).await.unwrap(),
+                vec![]
+            );
+
+            let view = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("active_customers").unwrap(),
+                "select * from customers where active",
+                "sql",
+                Some(1),
+                BTreeMap::from([("owner".to_string(), "querygraph".to_string())]),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_view(view).await.unwrap();
+
+            let updated = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("active_customers").unwrap(),
+                "select id, email from customers where active",
+                "sql",
+                Some(2),
+                BTreeMap::from([("owner".to_string(), "lakecat".to_string())]),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_view(updated.clone()).await.unwrap();
+
+            assert_eq!(
+                store.list_views(&warehouse, &namespace).await.unwrap(),
+                vec![updated]
+            );
         }
 
         #[tokio::test]

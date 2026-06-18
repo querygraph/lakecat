@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added governed durable view records with management list/upsert endpoints,
+  memory/Turso persistence, and audited outbox-backed `view.*` events as the
+  next Lakekeeper-style tenancy entity after Project and Warehouse.
 - Routed commit metadata object writes and orphan cleanup through
   `object_store::parse_url_opts`, keeping local `file://` behavior while moving
   the commit writer toward configured object-store backends.
