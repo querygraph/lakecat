@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added durable typed view columns and wired the in-process Sail
+  `CatalogProvider` view bridge to create, load, list, and drop LakeCat
+  `ViewRecord` values with `TableKind::View` status conversion for QueryGraph
+  bootstrap.
 - Added governed Iceberg REST namespace load/drop routes on unprefixed and
   warehouse-prefixed catalog paths, with memory/Turso persistence, typed
   `namespace.load` / `namespace.drop` capabilities, non-empty namespace guards,

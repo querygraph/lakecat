@@ -342,6 +342,7 @@ pub struct QueryGraphViewProjection {
     pub sql: String,
     pub dialect: String,
     pub schema_version: Option<u64>,
+    pub columns: Value,
     pub properties: Value,
     pub osi: Value,
 }
@@ -349,6 +350,7 @@ pub struct QueryGraphViewProjection {
 impl QueryGraphViewProjection {
     pub fn from_view(view: ViewRecord) -> Self {
         let stable_id = view_stable_id(&view);
+        let columns = json!(view.columns);
         let properties = json!(view.properties);
         let osi = view_osi_handoff(&view, &stable_id);
         Self {
@@ -359,6 +361,7 @@ impl QueryGraphViewProjection {
             sql: view.sql,
             dialect: view.dialect,
             schema_version: view.schema_version,
+            columns,
             properties,
             osi,
         }
@@ -534,6 +537,7 @@ impl QueryGraphCatalogGraph {
                     "name": view.name,
                     "dialect": view.dialect,
                     "schemaVersion": view.schema_version,
+                    "columns": view.columns,
                 }),
             });
             edges.push(QueryGraphEdge {
@@ -728,6 +732,7 @@ fn view_osi_handoff(view: &ViewRecord, stable_id: &str) -> Value {
             "namespace": view.namespace.path(),
             "dialect": view.dialect,
             "schemaVersion": view.schema_version,
+            "columns": view.columns,
             "sql": view.sql,
             "properties": view.properties
         },
@@ -939,6 +944,7 @@ fn verify_hash(label: &str, expected: &str, value: &Value) -> LakeCatResult<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lakecat_store::ViewColumnRecord;
     use std::collections::BTreeMap;
 
     use lakecat_core::{Namespace, Principal, TableName};
@@ -1129,6 +1135,21 @@ mod tests {
             BTreeMap::from([("semantic-domain".to_string(), "customer".to_string())]),
             Principal::anonymous(),
         )
+        .unwrap()
+        .with_columns(vec![
+            ViewColumnRecord {
+                name: "id".to_string(),
+                data_type: json!("int"),
+                nullable: false,
+                comment: Some("Customer identifier".to_string()),
+            },
+            ViewColumnRecord {
+                name: "email".to_string(),
+                data_type: json!("string"),
+                nullable: true,
+                comment: None,
+            },
+        ])
         .unwrap();
 
         let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
@@ -1141,6 +1162,7 @@ mod tests {
         assert_eq!(bundle.tables.len(), 0);
         assert_eq!(bundle.views.len(), 1);
         assert_eq!(bundle.views[0].name, "active_customers");
+        assert_eq!(bundle.views[0].columns[0]["name"], json!("id"));
         assert_eq!(bundle.manifest.view_artifacts.len(), 1);
         assert_eq!(
             bundle.manifest.view_artifacts[0].stable_id,
@@ -1160,6 +1182,10 @@ mod tests {
         assert_eq!(
             bundle.open_lineage["run"]["facets"]["queryGraph_semanticBundle"]["viewCount"],
             json!(1)
+        );
+        assert_eq!(
+            bundle.views[0].osi["view"]["columns"][0]["comment"],
+            json!("Customer identifier")
         );
         let verification = bundle.verify_manifest().unwrap();
         assert_eq!(verification.view_count, 1);

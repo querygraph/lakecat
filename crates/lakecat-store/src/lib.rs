@@ -434,9 +434,20 @@ pub struct ViewRecord {
     pub sql: String,
     pub dialect: String,
     pub schema_version: Option<u64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub columns: Vec<ViewColumnRecord>,
     pub properties: BTreeMap<String, String>,
     pub created: AuditStamp,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ViewColumnRecord {
+    pub name: String,
+    pub data_type: Value,
+    pub nullable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
 }
 
 impl ViewRecord {
@@ -458,12 +469,19 @@ impl ViewRecord {
             sql: sql.into(),
             dialect: dialect.into(),
             schema_version,
+            columns: Vec::new(),
             properties,
             updated_at: created.at,
             created,
         };
         record.validate()?;
         Ok(record)
+    }
+
+    pub fn with_columns(mut self, columns: Vec<ViewColumnRecord>) -> LakeCatResult<Self> {
+        self.columns = columns;
+        self.validate()?;
+        Ok(self)
     }
 
     pub fn validate(&self) -> LakeCatResult<()> {
@@ -483,7 +501,42 @@ impl ViewRecord {
                 "view dialect must not contain whitespace".to_string(),
             ));
         }
+        let mut column_names = BTreeSet::new();
+        for column in &self.columns {
+            column.validate()?;
+            if !column_names.insert(column.name.as_str()) {
+                return Err(LakeCatError::InvalidArgument(format!(
+                    "view column appears more than once: {}",
+                    column.name
+                )));
+            }
+        }
         validate_public_config(&self.properties)?;
+        Ok(())
+    }
+}
+
+impl ViewColumnRecord {
+    pub fn validate(&self) -> LakeCatResult<()> {
+        if self.name.trim().is_empty() {
+            return Err(LakeCatError::InvalidArgument(
+                "view column name must not be empty".to_string(),
+            ));
+        }
+        if self.data_type.is_null() {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "view column {} data type must not be null",
+                self.name
+            )));
+        }
+        if let Some(comment) = self.comment.as_deref()
+            && comment.trim().is_empty()
+        {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "view column {} comment must not be empty",
+                self.name
+            )));
+        }
         Ok(())
     }
 }
@@ -1920,6 +1973,13 @@ mod memory_tests {
             BTreeMap::from([("owner".to_string(), "lakecat".to_string())]),
             Principal::anonymous(),
         )
+        .unwrap()
+        .with_columns(vec![ViewColumnRecord {
+            name: "id".to_string(),
+            data_type: serde_json::json!("long"),
+            nullable: false,
+            comment: Some("Customer identifier".to_string()),
+        }])
         .unwrap();
         store.upsert_view(updated.clone()).await.unwrap();
 
@@ -3572,7 +3632,8 @@ pub mod turso_store {
         use lakecat_core::{Principal, TableName};
 
         use crate::{
-            CredentialIssuanceMode, PolicyBinding, ServerRecord, StorageProvider, ViewRecord,
+            CredentialIssuanceMode, PolicyBinding, ServerRecord, StorageProvider, ViewColumnRecord,
+            ViewRecord,
         };
 
         use super::*;
@@ -3765,6 +3826,13 @@ pub mod turso_store {
                 BTreeMap::from([("owner".to_string(), "lakecat".to_string())]),
                 Principal::anonymous(),
             )
+            .unwrap()
+            .with_columns(vec![ViewColumnRecord {
+                name: "id".to_string(),
+                data_type: serde_json::json!("long"),
+                nullable: false,
+                comment: Some("Customer identifier".to_string()),
+            }])
             .unwrap();
             store.upsert_view(updated.clone()).await.unwrap();
 

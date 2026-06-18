@@ -258,15 +258,18 @@ durable project records can attach to stored servers; and durable warehouse
 records must attach to stored projects. Project-scoped management routes can now
 list and upsert those warehouses for QueryGraph/bootstrap callers without
 changing standard table access. Governed view list/upsert endpoints persist
-`ViewRecord` values in memory and Turso. Warehouse-prefixed catalog REST aliases
-now list, load, upsert, and drop those durable views while preserving standard
-table access semantics. Unprefixed and warehouse-prefixed Iceberg REST namespace
-load/drop routes now resolve durable namespace state and reject non-empty drops
-while tables, views, or scoped policy bindings remain. QueryGraph bootstrap now
-exports those views with manifest-covered OSI hashes, view-aware graph edges, and
+`ViewRecord` values in memory and Turso, including durable typed view columns.
+Warehouse-prefixed catalog REST aliases now list, load, upsert, and drop those
+durable views while preserving standard table access semantics, and the
+in-process Sail `CatalogProvider` bridge can create/load/list/drop those
+`ViewRecord` values as `TableKind::View` statuses. Unprefixed and
+warehouse-prefixed Iceberg REST namespace load/drop routes now resolve durable
+namespace state and reject non-empty drops while tables, views, or scoped policy
+bindings remain. QueryGraph bootstrap now exports those views with
+manifest-covered OSI hashes, typed view columns, view-aware graph edges, and
 OpenLineage view counts.
-The remaining tenancy gap is narrower but real: full typed Iceberg view metadata
-and view commit semantics are not fully modeled yet.
+The remaining tenancy gap is narrower but real: full Iceberg view version/commit
+semantics are not fully modeled yet.
 
 **Fix:** converge the durable View records with Sail-backed typed Iceberg view
 metadata and commit semantics when upstream model support is ready.

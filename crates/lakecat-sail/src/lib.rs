@@ -236,18 +236,20 @@ pub mod catalog_provider {
     use std::sync::Arc;
 
     use arrow_schema::{DataType, Field, Fields, TimeUnit};
-    use lakecat_core::{Namespace, Principal, TableIdent, TableName, WarehouseName};
+    use lakecat_core::{LakeCatError, Namespace, Principal, TableIdent, TableName, WarehouseName};
     use lakecat_security::{
         AuthorizationRequest, CatalogAction, GovernanceEngine, ReadRestriction,
         TableCommitCapability, TableCreateCapability, TableDropCapability, TableLoadCapability,
-        TableScanCapability,
+        TableScanCapability, ViewDropCapability, ViewLoadCapability, ViewManageCapability,
     };
-    use lakecat_store::{CatalogStore, PolicyBinding, TableCommit, TableRecord};
+    use lakecat_store::{
+        CatalogStore, PolicyBinding, TableCommit, TableRecord, ViewColumnRecord, ViewRecord,
+    };
     use sail_catalog::error::{CatalogError, CatalogObject, CatalogResult};
     use sail_catalog::provider::{
         AlterTableOptions, CatalogProvider, CommitTableOptions, CreateDatabaseOptions,
-        CreateTableOptions, CreateViewOptions, DropDatabaseOptions, DropTableOptions,
-        DropViewOptions, GetTableCommitsOptions, GetTableCommitsResponse,
+        CreateTableOptions, CreateViewColumnOptions, CreateViewOptions, DropDatabaseOptions,
+        DropTableOptions, DropViewOptions, GetTableCommitsOptions, GetTableCommitsResponse,
         Namespace as SailNamespace, TableCommitInfo,
     };
     use sail_catalog_iceberg::{LoadTableResult, load_table_result_to_status};
@@ -834,38 +836,117 @@ pub mod catalog_provider {
 
         async fn create_view(
             &self,
-            _database: &SailNamespace,
-            _view: &str,
-            _options: CreateViewOptions,
+            database: &SailNamespace,
+            view: &str,
+            options: CreateViewOptions,
         ) -> CatalogResult<TableStatus> {
-            Err(CatalogError::NotSupported(
-                "LakeCat Sail views are not implemented".to_string(),
-            ))
+            let receipt = self.authorize_catalog(CatalogAction::ViewManage).await?;
+            let capability = ViewManageCapability::from_receipt(receipt).map_err(catalog_error)?;
+            let namespace = lakecat_namespace(database)?;
+            self.store
+                .load_namespace(&self.warehouse, &namespace)
+                .await
+                .map_err(catalog_error)?;
+            let view_name = TableName::new(view).map_err(catalog_error)?;
+            let existing = self
+                .store
+                .load_view(&self.warehouse, &namespace, &view_name)
+                .await;
+            match existing {
+                Ok(record) if options.if_not_exists => return view_status(&self.name, &record),
+                Ok(_) if !options.replace => {
+                    return Err(CatalogError::AlreadyExists(
+                        CatalogObject::View,
+                        view.to_string(),
+                    ));
+                }
+                Ok(_) | Err(LakeCatError::NotFound { .. }) => {}
+                Err(error) => return Err(catalog_error(error)),
+            }
+            let CreateViewOptions {
+                columns,
+                definition,
+                if_not_exists: _,
+                replace: _,
+                comment,
+                properties,
+            } = options;
+            let mut properties = properties
+                .into_iter()
+                .collect::<std::collections::BTreeMap<_, _>>();
+            if let Some(comment) = comment {
+                properties.insert(VIEW_COMMENT_PROPERTY.to_string(), comment);
+            }
+            let record = ViewRecord::new(
+                self.warehouse.clone(),
+                namespace,
+                view_name,
+                definition,
+                "sql",
+                None,
+                properties,
+                capability.receipt().principal.clone(),
+            )
+            .map_err(catalog_error)?
+            .with_columns(view_columns_from_sail(columns)?)
+            .map_err(catalog_error)?;
+            let record = self
+                .store
+                .upsert_view(record)
+                .await
+                .map_err(catalog_error)?;
+            view_status(&self.name, &record)
         }
 
         async fn get_view(
             &self,
-            _database: &SailNamespace,
-            _view: &str,
+            database: &SailNamespace,
+            view: &str,
         ) -> CatalogResult<TableStatus> {
-            Err(CatalogError::NotSupported(
-                "LakeCat Sail views are not implemented".to_string(),
-            ))
+            let receipt = self.authorize_catalog(CatalogAction::ViewLoad).await?;
+            let _capability = ViewLoadCapability::from_receipt(receipt).map_err(catalog_error)?;
+            let namespace = lakecat_namespace(database)?;
+            let view_name = TableName::new(view).map_err(catalog_error)?;
+            let record = self
+                .store
+                .load_view(&self.warehouse, &namespace, &view_name)
+                .await
+                .map_err(catalog_error)?;
+            view_status(&self.name, &record)
         }
 
-        async fn list_views(&self, _database: &SailNamespace) -> CatalogResult<Vec<TableStatus>> {
-            Ok(Vec::new())
+        async fn list_views(&self, database: &SailNamespace) -> CatalogResult<Vec<TableStatus>> {
+            let receipt = self.authorize_catalog(CatalogAction::ViewLoad).await?;
+            let _capability = ViewLoadCapability::from_receipt(receipt).map_err(catalog_error)?;
+            let namespace = lakecat_namespace(database)?;
+            self.store
+                .list_views(&self.warehouse, &namespace)
+                .await
+                .map_err(catalog_error)?
+                .iter()
+                .map(|record| view_status(&self.name, record))
+                .collect()
         }
 
         async fn drop_view(
             &self,
-            _database: &SailNamespace,
-            _view: &str,
-            _options: DropViewOptions,
+            database: &SailNamespace,
+            view: &str,
+            options: DropViewOptions,
         ) -> CatalogResult<()> {
-            Err(CatalogError::NotSupported(
-                "LakeCat Sail views are not implemented".to_string(),
-            ))
+            let receipt = self.authorize_catalog(CatalogAction::ViewDrop).await?;
+            let _capability = ViewDropCapability::from_receipt(receipt).map_err(catalog_error)?;
+            let namespace = lakecat_namespace(database)?;
+            let view_name = TableName::new(view).map_err(catalog_error)?;
+            match self
+                .store
+                .drop_view(&self.warehouse, &namespace, &view_name)
+                .await
+            {
+                Ok(_) => Ok(()),
+                Err(LakeCatError::NotFound { .. }) if options.if_exists => Ok(()),
+                Err(error) => Err(catalog_error(error)),
+            }
         }
     }
 
@@ -886,6 +967,61 @@ pub mod catalog_provider {
             location: None,
             properties: Vec::new(),
         }
+    }
+
+    const VIEW_COMMENT_PROPERTY: &str = "lakecat:view-comment";
+
+    fn view_columns_from_sail(
+        columns: Vec<CreateViewColumnOptions>,
+    ) -> CatalogResult<Vec<ViewColumnRecord>> {
+        columns
+            .into_iter()
+            .map(|column| {
+                Ok(ViewColumnRecord {
+                    name: column.name,
+                    data_type: serde_json::to_value(column.data_type).map_err(catalog_error)?,
+                    nullable: column.nullable,
+                    comment: column.comment,
+                })
+            })
+            .collect()
+    }
+
+    fn view_status(catalog: &str, record: &ViewRecord) -> CatalogResult<TableStatus> {
+        let columns = record
+            .columns
+            .iter()
+            .map(|column| {
+                Ok(TableColumnStatus {
+                    name: column.name.clone(),
+                    data_type: serde_json::from_value(column.data_type.clone())
+                        .map_err(catalog_error)?,
+                    nullable: column.nullable,
+                    comment: column.comment.clone(),
+                    default: None,
+                    generated_always_as: None,
+                    identity: None,
+                    is_partition: false,
+                    is_bucket: false,
+                    is_cluster: false,
+                })
+            })
+            .collect::<CatalogResult<Vec<_>>>()?;
+        Ok(TableStatus {
+            catalog: Some(catalog.to_string()),
+            database: record.namespace.parts().to_vec(),
+            name: record.name.as_str().to_string(),
+            kind: TableKind::View {
+                definition: record.sql.clone(),
+                columns,
+                comment: record.properties.get(VIEW_COMMENT_PROPERTY).cloned(),
+                properties: record
+                    .properties
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect(),
+            },
+        })
     }
 
     fn policy_binding_context(binding: &PolicyBinding) -> serde_json::Value {
@@ -1814,6 +1950,130 @@ pub mod catalog_provider {
                 .await
                 .unwrap();
             assert!(provider.get_table(&namespace, "events").await.is_err());
+        }
+
+        #[tokio::test]
+        async fn provider_manages_durable_views_with_typed_columns() {
+            let provider = LakeCatCatalogProvider::new(
+                "lakecat",
+                WarehouseName::new("local").unwrap(),
+                MemoryCatalogStore::new(),
+                DeferredSailCatalogEngine::new(),
+                AllowAllGovernanceEngine::new(),
+                Principal::anonymous(),
+            );
+            let namespace = SailNamespace::try_from(vec!["default"]).unwrap();
+            provider
+                .create_database(
+                    &namespace,
+                    CreateDatabaseOptions {
+                        comment: None,
+                        location: None,
+                        if_not_exists: true,
+                        properties: Vec::new(),
+                    },
+                )
+                .await
+                .unwrap();
+
+            let created = provider
+                .create_view(
+                    &namespace,
+                    "active_customers",
+                    CreateViewOptions {
+                        columns: vec![
+                            CreateViewColumnOptions {
+                                name: "id".to_string(),
+                                data_type: DataType::Int64,
+                                nullable: false,
+                                comment: Some("Customer identifier".to_string()),
+                            },
+                            CreateViewColumnOptions {
+                                name: "email".to_string(),
+                                data_type: DataType::Utf8,
+                                nullable: true,
+                                comment: None,
+                            },
+                        ],
+                        definition: "select id, email from customers where active".to_string(),
+                        if_not_exists: false,
+                        replace: false,
+                        comment: Some("Active customer view".to_string()),
+                        properties: vec![("semantic-domain".to_string(), "customer".to_string())],
+                    },
+                )
+                .await
+                .unwrap();
+            let TableKind::View {
+                definition,
+                columns,
+                comment,
+                properties,
+            } = created.kind
+            else {
+                panic!("expected Sail view status");
+            };
+            assert_eq!(
+                definition,
+                "select id, email from customers where active".to_string()
+            );
+            assert_eq!(comment.as_deref(), Some("Active customer view"));
+            assert_eq!(columns.len(), 2);
+            assert_eq!(columns[0].name, "id");
+            assert_eq!(columns[0].data_type, DataType::Int64);
+            assert!(!columns[0].nullable);
+            assert_eq!(columns[0].comment.as_deref(), Some("Customer identifier"));
+            assert_eq!(columns[1].name, "email");
+            assert_eq!(columns[1].data_type, DataType::Utf8);
+            assert!(columns[1].nullable);
+            assert!(
+                properties
+                    .iter()
+                    .any(|(key, value)| key == "semantic-domain" && value == "customer")
+            );
+
+            let existing = provider
+                .create_view(
+                    &namespace,
+                    "active_customers",
+                    CreateViewOptions {
+                        columns: Vec::new(),
+                        definition: "select 1".to_string(),
+                        if_not_exists: true,
+                        replace: false,
+                        comment: None,
+                        properties: Vec::new(),
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(existing.name, "active_customers");
+            assert_eq!(provider.list_views(&namespace).await.unwrap().len(), 1);
+
+            let loaded = provider
+                .get_view(&namespace, "active_customers")
+                .await
+                .unwrap();
+            assert_eq!(loaded.name, "active_customers");
+            assert!(matches!(loaded.kind, TableKind::View { .. }));
+
+            provider
+                .drop_view(
+                    &namespace,
+                    "active_customers",
+                    DropViewOptions { if_exists: false },
+                )
+                .await
+                .unwrap();
+            assert!(provider.list_views(&namespace).await.unwrap().is_empty());
+            provider
+                .drop_view(
+                    &namespace,
+                    "active_customers",
+                    DropViewOptions { if_exists: true },
+                )
+                .await
+                .unwrap();
         }
 
         #[tokio::test]

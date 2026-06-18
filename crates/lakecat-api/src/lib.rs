@@ -262,7 +262,20 @@ pub struct UpsertViewRequest {
     #[serde(default)]
     pub schema_version: Option<u64>,
     #[serde(default)]
+    pub columns: Vec<ViewColumnRequest>,
+    #[serde(default)]
     pub properties: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ViewColumnRequest {
+    pub name: String,
+    pub data_type: Value,
+    #[serde(default)]
+    pub nullable: bool,
+    #[serde(default)]
+    pub comment: Option<String>,
 }
 
 fn default_sql_dialect() -> String {
@@ -278,7 +291,17 @@ pub struct ViewResponse {
     pub sql: String,
     pub dialect: String,
     pub schema_version: Option<u64>,
+    pub columns: Vec<ViewColumnResponse>,
     pub properties: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ViewColumnResponse {
+    pub name: String,
+    pub data_type: Value,
+    pub nullable: bool,
+    pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

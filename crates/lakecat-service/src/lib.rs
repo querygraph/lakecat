@@ -16,11 +16,11 @@ use lakecat_api::{
     PlanTableScanResponse, PolicyBindingResponse, ProjectResponse, ServerResponse,
     StorageCredential, StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest,
     UpsertProjectRequest, UpsertServerRequest, UpsertStorageProfileRequest, UpsertViewRequest,
-    UpsertWarehouseRequest, ViewResponse, WarehouseResponse,
+    UpsertWarehouseRequest, ViewColumnResponse, ViewResponse, WarehouseResponse,
 };
 use lakecat_core::{
-    LakeCatError, Namespace, Principal, PrincipalKind, TableIdent, TableName, WarehouseName,
-    content_hash_bytes, content_hash_json,
+    LakeCatError, LakeCatResult, Namespace, Principal, PrincipalKind, TableIdent, TableName,
+    WarehouseName, content_hash_bytes, content_hash_json,
 };
 use lakecat_graph::{CatalogGraphSink, GraphAction, GraphEvent, NoopCatalogGraphSink};
 use lakecat_lineage::{HashOnlyLineageSink, LineageEvent, LineageEventType, LineageSink};
@@ -49,7 +49,7 @@ use lakecat_security::{
 use lakecat_store::{
     CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, PolicyBinding,
     ProjectRecord, ServerRecord, StorageProfile, StorageProvider, TableCommit, TableRecord,
-    ViewRecord, WarehouseRecord, table_ident,
+    ViewColumnRecord, ViewRecord, WarehouseRecord, table_ident,
 };
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStore, ObjectStoreExt, PutPayload};
@@ -1912,7 +1912,8 @@ async fn upsert_view(
         request.schema_version,
         request.properties,
         capability.receipt().principal.clone(),
-    )?;
+    )?
+    .with_columns(view_columns_from_request(request.columns)?)?;
     let record = state.store.upsert_view(record).await?;
     state
         .store
@@ -1967,7 +1968,8 @@ async fn catalog_upsert_view(
         request.schema_version,
         request.properties,
         capability.receipt().principal.clone(),
-    )?;
+    )?
+    .with_columns(view_columns_from_request(request.columns)?)?;
     let record = state.store.upsert_view(record).await?;
     state
         .store
@@ -3170,8 +3172,36 @@ fn view_response(record: &ViewRecord) -> ViewResponse {
         sql: record.sql.clone(),
         dialect: record.dialect.clone(),
         schema_version: record.schema_version,
+        columns: record
+            .columns
+            .iter()
+            .map(|column| ViewColumnResponse {
+                name: column.name.clone(),
+                data_type: column.data_type.clone(),
+                nullable: column.nullable,
+                comment: column.comment.clone(),
+            })
+            .collect(),
         properties: record.properties.clone(),
     }
+}
+
+fn view_columns_from_request(
+    columns: Vec<lakecat_api::ViewColumnRequest>,
+) -> LakeCatResult<Vec<ViewColumnRecord>> {
+    columns
+        .into_iter()
+        .map(|column| {
+            let record = ViewColumnRecord {
+                name: column.name,
+                data_type: column.data_type,
+                nullable: column.nullable,
+                comment: column.comment,
+            };
+            record.validate()?;
+            Ok(record)
+        })
+        .collect()
 }
 
 fn policy_binding_response(binding: &PolicyBinding) -> PolicyBindingResponse {
@@ -5822,6 +5852,19 @@ mod tests {
                     "sql": "select id, email from customers where active",
                     "dialect": "sql",
                     "schema-version": 1,
+                    "columns": [
+                        {
+                            "name": "id",
+                            "data-type": "int",
+                            "nullable": false,
+                            "comment": "Customer identifier"
+                        },
+                        {
+                            "name": "email",
+                            "data-type": "string",
+                            "nullable": true
+                        }
+                    ],
                     "properties": {
                         "semantic-domain": "customer"
                     }
@@ -6370,6 +6413,19 @@ mod tests {
                     "sql": "select id, email from customers where active",
                     "dialect": "sql",
                     "schema-version": 1,
+                    "columns": [
+                        {
+                            "name": "id",
+                            "data-type": "int",
+                            "nullable": false,
+                            "comment": "Customer identifier"
+                        },
+                        {
+                            "name": "email",
+                            "data-type": "string",
+                            "nullable": true
+                        }
+                    ],
                     "properties": {
                         "semantic-domain": "customer"
                     }
@@ -6390,6 +6446,10 @@ mod tests {
             body["properties"]["semantic-domain"],
             serde_json::json!("customer")
         );
+        assert_eq!(body["columns"].as_array().unwrap().len(), 2);
+        assert_eq!(body["columns"][0]["name"], serde_json::json!("id"));
+        assert_eq!(body["columns"][0]["data-type"], serde_json::json!("int"));
+        assert_eq!(body["columns"][0]["nullable"], serde_json::json!(false));
 
         let list = Request::builder()
             .method(Method::GET)
@@ -6409,6 +6469,10 @@ mod tests {
             serde_json::json!("active_customers")
         );
         assert_eq!(body["views"][0]["schema-version"], serde_json::json!(1));
+        assert_eq!(
+            body["views"][0]["columns"][0]["comment"],
+            serde_json::json!("Customer identifier")
+        );
 
         let catalog_list = Request::builder()
             .method(Method::GET)
