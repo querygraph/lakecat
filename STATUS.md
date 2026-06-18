@@ -6,6 +6,27 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `ff08e77 Project credential replay into OpenLineage`.
+- Paused after pushing the QGLake credential OpenLineage replay slice.
+  `credentials.vend-attempted` outbox replay now emits LakeCat
+  lineage/OpenLineage receipts, and QGLake lineage-drain acceptance requires
+  both the restricted and trusted-human credential probes to carry lineage
+  projection counts plus sink receipt hashes.
+- Local verification for the pushed QGLake credential OpenLineage replay slice
+  was green:
+  `cargo fmt -p lakecat-lineage -p lakecat-service -p lakecat-cli -p lakecat-api`;
+  `cargo test -p lakecat-lineage credential`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`;
+  `cargo fmt -p lakecat-lineage -p lakecat-service -p lakecat-cli -p lakecat-api -- --check`;
+  `git diff --check`.
+- This status commit records the pushed QGLake credential OpenLineage replay
+  slice.
+- Previous implementation slice:
   `69a43b9 Verify QGLake credential replay evidence`.
 - Paused after pushing the QGLake credential replay-evidence slice.
   Lineage-drain event summaries now expose compact credential-vend evidence:
