@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake bootstrap OpenLineage acceptance to verify the event type,
+  QueryGraph bootstrap job identity, and output data-source URI before accepting
+  the handoff bundle.
 - Required QGLake bootstrap OpenLineage acceptance to verify the LakeCat
   producer, OpenLineage schema URL, and semantic-bundle table/view counts
   before accepting the QueryGraph handoff bundle.
