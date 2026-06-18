@@ -6,6 +6,26 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `e200664 Validate warehouse project attachments`.
+- Paused after pushing warehouse-to-project validation. Durable warehouse upserts
+  in memory and Turso now reject references to missing projects, and the service
+  management/prefixed-route tests create the durable project before registering
+  warehouses.
+- Local verification for the pushed warehouse-project validation slice was green:
+  `cargo fmt -p lakecat-store -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-store memory_store_persists_warehouse_records`;
+  `cargo test -p lakecat-store --features turso-local turso_store_persists_warehouse_records`;
+  `cargo test -p lakecat-service management_warehouses_are_durable_management_entities -- --nocapture`;
+  `cargo test -p lakecat-store`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed warehouse-project validation slice.
+- Previous implementation slice:
   `9a27369 Attach projects to durable servers`.
 - Paused after pushing optional `server-id` attachment for durable project
   records. Project management responses now expose the Server > Project link,
@@ -218,6 +238,9 @@ Updated: 2026-06-18
 
 ## Completed In Latest Implementation Slice
 
+- Enforced warehouse-to-project attachment in memory and Turso stores, with
+  governed warehouse management rejecting warehouses that point at missing
+  projects.
 - Added optional `server-id` attachment to durable project records, surfaced it
   through management API responses, and made memory/Turso project upserts reject
   attachments to missing servers.
