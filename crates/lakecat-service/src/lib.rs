@@ -959,6 +959,10 @@ fn lineage_drain_event_summary(
         authorization_receipt_hash: payload
             .get("authorization-receipt")
             .and_then(|receipt| content_hash_json(receipt).ok()),
+        request_identity_state: payload
+            .pointer("/authorization-receipt/request-identity/attestation-state")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         graph_events: receipt.graph_events,
         lineage_events: receipt.lineage_events,
         bundle_hash: payload
@@ -4817,6 +4821,10 @@ mod tests {
                 .as_deref()
                 .is_some_and(|hash| hash.starts_with("sha256:"))
         );
+        assert_eq!(
+            bootstrap_summary.request_identity_state.as_deref(),
+            Some("verified")
+        );
         assert_eq!(bootstrap_summary.graph_events, 1);
         assert_eq!(bootstrap_summary.lineage_events, 1);
         assert_eq!(
@@ -5284,6 +5292,10 @@ mod tests {
             payload["events"][0]["authorization-receipt-hash"]
                 .as_str()
                 .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert_eq!(
+            payload["events"][0]["request-identity-state"],
+            serde_json::json!("verified")
         );
         assert_eq!(payload["events"][0]["graph-events"], serde_json::json!(1));
         assert_eq!(payload["events"][0]["lineage-events"], serde_json::json!(1));

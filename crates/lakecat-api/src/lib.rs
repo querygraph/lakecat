@@ -358,6 +358,8 @@ pub struct LineageDrainEventSummary {
     pub principal_subject: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authorization_receipt_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_identity_state: Option<String>,
     #[serde(default)]
     pub graph_events: usize,
     #[serde(default)]

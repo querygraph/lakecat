@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added compact request-identity attestation-state evidence to lineage-drain
+  replay summaries and required QGLake acceptance to reject bootstrap replay
+  that drops the request identity state.
 - Added compact authorization-receipt hash evidence to lineage-drain replay
   summaries and required QGLake acceptance to reject unattributed bootstrap
   replay.
