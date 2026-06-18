@@ -6,6 +6,26 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `77d72cc Bind QGLake replay policy count`.
+- Paused after pushing the QGLake replay policy-binding count slice. The
+  lineage-drain event summary now exposes the replayed bootstrap
+  policy-binding count, service tests pin it in direct and HTTP drain
+  responses, and QGLake rejects replay evidence whose policy-binding count does
+  not match the accepted bootstrap bundle.
+- Local verification for the pushed QGLake replay policy-binding count slice
+  was green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`.
+- This status commit records the pushed QGLake replay policy-binding count
+  slice.
+- Previous implementation slice:
   `0dbefd7 Bind QGLake replay principal`.
 - Paused after pushing the QGLake replay-principal slice. The lineage-drain
   event summary now exposes the replayed bootstrap authorization principal, the
