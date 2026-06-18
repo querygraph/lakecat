@@ -65,6 +65,32 @@ model changes.
   files, and keep `STATUS.md` current when the unit changes the working state
   or next-step guidance.
 
+Permanent operating constraints from `AGENTS.md`:
+
+- LakeCat should keep only the catalog-facing boundary for graph, governance,
+  lineage, and engine integrations. If the work becomes reusable graph schema,
+  taxonomy, projection, traversal, graph storage, or graph query behavior, move
+  it into Grust first and integrate through a LakeCat sink or projection seam.
+- If the work becomes reusable Iceberg format handling, manifest processing,
+  scan planning, pruning, delete handling, metadata-as-data, or execution
+  behavior, move it into Sail first and call it from LakeCat.
+- If the work becomes reusable governance, policy composition, capabilities,
+  TypeDID envelopes, secure-agent behavior, or authorization semantics, move it
+  into TypeSec first and persist the resulting decisions, proofs, and receipts
+  in LakeCat.
+- Keep OSI, OpenLineage, Croissant, ODRL, and TypeSec integration replayable as
+  catalog evidence in LakeCat while leaving richer semantic composition and
+  agent workflows to QueryGraph or QueryGraph plugins/add-ons.
+- Use the Rust `turso` crate for the durable local catalog spine unless the
+  user explicitly requests another backend.
+- Keep feature gates honest: default-feature tests should remain lightweight
+  and embedded, while real integrations must stay behind explicit features such
+  as `sail-local`, `typesec-local`, `grust-local`, and `turso-local`.
+- Before committing, update `CHANGELOG.md`; after each logical unit, stage only
+  the related files, commit them, update `STATUS.md` when the working state or
+  next slice changes, verify locally, and push only after the local proof is
+  green.
+
 ## Repo Boundaries
 
 - Push reusable Iceberg format, manifest, scan-planning, pruning, delete

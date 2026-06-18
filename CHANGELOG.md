@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened `GOAL.md` with the permanent `AGENTS.md` operating constraints for
+  Grust/Sail/TypeSec placement, QueryGraph evidence boundaries, Turso, feature
+  gates, and local commit discipline.
 - Added a governed management read endpoint for compact view-version receipts
   so QueryGraph and operators can inspect the durable receipt chain without
   using non-standard Iceberg metadata or backend-specific storage access.
