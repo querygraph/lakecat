@@ -833,11 +833,12 @@ curl -s -X PUT \
 ```
 
 This is not Iceberg business metadata glued onto a table. It is catalog state
-about a view object. LakeCat records `view.upserted` and `view.dropped` audit
-events. Outbox replay projects those changes to a catalog-facing View graph
-event and a LakeCat OpenLineage view dataset receipt. QueryGraph bootstrap can
-then include views with OSI hashes, view-aware graph edges, and OpenLineage view
-counts. The lineage-drain summary also carries compact view replay identity:
+about a view object. LakeCat records `view.upserted`, `view.loaded`, and
+`view.dropped` audit events. Outbox replay projects those changes and reads to
+a catalog-facing View graph event and a LakeCat OpenLineage view dataset
+receipt. QueryGraph bootstrap can then include views with OSI hashes,
+view-aware graph edges, and OpenLineage view counts. The lineage-drain summary
+also carries compact view replay identity:
 
 ```json
 {

@@ -53,6 +53,7 @@ pub enum LineageEventType {
     TableDeleted,
     TableRestored,
     ViewDropped,
+    ViewLoaded,
     ViewUpserted,
     WarehouseUpserted,
     CredentialsVendAttempted,
@@ -226,7 +227,9 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
                 }
             }
         })],
-        LineageEventType::ViewDropped | LineageEventType::ViewUpserted => vec![json!({
+        LineageEventType::ViewDropped
+        | LineageEventType::ViewLoaded
+        | LineageEventType::ViewUpserted => vec![json!({
             "namespace": "lakecat.view",
             "name": event
                 .payload
@@ -323,6 +326,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::TableDeleted => "table-deleted",
         LineageEventType::TableRestored => "table-restored",
         LineageEventType::ViewDropped => "view-dropped",
+        LineageEventType::ViewLoaded => "view-loaded",
         LineageEventType::ViewUpserted => "view-upserted",
         LineageEventType::WarehouseUpserted => "warehouse-upserted",
         LineageEventType::CredentialsVendAttempted => "credentials-vend-attempted",

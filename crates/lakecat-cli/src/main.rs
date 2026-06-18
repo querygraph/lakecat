@@ -1767,8 +1767,10 @@ fn verify_qglake_view_replay(
 ) -> lakecat_core::LakeCatResult<()> {
     for view_stable_id in &verification.verified_views {
         let Some(view_replay) = drain.events.iter().find(|event| {
-            matches!(event.event_type.as_str(), "view.upserted" | "view.dropped")
-                && event.view_stable_id.as_deref() == Some(view_stable_id.as_str())
+            matches!(
+                event.event_type.as_str(),
+                "view.upserted" | "view.loaded" | "view.dropped"
+            ) && event.view_stable_id.as_deref() == Some(view_stable_id.as_str())
         }) else {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "qglake lineage drain did not replay view evidence for {view_stable_id}"

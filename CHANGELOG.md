@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Replayed `view.loaded` outbox events into catalog-facing View graph events
+  and LakeCat OpenLineage receipts so standard catalog view reads carry the
+  same replayable evidence as view management changes.
 - Added compact view replay identity to lineage-drain event summaries and made
   QGLake lineage-drain acceptance require replayed view evidence to match the
   accepted QueryGraph bootstrap view artifacts.

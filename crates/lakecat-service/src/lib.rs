@@ -3044,12 +3044,15 @@ async fn project_outbox_event(
             ))
             .await?;
         receipt.record_lineage(lineage_receipt);
-    } else if event.event_type == "view.upserted" || event.event_type == "view.dropped" {
+    } else if matches!(
+        event.event_type.as_str(),
+        "view.upserted" | "view.loaded" | "view.dropped"
+    ) {
         let (warehouse, namespace, view_name) = outbox_view(event, &state.warehouse)?;
-        let (graph_action, lineage_type) = if event.event_type == "view.dropped" {
-            (GraphAction::Deleted, LineageEventType::ViewDropped)
-        } else {
-            (GraphAction::Upserted, LineageEventType::ViewUpserted)
+        let (graph_action, lineage_type) = match event.event_type.as_str() {
+            "view.dropped" => (GraphAction::Deleted, LineageEventType::ViewDropped),
+            "view.loaded" => (GraphAction::Loaded, LineageEventType::ViewLoaded),
+            _ => (GraphAction::Upserted, LineageEventType::ViewUpserted),
         };
         state
             .graph
@@ -5708,6 +5711,18 @@ mod tests {
                     delivered_at: None,
                 },
                 OutboxEvent {
+                    event_id: "evt-view-load".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "view.loaded".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-view-load",
+                        "event-type": "view.loaded",
+                        "payload": view_payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
                     event_id: "evt-view-drop".to_string(),
                     sink: "lakecat.lineage-and-graph".to_string(),
                     event_type: "view.dropped".to_string(),
@@ -5733,18 +5748,26 @@ mod tests {
             );
 
         let drain = drain_outbox_once(&state, 10).await.unwrap();
-        assert_eq!(drain.delivered, 2);
+        assert_eq!(drain.delivered, 3);
         assert_eq!(
             drain.event_types,
-            vec!["view.upserted".to_string(), "view.dropped".to_string()]
+            vec![
+                "view.upserted".to_string(),
+                "view.loaded".to_string(),
+                "view.dropped".to_string()
+            ]
         );
-        assert_eq!(drain.graph_events, 4);
-        assert_eq!(drain.lineage_events, 2);
+        assert_eq!(drain.graph_events, 6);
+        assert_eq!(drain.lineage_events, 3);
         assert_eq!(
             store.delivered.lock().await.as_slice(),
-            &["evt-view-upsert".to_string(), "evt-view-drop".to_string()]
+            &[
+                "evt-view-upsert".to_string(),
+                "evt-view-load".to_string(),
+                "evt-view-drop".to_string()
+            ]
         );
-        assert_eq!(drain.events.len(), 2);
+        assert_eq!(drain.events.len(), 3);
         assert_eq!(
             drain.events[0].view_stable_id.as_deref(),
             Some("lakecat:view:local:default:events_view")
@@ -5754,24 +5777,26 @@ mod tests {
         assert_eq!(drain.events[0].view_name.as_deref(), Some("events_view"));
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 4);
+        assert_eq!(graph_events.len(), 6);
         let view_events = graph_events
             .iter()
             .filter(|event| event.label == GraphNodeLabel::View)
             .collect::<Vec<_>>();
-        assert_eq!(view_events.len(), 2);
+        assert_eq!(view_events.len(), 3);
         assert_eq!(view_events[0].action, GraphAction::Upserted);
         assert_eq!(
             view_events[0].subject,
             "lakecat:warehouse:local:namespace:default:view:events_view"
         );
-        assert_eq!(view_events[1].action, GraphAction::Deleted);
+        assert_eq!(view_events[1].action, GraphAction::Loaded);
+        assert_eq!(view_events[2].action, GraphAction::Deleted);
         drop(graph_events);
 
         let lineage_events = lineage.events.lock().await;
-        assert_eq!(lineage_events.len(), 2);
+        assert_eq!(lineage_events.len(), 3);
         assert_eq!(lineage_events[0].event_type, LineageEventType::ViewUpserted);
-        assert_eq!(lineage_events[1].event_type, LineageEventType::ViewDropped);
+        assert_eq!(lineage_events[1].event_type, LineageEventType::ViewLoaded);
+        assert_eq!(lineage_events[2].event_type, LineageEventType::ViewDropped);
         assert_eq!(
             lineage_events[0].payload["view"]["name"],
             serde_json::json!("events_view")
