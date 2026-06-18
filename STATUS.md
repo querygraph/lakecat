@@ -6,6 +6,35 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `aeb266e Record view drop tombstones`.
+- Latest committed goal-guidance/docs slice:
+  `e9bd014 Mirror agent guidance into goal`.
+- Paused after adding compact view drop/tombstone receipts to the durable
+  view-version receipt chain. Memory and Turso stores now append a `drop`
+  receipt when a view is deleted, preserving the last durable `view-version`,
+  stable view id, previous version, content hash, principal, and timestamp
+  after the current view row is removed. The governed receipt endpoint remains
+  readable after a drop so QueryGraph/operators can verify tombstones without
+  using custom Iceberg metadata or backend-specific storage access.
+- Local verification for the view drop/tombstone receipt slice was green:
+  `cargo fmt -p lakecat-store -p lakecat-service -p lakecat-sail -p lakecat-api`;
+  `cargo test -p lakecat-store memory_store_persists_view_records`;
+  `cargo test -p lakecat-store turso_store_persists_view_records --features turso-local`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities`;
+  `cargo test -p lakecat-sail provider_manages_durable_views_with_typed_columns`
+  (compiled only; test is behind `catalog-provider`);
+  `cargo test -p lakecat-sail --features catalog-provider provider_manages_durable_views_with_typed_columns`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-store -p lakecat-api -p lakecat-service -p lakecat-cli -p lakecat-sail -- --check`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `ed1be2f Expose view version receipt reads`.
 - Paused after adding a governed read-side management endpoint for compact
   view-version receipts:
@@ -2103,8 +2132,10 @@ Updated: 2026-06-18
 
 ## Next Recommended Slice
 
-Continue the local-first view semantics track by adding the next narrow bridge
-toward Iceberg view history: add drop/tombstone receipts or push the reusable
-history model into Sail if the work stops being catalog-boundary state. Keep CI
-manual-only until local gates are green and the temporary Sail patch bridge can
-be replaced by an upstream branch or published Sail helper crate.
+Continue the local-first view semantics track by choosing the next catalog-bound
+bridge toward Iceberg view history: either bind QueryGraph/QGLake acceptance to
+drop/tombstone receipt evidence or, if the work becomes a reusable typed view
+history model, push that model into Sail first and consume it through LakeCat's
+existing seams. Keep CI manual-only until local gates are green and the
+temporary Sail patch bridge can be replaced by an upstream branch or published
+Sail helper crate.
