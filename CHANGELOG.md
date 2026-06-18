@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made QGLake acceptance exercise the governed policy-list management read and
+  require lineage-drain replay to expose matching compact `policy-binding.listed`
+  evidence before accepting the workflow.
 - Added compact management-list count fields to lineage-drain event summaries
   so QueryGraph can verify replayed policy, project, server, storage-profile,
   and warehouse list evidence without parsing raw lineage payloads.

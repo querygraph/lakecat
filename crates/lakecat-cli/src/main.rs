@@ -519,6 +519,7 @@ async fn qglake_fixture(
         },
     )
     .await?;
+    verify_qglake_policy_list(&catalog, &warehouse, &policy, principal, identity_mode).await?;
 
     verify_qglake_governed_scan(
         &catalog,
@@ -1111,6 +1112,33 @@ fn verify_qglake_bootstrap_graph(
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "QGLake bootstrap graph did not connect namespace to table {}",
             projection.stable_id
+        )));
+    }
+    Ok(())
+}
+
+async fn verify_qglake_policy_list(
+    catalog: &str,
+    warehouse: &str,
+    policy: &str,
+    principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
+) -> lakecat_core::LakeCatResult<()> {
+    let response = get_json_with_identity::<ListPolicyBindingsResponse>(
+        catalog,
+        &format!("/management/v1/warehouses/{warehouse}/policies"),
+        principal,
+        identity_mode,
+        "qglake policy list",
+    )
+    .await?;
+    if !response
+        .policies
+        .iter()
+        .any(|binding| binding.policy_id == policy)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake policy list did not return expected binding {policy}"
         )));
     }
     Ok(())
@@ -1758,6 +1786,7 @@ fn verify_qglake_lineage_drain(
     }
     verify_qglake_view_replay(drain, verification)?;
     verify_qglake_credential_replay(drain, principal)?;
+    verify_qglake_management_list_replay(drain, expected_policy_binding_count)?;
     Ok(())
 }
 
@@ -1876,6 +1905,50 @@ fn verify_qglake_credential_lineage_projection(
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain {label} credential replay is missing sink receipt hashes"
         )));
+    }
+    Ok(())
+}
+
+fn verify_qglake_management_list_replay(
+    drain: &LineageDrainResponse,
+    expected_policy_binding_count: usize,
+) -> lakecat_core::LakeCatResult<()> {
+    let Some(policy_list) = drain
+        .events
+        .iter()
+        .find(|event| event.event_type == "policy-binding.listed")
+    else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain did not replay policy list evidence".to_string(),
+        ));
+    };
+    if policy_list.lineage_events == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain policy list replay emitted no lineage projection".to_string(),
+        ));
+    }
+    if policy_list.policy_binding_count != expected_policy_binding_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain policy list replay count does not match the accepted QueryGraph bundle"
+                .to_string(),
+        ));
+    }
+    if policy_list
+        .management_scope_warehouse
+        .as_deref()
+        .map_or(true, str::is_empty)
+        || policy_list.replay_event_hashes.is_empty()
+        || policy_list.replay_event_hashes.iter().any(String::is_empty)
+        || policy_list.replay_open_lineage_hashes.is_empty()
+        || policy_list
+            .replay_open_lineage_hashes
+            .iter()
+            .any(String::is_empty)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain policy list replay is missing compact count/scope or receipt hashes"
+                .to_string(),
+        ));
     }
     Ok(())
 }
@@ -5281,36 +5354,7 @@ mod tests {
             "qglake lineage drain did not replay view evidence for lakecat:view:local:default:active_customers"
         ));
 
-        verify_qglake_lineage_drain(
-            &LineageDrainResponse {
-                delivered: 5,
-                event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "view.upserted".to_string(),
-                    "querygraph.bootstrap".to_string(),
-                ],
-                graph_events: 3,
-                lineage_events: 5,
-                principal_subject: Some("did:example:agent".to_string()),
-                principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
-                request_identity_state: Some("verified".to_string()),
-                events: vec![
-                    bootstrap_with_view,
-                    qglake_restricted_credential_summary(),
-                    qglake_human_credential_summary(),
-                    qglake_view_lineage_summary(),
-                ],
-            },
-            &view_verification,
-            Some("did:example:agent"),
-            1,
-        )
-        .expect("QGLake lineage drain should accept replayed view evidence");
-
-        verify_qglake_lineage_drain(
+        let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 4,
                 event_types: vec![
@@ -5329,6 +5373,104 @@ mod tests {
                     qglake_bootstrap_lineage_summary(),
                     qglake_restricted_credential_summary(),
                     qglake_human_credential_summary(),
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require policy list replay");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain did not replay policy list evidence")
+        );
+
+        let mut policy_list_mismatch = qglake_policy_list_lineage_summary();
+        policy_list_mismatch.policy_binding_count = 0;
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 5,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 5,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    policy_list_mismatch,
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject mismatched policy list replay");
+        assert!(err.to_string().contains(
+            "qglake lineage drain policy list replay count does not match the accepted QueryGraph bundle"
+        ));
+
+        verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 5,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 3,
+                lineage_events: 6,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                events: vec![
+                    bootstrap_with_view,
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect("QGLake lineage drain should accept replayed view evidence");
+
+        verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 4,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 5,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_policy_list_lineage_summary(),
                 ],
             },
             &verification,
@@ -5444,6 +5586,45 @@ mod tests {
             raw_credential_exception_reason: None,
             replay_event_hashes: vec!["sha256:view-replay-event".to_string()],
             replay_open_lineage_hashes: vec!["sha256:view-replay-openlineage".to_string()],
+        }
+    }
+
+    fn qglake_policy_list_lineage_summary() -> LineageDrainEventSummary {
+        LineageDrainEventSummary {
+            event_id: "evt-policy-list".to_string(),
+            event_type: "policy-binding.listed".to_string(),
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:policy-list-authorization".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            agent_delegation_hash: Some("sha256:delegation".to_string()),
+            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            graph_events: 1,
+            lineage_events: 1,
+            bundle_hash: None,
+            graph_hash: None,
+            open_lineage_hash: None,
+            querygraph_import_hash: None,
+            table_artifact_count: 0,
+            view_artifact_count: 0,
+            view_warehouse: None,
+            view_namespace: Vec::new(),
+            view_name: None,
+            view_stable_id: None,
+            policy_binding_count: 1,
+            project_count: None,
+            server_count: None,
+            storage_profile_count: None,
+            warehouse_count: None,
+            management_scope_project_id: None,
+            management_scope_warehouse: Some("local".to_string()),
+            standards: Vec::new(),
+            credential_count: None,
+            credential_block_reason: None,
+            raw_credential_exception_allowed: None,
+            raw_credential_exception_reason: None,
+            replay_event_hashes: vec!["sha256:policy-list-replay-event".to_string()],
+            replay_open_lineage_hashes: vec!["sha256:policy-list-openlineage".to_string()],
         }
     }
 

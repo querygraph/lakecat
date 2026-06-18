@@ -928,7 +928,9 @@ and warehouses replay as OpenLineage receipts too. They intentionally do not
 create list-specific graph nodes in LakeCat; Grust owns the reusable hierarchy
 and traversal model. The drain response lifts their counts and management scope
 into compact fields, so QueryGraph can verify the control-plane read evidence
-without opening the raw lineage payload.
+without opening the raw lineage payload. The QGLake acceptance workflow now
+performs a governed policy-list read before bootstrap and rejects a drain that
+does not replay matching `policy-binding.listed` evidence.
 
 The end-to-end result is a chain:
 

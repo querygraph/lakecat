@@ -348,7 +348,8 @@ and warehouses now replay into LakeCat OpenLineage receipts, giving QueryGraph
 durable control-plane read evidence without adding list-specific graph nodes in
 LakeCat. The lineage-drain response exposes compact list counts and management
 scope fields so QueryGraph can validate those reads without parsing raw lineage
-payloads.
+payloads. QGLake acceptance exercises the governed policy-list path and rejects
+drains that do not preserve matching `policy-binding.listed` evidence.
 
 Required tables:
 
