@@ -1726,6 +1726,20 @@ async fn project_outbox_event(
                 )
                 .await?;
             receipt.graph_events += 1;
+            if outbox_is_scan_projection(event.event_type.as_str()) {
+                state
+                    .graph
+                    .emit(
+                        GraphEvent::scan_plan(
+                            GraphAction::PlannedScan,
+                            event.event_id.clone(),
+                            event_payload.clone(),
+                        )
+                        .with_event_id(format!("{}:scan-plan", event.event_id)),
+                    )
+                    .await?;
+                receipt.graph_events += 1;
+            }
             state
                 .lineage
                 .emit(LineageEvent::new(
@@ -1928,6 +1942,13 @@ fn outbox_table_projection(event_type: &str) -> Option<(GraphAction, LineageEven
         "table.deleted" => Some((GraphAction::Deleted, LineageEventType::TableDeleted)),
         _ => None,
     }
+}
+
+fn outbox_is_scan_projection(event_type: &str) -> bool {
+    matches!(
+        event_type,
+        "table.scan-planned" | "table.scan-tasks-fetched"
+    )
 }
 
 fn load_table_response(table: TableRecord) -> LoadTableResponse {
@@ -3116,11 +3137,11 @@ mod tests {
                 "querygraph.bootstrap".to_string()
             ]
         );
-        assert_eq!(drain.graph_events, 4);
+        assert_eq!(drain.graph_events, 5);
         assert_eq!(drain.lineage_events, 4);
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 4);
+        assert_eq!(graph_events.len(), 5);
         assert_eq!(graph_events[0].label, GraphNodeLabel::Namespace);
         assert_eq!(
             graph_events[0].subject,
@@ -3145,9 +3166,17 @@ mod tests {
         assert_eq!(graph_events[2].label, GraphNodeLabel::Table);
         assert_eq!(graph_events[2].action, GraphAction::Created);
         assert_eq!(graph_events[2].event_id.as_deref(), Some("evt-1"));
+        assert_eq!(graph_events[3].label, GraphNodeLabel::Table);
         assert_eq!(graph_events[3].action, GraphAction::PlannedScan);
         assert_eq!(
             graph_events[3].properties["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(graph_events[4].label, GraphNodeLabel::ScanPlan);
+        assert_eq!(graph_events[4].subject, "lakecat:scan-plan:evt-2");
+        assert_eq!(graph_events[4].event_id.as_deref(), Some("evt-2:scan-plan"));
+        assert_eq!(
+            graph_events[4].properties["read-restriction"]["allowed-columns"],
             serde_json::json!(["event_id"])
         );
         let lineage_events = lineage.events.lock().await;

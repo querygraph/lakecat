@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Projected scan-planning outbox events into LakeCat's catalog-facing graph sink
+  as stable `ScanPlan` events derived from durable outbox IDs, preserving the
+  governed read restriction payload for QueryGraph replay.
 - Projected `policy-binding.upserted` outbox events into LakeCat's
   catalog-facing graph sink as stable `Policy` events carrying ODRL and
   authorization payloads for QueryGraph replay.

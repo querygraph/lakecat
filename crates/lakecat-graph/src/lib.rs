@@ -70,6 +70,19 @@ impl GraphEvent {
         }
     }
 
+    pub fn scan_plan(action: GraphAction, plan_id: impl Into<String>, properties: Value) -> Self {
+        let plan_id = plan_id.into();
+        Self {
+            event_id: None,
+            subject: scan_plan_stable_id(&plan_id),
+            label: GraphNodeLabel::ScanPlan,
+            action,
+            table: None,
+            properties,
+            emitted_at: Utc::now(),
+        }
+    }
+
     pub fn with_event_id(mut self, event_id: impl Into<String>) -> Self {
         self.event_id = Some(event_id.into());
         self
@@ -90,6 +103,10 @@ pub fn policy_stable_id(warehouse: &WarehouseName, policy_id: &str) -> String {
         warehouse.as_str(),
         policy_id
     )
+}
+
+pub fn scan_plan_stable_id(plan_id: &str) -> String {
+    format!("lakecat:scan-plan:{plan_id}")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -174,6 +191,19 @@ mod tests {
 
         assert_eq!(event.label, GraphNodeLabel::Policy);
         assert_eq!(event.subject, "lakecat:warehouse:local:policy:agent-read");
+        assert!(event.table.is_none());
+    }
+
+    #[test]
+    fn scan_plan_event_uses_stable_catalog_subject() {
+        let event = GraphEvent::scan_plan(
+            GraphAction::PlannedScan,
+            "evt-scan",
+            serde_json::json!({"kind": "test"}),
+        );
+
+        assert_eq!(event.label, GraphNodeLabel::ScanPlan);
+        assert_eq!(event.subject, "lakecat:scan-plan:evt-scan");
         assert!(event.table.is_none());
     }
 }
@@ -324,6 +354,30 @@ pub mod grust_integration {
                 Some(&Value::String("upserted".to_string()))
             );
             GraphIndex::new(&graph).expect("policy event graph should be valid");
+        }
+
+        #[test]
+        fn converts_scan_plan_event_to_valid_grust_graph_event() {
+            let event = GraphEvent::scan_plan(
+                GraphAction::PlannedScan,
+                "evt-scan",
+                serde_json::json!({"kind":"test"}),
+            )
+            .with_event_id("lakecat:outbox:scan-1:scan-plan");
+            let graph = graph_event_to_grust(&event);
+
+            assert_eq!(graph.nodes.len(), 1);
+            assert_eq!(graph.edges.len(), 0);
+            assert_eq!(graph.nodes[0].label.as_str(), "CatalogEvent");
+            assert_eq!(
+                graph.nodes[0].props.get("label"),
+                Some(&Value::String("ScanPlan".to_string()))
+            );
+            assert_eq!(
+                graph.nodes[0].props.get("action"),
+                Some(&Value::String("planned-scan".to_string()))
+            );
+            GraphIndex::new(&graph).expect("scan plan event graph should be valid");
         }
 
         #[tokio::test]

@@ -7,11 +7,11 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `745ce5f Project policy bindings to graph`.
-- Paused after pushing policy-binding graph projection from the durable outbox.
-  `policy-binding.upserted` replay now emits a catalog-facing `Policy` graph
-  event with a stable policy subject, ODRL payload, and the same authorization
-  receipt used for audit.
-- Local verification for the pushed slice was green:
+- Current working slice: scan-plan graph projection from the durable outbox.
+  `table.scan-planned` and `table.scan-tasks-fetched` replay now emit stable
+  catalog-facing `ScanPlan` graph events derived from durable outbox IDs while
+  preserving the governed read restriction payload.
+- Local verification for the current slice is green:
   `cargo fmt -p lakecat-graph -p lakecat-service -p lakecat-api -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-graph`;
@@ -67,6 +67,11 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added scan-plan graph projection to durable outbox drain for
+  `table.scan-planned` and `table.scan-tasks-fetched`, while preserving the
+  existing table graph and OpenLineage replay.
+- Added a stable scan-plan subject helper plus default and `grust-local`
+  graph-crate coverage for the catalog-facing scan-plan event shape.
 - Added policy-binding graph projection to the durable outbox drain, so
   `policy-binding.upserted` events now replay to the graph sink with ODRL and
   authorization payloads intact.
