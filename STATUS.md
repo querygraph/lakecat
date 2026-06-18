@@ -6,10 +6,27 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `1c3cfb8 Add governed durable view records`.
+- Paused after pushing governed durable view records with management list/upsert
+  endpoints, memory/Turso persistence, and audited `view.*` events.
+- Local verification for the pushed governed-view slice was green:
+  `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-store memory_store_persists_view_records`;
+  `cargo test -p lakecat-store --features turso-local turso_store_persists_view_records`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities -- --nocapture`;
+  `cargo test -p lakecat-store`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-security`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed governed-view slice.
+- Previous implementation slice:
   `d905f27 Route commit metadata through object_store`.
-- Current working slice adds governed durable view records with management
-  list/upsert endpoints, memory/Turso persistence, and audited `view.*` events.
-- Local verification for the pushed object-store metadata writer slice was green:
+- Local verification for the previous object-store metadata writer slice was green:
   `cargo fmt -p lakecat-service`;
   `cargo fmt -p lakecat-service -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -- --check`;
   `git diff --check`;
@@ -21,8 +38,7 @@ Updated: 2026-06-18
   `cargo test -p lakecat-store --features turso-local`;
   `cargo test --workspace`;
   `cargo test --workspace --all-features`.
-- This status commit records the pushed object-store metadata writer slice.
-- Previous implementation slice:
+- Prior implementation slice:
   `ce4b82b Verify QGLake credential blocking`.
 - Local verification for the previous QGLake credential-blocking slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
