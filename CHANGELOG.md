@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Replayed `namespace.listed` and `namespace.loaded` outbox events into
+  warehouse/namespace-scoped catalog graph events and LakeCat OpenLineage
+  receipts so standard namespace reads carry durable replay evidence.
 - Replayed `view.listed` outbox events into namespace-scoped catalog graph
   events and LakeCat OpenLineage receipts so standard view listing reads carry
   durable replay evidence without pretending a list response is a single view.

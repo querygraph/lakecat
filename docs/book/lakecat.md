@@ -913,9 +913,12 @@ A useful drain response includes delivered event types, graph projection counts,
 lineage projection counts, receipt hashes, and the authorization proof for the
 drain request itself. That last part is easy to overlook. Reading the replay
 stream is also privileged, so LakeCat records that the drainer was allowed to
-read lineage evidence. For view events, the response includes the warehouse,
-namespace, view name, and QueryGraph-compatible stable id, so downstream
-acceptance can check replay identity without parsing the full audit payload.
+read lineage evidence. Namespace reads replay too: `namespace.listed` records a
+warehouse-scoped graph/OpenLineage fact, while `namespace.loaded` records the
+specific namespace that was resolved through the standard catalog route. For
+view events, the response includes the warehouse, namespace, view name, and
+QueryGraph-compatible stable id, so downstream acceptance can check replay
+identity without parsing the full audit payload.
 
 The end-to-end result is a chain:
 

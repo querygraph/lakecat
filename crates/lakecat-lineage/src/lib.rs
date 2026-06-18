@@ -42,6 +42,8 @@ impl LineageEvent {
 pub enum LineageEventType {
     NamespaceCreated,
     NamespaceDropped,
+    NamespaceListed,
+    NamespaceLoaded,
     PolicyBindingUpserted,
     ProjectUpserted,
     ServerUpserted,
@@ -151,13 +153,26 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
             .as_ref()
             .map(|table| vec![open_lineage_dataset(table, &event.payload)])
             .unwrap_or_default(),
-        LineageEventType::NamespaceCreated | LineageEventType::NamespaceDropped => vec![json!({
+        LineageEventType::NamespaceCreated
+        | LineageEventType::NamespaceDropped
+        | LineageEventType::NamespaceLoaded => vec![json!({
             "namespace": "lakecat.namespace",
+            "name": namespace_lineage_output_name(event),
+            "facets": {
+                "lakecat_namespace": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-namespace-facet/0.1.0.json",
+                    "payload": event.payload,
+                }
+            }
+        })],
+        LineageEventType::NamespaceListed => vec![json!({
+            "namespace": "lakecat.namespace-list",
             "name": event
                 .payload
-                .get("namespace")
-                .map(Value::to_string)
-                .unwrap_or_else(|| "unknown".to_string()),
+                .get("warehouse")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown"),
             "facets": {
                 "lakecat_namespace": {
                     "_producer": "https://querygraph.ai/lakecat",
@@ -313,6 +328,18 @@ fn open_lineage_dataset(table: &TableIdent, payload: &Value) -> Value {
     })
 }
 
+fn namespace_lineage_output_name(event: &LineageEvent) -> String {
+    match event.payload.get("namespace") {
+        Some(Value::Array(parts)) => parts
+            .iter()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>()
+            .join("."),
+        Some(Value::String(path)) => path.clone(),
+        _ => "unknown".to_string(),
+    }
+}
+
 fn view_lineage_output_name(event: &LineageEvent) -> String {
     if let Some(name) = event.payload.pointer("/view/name").and_then(Value::as_str) {
         return name.to_string();
@@ -332,6 +359,8 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
     match event_type {
         LineageEventType::NamespaceCreated => "namespace-created",
         LineageEventType::NamespaceDropped => "namespace-dropped",
+        LineageEventType::NamespaceListed => "namespace-listed",
+        LineageEventType::NamespaceLoaded => "namespace-loaded",
         LineageEventType::PolicyBindingUpserted => "policy-binding-upserted",
         LineageEventType::ProjectUpserted => "project-upserted",
         LineageEventType::ServerUpserted => "server-upserted",
@@ -485,6 +514,46 @@ mod tests {
 
     #[test]
     fn projects_control_plane_upserts_to_openlineage_outputs() {
+        let namespace_list = open_lineage_event(&LineageEvent::new(
+            LineageEventType::NamespaceListed,
+            Principal::anonymous(),
+            None,
+            json!({
+                "warehouse": "local",
+                "namespace-count": 2
+            }),
+        ));
+        assert_eq!(namespace_list["job"]["name"], json!("namespace-listed"));
+        assert_eq!(
+            namespace_list["outputs"][0]["namespace"],
+            json!("lakecat.namespace-list")
+        );
+        assert_eq!(namespace_list["outputs"][0]["name"], json!("local"));
+        assert_eq!(
+            namespace_list["outputs"][0]["facets"]["lakecat_namespace"]["payload"]["namespace-count"],
+            json!(2)
+        );
+
+        let namespace_load = open_lineage_event(&LineageEvent::new(
+            LineageEventType::NamespaceLoaded,
+            Principal::anonymous(),
+            None,
+            json!({
+                "warehouse": "local",
+                "namespace": ["default"]
+            }),
+        ));
+        assert_eq!(namespace_load["job"]["name"], json!("namespace-loaded"));
+        assert_eq!(
+            namespace_load["outputs"][0]["namespace"],
+            json!("lakecat.namespace")
+        );
+        assert_eq!(namespace_load["outputs"][0]["name"], json!("default"));
+        assert_eq!(
+            namespace_load["outputs"][0]["facets"]["lakecat_namespace"]["payload"]["namespace"],
+            json!(["default"])
+        );
+
         let policy = open_lineage_event(&LineageEvent::new(
             LineageEventType::PolicyBindingUpserted,
             Principal::anonymous(),

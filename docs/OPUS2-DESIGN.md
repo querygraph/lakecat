@@ -267,9 +267,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   transport + TypeDID attestation on the same events. *Started:
   `namespace.created` outbox replay now emits a catalog-facing `Namespace` graph
   event with a stable namespace subject and the same authorization payload used
-  for lineage; `policy-binding.upserted` replay now emits a catalog-facing
-  `Policy` graph event with stable policy subject, ODRL material, and
-  authorization payload; `table.scan-planned` and `table.scan-tasks-fetched`
+  for lineage; `namespace.listed` and `namespace.loaded` replay now carry
+  standard namespace reads into warehouse/namespace-scoped graph events plus
+  LakeCat OpenLineage receipts; `policy-binding.upserted` replay now emits a
+  catalog-facing `Policy` graph event with stable policy subject, ODRL material,
+  and authorization payload; `table.scan-planned` and `table.scan-tasks-fetched`
   replay now emit stable catalog-facing `ScanPlan` graph events with governed
   read restrictions; `table.commit` replay now emits stable catalog-facing
   `Commit` graph events keyed by table and committed sequence; non-anonymous
@@ -306,11 +308,12 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   durable typed columns, warehouse-prefixed catalog REST aliases now list, load,
   upsert, and drop those durable views, and the in-process Sail provider can
   create/load/list/drop them as `TableKind::View` statuses; governed namespace
-  load/drop is now wired on unprefixed and warehouse-prefixed Iceberg REST paths
-  and through the in-process Sail `CatalogProvider` `drop_database` path, with
-  non-empty guards across tables, views, and policy bindings plus audited
-  `namespace.dropped` graph/lineage projection on the REST path; `view.listed`
-  replay emits namespace-scoped graph and OpenLineage evidence, while
+  list/load/drop is now wired on unprefixed and warehouse-prefixed Iceberg REST
+  paths and through the in-process Sail `CatalogProvider` `drop_database` path,
+  with non-empty guards across tables, views, and policy bindings plus audited
+  `namespace.listed`, `namespace.loaded`, and `namespace.dropped` graph/lineage
+  projection on the REST path; `view.listed` replay emits namespace-scoped graph
+  and OpenLineage evidence, while
   `view.upserted`, `view.loaded`, and `view.dropped` outbox replay emits
   catalog-facing View graph events and LakeCat OpenLineage receipts; lineage
   drain summaries expose compact view warehouse/namespace/name/stable-id

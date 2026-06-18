@@ -329,10 +329,11 @@ durable server records in memory and Turso; project records can attach to stored
 servers; and warehouse records must attach to stored projects. Project-scoped
 management routes can list and upsert those warehouses without changing standard
 table access, establishing the Server > Project > Warehouse control-plane
-hierarchy. Iceberg REST namespace load/drop is now governed on both unprefixed
-and warehouse-prefixed catalog paths; namespace drops are blocked while tables,
-views, or scoped policy bindings remain, and audited `namespace.dropped` events
-enter the outbox projection stream.
+hierarchy. Iceberg REST namespace list/load/drop is now governed on both
+unprefixed and warehouse-prefixed catalog paths; namespace drops are blocked
+while tables, views, or scoped policy bindings remain, and audited
+`namespace.listed`, `namespace.loaded`, and `namespace.dropped` events enter the
+outbox projection stream.
 Governed table lifecycle now records soft-delete rows, hides deleted tables from
 normal catalog reads, restores soft-deleted tables through a governed management
 endpoint, and emits `table.deleted` / `table.restored` audit/outbox events.

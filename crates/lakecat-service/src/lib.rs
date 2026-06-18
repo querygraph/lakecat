@@ -2950,12 +2950,15 @@ async fn project_outbox_event(
                 .await?;
             receipt.record_lineage(lineage_receipt);
         }
-    } else if event.event_type == "namespace.created" || event.event_type == "namespace.dropped" {
+    } else if matches!(
+        event.event_type.as_str(),
+        "namespace.created" | "namespace.dropped" | "namespace.loaded"
+    ) {
         let (warehouse, namespace) = outbox_namespace(event, &state.warehouse)?;
-        let (graph_action, lineage_type) = if event.event_type == "namespace.dropped" {
-            (GraphAction::Deleted, LineageEventType::NamespaceDropped)
-        } else {
-            (GraphAction::Created, LineageEventType::NamespaceCreated)
+        let (graph_action, lineage_type) = match event.event_type.as_str() {
+            "namespace.dropped" => (GraphAction::Deleted, LineageEventType::NamespaceDropped),
+            "namespace.loaded" => (GraphAction::Loaded, LineageEventType::NamespaceLoaded),
+            _ => (GraphAction::Created, LineageEventType::NamespaceCreated),
         };
         state
             .graph
@@ -2969,6 +2972,26 @@ async fn project_outbox_event(
             .lineage
             .emit(LineageEvent::new(
                 lineage_type,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
+    } else if event.event_type == "namespace.listed" {
+        let warehouse = outbox_warehouse(event, &state.warehouse)?;
+        state
+            .graph
+            .emit(
+                GraphEvent::warehouse(GraphAction::Loaded, warehouse, event_payload.clone())
+                    .with_event_id(event.event_id.clone()),
+            )
+            .await?;
+        receipt.graph_events += 1;
+        let lineage_receipt = state
+            .lineage
+            .emit(LineageEvent::new(
+                LineageEventType::NamespaceListed,
                 principal,
                 None,
                 event_payload,
@@ -5530,6 +5553,145 @@ mod tests {
                 "evt-3".to_string(),
                 "evt-namespace-drop".to_string()
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_projects_namespace_reads_to_graph_and_lineage() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![
+                OutboxEvent {
+                    event_id: "evt-namespace-list".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "namespace.listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-namespace-list",
+                        "event-type": "namespace.listed",
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "namespace-list",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            },
+                            "warehouse": "local",
+                            "namespace-count": 2,
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
+                    event_id: "evt-namespace-load".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "namespace.loaded".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-namespace-load",
+                        "event-type": "namespace.loaded",
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "namespace-load",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            },
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+            ]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let drain = drain_outbox_once(&state, 10).await.unwrap();
+        assert_eq!(drain.delivered, 2);
+        assert_eq!(
+            drain.event_types,
+            vec![
+                "namespace.listed".to_string(),
+                "namespace.loaded".to_string()
+            ]
+        );
+        assert_eq!(drain.graph_events, 4);
+        assert_eq!(drain.lineage_events, 2);
+        assert_eq!(
+            store.delivered.lock().await.as_slice(),
+            &[
+                "evt-namespace-list".to_string(),
+                "evt-namespace-load".to_string()
+            ]
+        );
+        assert_eq!(drain.events.len(), 2);
+        assert_eq!(drain.events[0].graph_events, 2);
+        assert_eq!(drain.events[0].lineage_events, 1);
+        assert_eq!(drain.events[1].graph_events, 2);
+        assert_eq!(drain.events[1].lineage_events, 1);
+
+        let graph_events = graph.events.lock().await;
+        assert_eq!(graph_events.len(), 4);
+        assert_eq!(graph_events[0].label, GraphNodeLabel::Principal);
+        assert_eq!(
+            graph_events[0].event_id.as_deref(),
+            Some("evt-namespace-list:principal")
+        );
+        assert_eq!(graph_events[1].label, GraphNodeLabel::Warehouse);
+        assert_eq!(graph_events[1].action, GraphAction::Loaded);
+        assert_eq!(graph_events[1].subject, "lakecat:warehouse:local");
+        assert_eq!(
+            graph_events[1].event_id.as_deref(),
+            Some("evt-namespace-list")
+        );
+        assert_eq!(graph_events[2].label, GraphNodeLabel::Principal);
+        assert_eq!(
+            graph_events[2].event_id.as_deref(),
+            Some("evt-namespace-load:principal")
+        );
+        assert_eq!(graph_events[3].label, GraphNodeLabel::Namespace);
+        assert_eq!(graph_events[3].action, GraphAction::Loaded);
+        assert_eq!(
+            graph_events[3].subject,
+            "lakecat:warehouse:local:namespace:default"
+        );
+        assert_eq!(
+            graph_events[3].event_id.as_deref(),
+            Some("evt-namespace-load")
+        );
+        drop(graph_events);
+
+        let lineage_events = lineage.events.lock().await;
+        assert_eq!(lineage_events.len(), 2);
+        assert_eq!(
+            lineage_events[0].event_type,
+            LineageEventType::NamespaceListed
+        );
+        assert_eq!(
+            lineage_events[0].payload["namespace-count"],
+            serde_json::json!(2)
+        );
+        assert_eq!(
+            lineage_events[1].event_type,
+            LineageEventType::NamespaceLoaded
+        );
+        assert_eq!(
+            lineage_events[1].payload["namespace"],
+            serde_json::json!(["default"])
         );
     }
 
