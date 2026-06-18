@@ -6,6 +6,27 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `79d7f26 Bind QGLake replay authorization proof`.
+- Paused after pushing the QGLake replay authorization-proof slice. The
+  lineage-drain event summary now exposes a compact
+  `authorization-receipt-hash` for replayed bootstrap events, service tests pin
+  the hash in direct and HTTP drain responses, and QGLake rejects
+  `querygraph.bootstrap` replay evidence that lacks an authorization receipt
+  proof.
+- Local verification for the pushed QGLake replay authorization-proof slice was
+  green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`.
+- This status commit records the pushed QGLake replay authorization-proof
+  slice.
+- Previous implementation slice:
   `77d72cc Bind QGLake replay policy count`.
 - Paused after pushing the QGLake replay policy-binding count slice. The
   lineage-drain event summary now exposes the replayed bootstrap
