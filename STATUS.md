@@ -6,6 +6,21 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `7df6e99 Require QGLake fetched column proof`.
+- Paused after pushing the QGLake fetched-column proof slice. The
+  `lakecat-cli qglake-fixture` governed `fetchScanTasks` verifier now rejects
+  fetched residual read restrictions that widen the allowed-column set, proving
+  `raw_payload` stays excluded during task materialization as well as initial
+  scan planning.
+- Local verification for the pushed QGLake fetched-column proof slice was
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_fetch_scan_tasks_verifier`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens --features sail-local,turso-local`.
+- This status commit records the pushed QGLake fetched-column proof slice.
+- Previous implementation slice:
   `44d0265 Constrain QGLake fetched files to table location`.
 - Paused after pushing the QGLake fetched-file table-location proof slice. The
   `lakecat-cli qglake-fixture` governed `fetchScanTasks` verifier now carries
