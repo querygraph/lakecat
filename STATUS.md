@@ -6,11 +6,38 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
-  `4b5a6ed Expose view receipt chains`.
+  `43d4991 Require QGLake view receipt chains`.
 - Latest committed status slice:
-  `a79a95d Record view tombstone status`.
+  `d318a68 Record view receipt chain status`.
 - Latest committed goal-guidance/docs slice:
   `81144f2 Mirror agent contract into goal`.
+- Paused after making QGLake consume the namespace-level receipt-chain read as
+  acceptance evidence. The fixture now drops its accepted transient view, checks
+  the governed per-view receipt list, checks the governed namespace-level
+  `view-version-receipt-chains` read for a tombstoned chain with hashed drop
+  receipts, and rejects lineage drains that do not replay
+  `view.version-receipt-chains-listed` as compact lineage evidence. The catalog
+  config response now advertises the receipt-chain endpoint.
+- Local verification for the QGLake receipt-chain acceptance slice was green:
+  `cargo fmt -p lakecat-cli -p lakecat-api`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-cli -p lakecat-api -- --check`;
+  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-service config_endpoint_reports_lakecat_capabilities`;
+  `cargo test -p lakecat-service outbox_drain_projects_view_events_to_graph_and_lineage`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities`;
+  `cargo fmt -p lakecat-api -p lakecat-cli -p lakecat-service -p lakecat-sail -- --check`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Previous committed LakeCat implementation slice:
+  `4b5a6ed Expose view receipt chains`.
 - Paused after adding a namespace-level governed management read for active and
   tombstoned view receipt chains:
   `GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/view-version-receipt-chains`.
@@ -2191,10 +2218,11 @@ Updated: 2026-06-18
 
 ## Next Recommended Slice
 
-Continue the local-first view semantics track by making QGLake or QueryGraph
-consume the namespace-level receipt-chain read as bootstrap/acceptance evidence
-for active and tombstoned views. If the next step starts to become a reusable
-typed view-history or Iceberg view-history model, push that model into Sail
-first and consume it through LakeCat's existing seams. Keep CI manual-only
-until local gates are green and the temporary Sail patch bridge can be replaced
-by an upstream branch or published Sail helper crate.
+Continue the local-first view semantics track by making the QueryGraph import
+or verification path consume the compact receipt-chain evidence that QGLake now
+requires from LakeCat. Keep this at the handoff/acceptance boundary: if the
+next step starts to become reusable typed view-history or Iceberg view-history
+semantics, push that model into Sail first and consume it through LakeCat's
+existing seams. Keep CI manual-only until local gates are green and the
+temporary Sail patch bridge can be replaced by an upstream branch or published
+Sail helper crate.
