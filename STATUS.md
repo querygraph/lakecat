@@ -6,6 +6,22 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `09b6b06 Require QGLake child plan tasks`.
+- Paused after pushing the QGLake child-plan-task proof slice. The
+  `lakecat-cli qglake-fixture` governed `fetchScanTasks` verifier now rejects
+  manifest-list expansions that do not return both a child Iceberg REST
+  plan-task token and a LakeCat manifest child task, keeping acceptance on the
+  standard multi-step planning path rather than accepting a terminal file list
+  without follow-on planning proof.
+- Local verification for the pushed QGLake child-plan-task proof slice was
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_fetch_scan_tasks_verifier`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens --features sail-local,turso-local`;
+  `git diff --check`.
+- This status commit records the pushed QGLake child-plan-task proof slice.
+- Previous implementation slice:
   `feec688 Require QGLake manifest-backed plan`.
 - Paused after pushing the QGLake manifest-backed plan proof slice. The
   `lakecat-cli qglake-fixture` governed scan-plan verifier now rejects plans
