@@ -313,14 +313,17 @@ warehouse storage profiles, and Turso persists those profiles for
 longest-prefix credential selection. Production external secret-store resolver
 backend coverage beyond Vault remains pending. Governed management endpoints can
 also upsert and list durable semantic view records in memory and Turso, giving
-QueryGraph a stable catalog-owned view entity before standard Iceberg view REST
-semantics are wired. QueryGraph bootstrap now exports those stored views with
-manifest-covered OSI handoff hashes, view-aware graph edges, and OpenLineage view
-counts. Governed management endpoints now also upsert and list durable server
-records in memory and Turso; project records can attach to stored servers; and
-warehouse records must attach to stored projects. Project-scoped management
-routes can list and upsert those warehouses without changing standard table
-access, establishing the Server > Project > Warehouse control-plane hierarchy.
+QueryGraph a stable catalog-owned view entity. Warehouse-prefixed catalog REST
+aliases can now list, load, and upsert those durable views for Iceberg-compatible
+clients while richer typed Iceberg view metadata should move toward Sail-backed
+models as they become available. QueryGraph bootstrap now exports those stored
+views with manifest-covered OSI handoff hashes, view-aware graph edges, and
+OpenLineage view counts. Governed management endpoints now also upsert and list
+durable server records in memory and Turso; project records can attach to stored
+servers; and warehouse records must attach to stored projects. Project-scoped
+management routes can list and upsert those warehouses without changing standard
+table access, establishing the Server > Project > Warehouse control-plane
+hierarchy.
 Governed table lifecycle now records soft-delete rows, hides deleted tables from
 normal catalog reads, restores soft-deleted tables through a governed management
 endpoint, and emits `table.deleted` / `table.restored` audit/outbox events.

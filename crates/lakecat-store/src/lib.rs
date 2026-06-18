@@ -117,6 +117,21 @@ pub trait CatalogStore: Send + Sync + 'static {
         view.validate()?;
         Ok(view)
     }
+    async fn load_view(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+        view: &TableName,
+    ) -> LakeCatResult<ViewRecord> {
+        self.list_views(warehouse, namespace)
+            .await?
+            .into_iter()
+            .find(|record| record.name == *view)
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "view",
+                name: view.as_str().to_string(),
+            })
+    }
     async fn list_views(
         &self,
         _warehouse: &WarehouseName,
@@ -1146,6 +1161,23 @@ impl CatalogStore for MemoryCatalogStore {
         Ok(view)
     }
 
+    async fn load_view(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+        view: &TableName,
+    ) -> LakeCatResult<ViewRecord> {
+        let state = self.state.read().await;
+        state
+            .views
+            .get(&view_key_parts(warehouse, namespace, view))
+            .cloned()
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "view",
+                name: view.as_str().to_string(),
+            })
+    }
+
     async fn list_views(
         &self,
         warehouse: &WarehouseName,
@@ -1660,6 +1692,24 @@ mod memory_tests {
         store.upsert_view(updated.clone()).await.unwrap();
 
         assert_eq!(
+            store
+                .load_view(
+                    &warehouse,
+                    &namespace,
+                    &TableName::new("active_customers").unwrap()
+                )
+                .await
+                .unwrap(),
+            updated.clone()
+        );
+        assert!(matches!(
+            store
+                .load_view(&warehouse, &namespace, &TableName::new("missing_view").unwrap())
+                .await,
+            Err(LakeCatError::NotFound { object, name })
+                if object == "view" && name == "missing_view"
+        ));
+        assert_eq!(
             store.list_views(&warehouse, &namespace).await.unwrap(),
             vec![updated]
         );
@@ -1751,7 +1801,7 @@ pub mod turso_store {
         CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, ProjectRecord, ServerRecord,
         SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord, ViewRecord,
         WarehouseRecord, policy_binding_key, policy_bindings_for_table, storage_profile_key,
-        storage_profile_match, table_key, validate_project_id, view_key,
+        storage_profile_match, table_key, validate_project_id, view_key, view_key_parts,
     };
 
     #[derive(Debug, Clone)]
@@ -2645,6 +2695,33 @@ pub mod turso_store {
             Ok(view)
         }
 
+        async fn load_view(
+            &self,
+            warehouse: &WarehouseName,
+            namespace: &Namespace,
+            view: &TableName,
+        ) -> LakeCatResult<ViewRecord> {
+            let conn = self.connect()?;
+            let view_key = view_key_parts(warehouse, namespace, view);
+            conn.query(
+                "select record_json from views
+                 where view_key = ?1
+                 limit 1",
+                (view_key.as_str(),),
+            )
+            .await
+            .map_err(turso_error)?
+            .next()
+            .await
+            .map_err(turso_error)?
+            .map(|row| decode_json(row_string(&row, 0)?))
+            .transpose()?
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "view",
+                name: view.as_str().to_string(),
+            })
+        }
+
         async fn list_views(
             &self,
             warehouse: &WarehouseName,
@@ -3327,6 +3404,24 @@ pub mod turso_store {
             .unwrap();
             store.upsert_view(updated.clone()).await.unwrap();
 
+            assert_eq!(
+                store
+                    .load_view(
+                        &warehouse,
+                        &namespace,
+                        &TableName::new("active_customers").unwrap()
+                    )
+                    .await
+                    .unwrap(),
+                updated.clone()
+            );
+            assert!(matches!(
+                store
+                    .load_view(&warehouse, &namespace, &TableName::new("missing_view").unwrap())
+                    .await,
+                Err(LakeCatError::NotFound { object, name })
+                    if object == "view" && name == "missing_view"
+            ));
             assert_eq!(
                 store.list_views(&warehouse, &namespace).await.unwrap(),
                 vec![updated]

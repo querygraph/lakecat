@@ -258,13 +258,15 @@ durable project records can attach to stored servers; and durable warehouse
 records must attach to stored projects. Project-scoped management routes can now
 list and upsert those warehouses for QueryGraph/bootstrap callers without
 changing standard table access. Governed view list/upsert endpoints persist
-`ViewRecord` values in memory and Turso. QueryGraph bootstrap now exports those
-views with manifest-covered OSI hashes, view-aware graph edges, and OpenLineage
-view counts. The remaining tenancy gap is narrower but real: standard Iceberg
-view REST semantics are not fully modeled yet.
+`ViewRecord` values in memory and Turso. Warehouse-prefixed catalog REST aliases
+now list, load, and upsert those durable views while preserving standard table
+access semantics. QueryGraph bootstrap now exports those views with
+manifest-covered OSI hashes, view-aware graph edges, and OpenLineage view counts.
+The remaining tenancy gap is narrower but real: full typed Iceberg view metadata
+and view commit semantics are not fully modeled yet.
 
-**Fix:** introduce Iceberg-compatible view REST entities around the existing
-View records while keeping standard table access semantics unchanged.
+**Fix:** converge the durable View records with Sail-backed typed Iceberg view
+metadata and commit semantics when upstream model support is ready.
 
 ### F8. (LOW) Production secret-store backends fail closed but are unexercised
 

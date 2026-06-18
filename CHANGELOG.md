@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added catalog-path view REST aliases for listing, loading, and upserting
+  durable views under
+  `/catalog/v1/{warehouse}/namespaces/{namespace}/views`, with governed
+  `view.load` authorization and audited Iceberg REST `view.*` events.
 - Added project-scoped warehouse management routes for listing and upserting
   warehouses under `/management/v1/projects/{project}/warehouses`, using the
   existing durable Warehouse records without changing standard Iceberg REST

@@ -45,6 +45,10 @@ impl Default for CatalogConfigResponse {
                     .to_string(),
                 "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials"
                     .to_string(),
+                "GET /catalog/v1/{warehouse}/namespaces/{namespace}/views".to_string(),
+                "GET /catalog/v1/{warehouse}/namespaces/{namespace}/views/{view}".to_string(),
+                "POST /catalog/v1/{warehouse}/namespaces/{namespace}/views/{view}".to_string(),
+                "PUT /catalog/v1/{warehouse}/namespaces/{namespace}/views/{view}".to_string(),
                 "GET /management/v1/servers".to_string(),
                 "PUT /management/v1/servers/{server}".to_string(),
                 "GET /management/v1/projects".to_string(),

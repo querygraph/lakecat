@@ -34,6 +34,7 @@ pub enum CatalogAction {
     TableDrop,
     TableRestore,
     CredentialsVend,
+    ViewLoad,
     ServerManage,
     ProjectManage,
     WarehouseManage,
@@ -447,6 +448,9 @@ pub struct CanManageWarehouses;
 pub struct CanManageStorageProfiles;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanLoadViews;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanManageViews;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -478,6 +482,7 @@ pub type ServerManageCapability = Capability<CanManageServers, ()>;
 pub type ProjectManageCapability = Capability<CanManageProjects, ()>;
 pub type WarehouseManageCapability = Capability<CanManageWarehouses, ()>;
 pub type StorageProfileManageCapability = Capability<CanManageStorageProfiles, ()>;
+pub type ViewLoadCapability = Capability<CanLoadViews, ()>;
 pub type ViewManageCapability = Capability<CanManageViews, ()>;
 pub type PolicyManageCapability = Capability<CanManagePolicies, ()>;
 pub type GraphReadCapability = Capability<CanReadGraph, ()>;
@@ -607,6 +612,12 @@ impl StorageProfileManageCapability {
 impl ViewManageCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
         catalog_capability_from_receipt(receipt, CatalogAction::ViewManage, "manage views")
+    }
+}
+
+impl ViewLoadCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
+        catalog_capability_from_receipt(receipt, CatalogAction::ViewLoad, "load views")
     }
 }
 
@@ -1163,6 +1174,21 @@ mod tests {
         };
         assert!(ViewManageCapability::from_receipt(view_receipt).is_ok());
 
+        let view_load_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:reader".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::ViewLoad,
+            table: None,
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            context: serde_json::json!({}),
+            checked_at: Utc::now(),
+        };
+        assert!(ViewLoadCapability::from_receipt(view_load_receipt).is_ok());
+
         let policy_receipt = AuthorizationReceipt {
             principal: Principal {
                 subject: "agent:operator".to_string(),
@@ -1486,6 +1512,7 @@ pub fn action_name(action: &CatalogAction) -> &'static str {
         CatalogAction::TableDrop => "table.drop",
         CatalogAction::TableRestore => "table.restore",
         CatalogAction::CredentialsVend => "credentials.vend",
+        CatalogAction::ViewLoad => "view.load",
         CatalogAction::ServerManage => "server.manage",
         CatalogAction::ProjectManage => "project.manage",
         CatalogAction::WarehouseManage => "warehouse.manage",

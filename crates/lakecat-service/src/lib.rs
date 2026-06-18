@@ -43,7 +43,7 @@ use lakecat_security::{
     PolicyManageCapability, ProjectManageCapability, ReadRestriction, ServerManageCapability,
     StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
     TableDropCapability, TableLoadCapability, TableRestoreCapability, TableScanCapability,
-    ViewManageCapability, WarehouseManageCapability,
+    ViewLoadCapability, ViewManageCapability, WarehouseManageCapability,
 };
 use lakecat_store::{
     CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, PolicyBinding,
@@ -786,6 +786,16 @@ pub fn app(state: LakeCatState) -> Router {
         .route(
             "/catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials",
             get(load_credentials_for_warehouse),
+        )
+        .route(
+            "/catalog/v1/{warehouse}/namespaces/{namespace}/views",
+            get(catalog_list_views),
+        )
+        .route(
+            "/catalog/v1/{warehouse}/namespaces/{namespace}/views/{view}",
+            get(catalog_load_view)
+                .post(catalog_upsert_view)
+                .put(catalog_upsert_view),
         )
         .route(
             "/catalog/v1/namespaces",
@@ -1726,6 +1736,68 @@ async fn list_views(
     }))
 }
 
+async fn catalog_list_views(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace)): Path<(String, String)>,
+) -> Result<Json<ListViewsResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let namespace = namespace.parse::<Namespace>()?;
+    let capability = authorize_view_load(&state, request_identity(&headers)?).await?;
+    let views = state.store.list_views(&warehouse, &namespace).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "view.listed",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "view.listed",
+                "interface": "iceberg-rest",
+                "warehouse": warehouse.as_str(),
+                "namespace": namespace.parts(),
+                "view-count": views.len(),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(ListViewsResponse {
+        views: views.iter().map(view_response).collect(),
+    }))
+}
+
+async fn catalog_load_view(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, view)): Path<(String, String, String)>,
+) -> Result<Json<ViewResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let namespace = namespace.parse::<Namespace>()?;
+    let view_name = TableName::new(view)?;
+    let capability = authorize_view_load(&state, request_identity(&headers)?).await?;
+    let record = state
+        .store
+        .load_view(&warehouse, &namespace, &view_name)
+        .await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "view.loaded",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "view.loaded",
+                "interface": "iceberg-rest",
+                "warehouse": warehouse.as_str(),
+                "namespace": namespace.parts(),
+                "view": view_response(&record),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(view_response(&record)))
+}
+
 async fn upsert_view(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
@@ -1754,6 +1826,45 @@ async fn upsert_view(
             capability.receipt().principal.clone(),
             json!({
                 "event-type": "view.upserted",
+                "warehouse": warehouse.as_str(),
+                "namespace": namespace.parts(),
+                "view": view_response(&record),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(view_response(&record)))
+}
+
+async fn catalog_upsert_view(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, view)): Path<(String, String, String)>,
+    Json(request): Json<UpsertViewRequest>,
+) -> Result<Json<ViewResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let namespace = namespace.parse::<Namespace>()?;
+    let capability = authorize_view_manage(&state, request_identity(&headers)?).await?;
+    let record = ViewRecord::new(
+        warehouse.clone(),
+        namespace.clone(),
+        TableName::new(view)?,
+        request.sql,
+        request.dialect,
+        request.schema_version,
+        request.properties,
+        capability.receipt().principal.clone(),
+    )?;
+    let record = state.store.upsert_view(record).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "view.upserted",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "view.upserted",
+                "interface": "iceberg-rest",
                 "warehouse": warehouse.as_str(),
                 "namespace": namespace.parts(),
                 "view": view_response(&record),
@@ -3316,6 +3427,14 @@ async fn authorize_view_manage(
 ) -> Result<ViewManageCapability, LakeCatHttpError> {
     let receipt = authorize(state, identity, CatalogAction::ViewManage, None).await?;
     Ok(ViewManageCapability::from_receipt(receipt)?)
+}
+
+async fn authorize_view_load(
+    state: &LakeCatState,
+    identity: RequestIdentity,
+) -> Result<ViewLoadCapability, LakeCatHttpError> {
+    let receipt = authorize(state, identity, CatalogAction::ViewLoad, None).await?;
+    Ok(ViewLoadCapability::from_receipt(receipt)?)
 }
 
 async fn authorize_policy_manage(
@@ -5534,7 +5653,7 @@ mod tests {
             .header("x-lakecat-principal", "operator@example.com")
             .body(Body::empty())
             .unwrap();
-        let response = app.oneshot(list).await.unwrap();
+        let response = app.clone().oneshot(list).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
@@ -5868,7 +5987,7 @@ mod tests {
             .header("x-lakecat-principal", "operator@example.com")
             .body(Body::empty())
             .unwrap();
-        let response = app.oneshot(list).await.unwrap();
+        let response = app.clone().oneshot(list).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
@@ -5880,6 +5999,87 @@ mod tests {
             serde_json::json!("active_customers")
         );
         assert_eq!(body["views"][0]["schema-version"], serde_json::json!(1));
+
+        let catalog_list = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/local/namespaces/default/views")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(catalog_list).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["views"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            body["views"][0]["name"],
+            serde_json::json!("active_customers")
+        );
+
+        let catalog_load = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/local/namespaces/default/views/active_customers")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(catalog_load).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["name"], serde_json::json!("active_customers"));
+        assert_eq!(body["schema-version"], serde_json::json!(1));
+        assert_eq!(
+            body["properties"]["semantic-domain"],
+            serde_json::json!("customer")
+        );
+
+        let catalog_upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/catalog/v1/local/namespaces/default/views/catalog_customers")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "sql": "select id from customers where active",
+                    "dialect": "sql",
+                    "schema-version": 2,
+                    "properties": {
+                        "semantic-domain": "catalog-customer"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(catalog_upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let catalog_load = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/local/namespaces/default/views/catalog_customers")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(catalog_load).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["name"], serde_json::json!("catalog_customers"));
+        assert_eq!(body["schema-version"], serde_json::json!(2));
+
+        let missing = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/local/namespaces/default/views/missing_view")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(missing).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
