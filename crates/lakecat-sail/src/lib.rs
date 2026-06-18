@@ -257,7 +257,17 @@ pub mod catalog_provider {
     };
     use serde_json::json;
 
-    use crate::{CommitPreparationRequest, SailCatalogEngine};
+    use crate::{CommitPreparationRequest, SailCatalogEngine, ScanPlan, ScanPlanningRequest};
+
+    #[derive(Debug, Clone, Default)]
+    pub struct ProviderScanPlanningRequest {
+        pub projection: Vec<String>,
+        pub filters: Vec<serde_json::Value>,
+        pub limit: Option<u64>,
+        pub snapshot_id: Option<i64>,
+        pub start_snapshot_id: Option<i64>,
+        pub end_snapshot_id: Option<i64>,
+    }
 
     pub struct LakeCatCatalogProvider {
         name: String,
@@ -368,6 +378,41 @@ pub mod catalog_provider {
                 .authorize_table_with_context(CatalogAction::TablePlanScan, ident.clone(), context)
                 .await?;
             TableScanCapability::from_receipt(receipt, ident).map_err(catalog_error)
+        }
+
+        pub async fn plan_table_scan(
+            &self,
+            database: &SailNamespace,
+            table: &str,
+            request: ProviderScanPlanningRequest,
+        ) -> CatalogResult<ScanPlan> {
+            let capability = self.authorize_table_scan(database, table).await?;
+            let restriction = capability.read_restriction().map_err(catalog_error)?;
+            let projection = restriction
+                .effective_projection(&request.projection)
+                .map_err(catalog_error)?;
+            let mut filters = request.filters;
+            filters.extend(restriction.mandatory_filters());
+            let record = self
+                .store
+                .load_table(capability.table())
+                .await
+                .map_err(catalog_error)?;
+            self.sail
+                .plan_scan(ScanPlanningRequest {
+                    table: capability.table().clone(),
+                    principal: capability.receipt().principal.clone(),
+                    metadata_location: record.metadata_location,
+                    table_metadata: record.metadata,
+                    projection,
+                    filters,
+                    limit: request.limit,
+                    snapshot_id: request.snapshot_id,
+                    start_snapshot_id: request.start_snapshot_id,
+                    end_snapshot_id: request.end_snapshot_id,
+                })
+                .await
+                .map_err(catalog_error)
         }
 
         async fn authorize_catalog(
@@ -1410,10 +1455,51 @@ pub mod catalog_provider {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use crate::DeferredSailCatalogEngine;
+        use crate::{
+            CommitPlan, DeferredSailCatalogEngine, FetchScanTasksPlan, FetchScanTasksRequest,
+            SailCatalogEngine,
+        };
+        use lakecat_core::{LakeCatError, LakeCatResult};
         use lakecat_security::AllowAllGovernanceEngine;
-        use lakecat_store::MemoryCatalogStore;
+        use lakecat_store::{MemoryCatalogStore, TableRecord};
         use sail_catalog::provider::CatalogProvider;
+        use tokio::sync::Mutex;
+
+        #[derive(Debug, Default)]
+        struct RecordingSailEngine {
+            last_scan: Mutex<Option<ScanPlanningRequest>>,
+        }
+
+        #[async_trait::async_trait]
+        impl SailCatalogEngine for RecordingSailEngine {
+            async fn prepare_commit(
+                &self,
+                _request: CommitPreparationRequest,
+            ) -> LakeCatResult<CommitPlan> {
+                Err(LakeCatError::NotSupported(
+                    "recording provider test engine does not prepare commits".to_string(),
+                ))
+            }
+
+            async fn plan_scan(&self, request: ScanPlanningRequest) -> LakeCatResult<ScanPlan> {
+                *self.last_scan.lock().await = Some(request);
+                Ok(ScanPlan {
+                    planned_by: "recording-provider-test".to_string(),
+                    snapshot_id: Some(42),
+                    scan_tasks: vec![json!({"plan-task": "recorded"})],
+                    residual_filter: None,
+                })
+            }
+
+            async fn fetch_scan_tasks(
+                &self,
+                _request: FetchScanTasksRequest,
+            ) -> LakeCatResult<FetchScanTasksPlan> {
+                Err(LakeCatError::NotSupported(
+                    "recording provider test engine does not fetch scan tasks".to_string(),
+                ))
+            }
+        }
 
         #[tokio::test]
         async fn provider_resolves_governed_tables_in_process() {
@@ -1704,6 +1790,124 @@ pub mod catalog_provider {
                 capability.receipt().context["lakecat:sail-provider"],
                 json!("lakecat")
             );
+        }
+
+        #[tokio::test]
+        async fn provider_scan_planning_applies_policy_restriction_before_sail() {
+            let store = MemoryCatalogStore::new();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let table_name = TableName::new("events").unwrap();
+            let ident = TableIdent::new(warehouse.clone(), namespace.clone(), table_name.clone());
+            store
+                .create_table(TableRecord::new(
+                    ident,
+                    "file:///tmp/events".to_string(),
+                    Some("file:///tmp/events/metadata/00000.json".to_string()),
+                    json!({
+                        "format-version": 3,
+                        "location": "file:///tmp/events",
+                        "current-schema-id": 1,
+                        "schemas": [{
+                            "schema-id": 1,
+                            "fields": [
+                                {"id": 1, "name": "event_id", "type": "string", "required": true},
+                                {"id": 2, "name": "payload", "type": "string", "required": false}
+                            ]
+                        }],
+                        "default-spec-id": 0,
+                        "partition-specs": [{"spec-id": 0, "fields": []}],
+                        "current-snapshot-id": 42,
+                        "snapshots": [{
+                            "snapshot-id": 42,
+                            "sequence-number": 7,
+                            "timestamp-ms": 1710000000000_i64,
+                            "manifest-list": "file:///tmp/events/metadata/snap-42.avro",
+                            "summary": {"operation": "append"},
+                            "schema-id": 1
+                        }]
+                    }),
+                    Principal::anonymous(),
+                ))
+                .await
+                .unwrap();
+            store
+                .upsert_policy_binding(
+                    PolicyBinding::new(
+                        "policy-provider-plan",
+                        warehouse.clone(),
+                        Some(namespace),
+                        Some(table_name),
+                        true,
+                        json!({
+                            "uid": "policy:provider-plan",
+                            "lakecat:read-restriction": {
+                                "allowed-columns": ["event_id"],
+                                "row-predicate": {
+                                    "type": "equal",
+                                    "term": "event_id",
+                                    "value": "evt-1"
+                                }
+                            }
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            let sail = Arc::new(RecordingSailEngine::default());
+            let provider = LakeCatCatalogProvider::new(
+                "lakecat",
+                warehouse,
+                store,
+                sail.clone(),
+                AllowAllGovernanceEngine::new(),
+                Principal::anonymous(),
+            );
+            let sail_namespace = SailNamespace::try_from(vec!["default"]).unwrap();
+
+            let plan = provider
+                .plan_table_scan(
+                    &sail_namespace,
+                    "events",
+                    ProviderScanPlanningRequest {
+                        projection: vec!["event_id".to_string(), "payload".to_string()],
+                        filters: vec![json!({
+                            "type": "not-null",
+                            "term": "event_id"
+                        })],
+                        limit: Some(10),
+                        snapshot_id: Some(42),
+                        start_snapshot_id: None,
+                        end_snapshot_id: None,
+                    },
+                )
+                .await
+                .unwrap();
+            let recorded = sail.last_scan.lock().await.clone().unwrap();
+
+            assert_eq!(plan.planned_by, "recording-provider-test");
+            assert_eq!(recorded.projection, vec!["event_id".to_string()]);
+            assert_eq!(
+                recorded.filters,
+                vec![
+                    json!({
+                        "type": "not-null",
+                        "term": "event_id"
+                    }),
+                    json!({
+                        "type": "equal",
+                        "term": "event_id",
+                        "value": "evt-1"
+                    }),
+                ]
+            );
+            assert_eq!(
+                recorded.metadata_location.as_deref(),
+                Some("file:///tmp/events/metadata/00000.json")
+            );
+            assert_eq!(recorded.limit, Some(10));
+            assert_eq!(recorded.snapshot_id, Some(42));
         }
 
         #[tokio::test]

@@ -43,6 +43,9 @@
   provider-side scan capabilities with policy-binding context and shared
   `ReadRestriction` enforcement, preparing provider-routed reads without
   duplicating REST policy logic.
+- Added provider-side governed scan planning through `LakeCatCatalogProvider`,
+  applying the shared `ReadRestriction` projection and mandatory filters before
+  delegating to the configured Sail engine.
 - Changed the QueryGraph bootstrap OSI artifact from a LakeCat-authored semantic
   model into a stable OSI handoff: LakeCat now publishes dataset/field anchors
   and governed Sail/LakeCat source metadata while leaving metrics, dimensions,

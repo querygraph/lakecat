@@ -6,12 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `e1d0869 Add LakeSail book artifacts`.
-- Current working slice: provider-side governed scan authorization. The
-  in-process `LakeCatCatalogProvider` can now mint `TableScanCapability`
-  receipts carrying stored policy-binding context and shared `ReadRestriction`
-  data, giving future provider-routed read planning the same governance surface
-  REST scan planning uses.
+  working changes: `6a73317 Authorize provider scan capabilities`.
+- Current working slice: provider-side governed scan planning. The in-process
+  `LakeCatCatalogProvider` now has a scan-planning seam that authorizes through
+  provider scan capabilities, applies shared `ReadRestriction` projection and
+  mandatory filters, loads the table from the catalog store, and delegates the
+  effective plan request to Sail.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -128,6 +128,11 @@ Updated: 2026-06-18
   receipt context.
 - Added a provider test proving stored ODRL policy bindings are visible through
   the provider scan capability and preserve the Sail-provider context.
+- Added `LakeCatCatalogProvider::plan_table_scan` and a small provider scan
+  request type so provider-routed scan planning can apply governed projection
+  and row filters before invoking the configured Sail engine.
+- Added a recording-engine provider test proving policy-derived projection and
+  row predicates are passed into Sail from the provider scan-planning seam.
 - Parsed a minimal enforceable ODRL subset from active policy bindings:
   `allowed-columns` / `allowedColumns` at the policy root, in
   `lakecat:read-restriction`, or in ODRL constraints, plus purpose and policy
@@ -222,6 +227,14 @@ Updated: 2026-06-18
   `cargo fmt -p lakecat-sail -- --check`,
   `cargo test -p lakecat-sail --features catalog-provider provider_scan_authorization_carries_policy_restriction -- --nocapture`, and
   `cargo test -p lakecat-sail --features catalog-provider provider_resolves_governed_tables_in_process -- --nocapture`,
+  `cargo test -p lakecat-sail --features catalog-provider`,
+  `cargo test -p lakecat-sail --all-features`,
+  `git diff --check`, and
+  `cargo test --workspace --all-features`.
+- Provider-side governed scan planning checks passed:
+  `cargo fmt -p lakecat-sail -- --check`,
+  `cargo test -p lakecat-sail --features catalog-provider provider_scan_planning_applies_policy_restriction_before_sail -- --nocapture`, and
+  `cargo test -p lakecat-sail --features catalog-provider provider_scan_authorization_carries_policy_restriction -- --nocapture`,
   `cargo test -p lakecat-sail --features catalog-provider`,
   `cargo test -p lakecat-sail --all-features`,
   `git diff --check`, and
