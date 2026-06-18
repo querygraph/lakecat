@@ -6,6 +6,21 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `e02045b Require QGLake fetched scan work`.
+- Paused after pushing the QGLake fetched-scan-work proof slice. The
+  `lakecat-cli qglake-fixture` governed `fetchScanTasks` verifier now rejects
+  responses that carry only the residual policy proof but no fetched file scan
+  tasks, proving the plan-task token was expanded into real Sail-backed scan
+  work.
+- Local verification for the pushed QGLake fetched-scan-work proof slice was
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_fetch_scan_tasks_verifier`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens --features sail-local,turso-local`.
+- This status commit records the pushed QGLake fetched-scan-work proof slice.
+- Previous implementation slice:
   `d5b496a Preflight QGLake manifest lists`.
 - Paused after pushing the QGLake manifest-list preflight slice. QGLake fixture
   reruns now reject existing fixture tables when snapshot manifest-list files
