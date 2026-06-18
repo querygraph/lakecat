@@ -288,6 +288,7 @@ pub struct ViewResponse {
     pub warehouse: String,
     pub namespace: Vec<String>,
     pub name: String,
+    pub view_version: u64,
     pub sql: String,
     pub dialect: String,
     pub schema_version: Option<u64>,

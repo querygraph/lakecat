@@ -500,6 +500,7 @@ pub struct QueryGraphViewProjection {
     pub warehouse: String,
     pub namespace: Vec<String>,
     pub name: String,
+    pub view_version: u64,
     pub sql: String,
     pub dialect: String,
     pub schema_version: Option<u64>,
@@ -519,6 +520,7 @@ impl QueryGraphViewProjection {
             warehouse: view.warehouse.as_str().to_string(),
             namespace: view.namespace.parts().to_vec(),
             name: view.name.as_str().to_string(),
+            view_version: view.view_version,
             sql: view.sql,
             dialect: view.dialect,
             schema_version: view.schema_version,
@@ -696,6 +698,7 @@ impl QueryGraphCatalogGraph {
                 label: "View".to_string(),
                 properties: json!({
                     "name": view.name,
+                    "viewVersion": view.view_version,
                     "dialect": view.dialect,
                     "schemaVersion": view.schema_version,
                     "columns": view.columns,
@@ -891,6 +894,7 @@ fn view_osi_handoff(view: &ViewRecord, stable_id: &str) -> Value {
             "name": safe_sql_name(view.name.as_str()),
             "warehouse": view.warehouse.as_str(),
             "namespace": view.namespace.path(),
+            "viewVersion": view.view_version,
             "dialect": view.dialect,
             "schemaVersion": view.schema_version,
             "columns": view.columns,
@@ -992,6 +996,7 @@ fn bootstrap_open_lineage(
                         "_producer": "https://querygraph.ai/lakecat",
                         "_schemaURL": "https://querygraph.ai/schemas/openlineage/querygraph-catalog-view-facet/0.1.0.json",
                         "stableId": view.stable_id,
+                        "viewVersion": view.view_version,
                         "dialect": view.dialect,
                         "schemaVersion": view.schema_version
                     }
@@ -1395,6 +1400,7 @@ mod tests {
         assert_eq!(bundle.tables.len(), 0);
         assert_eq!(bundle.views.len(), 1);
         assert_eq!(bundle.views[0].name, "active_customers");
+        assert_eq!(bundle.views[0].view_version, 1);
         assert_eq!(bundle.views[0].columns[0]["name"], json!("id"));
         assert_eq!(bundle.manifest.view_artifacts.len(), 1);
         assert_eq!(
@@ -1427,6 +1433,18 @@ mod tests {
         assert_eq!(
             bundle.views[0].osi["view"]["columns"][0]["comment"],
             json!("Customer identifier")
+        );
+        assert_eq!(bundle.views[0].osi["view"]["viewVersion"], json!(1));
+        let graph_view = bundle
+            .graph
+            .nodes
+            .iter()
+            .find(|node| node.id == bundle.views[0].stable_id)
+            .unwrap();
+        assert_eq!(graph_view.properties["viewVersion"], json!(1));
+        assert_eq!(
+            bundle.open_lineage["outputs"][0]["facets"]["queryGraph_catalogView"]["viewVersion"],
+            json!(1)
         );
         let verification = bundle.verify_manifest().unwrap();
         assert_eq!(verification.view_count, 1);

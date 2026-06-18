@@ -3722,6 +3722,7 @@ fn view_response(record: &ViewRecord) -> ViewResponse {
         warehouse: record.warehouse.as_str().to_string(),
         namespace: record.namespace.parts().to_vec(),
         name: record.name.as_str().to_string(),
+        view_version: record.view_version,
         sql: record.sql.clone(),
         dialect: record.dialect.clone(),
         schema_version: record.schema_version,
@@ -8277,6 +8278,7 @@ mod tests {
         assert_eq!(body["warehouse"], serde_json::json!("local"));
         assert_eq!(body["namespace"], serde_json::json!(["default"]));
         assert_eq!(body["name"], serde_json::json!("active_customers"));
+        assert_eq!(body["view-version"], serde_json::json!(1));
         assert_eq!(
             body["properties"]["semantic-domain"],
             serde_json::json!("customer")
@@ -8304,6 +8306,7 @@ mod tests {
             serde_json::json!("active_customers")
         );
         assert_eq!(body["views"][0]["schema-version"], serde_json::json!(1));
+        assert_eq!(body["views"][0]["view-version"], serde_json::json!(1));
         assert_eq!(
             body["views"][0]["columns"][0]["comment"],
             serde_json::json!("Customer identifier")
@@ -8326,6 +8329,7 @@ mod tests {
             body["views"][0]["name"],
             serde_json::json!("active_customers")
         );
+        assert_eq!(body["views"][0]["view-version"], serde_json::json!(1));
 
         let catalog_load = Request::builder()
             .method(Method::GET)
@@ -8340,6 +8344,7 @@ mod tests {
             .unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["name"], serde_json::json!("active_customers"));
+        assert_eq!(body["view-version"], serde_json::json!(1));
         assert_eq!(body["schema-version"], serde_json::json!(1));
         assert_eq!(
             body["properties"]["semantic-domain"],
@@ -8379,6 +8384,7 @@ mod tests {
             .unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["name"], serde_json::json!("catalog_customers"));
+        assert_eq!(body["view-version"], serde_json::json!(1));
         assert_eq!(body["schema-version"], serde_json::json!(2));
 
         let catalog_drop = Request::builder()

@@ -838,8 +838,24 @@ about a view object. LakeCat records `view.listed`, `view.upserted`,
 reads to namespace-scoped graph and OpenLineage evidence, and projects
 single-view changes and reads to catalog-facing View graph events plus
 LakeCat OpenLineage view dataset receipts. QueryGraph bootstrap can then
-include views with OSI hashes, view-aware graph edges, and OpenLineage view
-counts. The lineage-drain summary also carries compact view replay identity:
+include views with OSI hashes, store-assigned view versions, view-aware graph
+edges, and OpenLineage view counts. The lineage-drain summary also carries
+compact view replay identity:
+
+```json
+{
+  "name": "events_view",
+  "view-version": 1,
+  "schema-version": 1,
+  "dialect": "sql"
+}
+```
+
+That `view-version` is assigned by the durable store on each upsert, not by the
+caller. It is the first compatibility bridge toward Iceberg view commit history:
+QueryGraph can compare a bootstrap view artifact with the catalog's current
+view version today, while fuller version-log semantics remain a Sail-aligned
+implementation target.
 
 ```json
 {

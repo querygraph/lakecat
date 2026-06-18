@@ -319,11 +319,12 @@ also upsert and list durable semantic view records in memory and Turso, giving
 QueryGraph a stable catalog-owned view entity. Warehouse-prefixed catalog REST
 aliases can now list, load, upsert, and drop those durable views for
 Iceberg-compatible clients. `ViewRecord` now carries durable typed columns and
-the in-process Sail provider can create, load, list, and drop those records as
-`TableKind::View` statuses; full Iceberg view version/commit semantics should
-still move toward Sail-backed models as they become available. QueryGraph
-bootstrap now exports those stored views with manifest-covered OSI handoff
-hashes, typed view columns, view-aware graph edges, and OpenLineage view counts.
+store-assigned `view-version` counters, and the in-process Sail provider can
+create, load, list, and drop those records as `TableKind::View` statuses; full
+Iceberg view history and commit semantics should still move toward Sail-backed
+models as they become available. QueryGraph bootstrap now exports those stored
+views with manifest-covered OSI handoff hashes, typed view columns, view
+versions, view-aware graph edges, and OpenLineage view counts.
 Governed management endpoints now also upsert and list
 durable server records in memory and Turso; project records can attach to stored
 servers; and warehouse records must attach to stored projects. Project-scoped

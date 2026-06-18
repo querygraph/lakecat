@@ -431,6 +431,8 @@ pub struct ViewRecord {
     pub warehouse: WarehouseName,
     pub namespace: Namespace,
     pub name: TableName,
+    #[serde(default = "default_view_version")]
+    pub view_version: u64,
     pub sql: String,
     pub dialect: String,
     pub schema_version: Option<u64>,
@@ -466,6 +468,7 @@ impl ViewRecord {
             warehouse,
             namespace,
             name,
+            view_version: 1,
             sql: sql.into(),
             dialect: dialect.into(),
             schema_version,
@@ -484,7 +487,23 @@ impl ViewRecord {
         Ok(self)
     }
 
+    pub fn with_next_version(mut self, previous: Option<&ViewRecord>) -> LakeCatResult<Self> {
+        self.view_version = previous
+            .map(|view| view.view_version.saturating_add(1))
+            .unwrap_or(1);
+        if let Some(previous) = previous {
+            self.created = previous.created.clone();
+        }
+        self.validate()?;
+        Ok(self)
+    }
+
     pub fn validate(&self) -> LakeCatResult<()> {
+        if self.view_version == 0 {
+            return Err(LakeCatError::InvalidArgument(
+                "view version must be greater than zero".to_string(),
+            ));
+        }
         if self.sql.trim().is_empty() {
             return Err(LakeCatError::InvalidArgument(
                 "view SQL must not be empty".to_string(),
@@ -514,6 +533,10 @@ impl ViewRecord {
         validate_public_config(&self.properties)?;
         Ok(())
     }
+}
+
+fn default_view_version() -> u64 {
+    1
 }
 
 impl ViewColumnRecord {
@@ -1311,7 +1334,10 @@ impl CatalogStore for MemoryCatalogStore {
     async fn upsert_view(&self, view: ViewRecord) -> LakeCatResult<ViewRecord> {
         view.validate()?;
         let mut state = self.state.write().await;
-        state.views.insert(view_key(&view), view.clone());
+        let view_key = view_key(&view);
+        let previous = state.views.get(&view_key);
+        let view = view.with_next_version(previous)?;
+        state.views.insert(view_key, view.clone());
         Ok(view)
     }
 
@@ -1961,7 +1987,8 @@ mod memory_tests {
             Principal::anonymous(),
         )
         .unwrap();
-        store.upsert_view(view).await.unwrap();
+        let view = store.upsert_view(view).await.unwrap();
+        assert_eq!(view.view_version, 1);
 
         let updated = ViewRecord::new(
             warehouse.clone(),
@@ -1981,7 +2008,8 @@ mod memory_tests {
             comment: Some("Customer identifier".to_string()),
         }])
         .unwrap();
-        store.upsert_view(updated.clone()).await.unwrap();
+        let updated = store.upsert_view(updated).await.unwrap();
+        assert_eq!(updated.view_version, 2);
 
         assert_eq!(
             store
@@ -3050,6 +3078,21 @@ pub mod turso_store {
             view.validate()?;
             let conn = self.connect()?;
             let view_key = view_key(&view);
+            let previous = conn
+                .query(
+                    "select record_json from views
+                     where view_key = ?1
+                     limit 1",
+                    (view_key.as_str(),),
+                )
+                .await
+                .map_err(turso_error)?
+                .next()
+                .await
+                .map_err(turso_error)?
+                .map(|row| decode_json::<ViewRecord>(row_string(&row, 0)?))
+                .transpose()?;
+            let view = view.with_next_version(previous.as_ref())?;
             conn.execute(
                 "insert into views (
                     view_key, warehouse, namespace_path, view_name, dialect, record_json, updated_at
@@ -3814,7 +3857,8 @@ pub mod turso_store {
                 Principal::anonymous(),
             )
             .unwrap();
-            store.upsert_view(view).await.unwrap();
+            let view = store.upsert_view(view).await.unwrap();
+            assert_eq!(view.view_version, 1);
 
             let updated = ViewRecord::new(
                 warehouse.clone(),
@@ -3834,7 +3878,8 @@ pub mod turso_store {
                 comment: Some("Customer identifier".to_string()),
             }])
             .unwrap();
-            store.upsert_view(updated.clone()).await.unwrap();
+            let updated = store.upsert_view(updated).await.unwrap();
+            assert_eq!(updated.view_version, 2);
 
             assert_eq!(
                 store

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a durable, store-assigned `view-version` counter to LakeCat view
+  records and responses, and surfaced it through QueryGraph view graph, OSI,
+  and OpenLineage handoff artifacts as the first step toward full Iceberg view
+  commit semantics.
 - Made QGLake acceptance establish and list its durable server, project, and
   warehouse tenant spine, then require lineage-drain replay to expose
   `server.listed`, `project.listed`, and `warehouse.listed` count evidence.

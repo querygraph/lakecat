@@ -317,9 +317,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   when no resolver backend is configured; governed view list/upsert/drop
   management endpoints now persist and delete durable `ViewRecord` values in
   memory and Turso and emit audited `view.*` events; `ViewRecord` now carries
-  durable typed columns, warehouse-prefixed catalog REST aliases now list, load,
-  upsert, and drop those durable views, and the in-process Sail provider can
-  create/load/list/drop them as `TableKind::View` statuses; governed namespace
+  durable typed columns and store-assigned `view-version` counters,
+  warehouse-prefixed catalog REST aliases now list, load, upsert, and drop those
+  durable views, and the in-process Sail provider can create/load/list/drop them
+  as `TableKind::View` statuses; governed namespace
   list/load/drop is now wired on unprefixed and warehouse-prefixed Iceberg REST
   paths and through the in-process Sail `CatalogProvider` `drop_database` path,
   with non-empty guards across tables, views, and policy bindings plus audited
@@ -331,9 +332,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   drain summaries expose compact view warehouse/namespace/name/stable-id
   evidence for QGLake acceptance while leaving reusable view graph topology to
   Grust; QueryGraph bootstrap now exports those stored views with
-  manifest-covered OSI hashes, typed view columns, view-aware graph edges, and
-  OpenLineage view counts. Full Iceberg view version/commit semantics remain
-  pending.*
+  manifest-covered OSI hashes, typed view columns, durable view versions,
+  view-aware graph edges, and OpenLineage view counts. Full Iceberg view history
+  and commit semantics remain pending.*
 - **P6 — Reproducibility (F10) + typed v4 (F9).** Land the Sail helper commits
   upstream (or pin a published Sail) and re-enable automatic CI; converge on
   typed v4 metadata once `sail-iceberg` provides it.
