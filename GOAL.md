@@ -50,6 +50,12 @@ update the docs as part of the logical unit.
 - Treat QueryGraph as the end-to-end acceptance target. LakeCat should naturally
   support QueryGraph bootstrap, QGLake flows, Croissant/CDIF/OSI/ODRL/OpenLineage
   projection, and governed agent access without importing QueryGraph.
+- Treat the LakeCat book as part of the development workflow, not a side
+  artifact. Keep growing it as implementation lands, with substantial
+  end-to-end examples that show how the catalog participates in real user
+  workflows: standard Iceberg clients, PySpark/Spark, governed scan planning,
+  credential vending decisions, QueryGraph bootstrap/import, OpenLineage replay,
+  and agentic QGLake flows.
 
 ## Build Direction
 
@@ -76,6 +82,9 @@ For each logical unit:
    true without moving reusable Sail, Grust, or TypeSec responsibilities into
    LakeCat.
 3. Update `CHANGELOG.md` and any affected design/status docs before committing.
-4. Run focused tests plus the relevant LakeCat gates from `AGENTS.md`.
-5. Commit only the files belonging to that logical unit, then push when local
+4. Update the book when the unit changes user-facing workflows or architecture,
+   especially with runnable or near-runnable examples instead of prose-only
+   claims.
+5. Run focused tests plus the relevant LakeCat gates from `AGENTS.md`.
+6. Commit only the files belonging to that logical unit, then push when local
    verification is green.

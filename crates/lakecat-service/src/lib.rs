@@ -3003,6 +3003,37 @@ async fn project_outbox_event(
             ))
             .await?;
         receipt.record_lineage(lineage_receipt);
+    } else if event.event_type == "view.upserted" || event.event_type == "view.dropped" {
+        let (warehouse, namespace, view_name) = outbox_view(event, &state.warehouse)?;
+        let (graph_action, lineage_type) = if event.event_type == "view.dropped" {
+            (GraphAction::Deleted, LineageEventType::ViewDropped)
+        } else {
+            (GraphAction::Upserted, LineageEventType::ViewUpserted)
+        };
+        state
+            .graph
+            .emit(
+                GraphEvent::view(
+                    graph_action,
+                    warehouse,
+                    namespace,
+                    view_name.as_str(),
+                    event_payload.clone(),
+                )
+                .with_event_id(event.event_id.clone()),
+            )
+            .await?;
+        receipt.graph_events += 1;
+        let lineage_receipt = state
+            .lineage
+            .emit(LineageEvent::new(
+                lineage_type,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "warehouse.upserted" {
         let warehouse = outbox_warehouse(event, &state.warehouse)?;
         state
@@ -3309,6 +3340,69 @@ fn outbox_storage_profile(event: &OutboxEvent) -> Result<String, LakeCatError> {
                 event.event_id
             ))
         })
+}
+
+fn outbox_view(
+    event: &OutboxEvent,
+    default_warehouse: &WarehouseName,
+) -> Result<(WarehouseName, Namespace, String), LakeCatError> {
+    let payload = event.payload.get("payload").unwrap_or(&event.payload);
+    let view = payload.get("view").ok_or_else(|| {
+        LakeCatError::Internal(format!(
+            "outbox event {} is missing view payload",
+            event.event_id
+        ))
+    })?;
+    let warehouse = view
+        .get("warehouse")
+        .or_else(|| payload.get("warehouse"))
+        .and_then(Value::as_str)
+        .map(WarehouseName::new)
+        .transpose()?
+        .unwrap_or_else(|| default_warehouse.clone());
+    let namespace_value = view
+        .get("namespace")
+        .or_else(|| payload.get("namespace"))
+        .ok_or_else(|| {
+            LakeCatError::Internal(format!(
+                "outbox event {} view payload is missing namespace",
+                event.event_id
+            ))
+        })?;
+    let namespace = match namespace_value {
+        Value::Array(parts) => Namespace::new(
+            parts
+                .iter()
+                .map(|part| {
+                    part.as_str().map(ToString::to_string).ok_or_else(|| {
+                        LakeCatError::Internal(format!(
+                            "outbox event {} view namespace components must be strings",
+                            event.event_id
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        )?,
+        Value::String(path) => path.parse::<Namespace>()?,
+        _ => {
+            return Err(LakeCatError::Internal(format!(
+                "outbox event {} view namespace must be an array or string",
+                event.event_id
+            )));
+        }
+    };
+    let view_name = view
+        .get("name")
+        .and_then(Value::as_str)
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| {
+            LakeCatError::Internal(format!(
+                "outbox event {} view payload is missing name",
+                event.event_id
+            ))
+        })?
+        .to_string();
+    Ok((warehouse, namespace, view_name))
 }
 
 fn outbox_warehouse(
@@ -5525,6 +5619,113 @@ mod tests {
         assert_eq!(
             lineage_events[0].payload["storage-profile"]["issuance-mode"],
             serde_json::json!("secret-ref")
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_projects_view_events_to_graph_and_lineage() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let view_payload = json!({
+            "warehouse": "local",
+            "namespace": ["default"],
+            "view": {
+                "warehouse": "local",
+                "namespace": ["default"],
+                "name": "events_view",
+                "sql": "select event_id from default.events",
+                "dialect": "spark-sql",
+                "schema-version": 1,
+                "columns": [{
+                    "name": "event_id",
+                    "data-type": {"type": "long"},
+                    "nullable": false,
+                    "comment": null
+                }],
+                "properties": {}
+            },
+            "authorization-receipt": {
+                "principal": principal,
+                "action": "view-manage",
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            }
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![
+                OutboxEvent {
+                    event_id: "evt-view-upsert".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "view.upserted".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-view-upsert",
+                        "event-type": "view.upserted",
+                        "payload": view_payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
+                    event_id: "evt-view-drop".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "view.dropped".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-view-drop",
+                        "event-type": "view.dropped",
+                        "payload": view_payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+            ]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let drain = drain_outbox_once(&state, 10).await.unwrap();
+        assert_eq!(drain.delivered, 2);
+        assert_eq!(
+            drain.event_types,
+            vec!["view.upserted".to_string(), "view.dropped".to_string()]
+        );
+        assert_eq!(drain.graph_events, 4);
+        assert_eq!(drain.lineage_events, 2);
+        assert_eq!(
+            store.delivered.lock().await.as_slice(),
+            &["evt-view-upsert".to_string(), "evt-view-drop".to_string()]
+        );
+
+        let graph_events = graph.events.lock().await;
+        assert_eq!(graph_events.len(), 4);
+        let view_events = graph_events
+            .iter()
+            .filter(|event| event.label == GraphNodeLabel::View)
+            .collect::<Vec<_>>();
+        assert_eq!(view_events.len(), 2);
+        assert_eq!(view_events[0].action, GraphAction::Upserted);
+        assert_eq!(
+            view_events[0].subject,
+            "lakecat:warehouse:local:namespace:default:view:events_view"
+        );
+        assert_eq!(view_events[1].action, GraphAction::Deleted);
+        drop(graph_events);
+
+        let lineage_events = lineage.events.lock().await;
+        assert_eq!(lineage_events.len(), 2);
+        assert_eq!(lineage_events[0].event_type, LineageEventType::ViewUpserted);
+        assert_eq!(lineage_events[1].event_type, LineageEventType::ViewDropped);
+        assert_eq!(
+            lineage_events[0].payload["view"]["name"],
+            serde_json::json!("events_view")
         );
     }
 

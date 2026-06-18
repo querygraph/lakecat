@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Replayed `view.upserted` and `view.dropped` outbox events into catalog-facing
+  View graph events and LakeCat OpenLineage receipts, and added focused
+  coverage for Grust ingestion plus service replay counts.
+- Made the LakeCat book part of the active development workflow in `GOAL.md`,
+  added a substantial workflow-examples chapter spanning service startup,
+  warehouse/project/storage-profile setup, PySpark reads, credential vending,
+  view management, QueryGraph bootstrap, outbox draining, and agentic QGLake
+  flows, then rebuilt the PDF, EPUB, and MOBI artifacts.
 - Projected `storage-profile.upserted` outbox events into LakeCat
   lineage/OpenLineage receipts so credential-root management changes carry
   replayable evidence from durable outbox replay.

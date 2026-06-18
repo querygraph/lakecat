@@ -576,6 +576,368 @@ available. JSON passthrough can bridge compatibility, but it is not the desired
 long-term implementation. Round-trip tests should prove LakeCat preserves
 unknown or evolving metadata without claiming settled semantics too early.
 
+## Workflow Examples
+
+The catalog is easiest to understand by watching it participate in ordinary
+work. LakeCat should not ask users to think about graph, lineage, security, and
+Sail every time they read a table. Those systems should appear when they matter:
+at the boundary where a name is resolved, a policy is enforced, a plan is
+created, credentials are withheld or issued, and a durable event is replayed.
+
+The examples below use one table, `local.default.events`, but the pattern is the
+same for larger warehouses. The important point is not the exact sample data.
+It is the catalog role in each workflow.
+
+### Starting The Catalog
+
+A local operator starts LakeCat as an Iceberg REST catalog plus management
+surface:
+
+```sh
+cargo run -p lakecat-service --features sail-local,turso-local,typesec-local,grust-local
+```
+
+The standard catalog path is still `/catalog/v1`. The management and
+QueryGraph surfaces sit beside it:
+
+```text
+/catalog/v1
+/management/v1
+/querygraph/v1/bootstrap
+```
+
+A simple health-oriented configuration read shows the split. Standard engines
+care about the Iceberg endpoints. Operators and QueryGraph care about the
+management and bootstrap endpoints.
+
+```sh
+curl -s http://127.0.0.1:3000/catalog/v1/config
+```
+
+At this point the catalog is already doing more than route HTTP. It has a
+warehouse identity, a store, a governance engine, a Sail planning seam, a graph
+sink, and a lineage sink. Embedded defaults keep the local loop small, but the
+same trait boundaries can point to Turso, TypeSec, Grust, and Sail.
+
+### Registering The Warehouse Shape
+
+An operator usually starts with management objects. A server groups projects. A
+project groups warehouses. A warehouse owns namespaces, tables, views, storage
+profiles, policy bindings, and the metadata pointer state that standard engines
+see through Iceberg REST.
+
+```sh
+curl -s -X PUT http://127.0.0.1:3000/management/v1/servers/prod \
+  -H 'content-type: application/json' \
+  -d '{
+    "display-name": "Production LakeCat",
+    "endpoint-url": "https://lakecat.example.com",
+    "properties": {
+      "owner": "platform"
+    }
+  }'
+
+curl -s -X PUT http://127.0.0.1:3000/management/v1/projects/resilience \
+  -H 'content-type: application/json' \
+  -d '{
+    "display-name": "Resilience Desk",
+    "server-id": "prod",
+    "properties": {
+      "environment": "demo"
+    }
+  }'
+
+curl -s -X PUT http://127.0.0.1:3000/management/v1/projects/resilience/warehouses/local \
+  -H 'content-type: application/json' \
+  -d '{
+    "display-name": "Local QGLake Warehouse",
+    "storage-root": "file:///tmp/lakecat/qglake",
+    "properties": {
+      "querygraph": "enabled"
+    }
+  }'
+```
+
+These writes are not Iceberg table metadata. They are catalog control-plane
+state. LakeCat persists them durably, records authorization receipts, and writes
+outbox events. When the outbox drains, project and warehouse changes become
+catalog graph events; project, warehouse, server, and storage-profile changes
+also become OpenLineage receipts. QueryGraph can later learn the management
+shape without requiring every Iceberg client to understand it.
+
+### Storage Profiles And Credential Roots
+
+Storage profiles bind a warehouse to physical storage roots and credential
+issuance policy. A local profile can return scoped local file configuration. A
+remote profile should usually reference a secret store and require TypeSec to
+authorize issuance before any resolver sees the secret reference.
+
+```sh
+curl -s -X PUT \
+  http://127.0.0.1:3000/management/v1/warehouses/local/storage-profiles/local-events \
+  -H 'content-type: application/json' \
+  -d '{
+    "location-prefix": "file:///tmp/lakecat/qglake/events",
+    "provider": "local",
+    "issuance-mode": "standard",
+    "properties": {
+      "purpose": "developer-loop"
+    }
+  }'
+
+curl -s -X PUT \
+  http://127.0.0.1:3000/management/v1/warehouses/local/storage-profiles/s3-events \
+  -H 'content-type: application/json' \
+  -d '{
+    "location-prefix": "s3://lakecat/events",
+    "provider": "s3",
+    "issuance-mode": "secret-ref",
+    "secret-ref": "vault://kv/lakecat/events",
+    "public-config": {
+      "region": "us-west-2"
+    },
+    "properties": {
+      "purpose": "production-events"
+    }
+  }'
+```
+
+The catalog row stores the public profile and secret reference, not raw cloud
+keys. A later credential request is checked against TypeSec and against the
+effective read restriction for the target table. Agents with fine-grained table
+restrictions are steered to governed Sail-planned reads instead of raw
+credentials. Trusted humans can receive audited standard credentials only when
+policy allows the exception.
+
+### A PySpark User Reads Iceberg
+
+A PySpark user should not need to know about QueryGraph. They configure Spark's
+Iceberg REST catalog and point it at LakeCat:
+
+```python
+from pyspark.sql import SparkSession
+
+spark = (
+    SparkSession.builder
+    .appName("lakecat-events")
+    .config("spark.sql.catalog.lakecat", "org.apache.iceberg.spark.SparkCatalog")
+    .config("spark.sql.catalog.lakecat.type", "rest")
+    .config("spark.sql.catalog.lakecat.uri", "http://127.0.0.1:3000/catalog/v1")
+    .config("spark.sql.defaultCatalog", "lakecat")
+    .getOrCreate()
+)
+
+events = spark.table("default.events")
+events.select("event_id", "severity").where("severity = 'critical'").show()
+```
+
+For an unrestricted principal, the flow looks like a normal Iceberg read:
+
+1. Spark asks LakeCat to resolve `default.events`.
+2. LakeCat checks the principal and table capability.
+3. LakeCat returns an Iceberg-compatible table response.
+4. Spark plans the read using Iceberg metadata.
+
+For a governed principal, the more interesting path is server-side planning.
+The user request still looks ordinary, but LakeCat derives the mandatory
+restriction before Sail sees the plan. If policy allows only `event_id` and
+`severity`, then a wider client projection is narrowed:
+
+```text
+client asks:     event_id, severity, raw_payload
+policy allows:   event_id, severity
+Sail receives:   event_id, severity
+```
+
+The catalog does not trust the client to remember that. The restriction is
+re-applied when scan tasks are fetched, and the audit payload records the
+policy hash, narrowed columns, row predicate, storage location, metadata
+location, and principal.
+
+### A Notebook Requests Credentials
+
+Credential vending is deliberately different from scan planning. Returning
+storage credentials gives the client broader power than returning a governed
+task list, so LakeCat treats it as an exception path.
+
+```sh
+curl -s \
+  -H 'x-lakecat-principal: agent:triage' \
+  http://127.0.0.1:3000/catalog/v1/local/namespaces/default/tables/events/credentials
+```
+
+For an agent bound by a fine-grained restriction, LakeCat should fail closed:
+
+```json
+{
+  "credentials": [],
+  "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads"
+}
+```
+
+That empty credential response is not a missing feature. It is the intended
+agentic posture. The agent should ask LakeCat to plan the read through Sail, not
+receive raw storage reach. The audit event records the decision and the lineage
+outbox can replay the credential-vend attempt with the same block reason.
+
+For a trusted human principal, policy can allow an audited raw credential
+exception. LakeCat still records the same context:
+
+```text
+principal: analyst:maya
+principal-kind: human
+table: local.default.events
+decision: raw credential exception allowed
+reason: trusted human principal
+restriction: present in receipt
+lineage: credential vend attempted
+```
+
+The contrast matters for operators. They can prove that agents were kept on
+the governed path while a human exception was explicit, policy-backed, and
+replayable.
+
+### A View Becomes Part Of The Catalog Story
+
+Views are catalog objects too. LakeCat stores durable view records with SQL,
+dialect, schema version, typed columns, properties, creator, and warehouse
+scope. They can be managed through the management API or through
+warehouse-prefixed catalog routes.
+
+```sh
+curl -s -X PUT \
+  http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/views/events_view \
+  -H 'content-type: application/json' \
+  -d '{
+    "sql": "select event_id, severity from default.events where severity = '\''critical'\''",
+    "dialect": "spark-sql",
+    "schema-version": 1,
+    "columns": [
+      {
+        "name": "event_id",
+        "data-type": {"type": "long"},
+        "nullable": false,
+        "comment": "Stable event identifier"
+      },
+      {
+        "name": "severity",
+        "data-type": {"type": "string"},
+        "nullable": false,
+        "comment": "Operational severity"
+      }
+    ],
+    "properties": {
+      "owner": "resilience-desk"
+    }
+  }'
+```
+
+This is not Iceberg business metadata glued onto a table. It is catalog state
+about a view object. LakeCat records `view.upserted` and `view.dropped` audit
+events. Outbox replay projects those changes to a catalog-facing View graph
+event and a LakeCat OpenLineage view dataset receipt. QueryGraph bootstrap can
+then include views with OSI hashes, view-aware graph edges, and OpenLineage view
+counts.
+
+### QueryGraph Bootstrap
+
+QueryGraph should import LakeCat facts through a verified handoff, not by
+scraping service internals. The bootstrap endpoint publishes a bundle with
+artifact hashes:
+
+```sh
+curl -s \
+  -H 'x-lakecat-principal: agent:querygraph-importer' \
+  http://127.0.0.1:3000/querygraph/v1/bootstrap \
+  -o target/qglake/lakecat-bootstrap.json
+```
+
+The bundle contains catalog tables, views, policy bindings, graph artifacts,
+OpenLineage artifacts, Croissant/CDIF/OSI/ODRL projections, and a manifest that
+hashes what was emitted. The manifest is the import contract. QueryGraph can
+refuse a bundle whose graph hash, OpenLineage hash, table artifact hash, view
+artifact hash, or QueryGraph import-compatibility hash does not match.
+
+This gives the semantic layer a responsible starting point. LakeCat says:
+
+```text
+Here are the governed catalog objects.
+Here are the policies that shaped planning.
+Here are stable dataset and field anchors.
+Here is the graph envelope.
+Here is the OpenLineage replay evidence.
+Here are the hashes that bind the handoff.
+```
+
+QueryGraph then owns the richer semantic work: metrics, dimensions, joins,
+business names, multi-dataset reasoning, and agent-facing synthesis.
+
+### Draining The Outbox
+
+LakeCat records side effects as durable outbox events. Draining the outbox is
+what turns committed catalog facts into graph and lineage receipts:
+
+```sh
+curl -s -X POST \
+  -H 'x-lakecat-principal: agent:lineage-drainer' \
+  http://127.0.0.1:3000/management/v1/lineage/drain
+```
+
+A useful drain response includes delivered event types, graph projection counts,
+lineage projection counts, receipt hashes, and the authorization proof for the
+drain request itself. That last part is easy to overlook. Reading the replay
+stream is also privileged, so LakeCat records that the drainer was allowed to
+read lineage evidence.
+
+The end-to-end result is a chain:
+
+```text
+catalog write
+  -> audit event
+  -> outbox event
+  -> graph projection
+  -> OpenLineage projection
+  -> QueryGraph import evidence
+```
+
+If graph or lineage sinks are down, catalog state should not be lost or rolled
+back accidentally. The outbox lets LakeCat retry projection from committed
+state.
+
+### An Agentic QGLake Flow
+
+The agentic path is the reason LakeCat has to be more than a passive catalog.
+Imagine a resilience supervisor agent investigating incidents:
+
+1. The supervisor delegates table triage to a specialist agent.
+2. The specialist asks LakeCat to plan a scan over `local.default.events`.
+3. LakeCat resolves the agent identity and TypeDID context.
+4. TypeSec authorizes the table scan and returns a restricted capability.
+5. LakeCat narrows the projection and appends the required row predicate.
+6. Sail plans against the current Iceberg metadata and delete manifests.
+7. LakeCat returns governed plan and fetch-task responses.
+8. The specialist summarizes only the allowed result shape.
+9. LakeCat records scan and credential decisions into audit/outbox.
+10. QueryGraph imports graph, policy, lineage, and bootstrap evidence.
+
+The key point is the absence of raw storage reach. The specialist agent does
+not need broad cloud credentials to do its job. It needs a governed plan, a
+bounded task set, and a receipt trail.
+
+The local fixture compresses this story into one command:
+
+```sh
+cargo run -p lakecat-cli -- qglake-fixture \
+  --output target/qglake/lakecat-bootstrap.json
+```
+
+That fixture creates the sample table shape, installs a restricted policy,
+verifies governed scan planning, verifies fetch-scan-task reapplication,
+exercises delete manifest handling, probes credential-vend behavior for agents
+and trusted humans, exports QueryGraph bootstrap artifacts, and drains the
+outbox. It is small, but it is not decorative. It is the acceptance story for a
+catalog that participates in the user workflow from notebook to agent.
+
 ## Operating The Book's Example System
 
 The local development posture is intentionally small:

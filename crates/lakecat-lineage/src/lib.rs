@@ -52,6 +52,8 @@ pub enum LineageEventType {
     TableCommitted,
     TableDeleted,
     TableRestored,
+    ViewDropped,
+    ViewUpserted,
     WarehouseUpserted,
     CredentialsVendAttempted,
     QueryGraphBootstrap,
@@ -224,6 +226,23 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
                 }
             }
         })],
+        LineageEventType::ViewDropped | LineageEventType::ViewUpserted => vec![json!({
+            "namespace": "lakecat.view",
+            "name": event
+                .payload
+                .pointer("/view/name")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown"),
+            "facets": {
+                "lakecat_view": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-view-facet/0.1.0.json",
+                    "warehouse": event.payload.get("warehouse"),
+                    "namespace": event.payload.get("namespace"),
+                    "payload": event.payload,
+                }
+            }
+        })],
         LineageEventType::WarehouseUpserted => vec![json!({
             "namespace": "lakecat.warehouse",
             "name": event
@@ -303,6 +322,8 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::TableCommitted => "table-committed",
         LineageEventType::TableDeleted => "table-deleted",
         LineageEventType::TableRestored => "table-restored",
+        LineageEventType::ViewDropped => "view-dropped",
+        LineageEventType::ViewUpserted => "view-upserted",
         LineageEventType::WarehouseUpserted => "warehouse-upserted",
         LineageEventType::CredentialsVendAttempted => "credentials-vend-attempted",
         LineageEventType::QueryGraphBootstrap => "querygraph-bootstrap",
@@ -533,6 +554,32 @@ mod tests {
             storage_profile["outputs"][0]["facets"]["lakecat_storageProfile"]["payload"]["storage-profile"]
                 ["provider"],
             json!("s3")
+        );
+
+        let view = open_lineage_event(&LineageEvent::new(
+            LineageEventType::ViewUpserted,
+            Principal::anonymous(),
+            None,
+            json!({
+                "warehouse": "local",
+                "namespace": ["default"],
+                "view": {
+                    "name": "events_view",
+                    "dialect": "sql",
+                    "schema-version": 3
+                }
+            }),
+        ));
+        assert_eq!(view["job"]["name"], json!("view-upserted"));
+        assert_eq!(view["outputs"][0]["namespace"], json!("lakecat.view"));
+        assert_eq!(view["outputs"][0]["name"], json!("events_view"));
+        assert_eq!(
+            view["outputs"][0]["facets"]["lakecat_view"]["warehouse"],
+            json!("local")
+        );
+        assert_eq!(
+            view["outputs"][0]["facets"]["lakecat_view"]["namespace"],
+            json!(["default"])
         );
 
         let warehouse = open_lineage_event(&LineageEvent::new(

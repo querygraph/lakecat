@@ -77,6 +77,25 @@ impl GraphEvent {
         }
     }
 
+    pub fn view(
+        action: GraphAction,
+        warehouse: WarehouseName,
+        namespace: Namespace,
+        name: impl Into<String>,
+        properties: Value,
+    ) -> Self {
+        let name = name.into();
+        Self {
+            event_id: None,
+            subject: view_stable_id(&warehouse, &namespace, &name),
+            label: GraphNodeLabel::View,
+            action,
+            table: None,
+            properties,
+            emitted_at: Utc::now(),
+        }
+    }
+
     pub fn policy(
         action: GraphAction,
         warehouse: WarehouseName,
@@ -192,6 +211,14 @@ pub fn namespace_stable_id(warehouse: &WarehouseName, namespace: &Namespace) -> 
         "lakecat:warehouse:{}:namespace:{}",
         warehouse.as_str(),
         namespace.path()
+    )
+}
+
+pub fn view_stable_id(warehouse: &WarehouseName, namespace: &Namespace, name: &str) -> String {
+    format!(
+        "{}:view:{}",
+        namespace_stable_id(warehouse, namespace),
+        name
     )
 }
 
@@ -331,6 +358,24 @@ mod tests {
 
         assert_eq!(event.label, GraphNodeLabel::Warehouse);
         assert_eq!(event.subject, "lakecat:warehouse:local");
+        assert!(event.table.is_none());
+    }
+
+    #[test]
+    fn view_event_uses_stable_catalog_subject() {
+        let event = GraphEvent::view(
+            GraphAction::Upserted,
+            WarehouseName::new("local").unwrap(),
+            "default.analytics".parse::<Namespace>().unwrap(),
+            "events_view",
+            serde_json::json!({"kind": "test"}),
+        );
+
+        assert_eq!(event.label, GraphNodeLabel::View);
+        assert_eq!(
+            event.subject,
+            "lakecat:warehouse:local:namespace:default.analytics:view:events_view"
+        );
         assert!(event.table.is_none());
     }
 
@@ -615,6 +660,28 @@ pub mod grust_integration {
                 Some(&Value::String("Project".to_string()))
             );
             GraphIndex::new(&graph).expect("project event graph should be valid");
+        }
+
+        #[test]
+        fn converts_view_event_to_valid_grust_graph_event() {
+            let event = GraphEvent::view(
+                GraphAction::Upserted,
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                "events_view",
+                serde_json::json!({"view":{"name":"events_view"}}),
+            )
+            .with_event_id("lakecat:outbox:view");
+            let graph = graph_event_to_grust(&event);
+
+            assert_eq!(graph.nodes.len(), 1);
+            assert_eq!(graph.edges.len(), 0);
+            assert_eq!(graph.nodes[0].label.as_str(), "CatalogEvent");
+            assert_eq!(
+                graph.nodes[0].props.get("label"),
+                Some(&Value::String("View".to_string()))
+            );
+            GraphIndex::new(&graph).expect("view event graph should be valid");
         }
 
         #[test]
