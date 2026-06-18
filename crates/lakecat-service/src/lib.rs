@@ -1638,6 +1638,13 @@ async fn querygraph_bootstrap(
 ) -> Result<Json<QueryGraphBootstrap>, LakeCatHttpError> {
     let capability = authorize_graph_read(&state, request_identity(&headers)?).await?;
     let tables = state.store.list_tables(&state.warehouse).await?;
+    let mut table_policy_bindings = Vec::with_capacity(tables.len());
+    let mut policy_binding_count = 0usize;
+    for table in tables {
+        let policy_bindings = state.store.policy_bindings_for_table(&table.ident).await?;
+        policy_binding_count += policy_bindings.len();
+        table_policy_bindings.push((table, policy_bindings));
+    }
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -1648,13 +1655,14 @@ async fn querygraph_bootstrap(
                 "event-type": "querygraph.bootstrap",
                 "authorization-receipt": capability.receipt(),
                 "warehouse": state.warehouse.as_str(),
-                "table-count": tables.len(),
+                "table-count": table_policy_bindings.len(),
+                "policy-binding-count": policy_binding_count,
             }),
         )?)
         .await?;
-    Ok(Json(QueryGraphBootstrap::from_tables(
+    Ok(Json(QueryGraphBootstrap::from_tables_with_policy_bindings(
         state.warehouse.clone(),
-        tables,
+        table_policy_bindings,
     )?))
 }
 
@@ -3368,6 +3376,28 @@ mod tests {
         let response = app.clone().oneshot(create).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
+        let policy = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/policies/agent-read")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "namespace": ["default"],
+                    "table": "events",
+                    "enforced": true,
+                    "odrl": {
+                        "uid": "policy:agent-read",
+                        "lakecat:read-restriction": {
+                            "allowed-columns": ["event_id"]
+                        }
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(policy).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
         let bootstrap = Request::builder()
             .method(Method::GET)
             .uri("/querygraph/v1/bootstrap")
@@ -3375,6 +3405,23 @@ mod tests {
             .unwrap();
         let response = app.oneshot(bootstrap).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            body["tables"][0]["policy-bindings"][0]["policy-id"],
+            "agent-read"
+        );
+        assert_eq!(
+            body["tables"][0]["policy-bindings"][0]["odrl"]["lakecat:read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            body["tables"][0]["odrl"]["lakecat:policy-bindings"][0]["odrl"]["lakecat:read-restriction"]
+                ["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
     }
 
     #[tokio::test]

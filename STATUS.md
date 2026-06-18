@@ -6,17 +6,18 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `012dd9c Surface scan task fetch restrictions`.
-- Current working slice: QGLake fixture governed restriction. The live
-  `lakecat-cli qglake-fixture` setup now installs a policy with an explicit
-  `lakecat:read-restriction` containing allowed columns, a row predicate, and a
-  300 second credential TTL, while the fixture table includes a restricted
-  `raw_payload` column so governed Sail planning has something concrete to
-  narrow before QueryGraph import.
+  working changes: `482dda1 Govern QGLake fixture reads`.
+- Current working slice: QueryGraph bootstrap policy-binding export.
+  `/querygraph/v1/bootstrap` now loads table-scoped policy bindings from the
+  catalog store and includes them in each table projection, in the table ODRL
+  artifact, and in a manifest hash, so QueryGraph import sees the actual
+  LakeCat ODRL policy that governs planning instead of only a synthetic
+  placeholder.
 - Local verification for the current slice is green:
-  `cargo test -p lakecat-cli qglake_fixture -- --nocapture`;
+  `cargo test -p lakecat-querygraph policy_bindings -- --nocapture`;
+  `cargo test -p lakecat-service querygraph_bootstrap_projects_catalog_tables -- --nocapture`;
   `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
-  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-querygraph`;
   `cargo test -p lakecat-service`;
   `cargo test -p lakecat-service --all-features`;
   `cargo test -p lakecat-store --features turso-local`;
@@ -66,6 +67,11 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added `QueryGraphBootstrap::from_tables_with_policy_bindings` and a
+  per-table `policy-bindings` projection with its own manifest hash.
+- Changed `/querygraph/v1/bootstrap` to load stored table policy bindings and
+  include the actual ODRL documents in the QueryGraph table projection and ODRL
+  artifact.
 - Added a `raw_payload` column to the QGLake fixture table metadata and kept it
   outside the fixture policy's allowed agent columns.
 - Extended the QGLake fixture policy with `lakecat:read-restriction` allowed

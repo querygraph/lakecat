@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Exported stored table-scoped `PolicyBinding` documents through the
+  QueryGraph bootstrap table projection and manifest hashes, so `/querygraph/v1/bootstrap`
+  carries the actual LakeCat ODRL policy used for governed planning.
 - Made `lakecat-cli qglake-fixture` install an enforceable
   `lakecat:read-restriction` with allowed columns, row predicate, and credential
   TTL, plus a restricted raw payload column so the fixture proves governed

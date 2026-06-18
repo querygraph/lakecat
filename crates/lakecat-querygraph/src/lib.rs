@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use lakecat_core::{LakeCatResult, TableIdent, WarehouseName, content_hash_json};
-use lakecat_store::TableRecord;
+use lakecat_store::{PolicyBinding, TableRecord};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -21,10 +21,22 @@ impl QueryGraphBootstrap {
         warehouse: WarehouseName,
         tables: impl IntoIterator<Item = TableRecord>,
     ) -> LakeCatResult<Self> {
+        Self::from_tables_with_policy_bindings(
+            warehouse,
+            tables.into_iter().map(|table| (table, Vec::new())),
+        )
+    }
+
+    pub fn from_tables_with_policy_bindings(
+        warehouse: WarehouseName,
+        tables: impl IntoIterator<Item = (TableRecord, Vec<PolicyBinding>)>,
+    ) -> LakeCatResult<Self> {
         let generated_at = Utc::now();
         let tables = tables
             .into_iter()
-            .map(QueryGraphTableProjection::from_table)
+            .map(|(table, policy_bindings)| {
+                QueryGraphTableProjection::from_table_with_policy_bindings(table, policy_bindings)
+            })
             .collect::<Vec<_>>();
         let graph = QueryGraphCatalogGraph::from_tables(&tables);
         let open_lineage = bootstrap_open_lineage(&warehouse, &tables, generated_at);
@@ -172,6 +184,7 @@ pub struct QueryGraphTableArtifactHashes {
     pub cdif_hash: String,
     pub osi_hash: String,
     pub odrl_hash: String,
+    pub policy_bindings_hash: String,
 }
 
 impl QueryGraphTableArtifactHashes {
@@ -182,6 +195,7 @@ impl QueryGraphTableArtifactHashes {
             cdif_hash: content_hash_json(&table.cdif)?,
             osi_hash: content_hash_json(&table.osi)?,
             odrl_hash: content_hash_json(&table.odrl)?,
+            policy_bindings_hash: content_hash_json(&policy_bindings_value(table)?)?,
         })
     }
 
@@ -190,8 +204,21 @@ impl QueryGraphTableArtifactHashes {
         verify_hash("CDIF", &self.cdif_hash, &table.cdif)?;
         verify_hash("OSI", &self.osi_hash, &table.osi)?;
         verify_hash("ODRL", &self.odrl_hash, &table.odrl)?;
+        verify_hash(
+            "policy bindings",
+            &self.policy_bindings_hash,
+            &policy_bindings_value(table)?,
+        )?;
         Ok(())
     }
+}
+
+fn policy_bindings_value(table: &QueryGraphTableProjection) -> LakeCatResult<Value> {
+    serde_json::to_value(&table.policy_bindings).map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to encode QueryGraph policy bindings: {err}"
+        ))
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -218,13 +245,25 @@ pub struct QueryGraphTableProjection {
     pub cdif: Value,
     pub osi: Value,
     pub odrl: Value,
+    pub policy_bindings: Vec<QueryGraphPolicyBindingProjection>,
 }
 
 impl QueryGraphTableProjection {
     pub fn from_table(table: TableRecord) -> Self {
+        Self::from_table_with_policy_bindings(table, Vec::new())
+    }
+
+    pub fn from_table_with_policy_bindings(
+        table: TableRecord,
+        policy_bindings: Vec<PolicyBinding>,
+    ) -> Self {
         let stable_id = table.ident.stable_id();
         let fields = iceberg_fields(&table.metadata);
-        let odrl = odrl_policy(&stable_id);
+        let policy_bindings = policy_bindings
+            .into_iter()
+            .map(QueryGraphPolicyBindingProjection::from_binding)
+            .collect::<Vec<_>>();
+        let odrl = odrl_policy(&stable_id, &policy_bindings);
         let croissant = croissant_dataset(&table, &stable_id, &fields);
         let cdif = cdif_resource(&table, &stable_id, &fields, odrl.clone());
         let osi = osi_handoff(&table, &stable_id, &fields);
@@ -239,6 +278,31 @@ impl QueryGraphTableProjection {
             cdif,
             osi,
             odrl,
+            policy_bindings,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct QueryGraphPolicyBindingProjection {
+    pub policy_id: String,
+    pub enforced: bool,
+    pub namespace: Option<Vec<String>>,
+    pub table: Option<String>,
+    pub odrl: Value,
+}
+
+impl QueryGraphPolicyBindingProjection {
+    fn from_binding(binding: PolicyBinding) -> Self {
+        Self {
+            policy_id: binding.policy_id,
+            enforced: binding.enforced,
+            namespace: binding
+                .namespace
+                .map(|namespace| namespace.parts().to_vec()),
+            table: binding.table.map(|table| table.as_str().to_string()),
+            odrl: binding.odrl,
         }
     }
 }
@@ -475,12 +539,13 @@ fn osi_handoff(table: &TableRecord, stable_id: &str, fields: &[IcebergFieldProje
     })
 }
 
-fn odrl_policy(stable_id: &str) -> Value {
+fn odrl_policy(stable_id: &str, policy_bindings: &[QueryGraphPolicyBindingProjection]) -> Value {
     json!({
         "@type": "odrl:Policy",
         "@id": format!("{stable_id}#odrl"),
         "odrl:target": stable_id,
         "odrl:assigner": "did:web:querygraph.ai:lakecat",
+        "lakecat:policy-bindings": policy_bindings,
         "odrl:permission": [
             {
                 "odrl:action": "odrl:read",
@@ -711,6 +776,10 @@ mod tests {
             content_hash_json(&bundle.tables[0].odrl).unwrap()
         );
         assert_eq!(
+            bundle.manifest.table_artifacts[0].policy_bindings_hash,
+            content_hash_json(&policy_bindings_value(&bundle.tables[0]).unwrap()).unwrap()
+        );
+        assert_eq!(
             bundle.manifest.open_lineage_hash,
             content_hash_json(&bundle.open_lineage).unwrap()
         );
@@ -743,6 +812,67 @@ mod tests {
         let verification = bundle.verify_manifest().unwrap();
         assert_eq!(verification.table_count, 1);
         assert_eq!(verification.bundle_hash, bundle.bundle_hash);
+    }
+
+    #[test]
+    fn projects_policy_bindings_into_querygraph_bundle() {
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = Namespace::new(vec!["default".to_string()]).unwrap();
+        let table_name = TableName::new("events").unwrap();
+        let ident = TableIdent::new(warehouse.clone(), namespace.clone(), table_name.clone());
+        let table = TableRecord::new(
+            ident,
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            json!({
+                "format-version": 3,
+                "current-schema-id": 1,
+                "schemas": [{
+                    "schema-id": 1,
+                    "fields": [{
+                        "id": 1,
+                        "name": "event_id",
+                        "type": "string",
+                        "required": true
+                    }]
+                }]
+            }),
+            Principal::anonymous(),
+        );
+        let policy = PolicyBinding::new(
+            "agent-read",
+            warehouse.clone(),
+            Some(namespace),
+            Some(table_name),
+            true,
+            json!({
+                "uid": "policy:agent-read",
+                "lakecat:read-restriction": {
+                    "allowed-columns": ["event_id"]
+                }
+            }),
+        )
+        .unwrap();
+
+        let bundle = QueryGraphBootstrap::from_tables_with_policy_bindings(
+            warehouse,
+            vec![(table, vec![policy])],
+        )
+        .unwrap();
+
+        assert_eq!(bundle.tables[0].policy_bindings.len(), 1);
+        assert_eq!(bundle.tables[0].policy_bindings[0].policy_id, "agent-read");
+        assert_eq!(
+            bundle.tables[0].policy_bindings[0].odrl["lakecat:read-restriction"]["allowed-columns"],
+            json!(["event_id"])
+        );
+        assert_eq!(
+            bundle.tables[0].odrl["lakecat:policy-bindings"][0]["odrl"]["lakecat:read-restriction"]
+                ["allowed-columns"],
+            json!(["event_id"])
+        );
+        let verification = bundle.verify_manifest().unwrap();
+        assert_eq!(verification.table_count, 1);
     }
 
     #[test]
