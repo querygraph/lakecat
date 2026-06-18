@@ -101,8 +101,12 @@ impl ReadRestriction {
             if restriction.purpose.is_none() {
                 restriction.purpose = purpose_from_odrl(odrl);
             }
-            if restriction.max_credential_ttl_seconds.is_none() {
-                restriction.max_credential_ttl_seconds = ttl_from_odrl(odrl);
+            if let Some(ttl) = ttl_from_odrl(odrl)? {
+                restriction.max_credential_ttl_seconds =
+                    Some(match restriction.max_credential_ttl_seconds {
+                        Some(existing) => existing.min(ttl),
+                        None => ttl,
+                    });
             }
         }
         Ok(restriction)
@@ -280,10 +284,54 @@ fn purpose_from_odrl(odrl: &Value) -> Option<String> {
         })
 }
 
-fn ttl_from_odrl(odrl: &Value) -> Option<u64> {
-    odrl.get("max-credential-ttl-seconds")
-        .or_else(|| odrl.get("maxCredentialTtlSeconds"))
-        .and_then(Value::as_u64)
+fn ttl_from_odrl(odrl: &Value) -> LakeCatResult<Option<u64>> {
+    for value in [
+        odrl.get("max-credential-ttl-seconds"),
+        odrl.get("maxCredentialTtlSeconds"),
+        odrl.get("lakecat:read-restriction")
+            .and_then(|value| value.get("max-credential-ttl-seconds")),
+        odrl.get("lakecat:read-restriction")
+            .and_then(|value| value.get("maxCredentialTtlSeconds")),
+        odrl.get("read-restriction")
+            .and_then(|value| value.get("max-credential-ttl-seconds")),
+        odrl.get("readRestriction")
+            .and_then(|value| value.get("maxCredentialTtlSeconds")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        return ttl_value(value);
+    }
+
+    for constraint in odrl_constraints(odrl) {
+        let left = constraint
+            .get("leftOperand")
+            .or_else(|| constraint.get("left-operand"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if matches!(
+            left,
+            "max-credential-ttl-seconds"
+                | "maxCredentialTtlSeconds"
+                | "credential-ttl"
+                | "credentialTtl"
+                | "lakecat:max-credential-ttl-seconds"
+        ) && let Some(value) = constraint
+            .get("rightOperand")
+            .or_else(|| constraint.get("right-operand"))
+        {
+            return ttl_value(value);
+        }
+    }
+    Ok(None)
+}
+
+fn ttl_value(value: &Value) -> LakeCatResult<Option<u64>> {
+    value.as_u64().map(Some).ok_or_else(|| {
+        LakeCatError::InvalidArgument(
+            "ODRL max credential TTL must be an unsigned integer number of seconds".to_string(),
+        )
+    })
 }
 
 fn odrl_constraints(odrl: &Value) -> Vec<&Value> {
@@ -618,6 +666,7 @@ mod tests {
             "uid": "policy-a",
             "purpose": "resilience-demo",
             "lakecat:read-restriction": {
+                "max-credential-ttl-seconds": 900,
                 "allowed-columns": ["event_id", "payload"],
                 "row-predicate": {
                     "type": "equal",
@@ -673,6 +722,50 @@ mod tests {
                     "value": 3
                 }
             }))
+        );
+    }
+
+    #[test]
+    fn read_restriction_parses_ttl_from_odrl_constraints_and_uses_tightest_ttl() {
+        let policy_a = serde_json::json!({
+            "uid": "policy-a",
+            "lakecat:read-restriction": {
+                "max-credential-ttl-seconds": 900
+            }
+        });
+        let policy_b = serde_json::json!({
+            "uid": "policy-b",
+            "permission": [{
+                "constraint": {
+                    "leftOperand": "max-credential-ttl-seconds",
+                    "operator": "lteq",
+                    "rightOperand": 300
+                }
+            }]
+        });
+
+        let restriction = ReadRestriction::from_odrl_policies([&policy_a, &policy_b]).unwrap();
+
+        assert_eq!(restriction.max_credential_ttl_seconds, Some(300));
+    }
+
+    #[test]
+    fn read_restriction_rejects_non_numeric_ttl_constraints() {
+        let policy = serde_json::json!({
+            "permission": [{
+                "constraint": {
+                    "leftOperand": "credential-ttl",
+                    "operator": "lteq",
+                    "rightOperand": "five minutes"
+                }
+            }]
+        });
+
+        let err = ReadRestriction::from_odrl_policies([&policy]).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("ODRL max credential TTL must be an unsigned integer")
         );
     }
 

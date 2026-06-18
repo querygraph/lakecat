@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Extended `ReadRestriction` ODRL parsing to accept max credential TTL from
+  nested read-restriction objects and ODRL constraints, compose multiple TTLs to
+  the shortest governed lifetime, and reject malformed non-numeric TTL values.
 - Routed REST `sail-local` `fetch-scan-tasks` through
   `LakeCatCatalogProvider`, so plan-task expansion now uses the same
   provider-owned scan authorization and shared `ReadRestriction` mandatory

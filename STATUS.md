@@ -6,19 +6,19 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `de520e1 Route REST scan planning through provider`.
-- Current working slice: REST `sail-local` `fetch-scan-tasks` now routes through
-  the in-process `LakeCatCatalogProvider` seam. The provider re-authorizes scan
-  access, recomputes the current shared `ReadRestriction`, loads the table
-  metadata from the catalog store, and passes mandatory projection/filter
-  requirements to Sail before plan-task expansion while preserving the default
-  direct Sail path for non-`sail-local` builds.
+  working changes: `0a7d26b Route scan task fetch through provider`.
+- Current working slice: ODRL max credential TTL extraction in the shared
+  `ReadRestriction` parser/composer. LakeCat now accepts TTLs from nested
+  read-restriction objects and ODRL constraints, composes multiple policy TTLs
+  by choosing the shortest governed lifetime, and rejects malformed non-numeric
+  TTLs instead of silently dropping them.
 - Local verification for the current slice is green:
-  `cargo fmt -p lakecat-service -p lakecat-sail -- --check`;
-  `cargo test -p lakecat-service`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-security read_restriction -- --nocapture`;
+  `cargo test -p lakecat-security --all-features`;
   `cargo test -p lakecat-service --features sail-local`;
+  `cargo test -p lakecat-service --all-features`;
   `cargo test -p lakecat-store --features turso-local`;
-  `cargo test -p lakecat-sail --all-features`; and
   `cargo test --workspace --all-features`.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
@@ -64,6 +64,13 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Extended `ReadRestriction::from_odrl_policies` to parse max credential TTLs
+  from top-level, nested `lakecat:read-restriction` / `readRestriction`, and
+  ODRL constraint forms.
+- Changed TTL composition to keep the shortest governed credential lifetime
+  across multiple active policy bindings.
+- Added security tests proving constraint-based TTL extraction, shortest-TTL
+  composition, and fail-closed rejection for non-numeric TTL constraints.
 - Added `LakeCatCatalogProvider::fetch_table_scan_tasks` and
   `fetch_table_scan_tasks_for_ident`, applying the provider-owned scan
   authorization and shared `ReadRestriction` mandatory projection/filter

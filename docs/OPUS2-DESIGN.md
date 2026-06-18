@@ -158,12 +158,14 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   1. Parse the enforceable ODRL subset of a `PolicyBinding` into a typed
      `ReadRestriction { columns, row_predicate, purpose, max_ttl }`; compose
      `Delegate` onto RBAC instead of denying. *Started for allowed-columns and
-     purpose extraction from enforced policy bindings; row-predicate extraction
-     is now started for nested LakeCat restriction fields and ODRL constraints;
-     the parser/composer and restriction-application helpers now live in
-     `lakecat-security` so the REST route and future provider scan path share
-     one governance primitive; TypeSec delegate-to-fallback composition is wired
-     at the LakeCat governance wrapper seam.*
+     purpose extraction from enforced policy bindings; row-predicate and max
+     credential TTL extraction now support nested LakeCat restriction fields and
+     ODRL constraints; TTL composition chooses the shortest governed lifetime
+     and malformed TTLs fail closed; the parser/composer and
+     restriction-application helpers now live in `lakecat-security` so the REST
+     route and provider scan path share one governance primitive; TypeSec
+     delegate-to-fallback composition is wired at the LakeCat governance wrapper
+     seam.*
   2. Carry the effective restriction in `TableScanCapability` and record it in
      the audit receipt (`policy_hash` includes the binding's ODRL hash).
      *Started: scan receipts now carry `read-restriction` with allowed columns
