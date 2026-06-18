@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Attached policy-derived `ReadRestriction` context to credential-vending
+  authorization receipts and marked governed raw credential requests as explicit
+  LakeCat raw-credential exceptions for audit and issuer decisions.
 - Added `typesec-local` RBAC policy loading for the service binary via
   `LAKECAT_TYPESEC_RBAC_POLICY`, using TypeSec's `RbacEngine` through
   `TypeSecGovernanceEngine` instead of embedding RBAC semantics in LakeCat.

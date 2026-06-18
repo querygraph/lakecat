@@ -1931,12 +1931,15 @@ async fn authorize(
     } else {
         Vec::new()
     };
-    let read_restriction =
-        if matches!(action, CatalogAction::TablePlanScan) && !policy_bindings.is_empty() {
-            Some(read_restriction_from_policy_bindings(&policy_bindings)?)
-        } else {
-            None
-        };
+    let read_restriction = if matches!(
+        action,
+        CatalogAction::TablePlanScan | CatalogAction::CredentialsVend
+    ) && !policy_bindings.is_empty()
+    {
+        Some(read_restriction_from_policy_bindings(&policy_bindings)?)
+    } else {
+        None
+    };
     let mut context = json!({
         "warehouse": state.warehouse.as_str(),
         "request-identity": identity.envelope,
@@ -1949,6 +1952,9 @@ async fn authorize(
         context["read-restriction"] = serde_json::to_value(restriction).map_err(|err| {
             LakeCatError::Internal(format!("failed to encode read restriction: {err}"))
         })?;
+        if matches!(action, CatalogAction::CredentialsVend) {
+            context["lakecat:raw-credential-exception"] = json!(true);
+        }
     }
     let receipt = state
         .governance
@@ -4161,6 +4167,95 @@ mod tests {
                 "term": "event_id",
                 "value": "evt-1"
             })
+        );
+    }
+
+    #[tokio::test]
+    async fn credential_vend_authorization_carries_policy_read_restriction() {
+        let store = MemoryCatalogStore::new();
+        let issuer = Arc::new(RecordingCredentialIssuer::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_credential_issuer(issuer.clone());
+        let create = TableRecord::new(
+            TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            ),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({
+                "format-version": 3,
+                "current-schema-id": 1,
+                "schemas": [{
+                    "schema-id": 1,
+                    "fields": [
+                        {"id": 1, "name": "event_id", "type": "string", "required": true},
+                        {"id": 2, "name": "payload", "type": "string", "required": false}
+                    ]
+                }]
+            }),
+            Principal::anonymous(),
+        );
+        let ident = create.ident.clone();
+        store.create_table(create).await.unwrap();
+        store
+            .upsert_policy_binding(
+                PolicyBinding::new(
+                    "agent-credential-columns",
+                    WarehouseName::new("local").unwrap(),
+                    Some(ident.namespace.clone()),
+                    Some(ident.name.clone()),
+                    true,
+                    serde_json::json!({
+                        "uid": "policy:agent-credential-columns",
+                        "lakecat:read-restriction": {
+                            "allowed-columns": ["event_id"],
+                            "row-predicate": {
+                                "type": "eq",
+                                "term": "event_id",
+                                "value": "evt-1"
+                            },
+                            "max-credential-ttl-seconds": 300
+                        }
+                    }),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let response = load_credentials(
+            State(state),
+            HeaderMap::new(),
+            Path(("default".to_string(), "events".to_string())),
+        )
+        .await
+        .unwrap();
+        assert_eq!(response.0.storage_credentials.len(), 1);
+
+        let requests = issuer.requests.lock().await;
+        let receipt = &requests[0].authorization_receipt;
+        assert_eq!(receipt.action, CatalogAction::CredentialsVend);
+        assert_eq!(
+            receipt.context["lakecat:raw-credential-exception"],
+            serde_json::json!(true)
+        );
+        assert_eq!(
+            receipt.context["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            receipt.context["read-restriction"]["row-predicate"],
+            serde_json::json!({
+                "type": "eq",
+                "term": "event_id",
+                "value": "evt-1"
+            })
+        );
+        assert_eq!(
+            receipt.context["read-restriction"]["max-credential-ttl-seconds"],
+            serde_json::json!(300)
         );
     }
 

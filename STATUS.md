@@ -6,17 +6,17 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `57ea5b5 Compose ODRL credential TTL restrictions`.
-- Current working slice: `typesec-local` RBAC policy loading for the service
-  binary. `LAKECAT_TYPESEC_RBAC_POLICY` can now point at a TypeSec RBAC YAML
-  file, LakeCat loads it through TypeSec's `RbacEngine`, and invalid/missing
-  policy files fail service startup instead of silently falling back to
-  allow-all. No RBAC semantics moved into LakeCat.
+  working changes: `45008c4 Load TypeSec RBAC policy for service`.
+- Current working slice: governed credential-vending receipts. When active
+  policy bindings produce a `ReadRestriction`, credential-vending authorization
+  now carries the same restriction context and marks the request as a
+  `lakecat:raw-credential-exception`, making raw credential access visibly
+  distinct from the default governed Sail-planned read path.
 - Local verification for the current slice is green:
   `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
-  `cargo test -p lakecat-security --features typesec-local rbac -- --nocapture`;
-  `cargo test -p lakecat-security --all-features`;
-  `cargo test -p lakecat-service --features typesec-local configured_governance_engine -- --nocapture`;
+  `cargo test -p lakecat-service credential_vend_authorization_carries_policy_read_restriction -- --nocapture`;
+  `cargo test -p lakecat-service table_scan_authorization_carries_policy_read_restriction -- --nocapture`;
+  `cargo test -p lakecat-service`;
   `cargo test -p lakecat-service --all-features`;
   `cargo test -p lakecat-store --features turso-local`;
   `cargo test --workspace --all-features`.
@@ -64,6 +64,15 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Extended authorization restriction derivation from scan planning to credential
+  vending so raw credential issuance sees the same policy-derived allowed
+  columns, row predicate, TTL, purpose, and policy hashes.
+- Marked governed credential-vending authorization context with
+  `lakecat:raw-credential-exception = true` so audit/outbox receipts distinguish
+  the deliberate exception path from the preferred governed Sail-planned reads.
+- Added a service test proving the credential issuer receives the governed
+  credential authorization receipt with the composed read restriction and raw
+  credential exception marker.
 - Enabled the TypeSec RBAC feature for LakeCat's `typesec-local` integration.
 - Added `TypeSecGovernanceEngine::rbac_from_yaml`, a narrow constructor that
   loads RBAC policy text through TypeSec's `RbacEngine` and returns LakeCat

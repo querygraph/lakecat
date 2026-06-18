@@ -169,8 +169,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
      policy through `LAKECAT_TYPESEC_RBAC_POLICY`.*
   2. Carry the effective restriction in `TableScanCapability` and record it in
      the audit receipt (`policy_hash` includes the binding's ODRL hash).
-     *Started: scan receipts now carry `read-restriction` with allowed columns
-     and policy hashes.*
+     *Started: scan and credential-vend receipts now carry `read-restriction`
+     with allowed columns and policy hashes; governed credential-vend receipts
+     are marked as raw-credential exceptions so audit/outbox consumers can
+     distinguish them from the preferred Sail-planned read path.*
   3. Apply it as a mandatory projection/filter through a Sail-planned read that
      flows through `LakeCatCatalogProvider`; re-apply on `fetch-scan-tasks`.
      *Started: scan planning intersects client projection with allowed columns,
