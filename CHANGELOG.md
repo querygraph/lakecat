@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Projected table metadata graph summaries from durable outbox replay into
+  stable catalog-facing `Column` and `Snapshot` events, giving QueryGraph schema
+  and snapshot anchors while leaving graph traversal semantics in Grust.
 - Projected resolved non-anonymous outbox principals into LakeCat's
   catalog-facing graph sink as stable `Principal` events, giving QueryGraph
   actor anchors without moving traversal semantics into LakeCat.

@@ -7,11 +7,13 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `b36231e Project principals to graph`.
-- Paused after pushing principal graph projection from the durable outbox.
-  Non-anonymous principals resolved from outbox authorization receipts now emit
-  stable catalog-facing `Principal` graph events before the domain-specific
-  graph projection, giving QueryGraph actor anchors for replayed catalog events.
-- Local verification for the pushed slice was green:
+- Current working slice: column and snapshot graph projection from table
+  metadata graph summaries. Table create/load audit payloads now carry compact
+  current-schema/current-snapshot graph summaries, and durable outbox replay
+  emits stable catalog-facing `Column` and `Snapshot` graph events when those
+  summaries are present.
+- Local verification for the current slice is green:
+  `cargo fmt -p lakecat-graph -p lakecat-service`;
   `cargo fmt -p lakecat-graph -p lakecat-service -p lakecat-api -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-graph`;
@@ -72,6 +74,11 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added stable catalog-facing `Column` and `Snapshot` graph event constructors
+  plus default and `grust-local` graph-crate coverage.
+- Added compact table metadata graph summaries to table create/load audit
+  payloads and replayed those summaries from the durable outbox into column and
+  snapshot graph anchors.
 - Added principal graph projection to durable outbox drain for non-anonymous
   resolved principals, while preserving existing domain graph and OpenLineage
   replay.

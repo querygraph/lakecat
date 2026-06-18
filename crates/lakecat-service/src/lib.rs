@@ -951,6 +951,7 @@ async fn create_table(
                 "authorization-receipt": capability.receipt(),
                 "metadata-location": table.metadata_location,
                 "location": table.location,
+                "metadata-graph": table_metadata_graph_summary(&table.metadata),
                 "version": table.version,
             }),
         )?)
@@ -980,6 +981,7 @@ async fn load_table(
                 "table": ident,
                 "authorization-receipt": capability.receipt(),
                 "metadata-location": table.metadata_location,
+                "metadata-graph": table_metadata_graph_summary(&table.metadata),
                 "version": table.version,
             }),
         )?)
@@ -1142,6 +1144,46 @@ fn table_scan_tasks_fetched_audit_payload(
         audit_payload["read-restriction"] = restriction.clone();
     }
     audit_payload
+}
+
+fn table_metadata_graph_summary(metadata: &Value) -> Value {
+    json!({
+        "current-schema-id": metadata.get("current-schema-id").cloned().unwrap_or(Value::Null),
+        "fields": metadata_current_schema_fields(metadata),
+        "current-snapshot-id": metadata.get("current-snapshot-id").cloned().unwrap_or(Value::Null),
+        "current-snapshot": metadata_current_snapshot(metadata).cloned().unwrap_or(Value::Null),
+    })
+}
+
+fn metadata_current_schema_fields(metadata: &Value) -> Vec<Value> {
+    let current_schema_id = metadata.get("current-schema-id").and_then(Value::as_i64);
+    metadata
+        .get("schemas")
+        .and_then(Value::as_array)
+        .and_then(|schemas| {
+            schemas
+                .iter()
+                .find(|schema| schema.get("schema-id").and_then(Value::as_i64) == current_schema_id)
+        })
+        .or_else(|| metadata.get("schema"))
+        .and_then(|schema| schema.get("fields"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn metadata_current_snapshot(metadata: &Value) -> Option<&Value> {
+    let current_snapshot_id = metadata
+        .get("current-snapshot-id")
+        .and_then(Value::as_i64)?;
+    metadata
+        .get("snapshots")
+        .and_then(Value::as_array)
+        .and_then(|snapshots| {
+            snapshots.iter().find(|snapshot| {
+                snapshot.get("snapshot-id").and_then(Value::as_i64) == Some(current_snapshot_id)
+            })
+        })
 }
 
 async fn list_storage_profiles(
@@ -1738,11 +1780,20 @@ async fn project_outbox_event(
             state
                 .graph
                 .emit(
-                    GraphEvent::table(graph_action, table.clone(), event_payload.clone())
+                    GraphEvent::table(graph_action.clone(), table.clone(), event_payload.clone())
                         .with_event_id(event.event_id.clone()),
                 )
                 .await?;
             receipt.graph_events += 1;
+            project_table_metadata_graph_events(
+                state,
+                event,
+                graph_action.clone(),
+                &table,
+                &event_payload,
+                &mut receipt,
+            )
+            .await?;
             if outbox_is_scan_projection(event.event_type.as_str()) {
                 state
                     .graph
@@ -1850,6 +1901,105 @@ async fn project_outbox_event(
         receipt.lineage_events += 1;
     }
     Ok(receipt)
+}
+
+async fn project_table_metadata_graph_events(
+    state: &LakeCatState,
+    event: &OutboxEvent,
+    action: GraphAction,
+    table: &TableIdent,
+    event_payload: &Value,
+    receipt: &mut OutboxProjectionReceipt,
+) -> Result<(), LakeCatError> {
+    let Some(metadata_graph) = event_payload
+        .get("metadata-graph")
+        .or_else(|| event_payload.get("metadata"))
+    else {
+        return Ok(());
+    };
+    for field in metadata_graph_fields(metadata_graph) {
+        let Some(column_id) = metadata_field_id(&field) else {
+            continue;
+        };
+        state
+            .graph
+            .emit(
+                GraphEvent::column(
+                    action.clone(),
+                    table,
+                    column_id.clone(),
+                    json!({
+                        "event-type": event.event_type,
+                        "table": table,
+                        "current-schema-id": metadata_graph.get("current-schema-id"),
+                        "field": field,
+                    }),
+                )
+                .with_event_id(format!("{}:column:{column_id}", event.event_id)),
+            )
+            .await?;
+        receipt.graph_events += 1;
+    }
+    if let Some((snapshot_id, snapshot)) = metadata_graph_current_snapshot(metadata_graph) {
+        state
+            .graph
+            .emit(
+                GraphEvent::snapshot(
+                    action,
+                    table,
+                    snapshot_id.clone(),
+                    json!({
+                        "event-type": event.event_type,
+                        "table": table,
+                        "current-snapshot-id": metadata_graph.get("current-snapshot-id"),
+                        "snapshot": snapshot,
+                    }),
+                )
+                .with_event_id(format!("{}:snapshot:{snapshot_id}", event.event_id)),
+            )
+            .await?;
+        receipt.graph_events += 1;
+    }
+    Ok(())
+}
+
+fn metadata_graph_fields(metadata_graph: &Value) -> Vec<Value> {
+    metadata_graph
+        .get("fields")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_else(|| metadata_current_schema_fields(metadata_graph))
+}
+
+fn metadata_field_id(field: &Value) -> Option<String> {
+    field
+        .get("id")
+        .and_then(value_to_stable_part)
+        .or_else(|| field.get("name").and_then(value_to_stable_part))
+}
+
+fn metadata_graph_current_snapshot(metadata_graph: &Value) -> Option<(String, Value)> {
+    let snapshot = metadata_graph
+        .get("current-snapshot")
+        .filter(|snapshot| !snapshot.is_null())
+        .cloned()
+        .or_else(|| metadata_current_snapshot(metadata_graph).cloned())?;
+    let snapshot_id = snapshot
+        .get("snapshot-id")
+        .and_then(value_to_stable_part)
+        .or_else(|| {
+            metadata_graph
+                .get("current-snapshot-id")
+                .and_then(value_to_stable_part)
+        })?;
+    Some((snapshot_id, snapshot))
+}
+
+fn value_to_stable_part(value: &Value) -> Option<String> {
+    value
+        .as_i64()
+        .map(|value| value.to_string())
+        .or_else(|| value.as_str().map(ToString::to_string))
 }
 
 fn outbox_table(event: &OutboxEvent) -> Result<Option<TableIdent>, LakeCatError> {
@@ -3104,6 +3254,22 @@ mod tests {
                                 "checked_at": chrono::Utc::now(),
                             },
                             "metadata-location": "file:///tmp/events/metadata/00000.json",
+                            "metadata-graph": {
+                                "current-schema-id": 1,
+                                "fields": [
+                                    {"id": 1, "name": "event_id", "type": "string", "required": true},
+                                    {"id": 2, "name": "payload", "type": "string", "required": false}
+                                ],
+                                "current-snapshot-id": 42,
+                                "current-snapshot": {
+                                    "snapshot-id": 42,
+                                    "sequence-number": 7,
+                                    "timestamp-ms": 1710000000000_i64,
+                                    "manifest-list": "file:///tmp/events/metadata/snap-42.avro",
+                                    "summary": {"operation": "append"},
+                                    "schema-id": 1
+                                }
+                            },
                         }
                     }),
                     created_at: chrono::Utc::now(),
@@ -3225,11 +3391,11 @@ mod tests {
                 "querygraph.bootstrap".to_string()
             ]
         );
-        assert_eq!(drain.graph_events, 13);
+        assert_eq!(drain.graph_events, 16);
         assert_eq!(drain.lineage_events, 5);
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 13);
+        assert_eq!(graph_events.len(), 16);
         assert_eq!(graph_events[0].label, GraphNodeLabel::Principal);
         assert_eq!(graph_events[0].subject, "lakecat:principal:agent:writer");
         assert_eq!(
@@ -3270,44 +3436,75 @@ mod tests {
         assert_eq!(graph_events[5].label, GraphNodeLabel::Table);
         assert_eq!(graph_events[5].action, GraphAction::Created);
         assert_eq!(graph_events[5].event_id.as_deref(), Some("evt-1"));
-        assert_eq!(graph_events[6].label, GraphNodeLabel::Principal);
-        assert_eq!(graph_events[7].label, GraphNodeLabel::Table);
-        assert_eq!(graph_events[7].action, GraphAction::PlannedScan);
+        assert_eq!(graph_events[6].label, GraphNodeLabel::Column);
         assert_eq!(
-            graph_events[7].properties["read-restriction"]["allowed-columns"],
-            serde_json::json!(["event_id"])
+            graph_events[6].subject,
+            "lakecat:column:lakecat:table:local:default:events:1"
         );
-        assert_eq!(graph_events[8].label, GraphNodeLabel::ScanPlan);
-        assert_eq!(graph_events[8].subject, "lakecat:scan-plan:evt-2");
-        assert_eq!(graph_events[8].event_id.as_deref(), Some("evt-2:scan-plan"));
+        assert_eq!(graph_events[6].event_id.as_deref(), Some("evt-1:column:1"));
         assert_eq!(
-            graph_events[8].properties["read-restriction"]["allowed-columns"],
-            serde_json::json!(["event_id"])
+            graph_events[6].properties["field"]["name"],
+            serde_json::json!("event_id")
+        );
+        assert_eq!(graph_events[7].label, GraphNodeLabel::Column);
+        assert_eq!(
+            graph_events[7].subject,
+            "lakecat:column:lakecat:table:local:default:events:2"
+        );
+        assert_eq!(graph_events[8].label, GraphNodeLabel::Snapshot);
+        assert_eq!(
+            graph_events[8].subject,
+            "lakecat:snapshot:lakecat:table:local:default:events:42"
+        );
+        assert_eq!(
+            graph_events[8].event_id.as_deref(),
+            Some("evt-1:snapshot:42")
+        );
+        assert_eq!(
+            graph_events[8].properties["snapshot"]["manifest-list"],
+            serde_json::json!("file:///tmp/events/metadata/snap-42.avro")
         );
         assert_eq!(graph_events[9].label, GraphNodeLabel::Principal);
         assert_eq!(graph_events[10].label, GraphNodeLabel::Table);
-        assert_eq!(graph_events[10].action, GraphAction::Committed);
-        assert_eq!(graph_events[10].event_id.as_deref(), Some("evt-commit"));
+        assert_eq!(graph_events[10].action, GraphAction::PlannedScan);
         assert_eq!(
-            graph_events[10].properties["commit"]["new_metadata_location"],
+            graph_events[10].properties["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(graph_events[11].label, GraphNodeLabel::ScanPlan);
+        assert_eq!(graph_events[11].subject, "lakecat:scan-plan:evt-2");
+        assert_eq!(
+            graph_events[11].event_id.as_deref(),
+            Some("evt-2:scan-plan")
+        );
+        assert_eq!(
+            graph_events[11].properties["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(graph_events[12].label, GraphNodeLabel::Principal);
+        assert_eq!(graph_events[13].label, GraphNodeLabel::Table);
+        assert_eq!(graph_events[13].action, GraphAction::Committed);
+        assert_eq!(graph_events[13].event_id.as_deref(), Some("evt-commit"));
+        assert_eq!(
+            graph_events[13].properties["commit"]["new_metadata_location"],
             serde_json::json!("file:///tmp/events/metadata/00001.json")
         );
-        assert_eq!(graph_events[11].label, GraphNodeLabel::Commit);
+        assert_eq!(graph_events[14].label, GraphNodeLabel::Commit);
         assert_eq!(
-            graph_events[11].subject,
+            graph_events[14].subject,
             "lakecat:commit:lakecat:table:local:default:events:7"
         );
         assert_eq!(
-            graph_events[11].event_id.as_deref(),
+            graph_events[14].event_id.as_deref(),
             Some("evt-commit:commit")
         );
         assert_eq!(
-            graph_events[11].properties["commit"]["idempotency_key_sha256"],
+            graph_events[14].properties["commit"]["idempotency_key_sha256"],
             serde_json::json!("sha256:idempotency")
         );
-        assert_eq!(graph_events[12].label, GraphNodeLabel::Principal);
+        assert_eq!(graph_events[15].label, GraphNodeLabel::Principal);
         assert_eq!(
-            graph_events[12].event_id.as_deref(),
+            graph_events[15].event_id.as_deref(),
             Some("evt-3:principal")
         );
         let lineage_events = lineage.events.lock().await;

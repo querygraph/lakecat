@@ -100,6 +100,42 @@ impl GraphEvent {
         }
     }
 
+    pub fn column(
+        action: GraphAction,
+        table: &TableIdent,
+        column_id: impl Into<String>,
+        properties: Value,
+    ) -> Self {
+        let column_id = column_id.into();
+        Self {
+            event_id: None,
+            subject: column_stable_id(table, &column_id),
+            label: GraphNodeLabel::Column,
+            action,
+            table: Some(table.clone()),
+            properties,
+            emitted_at: Utc::now(),
+        }
+    }
+
+    pub fn snapshot(
+        action: GraphAction,
+        table: &TableIdent,
+        snapshot_id: impl Into<String>,
+        properties: Value,
+    ) -> Self {
+        let snapshot_id = snapshot_id.into();
+        Self {
+            event_id: None,
+            subject: snapshot_stable_id(table, &snapshot_id),
+            label: GraphNodeLabel::Snapshot,
+            action,
+            table: Some(table.clone()),
+            properties,
+            emitted_at: Utc::now(),
+        }
+    }
+
     pub fn principal(action: GraphAction, principal: &Principal, properties: Value) -> Self {
         Self {
             event_id: None,
@@ -140,6 +176,14 @@ pub fn scan_plan_stable_id(plan_id: &str) -> String {
 
 pub fn commit_stable_id(table: &TableIdent, sequence_number: u64) -> String {
     format!("lakecat:commit:{}:{sequence_number}", table.stable_id())
+}
+
+pub fn column_stable_id(table: &TableIdent, column_id: &str) -> String {
+    format!("lakecat:column:{}:{column_id}", table.stable_id())
+}
+
+pub fn snapshot_stable_id(table: &TableIdent, snapshot_id: &str) -> String {
+    format!("lakecat:snapshot:{}:{snapshot_id}", table.stable_id())
 }
 
 pub fn principal_stable_id(principal: &Principal) -> String {
@@ -279,6 +323,50 @@ mod tests {
         assert_eq!(event.label, GraphNodeLabel::Principal);
         assert_eq!(event.subject, "lakecat:principal:did:example:agent");
         assert!(event.table.is_none());
+    }
+
+    #[test]
+    fn column_event_uses_stable_catalog_subject() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            lakecat_core::TableName::new("events").unwrap(),
+        );
+        let event = GraphEvent::column(
+            GraphAction::Created,
+            &table,
+            "1",
+            serde_json::json!({"kind": "test"}),
+        );
+
+        assert_eq!(event.label, GraphNodeLabel::Column);
+        assert_eq!(
+            event.subject,
+            "lakecat:column:lakecat:table:local:default:events:1"
+        );
+        assert_eq!(event.table.as_ref(), Some(&table));
+    }
+
+    #[test]
+    fn snapshot_event_uses_stable_catalog_subject() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            lakecat_core::TableName::new("events").unwrap(),
+        );
+        let event = GraphEvent::snapshot(
+            GraphAction::Created,
+            &table,
+            "42",
+            serde_json::json!({"kind": "test"}),
+        );
+
+        assert_eq!(event.label, GraphNodeLabel::Snapshot);
+        assert_eq!(
+            event.subject,
+            "lakecat:snapshot:lakecat:table:local:default:events:42"
+        );
+        assert_eq!(event.table.as_ref(), Some(&table));
     }
 }
 
@@ -512,6 +600,58 @@ pub mod grust_integration {
                 Some(&Value::String("Principal".to_string()))
             );
             GraphIndex::new(&graph).expect("principal event graph should be valid");
+        }
+
+        #[test]
+        fn converts_column_event_to_valid_grust_graph_event() {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let event = GraphEvent::column(
+                GraphAction::Created,
+                &table,
+                "1",
+                serde_json::json!({"field":{"id":1,"name":"event_id"}}),
+            )
+            .with_event_id("lakecat:outbox:evt-1:column:1");
+            let graph = graph_event_to_grust(&event);
+
+            assert!(graph.nodes.len() >= 2);
+            assert!(!graph.edges.is_empty());
+            assert_eq!(graph.nodes[0].label.as_str(), "CatalogEvent");
+            assert_eq!(
+                graph.nodes[0].props.get("label"),
+                Some(&Value::String("Column".to_string()))
+            );
+            GraphIndex::new(&graph).expect("column event graph should be valid");
+        }
+
+        #[test]
+        fn converts_snapshot_event_to_valid_grust_graph_event() {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let event = GraphEvent::snapshot(
+                GraphAction::Created,
+                &table,
+                "42",
+                serde_json::json!({"snapshot":{"snapshot-id":42}}),
+            )
+            .with_event_id("lakecat:outbox:evt-1:snapshot:42");
+            let graph = graph_event_to_grust(&event);
+
+            assert!(graph.nodes.len() >= 2);
+            assert!(!graph.edges.is_empty());
+            assert_eq!(graph.nodes[0].label.as_str(), "CatalogEvent");
+            assert_eq!(
+                graph.nodes[0].props.get("label"),
+                Some(&Value::String("Snapshot".to_string()))
+            );
+            GraphIndex::new(&graph).expect("snapshot event graph should be valid");
         }
 
         #[tokio::test]
