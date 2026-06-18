@@ -6,6 +6,28 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `88955ec Bind QGLake replay agent summary proofs`.
+- Paused after pushing the QGLake replay agent-summary proof slice. The QGLake
+  agent-DID fixture mode now sends deterministic local delegation and
+  agent-summary proof headers, lineage-drain replay summaries expose their
+  sanitized hashes, and QGLake rejects explicit agent replay evidence that
+  drops either hash.
+- Local verification for the pushed QGLake replay agent-summary proof slice was
+  green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-cli parses_qglake_fixture_command_defaults`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed QGLake replay agent-summary proof
+  slice.
+- Previous implementation slice:
   `9f7ec88 Bind QGLake replay principal kind`.
 - Paused after pushing the QGLake replay principal-kind slice. The CLI now uses
   agent-DID request headers for explicit `qglake-fixture` principals while
