@@ -6,6 +6,23 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `d31ace5 Exercise production secret-ref gating`.
+- Paused after pushing production secret-ref gate coverage. The TypeSec-backed
+  credential issuer now has service-level coverage proving `vault://`,
+  `aws-sm://`, `gcp-sm://`, and `azure-kv://` refs authorize the exact secret
+  URI before failing closed with provider-specific not-configured errors when no
+  resolver backend is wired.
+- Local verification for the pushed production secret-ref gating slice was green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_gates_production_secret_refs_before_dispatch -- --nocapture`;
+  `cargo fmt -p lakecat-service -p lakecat-api -p lakecat-security -p lakecat-store -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-service --features typesec-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed production secret-ref gating slice.
+- Previous implementation slice:
   `efd548a Add catalog view REST aliases`.
 - Paused after pushing catalog-path view REST aliases. Warehouse-prefixed catalog
   callers can now list, load, and upsert durable `ViewRecord` values through
