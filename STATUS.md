@@ -6,6 +6,29 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `2680f95 Add project-scoped warehouse management`.
+- Paused after pushing project-scoped warehouse management routes. Management
+  callers can now list and upsert warehouses through
+  `/management/v1/projects/{project}/warehouses`, using the same durable
+  `WarehouseRecord` state and validation while leaving standard Iceberg table
+  routes unchanged.
+- Local verification for the pushed project-scoped warehouse management slice was
+  green:
+  `cargo fmt -p lakecat-api -p lakecat-store -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-store memory_store_persists_warehouse_records`;
+  `cargo test -p lakecat-store --features turso-local turso_store_persists_warehouse_records`;
+  `cargo test -p lakecat-service management_warehouses_are_durable_management_entities -- --nocapture`;
+  `cargo test -p lakecat-store`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed project-scoped warehouse management
+  slice.
+- Previous implementation slice:
   `e200664 Validate warehouse project attachments`.
 - Paused after pushing warehouse-to-project validation. Durable warehouse upserts
   in memory and Turso now reject references to missing projects, and the service
@@ -238,6 +261,9 @@ Updated: 2026-06-18
 
 ## Completed In Latest Implementation Slice
 
+- Added project-scoped warehouse management routes for listing and upserting
+  warehouses under durable projects without changing standard Iceberg table
+  routes.
 - Enforced warehouse-to-project attachment in memory and Turso stores, with
   governed warehouse management rejecting warehouses that point at missing
   projects.
