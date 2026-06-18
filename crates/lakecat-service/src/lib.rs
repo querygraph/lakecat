@@ -9,11 +9,11 @@ use axum::{Json, Router};
 use lakecat_api::{
     CatalogConfigResponse, CommitTableRequest, CommitTableResponse, ConfigEntry,
     CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest,
-    FetchScanTasksResponse, ListNamespacesResponse, ListPolicyBindingsResponse,
-    ListStorageProfilesResponse, LoadCredentialsResponse, LoadTableResponse, NamespaceResponse,
-    PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse, StorageCredential,
-    StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest,
-    UpsertStorageProfileRequest,
+    FetchScanTasksResponse, LineageDrainResponse, ListNamespacesResponse,
+    ListPolicyBindingsResponse, ListStorageProfilesResponse, LoadCredentialsResponse,
+    LoadTableResponse, NamespaceResponse, PlanTableScanRequest, PlanTableScanResponse,
+    PolicyBindingResponse, StorageCredential, StorageProfileResponse, TableIdentifier,
+    UpsertPolicyBindingRequest, UpsertStorageProfileRequest,
 };
 use lakecat_core::{
     LakeCatError, Namespace, Principal, PrincipalKind, TableIdent, TableName, WarehouseName,
@@ -36,9 +36,10 @@ use lakecat_sail::{CommitPreparationRequest, SailCatalogEngine};
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
-    NamespaceCreateCapability, NamespaceListCapability, PolicyManageCapability, ReadRestriction,
-    StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
-    TableDropCapability, TableLoadCapability, TableRestoreCapability, TableScanCapability,
+    LineageReadCapability, NamespaceCreateCapability, NamespaceListCapability,
+    PolicyManageCapability, ReadRestriction, StorageProfileManageCapability, TableCommitCapability,
+    TableCreateCapability, TableDropCapability, TableLoadCapability, TableRestoreCapability,
+    TableScanCapability,
 };
 use lakecat_store::{
     CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, PolicyBinding,
@@ -798,6 +799,7 @@ pub fn app(state: LakeCatState) -> Router {
             "/management/v1/warehouses/{warehouse}/policies/{policy}",
             post(upsert_policy_binding).put(upsert_policy_binding),
         )
+        .route("/management/v1/lineage/drain", post(drain_lineage_outbox))
         .route("/querygraph/v1/bootstrap", get(querygraph_bootstrap))
         .with_state(state)
 }
@@ -1666,6 +1668,15 @@ async fn querygraph_bootstrap(
     )?))
 }
 
+async fn drain_lineage_outbox(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+) -> Result<Json<LineageDrainResponse>, LakeCatHttpError> {
+    let _capability = authorize_lineage_read(&state, request_identity(&headers)?).await?;
+    let delivered = drain_outbox_once(&state, 100).await?;
+    Ok(Json(LineageDrainResponse { delivered }))
+}
+
 async fn project_outbox_event(
     state: &LakeCatState,
     event: &OutboxEvent,
@@ -2202,6 +2213,14 @@ async fn authorize_graph_read(
 ) -> Result<GraphReadCapability, LakeCatHttpError> {
     let receipt = authorize(state, identity, CatalogAction::GraphRead, None).await?;
     Ok(GraphReadCapability::from_receipt(receipt)?)
+}
+
+async fn authorize_lineage_read(
+    state: &LakeCatState,
+    identity: RequestIdentity,
+) -> Result<LineageReadCapability, LakeCatHttpError> {
+    let receipt = authorize(state, identity, CatalogAction::LineageRead, None).await?;
+    Ok(LineageReadCapability::from_receipt(receipt)?)
 }
 
 #[derive(Debug)]
@@ -2916,6 +2935,85 @@ mod tests {
                 "evt-3".to_string()
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn lineage_drain_endpoint_replays_querygraph_bootstrap_outbox() {
+        let principal = Principal {
+            subject: "did:example:agent".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-bootstrap".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-bootstrap",
+                    "event-type": "querygraph.bootstrap",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "graph-read",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                            "request-identity": {
+                                "attestation-state": "verified",
+                                "typedid": "did:example:agent"
+                            }
+                        },
+                        "warehouse": "local",
+                        "table-count": 1,
+                        "policy-binding-count": 1
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let lineage = Arc::new(RecordingLineage::default());
+        let app = app(
+            LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    NoopCatalogGraphSink::new(),
+                    lineage.clone(),
+                ),
+        );
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/management/v1/lineage/drain")
+                    .header("x-lakecat-agent-did", "did:example:agent")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(payload["delivered"], serde_json::json!(1));
+        assert_eq!(
+            store.delivered.lock().await.as_slice(),
+            &["evt-bootstrap".to_string()]
+        );
+        let lineage_events = lineage.events.lock().await;
+        assert_eq!(lineage_events.len(), 1);
+        assert_eq!(
+            lineage_events[0].event_type,
+            LineageEventType::QueryGraphBootstrap
+        );
+        assert_eq!(lineage_events[0].principal.subject, "did:example:agent");
     }
 
     #[tokio::test]

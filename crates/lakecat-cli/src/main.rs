@@ -1,10 +1,11 @@
 use std::{collections::BTreeMap, fs, path::PathBuf};
 
 use lakecat_api::{
-    CatalogConfigResponse, CreateNamespaceRequest, CreateTableRequest, ListNamespacesResponse,
-    ListPolicyBindingsResponse, ListStorageProfilesResponse, LoadTableResponse, NamespaceResponse,
-    PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse, StorageProfileResponse,
-    TableIdentifier, UpsertPolicyBindingRequest, UpsertStorageProfileRequest,
+    CatalogConfigResponse, CreateNamespaceRequest, CreateTableRequest, LineageDrainResponse,
+    ListNamespacesResponse, ListPolicyBindingsResponse, ListStorageProfilesResponse,
+    LoadTableResponse, NamespaceResponse, PlanTableScanRequest, PlanTableScanResponse,
+    PolicyBindingResponse, StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest,
+    UpsertStorageProfileRequest,
 };
 use lakecat_querygraph::{QueryGraphBootstrap, QueryGraphBootstrapVerification};
 use serde::{Serialize, de::DeserializeOwned};
@@ -27,6 +28,7 @@ async fn run() -> lakecat_core::LakeCatResult<()> {
             principal,
         } => bootstrap_export(catalog, output, principal).await,
         Command::Config { catalog, principal } => config(catalog, principal).await,
+        Command::LineageDrain { catalog, principal } => lineage_drain(catalog, principal).await,
         Command::PolicyList {
             catalog,
             warehouse,
@@ -212,6 +214,29 @@ async fn config(catalog: String, principal: Option<String>) -> lakecat_core::Lak
     print_json(&config)
 }
 
+async fn lineage_drain(
+    catalog: String,
+    principal: Option<String>,
+) -> lakecat_core::LakeCatResult<()> {
+    let response = drain_lineage_outbox(&catalog, principal.as_deref()).await?;
+    println!("delivered {}", response.delivered);
+    Ok(())
+}
+
+async fn drain_lineage_outbox(
+    catalog: &str,
+    principal: Option<&str>,
+) -> lakecat_core::LakeCatResult<LineageDrainResponse> {
+    post_json::<_, LineageDrainResponse>(
+        catalog,
+        "/management/v1/lineage/drain",
+        principal,
+        "lineage drain",
+        &json!({}),
+    )
+    .await
+}
+
 async fn get_json<T: DeserializeOwned>(
     catalog: &str,
     path: &str,
@@ -391,7 +416,10 @@ async fn qglake_fixture(
     verify_qglake_governed_scan(&catalog, &namespace_path, &table, principal).await?;
     let (bundle, verification) = fetch_bootstrap_bundle(&catalog, principal).await?;
     verify_qglake_bootstrap_bundle(&bundle, &namespace, &table)?;
-    write_bootstrap_bundle(&output, &bundle, &verification)
+    write_bootstrap_bundle(&output, &bundle, &verification)?;
+    let drain = drain_lineage_outbox(&catalog, principal).await?;
+    println!("drained {} lineage/outbox event(s)", drain.delivered);
+    Ok(())
 }
 
 async fn ensure_qglake_namespace(
@@ -785,6 +813,10 @@ enum Command {
         catalog: String,
         principal: Option<String>,
     },
+    LineageDrain {
+        catalog: String,
+        principal: Option<String>,
+    },
     PolicyList {
         catalog: String,
         warehouse: String,
@@ -837,6 +869,7 @@ impl Command {
         match command.as_str() {
             "bootstrap-export" => parse_bootstrap_export(args),
             "config" => parse_config(args),
+            "lineage-drain" => parse_lineage_drain(args),
             "policy-list" => parse_policy_list(args),
             "policy-upsert" => parse_policy_upsert(args),
             "storage-profile-list" => parse_storage_profile_list(args),
@@ -886,6 +919,20 @@ fn parse_config(args: impl Iterator<Item = String>) -> lakecat_core::LakeCatResu
         }
     }
     Ok(Command::Config { catalog, principal })
+}
+
+fn parse_lineage_drain(args: impl Iterator<Item = String>) -> lakecat_core::LakeCatResult<Command> {
+    let mut catalog = "http://127.0.0.1:8181".to_string();
+    let mut principal = None;
+    let mut args = args.peekable();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--catalog" => catalog = next_arg(&mut args, "--catalog")?,
+            "--principal" => principal = Some(next_arg(&mut args, "--principal")?),
+            _ => return Err(usage_error()),
+        }
+    }
+    Ok(Command::LineageDrain { catalog, principal })
 }
 
 fn parse_policy_list(args: impl Iterator<Item = String>) -> lakecat_core::LakeCatResult<Command> {
@@ -1124,10 +1171,20 @@ fn next_arg(
 }
 
 fn usage_error() -> lakecat_core::LakeCatError {
-    lakecat_core::LakeCatError::InvalidArgument(
-        "usage: lakecat-cli <config|bootstrap-export|storage-profile-list|storage-profile-upsert|policy-list|policy-upsert|qglake-fixture> [options]"
-            .to_string(),
-    )
+    let commands = [
+        "config",
+        "bootstrap-export",
+        "lineage-drain",
+        "storage-profile-list",
+        "storage-profile-upsert",
+        "policy-list",
+        "policy-upsert",
+        "qglake-fixture",
+    ];
+    lakecat_core::LakeCatError::InvalidArgument(format!(
+        "usage: lakecat-cli <{}> [options]",
+        commands.join("|")
+    ))
 }
 
 #[cfg(test)]
@@ -1169,6 +1226,25 @@ mod tests {
                 assert_eq!(principal.as_deref(), Some("alice"));
             }
             _ => panic!("expected bootstrap-export command"),
+        }
+    }
+
+    #[test]
+    fn parses_lineage_drain_command() {
+        let command = Command::parse([
+            "lineage-drain".to_string(),
+            "--catalog".to_string(),
+            "http://localhost:9000".to_string(),
+            "--principal".to_string(),
+            "did:example:agent".to_string(),
+        ])
+        .unwrap();
+        match command {
+            Command::LineageDrain { catalog, principal } => {
+                assert_eq!(catalog, "http://localhost:9000");
+                assert_eq!(principal.as_deref(), Some("did:example:agent"));
+            }
+            _ => panic!("expected lineage-drain command"),
         }
     }
 

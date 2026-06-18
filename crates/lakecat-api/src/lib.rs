@@ -172,6 +172,12 @@ pub struct ListPolicyBindingsResponse {
     pub policies: Vec<PolicyBindingResponse>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct LineageDrainResponse {
+    pub delivered: usize,
+}
+
 fn default_enforced() -> bool {
     true
 }

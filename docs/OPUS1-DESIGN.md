@@ -662,8 +662,9 @@ only once **P2** gives it a governed path to run on.
   outbox-drained namespace/table lineage events now project to OpenLineage-shaped
   payloads and hash receipts in `lakecat-lineage`; QueryGraph bootstrap outbox
   events now also project to OpenLineage output events carrying the bootstrap
-  authorization/request-identity payload; TypeDID request envelopes are captured
-  on receipts. Grust now owns reusable LakeCat graph envelope ingestion
+  authorization/request-identity payload; a governed lineage-drain management
+  endpoint lets local acceptance flows replay the durable outbox on demand;
+  TypeDID request envelopes are captured on receipts. Grust now owns reusable LakeCat graph envelope ingestion
   and a catalog-event taxonomy helper for event, warehouse, namespace, and table
   projections; LakeCat's `grust-local` sink only adapts outbox events into that
   helper. LakeCat now enables Grust's `cypher` facade feature under
@@ -679,7 +680,8 @@ only once **P2** gives it a governed path to run on.
   dimensions, joins, ontology claims, or business semantic names; those belong
   in QueryGraph. The QGLake fixture now verifies governed scan planning,
   exported policy bindings, OpenLineage output presence, and bootstrap
-  OpenLineage replay before writing the bundle.*
+  OpenLineage replay before writing the bundle, then drains the lineage/outbox
+  stream through the governed management endpoint.*
 - **Deferred — Tier-0 pruning depth and typed v4.** Good but diminishing-returns
   until P1–P3 land; HMAC-signed plan-task tokens are now implemented for new
   Sail scan-planning tokens. (Milestone 10; Finding 12.)

@@ -436,6 +436,9 @@ pub struct CanManagePolicies;
 pub struct CanReadGraph;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanReadLineage;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanReadCatalogConfig;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -454,6 +457,7 @@ pub type CredentialsVendCapability = Capability<CanVendCredentials, TableIdent>;
 pub type StorageProfileManageCapability = Capability<CanManageStorageProfiles, ()>;
 pub type PolicyManageCapability = Capability<CanManagePolicies, ()>;
 pub type GraphReadCapability = Capability<CanReadGraph, ()>;
+pub type LineageReadCapability = Capability<CanReadLineage, ()>;
 pub type CatalogConfigCapability = Capability<CanReadCatalogConfig, ()>;
 pub type NamespaceCreateCapability = Capability<CanCreateNamespace, ()>;
 pub type NamespaceListCapability = Capability<CanListNamespaces, ()>;
@@ -568,6 +572,12 @@ impl PolicyManageCapability {
 impl GraphReadCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
         catalog_capability_from_receipt(receipt, CatalogAction::GraphRead, "read catalog graph")
+    }
+}
+
+impl LineageReadCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
+        catalog_capability_from_receipt(receipt, CatalogAction::LineageRead, "read catalog lineage")
     }
 }
 

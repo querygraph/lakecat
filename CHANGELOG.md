@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a governed `/management/v1/lineage/drain` endpoint plus
+  `lakecat-cli lineage-drain`, and made `lakecat-cli qglake-fixture` drain the
+  lineage/outbox stream after writing the verified QueryGraph bootstrap bundle.
 - Projected `querygraph.bootstrap` outbox events into LakeCat OpenLineage
   output events, preserving the bootstrap authorization/request-identity
   payload so QueryGraph acceptance runs can replay catalog-level bootstrap
