@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Surfaced governed scan-task fetch `read-restriction`, storage location, and
+  metadata location at the top level of `table.scan-tasks-fetched` audit/outbox
+  payloads, and routed fetched scan-task events through the existing graph and
+  OpenLineage scan projection sink path.
 - Surfaced governed scan-planning `read-restriction`, storage location, and
   metadata location at the top level of `table.scan-planned` audit/outbox
   payloads, and proved OpenLineage carries the restriction through the LakeCat

@@ -1096,6 +1096,31 @@ fn table_scan_planned_audit_payload(
     audit_payload
 }
 
+fn table_scan_tasks_fetched_audit_payload(
+    ident: &TableIdent,
+    table: &TableRecord,
+    receipt: &AuthorizationReceipt,
+    fetched: &lakecat_sail::FetchScanTasksPlan,
+) -> Value {
+    let mut audit_payload = json!({
+        "event-type": "table.scan-tasks-fetched",
+        "table": ident,
+        "authorization-receipt": receipt,
+        "planned-by": fetched.planned_by,
+        "snapshot-id": fetched.snapshot_id,
+        "plan-task": fetched.plan_task,
+        "file-scan-task-count": fetched.file_scan_tasks.len(),
+        "delete-file-count": fetched.delete_files.len(),
+        "child-plan-task-count": fetched.plan_tasks.len(),
+        "storage-location": table.location,
+        "metadata-location": table.metadata_location,
+    });
+    if let Some(restriction) = receipt.context.get("read-restriction") {
+        audit_payload["read-restriction"] = restriction.clone();
+    }
+    audit_payload
+}
+
 async fn list_storage_profiles(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
@@ -1508,25 +1533,17 @@ async fn fetch_scan_tasks(
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
     let capability = authorize_table_scan(&state, identity, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
-    let fetched = fetch_scan_tasks_with_capability(&state, &capability, table, request).await?;
+    let fetched = fetch_scan_tasks_with_capability(&state, &capability, &table, request).await?;
     let ident = capability.table().clone();
+    let audit_payload =
+        table_scan_tasks_fetched_audit_payload(&ident, &table, capability.receipt(), &fetched);
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
             "table.scan-tasks-fetched",
             Some(ident.clone()),
             capability.receipt().principal.clone(),
-            json!({
-                "event-type": "table.scan-tasks-fetched",
-                "table": ident,
-                "authorization-receipt": capability.receipt(),
-                "planned-by": fetched.planned_by,
-                "snapshot-id": fetched.snapshot_id,
-                "plan-task": fetched.plan_task,
-                "file-scan-task-count": fetched.file_scan_tasks.len(),
-                "delete-file-count": fetched.delete_files.len(),
-                "child-plan-task-count": fetched.plan_tasks.len(),
-            }),
+            audit_payload,
         )?)
         .await?;
     Ok(Json(FetchScanTasksResponse {
@@ -1545,7 +1562,7 @@ async fn fetch_scan_tasks(
 async fn fetch_scan_tasks_with_capability(
     state: &LakeCatState,
     capability: &TableScanCapability,
-    table: TableRecord,
+    table: &TableRecord,
     request: ApiFetchScanTasksRequest,
 ) -> Result<lakecat_sail::FetchScanTasksPlan, LakeCatHttpError> {
     #[cfg(feature = "sail-local")]
@@ -1578,8 +1595,8 @@ async fn fetch_scan_tasks_with_capability(
         .fetch_scan_tasks(SailFetchScanTasksRequest {
             table: capability.table().clone(),
             principal: capability.receipt().principal.clone(),
-            metadata_location: table.metadata_location,
-            table_metadata: table.metadata,
+            metadata_location: table.metadata_location.clone(),
+            table_metadata: table.metadata.clone(),
             plan_task: request.plan_task,
             required_projection: restriction.effective_projection(&[])?,
             required_filters: restriction.mandatory_filters(),
@@ -1730,6 +1747,9 @@ fn outbox_table_projection(event_type: &str) -> Option<(GraphAction, LineageEven
         "table.created" => Some((GraphAction::Created, LineageEventType::TableCreated)),
         "table.loaded" => Some((GraphAction::Loaded, LineageEventType::TableLoaded)),
         "table.scan-planned" => {
+            Some((GraphAction::PlannedScan, LineageEventType::TableScanPlanned))
+        }
+        "table.scan-tasks-fetched" => {
             Some((GraphAction::PlannedScan, LineageEventType::TableScanPlanned))
         }
         "table.commit" => Some((GraphAction::Committed, LineageEventType::TableCommitted)),
@@ -2748,29 +2768,58 @@ mod tests {
             kind: PrincipalKind::Agent,
         };
         let store = Arc::new(RecordingOutboxStore {
-            events: Mutex::new(vec![OutboxEvent {
-                event_id: "evt-1".to_string(),
-                sink: "lakecat.lineage-and-graph".to_string(),
-                event_type: "table.created".to_string(),
-                payload: json!({
-                    "audit-event-id": "audit-1",
-                    "event-type": "table.created",
-                    "table": table,
-                    "payload": {
-                        "authorization-receipt": {
-                            "principal": principal,
-                            "action": "table-create",
-                            "allowed": true,
-                            "engine": "test",
-                            "policy_hash": null,
-                            "checked_at": chrono::Utc::now(),
+            events: Mutex::new(vec![
+                OutboxEvent {
+                    event_id: "evt-1".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.created".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-1",
+                        "event-type": "table.created",
+                        "table": table,
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "table-create",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            },
+                            "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
+                    event_id: "evt-2".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.scan-tasks-fetched".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-2",
+                        "event-type": "table.scan-tasks-fetched",
+                        "table": table,
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "table-plan-scan",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            },
+                            "read-restriction": {
+                                "allowed-columns": ["event_id"]
+                            },
+                            "storage-location": "file:///tmp/events",
+                            "metadata-location": "file:///tmp/events/metadata/00000.json",
                         },
-                        "metadata-location": "file:///tmp/events/metadata/00000.json",
-                    }
-                }),
-                created_at: chrono::Utc::now(),
-                delivered_at: None,
-            }]),
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+            ]),
             delivered: Mutex::default(),
         });
         let graph = Arc::new(RecordingGraph::default());
@@ -2783,18 +2832,31 @@ mod tests {
                 lineage.clone(),
             );
 
-        assert_eq!(drain_outbox_once(&state, 10).await.unwrap(), 1);
+        assert_eq!(drain_outbox_once(&state, 10).await.unwrap(), 2);
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 1);
+        assert_eq!(graph_events.len(), 2);
         assert_eq!(graph_events[0].action, GraphAction::Created);
         assert_eq!(graph_events[0].event_id.as_deref(), Some("evt-1"));
+        assert_eq!(graph_events[1].action, GraphAction::PlannedScan);
+        assert_eq!(
+            graph_events[1].properties["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
         let lineage_events = lineage.events.lock().await;
-        assert_eq!(lineage_events.len(), 1);
+        assert_eq!(lineage_events.len(), 2);
         assert_eq!(lineage_events[0].event_type, LineageEventType::TableCreated);
         assert_eq!(
+            lineage_events[1].event_type,
+            LineageEventType::TableScanPlanned
+        );
+        assert_eq!(
+            lineage_events[1].payload["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
             store.delivered.lock().await.as_slice(),
-            &["evt-1".to_string()]
+            &["evt-1".to_string(), "evt-2".to_string()]
         );
     }
 
@@ -4422,6 +4484,71 @@ mod tests {
             payload["read-restriction"]
         );
         assert_eq!(payload["scan-task-count"], serde_json::json!(1));
+    }
+
+    #[test]
+    fn scan_tasks_fetched_audit_payload_surfaces_policy_context() {
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let table = TableRecord::new(
+            ident.clone(),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({ "format-version": 3 }),
+            Principal::anonymous(),
+        );
+        let receipt = AuthorizationReceipt {
+            principal: Principal::new("did:example:agent", PrincipalKind::Agent).unwrap(),
+            action: CatalogAction::TablePlanScan,
+            table: Some(ident.clone()),
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: Some("policy-hash".to_string()),
+            context: serde_json::json!({
+                "read-restriction": {
+                    "allowed-columns": ["event_id"],
+                    "row-predicate": {
+                        "type": "eq",
+                        "term": "event_id",
+                        "value": "evt-1"
+                    }
+                }
+            }),
+            checked_at: chrono::Utc::now(),
+        };
+        let fetched = lakecat_sail::FetchScanTasksPlan {
+            planned_by: "lakecat-sail".to_string(),
+            plan_task: "lakecat:plan:abc".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![serde_json::json!({"file": "events.parquet"})],
+            delete_files: vec![serde_json::json!({"file": "events-delete.parquet"})],
+            plan_tasks: vec![serde_json::json!({"task": 2})],
+            residual_filter: None,
+        };
+
+        let payload = table_scan_tasks_fetched_audit_payload(&ident, &table, &receipt, &fetched);
+        assert_eq!(
+            payload["storage-location"],
+            serde_json::json!("file:///tmp/events")
+        );
+        assert_eq!(
+            payload["metadata-location"],
+            serde_json::json!("file:///tmp/events/metadata/00000.json")
+        );
+        assert_eq!(
+            payload["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            payload["authorization-receipt"]["context"]["read-restriction"],
+            payload["read-restriction"]
+        );
+        assert_eq!(payload["file-scan-task-count"], serde_json::json!(1));
+        assert_eq!(payload["delete-file-count"], serde_json::json!(1));
+        assert_eq!(payload["child-plan-task-count"], serde_json::json!(1));
     }
 
     #[test]

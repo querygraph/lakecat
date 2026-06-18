@@ -172,11 +172,13 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
      *Started: scan and credential-vend receipts now carry `read-restriction`
      with allowed columns and policy hashes; `table.scan-planned` audit/outbox
      payloads surface the effective restriction plus storage/metadata locations
-     for OpenLineage and graph consumers; governed credential-vend receipts are
-     marked as raw-credential exceptions, and the
-     `credentials.vend-attempted` audit/outbox payload surfaces the same
-     restriction and exception marker at top level so consumers can distinguish
-     raw credential exceptions from the preferred Sail-planned read path.*
+     for OpenLineage and graph consumers; `table.scan-tasks-fetched` now
+     surfaces the same governed context and routes through the scan projection
+     sink path; governed credential-vend receipts are marked as raw-credential
+     exceptions, and the `credentials.vend-attempted` audit/outbox payload
+     surfaces the same restriction and exception marker at top level so
+     consumers can distinguish raw credential exceptions from the preferred
+     Sail-planned read path.*
   3. Apply it as a mandatory projection/filter through a Sail-planned read that
      flows through `LakeCatCatalogProvider`; re-apply on `fetch-scan-tasks`.
      *Started: scan planning intersects client projection with allowed columns,
