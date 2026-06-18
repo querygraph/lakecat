@@ -6,12 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `8975d55 Project table commits to graph`.
-- Current working slice: principal graph projection from the durable outbox.
+  `b36231e Project principals to graph`.
+- Paused after pushing principal graph projection from the durable outbox.
   Non-anonymous principals resolved from outbox authorization receipts now emit
   stable catalog-facing `Principal` graph events before the domain-specific
   graph projection, giving QueryGraph actor anchors for replayed catalog events.
-- Local verification for the current slice is green:
+- Local verification for the pushed slice was green:
   `cargo fmt -p lakecat-graph -p lakecat-service -p lakecat-api -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-graph`;
