@@ -472,6 +472,8 @@ struct MemoryState {
     namespaces: BTreeMap<String, BTreeSet<Namespace>>,
     tables: BTreeMap<String, TableRecord>,
     commits: Vec<TableCommitRecord>,
+    audit_events: Vec<CatalogAuditEvent>,
+    outbox_events: Vec<OutboxEvent>,
     idempotency: BTreeMap<String, IdempotencyReplay>,
     storage_profiles: BTreeMap<String, StorageProfile>,
     policy_bindings: BTreeMap<String, PolicyBinding>,
@@ -810,6 +812,50 @@ impl CatalogStore for MemoryCatalogStore {
             table,
         ))
     }
+
+    async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {
+        let event_id = audit_event_id(&event)?;
+        let outbox_payload = audit_outbox_payload(&event_id, &event);
+        let outbox_event = outbox_event_from_payload(&outbox_payload, event.created_at)?;
+        let mut state = self.state.write().await;
+        state.audit_events.push(event);
+        state.outbox_events.push(outbox_event);
+        Ok(())
+    }
+
+    async fn pending_outbox_events(
+        &self,
+        sink: Option<&str>,
+        limit: usize,
+    ) -> LakeCatResult<Vec<OutboxEvent>> {
+        let state = self.state.read().await;
+        Ok(state
+            .outbox_events
+            .iter()
+            .filter(|event| event.delivered_at.is_none())
+            .filter(|event| sink.is_none_or(|sink| event.sink == sink))
+            .take(limit)
+            .cloned()
+            .collect())
+    }
+
+    async fn mark_outbox_delivered(&self, event_ids: &[String]) -> LakeCatResult<usize> {
+        if event_ids.is_empty() {
+            return Ok(0);
+        }
+        let mut state = self.state.write().await;
+        let delivered_at = Utc::now();
+        let mut delivered = 0usize;
+        for event in &mut state.outbox_events {
+            if event.delivered_at.is_none()
+                && event_ids.iter().any(|event_id| event_id == &event.event_id)
+            {
+                event.delivered_at = Some(delivered_at);
+                delivered += 1;
+            }
+        }
+        Ok(delivered)
+    }
 }
 
 pub fn table_ident(
@@ -829,6 +875,43 @@ fn table_key(ident: &TableIdent) -> String {
         "{}\u{1f}{}\u{1f}{}",
         ident.warehouse, ident.namespace, ident.name
     )
+}
+
+fn audit_event_id(event: &CatalogAuditEvent) -> LakeCatResult<String> {
+    content_hash_json(&serde_json::json!({
+        "event-type": &event.event_type,
+        "table": &event.table,
+        "principal": &event.principal,
+        "request-hash": &event.request_hash,
+        "payload": &event.payload,
+        "created-at": event.created_at.to_rfc3339(),
+    }))
+}
+
+fn audit_outbox_payload(event_id: &str, event: &CatalogAuditEvent) -> Value {
+    serde_json::json!({
+        "audit-event-id": event_id,
+        "event-type": &event.event_type,
+        "table": &event.table,
+        "payload": &event.payload,
+    })
+}
+
+fn outbox_event_from_payload(
+    payload: &Value,
+    created_at: DateTime<Utc>,
+) -> LakeCatResult<OutboxEvent> {
+    let event_type = payload["event-type"]
+        .as_str()
+        .ok_or_else(|| LakeCatError::Internal("outbox payload missing event-type".to_string()))?;
+    Ok(OutboxEvent {
+        event_id: content_hash_json(payload)?,
+        sink: "lakecat.lineage-and-graph".to_string(),
+        event_type: event_type.to_string(),
+        payload: payload.clone(),
+        created_at,
+        delivered_at: None,
+    })
 }
 
 fn storage_profile_key(warehouse: &WarehouseName, profile_id: &str) -> String {
@@ -955,6 +1038,80 @@ fn policy_bindings_for_table<'a>(
         .collect::<Vec<_>>();
     bindings.sort_by(|left, right| left.policy_id.cmp(&right.policy_id));
     bindings
+}
+
+#[cfg(test)]
+mod memory_tests {
+    use lakecat_core::{Principal, TableName};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn memory_store_records_and_marks_audit_outbox_events() {
+        let store = MemoryCatalogStore::new();
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        store
+            .record_audit_event(
+                CatalogAuditEvent::new(
+                    "querygraph.bootstrap",
+                    Some(ident.clone()),
+                    Principal::anonymous(),
+                    serde_json::json!({
+                        "event-type": "querygraph.bootstrap",
+                        "table": ident,
+                        "authorization-receipt": {
+                            "engine": "typesec",
+                            "allowed": true,
+                            "action": "querygraph.bootstrap"
+                        },
+                        "manifest-hash": "lakecat:test"
+                    }),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let pending = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].sink, "lakecat.lineage-and-graph");
+        assert_eq!(pending[0].event_type, "querygraph.bootstrap");
+        assert_eq!(
+            pending[0].payload["payload"]["authorization-receipt"]["engine"],
+            serde_json::json!("typesec")
+        );
+        assert_eq!(
+            pending[0].payload["payload"]["manifest-hash"],
+            serde_json::json!("lakecat:test")
+        );
+
+        let unrelated = store
+            .pending_outbox_events(Some("lakecat.unrelated"), 10)
+            .await
+            .unwrap();
+        assert!(unrelated.is_empty());
+
+        let event_ids = pending
+            .iter()
+            .map(|event| event.event_id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(store.mark_outbox_delivered(&event_ids).await.unwrap(), 1);
+        assert!(
+            store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(store.mark_outbox_delivered(&event_ids).await.unwrap(), 0);
+    }
 }
 
 #[cfg(feature = "turso-local")]

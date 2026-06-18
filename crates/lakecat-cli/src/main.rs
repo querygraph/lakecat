@@ -418,6 +418,7 @@ async fn qglake_fixture(
     verify_qglake_bootstrap_bundle(&bundle, &namespace, &table)?;
     write_bootstrap_bundle(&output, &bundle, &verification)?;
     let drain = drain_lineage_outbox(&catalog, principal).await?;
+    verify_qglake_lineage_drain(&drain)?;
     println!("drained {} lineage/outbox event(s)", drain.delivered);
     Ok(())
 }
@@ -727,6 +728,15 @@ fn verify_qglake_scan_plan(plan: &PlanTableScanResponse) -> lakecat_core::LakeCa
             "qglake governed scan row predicate was not enforced as expected: {}",
             extension["read-restriction"]["row-predicate"].clone()
         )));
+    }
+    Ok(())
+}
+
+fn verify_qglake_lineage_drain(drain: &LineageDrainResponse) -> lakecat_core::LakeCatResult<()> {
+    if drain.delivered == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain delivered no outbox events".to_string(),
+        ));
     }
     Ok(())
 }
@@ -1543,6 +1553,19 @@ mod tests {
         };
 
         verify_qglake_scan_plan(&plan).unwrap();
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_requires_delivered_events() {
+        let err = verify_qglake_lineage_drain(&LineageDrainResponse { delivered: 0 })
+            .expect_err("QGLake lineage drain should reject zero deliveries");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain delivered no outbox events")
+        );
+
+        verify_qglake_lineage_drain(&LineageDrainResponse { delivered: 2 })
+            .expect("QGLake lineage drain should accept delivered outbox events");
     }
 
     fn qglake_querygraph_projection(

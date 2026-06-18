@@ -6,25 +6,26 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `7ff0316 Project QueryGraph bootstrap lineage`.
-- Current working slice: governed lineage drain for QGLake acceptance.
-  LakeCat now exposes a `lineage.read`-authorized
-  `/management/v1/lineage/drain` endpoint, `lakecat-cli lineage-drain`, and
-  `lakecat-cli qglake-fixture` now drains the lineage/outbox stream after
-  writing the verified QueryGraph bootstrap bundle.
+  working changes: `ae38fba Add governed lineage drain`.
+- Current working slice: memory audit/outbox parity plus QGLake drain
+  verification. The embedded `MemoryCatalogStore` now records catalog audit
+  events into the same `lakecat.lineage-and-graph` outbox envelope used by the
+  Turso store, and `lakecat-cli qglake-fixture` now fails if the governed
+  lineage drain delivers zero events.
 - Local verification for the current slice is green:
-  `cargo test -p lakecat-cli lineage -- --nocapture`;
-  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox -- --nocapture`;
+  `cargo fmt -p lakecat-store -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-store memory_store_records_and_marks_audit_outbox_events -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --nocapture`;
   `cargo test -p lakecat-cli qglake -- --nocapture`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox -- --nocapture`;
   `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `git diff --check`;
   `cargo test -p lakecat-cli`;
   `cargo test -p lakecat-service`;
-  `cargo test -p lakecat-service --all-features`;
   `cargo test -p lakecat-store --features turso-local`;
-  `cargo test --workspace --all-features`. The final workspace all-features
-  rerun completed green with sibling Grust `grust-cypher` dead-code warnings
-  around the unused `CypherReturnScalarExpression` enum variants;
-  `git diff --check`.
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -69,6 +70,10 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added embedded memory-store audit/outbox delivery parity for explicit catalog
+  audit events, matching the Turso lineage-and-graph outbox envelope.
+- Made `lakecat-cli qglake-fixture` reject a lineage drain that delivers zero
+  events, turning the QGLake acceptance run into a real replay check.
 - Added a governed lineage-drain endpoint and CLI command, and wired
   `lakecat-cli qglake-fixture` to drain lineage/outbox events after writing the
   verified QueryGraph bootstrap bundle.

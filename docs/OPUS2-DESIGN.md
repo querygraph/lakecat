@@ -214,7 +214,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   output events carrying the bootstrap authorization/request-identity payload
   for QueryGraph replay; LakeCat now exposes a governed lineage-drain
   management endpoint and `lakecat-cli qglake-fixture` drains the outbox after
-  writing the verified bootstrap bundle;
+  writing the verified bootstrap bundle, failing the fixture if the drain
+  delivered zero events; the embedded memory store now records audit events into
+  the same lineage-and-graph outbox envelope so default local acceptance runs
+  exercise real replay rather than a no-op drain;
   `/querygraph/v1/bootstrap` now exports the stored table policy bindings in
   each table projection and hashes them in the manifest, so QueryGraph imports
   the actual LakeCat policy documents used for governed planning.*

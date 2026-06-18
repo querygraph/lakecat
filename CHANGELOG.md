@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added embedded memory-store audit/outbox delivery parity for catalog audit
+  events and made `lakecat-cli qglake-fixture` fail if the lineage drain
+  delivers zero events, so local QGLake acceptance proves replay actually
+  happened.
 - Added a governed `/management/v1/lineage/drain` endpoint plus
   `lakecat-cli lineage-drain`, and made `lakecat-cli qglake-fixture` drain the
   lineage/outbox stream after writing the verified QueryGraph bootstrap bundle.

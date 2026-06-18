@@ -506,7 +506,7 @@ append a dated entry per slice; keep the finding-status table current.
 | 7 | Plan ↔ implementation drift | **PARTIAL** | architecture and OPUS working-plan docs now track the committed Turso CAS/object-write/outbox/OpenLineage/storage-profile, in-process Sail provider, TypeSec 0.8.0, and Grust 0.9.0 + Cypher slices; remaining drift risk is around production credential issuance and QueryGraph end-to-end acceptance |
 | 8 | Grust graph is a placeholder taxonomy | **STARTED** | The reusable LakeCat graph envelope importer and catalog-event taxonomy helper now live in Grust; LakeCat's `grust-local` sink adapts outbox events into Grust-owned event/warehouse/namespace/table graph projections, and a boundary test verifies Grust Cypher can consume the projection. Richer graph schemas, traversal, and query behavior remain Grust work. |
 | 9 | `list_namespaces` fabricates `default` | **CLOSED** | memory and Turso stores return an empty list until namespace creation |
-| 10 | Side effects coupled to request path | **CLOSED** | Turso outbox and service drain/projection API exist; catalog handlers record durable events and no longer emit graph/lineage inline |
+| 10 | Side effects coupled to request path | **CLOSED** | Turso outbox, embedded memory audit/outbox parity, and service drain/projection API exist; catalog handlers record events for replay and no longer emit graph/lineage inline |
 | 11 | Plan tokens unauthenticated / leak paths | **CLOSED** | new structured Sail plan-task tokens are table-bound, path re-validated, and HMAC-signed; legacy unsigned structured tokens remain decodable for compatibility |
 | 12 | v4 = JSON passthrough, thin coverage | **OPEN (by design)** | keep behind capability flag |
 
@@ -527,8 +527,9 @@ writing bounds.
 **Status: implemented for the local durable spine, partial P1 overall.** Added
 `lakecat-store/turso-local` with a Turso `TursoCatalogStore` for namespaces, table
 records, metadata pointer log, idempotency records, audit events, and outbox
-events. The service binary can use it when built with `turso-local` and
-`LAKECAT_TURSO_PATH` is set. Since the first Turso slice, LakeCat now writes local
+events. The embedded memory store now mirrors audit-event outbox delivery for
+default local acceptance runs, while the service binary can use Turso when built
+with `turso-local` and `LAKECAT_TURSO_PATH` is set. Since the first Turso slice, LakeCat now writes local
 `file://` metadata objects when the Sail-facing commit plan carries new metadata,
 advances table pointers with expected-previous compare-and-swap, persists
 authorization/audit/outbox receipts across privileged catalog paths, and drains
