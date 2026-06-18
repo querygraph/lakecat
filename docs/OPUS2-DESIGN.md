@@ -264,21 +264,21 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   *Started: governed server, project, and warehouse list/upsert management
   endpoints now persist durable `ServerRecord`, `ProjectRecord`, and
   `WarehouseRecord` values in memory and Turso stores; `ProjectRecord` can now
-  attach to a stored `ServerRecord`, and stores reject attachments to missing
-  servers; `project.upserted` / `warehouse.upserted` outbox replay emits
-  catalog-facing Project and Warehouse graph anchors; server writes emit audited
-  `server.*` events while leaving reusable graph hierarchy work to Grust;
-  management routes now use the requested warehouse instead of the configured
-  default, and Iceberg REST routes now accept a warehouse prefix only after
-  resolving a durable `WarehouseRecord`, while keeping the unprefixed
-  default-warehouse compatibility path; credential-vend attempts with
-  fine-grained restrictions now fail closed into governed Sail-planned reads
-  before any secret resolver is called; governed view list/upsert management
-  endpoints now persist durable `ViewRecord` values in memory and Turso and emit
-  audited `view.*` events; QueryGraph bootstrap now exports those stored views
-  with manifest-covered OSI hashes, view-aware graph edges, and OpenLineage view
-  counts. Standard Iceberg view REST semantics, warehouse-to-project validation,
-  and richer project-scoped routing remain pending.*
+  attach to a stored `ServerRecord`, stores reject project attachments to missing
+  servers, and stores reject warehouse attachments to missing projects;
+  `project.upserted` / `warehouse.upserted` outbox replay emits catalog-facing
+  Project and Warehouse graph anchors; server writes emit audited `server.*`
+  events while leaving reusable graph hierarchy work to Grust; management routes
+  now use the requested warehouse instead of the configured default, and Iceberg
+  REST routes now accept a warehouse prefix only after resolving a durable
+  `WarehouseRecord`, while keeping the unprefixed default-warehouse compatibility
+  path; credential-vend attempts with fine-grained restrictions now fail closed
+  into governed Sail-planned reads before any secret resolver is called; governed
+  view list/upsert management endpoints now persist durable `ViewRecord` values
+  in memory and Turso and emit audited `view.*` events; QueryGraph bootstrap now
+  exports those stored views with manifest-covered OSI hashes, view-aware graph
+  edges, and OpenLineage view counts. Standard Iceberg view REST semantics and
+  richer project-scoped routing remain pending.*
 - **P6 — Reproducibility (F10) + typed v4 (F9).** Land the Sail helper commits
   upstream (or pin a published Sail) and re-enable automatic CI; converge on
   typed v4 metadata once `sail-iceberg` provides it.

@@ -4579,6 +4579,21 @@ mod tests {
     #[tokio::test]
     async fn prefixed_catalog_routes_target_requested_warehouse() {
         let app = test_app();
+        let upsert_project = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/projects/default")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "display-name": "Default Project"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert_project).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
         for (warehouse, location, metadata_location, uuid) in [
             (
                 "local",
@@ -5459,6 +5474,21 @@ mod tests {
     #[tokio::test]
     async fn management_warehouses_are_durable_management_entities() {
         let app = test_app();
+        let upsert_project = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/projects/default")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "display-name": "Default Project"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert_project).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
         let upsert = Request::builder()
             .method(Method::PUT)
             .uri("/management/v1/warehouses/local")
@@ -5541,7 +5571,7 @@ mod tests {
             .header("x-lakecat-principal", "operator@example.com")
             .body(Body::empty())
             .unwrap();
-        let response = app.oneshot(list).await.unwrap();
+        let response = app.clone().oneshot(list).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
@@ -5552,6 +5582,22 @@ mod tests {
             body["warehouses"][1]["warehouse"],
             serde_json::json!("other")
         );
+
+        let missing_project = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/orphaned")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "project-id": "missing-project",
+                    "storage-root": "file:///tmp/orphaned"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(missing_project).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

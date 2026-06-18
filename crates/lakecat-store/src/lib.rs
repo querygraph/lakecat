@@ -975,6 +975,12 @@ impl CatalogStore for MemoryCatalogStore {
     async fn upsert_warehouse(&self, warehouse: WarehouseRecord) -> LakeCatResult<WarehouseRecord> {
         warehouse.validate()?;
         let mut state = self.state.write().await;
+        if !state.projects.contains_key(&warehouse.project_id) {
+            return Err(LakeCatError::NotFound {
+                object: "project",
+                name: warehouse.project_id.clone(),
+            });
+        }
         state
             .warehouses
             .insert(warehouse.warehouse.as_str().to_string(), warehouse.clone());
@@ -1449,6 +1455,15 @@ mod memory_tests {
     async fn memory_store_persists_warehouse_records() {
         let store = MemoryCatalogStore::new();
         assert_eq!(store.list_warehouses().await.unwrap(), vec![]);
+        let project = ProjectRecord::new(
+            "default",
+            None,
+            Some("Default Project".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_project(project).await.unwrap();
 
         let warehouse = WarehouseName::new("local").unwrap();
         let record = WarehouseRecord::new(
@@ -1480,6 +1495,20 @@ mod memory_tests {
                 if object == "warehouse" && name == "missing"
         ));
         assert_eq!(store.list_warehouses().await.unwrap(), vec![updated]);
+
+        let missing_project = WarehouseRecord::new(
+            WarehouseName::new("orphaned").unwrap(),
+            "missing-project",
+            Some("file:///tmp/orphaned".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        assert!(matches!(
+            store.upsert_warehouse(missing_project).await,
+            Err(LakeCatError::NotFound { object, name })
+                if object == "project" && name == "missing-project"
+        ));
     }
 
     #[tokio::test]
@@ -2413,6 +2442,22 @@ pub mod turso_store {
         ) -> LakeCatResult<WarehouseRecord> {
             warehouse.validate()?;
             let conn = self.connect()?;
+            let project_exists = {
+                let mut rows = conn
+                    .query(
+                        "select 1 from projects where project_id = ?1 limit 1",
+                        (warehouse.project_id.as_str(),),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                rows.next().await.map_err(turso_error)?.is_some()
+            };
+            if !project_exists {
+                return Err(LakeCatError::NotFound {
+                    object: "project",
+                    name: warehouse.project_id.clone(),
+                });
+            }
             conn.execute(
                 "insert into warehouses (
                     warehouse, project_id, storage_root, record_json, updated_at
@@ -3028,6 +3073,15 @@ pub mod turso_store {
         async fn turso_store_persists_warehouse_records() {
             let store = TursoCatalogStore::in_memory().await.unwrap();
             assert_eq!(store.list_warehouses().await.unwrap(), vec![]);
+            let project = ProjectRecord::new(
+                "default",
+                None,
+                Some("Default Project".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_project(project).await.unwrap();
 
             let warehouse = WarehouseName::new("local").unwrap();
             let record = WarehouseRecord::new(
@@ -3059,6 +3113,20 @@ pub mod turso_store {
                     if object == "warehouse" && name == "missing"
             ));
             assert_eq!(store.list_warehouses().await.unwrap(), vec![updated]);
+
+            let missing_project = WarehouseRecord::new(
+                WarehouseName::new("orphaned").unwrap(),
+                "missing-project",
+                Some("file:///tmp/orphaned".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            assert!(matches!(
+                store.upsert_warehouse(missing_project).await,
+                Err(LakeCatError::NotFound { object, name })
+                    if object == "project" && name == "missing-project"
+            ));
         }
 
         #[tokio::test]

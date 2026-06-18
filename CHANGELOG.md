@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Enforced warehouse-to-project attachment in memory and Turso stores, with
+  governed warehouse management rejecting warehouses that point at missing
+  projects while preserving standard Iceberg table access routes.
 - Added optional `server-id` attachment for durable project records, with
   memory/Turso validation that rejects projects pointing at missing servers and
   management responses that expose the Server > Project link.
