@@ -287,9 +287,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   policy bindings, projects, servers, storage profiles, and warehouses replay
   into LakeCat OpenLineage receipts without adding list-specific graph nodes in
   LakeCat, and lineage-drain summaries expose compact list counts/scope for
-  QueryGraph verification; QGLake acceptance now performs a governed
-  policy-list read and requires matching `policy-binding.listed` replay
-  evidence; table events continue through the Grust-owned event graph adapter.*
+  QueryGraph verification; QGLake acceptance now performs governed policy-list
+  and storage-profile-list reads and requires matching `policy-binding.listed`
+  and `storage-profile.listed` replay evidence; table events continue through
+  the Grust-owned event graph adapter.*
 - **P5 — Tenancy (F7) + production credentials (F8).** Project/Warehouse as
   stored entities with management endpoints; real Vault/AWS/GCP/Azure resolvers
   behind the TypeSec gate. Needed for multi-tenant deployment, not for the demo.

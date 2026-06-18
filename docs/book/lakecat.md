@@ -929,8 +929,9 @@ create list-specific graph nodes in LakeCat; Grust owns the reusable hierarchy
 and traversal model. The drain response lifts their counts and management scope
 into compact fields, so QueryGraph can verify the control-plane read evidence
 without opening the raw lineage payload. The QGLake acceptance workflow now
-performs a governed policy-list read before bootstrap and rejects a drain that
-does not replay matching `policy-binding.listed` evidence.
+performs governed policy-list and storage-profile-list reads before bootstrap
+and rejects a drain that does not replay matching `policy-binding.listed` and
+`storage-profile.listed` evidence.
 
 The end-to-end result is a chain:
 

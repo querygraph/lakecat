@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made QGLake acceptance exercise the governed storage-profile-list management
+  read and require lineage-drain replay to expose matching compact
+  `storage-profile.listed` count/scope evidence alongside policy-list evidence.
 - Added durable `GOAL.md` guidance that keeps QueryGraph's OSI, OpenLineage,
   Croissant, ODRL, and TypeSec composition as a catalog-facing LakeCat contract
   plus richer QueryGraph integration layer, with local verification before
