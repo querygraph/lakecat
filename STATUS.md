@@ -6,6 +6,21 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `5dc9884 Verify QGLake OpenLineage envelope`.
+- Paused after pushing the QGLake OpenLineage envelope proof slice. The
+  `lakecat-cli qglake-fixture` bootstrap verifier now rejects QueryGraph
+  bundles whose OpenLineage output is not produced by LakeCat, does not use the
+  expected OpenLineage schema URL, or whose semantic-bundle table/view counts do
+  not match the exported bundle.
+- Local verification for the pushed QGLake OpenLineage envelope proof slice was
+  green:
+  `cargo fmt -p lakecat-cli -p lakecat-querygraph -- --check`;
+  `cargo test -p lakecat-cli qglake_bootstrap`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-querygraph`;
+  `git diff --check`.
+- This status commit records the pushed QGLake OpenLineage envelope proof slice.
+- Previous implementation slice:
   `b08a2e7 Mirror QueryGraph standards in OpenLineage`.
 - Paused after pushing the QueryGraph OpenLineage standards facet slice. The
   QueryGraph bootstrap OpenLineage `queryGraph_semanticBundle` facet now carries
