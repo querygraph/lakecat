@@ -7,11 +7,21 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `fe03c29 Add durable project management`.
-- Paused after pushing durable project management entities. LakeCat now has
-  governed project list/upsert management endpoints, memory/Turso
-  `ProjectRecord` persistence, and `project.upserted` outbox replay to a
-  catalog-facing `Project` graph anchor for QueryGraph tenancy bootstrap.
-- Local verification for the pushed slice was green:
+- Current working slice adds multi-warehouse management-path routing. Management
+  endpoints that carry `{warehouse}` now route by the requested warehouse instead
+  of rejecting everything except the configured default warehouse; Iceberg REST
+  table access remains default-warehouse routed for compatibility.
+- Local verification for this working slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-service management_warehouses_are_durable_management_entities -- --nocapture`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- Local verification for the previous pushed slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service`;
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
@@ -88,6 +98,9 @@ Updated: 2026-06-18
 
 ## Completed In Latest Implementation Slice
 
+- Allowed governed warehouse management endpoints to manage a second durable
+  warehouse from the same service instead of rejecting non-default warehouse
+  path parameters.
 - Added governed project list/upsert management endpoints and a
   `ProjectManage` capability action.
 - Added durable `ProjectRecord` persistence to memory and Turso stores.

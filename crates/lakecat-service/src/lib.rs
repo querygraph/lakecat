@@ -2417,17 +2417,10 @@ fn read_restriction_from_policy_bindings(
 }
 
 fn management_warehouse(
-    state: &LakeCatState,
+    _state: &LakeCatState,
     warehouse: String,
 ) -> Result<WarehouseName, LakeCatHttpError> {
     let warehouse = WarehouseName::new(warehouse)?;
-    if warehouse != state.warehouse {
-        return Err(LakeCatError::InvalidArgument(format!(
-            "management warehouse {} does not match configured warehouse {}",
-            warehouse, state.warehouse
-        ))
-        .into());
-    }
     Ok(warehouse)
 }
 
@@ -4812,20 +4805,51 @@ mod tests {
             serde_json::json!("local")
         );
 
-        let wrong_warehouse = Request::builder()
+        let other_warehouse = Request::builder()
             .method(Method::PUT)
             .uri("/management/v1/warehouses/other")
             .header("content-type", "application/json")
             .header("x-lakecat-principal", "operator@example.com")
             .body(Body::from(
                 serde_json::json!({
-                    "project-id": "default"
+                    "project-id": "default",
+                    "storage-root": "file:///tmp/lakecat-other",
+                    "properties": {
+                        "region": "other"
+                    }
                 })
                 .to_string(),
             ))
             .unwrap();
-        let response = app.oneshot(wrong_warehouse).await.unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let response = app.clone().oneshot(other_warehouse).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["warehouse"], serde_json::json!("other"));
+        assert_eq!(
+            body["storage-root"],
+            serde_json::json!("file:///tmp/lakecat-other")
+        );
+
+        let list = Request::builder()
+            .method(Method::GET)
+            .uri("/management/v1/warehouses")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(list).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["warehouses"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            body["warehouses"][1]["warehouse"],
+            serde_json::json!("other")
+        );
     }
 
     #[tokio::test]

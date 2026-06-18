@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Allowed management APIs to route by the requested warehouse instead of the
+  configured default warehouse, so operators can manage multiple durable
+  warehouses from one LakeCat service.
 - Added durable project records with governed management list/upsert endpoints,
   Turso persistence, and outbox-drained `Project` graph anchors for QueryGraph
   tenancy bootstrap.
