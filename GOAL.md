@@ -39,6 +39,32 @@ Before choosing or implementing a slice, read the current state from:
 If these conflict, prefer the live code and the newest status/design entry, then
 update the docs as part of the logical unit.
 
+## Agent Guidance
+
+Treat the guidance in `AGENTS.md` as part of this goal, not as separate
+session-only advice. Keep this file and `AGENTS.md` aligned when the operating
+model changes.
+
+- LakeCat is the Rust Iceberg-compatible catalog foundation for QueryGraph.
+  Keep its boundary thin: identity, tenancy, Iceberg REST compatibility,
+  metadata-pointer state, policy gates, and integration events belong here.
+- Push reusable engine, graph, and governance work into Sail, Grust, and
+  TypeSec respectively, then integrate those capabilities through LakeCat's
+  catalog-facing seams.
+- Preserve Iceberg compatibility first. Standard clients should keep using
+  standard catalog behavior; graph, lineage, policy, semantic, and agent state
+  must remain derived control-plane evidence rather than custom Iceberg
+  metadata required for normal access.
+- Use QueryGraph as the end-to-end target. LakeCat should make OSI,
+  OpenLineage, Croissant, ODRL, TypeSec, and QGLake evidence replayable without
+  turning the catalog core into the full QueryGraph semantic layer.
+- Keep durable local catalog work on the Rust `turso` crate unless explicitly
+  directed otherwise, while preserving the portability of the `CatalogStore`
+  contract.
+- After each logical unit, update `CHANGELOG.md`, commit only the related
+  files, and keep `STATUS.md` current when the unit changes the working state
+  or next-step guidance.
+
 ## Repo Boundaries
 
 - Push reusable Iceberg format, manifest, scan-planning, pruning, delete

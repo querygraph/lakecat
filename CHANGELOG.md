@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Mirrored the LakeCat `AGENTS.md` operating guidance into `GOAL.md` so the
+  long-running goal permanently carries the thin catalog boundary, sibling-repo
+  placement rules, QueryGraph target, Turso preference, and commit/status
+  discipline.
 - Added a durable, store-assigned `view-version` counter to LakeCat view
   records and responses, and surfaced it through QueryGraph view graph, OSI,
   and OpenLineage handoff artifacts as the first step toward full Iceberg view
