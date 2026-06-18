@@ -45,6 +45,11 @@ async fn run() -> lakecat_core::LakeCatResult<()> {
         } => bootstrap_export(catalog, output, principal).await,
         Command::Config { catalog, principal } => config(catalog, principal).await,
         Command::LineageDrain { catalog, principal } => lineage_drain(catalog, principal).await,
+        Command::QglakeVerifyReplay {
+            bundle,
+            drain,
+            principal,
+        } => qglake_verify_replay(bundle, drain, principal),
         Command::PolicyList {
             catalog,
             warehouse,
@@ -129,6 +134,7 @@ async fn run() -> lakecat_core::LakeCatResult<()> {
             location,
             metadata_location,
             output,
+            drain_output,
             principal,
         } => {
             qglake_fixture(
@@ -139,6 +145,7 @@ async fn run() -> lakecat_core::LakeCatResult<()> {
                 location,
                 metadata_location,
                 output,
+                drain_output,
                 principal,
             )
             .await
@@ -225,6 +232,30 @@ fn write_bootstrap_bundle(
     Ok(())
 }
 
+fn write_json_file<T: Serialize>(
+    output: &PathBuf,
+    value: &T,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let pretty = serde_json::to_vec_pretty(value).map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!("failed to encode {label}: {err}"))
+    })?;
+    if let Some(parent) = output.parent().filter(|path| !path.as_os_str().is_empty()) {
+        fs::create_dir_all(parent).map_err(|err| {
+            lakecat_core::LakeCatError::Internal(format!(
+                "failed to create output directory {}: {err}",
+                parent.display()
+            ))
+        })?;
+    }
+    fs::write(output, pretty).map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to write {label} {}: {err}",
+            output.display()
+        ))
+    })
+}
+
 async fn config(catalog: String, principal: Option<String>) -> lakecat_core::LakeCatResult<()> {
     let config = get_json::<CatalogConfigResponse>(
         &catalog,
@@ -257,6 +288,24 @@ async fn lineage_drain(
     if !response.event_types.is_empty() {
         println!("event types {}", response.event_types.join(","));
     }
+    Ok(())
+}
+
+fn qglake_verify_replay(
+    bundle_path: PathBuf,
+    drain_path: PathBuf,
+    principal: Option<String>,
+) -> lakecat_core::LakeCatResult<()> {
+    let bundle =
+        read_typed_json_file::<QueryGraphBootstrap>(&bundle_path, "QueryGraph bootstrap bundle")?;
+    let drain =
+        read_typed_json_file::<LineageDrainResponse>(&drain_path, "lineage drain response")?;
+    let verification = verify_qglake_replay_artifacts(&bundle, &drain, principal.as_deref())?;
+    println!("verified qglake replay evidence");
+    println!("bundle {}", verification.bundle_hash);
+    println!("querygraph import {}", verification.querygraph_import_hash);
+    println!("tables {}", verification.table_count);
+    println!("views {}", verification.view_count);
     Ok(())
 }
 
@@ -500,6 +549,7 @@ async fn qglake_fixture(
     location: String,
     metadata_location: String,
     output: PathBuf,
+    drain_output: Option<PathBuf>,
     principal: Option<String>,
 ) -> lakecat_core::LakeCatResult<()> {
     let principal = principal.as_deref();
@@ -662,6 +712,10 @@ async fn qglake_fixture(
         principal,
         qglake_policy_binding_count(&bundle),
     )?;
+    if let Some(drain_output) = drain_output {
+        write_json_file(&drain_output, &drain, "lineage drain response")?;
+        println!("wrote lineage drain response to {}", drain_output.display());
+    }
     println!("drained {} lineage/outbox event(s)", drain.delivered);
     Ok(())
 }
@@ -2225,6 +2279,22 @@ fn verify_qglake_lineage_drain(
     Ok(())
 }
 
+fn verify_qglake_replay_artifacts(
+    bundle: &QueryGraphBootstrap,
+    drain: &LineageDrainResponse,
+    principal: Option<&str>,
+) -> lakecat_core::LakeCatResult<QueryGraphBootstrapVerification> {
+    let verification = bundle.verify_manifest()?;
+    verify_qglake_querygraph_import_contract(bundle)?;
+    verify_qglake_lineage_drain(
+        drain,
+        &verification,
+        principal,
+        qglake_policy_binding_count(bundle),
+    )?;
+    Ok(verification)
+}
+
 fn verify_qglake_view_replay(
     drain: &LineageDrainResponse,
     verification: &QueryGraphBootstrapVerification,
@@ -2937,6 +3007,11 @@ enum Command {
         catalog: String,
         principal: Option<String>,
     },
+    QglakeVerifyReplay {
+        bundle: PathBuf,
+        drain: PathBuf,
+        principal: Option<String>,
+    },
     PolicyList {
         catalog: String,
         warehouse: String,
@@ -2976,6 +3051,7 @@ enum Command {
         location: String,
         metadata_location: String,
         output: PathBuf,
+        drain_output: Option<PathBuf>,
         principal: Option<String>,
     },
 }
@@ -2990,6 +3066,7 @@ impl Command {
             "bootstrap-export" => parse_bootstrap_export(args),
             "config" => parse_config(args),
             "lineage-drain" => parse_lineage_drain(args),
+            "qglake-verify-replay" => parse_qglake_verify_replay(args),
             "policy-list" => parse_policy_list(args),
             "policy-upsert" => parse_policy_upsert(args),
             "storage-profile-list" => parse_storage_profile_list(args),
@@ -3053,6 +3130,36 @@ fn parse_lineage_drain(args: impl Iterator<Item = String>) -> lakecat_core::Lake
         }
     }
     Ok(Command::LineageDrain { catalog, principal })
+}
+
+fn parse_qglake_verify_replay(
+    args: impl Iterator<Item = String>,
+) -> lakecat_core::LakeCatResult<Command> {
+    let mut bundle = None;
+    let mut drain = None;
+    let mut principal = None;
+    let mut args = args.peekable();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--bundle" => bundle = Some(PathBuf::from(next_arg(&mut args, "--bundle")?)),
+            "--drain" => drain = Some(PathBuf::from(next_arg(&mut args, "--drain")?)),
+            "--principal" => principal = Some(next_arg(&mut args, "--principal")?),
+            _ => return Err(usage_error()),
+        }
+    }
+    Ok(Command::QglakeVerifyReplay {
+        bundle: bundle.ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(
+                "missing required --bundle for qglake-verify-replay".to_string(),
+            )
+        })?,
+        drain: drain.ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(
+                "missing required --drain for qglake-verify-replay".to_string(),
+            )
+        })?,
+        principal,
+    })
 }
 
 fn parse_policy_list(args: impl Iterator<Item = String>) -> lakecat_core::LakeCatResult<Command> {
@@ -3182,6 +3289,7 @@ fn parse_qglake_fixture(
     let mut location = "file:///tmp/lakecat-qglake/events".to_string();
     let mut metadata_location = "file:///tmp/lakecat-qglake/events/metadata/00000.json".to_string();
     let mut output = PathBuf::from("target/qglake/lakecat-bootstrap.json");
+    let mut drain_output = None;
     let mut args = args.peekable();
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -3195,6 +3303,9 @@ fn parse_qglake_fixture(
                 metadata_location = next_arg(&mut args, "--metadata-location")?
             }
             "--output" => output = PathBuf::from(next_arg(&mut args, "--output")?),
+            "--drain-output" => {
+                drain_output = Some(PathBuf::from(next_arg(&mut args, "--drain-output")?))
+            }
             _ => return Err(usage_error()),
         }
     }
@@ -3206,6 +3317,7 @@ fn parse_qglake_fixture(
         location,
         metadata_location,
         output,
+        drain_output,
         principal: common.principal,
     })
 }
@@ -3281,6 +3393,18 @@ fn read_json_file(path: &PathBuf) -> lakecat_core::LakeCatResult<Value> {
     })
 }
 
+fn read_typed_json_file<T: DeserializeOwned>(
+    path: &PathBuf,
+    label: &str,
+) -> lakecat_core::LakeCatResult<T> {
+    serde_json::from_value(read_json_file(path)?).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} JSON file {} did not match expected shape: {err}",
+            path.display()
+        ))
+    })
+}
+
 fn next_arg(
     args: &mut impl Iterator<Item = String>,
     flag: &str,
@@ -3295,6 +3419,7 @@ fn usage_error() -> lakecat_core::LakeCatError {
         "config",
         "bootstrap-export",
         "lineage-drain",
+        "qglake-verify-replay",
         "storage-profile-list",
         "storage-profile-upsert",
         "policy-list",
@@ -3367,6 +3492,35 @@ mod tests {
                 assert_eq!(principal.as_deref(), Some("did:example:agent"));
             }
             _ => panic!("expected lineage-drain command"),
+        }
+    }
+
+    #[test]
+    fn parses_qglake_verify_replay_command() {
+        let command = Command::parse([
+            "qglake-verify-replay".to_string(),
+            "--bundle".to_string(),
+            "target/qglake/lakecat-bootstrap.json".to_string(),
+            "--drain".to_string(),
+            "target/qglake/lineage-drain.json".to_string(),
+            "--principal".to_string(),
+            "did:example:agent".to_string(),
+        ])
+        .unwrap();
+        match command {
+            Command::QglakeVerifyReplay {
+                bundle,
+                drain,
+                principal,
+            } => {
+                assert_eq!(
+                    bundle,
+                    PathBuf::from("target/qglake/lakecat-bootstrap.json")
+                );
+                assert_eq!(drain, PathBuf::from("target/qglake/lineage-drain.json"));
+                assert_eq!(principal.as_deref(), Some("did:example:agent"));
+            }
+            _ => panic!("expected qglake-verify-replay command"),
         }
     }
 
@@ -3451,6 +3605,7 @@ mod tests {
                 table,
                 location,
                 output,
+                drain_output,
                 ..
             } => {
                 assert_eq!(warehouse, "local");
@@ -3460,6 +3615,26 @@ mod tests {
                 assert_eq!(
                     output,
                     PathBuf::from("target/qglake/lakecat-bootstrap.json")
+                );
+                assert_eq!(drain_output, None);
+            }
+            _ => panic!("expected qglake-fixture command"),
+        }
+    }
+
+    #[test]
+    fn parses_qglake_fixture_drain_output() {
+        let command = Command::parse([
+            "qglake-fixture".to_string(),
+            "--drain-output".to_string(),
+            "target/qglake/lineage-drain.json".to_string(),
+        ])
+        .unwrap();
+        match command {
+            Command::QglakeFixture { drain_output, .. } => {
+                assert_eq!(
+                    drain_output,
+                    Some(PathBuf::from("target/qglake/lineage-drain.json"))
                 );
             }
             _ => panic!("expected qglake-fixture command"),
@@ -3904,6 +4079,62 @@ mod tests {
 
         verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
             .expect("QGLake bootstrap should include policy binding and OpenLineage output");
+    }
+
+    #[test]
+    fn qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        let verification = bundle.verify_manifest().unwrap();
+        let policy_binding_count = qglake_policy_binding_count(&bundle);
+        let drain = LineageDrainResponse {
+            delivered: 8,
+            event_types: vec![
+                "table.scan-planned".to_string(),
+                "credentials.vend-attempted".to_string(),
+                "credentials.vend-attempted".to_string(),
+                "policy-binding.listed".to_string(),
+                "storage-profile.listed".to_string(),
+                "server.listed".to_string(),
+                "project.listed".to_string(),
+                "warehouse.listed".to_string(),
+                "querygraph.bootstrap".to_string(),
+            ],
+            graph_events: 1,
+            lineage_events: 9,
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            events: vec![
+                qglake_bootstrap_lineage_summary_for(&verification, policy_binding_count),
+                qglake_restricted_credential_summary(),
+                qglake_human_credential_summary(),
+                qglake_policy_list_lineage_summary(),
+                qglake_storage_profile_list_lineage_summary(),
+                qglake_server_list_lineage_summary(),
+                qglake_project_list_lineage_summary(),
+                qglake_warehouse_list_lineage_summary(),
+            ],
+        };
+
+        let replay_verification =
+            verify_qglake_replay_artifacts(&bundle, &drain, Some("did:example:agent"))
+                .expect("matching saved bundle and lineage drain should verify");
+        assert_eq!(replay_verification.bundle_hash, verification.bundle_hash);
+        assert_eq!(
+            replay_verification.querygraph_import_hash,
+            verification.querygraph_import_hash
+        );
     }
 
     #[test]
@@ -6503,6 +6734,27 @@ mod tests {
             replay_event_hashes: vec!["sha256:replay-event".to_string()],
             replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
         }
+    }
+
+    fn qglake_bootstrap_lineage_summary_for(
+        verification: &QueryGraphBootstrapVerification,
+        policy_binding_count: usize,
+    ) -> LineageDrainEventSummary {
+        let mut summary = qglake_bootstrap_lineage_summary();
+        summary.bundle_hash = Some(verification.bundle_hash.clone());
+        summary.graph_hash = Some(verification.graph_hash.clone());
+        summary.open_lineage_hash = Some(verification.open_lineage_hash.clone());
+        summary.querygraph_import_hash = Some(verification.querygraph_import_hash.clone());
+        summary.table_artifact_count = verification.table_count;
+        summary.view_artifact_count = verification.view_count;
+        summary.view_version_receipt_hashes = verification
+            .verified_view_receipt_hashes
+            .values()
+            .cloned()
+            .collect();
+        summary.policy_binding_count = policy_binding_count;
+        summary.standards = verification.standards.clone();
+        summary
     }
 
     fn qglake_view_lineage_summary() -> LineageDrainEventSummary {

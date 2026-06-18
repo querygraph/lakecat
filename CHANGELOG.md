@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added `lakecat-cli qglake-verify-replay` to verify a saved QueryGraph
+  bootstrap bundle together with a saved lineage-drain response, and added
+  `qglake-fixture --drain-output` so local QGLake runs can emit both artifacts
+  for offline handoff proof.
 - Reconciled `GOAL.md` with the current `AGENTS.md` operating contract so the
   durable goal carries one canonical copy of the LakeCat boundary, sibling-repo
   placement, Turso, feature-gate, verification, and commit-discipline guidance.

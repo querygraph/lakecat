@@ -346,7 +346,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   evidence in the import compatibility contract, view-aware graph edges, and
   OpenLineage view counts, and QGLake lineage-drain acceptance rejects replay
   that does not preserve the accepted view version or its compact durable
-  receipt hash. Full Iceberg view history and commit semantics remain pending.*
+  receipt hash; `lakecat-cli qglake-verify-replay` now runs the same handoff
+  proof against saved bootstrap and lineage-drain artifacts. Full Iceberg view
+  history and commit semantics remain pending.*
 - **P6 — Reproducibility (F10) + typed v4 (F9).** Land the Sail helper commits
   upstream (or pin a published Sail) and re-enable automatic CI; converge on
   typed v4 metadata once `sail-iceberg` provides it.

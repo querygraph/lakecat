@@ -1045,7 +1045,8 @@ what turns committed catalog facts into graph and lineage receipts:
 ```sh
 curl -s -X POST \
   -H 'x-lakecat-principal: agent:lineage-drainer' \
-  http://127.0.0.1:3000/management/v1/lineage/drain
+  http://127.0.0.1:3000/management/v1/lineage/drain \
+  -o target/qglake/lineage-drain.json
 ```
 
 A useful drain response includes delivered event types, graph projection counts,
@@ -1073,6 +1074,22 @@ server, project, warehouse, policy-list, and storage-profile-list reads before
 bootstrap, and rejects a drain that does not replay matching `server.listed`,
 `project.listed`, `warehouse.listed`, `policy-binding.listed`, and
 `storage-profile.listed` evidence.
+
+For handoff testing, LakeCat can verify a saved bootstrap bundle and a saved
+drain response together:
+
+```sh
+cargo run -p lakecat-cli -- qglake-verify-replay \
+  --bundle target/qglake/lakecat-bootstrap.json \
+  --drain target/qglake/lineage-drain.json \
+  --principal did:example:agent
+```
+
+That offline check replays the same boundary assertions used by the live
+QGLake fixture: the bundle manifest must verify, the QueryGraph import
+compatibility contract must match, and the lineage drain must carry matching
+bootstrap hashes, credential-denial receipts, management-list evidence, and
+view receipt evidence when views are present.
 
 The end-to-end result is a chain:
 
@@ -1109,11 +1126,18 @@ The key point is the absence of raw storage reach. The specialist agent does
 not need broad cloud credentials to do its job. It needs a governed plan, a
 bounded task set, and a receipt trail.
 
-The local fixture compresses this story into one command:
+The local fixture compresses this story into a short artifact-producing
+sequence:
 
 ```sh
 cargo run -p lakecat-cli -- qglake-fixture \
-  --output target/qglake/lakecat-bootstrap.json
+  --output target/qglake/lakecat-bootstrap.json \
+  --drain-output target/qglake/lineage-drain.json \
+  --principal did:example:agent
+cargo run -p lakecat-cli -- qglake-verify-replay \
+  --bundle target/qglake/lakecat-bootstrap.json \
+  --drain target/qglake/lineage-drain.json \
+  --principal did:example:agent
 ```
 
 That fixture creates the sample table shape, installs a restricted policy,
@@ -1132,7 +1156,13 @@ cargo run -p lakecat-cli -- config
 cargo run -p lakecat-cli -- storage-profile-list
 cargo run -p lakecat-cli -- policy-list
 cargo run -p lakecat-cli -- qglake-fixture \
-  --output target/qglake/lakecat-bootstrap.json
+  --output target/qglake/lakecat-bootstrap.json \
+  --drain-output target/qglake/lineage-drain.json \
+  --principal did:example:agent
+cargo run -p lakecat-cli -- qglake-verify-replay \
+  --bundle target/qglake/lakecat-bootstrap.json \
+  --drain target/qglake/lineage-drain.json \
+  --principal did:example:agent
 cargo run -p lakecat-cli -- bootstrap-export \
   --output lakecat-bootstrap.json
 ```
