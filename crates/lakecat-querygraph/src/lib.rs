@@ -52,9 +52,30 @@ impl QueryGraphBootstrap {
             .map(QueryGraphViewProjection::from_view)
             .collect::<Vec<_>>();
         let graph = QueryGraphCatalogGraph::from_tables_and_views(&tables, &views);
-        let open_lineage = bootstrap_open_lineage(&warehouse, &tables, &views, generated_at);
-        let manifest =
-            QueryGraphBundleManifest::from_parts(&tables, &views, &graph, &open_lineage)?;
+        let table_artifacts = tables
+            .iter()
+            .map(QueryGraphTableArtifactHashes::from_table)
+            .collect::<LakeCatResult<Vec<_>>>()?;
+        let view_artifacts = views
+            .iter()
+            .map(QueryGraphViewArtifactHashes::from_view)
+            .collect::<LakeCatResult<Vec<_>>>()?;
+        let graph_hash = graph_hash(&graph)?;
+        let open_lineage = bootstrap_open_lineage(
+            &warehouse,
+            &tables,
+            &views,
+            &table_artifacts,
+            &view_artifacts,
+            &graph_hash,
+            generated_at,
+        );
+        let manifest = QueryGraphBundleManifest::from_hashes(
+            table_artifacts,
+            view_artifacts,
+            graph_hash,
+            &open_lineage,
+        )?;
         let bundle_payload = json!({
             "warehouse": warehouse.as_str(),
             "manifest": manifest,
@@ -211,25 +232,19 @@ pub struct QueryGraphBundleManifest {
 }
 
 impl QueryGraphBundleManifest {
-    fn from_parts(
-        tables: &[QueryGraphTableProjection],
-        views: &[QueryGraphViewProjection],
-        graph: &QueryGraphCatalogGraph,
+    fn from_hashes(
+        table_artifacts: Vec<QueryGraphTableArtifactHashes>,
+        view_artifacts: Vec<QueryGraphViewArtifactHashes>,
+        graph_hash: String,
         open_lineage: &Value,
     ) -> LakeCatResult<Self> {
         Ok(Self {
             schema_version: "lakecat.querygraph.bootstrap.v1".to_string(),
             producer: "https://querygraph.ai/lakecat".to_string(),
             standards: querygraph_bootstrap_standards(),
-            table_artifacts: tables
-                .iter()
-                .map(QueryGraphTableArtifactHashes::from_table)
-                .collect::<LakeCatResult<Vec<_>>>()?,
-            view_artifacts: views
-                .iter()
-                .map(QueryGraphViewArtifactHashes::from_view)
-                .collect::<LakeCatResult<Vec<_>>>()?,
-            graph_hash: graph_hash(graph)?,
+            table_artifacts,
+            view_artifacts,
+            graph_hash,
             open_lineage_hash: content_hash_json(open_lineage)?,
         })
     }
@@ -778,6 +793,9 @@ fn bootstrap_open_lineage(
     warehouse: &WarehouseName,
     tables: &[QueryGraphTableProjection],
     views: &[QueryGraphViewProjection],
+    table_artifacts: &[QueryGraphTableArtifactHashes],
+    view_artifacts: &[QueryGraphViewArtifactHashes],
+    graph_hash: &str,
     generated_at: DateTime<Utc>,
 ) -> Value {
     json!({
@@ -791,7 +809,10 @@ fn bootstrap_open_lineage(
                     "_schemaURL": "https://querygraph.ai/schemas/openlineage/querygraph-semantic-bundle-facet/0.1.0.json",
                     "tableCount": tables.len(),
                     "viewCount": views.len(),
-                    "standards": querygraph_bootstrap_standards()
+                    "standards": querygraph_bootstrap_standards(),
+                    "graphHash": graph_hash,
+                    "tableArtifacts": table_artifacts.iter().map(open_lineage_table_artifact).collect::<Vec<_>>(),
+                    "viewArtifacts": view_artifacts.iter().map(open_lineage_view_artifact).collect::<Vec<_>>()
                 }
             }
         },
@@ -837,6 +858,24 @@ fn bootstrap_open_lineage(
         })).collect::<Vec<_>>(),
         "producer": "https://querygraph.ai/lakecat",
         "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json"
+    })
+}
+
+fn open_lineage_table_artifact(artifact: &QueryGraphTableArtifactHashes) -> Value {
+    json!({
+        "stableId": artifact.stable_id,
+        "croissantHash": artifact.croissant_hash,
+        "cdifHash": artifact.cdif_hash,
+        "osiHash": artifact.osi_hash,
+        "odrlHash": artifact.odrl_hash,
+        "policyBindingsHash": artifact.policy_bindings_hash
+    })
+}
+
+fn open_lineage_view_artifact(artifact: &QueryGraphViewArtifactHashes) -> Value {
+    json!({
+        "stableId": artifact.stable_id,
+        "osiHash": artifact.osi_hash
     })
 }
 
@@ -1042,6 +1081,20 @@ mod tests {
                 .any(|item| item == "CDIF")
         );
         assert_eq!(
+            bundle.open_lineage["run"]["facets"]["queryGraph_semanticBundle"]["graphHash"],
+            bundle.manifest.graph_hash
+        );
+        assert_eq!(
+            bundle.open_lineage["run"]["facets"]["queryGraph_semanticBundle"]["tableArtifacts"][0]
+                ["stableId"],
+            bundle.manifest.table_artifacts[0].stable_id
+        );
+        assert_eq!(
+            bundle.open_lineage["run"]["facets"]["queryGraph_semanticBundle"]["tableArtifacts"][0]
+                ["croissantHash"],
+            bundle.manifest.table_artifacts[0].croissant_hash
+        );
+        assert_eq!(
             bundle.tables[0].cdif["dct:accessRights"]["odrl:policy"]["@type"],
             "odrl:Policy"
         );
@@ -1194,6 +1247,14 @@ mod tests {
         assert_eq!(
             bundle.open_lineage["run"]["facets"]["queryGraph_semanticBundle"]["viewCount"],
             json!(1)
+        );
+        assert_eq!(
+            bundle.open_lineage["run"]["facets"]["queryGraph_semanticBundle"]["viewArtifacts"][0]["stableId"],
+            bundle.manifest.view_artifacts[0].stable_id
+        );
+        assert_eq!(
+            bundle.open_lineage["run"]["facets"]["queryGraph_semanticBundle"]["viewArtifacts"][0]["osiHash"],
+            bundle.manifest.view_artifacts[0].osi_hash
         );
         assert_eq!(
             bundle.views[0].osi["view"]["columns"][0]["comment"],

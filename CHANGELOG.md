@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added QueryGraph artifact-hash evidence to the bootstrap OpenLineage semantic
+  bundle facet and required QGLake bootstrap acceptance to verify those hashes
+  against the manifest.
 - Required QGLake bootstrap acceptance to run the QueryGraph bundle manifest
   verifier, rejecting tampered Croissant/CDIF/OSI/ODRL, graph, OpenLineage, or
   bundle-hash content before accepting the handoff.

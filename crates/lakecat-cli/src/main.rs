@@ -803,6 +803,35 @@ fn verify_qglake_bootstrap_open_lineage(
             )));
         }
     }
+    if semantic_bundle["graphHash"] != json!(bundle.manifest.graph_hash) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap OpenLineage graph hash did not match manifest: {}",
+            semantic_bundle["graphHash"].clone()
+        )));
+    }
+    let manifest_artifact = bundle
+        .manifest
+        .table_artifacts
+        .iter()
+        .find(|artifact| artifact.stable_id == projection.stable_id)
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap manifest did not include table artifact {}",
+                projection.stable_id
+            ))
+        })?;
+    let lineage_artifact = semantic_bundle["tableArtifacts"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|artifact| artifact["stableId"] == projection.stable_id)
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap OpenLineage semantic bundle did not include table artifact {}",
+                projection.stable_id
+            ))
+        })?;
+    verify_qglake_open_lineage_table_artifact(lineage_artifact, manifest_artifact)?;
     let output = bundle
         .open_lineage
         .get("outputs")
@@ -832,6 +861,30 @@ fn verify_qglake_bootstrap_open_lineage(
             "QGLake bootstrap OpenLineage data-source URI did not match table location: {}",
             output["facets"]["dataSource"]["uri"].clone()
         )));
+    }
+    Ok(())
+}
+
+fn verify_qglake_open_lineage_table_artifact(
+    lineage_artifact: &Value,
+    manifest_artifact: &lakecat_querygraph::QueryGraphTableArtifactHashes,
+) -> lakecat_core::LakeCatResult<()> {
+    for (field, expected) in [
+        ("croissantHash", manifest_artifact.croissant_hash.as_str()),
+        ("cdifHash", manifest_artifact.cdif_hash.as_str()),
+        ("osiHash", manifest_artifact.osi_hash.as_str()),
+        ("odrlHash", manifest_artifact.odrl_hash.as_str()),
+        (
+            "policyBindingsHash",
+            manifest_artifact.policy_bindings_hash.as_str(),
+        ),
+    ] {
+        if lineage_artifact[field] != json!(expected) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap OpenLineage table artifact {field} did not match manifest: {}",
+                lineage_artifact[field].clone()
+            )));
+        }
     }
     Ok(())
 }
@@ -2305,6 +2358,30 @@ mod tests {
     }
 
     #[test]
+    fn qglake_bootstrap_verifier_requires_openlineage_artifact_hashes() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let mut bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        bundle.open_lineage["run"]["facets"]["queryGraph_semanticBundle"]["tableArtifacts"][0]["croissantHash"] =
+            json!("sha256:wrong");
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect_err("QGLake bootstrap should reject mismatched OpenLineage artifact hashes");
+        assert!(
+            err.to_string()
+                .contains("table artifact croissantHash did not match manifest")
+        );
+    }
+
+    #[test]
     fn qglake_bootstrap_verifier_requires_openlineage_envelope() {
         let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
         let output = serde_json::json!({
@@ -3312,6 +3389,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let graph = lakecat_querygraph::QueryGraphCatalogGraph::from_tables(&tables);
+        let graph_hash = content_hash_json(&serde_json::to_value(&graph).unwrap()).unwrap();
         let open_lineage = serde_json::json!({
             "eventType": "COMPLETE",
             "job": {
@@ -3333,7 +3411,10 @@ mod tests {
                             "ODRL",
                             "Grust catalog graph",
                             "OpenLineage"
-                        ]
+                        ],
+                        "graphHash": graph_hash,
+                        "tableArtifacts": table_artifacts.iter().map(qglake_open_lineage_table_artifact).collect::<Vec<_>>(),
+                        "viewArtifacts": []
                     }
                 }
             },
@@ -3353,7 +3434,7 @@ mod tests {
             ],
             table_artifacts,
             view_artifacts: Vec::new(),
-            graph_hash: content_hash_json(&serde_json::to_value(&graph).unwrap()).unwrap(),
+            graph_hash,
             open_lineage_hash: content_hash_json(&open_lineage).unwrap(),
         };
         let warehouse = lakecat_core::WarehouseName::new("local").unwrap();
@@ -3376,5 +3457,18 @@ mod tests {
             graph,
             open_lineage,
         }
+    }
+
+    fn qglake_open_lineage_table_artifact(
+        artifact: &lakecat_querygraph::QueryGraphTableArtifactHashes,
+    ) -> Value {
+        serde_json::json!({
+            "stableId": artifact.stable_id,
+            "croissantHash": artifact.croissant_hash,
+            "cdifHash": artifact.cdif_hash,
+            "osiHash": artifact.osi_hash,
+            "odrlHash": artifact.odrl_hash,
+            "policyBindingsHash": artifact.policy_bindings_hash
+        })
     }
 }
