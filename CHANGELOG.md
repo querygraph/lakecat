@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Exposed compact lineage-drain replay evidence for QueryGraph bootstrap events
+  and required QGLake acceptance to verify bundle, graph, OpenLineage, table
+  artifact, and sink receipt hashes.
 - Persisted QueryGraph manifest table/view artifact hashes in the
   `querygraph.bootstrap` audit/outbox payload and verified lineage-drain replay
   preserves them.

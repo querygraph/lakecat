@@ -345,6 +345,29 @@ pub struct LineageDrainResponse {
     pub event_types: Vec<String>,
     pub graph_events: usize,
     pub lineage_events: usize,
+    #[serde(default)]
+    pub events: Vec<LineageDrainEventSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct LineageDrainEventSummary {
+    pub event_id: String,
+    pub event_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundle_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graph_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open_lineage_hash: Option<String>,
+    #[serde(default)]
+    pub table_artifact_count: usize,
+    #[serde(default)]
+    pub view_artifact_count: usize,
+    #[serde(default)]
+    pub replay_event_hashes: Vec<String>,
+    #[serde(default)]
+    pub replay_open_lineage_hashes: Vec<String>,
 }
 
 fn default_enforced() -> bool {

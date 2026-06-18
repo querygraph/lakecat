@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, fs, path::PathBuf, sync::Arc};
 
 use lakecat_api::{
     CatalogConfigResponse, CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest,
-    FetchScanTasksResponse, LineageDrainResponse, ListNamespacesResponse,
+    FetchScanTasksResponse, LineageDrainEventSummary, LineageDrainResponse, ListNamespacesResponse,
     ListPolicyBindingsResponse, ListStorageProfilesResponse, LoadCredentialsResponse,
     LoadTableResponse, NamespaceResponse, PlanTableScanRequest, PlanTableScanResponse,
     PolicyBindingResponse, StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest,
@@ -1309,6 +1309,43 @@ fn verify_qglake_lineage_drain(drain: &LineageDrainResponse) -> lakecat_core::La
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain did not replay querygraph.bootstrap".to_string(),
+        ));
+    }
+    let Some(bootstrap) = drain
+        .events
+        .iter()
+        .find(|event| event.event_type == "querygraph.bootstrap")
+    else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain did not expose querygraph.bootstrap replay evidence".to_string(),
+        ));
+    };
+    if bootstrap.bundle_hash.as_deref().map_or(true, str::is_empty)
+        || bootstrap.graph_hash.as_deref().map_or(true, str::is_empty)
+        || bootstrap
+            .open_lineage_hash
+            .as_deref()
+            .map_or(true, str::is_empty)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain replay evidence is missing QueryGraph hashes".to_string(),
+        ));
+    }
+    if bootstrap.table_artifact_count == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain replay evidence has no QueryGraph table artifacts".to_string(),
+        ));
+    }
+    if bootstrap.replay_event_hashes.is_empty()
+        || bootstrap.replay_event_hashes.iter().any(String::is_empty)
+        || bootstrap.replay_open_lineage_hashes.is_empty()
+        || bootstrap
+            .replay_open_lineage_hashes
+            .iter()
+            .any(String::is_empty)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain replay evidence is missing sink receipt hashes".to_string(),
         ));
     }
     Ok(())
@@ -3341,6 +3378,7 @@ mod tests {
             event_types: Vec::new(),
             graph_events: 0,
             lineage_events: 0,
+            events: Vec::new(),
         })
         .expect_err("QGLake lineage drain should reject zero deliveries");
         assert!(
@@ -3353,6 +3391,7 @@ mod tests {
             event_types: vec!["querygraph.bootstrap".to_string()],
             graph_events: 0,
             lineage_events: 0,
+            events: Vec::new(),
         })
         .expect_err("QGLake lineage drain should reject missing lineage emissions");
         assert!(
@@ -3365,11 +3404,49 @@ mod tests {
             event_types: vec!["table.scan-planned".to_string()],
             graph_events: 1,
             lineage_events: 1,
+            events: Vec::new(),
         })
         .expect_err("QGLake lineage drain should require bootstrap replay");
         assert!(
             err.to_string()
                 .contains("qglake lineage drain did not replay querygraph.bootstrap")
+        );
+
+        let err = verify_qglake_lineage_drain(&LineageDrainResponse {
+            delivered: 1,
+            event_types: vec!["querygraph.bootstrap".to_string()],
+            graph_events: 1,
+            lineage_events: 1,
+            events: Vec::new(),
+        })
+        .expect_err("QGLake lineage drain should require bootstrap evidence");
+        assert!(
+            err.to_string().contains(
+                "qglake lineage drain did not expose querygraph.bootstrap replay evidence"
+            )
+        );
+
+        let err = verify_qglake_lineage_drain(&LineageDrainResponse {
+            delivered: 1,
+            event_types: vec!["querygraph.bootstrap".to_string()],
+            graph_events: 1,
+            lineage_events: 1,
+            events: vec![LineageDrainEventSummary {
+                event_id: "evt-bootstrap".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                bundle_hash: Some("sha256:bundle".to_string()),
+                graph_hash: Some("sha256:graph".to_string()),
+                open_lineage_hash: Some("sha256:openlineage".to_string()),
+                table_artifact_count: 1,
+                view_artifact_count: 0,
+                replay_event_hashes: Vec::new(),
+                replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+            }],
+        })
+        .expect_err("QGLake lineage drain should require sink receipt evidence");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain replay evidence is missing sink receipt hashes")
         );
 
         verify_qglake_lineage_drain(&LineageDrainResponse {
@@ -3380,6 +3457,17 @@ mod tests {
             ],
             graph_events: 1,
             lineage_events: 2,
+            events: vec![LineageDrainEventSummary {
+                event_id: "evt-bootstrap".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                bundle_hash: Some("sha256:bundle".to_string()),
+                graph_hash: Some("sha256:graph".to_string()),
+                open_lineage_hash: Some("sha256:openlineage".to_string()),
+                table_artifact_count: 1,
+                view_artifact_count: 0,
+                replay_event_hashes: vec!["sha256:replay-event".to_string()],
+                replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+            }],
         })
         .expect("QGLake lineage drain should accept delivered outbox events");
     }

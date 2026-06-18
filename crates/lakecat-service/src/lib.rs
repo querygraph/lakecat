@@ -9,7 +9,7 @@ use axum::{Json, Router};
 use lakecat_api::{
     CatalogConfigResponse, CommitTableRequest, CommitTableResponse, ConfigEntry,
     CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest,
-    FetchScanTasksResponse, LineageDrainResponse, ListNamespacesResponse,
+    FetchScanTasksResponse, LineageDrainEventSummary, LineageDrainResponse, ListNamespacesResponse,
     ListPolicyBindingsResponse, ListProjectsResponse, ListServersResponse,
     ListStorageProfilesResponse, ListViewsResponse, ListWarehousesResponse,
     LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
@@ -23,7 +23,9 @@ use lakecat_core::{
     WarehouseName, content_hash_bytes, content_hash_json,
 };
 use lakecat_graph::{CatalogGraphSink, GraphAction, GraphEvent, NoopCatalogGraphSink};
-use lakecat_lineage::{HashOnlyLineageSink, LineageEvent, LineageEventType, LineageSink};
+use lakecat_lineage::{
+    HashOnlyLineageSink, LineageEvent, LineageEventType, LineageReceipt, LineageSink,
+};
 use lakecat_querygraph::QueryGraphBootstrap;
 #[cfg(not(feature = "sail-local"))]
 use lakecat_sail::DeferredSailCatalogEngine;
@@ -899,6 +901,16 @@ pub fn app(state: LakeCatState) -> Router {
 struct OutboxProjectionReceipt {
     graph_events: usize,
     lineage_events: usize,
+    lineage_event_hashes: Vec<String>,
+    open_lineage_hashes: Vec<String>,
+}
+
+impl OutboxProjectionReceipt {
+    fn record_lineage(&mut self, receipt: LineageReceipt) {
+        self.lineage_events += 1;
+        self.lineage_event_hashes.push(receipt.event_hash);
+        self.open_lineage_hashes.push(receipt.open_lineage_hash);
+    }
 }
 
 pub async fn drain_outbox_once(
@@ -911,14 +923,16 @@ pub async fn drain_outbox_once(
         .await?;
     let mut delivered = Vec::with_capacity(events.len());
     let mut event_types = Vec::with_capacity(events.len());
+    let mut summaries = Vec::with_capacity(events.len());
     let mut graph_events = 0usize;
     let mut lineage_events = 0usize;
     for event in events {
         let receipt = project_outbox_event(state, &event).await?;
         graph_events += receipt.graph_events;
         lineage_events += receipt.lineage_events;
-        event_types.push(event.event_type);
-        delivered.push(event.event_id);
+        summaries.push(lineage_drain_event_summary(&event, &receipt));
+        event_types.push(event.event_type.clone());
+        delivered.push(event.event_id.clone());
     }
     let delivered = state.store.mark_outbox_delivered(&delivered).await?;
     Ok(LineageDrainResponse {
@@ -926,7 +940,41 @@ pub async fn drain_outbox_once(
         event_types,
         graph_events,
         lineage_events,
+        events: summaries,
     })
+}
+
+fn lineage_drain_event_summary(
+    event: &OutboxEvent,
+    receipt: &OutboxProjectionReceipt,
+) -> LineageDrainEventSummary {
+    let payload = event.payload.get("payload").unwrap_or(&event.payload);
+    LineageDrainEventSummary {
+        event_id: event.event_id.clone(),
+        event_type: event.event_type.clone(),
+        bundle_hash: payload
+            .get("bundle-hash")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        graph_hash: payload
+            .get("graph-hash")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        open_lineage_hash: payload
+            .get("open-lineage-hash")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        table_artifact_count: payload
+            .get("table-artifacts")
+            .and_then(Value::as_array)
+            .map_or(0, Vec::len),
+        view_artifact_count: payload
+            .get("view-artifacts")
+            .and_then(Value::as_array)
+            .map_or(0, Vec::len),
+        replay_event_hashes: receipt.lineage_event_hashes.clone(),
+        replay_open_lineage_hashes: receipt.open_lineage_hashes.clone(),
+    }
 }
 
 async fn get_config(
@@ -2746,7 +2794,7 @@ async fn project_outbox_event(
                     .await?;
                 receipt.graph_events += 1;
             }
-            state
+            let lineage_receipt = state
                 .lineage
                 .emit(LineageEvent::new(
                     lineage_type,
@@ -2755,7 +2803,7 @@ async fn project_outbox_event(
                     event_payload,
                 ))
                 .await?;
-            receipt.lineage_events += 1;
+            receipt.record_lineage(lineage_receipt);
         }
     } else if event.event_type == "namespace.created" || event.event_type == "namespace.dropped" {
         let (warehouse, namespace) = outbox_namespace(event, &state.warehouse)?;
@@ -2772,7 +2820,7 @@ async fn project_outbox_event(
             )
             .await?;
         receipt.graph_events += 1;
-        state
+        let lineage_receipt = state
             .lineage
             .emit(LineageEvent::new(
                 lineage_type,
@@ -2781,7 +2829,7 @@ async fn project_outbox_event(
                 event_payload,
             ))
             .await?;
-        receipt.lineage_events += 1;
+        receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "policy-binding.upserted" {
         let (warehouse, policy_id) = outbox_policy_binding(event, &state.warehouse)?;
         state
@@ -2819,7 +2867,7 @@ async fn project_outbox_event(
         receipt.graph_events += 1;
     } else if event.event_type == "table.restored" {
         if let Some(table) = table {
-            state
+            let lineage_receipt = state
                 .lineage
                 .emit(LineageEvent::new(
                     LineageEventType::TableRestored,
@@ -2828,10 +2876,10 @@ async fn project_outbox_event(
                     event_payload,
                 ))
                 .await?;
-            receipt.lineage_events += 1;
+            receipt.record_lineage(lineage_receipt);
         }
     } else if event.event_type == "querygraph.bootstrap" {
-        state
+        let lineage_receipt = state
             .lineage
             .emit(LineageEvent::new(
                 LineageEventType::QueryGraphBootstrap,
@@ -2840,7 +2888,7 @@ async fn project_outbox_event(
                 event_payload,
             ))
             .await?;
-        receipt.lineage_events += 1;
+        receipt.record_lineage(lineage_receipt);
     }
     Ok(receipt)
 }
@@ -4729,6 +4777,33 @@ mod tests {
         );
         assert_eq!(drain.graph_events, 18);
         assert_eq!(drain.lineage_events, 6);
+        let bootstrap_summary = drain
+            .events
+            .iter()
+            .find(|event| event.event_type == "querygraph.bootstrap")
+            .expect("bootstrap replay summary should be exposed");
+        assert_eq!(
+            bootstrap_summary.bundle_hash.as_deref(),
+            Some("sha256:bundle")
+        );
+        assert_eq!(
+            bootstrap_summary.graph_hash.as_deref(),
+            Some("sha256:graph")
+        );
+        assert_eq!(
+            bootstrap_summary.open_lineage_hash.as_deref(),
+            Some("sha256:openlineage")
+        );
+        assert_eq!(bootstrap_summary.table_artifact_count, 1);
+        assert_eq!(bootstrap_summary.view_artifact_count, 1);
+        assert_eq!(
+            bootstrap_summary.replay_event_hashes,
+            vec!["recorded".to_string()]
+        );
+        assert_eq!(
+            bootstrap_summary.replay_open_lineage_hashes,
+            vec!["recorded-openlineage".to_string()]
+        );
 
         let graph_events = graph.events.lock().await;
         assert_eq!(graph_events.len(), 18);
@@ -5151,6 +5226,42 @@ mod tests {
         );
         assert_eq!(payload["graph-events"], serde_json::json!(1));
         assert_eq!(payload["lineage-events"], serde_json::json!(1));
+        assert_eq!(
+            payload["events"][0]["event-id"],
+            serde_json::json!("evt-bootstrap")
+        );
+        assert_eq!(
+            payload["events"][0]["event-type"],
+            serde_json::json!("querygraph.bootstrap")
+        );
+        assert_eq!(
+            payload["events"][0]["bundle-hash"],
+            serde_json::json!("sha256:bundle")
+        );
+        assert_eq!(
+            payload["events"][0]["graph-hash"],
+            serde_json::json!("sha256:graph")
+        );
+        assert_eq!(
+            payload["events"][0]["open-lineage-hash"],
+            serde_json::json!("sha256:openlineage")
+        );
+        assert_eq!(
+            payload["events"][0]["table-artifact-count"],
+            serde_json::json!(1)
+        );
+        assert_eq!(
+            payload["events"][0]["view-artifact-count"],
+            serde_json::json!(1)
+        );
+        assert_eq!(
+            payload["events"][0]["replay-event-hashes"],
+            serde_json::json!(["recorded"])
+        );
+        assert_eq!(
+            payload["events"][0]["replay-open-lineage-hashes"],
+            serde_json::json!(["recorded-openlineage"])
+        );
         assert_eq!(
             store.delivered.lock().await.as_slice(),
             &["evt-bootstrap".to_string()]
