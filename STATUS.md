@@ -7,11 +7,26 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `eb97d69 Allow multi-warehouse management routing`.
-- Paused after pushing multi-warehouse management-path routing. Management
-  endpoints that carry `{warehouse}` now route by the requested warehouse instead
-  of rejecting everything except the configured default warehouse; Iceberg REST
-  table access remains default-warehouse routed for compatibility.
-- Local verification for the pushed slice was green:
+- Current working slice adds warehouse-prefixed Iceberg REST routing. Standard
+  catalog handlers now accept `/catalog/v1/{warehouse}/...` for config,
+  namespace, table, commit, scan-plan, fetch-scan-tasks, and credential access,
+  while the existing unprefixed routes remain the default-warehouse
+  compatibility path.
+- Local verification for this working slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-service config_endpoint_reports_lakecat_capabilities -- --nocapture`;
+  `cargo test -p lakecat-service prefixed_catalog_routes_target_requested_warehouse -- --nocapture`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- The all-feature gates again required local syntax repairs in the dirty sibling
+  `/Users/alexy/src/grust/crates/grust-cypher/src/lib.rs` checkout around
+  return-projection helper edits. LakeCat did not stage the sibling Grust repo.
+- Local verification for the pushed management-routing slice was green:
   `cargo fmt -p lakecat-service`;
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
@@ -98,6 +113,8 @@ Updated: 2026-06-18
 
 ## Completed In Latest Implementation Slice
 
+- Added warehouse-prefixed Iceberg REST catalog routes while preserving
+  unprefixed default-warehouse routes for existing clients.
 - Allowed governed warehouse management endpoints to manage a second durable
   warehouse from the same service instead of rejecting non-default warehouse
   path parameters.

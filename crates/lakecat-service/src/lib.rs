@@ -751,6 +751,42 @@ pub fn app(state: LakeCatState) -> Router {
     Router::new()
         .route("/catalog/v1/config", get(get_config))
         .route(
+            "/catalog/v1/{warehouse}/config",
+            get(get_config_for_warehouse),
+        )
+        .route(
+            "/catalog/v1/{warehouse}/namespaces",
+            get(list_namespaces_for_warehouse).post(create_namespace_for_warehouse),
+        )
+        .route(
+            "/catalog/v1/{warehouse}/namespaces/{namespace}/tables",
+            post(create_table_for_warehouse),
+        )
+        .route(
+            "/catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}",
+            get(load_table_for_warehouse).delete(delete_table_for_warehouse),
+        )
+        .route(
+            "/catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit",
+            post(commit_table_for_warehouse),
+        )
+        .route(
+            "/catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
+            post(plan_table_scan_for_warehouse),
+        )
+        .route(
+            "/catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
+            post(fetch_scan_tasks_for_warehouse),
+        )
+        .route(
+            "/catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/tasks",
+            post(fetch_scan_tasks_for_warehouse),
+        )
+        .route(
+            "/catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials",
+            get(load_credentials_for_warehouse),
+        )
+        .route(
             "/catalog/v1/namespaces",
             get(list_namespaces).post(create_namespace),
         )
@@ -855,6 +891,23 @@ async fn get_config(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
 ) -> Result<Json<CatalogConfigResponse>, LakeCatHttpError> {
+    get_config_in_warehouse(state.warehouse.clone(), state, headers).await
+}
+
+async fn get_config_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path(warehouse): Path<String>,
+) -> Result<Json<CatalogConfigResponse>, LakeCatHttpError> {
+    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    get_config_in_warehouse(warehouse, state, headers).await
+}
+
+async fn get_config_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+) -> Result<Json<CatalogConfigResponse>, LakeCatHttpError> {
     let capability = authorize_catalog_config(&state, request_identity(&headers)?).await?;
     state
         .store
@@ -865,7 +918,7 @@ async fn get_config(
             json!({
                 "event-type": "catalog.config-read",
                 "authorization-receipt": capability.receipt(),
-                "warehouse": state.warehouse.as_str(),
+                "warehouse": warehouse.as_str(),
             }),
         )?)
         .await?;
@@ -877,12 +930,31 @@ async fn create_namespace(
     headers: HeaderMap,
     Json(request): Json<CreateNamespaceRequest>,
 ) -> Result<Json<NamespaceResponse>, LakeCatHttpError> {
+    create_namespace_in_warehouse(state.warehouse.clone(), state, headers, request).await
+}
+
+async fn create_namespace_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path(warehouse): Path<String>,
+    Json(request): Json<CreateNamespaceRequest>,
+) -> Result<Json<NamespaceResponse>, LakeCatHttpError> {
+    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    create_namespace_in_warehouse(warehouse, state, headers, request).await
+}
+
+async fn create_namespace_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+    request: CreateNamespaceRequest,
+) -> Result<Json<NamespaceResponse>, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
     let capability = authorize_namespace_create(&state, identity).await?;
     let namespace = Namespace::new(request.namespace)?;
     state
         .store
-        .create_namespace(&state.warehouse, namespace.clone())
+        .create_namespace(&warehouse, namespace.clone())
         .await?;
     state
         .store
@@ -893,7 +965,7 @@ async fn create_namespace(
             json!({
                 "event-type": "namespace.created",
                 "authorization-receipt": capability.receipt(),
-                "warehouse": state.warehouse.as_str(),
+                "warehouse": warehouse.as_str(),
                 "namespace": namespace.parts(),
             }),
         )?)
@@ -905,8 +977,25 @@ async fn list_namespaces(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
 ) -> Result<Json<ListNamespacesResponse>, LakeCatHttpError> {
+    list_namespaces_in_warehouse(state.warehouse.clone(), state, headers).await
+}
+
+async fn list_namespaces_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path(warehouse): Path<String>,
+) -> Result<Json<ListNamespacesResponse>, LakeCatHttpError> {
+    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    list_namespaces_in_warehouse(warehouse, state, headers).await
+}
+
+async fn list_namespaces_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+) -> Result<Json<ListNamespacesResponse>, LakeCatHttpError> {
     let capability = authorize_namespace_list(&state, request_identity(&headers)?).await?;
-    let namespaces = state.store.list_namespaces(&state.warehouse).await?;
+    let namespaces = state.store.list_namespaces(&warehouse).await?;
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -916,7 +1005,7 @@ async fn list_namespaces(
             json!({
                 "event-type": "namespace.listed",
                 "authorization-receipt": capability.receipt(),
-                "warehouse": state.warehouse.as_str(),
+                "warehouse": warehouse.as_str(),
                 "namespace-count": namespaces.len(),
             }),
         )?)
@@ -935,9 +1024,29 @@ async fn create_table(
     Path(namespace): Path<String>,
     Json(request): Json<CreateTableRequest>,
 ) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
+    create_table_in_warehouse(state.warehouse.clone(), state, headers, namespace, request).await
+}
+
+async fn create_table_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace)): Path<(String, String)>,
+    Json(request): Json<CreateTableRequest>,
+) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
+    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    create_table_in_warehouse(warehouse, state, headers, namespace, request).await
+}
+
+async fn create_table_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+    namespace: String,
+    request: CreateTableRequest,
+) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
     let ident = table_ident(
-        state.warehouse.as_str(),
+        warehouse.as_str(),
         namespace,
         TableName::new(request.name)?.as_str(),
     )?;
@@ -977,8 +1086,27 @@ async fn load_table(
     headers: HeaderMap,
     Path((namespace, table)): Path<(String, String)>,
 ) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
+    load_table_in_warehouse(state.warehouse.clone(), state, headers, namespace, table).await
+}
+
+async fn load_table_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, table)): Path<(String, String, String)>,
+) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
+    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    load_table_in_warehouse(warehouse, state, headers, namespace, table).await
+}
+
+async fn load_table_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+    namespace: String,
+    table: String,
+) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
-    let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
+    let ident = table_ident(warehouse.as_str(), namespace, table)?;
     let capability = authorize_table_load(&state, identity, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
     let ident = capability.table().clone();
@@ -1007,8 +1135,27 @@ async fn delete_table(
     headers: HeaderMap,
     Path((namespace, table)): Path<(String, String)>,
 ) -> Result<StatusCode, LakeCatHttpError> {
+    delete_table_in_warehouse(state.warehouse.clone(), state, headers, namespace, table).await
+}
+
+async fn delete_table_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, table)): Path<(String, String, String)>,
+) -> Result<StatusCode, LakeCatHttpError> {
+    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    delete_table_in_warehouse(warehouse, state, headers, namespace, table).await
+}
+
+async fn delete_table_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+    namespace: String,
+    table: String,
+) -> Result<StatusCode, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
-    let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
+    let ident = table_ident(warehouse.as_str(), namespace, table)?;
     let capability = authorize_table_drop(&state, identity, ident).await?;
     let ident = capability.table().clone();
     state
@@ -1051,8 +1198,27 @@ async fn load_credentials(
     headers: HeaderMap,
     Path((namespace, table)): Path<(String, String)>,
 ) -> Result<Json<LoadCredentialsResponse>, LakeCatHttpError> {
+    load_credentials_in_warehouse(state.warehouse.clone(), state, headers, namespace, table).await
+}
+
+async fn load_credentials_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, table)): Path<(String, String, String)>,
+) -> Result<Json<LoadCredentialsResponse>, LakeCatHttpError> {
+    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    load_credentials_in_warehouse(warehouse, state, headers, namespace, table).await
+}
+
+async fn load_credentials_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+    namespace: String,
+    table: String,
+) -> Result<Json<LoadCredentialsResponse>, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
-    let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
+    let ident = table_ident(warehouse.as_str(), namespace, table)?;
     let capability = authorize_credentials_vend(&state, identity, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
     let storage_profile = state.store.storage_profile_for_table(&table).await?;
@@ -1442,9 +1608,38 @@ async fn commit_table(
     Path((namespace, table)): Path<(String, String)>,
     Json(request): Json<CommitTableRequest>,
 ) -> Result<Json<CommitTableResponse>, LakeCatHttpError> {
+    commit_table_in_warehouse(
+        state.warehouse.clone(),
+        state,
+        headers,
+        namespace,
+        table,
+        request,
+    )
+    .await
+}
+
+async fn commit_table_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, table)): Path<(String, String, String)>,
+    Json(request): Json<CommitTableRequest>,
+) -> Result<Json<CommitTableResponse>, LakeCatHttpError> {
+    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    commit_table_in_warehouse(warehouse, state, headers, namespace, table, request).await
+}
+
+async fn commit_table_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+    namespace: String,
+    table: String,
+    request: CommitTableRequest,
+) -> Result<Json<CommitTableResponse>, LakeCatHttpError> {
     let idempotency_key = request_idempotency_key(&headers)?;
     let identity = request_identity(&headers)?;
-    let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
+    let ident = table_ident(warehouse.as_str(), namespace, table)?;
     let capability = authorize_table_commit(&state, identity, ident).await?;
     let current = state.store.load_table(capability.table()).await?;
     let current_metadata_location = current.metadata_location.clone();
@@ -1584,8 +1779,37 @@ async fn plan_table_scan(
     Path((namespace, table)): Path<(String, String)>,
     Json(request): Json<PlanTableScanRequest>,
 ) -> Result<Json<PlanTableScanResponse>, LakeCatHttpError> {
+    plan_table_scan_in_warehouse(
+        state.warehouse.clone(),
+        state,
+        headers,
+        namespace,
+        table,
+        request,
+    )
+    .await
+}
+
+async fn plan_table_scan_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, table)): Path<(String, String, String)>,
+    Json(request): Json<PlanTableScanRequest>,
+) -> Result<Json<PlanTableScanResponse>, LakeCatHttpError> {
+    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    plan_table_scan_in_warehouse(warehouse, state, headers, namespace, table, request).await
+}
+
+async fn plan_table_scan_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+    namespace: String,
+    table: String,
+    request: PlanTableScanRequest,
+) -> Result<Json<PlanTableScanResponse>, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
-    let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
+    let ident = table_ident(warehouse.as_str(), namespace, table)?;
     let capability = authorize_table_scan(&state, identity, ident.clone()).await?;
     let table = state.store.load_table(capability.table()).await?;
     let (scan, scan_request_extensions) =
@@ -1647,7 +1871,7 @@ async fn plan_scan_with_capability(
     let scan = {
         let provider = LakeCatCatalogProvider::new(
             "lakecat",
-            state.warehouse.clone(),
+            capability.table().warehouse.clone(),
             state.store.clone(),
             state.sail.clone(),
             state.governance.clone(),
@@ -1719,8 +1943,37 @@ async fn fetch_scan_tasks(
     Path((namespace, table)): Path<(String, String)>,
     Json(request): Json<ApiFetchScanTasksRequest>,
 ) -> Result<Json<FetchScanTasksResponse>, LakeCatHttpError> {
+    fetch_scan_tasks_in_warehouse(
+        state.warehouse.clone(),
+        state,
+        headers,
+        namespace,
+        table,
+        request,
+    )
+    .await
+}
+
+async fn fetch_scan_tasks_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, table)): Path<(String, String, String)>,
+    Json(request): Json<ApiFetchScanTasksRequest>,
+) -> Result<Json<FetchScanTasksResponse>, LakeCatHttpError> {
+    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    fetch_scan_tasks_in_warehouse(warehouse, state, headers, namespace, table, request).await
+}
+
+async fn fetch_scan_tasks_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+    namespace: String,
+    table: String,
+    request: ApiFetchScanTasksRequest,
+) -> Result<Json<FetchScanTasksResponse>, LakeCatHttpError> {
     let identity = request_identity(&headers)?;
-    let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
+    let ident = table_ident(warehouse.as_str(), namespace, table)?;
     let capability = authorize_table_scan(&state, identity, ident).await?;
     let table = state.store.load_table(capability.table()).await?;
     let fetched = fetch_scan_tasks_with_capability(&state, &capability, &table, request).await?;
@@ -1763,7 +2016,7 @@ async fn fetch_scan_tasks_with_capability(
     let fetched = {
         let provider = LakeCatCatalogProvider::new(
             "lakecat",
-            state.warehouse.clone(),
+            capability.table().warehouse.clone(),
             state.store.clone(),
             state.sail.clone(),
             state.governance.clone(),
@@ -2422,6 +2675,16 @@ fn management_warehouse(
 ) -> Result<WarehouseName, LakeCatHttpError> {
     let warehouse = WarehouseName::new(warehouse)?;
     Ok(warehouse)
+}
+
+fn catalog_warehouse(
+    state: &LakeCatState,
+    warehouse: Option<String>,
+) -> Result<WarehouseName, LakeCatHttpError> {
+    match warehouse {
+        Some(warehouse) => Ok(WarehouseName::new(warehouse)?),
+        None => Ok(state.warehouse.clone()),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -4108,6 +4371,102 @@ mod tests {
                 serde_json::json!("sail_iceberg::io::load_manifest_list")
             );
         }
+    }
+
+    #[tokio::test]
+    async fn prefixed_catalog_routes_target_requested_warehouse() {
+        let app = test_app();
+        for (warehouse, location, metadata_location, uuid) in [
+            (
+                "local",
+                "file:///tmp/local-events",
+                "file:///tmp/local-events/metadata/00000.json",
+                "11111111-1111-1111-1111-111111111111",
+            ),
+            (
+                "other",
+                "file:///tmp/other-events",
+                "file:///tmp/other-events/metadata/00000.json",
+                "22222222-2222-2222-2222-222222222222",
+            ),
+        ] {
+            let create = Request::builder()
+                .method(Method::POST)
+                .uri(format!("/catalog/v1/{warehouse}/namespaces/default/tables"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "name": "events",
+                        "location": location,
+                        "metadata-location": metadata_location,
+                        "metadata": {
+                            "format-version": 3,
+                            "table-uuid": uuid,
+                            "location": location,
+                            "last-sequence-number": 7,
+                            "last-updated-ms": 1710000000000_i64,
+                            "last-column-id": 1,
+                            "schemas": [{
+                                "type": "struct",
+                                "schema-id": 1,
+                                "fields": [{
+                                    "id": 1,
+                                    "name": "id",
+                                    "type": "string",
+                                    "required": true
+                                }]
+                            }],
+                            "current-schema-id": 1,
+                            "partition-specs": [{"spec-id": 0, "fields": []}],
+                            "default-spec-id": 0
+                        }
+                    })
+                    .to_string(),
+                ))
+                .unwrap();
+            let response = app.clone().oneshot(create).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+
+        let default_load = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/namespaces/default/tables/events")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(default_load).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            body["metadata-location"],
+            serde_json::json!("file:///tmp/local-events/metadata/00000.json")
+        );
+        assert_eq!(
+            body["metadata"]["location"],
+            serde_json::json!("file:///tmp/local-events")
+        );
+
+        let prefixed_load = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/other/namespaces/default/tables/events")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(prefixed_load).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            body["metadata-location"],
+            serde_json::json!("file:///tmp/other-events/metadata/00000.json")
+        );
+        assert_eq!(
+            body["metadata"]["location"],
+            serde_json::json!("file:///tmp/other-events")
+        );
     }
 
     #[tokio::test]

@@ -31,6 +31,20 @@ impl Default for CatalogConfigResponse {
                 "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks"
                     .to_string(),
                 "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials".to_string(),
+                "GET /catalog/v1/{warehouse}/config".to_string(),
+                "GET /catalog/v1/{warehouse}/namespaces".to_string(),
+                "POST /catalog/v1/{warehouse}/namespaces".to_string(),
+                "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}".to_string(),
+                "DELETE /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}"
+                    .to_string(),
+                "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit"
+                    .to_string(),
+                "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan"
+                    .to_string(),
+                "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks"
+                    .to_string(),
+                "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials"
+                    .to_string(),
                 "GET /management/v1/projects".to_string(),
                 "PUT /management/v1/projects/{project}".to_string(),
                 "GET /management/v1/warehouses".to_string(),

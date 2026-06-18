@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added warehouse-prefixed Iceberg REST catalog routes for config, namespace,
+  table, commit, scan-plan, fetch-scan-tasks, and credential access while
+  preserving the existing unprefixed default-warehouse routes.
 - Allowed management APIs to route by the requested warehouse instead of the
   configured default warehouse, so operators can manage multiple durable
   warehouses from one LakeCat service.
