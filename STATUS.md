@@ -6,12 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `fe03c29 Add durable project management`.
-- Current working slice adds multi-warehouse management-path routing. Management
+  `eb97d69 Allow multi-warehouse management routing`.
+- Paused after pushing multi-warehouse management-path routing. Management
   endpoints that carry `{warehouse}` now route by the requested warehouse instead
   of rejecting everything except the configured default warehouse; Iceberg REST
   table access remains default-warehouse routed for compatibility.
-- Local verification for this working slice is green:
+- Local verification for the pushed slice was green:
   `cargo fmt -p lakecat-service`;
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
@@ -21,7 +21,7 @@ Updated: 2026-06-18
   `cargo test -p lakecat-service --all-features`;
   `cargo test --workspace`;
   `cargo test --workspace --all-features`.
-- Local verification for the previous pushed slice was green:
+- Local verification for the previous project-management slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service`;
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
