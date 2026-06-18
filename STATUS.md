@@ -6,6 +6,29 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `5d53aea Add governed durable view drop`.
+- Paused after pushing governed durable view deletion. Management and
+  warehouse-prefixed catalog REST paths can now delete durable `ViewRecord`
+  values from memory and Turso stores through a typed `view.drop` capability,
+  emitting audited `view.dropped` events while preserving Iceberg table access
+  semantics.
+- Local verification for the pushed governed view drop slice was green:
+  `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-service`;
+  `cargo test -p lakecat-security table_capabilities_require_matching_allowed_receipts`;
+  `cargo test -p lakecat-store memory_tests::memory_store_persists_view_records`;
+  `cargo test -p lakecat-store --features turso-local turso_store::tests::turso_store_persists_view_records`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities -- --nocapture`;
+  `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-security`;
+  `cargo test -p lakecat-store`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed governed view drop slice.
+- Previous implementation slice:
   `d31ace5 Exercise production secret-ref gating`.
 - Paused after pushing production secret-ref gate coverage. The TypeSec-backed
   credential issuer now has service-level coverage proving `vault://`,
