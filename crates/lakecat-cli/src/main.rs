@@ -240,6 +240,16 @@ async fn lineage_drain(
     println!("delivered {}", response.delivered);
     println!("graph events {}", response.graph_events);
     println!("lineage events {}", response.lineage_events);
+    if let Some(hash) = response.authorization_receipt_hash.as_deref() {
+        println!("authorization receipt {hash}");
+    }
+    if let Some(subject) = response.principal_subject.as_deref() {
+        let kind = response.principal_kind.as_deref().unwrap_or("unknown");
+        println!("principal {subject} ({kind})");
+    }
+    if let Some(state) = response.request_identity_state.as_deref() {
+        println!("request identity {state}");
+    }
     if !response.event_types.is_empty() {
         println!("event types {}", response.event_types.join(","));
     }
@@ -1584,6 +1594,40 @@ fn verify_qglake_lineage_drain(
             "qglake lineage drain did not replay querygraph.bootstrap".to_string(),
         ));
     }
+    let expected_principal = principal.unwrap_or("anonymous");
+    if drain.principal_subject.as_deref() != Some(expected_principal) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain read principal did not match accepted principal {expected_principal}"
+        )));
+    }
+    let expected_principal_kind = if principal.is_some() {
+        "agent"
+    } else {
+        "anonymous"
+    };
+    if drain.principal_kind.as_deref() != Some(expected_principal_kind) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain read principal kind did not match accepted principal kind {expected_principal_kind}"
+        )));
+    }
+    if drain
+        .authorization_receipt_hash
+        .as_deref()
+        .map_or(true, str::is_empty)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain read is missing authorization receipt hash".to_string(),
+        ));
+    }
+    if drain
+        .request_identity_state
+        .as_deref()
+        .map_or(true, str::is_empty)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain read is missing request identity attestation state".to_string(),
+        ));
+    }
     let Some(bootstrap) = drain
         .events
         .iter()
@@ -1608,17 +1652,11 @@ fn verify_qglake_lineage_drain(
             "qglake lineage drain replay evidence is missing QueryGraph hashes".to_string(),
         ));
     }
-    let expected_principal = principal.unwrap_or("anonymous");
     if bootstrap.principal_subject.as_deref() != Some(expected_principal) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain replay principal did not match accepted principal {expected_principal}"
         )));
     }
-    let expected_principal_kind = if principal.is_some() {
-        "agent"
-    } else {
-        "anonymous"
-    };
     if bootstrap.principal_kind.as_deref() != Some(expected_principal_kind) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain replay principal kind did not match accepted principal kind {expected_principal_kind}"
@@ -4158,6 +4196,10 @@ mod tests {
                 event_types: Vec::new(),
                 graph_events: 0,
                 lineage_events: 0,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: Vec::new(),
             },
             &verification,
@@ -4176,6 +4218,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 0,
                 lineage_events: 0,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: Vec::new(),
             },
             &verification,
@@ -4194,6 +4240,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 0,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: Vec::new(),
             },
             &verification,
@@ -4212,6 +4262,10 @@ mod tests {
                 event_types: vec!["table.scan-planned".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: Vec::new(),
             },
             &verification,
@@ -4230,6 +4284,55 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: None,
+                request_identity_state: Some("verified".to_string()),
+                events: Vec::new(),
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require read authorization proof");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain read is missing authorization receipt hash")
+        );
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: None,
+                events: Vec::new(),
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require read request identity proof");
+        assert!(
+            err.to_string().contains(
+                "qglake lineage drain read is missing request identity attestation state"
+            )
+        );
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: Vec::new(),
             },
             &verification,
@@ -4249,6 +4352,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4292,6 +4399,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4335,6 +4446,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4377,6 +4492,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4419,6 +4538,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4461,6 +4584,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4503,6 +4630,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4545,6 +4676,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4588,6 +4723,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4630,6 +4769,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4672,6 +4815,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4714,6 +4861,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4756,6 +4907,10 @@ mod tests {
                 event_types: vec!["querygraph.bootstrap".to_string()],
                 graph_events: 1,
                 lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4803,6 +4958,10 @@ mod tests {
                 ],
                 graph_events: 1,
                 lineage_events: 3,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![
                     qglake_bootstrap_lineage_summary(),
                     qglake_human_credential_summary(),
@@ -4829,6 +4988,10 @@ mod tests {
                 ],
                 graph_events: 1,
                 lineage_events: 3,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![
                     qglake_bootstrap_lineage_summary(),
                     qglake_restricted_credential_summary(),
@@ -4861,6 +5024,10 @@ mod tests {
                 ],
                 graph_events: 1,
                 lineage_events: 3,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![
                     qglake_bootstrap_lineage_summary(),
                     restricted_without_receipts,
@@ -4889,6 +5056,10 @@ mod tests {
                 ],
                 graph_events: 1,
                 lineage_events: 4,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![
                     qglake_bootstrap_lineage_summary(),
                     qglake_restricted_credential_summary(),
@@ -4915,6 +5086,10 @@ mod tests {
                 ],
                 graph_events: 1,
                 lineage_events: 4,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
                 events: vec![
                     qglake_bootstrap_lineage_summary(),
                     qglake_restricted_credential_summary(),

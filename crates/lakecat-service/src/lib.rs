@@ -940,8 +940,36 @@ pub async fn drain_outbox_once(
         event_types,
         graph_events,
         lineage_events,
+        principal_subject: None,
+        principal_kind: None,
+        authorization_receipt_hash: None,
+        request_identity_state: None,
         events: summaries,
     })
+}
+
+fn attach_lineage_drain_authorization(
+    response: &mut LineageDrainResponse,
+    receipt: &AuthorizationReceipt,
+) -> Result<(), LakeCatError> {
+    let receipt_value = serde_json::to_value(receipt).map_err(|err| {
+        LakeCatError::InvalidArgument(format!(
+            "lineage read receipt was not JSON encodable: {err}"
+        ))
+    })?;
+    response.principal_subject = Some(receipt.principal.subject.clone());
+    response.principal_kind = receipt_value
+        .pointer("/principal/kind")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    response.authorization_receipt_hash = Some(content_hash_json(&receipt_value)?);
+    response.request_identity_state = receipt
+        .context
+        .get("request-identity")
+        .and_then(|identity| identity.get("attestation-state"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    Ok(())
 }
 
 fn lineage_drain_event_summary(
@@ -2786,8 +2814,10 @@ async fn drain_lineage_outbox(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
 ) -> Result<Json<LineageDrainResponse>, LakeCatHttpError> {
-    let _capability = authorize_lineage_read(&state, request_identity(&headers)?).await?;
-    Ok(Json(drain_outbox_once(&state, 100).await?))
+    let capability = authorize_lineage_read(&state, request_identity(&headers)?).await?;
+    let mut response = drain_outbox_once(&state, 100).await?;
+    attach_lineage_drain_authorization(&mut response, capability.receipt())?;
+    Ok(Json(response))
 }
 
 async fn project_outbox_event(
@@ -5453,6 +5483,20 @@ mod tests {
         );
         assert_eq!(payload["graph-events"], serde_json::json!(1));
         assert_eq!(payload["lineage-events"], serde_json::json!(1));
+        assert_eq!(
+            payload["principal-subject"],
+            serde_json::json!("did:example:agent")
+        );
+        assert_eq!(payload["principal-kind"], serde_json::json!("agent"));
+        assert!(
+            payload["authorization-receipt-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert_eq!(
+            payload["request-identity-state"],
+            serde_json::json!("unverified")
+        );
         assert_eq!(
             payload["events"][0]["event-id"],
             serde_json::json!("evt-bootstrap")

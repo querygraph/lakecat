@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Exposed lineage-drain request authorization proof on the management response,
+  printed it in the CLI, and required QGLake lineage-drain acceptance to prove
+  the drain itself was gated by lineage-read authorization evidence.
 - Renamed the docs/book publishing surface from LakeSail to LakeCat, expanded
   the book with catalog-market context, Polaris positioning, Rust-first
   Sail/Iceberg v3-v4 evolution, Responsible Semantic Layer handoff, and

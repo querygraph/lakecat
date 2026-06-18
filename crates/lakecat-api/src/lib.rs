@@ -345,6 +345,14 @@ pub struct LineageDrainResponse {
     pub event_types: Vec<String>,
     pub graph_events: usize,
     pub lineage_events: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub principal_subject: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub principal_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authorization_receipt_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_identity_state: Option<String>,
     #[serde(default)]
     pub events: Vec<LineageDrainEventSummary>,
 }
