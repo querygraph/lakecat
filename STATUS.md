@@ -6,6 +6,27 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `f6ca1e0 Require QGLake view replay evidence`.
+- Paused after adding compact view replay identity to lineage-drain event
+  summaries and tightening QGLake lineage-drain acceptance so every accepted
+  QueryGraph bootstrap view artifact must have matching `view.upserted` or
+  `view.dropped` replay evidence with graph and OpenLineage receipt hashes.
+  The book now documents the view replay proof fields and how they connect
+  QueryGraph bootstrap artifacts to durable outbox replay.
+- Local verification for the view replay evidence slice was green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-service outbox_drain_projects_view_events_to_graph_and_lineage`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo fmt -p lakecat-api -p lakecat-cli -p lakecat-service -p lakecat-sail -- --check`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `f052cd6 Replay view events and expand book workflows`.
 - Paused after implementing the view outbox replay and book-workflow slice.
   `view.upserted` and `view.dropped` durable events now replay into
