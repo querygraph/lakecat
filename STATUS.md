@@ -6,6 +6,20 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `e201570 Write QGLake metadata pointer file`.
+- Paused after pushing the QGLake metadata-pointer file slice. The local
+  QGLake fixture now writes the Iceberg table metadata JSON at the advertised
+  `metadata_location` in addition to the manifest list and data manifest, so
+  standard metadata-pointer consumers can open the bootstrap table metadata
+  file directly.
+- Local verification for the pushed QGLake metadata-pointer file slice was
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_fixture_metadata_contains_restricted_raw_payload_column`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli qglake`.
+- This status commit records the pushed QGLake metadata-pointer file slice.
+- Previous implementation slice:
   `97b6e60 Make QGLake fixture fetchable`.
 - Paused after pushing the QGLake fetchable fixture slice. `lakecat-cli
   qglake-fixture` now creates local Iceberg manifest-list and data-manifest
