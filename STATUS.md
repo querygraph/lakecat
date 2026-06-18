@@ -6,6 +6,26 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `f699f68 Replay QueryGraph import hash evidence`.
+- Paused after pushing the QueryGraph import-hash replay slice.
+  `querygraph.bootstrap` audit/outbox payloads now persist the accepted
+  QueryGraph import hash, lineage-drain summaries expose it, and QGLake
+  lineage-drain acceptance rejects replay evidence that drops or changes the
+  import hash relative to the accepted bootstrap contract.
+- Local verification for the pushed QueryGraph import-hash replay slice was
+  green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed QueryGraph import-hash replay slice.
+- Previous implementation slice:
   `47d1666 Expose QueryGraph import compatibility hash`.
 - Paused after pushing the QueryGraph import-compatibility slice. Bootstrap
   manifests now carry a `querygraph-import` contract with a table-only bundle
