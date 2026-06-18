@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-- Added the LakeSail book under `docs/book/`, with a TypeSec-style publishing
-  pipeline, EPUB metadata validation, and generated PDF/EPUB/MOBI artifacts
-  explaining the LakeCat/Sail catalog foundation for QueryGraph.
+- Added and tracked the LakeSail book under `docs/book/`, with a TypeSec-style
+  publishing pipeline, EPUB metadata validation, and generated PDF/EPUB/MOBI
+  artifacts explaining the LakeCat/Sail catalog foundation for QueryGraph.
 - Added the first server-owned governed read restriction: enforced policy
   bindings can now provide allowed scan columns, table-scan capabilities carry
   the resulting `ReadRestriction`, and scan planning intersects client

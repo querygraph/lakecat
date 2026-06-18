@@ -6,12 +6,11 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `8d46f5c Share ODRL read restrictions from security`.
-- Current working slice: reusable read-restriction application. Governed
-  projection narrowing, stats-field narrowing, and mandatory row-filter
-  extraction now live on `ReadRestriction` in `lakecat-security`, so the future
-  in-process provider scan route can reuse both policy parsing and policy
-  application without REST-service helper copies.
+  working changes: `de46d7e Share governed scan restriction application`.
+- Current working slice: LakeSail book artifact reconciliation. The previously
+  recorded `docs/book/` publishing pipeline and stable PDF/EPUB/MOBI artifacts
+  are being checked in so the repository matches the changelog and the
+  "everything checked in" workflow.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -118,6 +117,10 @@ Updated: 2026-06-18
 - Updated REST scan planning and fetch-scan-tasks to call the shared
   `ReadRestriction` methods while preserving the existing governed Sail request
   behavior.
+- Added the LakeSail book source, publishing runbook, build/validation scripts,
+  and stable generated PDF/EPUB/MOBI deliverables under `docs/book/`.
+- Kept the generated versioned Kindle EPUB symlink ignored by `.gitignore` while
+  validating that it points to the stable `lakesail.epub` deliverable.
 - Parsed a minimal enforceable ODRL subset from active policy bindings:
   `allowed-columns` / `allowedColumns` at the policy root, in
   `lakecat:read-restriction`, or in ODRL constraints, plus purpose and policy
@@ -203,6 +206,11 @@ Updated: 2026-06-18
 
 ## Verification Completed
 
+- LakeSail book artifact checks passed:
+  `bash docs/book/check_epub_metadata.sh docs/book/dist/lakesail.epub 'lakesail (0.1.0)'`,
+  `pdftotext -f 1 -l 1 docs/book/dist/lakesail.pdf -`,
+  `pdftotext -f 2 -l 2 docs/book/dist/lakesail.pdf -`, and
+  `readlink 'docs/book/dist/lakesail (0.1.0).epub'`.
 - Reusable read-restriction parser checks passed:
   `cargo fmt -p lakecat-security -p lakecat-service -- --check`,
   `cargo test -p lakecat-security read_restriction -- --nocapture`,
