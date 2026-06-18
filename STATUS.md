@@ -6,12 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `40863e0 Project table metadata graph anchors`.
-- Current working slice: durable warehouse management entities. LakeCat now has
+  `d467bdd Add durable warehouse management`.
+- Paused after pushing durable warehouse management entities. LakeCat now has
   governed warehouse list/upsert management endpoints, memory/Turso
   `WarehouseRecord` persistence, and `warehouse.upserted` outbox replay to a
   catalog-facing `Warehouse` graph anchor for QueryGraph tenancy bootstrap.
-- Local verification for the current slice is green:
+- Local verification for the pushed slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service`;
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
