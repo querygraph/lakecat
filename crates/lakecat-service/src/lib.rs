@@ -3018,6 +3018,31 @@ async fn project_outbox_event(
             ))
             .await?;
         receipt.record_lineage(lineage_receipt);
+    } else if matches!(
+        event.event_type.as_str(),
+        "policy-binding.listed"
+            | "project.listed"
+            | "server.listed"
+            | "storage-profile.listed"
+            | "warehouse.listed"
+    ) {
+        let lineage_type = match event.event_type.as_str() {
+            "policy-binding.listed" => LineageEventType::PolicyBindingListed,
+            "project.listed" => LineageEventType::ProjectListed,
+            "server.listed" => LineageEventType::ServerListed,
+            "storage-profile.listed" => LineageEventType::StorageProfileListed,
+            _ => LineageEventType::WarehouseListed,
+        };
+        let lineage_receipt = state
+            .lineage
+            .emit(LineageEvent::new(
+                lineage_type,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "view.listed" {
         let (warehouse, namespace) = outbox_namespace(event, &state.warehouse)?;
         state
@@ -5756,6 +5781,174 @@ mod tests {
         assert_eq!(
             lineage_events[0].payload["metadata-location"],
             serde_json::json!("file:///tmp/events/metadata/00000.json")
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_projects_management_list_reads_to_lineage() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let authorization_receipt = json!({
+            "principal": principal,
+            "action": "management-list",
+            "allowed": true,
+            "engine": "test",
+            "policy_hash": null,
+            "checked_at": chrono::Utc::now(),
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![
+                OutboxEvent {
+                    event_id: "evt-policy-list".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "policy-binding.listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-policy-list",
+                        "event-type": "policy-binding.listed",
+                        "payload": {
+                            "authorization-receipt": authorization_receipt,
+                            "warehouse": "local",
+                            "policy-count": 2,
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
+                    event_id: "evt-project-list".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "project.listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-project-list",
+                        "event-type": "project.listed",
+                        "payload": {
+                            "authorization-receipt": authorization_receipt,
+                            "project-count": 1,
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
+                    event_id: "evt-server-list".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "server.listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-server-list",
+                        "event-type": "server.listed",
+                        "payload": {
+                            "authorization-receipt": authorization_receipt,
+                            "server-count": 1,
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
+                    event_id: "evt-storage-profile-list".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "storage-profile.listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-storage-profile-list",
+                        "event-type": "storage-profile.listed",
+                        "payload": {
+                            "authorization-receipt": authorization_receipt,
+                            "warehouse": "local",
+                            "storage-profile-count": 2,
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
+                    event_id: "evt-warehouse-list".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "warehouse.listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-warehouse-list",
+                        "event-type": "warehouse.listed",
+                        "payload": {
+                            "authorization-receipt": authorization_receipt,
+                            "project-id": "analytics",
+                            "warehouse-count": 3,
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+            ]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let drain = drain_outbox_once(&state, 10).await.unwrap();
+        assert_eq!(drain.delivered, 5);
+        assert_eq!(
+            drain.event_types,
+            vec![
+                "policy-binding.listed".to_string(),
+                "project.listed".to_string(),
+                "server.listed".to_string(),
+                "storage-profile.listed".to_string(),
+                "warehouse.listed".to_string(),
+            ]
+        );
+        assert_eq!(drain.graph_events, 5);
+        assert_eq!(drain.lineage_events, 5);
+        assert_eq!(
+            store.delivered.lock().await.as_slice(),
+            &[
+                "evt-policy-list".to_string(),
+                "evt-project-list".to_string(),
+                "evt-server-list".to_string(),
+                "evt-storage-profile-list".to_string(),
+                "evt-warehouse-list".to_string(),
+            ]
+        );
+
+        let graph_events = graph.events.lock().await;
+        assert_eq!(graph_events.len(), 5);
+        assert!(
+            graph_events
+                .iter()
+                .all(|event| event.label == GraphNodeLabel::Principal)
+        );
+        drop(graph_events);
+
+        let lineage_events = lineage.events.lock().await;
+        assert_eq!(lineage_events.len(), 5);
+        let lineage_types: Vec<_> = lineage_events
+            .iter()
+            .map(|event| event.event_type.clone())
+            .collect();
+        assert_eq!(
+            lineage_types,
+            vec![
+                LineageEventType::PolicyBindingListed,
+                LineageEventType::ProjectListed,
+                LineageEventType::ServerListed,
+                LineageEventType::StorageProfileListed,
+                LineageEventType::WarehouseListed,
+            ]
+        );
+        assert_eq!(
+            lineage_events[0].payload["policy-count"],
+            serde_json::json!(2)
+        );
+        assert_eq!(
+            lineage_events[3].payload["storage-profile-count"],
+            serde_json::json!(2)
+        );
+        assert_eq!(
+            lineage_events[4].payload["project-id"],
+            serde_json::json!("analytics")
         );
     }
 

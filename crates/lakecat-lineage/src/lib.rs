@@ -45,9 +45,13 @@ pub enum LineageEventType {
     NamespaceDropped,
     NamespaceListed,
     NamespaceLoaded,
+    PolicyBindingListed,
     PolicyBindingUpserted,
+    ProjectListed,
     ProjectUpserted,
+    ServerListed,
     ServerUpserted,
+    StorageProfileListed,
     StorageProfileUpserted,
     TableCreated,
     TableLoaded,
@@ -59,6 +63,7 @@ pub enum LineageEventType {
     ViewLoaded,
     ViewListed,
     ViewUpserted,
+    WarehouseListed,
     WarehouseUpserted,
     CredentialsVendAttempted,
     QueryGraphBootstrap,
@@ -197,6 +202,22 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
                 }
             }
         })],
+        LineageEventType::PolicyBindingListed => vec![json!({
+            "namespace": "lakecat.policy-list",
+            "name": event
+                .payload
+                .get("warehouse")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown"),
+            "facets": {
+                "lakecat_policyBinding": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-policy-binding-facet/0.1.0.json",
+                    "warehouse": event.payload.get("warehouse"),
+                    "payload": event.payload,
+                }
+            }
+        })],
         LineageEventType::PolicyBindingUpserted => vec![json!({
             "namespace": "lakecat.policy",
             "name": event
@@ -209,6 +230,17 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
                     "_producer": "https://querygraph.ai/lakecat",
                     "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-policy-binding-facet/0.1.0.json",
                     "warehouse": event.payload.get("warehouse"),
+                    "payload": event.payload,
+                }
+            }
+        })],
+        LineageEventType::ProjectListed => vec![json!({
+            "namespace": "lakecat.project-list",
+            "name": "projects",
+            "facets": {
+                "lakecat_project": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-project-facet/0.1.0.json",
                     "payload": event.payload,
                 }
             }
@@ -228,6 +260,17 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
                 }
             }
         })],
+        LineageEventType::ServerListed => vec![json!({
+            "namespace": "lakecat.server-list",
+            "name": "servers",
+            "facets": {
+                "lakecat_server": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-server-facet/0.1.0.json",
+                    "payload": event.payload,
+                }
+            }
+        })],
         LineageEventType::ServerUpserted => vec![json!({
             "namespace": "lakecat.server",
             "name": event
@@ -239,6 +282,22 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
                 "lakecat_server": {
                     "_producer": "https://querygraph.ai/lakecat",
                     "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-server-facet/0.1.0.json",
+                    "payload": event.payload,
+                }
+            }
+        })],
+        LineageEventType::StorageProfileListed => vec![json!({
+            "namespace": "lakecat.storage-profile-list",
+            "name": event
+                .payload
+                .get("warehouse")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown"),
+            "facets": {
+                "lakecat_storageProfile": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-storage-profile-facet/0.1.0.json",
+                    "warehouse": event.payload.get("warehouse"),
                     "payload": event.payload,
                 }
             }
@@ -275,6 +334,21 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
                     "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-view-facet/0.1.0.json",
                     "warehouse": event.payload.get("warehouse"),
                     "namespace": event.payload.get("namespace"),
+                    "payload": event.payload,
+                }
+            }
+        })],
+        LineageEventType::WarehouseListed => vec![json!({
+            "namespace": "lakecat.warehouse-list",
+            "name": event
+                .payload
+                .get("project-id")
+                .and_then(Value::as_str)
+                .unwrap_or("warehouses"),
+            "facets": {
+                "lakecat_warehouse": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-warehouse-facet/0.1.0.json",
                     "payload": event.payload,
                 }
             }
@@ -378,9 +452,13 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::NamespaceDropped => "namespace-dropped",
         LineageEventType::NamespaceListed => "namespace-listed",
         LineageEventType::NamespaceLoaded => "namespace-loaded",
+        LineageEventType::PolicyBindingListed => "policy-binding-listed",
         LineageEventType::PolicyBindingUpserted => "policy-binding-upserted",
+        LineageEventType::ProjectListed => "project-listed",
         LineageEventType::ProjectUpserted => "project-upserted",
+        LineageEventType::ServerListed => "server-listed",
         LineageEventType::ServerUpserted => "server-upserted",
+        LineageEventType::StorageProfileListed => "storage-profile-listed",
         LineageEventType::StorageProfileUpserted => "storage-profile-upserted",
         LineageEventType::TableCreated => "table-created",
         LineageEventType::TableLoaded => "table-loaded",
@@ -392,6 +470,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::ViewLoaded => "view-loaded",
         LineageEventType::ViewListed => "view-listed",
         LineageEventType::ViewUpserted => "view-upserted",
+        LineageEventType::WarehouseListed => "warehouse-listed",
         LineageEventType::WarehouseUpserted => "warehouse-upserted",
         LineageEventType::CredentialsVendAttempted => "credentials-vend-attempted",
         LineageEventType::QueryGraphBootstrap => "querygraph-bootstrap",
@@ -620,6 +699,26 @@ mod tests {
             json!("policy:agent-read")
         );
 
+        let policy_list = open_lineage_event(&LineageEvent::new(
+            LineageEventType::PolicyBindingListed,
+            Principal::anonymous(),
+            None,
+            json!({
+                "warehouse": "local",
+                "policy-count": 2
+            }),
+        ));
+        assert_eq!(policy_list["job"]["name"], json!("policy-binding-listed"));
+        assert_eq!(
+            policy_list["outputs"][0]["namespace"],
+            json!("lakecat.policy-list")
+        );
+        assert_eq!(policy_list["outputs"][0]["name"], json!("local"));
+        assert_eq!(
+            policy_list["outputs"][0]["facets"]["lakecat_policyBinding"]["payload"]["policy-count"],
+            json!(2)
+        );
+
         let project = open_lineage_event(&LineageEvent::new(
             LineageEventType::ProjectUpserted,
             Principal::anonymous(),
@@ -639,6 +738,25 @@ mod tests {
             json!("Default Project")
         );
 
+        let project_list = open_lineage_event(&LineageEvent::new(
+            LineageEventType::ProjectListed,
+            Principal::anonymous(),
+            None,
+            json!({
+                "project-count": 3
+            }),
+        ));
+        assert_eq!(project_list["job"]["name"], json!("project-listed"));
+        assert_eq!(
+            project_list["outputs"][0]["namespace"],
+            json!("lakecat.project-list")
+        );
+        assert_eq!(project_list["outputs"][0]["name"], json!("projects"));
+        assert_eq!(
+            project_list["outputs"][0]["facets"]["lakecat_project"]["payload"]["project-count"],
+            json!(3)
+        );
+
         let server = open_lineage_event(&LineageEvent::new(
             LineageEventType::ServerUpserted,
             Principal::anonymous(),
@@ -656,6 +774,25 @@ mod tests {
         assert_eq!(
             server["outputs"][0]["facets"]["lakecat_server"]["payload"]["server-record"]["display-name"],
             json!("Production")
+        );
+
+        let server_list = open_lineage_event(&LineageEvent::new(
+            LineageEventType::ServerListed,
+            Principal::anonymous(),
+            None,
+            json!({
+                "server-count": 2
+            }),
+        ));
+        assert_eq!(server_list["job"]["name"], json!("server-listed"));
+        assert_eq!(
+            server_list["outputs"][0]["namespace"],
+            json!("lakecat.server-list")
+        );
+        assert_eq!(server_list["outputs"][0]["name"], json!("servers"));
+        assert_eq!(
+            server_list["outputs"][0]["facets"]["lakecat_server"]["payload"]["server-count"],
+            json!(2)
         );
 
         let storage_profile = open_lineage_event(&LineageEvent::new(
@@ -689,6 +826,29 @@ mod tests {
             storage_profile["outputs"][0]["facets"]["lakecat_storageProfile"]["payload"]["storage-profile"]
                 ["provider"],
             json!("s3")
+        );
+
+        let storage_profile_list = open_lineage_event(&LineageEvent::new(
+            LineageEventType::StorageProfileListed,
+            Principal::anonymous(),
+            None,
+            json!({
+                "warehouse": "local",
+                "storage-profile-count": 2
+            }),
+        ));
+        assert_eq!(
+            storage_profile_list["job"]["name"],
+            json!("storage-profile-listed")
+        );
+        assert_eq!(
+            storage_profile_list["outputs"][0]["namespace"],
+            json!("lakecat.storage-profile-list")
+        );
+        assert_eq!(storage_profile_list["outputs"][0]["name"], json!("local"));
+        assert_eq!(
+            storage_profile_list["outputs"][0]["facets"]["lakecat_storageProfile"]["payload"]["storage-profile-count"],
+            json!(2)
         );
 
         let view = open_lineage_event(&LineageEvent::new(
@@ -766,6 +926,26 @@ mod tests {
         assert_eq!(
             warehouse["outputs"][0]["facets"]["lakecat_warehouse"]["payload"]["warehouse-record"]["storage-root"],
             json!("file:///tmp/lakecat")
+        );
+
+        let warehouse_list = open_lineage_event(&LineageEvent::new(
+            LineageEventType::WarehouseListed,
+            Principal::anonymous(),
+            None,
+            json!({
+                "project-id": "analytics",
+                "warehouse-count": 2
+            }),
+        ));
+        assert_eq!(warehouse_list["job"]["name"], json!("warehouse-listed"));
+        assert_eq!(
+            warehouse_list["outputs"][0]["namespace"],
+            json!("lakecat.warehouse-list")
+        );
+        assert_eq!(warehouse_list["outputs"][0]["name"], json!("analytics"));
+        assert_eq!(
+            warehouse_list["outputs"][0]["facets"]["lakecat_warehouse"]["payload"]["warehouse-count"],
+            json!(2)
         );
     }
 

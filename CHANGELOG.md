@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Replayed management list outbox events for policy bindings, projects,
+  servers, storage profiles, and warehouses into LakeCat OpenLineage receipts
+  so control-plane read paths carry durable replay evidence without inventing
+  list-specific graph nodes in LakeCat.
 - Clarified `GOAL.md` with path-qualified Sail, Grust, TypeSec, and QueryGraph
   boundaries plus explicit feature-gate and Turso durable-spine guidance.
 - Replayed `table.restored` outbox events into catalog-facing Table graph

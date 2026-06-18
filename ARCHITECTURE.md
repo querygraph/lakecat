@@ -343,6 +343,10 @@ to Grust.
 Governed policy management endpoints can now upsert/list enforced ODRL policy
 bindings, and active table bindings are attached to authorization context before
 TypeSec runs.
+Management list reads for policy bindings, projects, servers, storage profiles,
+and warehouses now replay into LakeCat OpenLineage receipts, giving QueryGraph
+durable control-plane read evidence without adding list-specific graph nodes in
+LakeCat.
 
 Required tables:
 

@@ -923,6 +923,10 @@ id, so downstream acceptance can check replay identity without parsing the full
 audit payload. Table restores replay as table graph evidence plus a restore
 OpenLineage receipt, so a soft-deleted table returning to service is visible to
 QueryGraph without forcing LakeCat to invent restore-specific graph taxonomy.
+Management list reads for policy bindings, projects, servers, storage profiles,
+and warehouses replay as OpenLineage receipts too. They intentionally do not
+create list-specific graph nodes in LakeCat; Grust owns the reusable hierarchy
+and traversal model.
 
 The end-to-end result is a chain:
 
