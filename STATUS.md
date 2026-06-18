@@ -6,6 +6,22 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `44d0265 Constrain QGLake fetched files to table location`.
+- Paused after pushing the QGLake fetched-file table-location proof slice. The
+  `lakecat-cli qglake-fixture` governed `fetchScanTasks` verifier now carries
+  the fixture table location through the live plan/fetch check and rejects any
+  fetched Iceberg data-file path outside that table location, catching
+  escaped-path or wrong-table scan work.
+- Local verification for the pushed QGLake fetched-file table-location proof
+  slice was green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_fetch_scan_tasks_verifier`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens --features sail-local,turso-local`.
+- This status commit records the pushed QGLake fetched-file table-location
+  proof slice.
+- Previous implementation slice:
   `d9c8ac7 Require QGLake fetched data files`.
 - Paused after pushing the QGLake fetched-data-file proof slice. The
   `lakecat-cli qglake-fixture` governed `fetchScanTasks` verifier now rejects
