@@ -6,6 +6,30 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `67ebd4f Bind QGLake view replay to view version`.
+- Paused after adding compact `view-version` evidence to lineage-drain event
+  summaries and binding QGLake view replay acceptance to the accepted
+  QueryGraph bootstrap view artifact version. QueryGraph verification now
+  exports a stable-id-to-version map for views, service replay summaries expose
+  replayed view versions, and QGLake rejects replay that reports a stale or
+  missing version for a currently verified view.
+- Local verification for the QGLake view-version replay slice was green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -p lakecat-querygraph`;
+  `cargo test -p lakecat-service outbox_drain_projects_view_events_to_graph_and_lineage`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-querygraph projects_catalog_views_into_querygraph_bundle`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -p lakecat-querygraph -p lakecat-sail -- --check`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `3f45f69 Add durable view version evidence`.
 - Paused after adding store-assigned durable `view-version` counters to
   `ViewRecord` values in memory and Turso stores. View responses now expose the
@@ -2028,7 +2052,9 @@ Updated: 2026-06-18
 
 ## Next Recommended Slice
 
-Rerun the manual GitHub Actions workflow after pushing the Sail patch bridge.
-If the matrix is green, keep automatic push/PR triggers disabled until the Sail
-helper commits can be checked out from a real upstream branch, then remove the
-temporary `ci/sail-patches/` bridge.
+Continue the local-first view semantics track by adding the next narrow bridge
+toward Iceberg view history: persist a compact view version audit/commit-log
+receipt or push the reusable history model into Sail if the work stops being
+catalog-boundary state. Keep CI manual-only until local gates are green and the
+temporary Sail patch bridge can be replaced by an upstream branch or published
+Sail helper crate.
