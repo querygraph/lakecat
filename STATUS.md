@@ -6,12 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `60c6884 Record QGLake drain receipt status`.
-- Current working slice: QueryGraph bootstrap graph integrity for QGLake
-  acceptance. The bootstrap manifest now hashes the catalog graph, manifest
-  verification rejects graph drift, and `lakecat-cli qglake-fixture` now
-  requires the fixture table's graph node and namespace edge before writing the
-  bundle.
+  `88f2853 Hash QueryGraph bootstrap graph`.
+- Current working slice: paused after QueryGraph bootstrap graph integrity for
+  QGLake acceptance. The bootstrap manifest now hashes the catalog graph,
+  manifest verification rejects graph drift, and `lakecat-cli qglake-fixture`
+  now requires the fixture table's graph node and namespace edge before writing
+  the bundle.
 - Local verification for the current slice is green:
   `cargo fmt -p lakecat-querygraph -p lakecat-cli -- --check`;
   `git diff --check`;
