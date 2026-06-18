@@ -6,6 +6,27 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `ae3b796 Replay namespace reads into lineage`.
+- Paused after adding `namespace.listed` and `namespace.loaded` outbox replay.
+  Standard namespace reads now emit warehouse/namespace-scoped catalog graph
+  events and LakeCat OpenLineage receipts, complementing namespace create/drop
+  replay and the existing view read replay. The book now documents that
+  namespace list/load reads participate in durable graph and lineage replay
+  without leaving the Iceberg-compatible catalog surface.
+- Local verification for the namespace-read replay slice was green:
+  `cargo fmt -p lakecat-lineage -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-service outbox_drain_projects_namespace_reads_to_graph_and_lineage`;
+  `cargo test -p lakecat-lineage projects_control_plane_upserts_to_openlineage_outputs`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-lineage -p lakecat-service -p lakecat-cli -p lakecat-api -p lakecat-sail -- --check`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `da2a590 Replay view listings into lineage`.
 - Paused after adding `view.listed` outbox replay. Standard view listing reads
   now emit namespace-scoped catalog graph events and LakeCat OpenLineage
