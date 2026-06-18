@@ -5064,6 +5064,10 @@ mod tests {
             serde_json::json!("sha256:openlineage")
         );
         assert_eq!(
+            lineage_events[4].payload["querygraph-import-hash"],
+            serde_json::json!("sha256:querygraph-import")
+        );
+        assert_eq!(
             lineage_events[4].payload["table-artifacts"][0]["cdif-hash"],
             serde_json::json!("sha256:cdif")
         );
@@ -5423,6 +5427,10 @@ mod tests {
         assert_eq!(
             lineage_events[0].payload["graph-hash"],
             serde_json::json!("sha256:graph")
+        );
+        assert_eq!(
+            lineage_events[0].payload["querygraph-import-hash"],
+            serde_json::json!("sha256:querygraph-import")
         );
         assert_eq!(
             lineage_events[0].payload["table-artifacts"][0]["croissant-hash"],

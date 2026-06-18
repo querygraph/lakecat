@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Mirrored QueryGraph bootstrap proof hashes, including the import-compatibility
+  hash, into the OpenLineage bootstrap facet and pinned lineage replay payload
+  tests to preserve the import hash.
 - Added QueryGraph import-hash evidence to `querygraph.bootstrap`
   outbox/replay summaries and required QGLake lineage-drain acceptance to match
   it against the accepted bootstrap import contract.

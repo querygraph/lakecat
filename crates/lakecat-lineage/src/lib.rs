@@ -166,6 +166,10 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
                     "warehouse": event.payload.get("warehouse"),
                     "tableCount": event.payload.get("table-count"),
                     "policyBindingCount": event.payload.get("policy-binding-count"),
+                    "bundleHash": event.payload.get("bundle-hash"),
+                    "graphHash": event.payload.get("graph-hash"),
+                    "openLineageHash": event.payload.get("open-lineage-hash"),
+                    "queryGraphImportHash": event.payload.get("querygraph-import-hash"),
                     "payload": event.payload,
                 }
             }
@@ -300,6 +304,10 @@ mod tests {
                 "warehouse": "local",
                 "table-count": 1,
                 "policy-binding-count": 1,
+                "bundle-hash": "sha256:bundle",
+                "graph-hash": "sha256:graph",
+                "open-lineage-hash": "sha256:openlineage",
+                "querygraph-import-hash": "sha256:querygraph-import",
                 "authorization-receipt": {
                     "request-identity": {
                         "attestation-state": "verified",
@@ -319,6 +327,22 @@ mod tests {
         assert_eq!(
             projected["outputs"][0]["facets"]["queryGraph_bootstrap"]["tableCount"],
             json!(1)
+        );
+        assert_eq!(
+            projected["outputs"][0]["facets"]["queryGraph_bootstrap"]["bundleHash"],
+            json!("sha256:bundle")
+        );
+        assert_eq!(
+            projected["outputs"][0]["facets"]["queryGraph_bootstrap"]["graphHash"],
+            json!("sha256:graph")
+        );
+        assert_eq!(
+            projected["outputs"][0]["facets"]["queryGraph_bootstrap"]["openLineageHash"],
+            json!("sha256:openlineage")
+        );
+        assert_eq!(
+            projected["outputs"][0]["facets"]["queryGraph_bootstrap"]["queryGraphImportHash"],
+            json!("sha256:querygraph-import")
         );
         assert_eq!(
             projected["outputs"][0]["facets"]["queryGraph_bootstrap"]["payload"]["authorization-receipt"]

@@ -226,7 +226,8 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   the catalog graph so QueryGraph import can reject graph projection drift;
   `querygraph.bootstrap` outbox events now project into LakeCat OpenLineage
   output events carrying the bootstrap authorization/request-identity payload
-  plus verified bundle, graph, and OpenLineage hashes for QueryGraph replay;
+  plus verified bundle, graph, OpenLineage, and QueryGraph import-compatibility
+  hashes for QueryGraph replay;
   LakeCat now exposes a governed lineage-drain
   management endpoint and `lakecat-cli qglake-fixture` drains the outbox after
   writing the verified bootstrap bundle, failing the fixture if the drain
@@ -243,8 +244,8 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   table-only bundle hash matching the current QueryGraph Rust importer hash
   domain, and QGLake acceptance refuses bundles that drop that import evidence;
   `querygraph.bootstrap` audit/outbox replay now also carries that import hash
-  into lineage-drain summaries so acceptance proves the durable replay stream
-  matches the same QueryGraph import contract.*
+  into lineage-drain summaries and the OpenLineage bootstrap facet so acceptance
+  proves the durable replay stream matches the same QueryGraph import contract.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond
