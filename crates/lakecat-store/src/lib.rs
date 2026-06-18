@@ -183,6 +183,7 @@ pub trait CatalogStore: Send + Sync + 'static {
         warehouse: &WarehouseName,
         namespace: &Namespace,
         view: &TableName,
+        _principal: Principal,
     ) -> LakeCatResult<ViewRecord> {
         let record = self.load_view(warehouse, namespace, view).await?;
         Ok(record)
@@ -551,6 +552,7 @@ fn default_view_version() -> u64 {
 #[serde(rename_all = "kebab-case")]
 pub enum ViewVersionOperation {
     Upsert,
+    Drop,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -583,6 +585,23 @@ impl ViewVersionReceipt {
             view_version: view.view_version,
             previous_view_version: previous.map(|previous| previous.view_version),
             operation: ViewVersionOperation::Upsert,
+            view_hash: content_hash_json(&serde_json::to_value(view).map_err(|err| {
+                LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
+            })?)?,
+            principal,
+            recorded_at: Utc::now(),
+        })
+    }
+
+    fn drop(view: &ViewRecord, principal: Principal) -> LakeCatResult<Self> {
+        Ok(Self {
+            stable_id: view_stable_id(view),
+            warehouse: view.warehouse.clone(),
+            namespace: view.namespace.clone(),
+            name: view.name.clone(),
+            view_version: view.view_version,
+            previous_view_version: Some(view.view_version),
+            operation: ViewVersionOperation::Drop,
             view_hash: content_hash_json(&serde_json::to_value(view).map_err(|err| {
                 LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
             })?)?,
@@ -1439,15 +1458,19 @@ impl CatalogStore for MemoryCatalogStore {
         warehouse: &WarehouseName,
         namespace: &Namespace,
         view: &TableName,
+        principal: Principal,
     ) -> LakeCatResult<ViewRecord> {
         let mut state = self.state.write().await;
-        state
+        let record = state
             .views
             .remove(&view_key_parts(warehouse, namespace, view))
             .ok_or_else(|| LakeCatError::NotFound {
                 object: "view",
                 name: view.as_str().to_string(),
-            })
+            })?;
+        let receipt = ViewVersionReceipt::drop(&record, principal)?;
+        state.view_version_receipts.push(receipt);
+        Ok(record)
     }
 
     async fn list_views(
@@ -2141,12 +2164,27 @@ mod memory_tests {
                 .drop_view(
                     &warehouse,
                     &namespace,
-                    &TableName::new("active_customers").unwrap()
+                    &TableName::new("active_customers").unwrap(),
+                    Principal::anonymous()
                 )
                 .await
                 .unwrap(),
             updated
         );
+        let receipts = store
+            .list_view_version_receipts(
+                &warehouse,
+                &namespace,
+                &TableName::new("active_customers").unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(receipts.len(), 3);
+        assert_eq!(receipts[2].stable_id, receipts[1].stable_id);
+        assert_eq!(receipts[2].view_version, 2);
+        assert_eq!(receipts[2].previous_view_version, Some(2));
+        assert_eq!(receipts[2].operation, ViewVersionOperation::Drop);
+        assert_eq!(receipts[2].view_hash, receipts[1].view_hash);
         assert_eq!(
             store.list_views(&warehouse, &namespace).await.unwrap(),
             Vec::<ViewRecord>::new()
@@ -2156,7 +2194,8 @@ mod memory_tests {
                 .drop_view(
                     &warehouse,
                     &namespace,
-                    &TableName::new("active_customers").unwrap()
+                    &TableName::new("active_customers").unwrap(),
+                    Principal::anonymous()
                 )
                 .await,
             Err(LakeCatError::NotFound { object, name })
@@ -2239,7 +2278,7 @@ pub mod turso_store {
     use async_trait::async_trait;
     use chrono::Utc;
     use lakecat_core::{
-        LakeCatError, LakeCatResult, Namespace, TableIdent, TableName, WarehouseName,
+        LakeCatError, LakeCatResult, Namespace, Principal, TableIdent, TableName, WarehouseName,
         content_hash_bytes, content_hash_json,
     };
     use serde::de::DeserializeOwned;
@@ -3312,16 +3351,69 @@ pub mod turso_store {
             warehouse: &WarehouseName,
             namespace: &Namespace,
             view: &TableName,
+            principal: Principal,
         ) -> LakeCatResult<ViewRecord> {
-            let conn = self.connect()?;
+            let mut conn = self.connect()?;
             let view_key = view_key_parts(warehouse, namespace, view);
-            let record = self.load_view(warehouse, namespace, view).await?;
-            conn.execute(
+            let tx = conn.transaction().await.map_err(turso_error)?;
+            let record = tx
+                .query(
+                    "select record_json from views
+                     where view_key = ?1
+                     limit 1",
+                    (view_key.as_str(),),
+                )
+                .await
+                .map_err(turso_error)?
+                .next()
+                .await
+                .map_err(turso_error)?
+                .map(|row| decode_json::<ViewRecord>(row_string(&row, 0)?))
+                .transpose()?
+                .ok_or_else(|| LakeCatError::NotFound {
+                    object: "view",
+                    name: view.as_str().to_string(),
+                })?;
+            let receipt = ViewVersionReceipt::drop(&record, principal)?;
+            let receipt_id =
+                content_hash_json(&serde_json::to_value(&receipt).map_err(|err| {
+                    LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
+                })?)?;
+            let previous_view_version = receipt
+                .previous_view_version
+                .map(|version| checked_i64(version, "previous view version"))
+                .transpose()?;
+            tx.execute(
                 "delete from views where view_key = ?1",
                 (view_key.as_str(),),
             )
             .await
             .map_err(turso_error)?;
+            tx.execute(
+                "insert into view_version_receipts (
+                    receipt_id, view_key, warehouse, namespace_path, view_name,
+                    view_version, previous_view_version, operation, view_hash,
+                    principal_json, receipt_json, recorded_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                (
+                    receipt_id.as_str(),
+                    view_key.as_str(),
+                    receipt.warehouse.as_str(),
+                    receipt.namespace.path().as_str(),
+                    receipt.name.as_str(),
+                    checked_i64(receipt.view_version, "view version")?,
+                    previous_view_version,
+                    "drop",
+                    receipt.view_hash.as_str(),
+                    encode_json(&receipt.principal)?,
+                    encode_json(&receipt)?,
+                    receipt.recorded_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
+            tx.commit().await.map_err(turso_error)?;
             Ok(record)
         }
 
@@ -4107,12 +4199,27 @@ pub mod turso_store {
                     .drop_view(
                         &warehouse,
                         &namespace,
-                        &TableName::new("active_customers").unwrap()
+                        &TableName::new("active_customers").unwrap(),
+                        Principal::anonymous()
                     )
                     .await
                     .unwrap(),
                 updated
             );
+            let receipts = store
+                .list_view_version_receipts(
+                    &warehouse,
+                    &namespace,
+                    &TableName::new("active_customers").unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(receipts.len(), 3);
+            assert_eq!(receipts[2].stable_id, receipts[1].stable_id);
+            assert_eq!(receipts[2].view_version, 2);
+            assert_eq!(receipts[2].previous_view_version, Some(2));
+            assert_eq!(receipts[2].operation, ViewVersionOperation::Drop);
+            assert_eq!(receipts[2].view_hash, receipts[1].view_hash);
             assert_eq!(
                 store.list_views(&warehouse, &namespace).await.unwrap(),
                 Vec::<ViewRecord>::new()
@@ -4122,7 +4229,8 @@ pub mod turso_store {
                     .drop_view(
                         &warehouse,
                         &namespace,
-                        &TableName::new("active_customers").unwrap()
+                        &TableName::new("active_customers").unwrap(),
+                        Principal::anonymous()
                     )
                     .await,
                 Err(LakeCatError::NotFound { object, name })

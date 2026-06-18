@@ -332,7 +332,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   drain summaries expose compact view warehouse/namespace/name/stable-id/version
   evidence and QueryGraph bootstrap replay exposes matching view-version receipt
   hashes for QGLake acceptance, and a governed management read endpoint exposes
-  compact view-version receipt chains for QueryGraph/operators while leaving
+  compact view-version receipt chains for QueryGraph/operators; view drops now
+  append a compact tombstone receipt that preserves the last durable view
+  version and content hash after the current view row is removed, while leaving
   reusable view graph topology to Grust; QueryGraph bootstrap now exports those
   stored views with manifest-covered OSI hashes, typed view columns, durable
   view versions, view-aware graph edges, and OpenLineage view counts, and QGLake

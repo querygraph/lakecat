@@ -857,7 +857,11 @@ QueryGraph can compare a bootstrap view artifact with the catalog's current
 view version today. LakeCat also writes a compact view-version receipt in the
 durable store. The receipt records the stable view id, assigned version,
 previous version, content hash, principal, operation, and timestamp. Fuller
-version-log semantics remain a Sail-aligned implementation target.
+version-log semantics remain a Sail-aligned implementation target. When a view
+is dropped, LakeCat appends a compact tombstone receipt instead of inventing a
+new view version: the receipt keeps `view-version` at the last durable version,
+sets `operation` to `drop`, and preserves the last content hash so QueryGraph
+or an operator can prove which catalog view state was removed.
 
 ```json
 {
@@ -920,14 +924,23 @@ curl -s \
       "operation": "upsert",
       "view-hash": "sha256:...",
       "receipt-hash": "sha256:..."
+    },
+    {
+      "stable-id": "lakecat:view:local:default:events_view",
+      "view-version": 1,
+      "previous-view-version": 1,
+      "operation": "drop",
+      "view-hash": "sha256:...",
+      "receipt-hash": "sha256:..."
     }
   ]
 }
 ```
 
 The response is catalog evidence, not Iceberg table metadata. It lets
-QueryGraph verify the version chain while keeping the richer view history model
-available for a future Sail-owned implementation.
+QueryGraph verify the version chain, including tombstones after the current
+view row is gone, while keeping the richer view history model available for a
+future Sail-owned implementation.
 
 ### QueryGraph Bootstrap
 

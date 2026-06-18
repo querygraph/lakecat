@@ -950,12 +950,18 @@ pub mod catalog_provider {
             options: DropViewOptions,
         ) -> CatalogResult<()> {
             let receipt = self.authorize_catalog(CatalogAction::ViewDrop).await?;
-            let _capability = ViewDropCapability::from_receipt(receipt).map_err(catalog_error)?;
+            let capability =
+                ViewDropCapability::from_receipt(receipt.clone()).map_err(catalog_error)?;
             let namespace = lakecat_namespace(database)?;
             let view_name = TableName::new(view).map_err(catalog_error)?;
             match self
                 .store
-                .drop_view(&self.warehouse, &namespace, &view_name)
+                .drop_view(
+                    &self.warehouse,
+                    &namespace,
+                    &view_name,
+                    capability.receipt().principal.clone(),
+                )
                 .await
             {
                 Ok(_) => Ok(()),

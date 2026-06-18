@@ -2226,7 +2226,12 @@ async fn drop_view(
     let capability = authorize_view_drop(&state, request_identity(&headers)?).await?;
     let record = state
         .store
-        .drop_view(&warehouse, &namespace, &view_name)
+        .drop_view(
+            &warehouse,
+            &namespace,
+            &view_name,
+            capability.receipt().principal.clone(),
+        )
         .await?;
     record_view_drop_audit(&state, &warehouse, &namespace, &record, &capability, None).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -2283,7 +2288,12 @@ async fn catalog_drop_view(
     let capability = authorize_view_drop(&state, request_identity(&headers)?).await?;
     let record = state
         .store
-        .drop_view(&warehouse, &namespace, &view_name)
+        .drop_view(
+            &warehouse,
+            &namespace,
+            &view_name,
+            capability.receipt().principal.clone(),
+        )
         .await?;
     record_view_drop_audit(
         &state,
@@ -3872,6 +3882,7 @@ fn principal_kind_name(kind: &PrincipalKind) -> &'static str {
 fn view_version_operation(operation: &ViewVersionOperation) -> &'static str {
     match operation {
         ViewVersionOperation::Upsert => "upsert",
+        ViewVersionOperation::Drop => "drop",
     }
 }
 
@@ -8616,6 +8627,32 @@ mod tests {
             .unwrap();
         let response = app.clone().oneshot(management_drop).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        let receipts_after_drop = Request::builder()
+            .method(Method::GET)
+            .uri(
+                "/management/v1/warehouses/local/namespaces/default/views/active_customers/version-receipts",
+            )
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(receipts_after_drop).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let receipts = body["receipts"].as_array().unwrap();
+        assert_eq!(receipts.len(), 3);
+        assert_eq!(receipts[2]["view-version"], serde_json::json!(2));
+        assert_eq!(receipts[2]["previous-view-version"], serde_json::json!(2));
+        assert_eq!(receipts[2]["operation"], serde_json::json!("drop"));
+        assert_eq!(receipts[2]["view-hash"], receipts[1]["view-hash"]);
+        assert!(
+            receipts[2]["receipt-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
 
         let list = Request::builder()
             .method(Method::GET)

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Recorded compact view drop/tombstone receipts in memory and Turso stores so
+  governed receipt-chain reads preserve the last durable view version and
+  content hash after the current view row has been deleted.
 - Tightened `GOAL.md` with the permanent `AGENTS.md` operating constraints for
   Grust/Sail/TypeSec placement, QueryGraph evidence boundaries, Turso, feature
   gates, and local commit discipline.
