@@ -6,11 +6,11 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `73ae316 Add governed scan column restrictions`.
-- Current working slice: governed row predicates. LakeCat now derives row
-  predicates from enforced ODRL policy bindings, carries them in the typed
-  `ReadRestriction`, composes multiple predicates with `and`, and appends them
-  as mandatory Sail scan filters.
+  working changes: `429a08c Add governed scan row predicates`.
+- Current working slice: governed fetch-token reapplication. Sail plan-task
+  tokens now carry effective projection as well as filters, and
+  `fetch-scan-tasks` revalidates decoded tokens against the current
+  server-derived restriction before expansion.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -65,6 +65,14 @@ Updated: 2026-06-18
   can only narrow the governed read surface.
 - Proved Sail receives the policy-derived row predicate as an accepted scan
   filter while column projection is also narrowed by policy.
+- Bound structured Sail plan-task tokens to the effective projection, preserving
+  the column narrowing context through manifest-list expansion.
+- Reapplied governed projection/filter requirements on `fetch-scan-tasks` by
+  recomputing the current `ReadRestriction` in LakeCat and passing mandatory
+  requirements into the Sail expansion path.
+- Added a negative guard that legacy/no-projection plan-task tokens cannot
+  satisfy a governed projection, preventing empty projection from widening to
+  all columns during fetch.
 - Parsed a minimal enforceable ODRL subset from active policy bindings:
   `allowed-columns` / `allowedColumns` at the policy root, in
   `lakecat:read-restriction`, or in ODRL constraints, plus purpose and policy
@@ -155,6 +163,13 @@ Updated: 2026-06-18
   `cargo test -p lakecat-service table_scan_authorization_carries_policy_read_restriction`,
   and
   `cargo test -p lakecat-service --features sail-local scan_planning_applies_policy_column_restriction_before_sail -- --nocapture`.
+- Governed fetch-token reapplication focused checks passed:
+  `cargo fmt -p lakecat-sail -p lakecat-service -- --check`,
+  `cargo test -p lakecat-sail --features sail-local preserves_filter_context_and_prunes_loaded_file_bounds -- --nocapture`,
+  `cargo test -p lakecat-service --features sail-local scan_planning_applies_policy_column_restriction_before_sail -- --nocapture`,
+  `cargo test -p lakecat-service --all-features`,
+  `cargo test -p lakecat-sail --all-features`,
+  and `cargo test --workspace --all-features`.
 - Governed read restriction focused checks passed:
   `cargo fmt -p lakecat-security -p lakecat-service -- --check`,
   `cargo test -p lakecat-security`,

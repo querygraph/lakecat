@@ -166,10 +166,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
      and policy hashes.*
   3. Apply it as a mandatory projection/filter through a Sail-planned read that
      flows through `LakeCatCatalogProvider`; re-apply on `fetch-scan-tasks`.
-     *Started: scan planning intersects client projection with allowed columns
-     and appends policy-derived row predicates before calling Sail;
-     Delegate→RBAC composition, provider read routing, and fetch-token
-     reapplication remain open.*
+     *Started: scan planning intersects client projection with allowed columns,
+     appends policy-derived row predicates before calling Sail, and
+     revalidates fetch-scan-tasks tokens against the current server-derived
+     restriction; Delegate→RBAC composition and provider read routing remain
+     open.*
   *Smallest end-to-end version landed first: a single allowed-columns list is
   enforced on one table, proven by a test where an agent asks for two columns
   and Sail receives one.*

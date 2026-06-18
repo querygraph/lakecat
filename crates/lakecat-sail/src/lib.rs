@@ -73,6 +73,10 @@ pub struct FetchScanTasksRequest {
     pub metadata_location: Option<String>,
     pub table_metadata: Value,
     pub plan_task: String,
+    #[serde(default)]
+    pub required_projection: Vec<String>,
+    #[serde(default)]
+    pub required_filters: Vec<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -2054,6 +2058,8 @@ pub mod sail_integration {
                     "plan-task": decoded.raw,
                     "task-kind": decoded.kind,
                     "manifest-path": decoded.path,
+                    "projection": decoded.projection,
+                    "filters": decoded.filters,
                     "sail-metadata": metadata_summary,
                 })),
             })
@@ -2513,6 +2519,7 @@ pub mod sail_integration {
                             "incremental-manifest-list",
                             snapshot.snapshot_id(),
                             snapshot.manifest_list(),
+                            &request.projection,
                             &request.filters,
                         )?,
                         metadata_location: metadata_location.clone(),
@@ -2544,6 +2551,7 @@ pub mod sail_integration {
                     "manifest-list",
                     snapshot.snapshot_id(),
                     snapshot.manifest_list(),
+                    &request.projection,
                     &request.filters,
                 )?,
                 metadata_location,
@@ -2573,6 +2581,7 @@ pub mod sail_integration {
                         "manifest",
                         snapshot.snapshot_id(),
                         manifest_path,
+                        &request.projection,
                         &request.filters,
                     )?,
                     metadata_location: metadata_location.clone(),
@@ -2669,6 +2678,7 @@ pub mod sail_integration {
                     "manifest-list",
                     snapshot_id,
                     manifest_list,
+                    &request.projection,
                     &request.filters,
                 )?,
                 metadata_location,
@@ -2686,6 +2696,7 @@ pub mod sail_integration {
         kind: &str,
         snapshot_id: i64,
         path: &str,
+        projection: &[String],
         filters: &[Value],
     ) -> LakeCatResult<String> {
         let payload = EncodedPlanTask {
@@ -2693,6 +2704,7 @@ pub mod sail_integration {
             kind: kind.to_string(),
             snapshot_id,
             path: path.to_string(),
+            projection: projection.to_vec(),
             filters: filters.to_vec(),
         };
         let bytes = serde_json::to_vec(&payload).map_err(|err| {
@@ -2816,6 +2828,7 @@ pub mod sail_integration {
                         "manifest",
                         decoded.snapshot_id,
                         &manifest.manifest_path,
+                        &decoded.projection,
                         &decoded.filters,
                     )?,
                     metadata_location: request.metadata_location.clone(),
@@ -3490,6 +3503,7 @@ pub mod sail_integration {
         kind: String,
         snapshot_id: i64,
         path: String,
+        projection: Vec<String>,
         filters: Vec<Value>,
     }
 
@@ -3500,6 +3514,8 @@ pub mod sail_integration {
         kind: String,
         snapshot_id: i64,
         path: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        projection: Vec<String>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         filters: Vec<Value>,
     }
@@ -3588,6 +3604,7 @@ pub mod sail_integration {
             kind: kind.to_string(),
             snapshot_id,
             path: path.to_string(),
+            projection: Vec::new(),
             filters: Vec::new(),
         })
     }
@@ -3613,6 +3630,7 @@ pub mod sail_integration {
             kind: task.kind,
             snapshot_id: task.snapshot_id,
             path: task.path,
+            projection: task.projection,
             filters: task.filters,
         })
     }
@@ -3664,6 +3682,8 @@ pub mod sail_integration {
                 request.table.stable_id()
             )));
         }
+        validate_decoded_projection(request, decoded)?;
+        validate_decoded_filters(request, decoded)?;
         if let Some(metadata) = typed_metadata {
             let snapshot = selected_snapshot(metadata, Some(decoded.snapshot_id))?;
             match decoded.kind.as_str() {
@@ -3712,6 +3732,46 @@ pub mod sail_integration {
                 )))
             }
         }
+    }
+
+    fn validate_decoded_projection(
+        request: &FetchScanTasksRequest,
+        decoded: &DecodedPlanTask,
+    ) -> LakeCatResult<()> {
+        if request.required_projection.is_empty() {
+            return Ok(());
+        }
+        if decoded.projection.is_empty() {
+            return Err(LakeCatError::InvalidArgument(
+                "plan task omits the required governed projection".to_string(),
+            ));
+        }
+        if decoded.projection.iter().all(|column| {
+            request
+                .required_projection
+                .iter()
+                .any(|required| required == column)
+        }) {
+            Ok(())
+        } else {
+            Err(LakeCatError::InvalidArgument(
+                "plan task projection widens the governed read restriction".to_string(),
+            ))
+        }
+    }
+
+    fn validate_decoded_filters(
+        request: &FetchScanTasksRequest,
+        decoded: &DecodedPlanTask,
+    ) -> LakeCatResult<()> {
+        for required in &request.required_filters {
+            if !decoded.filters.iter().any(|filter| filter == required) {
+                return Err(LakeCatError::InvalidArgument(
+                    "plan task omits a required governed filter".to_string(),
+                ));
+            }
+        }
+        Ok(())
     }
 
     async fn manifest_path_matches_local_manifest_list(
@@ -4436,6 +4496,8 @@ pub mod sail_integration {
                     metadata_location: Some(metadata_location.clone()),
                     table_metadata: metadata.clone(),
                     plan_task,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                 })
                 .await
                 .expect("fetch should expand manifest list through Sail I/O");
@@ -4477,6 +4539,8 @@ pub mod sail_integration {
                     metadata_location: Some(metadata_location),
                     table_metadata: metadata,
                     plan_task: manifest_plan_task,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                 })
                 .await
                 .expect("fetch should expand manifest through Sail I/O");
@@ -4655,6 +4719,7 @@ pub mod sail_integration {
             let decoded = decode_plan_task(plan.scan_tasks[0]["plan-task"].as_str().unwrap())
                 .expect("structured plan task should decode");
             assert_eq!(decoded.table.as_deref(), Some(table.stable_id().as_str()));
+            assert_eq!(decoded.projection, vec!["id".to_string()]);
             assert_eq!(decoded.filters.len(), 1);
             let plan_task = plan.scan_tasks[0]["plan-task"].as_str().unwrap();
             let mut tampered_plan_task = plan_task.to_string();
@@ -4686,6 +4751,8 @@ pub mod sail_integration {
                         .as_str()
                         .unwrap()
                         .to_string(),
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                 })
                 .await
                 .expect_err("structured plan tasks should be bound to the planned table");
@@ -4693,6 +4760,23 @@ pub mod sail_integration {
                 rejected
                     .to_string()
                     .contains("does not match requested table")
+            );
+            let rejected = engine
+                .fetch_scan_tasks(FetchScanTasksRequest {
+                    table: table.clone(),
+                    principal: Principal::anonymous(),
+                    metadata_location: Some(metadata_location.clone()),
+                    table_metadata: metadata.clone(),
+                    plan_task: format!("lakecat:sail:manifest-list:42:{manifest_list}"),
+                    required_projection: vec!["id".to_string()],
+                    required_filters: Vec::new(),
+                })
+                .await
+                .expect_err("legacy plan task should not satisfy a governed projection");
+            assert!(
+                rejected
+                    .to_string()
+                    .contains("required governed projection")
             );
 
             let fetched = engine
@@ -4705,6 +4789,12 @@ pub mod sail_integration {
                         .as_str()
                         .unwrap()
                         .to_string(),
+                    required_projection: vec!["id".to_string()],
+                    required_filters: vec![json!({
+                        "type": "eq",
+                        "term": "id",
+                        "value": "evt-1"
+                    })],
                 })
                 .await
                 .expect("fetch should prune files with Sail metadata bounds");
@@ -4980,6 +5070,8 @@ pub mod sail_integration {
                         .as_str()
                         .unwrap()
                         .to_string(),
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                 })
                 .await
                 .expect("incremental manifest-list task should expand through Sail I/O");

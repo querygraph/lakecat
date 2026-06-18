@@ -9,6 +9,9 @@
 - Added governed row-predicate extraction from enforced ODRL policy bindings:
   LakeCat now carries policy predicates in `ReadRestriction`, composes multiple
   predicates with `and`, and appends them as mandatory Sail scan filters.
+- Bound Sail plan-task tokens to the governed read surface by embedding the
+  effective projection alongside filters and revalidating `fetch-scan-tasks`
+  against the current server-derived restriction before expanding plan tasks.
 - Changed the QueryGraph bootstrap OSI artifact from a LakeCat-authored semantic
   model into a stable OSI handoff: LakeCat now publishes dataset/field anchors
   and governed Sail/LakeCat source metadata while leaving metrics, dimensions,

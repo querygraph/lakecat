@@ -1402,6 +1402,7 @@ async fn fetch_scan_tasks_with_capability(
     table: TableRecord,
     request: ApiFetchScanTasksRequest,
 ) -> Result<lakecat_sail::FetchScanTasksPlan, LakeCatHttpError> {
+    let restriction = capability.read_restriction()?;
     Ok(state
         .sail
         .fetch_scan_tasks(SailFetchScanTasksRequest {
@@ -1410,6 +1411,8 @@ async fn fetch_scan_tasks_with_capability(
             metadata_location: table.metadata_location,
             table_metadata: table.metadata,
             plan_task: request.plan_task,
+            required_projection: effective_projection(&[], &restriction)?,
+            required_filters: mandatory_filters(&restriction),
         })
         .await?)
 }
@@ -1873,6 +1876,10 @@ fn effective_stats_fields(requested: &[String], restriction: &ReadRestriction) -
         .filter(|column| allowed_columns.iter().any(|allowed| allowed == *column))
         .cloned()
         .collect()
+}
+
+fn mandatory_filters(restriction: &ReadRestriction) -> Vec<serde_json::Value> {
+    restriction.row_predicate.iter().cloned().collect()
 }
 
 fn management_warehouse(
@@ -4268,7 +4275,7 @@ mod tests {
                 .to_string(),
             ))
             .unwrap();
-        let response = app.oneshot(plan).await.unwrap();
+        let response = app.clone().oneshot(plan).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
@@ -4300,6 +4307,35 @@ mod tests {
         );
         assert_eq!(
             body["residual-filter"]["filters-accepted-by-sail"][0]["filter"],
+            serde_json::json!({
+                "type": "eq",
+                "term": "event_id",
+                "value": "evt-1"
+            })
+        );
+        let plan_task = body["plan-tasks"][0].as_str().unwrap().to_string();
+
+        let fetch = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/tasks")
+            .header("content-type", "application/json")
+            .header("x-lakecat-agent-did", "did:example:agent")
+            .body(Body::from(
+                serde_json::json!({ "plan-task": plan_task }).to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(fetch).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            body["residual-filter"]["projection"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            body["residual-filter"]["filters"][0],
             serde_json::json!({
                 "type": "eq",
                 "term": "event_id",
