@@ -6,6 +6,30 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `ed1be2f Expose view version receipt reads`.
+- Paused after adding a governed read-side management endpoint for compact
+  view-version receipts:
+  `GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}/version-receipts`.
+  The endpoint uses the view-load authorization path, returns compact receipt
+  records plus receipt hashes, and records a `view.version-receipts-listed`
+  audit/outbox event so QueryGraph/operators can inspect the durable receipt
+  chain without using backend-specific storage access or non-standard Iceberg
+  metadata.
+- Local verification for the view-version receipt read slice was green:
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-api -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-store -p lakecat-cli -p lakecat-sail -- --check`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `9433b18 Persist view version receipts`.
 - Paused after adding compact durable view-version receipts to memory and Turso
   stores. Each view upsert now records the store-assigned version, previous
@@ -2080,8 +2104,7 @@ Updated: 2026-06-18
 ## Next Recommended Slice
 
 Continue the local-first view semantics track by adding the next narrow bridge
-toward Iceberg view history: expose a read-side receipt surface for QueryGraph
-or push the reusable history model into Sail if the work stops being
-catalog-boundary state. Keep CI manual-only until local gates are green and the
-temporary Sail patch bridge can be replaced by an upstream branch or published
-Sail helper crate.
+toward Iceberg view history: add drop/tombstone receipts or push the reusable
+history model into Sail if the work stops being catalog-boundary state. Keep CI
+manual-only until local gates are green and the temporary Sail patch bridge can
+be replaced by an upstream branch or published Sail helper crate.
