@@ -892,6 +892,11 @@ async fn verify_qglake_fetch_scan_tasks(
 }
 
 fn verify_qglake_scan_tasks(fetched: &FetchScanTasksResponse) -> lakecat_core::LakeCatResult<()> {
+    if fetched.file_scan_tasks.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake governed fetchScanTasks produced no file scan tasks".to_string(),
+        ));
+    }
     let extension = fetched
         .residual_filter
         .as_ref()
@@ -2213,7 +2218,11 @@ mod tests {
             planned_by: "lakecat-sail".to_string(),
             plan_task: "lakecat:sail-json-hmac:test".to_string(),
             snapshot_id: Some(42),
-            file_scan_tasks: Vec::new(),
+            file_scan_tasks: vec![serde_json::json!({
+                "data-file": {
+                    "file-path": "file:///tmp/lakecat-qglake/events/data/part-1.parquet"
+                }
+            })],
             delete_files: Vec::new(),
             plan_tasks: Vec::new(),
             lakecat_plan_tasks: Vec::new(),
@@ -2236,7 +2245,8 @@ mod tests {
     }
 
     #[test]
-    fn qglake_fetch_scan_tasks_verifier_rejects_missing_policy_hash_binding() {
+    fn qglake_fetch_scan_tasks_verifier_rejects_empty_scan_work() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
         let fetched = FetchScanTasksResponse {
             table: lakecat_api::TableIdentifier {
                 namespace: vec!["default".to_string()],
@@ -2246,6 +2256,44 @@ mod tests {
             plan_task: "lakecat:sail-json-hmac:test".to_string(),
             snapshot_id: Some(42),
             file_scan_tasks: Vec::new(),
+            delete_files: Vec::new(),
+            plan_tasks: Vec::new(),
+            lakecat_plan_tasks: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_tasks(&fetched)
+            .expect_err("QGLake governed fetch should require scan work");
+        assert!(err.to_string().contains("produced no file scan tasks"));
+    }
+
+    #[test]
+    fn qglake_fetch_scan_tasks_verifier_rejects_missing_policy_hash_binding() {
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "lakecat-sail".to_string(),
+            plan_task: "lakecat:sail-json-hmac:test".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![serde_json::json!({
+                "data-file": {
+                    "file-path": "file:///tmp/lakecat-qglake/events/data/part-1.parquet"
+                }
+            })],
             delete_files: Vec::new(),
             plan_tasks: Vec::new(),
             lakecat_plan_tasks: Vec::new(),

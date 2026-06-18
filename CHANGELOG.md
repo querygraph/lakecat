@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required the QGLake governed `fetchScanTasks` verifier to prove Sail expanded
+  the plan-task token into at least one fetched file scan task, not only a
+  residual policy proof.
 - Required QGLake fixture reruns to preflight local snapshot manifest-list
   files referenced by existing fixture metadata before accepting a table for
   governed plan/fetch verification.
