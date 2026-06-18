@@ -537,6 +537,7 @@ fn verify_qglake_existing_table(
             response.metadata_location
         )));
     }
+    verify_qglake_metadata_pointer(metadata_location, &response.metadata)?;
     if response.metadata["format-version"] != json!(3) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "existing QGLake table is not Iceberg v3 fixture metadata: {}",
@@ -558,6 +559,29 @@ fn verify_qglake_existing_table(
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "existing QGLake table does not include a snapshot manifest list for fetchScanTasks"
                 .to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn verify_qglake_metadata_pointer(
+    metadata_location: &str,
+    expected_metadata: &Value,
+) -> lakecat_core::LakeCatResult<()> {
+    let metadata_file = file_url_path(metadata_location, "QGLake metadata location")?;
+    let bytes = fs::read(&metadata_file).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "existing QGLake table metadata location is not readable at {metadata_location}: {err}"
+        ))
+    })?;
+    let pointer_metadata = serde_json::from_slice::<Value>(&bytes).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "existing QGLake table metadata location is not valid JSON at {metadata_location}: {err}"
+        ))
+    })?;
+    if pointer_metadata != *expected_metadata {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "existing QGLake table metadata pointer does not match catalog metadata".to_string(),
         ));
     }
     Ok(())
@@ -1845,6 +1869,11 @@ mod tests {
             .as_array_mut()
             .unwrap()
             .retain(|field| field["name"] != "raw_payload");
+        write_qglake_metadata_file(
+            &file_url_path(&metadata_location, "test").unwrap(),
+            &metadata,
+        )
+        .unwrap();
         let response = LoadTableResponse {
             identifier: TableIdentifier {
                 namespace: vec!["default".to_string()],
@@ -1863,6 +1892,59 @@ mod tests {
         )
         .expect_err("drifted QGLake fixture table should be rejected");
         assert!(err.to_string().contains("raw_payload"));
+    }
+
+    #[test]
+    fn qglake_existing_table_verifier_rejects_missing_metadata_pointer_file() {
+        let (location, metadata_location) = qglake_test_fixture_urls("missing-pointer");
+        let metadata = qglake_table_metadata(&location, &metadata_location).unwrap();
+        fs::remove_file(file_url_path(&metadata_location, "test").unwrap()).unwrap();
+        let response = LoadTableResponse {
+            identifier: TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            metadata_location: Some(metadata_location.clone()),
+            metadata,
+            config: Vec::new(),
+        };
+
+        let err = verify_qglake_existing_table(
+            &response,
+            &["default".to_string()],
+            "events",
+            &metadata_location,
+        )
+        .expect_err("missing QGLake metadata pointer should be rejected");
+        assert!(err.to_string().contains("not readable"));
+    }
+
+    #[test]
+    fn qglake_existing_table_verifier_rejects_drifted_metadata_pointer_file() {
+        let (location, metadata_location) = qglake_test_fixture_urls("drifted-pointer");
+        let metadata = qglake_table_metadata(&location, &metadata_location).unwrap();
+        let metadata_file = file_url_path(&metadata_location, "test").unwrap();
+        let mut drifted = metadata.clone();
+        drifted["last-sequence-number"] = json!(99);
+        write_qglake_metadata_file(&metadata_file, &drifted).unwrap();
+        let response = LoadTableResponse {
+            identifier: TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            metadata_location: Some(metadata_location.clone()),
+            metadata,
+            config: Vec::new(),
+        };
+
+        let err = verify_qglake_existing_table(
+            &response,
+            &["default".to_string()],
+            "events",
+            &metadata_location,
+        )
+        .expect_err("drifted QGLake metadata pointer should be rejected");
+        assert!(err.to_string().contains("does not match"));
     }
 
     fn qglake_test_fixture_urls(name: &str) -> (String, String) {

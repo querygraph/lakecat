@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake fixture reruns to validate that an existing table's advertised
+  local `metadata_location` JSON file exists and matches the Iceberg metadata
+  returned by the catalog before accepting the table.
 - Made the QGLake local fixture write the Iceberg table metadata JSON at its
   advertised `metadata_location`, keeping the bootstrap pointer usable by
   standard metadata consumers as well as LakeCat's inline REST response.
