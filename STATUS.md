@@ -6,6 +6,28 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `0a0e414 Replay management list reads into lineage`.
+- Paused after adding lineage replay for management list outbox events.
+  `policy-binding.listed`, `project.listed`, `server.listed`,
+  `storage-profile.listed`, and `warehouse.listed` now emit LakeCat
+  OpenLineage receipts from durable outbox replay, while LakeCat avoids
+  inventing list-specific graph nodes and leaves reusable hierarchy/traversal
+  semantics to Grust.
+- Local verification for the management-list replay slice was green:
+  `cargo fmt -p lakecat-lineage -p lakecat-service`;
+  `cargo test -p lakecat-service outbox_drain_projects_management_list_reads_to_lineage`;
+  `cargo test -p lakecat-lineage projects_control_plane_upserts_to_openlineage_outputs`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `c028ac3 Replay table restores into graph`.
 - Paused after adding catalog-facing graph replay for `table.restored` outbox
   events and refreshing the persistent goal guidance. Table restore replay now
