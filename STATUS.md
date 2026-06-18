@@ -6,11 +6,38 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
-  `0651ccb Bind QueryGraph import to view receipts`.
+  `2db1d32 Verify QGLake replay artifacts offline`.
 - Latest committed status slice:
-  `8bf4b54 Record QGLake receipt chain status`.
+  `Record QGLake replay verifier status`.
 - Latest committed goal-guidance/docs slice:
-  `81144f2 Mirror agent contract into goal`.
+  `e65145f Reconcile goal agent guidance`.
+- Paused after adding offline QGLake handoff verification. `lakecat-cli
+  qglake-fixture` now accepts `--drain-output` so a local fixture run can save
+  the QueryGraph bootstrap bundle and the lineage-drain response as paired JSON
+  artifacts. `lakecat-cli qglake-verify-replay` reads those saved artifacts,
+  verifies the bundle manifest and QueryGraph import-compatibility contract,
+  then applies the existing QGLake lineage-drain acceptance checks against the
+  bundle-derived hashes, policy-binding count, credential replay evidence,
+  management-list replay evidence, and view receipt evidence when views are
+  present.
+- Local verification for the offline QGLake replay verifier slice was green:
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `cargo fmt -p lakecat-cli`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli`;
+  `cargo check -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`;
+  `cargo fmt -p lakecat-cli -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `cargo test --workspace --all-features`.
+- Previous committed LakeCat implementation slice:
+  `0651ccb Bind QueryGraph import to view receipts`.
 - Paused after adding compact view receipt evidence to the QueryGraph import
   compatibility contract. View-bearing bootstrap bundles now carry one
   manifest-covered `view-receipt-evidence` record per exported view version,
@@ -18,24 +45,6 @@ Updated: 2026-06-18
   view bundles without matching receipt evidence, the service attaches the
   store-derived receipt hashes before recording `querygraph.bootstrap`, and
   QGLake validates the import contract for view-bearing bundles.
-- Local verification for the QueryGraph view receipt import slice was green:
-  `cargo fmt -p lakecat-querygraph -p lakecat-service -p lakecat-cli`;
-  `cargo test -p lakecat-querygraph`;
-  `cargo test -p lakecat-service querygraph_bootstrap_projects_catalog_views`;
-  `cargo test -p lakecat-cli qglake_bootstrap_verifier_requires_querygraph_import_contract`;
-  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
-  `docs/book/build.sh`;
-  `cargo fmt -p lakecat-querygraph -p lakecat-service -p lakecat-cli -- --check`;
-  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox`;
-  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
-  `cargo test -p lakecat-cli`;
-  `cargo test -p lakecat-service --features turso-local`;
-  `cargo test -p lakecat-service --all-features`;
-  `cargo test -p lakecat-store --features turso-local`;
-  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
-  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
-  `git diff --check`;
-  `cargo test --workspace --all-features`.
 - Previous committed LakeCat implementation slice:
   `43d4991 Require QGLake view receipt chains`.
 - Paused after making QGLake consume the namespace-level receipt-chain read as
@@ -2245,11 +2254,12 @@ Updated: 2026-06-18
 
 ## Next Recommended Slice
 
-Continue the local-first view semantics track by proving the new QueryGraph
-view receipt import contract against a real QueryGraph-side verifier/importer
-run, or by adding a compact LakeCat CLI verifier command that checks a saved
-bootstrap bundle plus lineage-drain response together. Keep this at the
-handoff/acceptance boundary: if the next step starts to become reusable typed
+Continue the local-first handoff track by proving the saved-artifact workflow
+against a real live LakeCat run and QueryGraph-side verifier/importer: generate
+paired `qglake-fixture --drain-output` artifacts, run
+`qglake-verify-replay`, then run QueryGraph's `lakecat-verify` and
+`lakecat-import` over the same bootstrap bundle. Keep this at the
+handoff/acceptance boundary. If the next step starts to become reusable typed
 view-history or Iceberg view-history semantics, push that model into Sail first
 and consume it through LakeCat's existing seams. Keep CI manual-only until
 local gates are green and the temporary Sail patch bridge can be replaced by an
