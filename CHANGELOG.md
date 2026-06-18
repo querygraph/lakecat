@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required the QGLake governed `fetchScanTasks` verifier to prove at least one
+  fetched file scan task carries an Iceberg REST `data-file.file-path`, so
+  placeholder task JSON cannot satisfy the acceptance proof.
 - Required the QGLake governed `fetchScanTasks` verifier to prove Sail expanded
   the plan-task token into at least one fetched file scan task, not only a
   residual policy proof.
