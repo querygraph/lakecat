@@ -6,6 +6,23 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `de7c393 Bind QGLake lineage replay to bundle`.
+- Paused after pushing the QGLake lineage replay/bundle binding slice. The
+  `lakecat-cli qglake-fixture` lineage-drain verifier now compares the replayed
+  `querygraph.bootstrap` evidence against the exact QueryGraph bundle QGLake
+  accepted and wrote, rejecting drifted bundle, graph, OpenLineage, table-count,
+  or view-count evidence.
+- Local verification for the pushed QGLake lineage replay/bundle binding slice
+  was green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake`;
+  `git diff --check`;
+  `cargo test --workspace`.
+- This status commit records the pushed QGLake lineage replay/bundle binding
+  slice.
+- Previous implementation slice:
   `94847d8 Expose QGLake lineage replay evidence`.
 - Paused after pushing the QGLake lineage replay evidence slice. The management
   lineage-drain response now exposes compact per-event replay evidence for
