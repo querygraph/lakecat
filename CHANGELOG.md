@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made QGLake acceptance establish and list its durable server, project, and
+  warehouse tenant spine, then require lineage-drain replay to expose
+  `server.listed`, `project.listed`, and `warehouse.listed` count evidence.
 - Made QGLake acceptance exercise the governed storage-profile-list management
   read and require lineage-drain replay to expose matching compact
   `storage-profile.listed` count/scope evidence alongside policy-list evidence.

@@ -8,10 +8,12 @@ use std::{
 use lakecat_api::{
     CatalogConfigResponse, CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest,
     FetchScanTasksResponse, LineageDrainEventSummary, LineageDrainResponse, ListNamespacesResponse,
-    ListPolicyBindingsResponse, ListStorageProfilesResponse, LoadCredentialsResponse,
+    ListPolicyBindingsResponse, ListProjectsResponse, ListServersResponse,
+    ListStorageProfilesResponse, ListWarehousesResponse, LoadCredentialsResponse,
     LoadTableResponse, NamespaceResponse, PlanTableScanRequest, PlanTableScanResponse,
-    PolicyBindingResponse, StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest,
-    UpsertStorageProfileRequest,
+    PolicyBindingResponse, ProjectResponse, ServerResponse, StorageProfileResponse,
+    TableIdentifier, UpsertPolicyBindingRequest, UpsertProjectRequest, UpsertServerRequest,
+    UpsertStorageProfileRequest, UpsertWarehouseRequest, WarehouseResponse,
 };
 use lakecat_core::content_hash_json;
 use lakecat_querygraph::{QueryGraphBootstrap, QueryGraphBootstrapVerification};
@@ -474,8 +476,55 @@ async fn qglake_fixture(
     let principal = principal.as_deref();
     let identity_mode = RequestIdentityMode::AgentDid;
     let namespace_path = namespace.join(".");
+    let server = "lakecat-local";
+    let project = "default";
     let storage_profile = format!("{table}-local");
     let policy = format!("{table}-agent-read");
+
+    let _: ServerResponse = put_json_with_identity(
+        &catalog,
+        &format!("/management/v1/servers/{server}"),
+        principal,
+        identity_mode,
+        "server upsert",
+        &UpsertServerRequest {
+            display_name: Some("Local LakeCat".to_string()),
+            endpoint_url: Some(catalog.clone()),
+            properties: BTreeMap::from([("lakecat.fixture".to_string(), "qglake".to_string())]),
+        },
+    )
+    .await?;
+    verify_qglake_server_list(&catalog, server, principal, identity_mode).await?;
+
+    let _: ProjectResponse = put_json_with_identity(
+        &catalog,
+        &format!("/management/v1/projects/{project}"),
+        principal,
+        identity_mode,
+        "project upsert",
+        &UpsertProjectRequest {
+            server_id: Some(server.to_string()),
+            display_name: Some("QGLake Project".to_string()),
+            properties: BTreeMap::from([("lakecat.fixture".to_string(), "qglake".to_string())]),
+        },
+    )
+    .await?;
+    verify_qglake_project_list(&catalog, project, principal, identity_mode).await?;
+
+    let _: WarehouseResponse = put_json_with_identity(
+        &catalog,
+        &format!("/management/v1/warehouses/{warehouse}"),
+        principal,
+        identity_mode,
+        "warehouse upsert",
+        &UpsertWarehouseRequest {
+            project_id: Some(project.to_string()),
+            storage_root: Some(location.clone()),
+            properties: BTreeMap::from([("lakecat.fixture".to_string(), "qglake".to_string())]),
+        },
+    )
+    .await?;
+    verify_qglake_warehouse_list(&catalog, &warehouse, principal, identity_mode).await?;
 
     ensure_qglake_namespace(&catalog, &namespace, principal, identity_mode).await?;
     ensure_qglake_table(
@@ -1148,6 +1197,84 @@ async fn verify_qglake_policy_list(
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake policy list did not return expected binding {policy}"
+        )));
+    }
+    Ok(())
+}
+
+async fn verify_qglake_server_list(
+    catalog: &str,
+    server: &str,
+    principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
+) -> lakecat_core::LakeCatResult<()> {
+    let response = get_json_with_identity::<ListServersResponse>(
+        catalog,
+        "/management/v1/servers",
+        principal,
+        identity_mode,
+        "qglake server list",
+    )
+    .await?;
+    if !response
+        .servers
+        .iter()
+        .any(|candidate| candidate.server_id == server)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake server list did not return expected server {server}"
+        )));
+    }
+    Ok(())
+}
+
+async fn verify_qglake_project_list(
+    catalog: &str,
+    project: &str,
+    principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
+) -> lakecat_core::LakeCatResult<()> {
+    let response = get_json_with_identity::<ListProjectsResponse>(
+        catalog,
+        "/management/v1/projects",
+        principal,
+        identity_mode,
+        "qglake project list",
+    )
+    .await?;
+    if !response
+        .projects
+        .iter()
+        .any(|candidate| candidate.project_id == project)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake project list did not return expected project {project}"
+        )));
+    }
+    Ok(())
+}
+
+async fn verify_qglake_warehouse_list(
+    catalog: &str,
+    warehouse: &str,
+    principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
+) -> lakecat_core::LakeCatResult<()> {
+    let response = get_json_with_identity::<ListWarehousesResponse>(
+        catalog,
+        "/management/v1/warehouses",
+        principal,
+        identity_mode,
+        "qglake warehouse list",
+    )
+    .await?;
+    if !response
+        .warehouses
+        .iter()
+        .any(|candidate| candidate.warehouse == warehouse)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake warehouse list did not return expected warehouse {warehouse}"
         )));
     }
     Ok(())
@@ -1958,7 +2085,7 @@ fn verify_qglake_management_list_replay(
             "qglake lineage drain did not replay policy list evidence".to_string(),
         ));
     };
-    verify_qglake_management_list_receipts(policy_list, "policy list")?;
+    verify_qglake_management_list_receipts(policy_list, "policy list", true)?;
     if policy_list.policy_binding_count != expected_policy_binding_count {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain policy list replay count does not match the accepted QueryGraph bundle"
@@ -1974,7 +2101,7 @@ fn verify_qglake_management_list_replay(
             "qglake lineage drain did not replay storage profile list evidence".to_string(),
         ));
     };
-    verify_qglake_management_list_receipts(storage_profile_list, "storage profile list")?;
+    verify_qglake_management_list_receipts(storage_profile_list, "storage profile list", true)?;
     if storage_profile_list
         .storage_profile_count
         .unwrap_or_default()
@@ -1985,23 +2112,75 @@ fn verify_qglake_management_list_replay(
                 .to_string(),
         ));
     }
+    let Some(server_list) = drain
+        .events
+        .iter()
+        .find(|event| event.event_type == "server.listed")
+    else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain did not replay server list evidence".to_string(),
+        ));
+    };
+    verify_qglake_management_list_receipts(server_list, "server list", false)?;
+    if server_list.server_count.unwrap_or_default() == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain server list replay did not expose any servers".to_string(),
+        ));
+    }
+    let Some(project_list) = drain
+        .events
+        .iter()
+        .find(|event| event.event_type == "project.listed")
+    else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain did not replay project list evidence".to_string(),
+        ));
+    };
+    verify_qglake_management_list_receipts(project_list, "project list", false)?;
+    if project_list.project_count.unwrap_or_default() == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain project list replay did not expose any projects".to_string(),
+        ));
+    }
+    let Some(warehouse_list) = drain
+        .events
+        .iter()
+        .find(|event| event.event_type == "warehouse.listed")
+    else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain did not replay warehouse list evidence".to_string(),
+        ));
+    };
+    verify_qglake_management_list_receipts(warehouse_list, "warehouse list", false)?;
+    if warehouse_list.warehouse_count.unwrap_or_default() == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain warehouse list replay did not expose any warehouses".to_string(),
+        ));
+    }
     Ok(())
 }
 
 fn verify_qglake_management_list_receipts(
     event: &LineageDrainEventSummary,
     label: &str,
+    require_warehouse_scope: bool,
 ) -> lakecat_core::LakeCatResult<()> {
     if event.lineage_events == 0 {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain {label} replay emitted no lineage projection"
         )));
     }
-    if event
-        .management_scope_warehouse
-        .as_deref()
-        .map_or(true, str::is_empty)
-        || event.replay_event_hashes.is_empty()
+    if require_warehouse_scope
+        && event
+            .management_scope_warehouse
+            .as_deref()
+            .map_or(true, str::is_empty)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} replay is missing compact management scope"
+        )));
+    }
+    if event.replay_event_hashes.is_empty()
         || event.replay_event_hashes.iter().any(String::is_empty)
         || event.replay_open_lineage_hashes.is_empty()
         || event
@@ -2010,7 +2189,7 @@ fn verify_qglake_management_list_receipts(
             .any(String::is_empty)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "qglake lineage drain {label} replay is missing compact count/scope or receipt hashes"
+            "qglake lineage drain {label} replay is missing receipt hashes"
         )));
     }
     Ok(())
@@ -5551,42 +5730,9 @@ mod tests {
             "qglake lineage drain storage profile list replay did not expose any storage profiles"
         ));
 
-        verify_qglake_lineage_drain(
+        let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 6,
-                event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "view.upserted".to_string(),
-                    "policy-binding.listed".to_string(),
-                    "storage-profile.listed".to_string(),
-                    "querygraph.bootstrap".to_string(),
-                ],
-                graph_events: 3,
-                lineage_events: 7,
-                principal_subject: Some("did:example:agent".to_string()),
-                principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
-                request_identity_state: Some("verified".to_string()),
-                events: vec![
-                    bootstrap_with_view,
-                    qglake_restricted_credential_summary(),
-                    qglake_human_credential_summary(),
-                    qglake_view_lineage_summary(),
-                    qglake_policy_list_lineage_summary(),
-                    qglake_storage_profile_list_lineage_summary(),
-                ],
-            },
-            &view_verification,
-            Some("did:example:agent"),
-            1,
-        )
-        .expect("QGLake lineage drain should accept replayed view evidence");
-
-        verify_qglake_lineage_drain(
-            &LineageDrainResponse {
-                delivered: 5,
                 event_types: vec![
                     "table.scan-planned".to_string(),
                     "credentials.vend-attempted".to_string(),
@@ -5607,6 +5753,86 @@ mod tests {
                     qglake_human_credential_summary(),
                     qglake_policy_list_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require server list replay");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain did not replay server list evidence")
+        );
+
+        verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 9,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 3,
+                lineage_events: 10,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                events: vec![
+                    bootstrap_with_view,
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect("QGLake lineage drain should accept replayed view evidence");
+
+        verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 8,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 9,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
                 ],
             },
             &verification,
@@ -5802,6 +6028,123 @@ mod tests {
             raw_credential_exception_reason: None,
             replay_event_hashes: vec!["sha256:storage-profile-list-replay-event".to_string()],
             replay_open_lineage_hashes: vec!["sha256:storage-profile-list-openlineage".to_string()],
+        }
+    }
+
+    fn qglake_server_list_lineage_summary() -> LineageDrainEventSummary {
+        LineageDrainEventSummary {
+            event_id: "evt-server-list".to_string(),
+            event_type: "server.listed".to_string(),
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:server-list-authorization".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            agent_delegation_hash: Some("sha256:delegation".to_string()),
+            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            graph_events: 1,
+            lineage_events: 1,
+            bundle_hash: None,
+            graph_hash: None,
+            open_lineage_hash: None,
+            querygraph_import_hash: None,
+            table_artifact_count: 0,
+            view_artifact_count: 0,
+            view_warehouse: None,
+            view_namespace: Vec::new(),
+            view_name: None,
+            view_stable_id: None,
+            policy_binding_count: 0,
+            project_count: None,
+            server_count: Some(1),
+            storage_profile_count: None,
+            warehouse_count: None,
+            management_scope_project_id: None,
+            management_scope_warehouse: None,
+            standards: Vec::new(),
+            credential_count: None,
+            credential_block_reason: None,
+            raw_credential_exception_allowed: None,
+            raw_credential_exception_reason: None,
+            replay_event_hashes: vec!["sha256:server-list-replay-event".to_string()],
+            replay_open_lineage_hashes: vec!["sha256:server-list-openlineage".to_string()],
+        }
+    }
+
+    fn qglake_project_list_lineage_summary() -> LineageDrainEventSummary {
+        LineageDrainEventSummary {
+            event_id: "evt-project-list".to_string(),
+            event_type: "project.listed".to_string(),
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:project-list-authorization".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            agent_delegation_hash: Some("sha256:delegation".to_string()),
+            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            graph_events: 1,
+            lineage_events: 1,
+            bundle_hash: None,
+            graph_hash: None,
+            open_lineage_hash: None,
+            querygraph_import_hash: None,
+            table_artifact_count: 0,
+            view_artifact_count: 0,
+            view_warehouse: None,
+            view_namespace: Vec::new(),
+            view_name: None,
+            view_stable_id: None,
+            policy_binding_count: 0,
+            project_count: Some(1),
+            server_count: None,
+            storage_profile_count: None,
+            warehouse_count: None,
+            management_scope_project_id: None,
+            management_scope_warehouse: None,
+            standards: Vec::new(),
+            credential_count: None,
+            credential_block_reason: None,
+            raw_credential_exception_allowed: None,
+            raw_credential_exception_reason: None,
+            replay_event_hashes: vec!["sha256:project-list-replay-event".to_string()],
+            replay_open_lineage_hashes: vec!["sha256:project-list-openlineage".to_string()],
+        }
+    }
+
+    fn qglake_warehouse_list_lineage_summary() -> LineageDrainEventSummary {
+        LineageDrainEventSummary {
+            event_id: "evt-warehouse-list".to_string(),
+            event_type: "warehouse.listed".to_string(),
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:warehouse-list-authorization".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            agent_delegation_hash: Some("sha256:delegation".to_string()),
+            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            graph_events: 1,
+            lineage_events: 1,
+            bundle_hash: None,
+            graph_hash: None,
+            open_lineage_hash: None,
+            querygraph_import_hash: None,
+            table_artifact_count: 0,
+            view_artifact_count: 0,
+            view_warehouse: None,
+            view_namespace: Vec::new(),
+            view_name: None,
+            view_stable_id: None,
+            policy_binding_count: 0,
+            project_count: None,
+            server_count: None,
+            storage_profile_count: None,
+            warehouse_count: Some(1),
+            management_scope_project_id: None,
+            management_scope_warehouse: None,
+            standards: Vec::new(),
+            credential_count: None,
+            credential_block_reason: None,
+            raw_credential_exception_allowed: None,
+            raw_credential_exception_reason: None,
+            replay_event_hashes: vec!["sha256:warehouse-list-replay-event".to_string()],
+            replay_open_lineage_hashes: vec!["sha256:warehouse-list-openlineage".to_string()],
         }
     }
 
