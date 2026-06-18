@@ -47,6 +47,7 @@ pub enum LineageEventType {
     TableCommitted,
     TableDeleted,
     TableRestored,
+    QueryGraphBootstrap,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -154,6 +155,20 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
                 }
             }
         })],
+        LineageEventType::QueryGraphBootstrap => vec![json!({
+            "namespace": "lakecat.querygraph",
+            "name": "bootstrap",
+            "facets": {
+                "queryGraph_bootstrap": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/querygraph-bootstrap-facet/0.1.0.json",
+                    "warehouse": event.payload.get("warehouse"),
+                    "tableCount": event.payload.get("table-count"),
+                    "policyBindingCount": event.payload.get("policy-binding-count"),
+                    "payload": event.payload,
+                }
+            }
+        })],
         _ => Vec::new(),
     }
 }
@@ -195,6 +210,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::TableCommitted => "table-committed",
         LineageEventType::TableDeleted => "table-deleted",
         LineageEventType::TableRestored => "table-restored",
+        LineageEventType::QueryGraphBootstrap => "querygraph-bootstrap",
     }
 }
 
@@ -269,6 +285,43 @@ mod tests {
         assert_eq!(
             projected["outputs"][0]["facets"]["dataSource"]["uri"],
             json!("file:///tmp/events/metadata/00000.json")
+        );
+    }
+
+    #[test]
+    fn projects_querygraph_bootstrap_to_openlineage_output() {
+        let event = LineageEvent::new(
+            LineageEventType::QueryGraphBootstrap,
+            Principal::anonymous(),
+            None,
+            json!({
+                "warehouse": "local",
+                "table-count": 1,
+                "policy-binding-count": 1,
+                "authorization-receipt": {
+                    "request-identity": {
+                        "attestation-state": "verified",
+                        "typedid": "did:example:agent"
+                    }
+                }
+            }),
+        );
+        let projected = open_lineage_event(&event);
+        assert_eq!(projected["job"]["name"], json!("querygraph-bootstrap"));
+        assert_eq!(projected["inputs"], json!([]));
+        assert_eq!(
+            projected["outputs"][0]["namespace"],
+            json!("lakecat.querygraph")
+        );
+        assert_eq!(projected["outputs"][0]["name"], json!("bootstrap"));
+        assert_eq!(
+            projected["outputs"][0]["facets"]["queryGraph_bootstrap"]["tableCount"],
+            json!(1)
+        );
+        assert_eq!(
+            projected["outputs"][0]["facets"]["queryGraph_bootstrap"]["payload"]["authorization-receipt"]
+                ["request-identity"]["attestation-state"],
+            json!("verified")
         );
     }
 

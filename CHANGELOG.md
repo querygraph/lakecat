@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Projected `querygraph.bootstrap` outbox events into LakeCat OpenLineage
+  output events, preserving the bootstrap authorization/request-identity
+  payload so QueryGraph acceptance runs can replay catalog-level bootstrap
+  lineage alongside table scan lineage.
 - Added QGLake-specific QueryGraph bootstrap verification to
   `lakecat-cli qglake-fixture`, proving the exported bundle carries the
   enforced fixture policy binding, restricted ODRL material, and OpenLineage

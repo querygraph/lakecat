@@ -6,23 +6,20 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `ff96a14 Make QGLake fixture repeatable`.
-- Current working slice: QGLake QueryGraph bootstrap verification.
-  `lakecat-cli qglake-fixture` now verifies the exported QueryGraph bootstrap
-  bundle contains the enforced fixture policy binding, the restricted ODRL
-  read policy, and the OpenLineage output for the fixture table before writing
-  the bootstrap file.
+  working changes: `cdf3647 Verify QGLake bootstrap export`.
+- Current working slice: QueryGraph bootstrap OpenLineage outbox projection.
+  `querygraph.bootstrap` outbox events now drain into a catalog-level
+  OpenLineage output event that preserves the bootstrap authorization and
+  request-identity payload for QueryGraph replay.
 - Local verification for the current slice is green:
-  `cargo test -p lakecat-cli qglake -- --nocapture`;
-  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-lineage`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
   `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
   `cargo test -p lakecat-cli`;
   `cargo test -p lakecat-service`;
   `cargo test -p lakecat-service --all-features`;
   `cargo test -p lakecat-store --features turso-local`;
-  `cargo test --workspace --all-features`. The workspace all-features run
-  completed green with one warning in sibling Grust's `grust-cypher` crate for
-  an unused `CypherReturnTargetMaterialization` enum;
+  `cargo test --workspace --all-features`;
   `git diff --check`.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
@@ -68,6 +65,8 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Projected `querygraph.bootstrap` outbox events into LakeCat OpenLineage output
+  events while preserving bootstrap authorization/request-identity payloads.
 - Added QGLake-specific QueryGraph bootstrap verification to
   `lakecat-cli qglake-fixture`, covering policy bindings, ODRL restriction
   export, and OpenLineage output presence before the bootstrap file is written.

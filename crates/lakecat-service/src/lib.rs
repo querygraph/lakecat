@@ -1718,6 +1718,16 @@ async fn project_outbox_event(
                 ))
                 .await?;
         }
+    } else if event.event_type == "querygraph.bootstrap" {
+        state
+            .lineage
+            .emit(LineageEvent::new(
+                LineageEventType::QueryGraphBootstrap,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
     }
     Ok(())
 }
@@ -2827,6 +2837,34 @@ mod tests {
                     created_at: chrono::Utc::now(),
                     delivered_at: None,
                 },
+                OutboxEvent {
+                    event_id: "evt-3".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-3",
+                        "event-type": "querygraph.bootstrap",
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "graph-read",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                                "request-identity": {
+                                    "attestation-state": "verified",
+                                    "typedid": "did:example:agent"
+                                }
+                            },
+                            "warehouse": "local",
+                            "table-count": 1,
+                            "policy-binding-count": 1
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
             ]),
             delivered: Mutex::default(),
         });
@@ -2840,7 +2878,7 @@ mod tests {
                 lineage.clone(),
             );
 
-        assert_eq!(drain_outbox_once(&state, 10).await.unwrap(), 2);
+        assert_eq!(drain_outbox_once(&state, 10).await.unwrap(), 3);
 
         let graph_events = graph.events.lock().await;
         assert_eq!(graph_events.len(), 2);
@@ -2852,7 +2890,7 @@ mod tests {
             serde_json::json!(["event_id"])
         );
         let lineage_events = lineage.events.lock().await;
-        assert_eq!(lineage_events.len(), 2);
+        assert_eq!(lineage_events.len(), 3);
         assert_eq!(lineage_events[0].event_type, LineageEventType::TableCreated);
         assert_eq!(
             lineage_events[1].event_type,
@@ -2863,8 +2901,20 @@ mod tests {
             serde_json::json!(["event_id"])
         );
         assert_eq!(
+            lineage_events[2].event_type,
+            LineageEventType::QueryGraphBootstrap
+        );
+        assert_eq!(
+            lineage_events[2].payload["authorization-receipt"]["request-identity"]["attestation-state"],
+            serde_json::json!("verified")
+        );
+        assert_eq!(
             store.delivered.lock().await.as_slice(),
-            &["evt-1".to_string(), "evt-2".to_string()]
+            &[
+                "evt-1".to_string(),
+                "evt-2".to_string(),
+                "evt-3".to_string()
+            ]
         );
     }
 
