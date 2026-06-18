@@ -280,10 +280,13 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   when no resolver backend is configured; governed view list/upsert/drop
   management endpoints now persist and delete durable `ViewRecord` values in
   memory and Turso and emit audited `view.*` events; warehouse-prefixed catalog
-  REST aliases now list, load, upsert, and drop those durable views; QueryGraph
-  bootstrap now exports those stored views with manifest-covered OSI hashes,
-  view-aware graph edges, and OpenLineage view counts. Full typed Iceberg view
-  metadata and view commit semantics remain pending.*
+  REST aliases now list, load, upsert, and drop those durable views; governed
+  namespace load/drop is now wired on unprefixed and warehouse-prefixed Iceberg
+  REST paths, with non-empty guards across tables, views, and policy bindings
+  plus audited `namespace.dropped` graph/lineage projection; QueryGraph bootstrap
+  now exports those stored views with manifest-covered OSI hashes, view-aware
+  graph edges, and OpenLineage view counts. Full typed Iceberg view metadata and
+  view commit semantics remain pending.*
 - **P6 — Reproducibility (F10) + typed v4 (F9).** Land the Sail helper commits
   upstream (or pin a published Sail) and re-enable automatic CI; converge on
   typed v4 metadata once `sail-iceberg` provides it.

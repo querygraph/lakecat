@@ -24,6 +24,8 @@ impl Default for CatalogConfigResponse {
                 "GET /catalog/v1/config".to_string(),
                 "GET /catalog/v1/namespaces".to_string(),
                 "POST /catalog/v1/namespaces".to_string(),
+                "GET /catalog/v1/namespaces/{namespace}".to_string(),
+                "DELETE /catalog/v1/namespaces/{namespace}".to_string(),
                 "GET /catalog/v1/namespaces/{namespace}/tables/{table}".to_string(),
                 "DELETE /catalog/v1/namespaces/{namespace}/tables/{table}".to_string(),
                 "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit".to_string(),
@@ -34,6 +36,8 @@ impl Default for CatalogConfigResponse {
                 "GET /catalog/v1/{warehouse}/config".to_string(),
                 "GET /catalog/v1/{warehouse}/namespaces".to_string(),
                 "POST /catalog/v1/{warehouse}/namespaces".to_string(),
+                "GET /catalog/v1/{warehouse}/namespaces/{namespace}".to_string(),
+                "DELETE /catalog/v1/{warehouse}/namespaces/{namespace}".to_string(),
                 "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}".to_string(),
                 "DELETE /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}"
                     .to_string(),

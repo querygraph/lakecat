@@ -41,6 +41,7 @@ impl LineageEvent {
 #[serde(rename_all = "kebab-case")]
 pub enum LineageEventType {
     NamespaceCreated,
+    NamespaceDropped,
     TableCreated,
     TableLoaded,
     TableScanPlanned,
@@ -140,7 +141,7 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
             .as_ref()
             .map(|table| vec![open_lineage_dataset(table, &event.payload)])
             .unwrap_or_default(),
-        LineageEventType::NamespaceCreated => vec![json!({
+        LineageEventType::NamespaceCreated | LineageEventType::NamespaceDropped => vec![json!({
             "namespace": "lakecat.namespace",
             "name": event
                 .payload
@@ -204,6 +205,7 @@ fn open_lineage_dataset(table: &TableIdent, payload: &Value) -> Value {
 fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
     match event_type {
         LineageEventType::NamespaceCreated => "namespace-created",
+        LineageEventType::NamespaceDropped => "namespace-dropped",
         LineageEventType::TableCreated => "table-created",
         LineageEventType::TableLoaded => "table-loaded",
         LineageEventType::TableScanPlanned => "table-scan-planned",

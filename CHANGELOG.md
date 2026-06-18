@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added governed Iceberg REST namespace load/drop routes on unprefixed and
+  warehouse-prefixed catalog paths, with memory/Turso persistence, typed
+  `namespace.load` / `namespace.drop` capabilities, non-empty namespace guards,
+  and audited `namespace.dropped` graph/lineage projection.
 - Added governed durable view deletion on management and warehouse-prefixed
   catalog REST paths, with memory/Turso persistence, a typed `view.drop`
   capability, and audited `view.dropped` events.

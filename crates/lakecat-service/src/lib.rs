@@ -39,8 +39,9 @@ use lakecat_sail::{CommitPreparationRequest, SailCatalogEngine};
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
-    LineageReadCapability, NamespaceCreateCapability, NamespaceListCapability,
-    PolicyManageCapability, ProjectManageCapability, ReadRestriction, ServerManageCapability,
+    LineageReadCapability, NamespaceCreateCapability, NamespaceDropCapability,
+    NamespaceListCapability, NamespaceLoadCapability, PolicyManageCapability,
+    ProjectManageCapability, ReadRestriction, ServerManageCapability,
     StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
     TableDropCapability, TableLoadCapability, TableRestoreCapability, TableScanCapability,
     ViewDropCapability, ViewLoadCapability, ViewManageCapability, WarehouseManageCapability,
@@ -760,6 +761,10 @@ pub fn app(state: LakeCatState) -> Router {
             get(list_namespaces_for_warehouse).post(create_namespace_for_warehouse),
         )
         .route(
+            "/catalog/v1/{warehouse}/namespaces/{namespace}",
+            get(load_namespace_for_warehouse).delete(drop_namespace_for_warehouse),
+        )
+        .route(
             "/catalog/v1/{warehouse}/namespaces/{namespace}/tables",
             post(create_table_for_warehouse),
         )
@@ -801,6 +806,10 @@ pub fn app(state: LakeCatState) -> Router {
         .route(
             "/catalog/v1/namespaces",
             get(list_namespaces).post(create_namespace),
+        )
+        .route(
+            "/catalog/v1/namespaces/{namespace}",
+            get(load_namespace).delete(drop_namespace),
         )
         .route(
             "/catalog/v1/namespaces/{namespace}/tables",
@@ -1049,6 +1058,92 @@ async fn list_namespaces_in_warehouse(
             .map(|namespace| namespace.parts().to_vec())
             .collect(),
     }))
+}
+
+async fn load_namespace(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path(namespace): Path<String>,
+) -> Result<Json<NamespaceResponse>, LakeCatHttpError> {
+    load_namespace_in_warehouse(state.warehouse.clone(), state, headers, namespace).await
+}
+
+async fn load_namespace_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace)): Path<(String, String)>,
+) -> Result<Json<NamespaceResponse>, LakeCatHttpError> {
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
+    load_namespace_in_warehouse(warehouse, state, headers, namespace).await
+}
+
+async fn load_namespace_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+    namespace: String,
+) -> Result<Json<NamespaceResponse>, LakeCatHttpError> {
+    let capability = authorize_namespace_load(&state, request_identity(&headers)?).await?;
+    let namespace = namespace.parse::<Namespace>()?;
+    let namespace = state.store.load_namespace(&warehouse, &namespace).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "namespace.loaded",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "namespace.loaded",
+                "authorization-receipt": capability.receipt(),
+                "warehouse": warehouse.as_str(),
+                "namespace": namespace.parts(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(NamespaceResponse::from_namespace(&namespace)))
+}
+
+async fn drop_namespace(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path(namespace): Path<String>,
+) -> Result<StatusCode, LakeCatHttpError> {
+    drop_namespace_in_warehouse(state.warehouse.clone(), state, headers, namespace).await
+}
+
+async fn drop_namespace_for_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace)): Path<(String, String)>,
+) -> Result<StatusCode, LakeCatHttpError> {
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
+    drop_namespace_in_warehouse(warehouse, state, headers, namespace).await
+}
+
+async fn drop_namespace_in_warehouse(
+    warehouse: WarehouseName,
+    state: LakeCatState,
+    headers: HeaderMap,
+    namespace: String,
+) -> Result<StatusCode, LakeCatHttpError> {
+    let capability = authorize_namespace_drop(&state, request_identity(&headers)?).await?;
+    let namespace = namespace.parse::<Namespace>()?;
+    let namespace = state.store.drop_namespace(&warehouse, &namespace).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "namespace.dropped",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "namespace.dropped",
+                "authorization-receipt": capability.receipt(),
+                "warehouse": warehouse.as_str(),
+                "namespace": namespace.parts(),
+            }),
+        )?)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn create_table(
@@ -2624,25 +2719,25 @@ async fn project_outbox_event(
                 .await?;
             receipt.lineage_events += 1;
         }
-    } else if event.event_type == "namespace.created" {
+    } else if event.event_type == "namespace.created" || event.event_type == "namespace.dropped" {
         let (warehouse, namespace) = outbox_namespace(event, &state.warehouse)?;
+        let (graph_action, lineage_type) = if event.event_type == "namespace.dropped" {
+            (GraphAction::Deleted, LineageEventType::NamespaceDropped)
+        } else {
+            (GraphAction::Created, LineageEventType::NamespaceCreated)
+        };
         state
             .graph
             .emit(
-                GraphEvent::namespace(
-                    GraphAction::Created,
-                    warehouse,
-                    namespace,
-                    event_payload.clone(),
-                )
-                .with_event_id(event.event_id.clone()),
+                GraphEvent::namespace(graph_action, warehouse, namespace, event_payload.clone())
+                    .with_event_id(event.event_id.clone()),
             )
             .await?;
         receipt.graph_events += 1;
         state
             .lineage
             .emit(LineageEvent::new(
-                LineageEventType::NamespaceCreated,
+                lineage_type,
                 principal,
                 None,
                 event_payload,
@@ -3372,6 +3467,22 @@ async fn authorize_namespace_list(
     Ok(NamespaceListCapability::from_receipt(receipt)?)
 }
 
+async fn authorize_namespace_load(
+    state: &LakeCatState,
+    identity: RequestIdentity,
+) -> Result<NamespaceLoadCapability, LakeCatHttpError> {
+    let receipt = authorize(state, identity, CatalogAction::NamespaceLoad, None).await?;
+    Ok(NamespaceLoadCapability::from_receipt(receipt)?)
+}
+
+async fn authorize_namespace_drop(
+    state: &LakeCatState,
+    identity: RequestIdentity,
+) -> Result<NamespaceDropCapability, LakeCatHttpError> {
+    let receipt = authorize(state, identity, CatalogAction::NamespaceDrop, None).await?;
+    Ok(NamespaceDropCapability::from_receipt(receipt)?)
+}
+
 async fn authorize_table_load(
     state: &LakeCatState,
     identity: RequestIdentity,
@@ -4073,6 +4184,180 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn namespaces_load_and_drop_through_catalog_routes() {
+        let store = MemoryCatalogStore::new();
+        store
+            .upsert_project(
+                ProjectRecord::new(
+                    "default",
+                    None,
+                    Some("Default Project".to_string()),
+                    std::collections::BTreeMap::new(),
+                    Principal::anonymous(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        store
+            .upsert_warehouse(
+                WarehouseRecord::new(
+                    WarehouseName::new("local").unwrap(),
+                    "default",
+                    Some("file:///tmp/lakecat".to_string()),
+                    std::collections::BTreeMap::new(),
+                    Principal::anonymous(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            store,
+        ));
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/namespaces/empty")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/catalog/v1/namespaces")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"namespace":["empty"]}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/namespaces/empty")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(payload["namespace"], serde_json::json!(["empty"]));
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::DELETE)
+                    .uri("/catalog/v1/namespaces/empty")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/namespaces/empty")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/catalog/v1/local/namespaces")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"namespace":["prefixed"]}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/local/namespaces/prefixed")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::DELETE)
+                    .uri("/catalog/v1/local/namespaces/prefixed")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/catalog/v1/namespaces/default/tables")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"name":"events","location":"file:///tmp/events","metadata":{"format-version":3}}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::DELETE)
+                    .uri("/catalog/v1/namespaces/default")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
     async fn authorization_headers_resolve_typed_principal() {
         let governance = Arc::new(RecordingGovernance::default());
         let app = app(LakeCatState::new(
@@ -4313,6 +4598,29 @@ mod tests {
                     created_at: chrono::Utc::now(),
                     delivered_at: None,
                 },
+                OutboxEvent {
+                    event_id: "evt-namespace-drop".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "namespace.dropped".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-namespace-drop",
+                        "event-type": "namespace.dropped",
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "namespace-drop",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            },
+                            "warehouse": "local",
+                            "namespace": ["archived"],
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
             ]),
             delivered: Mutex::default(),
         });
@@ -4327,7 +4635,7 @@ mod tests {
             );
 
         let drain = drain_outbox_once(&state, 10).await.unwrap();
-        assert_eq!(drain.delivered, 6);
+        assert_eq!(drain.delivered, 7);
         assert_eq!(
             drain.event_types,
             vec![
@@ -4336,14 +4644,15 @@ mod tests {
                 "table.created".to_string(),
                 "table.scan-tasks-fetched".to_string(),
                 "table.commit".to_string(),
-                "querygraph.bootstrap".to_string()
+                "querygraph.bootstrap".to_string(),
+                "namespace.dropped".to_string()
             ]
         );
-        assert_eq!(drain.graph_events, 16);
-        assert_eq!(drain.lineage_events, 5);
+        assert_eq!(drain.graph_events, 18);
+        assert_eq!(drain.lineage_events, 6);
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 16);
+        assert_eq!(graph_events.len(), 18);
         assert_eq!(graph_events[0].label, GraphNodeLabel::Principal);
         assert_eq!(graph_events[0].subject, "lakecat:principal:agent:writer");
         assert_eq!(
@@ -4455,8 +4764,23 @@ mod tests {
             graph_events[15].event_id.as_deref(),
             Some("evt-3:principal")
         );
+        assert_eq!(graph_events[16].label, GraphNodeLabel::Principal);
+        assert_eq!(
+            graph_events[16].event_id.as_deref(),
+            Some("evt-namespace-drop:principal")
+        );
+        assert_eq!(graph_events[17].label, GraphNodeLabel::Namespace);
+        assert_eq!(graph_events[17].action, GraphAction::Deleted);
+        assert_eq!(
+            graph_events[17].subject,
+            "lakecat:warehouse:local:namespace:archived"
+        );
+        assert_eq!(
+            graph_events[17].event_id.as_deref(),
+            Some("evt-namespace-drop")
+        );
         let lineage_events = lineage.events.lock().await;
-        assert_eq!(lineage_events.len(), 5);
+        assert_eq!(lineage_events.len(), 6);
         assert_eq!(
             lineage_events[0].event_type,
             LineageEventType::NamespaceCreated
@@ -4499,6 +4823,10 @@ mod tests {
             serde_json::json!("sha256:openlineage")
         );
         assert_eq!(
+            lineage_events[5].event_type,
+            LineageEventType::NamespaceDropped
+        );
+        assert_eq!(
             store.delivered.lock().await.as_slice(),
             &[
                 "evt-namespace".to_string(),
@@ -4506,7 +4834,8 @@ mod tests {
                 "evt-1".to_string(),
                 "evt-2".to_string(),
                 "evt-commit".to_string(),
-                "evt-3".to_string()
+                "evt-3".to_string(),
+                "evt-namespace-drop".to_string()
             ]
         );
     }

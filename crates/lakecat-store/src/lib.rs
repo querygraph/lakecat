@@ -20,6 +20,44 @@ pub trait CatalogStore: Send + Sync + 'static {
         namespace: Namespace,
     ) -> LakeCatResult<()>;
     async fn list_namespaces(&self, warehouse: &WarehouseName) -> LakeCatResult<Vec<Namespace>>;
+    async fn load_namespace(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+    ) -> LakeCatResult<Namespace> {
+        self.list_namespaces(warehouse)
+            .await?
+            .into_iter()
+            .find(|candidate| candidate == namespace)
+            .ok_or_else(|| namespace_not_found(namespace))
+    }
+    async fn drop_namespace(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+    ) -> LakeCatResult<Namespace> {
+        let namespace = self.load_namespace(warehouse, namespace).await?;
+        if self
+            .list_tables(warehouse)
+            .await?
+            .iter()
+            .any(|table| table.ident.namespace == namespace)
+        {
+            return Err(namespace_not_empty(&namespace, "tables"));
+        }
+        if !self.list_views(warehouse, &namespace).await?.is_empty() {
+            return Err(namespace_not_empty(&namespace, "views"));
+        }
+        if self
+            .list_policy_bindings(warehouse)
+            .await?
+            .iter()
+            .any(|binding| binding.namespace.as_ref() == Some(&namespace))
+        {
+            return Err(namespace_not_empty(&namespace, "policy bindings"));
+        }
+        Ok(namespace)
+    }
     async fn list_tables(&self, warehouse: &WarehouseName) -> LakeCatResult<Vec<TableRecord>>;
     async fn create_table(&self, table: TableRecord) -> LakeCatResult<TableRecord>;
     async fn load_table(&self, ident: &TableIdent) -> LakeCatResult<TableRecord>;
@@ -811,6 +849,60 @@ impl CatalogStore for MemoryCatalogStore {
             .unwrap_or_default())
     }
 
+    async fn load_namespace(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+    ) -> LakeCatResult<Namespace> {
+        let state = self.state.read().await;
+        state
+            .namespaces
+            .get(warehouse.as_str())
+            .and_then(|set| set.get(namespace))
+            .cloned()
+            .ok_or_else(|| namespace_not_found(namespace))
+    }
+
+    async fn drop_namespace(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+    ) -> LakeCatResult<Namespace> {
+        let mut state = self.state.write().await;
+        if !state
+            .namespaces
+            .get(warehouse.as_str())
+            .is_some_and(|set| set.contains(namespace))
+        {
+            return Err(namespace_not_found(namespace));
+        }
+        if state
+            .tables
+            .values()
+            .any(|table| table.ident.warehouse == *warehouse && table.ident.namespace == *namespace)
+        {
+            return Err(namespace_not_empty(namespace, "tables"));
+        }
+        if state
+            .views
+            .values()
+            .any(|view| view.warehouse == *warehouse && view.namespace == *namespace)
+        {
+            return Err(namespace_not_empty(namespace, "views"));
+        }
+        if state.policy_bindings.values().any(|binding| {
+            binding.warehouse == *warehouse && binding.namespace.as_ref() == Some(namespace)
+        }) {
+            return Err(namespace_not_empty(namespace, "policy bindings"));
+        }
+        let namespaces = state
+            .namespaces
+            .get_mut(warehouse.as_str())
+            .ok_or_else(|| namespace_not_found(namespace))?;
+        namespaces.remove(namespace);
+        Ok(namespace.clone())
+    }
+
     async fn list_tables(&self, warehouse: &WarehouseName) -> LakeCatResult<Vec<TableRecord>> {
         let state = self.state.read().await;
         Ok(state
@@ -1382,6 +1474,20 @@ fn policy_binding_key(warehouse: &WarehouseName, policy_id: &str) -> String {
     format!("{}:{policy_id}", warehouse.as_str())
 }
 
+fn namespace_not_found(namespace: &Namespace) -> LakeCatError {
+    LakeCatError::NotFound {
+        object: "namespace",
+        name: namespace.path(),
+    }
+}
+
+fn namespace_not_empty(namespace: &Namespace, reason: &str) -> LakeCatError {
+    LakeCatError::Conflict(format!(
+        "cannot drop non-empty namespace {}: contains {reason}",
+        namespace.path()
+    ))
+}
+
 fn storage_profile_match<'a>(
     profiles: impl IntoIterator<Item = &'a StorageProfile>,
     table: &TableRecord,
@@ -1681,6 +1787,107 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_loads_and_drops_namespaces() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let empty_namespace = "empty".parse::<Namespace>().unwrap();
+
+        assert!(matches!(
+            store.load_namespace(&warehouse, &empty_namespace).await,
+            Err(LakeCatError::NotFound { object, name })
+                if object == "namespace" && name == "empty"
+        ));
+
+        store
+            .create_namespace(&warehouse, empty_namespace.clone())
+            .await
+            .unwrap();
+        assert_eq!(
+            store
+                .load_namespace(&warehouse, &empty_namespace)
+                .await
+                .unwrap(),
+            empty_namespace.clone()
+        );
+        assert_eq!(
+            store
+                .drop_namespace(&warehouse, &empty_namespace)
+                .await
+                .unwrap(),
+            empty_namespace
+        );
+        assert_eq!(store.list_namespaces(&warehouse).await.unwrap(), vec![]);
+
+        let table_namespace = "has_table".parse::<Namespace>().unwrap();
+        let table = TableRecord::new(
+            TableIdent::new(
+                warehouse.clone(),
+                table_namespace.clone(),
+                TableName::new("events").unwrap(),
+            ),
+            "file:///tmp/has_table".to_string(),
+            Some("file:///tmp/has_table/metadata/00000.json".to_string()),
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        );
+        store.create_table(table).await.unwrap();
+        assert!(matches!(
+            store.drop_namespace(&warehouse, &table_namespace).await,
+            Err(LakeCatError::Conflict(message)) if message.contains("tables")
+        ));
+
+        let view_namespace = "has_view".parse::<Namespace>().unwrap();
+        store
+            .create_namespace(&warehouse, view_namespace.clone())
+            .await
+            .unwrap();
+        store
+            .upsert_view(
+                ViewRecord::new(
+                    warehouse.clone(),
+                    view_namespace.clone(),
+                    TableName::new("active_customers").unwrap(),
+                    "select * from customers",
+                    "duckdb",
+                    None,
+                    BTreeMap::new(),
+                    Principal::anonymous(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(matches!(
+            store.drop_namespace(&warehouse, &view_namespace).await,
+            Err(LakeCatError::Conflict(message)) if message.contains("views")
+        ));
+
+        let policy_namespace = "has_policy".parse::<Namespace>().unwrap();
+        store
+            .create_namespace(&warehouse, policy_namespace.clone())
+            .await
+            .unwrap();
+        store
+            .upsert_policy_binding(
+                PolicyBinding::new(
+                    "namespace-policy",
+                    warehouse.clone(),
+                    Some(policy_namespace.clone()),
+                    None,
+                    true,
+                    serde_json::json!({"permission": []}),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(matches!(
+            store.drop_namespace(&warehouse, &policy_namespace).await,
+            Err(LakeCatError::Conflict(message)) if message.contains("policy bindings")
+        ));
+    }
+
+    #[tokio::test]
     async fn memory_store_persists_view_records() {
         let store = MemoryCatalogStore::new();
         let warehouse = WarehouseName::new("local").unwrap();
@@ -1851,8 +2058,9 @@ pub mod turso_store {
     use crate::{
         CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, ProjectRecord, ServerRecord,
         SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord, ViewRecord,
-        WarehouseRecord, policy_binding_key, policy_bindings_for_table, storage_profile_key,
-        storage_profile_match, table_key, validate_project_id, view_key, view_key_parts,
+        WarehouseRecord, namespace_not_empty, namespace_not_found, policy_binding_key,
+        policy_bindings_for_table, storage_profile_key, storage_profile_match, table_key,
+        validate_project_id, view_key, view_key_parts,
     };
 
     #[derive(Debug, Clone)]
@@ -1954,6 +2162,66 @@ pub mod turso_store {
                 namespaces.push(decode_namespace(row_string(&row, 0)?)?);
             }
             Ok(namespaces)
+        }
+
+        async fn load_namespace(
+            &self,
+            warehouse: &WarehouseName,
+            namespace: &Namespace,
+        ) -> LakeCatResult<Namespace> {
+            let conn = self.connect()?;
+            let mut rows = conn
+                .query(
+                    "select namespace_json from namespaces
+                     where warehouse = ?1 and namespace_path = ?2",
+                    (warehouse.as_str(), namespace.path()),
+                )
+                .await
+                .map_err(turso_error)?;
+            let Some(row) = rows.next().await.map_err(turso_error)? else {
+                return Err(namespace_not_found(namespace));
+            };
+            decode_namespace(row_string(&row, 0)?)
+        }
+
+        async fn drop_namespace(
+            &self,
+            warehouse: &WarehouseName,
+            namespace: &Namespace,
+        ) -> LakeCatResult<Namespace> {
+            let namespace = self.load_namespace(warehouse, namespace).await?;
+            let conn = self.connect()?;
+            let namespace_path = namespace.path();
+            if count_matching_rows(&conn, "tables", warehouse.as_str(), namespace_path.as_str())
+                .await?
+                > 0
+            {
+                return Err(namespace_not_empty(&namespace, "tables"));
+            }
+            if count_matching_rows(&conn, "views", warehouse.as_str(), namespace_path.as_str())
+                .await?
+                > 0
+            {
+                return Err(namespace_not_empty(&namespace, "views"));
+            }
+            if count_matching_rows(
+                &conn,
+                "policy_bindings",
+                warehouse.as_str(),
+                namespace_path.as_str(),
+            )
+            .await?
+                > 0
+            {
+                return Err(namespace_not_empty(&namespace, "policy bindings"));
+            }
+            conn.execute(
+                "delete from namespaces where warehouse = ?1 and namespace_path = ?2",
+                (warehouse.as_str(), namespace_path),
+            )
+            .await
+            .map_err(turso_error)?;
+            Ok(namespace)
         }
 
         async fn list_tables(&self, warehouse: &WarehouseName) -> LakeCatResult<Vec<TableRecord>> {
@@ -3208,7 +3476,6 @@ pub mod turso_store {
         }
     }
 
-    #[cfg(test)]
     fn row_i64(row: &Row, idx: usize) -> LakeCatResult<i64> {
         match row.get_value(idx).map_err(turso_error)? {
             TursoValue::Integer(value) => Ok(value),
@@ -3216,6 +3483,34 @@ pub mod turso_store {
                 "Turso catalog store expected integer at column {idx}, got {value:?}"
             ))),
         }
+    }
+
+    async fn count_matching_rows(
+        conn: &Connection,
+        table: &str,
+        warehouse: &str,
+        namespace_path: &str,
+    ) -> LakeCatResult<i64> {
+        let sql = match table {
+            "tables" => "select count(*) from tables where warehouse = ?1 and namespace_path = ?2",
+            "views" => "select count(*) from views where warehouse = ?1 and namespace_path = ?2",
+            "policy_bindings" => {
+                "select count(*) from policy_bindings where warehouse = ?1 and namespace_path = ?2"
+            }
+            table => {
+                return Err(LakeCatError::Internal(format!(
+                    "unsupported Turso count table: {table}"
+                )));
+            }
+        };
+        let mut rows = conn
+            .query(sql, (warehouse, namespace_path))
+            .await
+            .map_err(turso_error)?;
+        let row = rows.next().await.map_err(turso_error)?.ok_or_else(|| {
+            LakeCatError::Internal(format!("Turso catalog store returned no count for {table}"))
+        })?;
+        row_i64(&row, 0)
     }
 
     fn outbox_event_from_row(row: &Row) -> LakeCatResult<OutboxEvent> {
@@ -3520,6 +3815,51 @@ pub mod turso_store {
                     .await,
                 Err(LakeCatError::NotFound { object, name })
                     if object == "view" && name == "active_customers"
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_loads_and_drops_namespaces() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "empty".parse::<Namespace>().unwrap();
+
+            assert!(matches!(
+                store.load_namespace(&warehouse, &namespace).await,
+                Err(LakeCatError::NotFound { object, name })
+                    if object == "namespace" && name == "empty"
+            ));
+            store
+                .create_namespace(&warehouse, namespace.clone())
+                .await
+                .unwrap();
+            assert_eq!(
+                store.load_namespace(&warehouse, &namespace).await.unwrap(),
+                namespace.clone()
+            );
+            assert_eq!(
+                store.drop_namespace(&warehouse, &namespace).await.unwrap(),
+                namespace
+            );
+            assert_eq!(store.list_namespaces(&warehouse).await.unwrap(), vec![]);
+
+            let occupied_namespace = "occupied".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                occupied_namespace.clone(),
+                TableName::new("events").unwrap(),
+            );
+            let table = TableRecord::new(
+                ident,
+                "file:///tmp/occupied".to_string(),
+                Some("file:///tmp/occupied/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            );
+            store.create_table(table).await.unwrap();
+            assert!(matches!(
+                store.drop_namespace(&warehouse, &occupied_namespace).await,
+                Err(LakeCatError::Conflict(message)) if message.contains("tables")
             ));
         }
 

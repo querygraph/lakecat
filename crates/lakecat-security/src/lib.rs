@@ -26,6 +26,8 @@ pub enum CatalogAction {
     CatalogConfig,
     NamespaceCreate,
     NamespaceList,
+    NamespaceLoad,
+    NamespaceDrop,
     TableCreate,
     TableRegister,
     TableLoad,
@@ -475,6 +477,12 @@ pub struct CanCreateNamespace;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanListNamespaces;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanLoadNamespace;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanDropNamespace;
+
 pub type TableCreateCapability = Capability<CanCreateTable, TableIdent>;
 pub type TableLoadCapability = Capability<CanLoadTable, TableIdent>;
 pub type TableCommitCapability = Capability<CanCommitTable, TableIdent>;
@@ -495,6 +503,8 @@ pub type LineageReadCapability = Capability<CanReadLineage, ()>;
 pub type CatalogConfigCapability = Capability<CanReadCatalogConfig, ()>;
 pub type NamespaceCreateCapability = Capability<CanCreateNamespace, ()>;
 pub type NamespaceListCapability = Capability<CanListNamespaces, ()>;
+pub type NamespaceLoadCapability = Capability<CanLoadNamespace, ()>;
+pub type NamespaceDropCapability = Capability<CanDropNamespace, ()>;
 
 impl TableCreateCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt, table: TableIdent) -> LakeCatResult<Self> {
@@ -689,6 +699,18 @@ impl NamespaceCreateCapability {
 impl NamespaceListCapability {
     pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
         catalog_capability_from_receipt(receipt, CatalogAction::NamespaceList, "list namespaces")
+    }
+}
+
+impl NamespaceLoadCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
+        catalog_capability_from_receipt(receipt, CatalogAction::NamespaceLoad, "load namespaces")
+    }
+}
+
+impl NamespaceDropCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
+        catalog_capability_from_receipt(receipt, CatalogAction::NamespaceDrop, "drop namespaces")
     }
 }
 
@@ -1110,6 +1132,36 @@ mod tests {
         };
         assert!(NamespaceListCapability::from_receipt(namespace_list_receipt).is_ok());
 
+        let namespace_load_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:catalog".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::NamespaceLoad,
+            table: None,
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            context: serde_json::json!({}),
+            checked_at: Utc::now(),
+        };
+        assert!(NamespaceLoadCapability::from_receipt(namespace_load_receipt).is_ok());
+
+        let namespace_drop_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:catalog".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::NamespaceDrop,
+            table: None,
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            context: serde_json::json!({}),
+            checked_at: Utc::now(),
+        };
+        assert!(NamespaceDropCapability::from_receipt(namespace_drop_receipt).is_ok());
+
         let server_receipt = AuthorizationReceipt {
             principal: Principal {
                 subject: "agent:operator".to_string(),
@@ -1530,6 +1582,8 @@ pub fn action_name(action: &CatalogAction) -> &'static str {
         CatalogAction::CatalogConfig => "catalog.config",
         CatalogAction::NamespaceCreate => "namespace.create",
         CatalogAction::NamespaceList => "namespace.list",
+        CatalogAction::NamespaceLoad => "namespace.load",
+        CatalogAction::NamespaceDrop => "namespace.drop",
         CatalogAction::TableCreate => "table.create",
         CatalogAction::TableRegister => "table.register",
         CatalogAction::TableLoad => "table.load",
