@@ -6,6 +6,26 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `9a27369 Attach projects to durable servers`.
+- Paused after pushing optional `server-id` attachment for durable project
+  records. Project management responses now expose the Server > Project link,
+  and memory/Turso stores reject project attachments to missing servers while
+  preserving existing projects that do not declare a server.
+- Local verification for the pushed project-server attachment slice was green:
+  `cargo fmt -p lakecat-api -p lakecat-store -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-store memory_store_persists_project_records`;
+  `cargo test -p lakecat-store --features turso-local turso_store_persists_project_records`;
+  `cargo test -p lakecat-service management_projects_are_durable_management_entities -- --nocapture`;
+  `cargo test -p lakecat-store`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed project-server attachment slice.
+- Previous implementation slice:
   `7bc33ab Add governed durable server records`.
 - Paused after pushing governed durable `ServerRecord` support with management
   list/upsert endpoints, memory/Turso persistence, `server.manage`
@@ -198,6 +218,12 @@ Updated: 2026-06-18
 
 ## Completed In Latest Implementation Slice
 
+- Added optional `server-id` attachment to durable project records, surfaced it
+  through management API responses, and made memory/Turso project upserts reject
+  attachments to missing servers.
+- Added governed durable server records with management list/upsert endpoints,
+  memory/Turso persistence, and audited `server.*` events as the root of the
+  Server > Project > Warehouse control-plane hierarchy.
 - Added stored view projections to QueryGraph bootstrap bundles, including
   manifest view artifact hashes, view-aware graph edges, OpenLineage view counts,
   service-level export, and verification coverage.
