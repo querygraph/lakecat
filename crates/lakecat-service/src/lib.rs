@@ -25,12 +25,14 @@ use lakecat_querygraph::QueryGraphBootstrap;
 #[cfg(not(feature = "sail-local"))]
 use lakecat_sail::DeferredSailCatalogEngine;
 #[cfg(not(feature = "sail-local"))]
+use lakecat_sail::FetchScanTasksRequest as SailFetchScanTasksRequest;
+#[cfg(not(feature = "sail-local"))]
 use lakecat_sail::ScanPlanningRequest;
 #[cfg(feature = "sail-local")]
-use lakecat_sail::catalog_provider::{LakeCatCatalogProvider, ProviderScanPlanningRequest};
-use lakecat_sail::{
-    CommitPreparationRequest, FetchScanTasksRequest as SailFetchScanTasksRequest, SailCatalogEngine,
+use lakecat_sail::catalog_provider::{
+    LakeCatCatalogProvider, ProviderFetchScanTasksRequest, ProviderScanPlanningRequest,
 };
+use lakecat_sail::{CommitPreparationRequest, SailCatalogEngine};
 use lakecat_security::{
     AllowAllGovernanceEngine, AuthorizationReceipt, AuthorizationRequest, CatalogAction,
     CatalogConfigCapability, CredentialsVendCapability, GovernanceEngine, GraphReadCapability,
@@ -1505,8 +1507,32 @@ async fn fetch_scan_tasks_with_capability(
     table: TableRecord,
     request: ApiFetchScanTasksRequest,
 ) -> Result<lakecat_sail::FetchScanTasksPlan, LakeCatHttpError> {
+    #[cfg(feature = "sail-local")]
+    let _ = &table;
+    #[cfg(not(feature = "sail-local"))]
     let restriction = capability.read_restriction()?;
-    Ok(state
+    #[cfg(feature = "sail-local")]
+    let fetched = {
+        let provider = LakeCatCatalogProvider::new(
+            "lakecat",
+            state.warehouse.clone(),
+            state.store.clone(),
+            state.sail.clone(),
+            state.governance.clone(),
+            capability.receipt().principal.clone(),
+        );
+        provider
+            .fetch_table_scan_tasks_for_ident(
+                capability.table(),
+                ProviderFetchScanTasksRequest {
+                    plan_task: request.plan_task,
+                },
+            )
+            .await
+            .map_err(catalog_provider_error)?
+    };
+    #[cfg(not(feature = "sail-local"))]
+    let fetched = state
         .sail
         .fetch_scan_tasks(SailFetchScanTasksRequest {
             table: capability.table().clone(),
@@ -1517,7 +1543,8 @@ async fn fetch_scan_tasks_with_capability(
             required_projection: restriction.effective_projection(&[])?,
             required_filters: restriction.mandatory_filters(),
         })
-        .await?)
+        .await?;
+    Ok(fetched)
 }
 
 fn plan_task_tokens(tasks: &[serde_json::Value]) -> Vec<String> {

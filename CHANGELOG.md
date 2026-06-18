@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Routed REST `sail-local` `fetch-scan-tasks` through
+  `LakeCatCatalogProvider`, so plan-task expansion now uses the same
+  provider-owned scan authorization and shared `ReadRestriction` mandatory
+  projection/filter requirements before delegating to Sail.
 - Routed REST `sail-local` scan planning through the in-process
   `LakeCatCatalogProvider` seam, so the REST endpoint now exercises the same
   provider-owned authorization and shared `ReadRestriction` projection/filter

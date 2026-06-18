@@ -257,7 +257,10 @@ pub mod catalog_provider {
     };
     use serde_json::json;
 
-    use crate::{CommitPreparationRequest, SailCatalogEngine, ScanPlan, ScanPlanningRequest};
+    use crate::{
+        CommitPreparationRequest, FetchScanTasksPlan, FetchScanTasksRequest, SailCatalogEngine,
+        ScanPlan, ScanPlanningRequest,
+    };
 
     #[derive(Debug, Clone, Default)]
     pub struct ProviderScanPlanningRequest {
@@ -267,6 +270,11 @@ pub mod catalog_provider {
         pub snapshot_id: Option<i64>,
         pub start_snapshot_id: Option<i64>,
         pub end_snapshot_id: Option<i64>,
+    }
+
+    #[derive(Debug, Clone, Default)]
+    pub struct ProviderFetchScanTasksRequest {
+        pub plan_task: String,
     }
 
     pub struct LakeCatCatalogProvider {
@@ -436,6 +444,54 @@ pub mod catalog_provider {
                     snapshot_id: request.snapshot_id,
                     start_snapshot_id: request.start_snapshot_id,
                     end_snapshot_id: request.end_snapshot_id,
+                })
+                .await
+                .map_err(catalog_error)
+        }
+
+        pub async fn fetch_table_scan_tasks(
+            &self,
+            database: &SailNamespace,
+            table: &str,
+            request: ProviderFetchScanTasksRequest,
+        ) -> CatalogResult<FetchScanTasksPlan> {
+            let capability = self.authorize_table_scan(database, table).await?;
+            self.fetch_table_scan_tasks_with_capability(capability, request)
+                .await
+        }
+
+        pub async fn fetch_table_scan_tasks_for_ident(
+            &self,
+            table: &TableIdent,
+            request: ProviderFetchScanTasksRequest,
+        ) -> CatalogResult<FetchScanTasksPlan> {
+            let capability = self.authorize_table_scan_for_ident(table).await?;
+            self.fetch_table_scan_tasks_with_capability(capability, request)
+                .await
+        }
+
+        async fn fetch_table_scan_tasks_with_capability(
+            &self,
+            capability: TableScanCapability,
+            request: ProviderFetchScanTasksRequest,
+        ) -> CatalogResult<FetchScanTasksPlan> {
+            let restriction = capability.read_restriction().map_err(catalog_error)?;
+            let record = self
+                .store
+                .load_table(capability.table())
+                .await
+                .map_err(catalog_error)?;
+            self.sail
+                .fetch_scan_tasks(FetchScanTasksRequest {
+                    table: capability.table().clone(),
+                    principal: capability.receipt().principal.clone(),
+                    metadata_location: record.metadata_location,
+                    table_metadata: record.metadata,
+                    plan_task: request.plan_task,
+                    required_projection: restriction
+                        .effective_projection(&[])
+                        .map_err(catalog_error)?,
+                    required_filters: restriction.mandatory_filters(),
                 })
                 .await
                 .map_err(catalog_error)
@@ -1498,6 +1554,7 @@ pub mod catalog_provider {
         #[derive(Debug, Default)]
         struct RecordingSailEngine {
             last_scan: Mutex<Option<ScanPlanningRequest>>,
+            last_fetch: Mutex<Option<FetchScanTasksRequest>>,
         }
 
         #[async_trait::async_trait]
@@ -1523,11 +1580,18 @@ pub mod catalog_provider {
 
             async fn fetch_scan_tasks(
                 &self,
-                _request: FetchScanTasksRequest,
+                request: FetchScanTasksRequest,
             ) -> LakeCatResult<FetchScanTasksPlan> {
-                Err(LakeCatError::NotSupported(
-                    "recording provider test engine does not fetch scan tasks".to_string(),
-                ))
+                *self.last_fetch.lock().await = Some(request);
+                Ok(FetchScanTasksPlan {
+                    planned_by: "recording-provider-test".to_string(),
+                    plan_task: "recorded-plan-task".to_string(),
+                    snapshot_id: Some(42),
+                    file_scan_tasks: vec![json!({"file-path": "file:///tmp/events/data.parquet"})],
+                    delete_files: Vec::new(),
+                    plan_tasks: Vec::new(),
+                    residual_filter: None,
+                })
             }
         }
 
@@ -1938,6 +2002,102 @@ pub mod catalog_provider {
             );
             assert_eq!(recorded.limit, Some(10));
             assert_eq!(recorded.snapshot_id, Some(42));
+        }
+
+        #[tokio::test]
+        async fn provider_fetch_scan_tasks_applies_policy_requirements_before_sail() {
+            let store = MemoryCatalogStore::new();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let table_name = TableName::new("events").unwrap();
+            let ident = TableIdent::new(warehouse.clone(), namespace.clone(), table_name.clone());
+            store
+                .create_table(TableRecord::new(
+                    ident,
+                    "file:///tmp/events".to_string(),
+                    Some("file:///tmp/events/metadata/00000.json".to_string()),
+                    json!({
+                        "format-version": 3,
+                        "location": "file:///tmp/events",
+                        "current-schema-id": 1,
+                        "schemas": [{
+                            "schema-id": 1,
+                            "fields": [
+                                {"id": 1, "name": "event_id", "type": "string", "required": true},
+                                {"id": 2, "name": "payload", "type": "string", "required": false}
+                            ]
+                        }],
+                        "default-spec-id": 0,
+                        "partition-specs": [{"spec-id": 0, "fields": []}],
+                        "current-snapshot-id": 42,
+                        "snapshots": []
+                    }),
+                    Principal::anonymous(),
+                ))
+                .await
+                .unwrap();
+            store
+                .upsert_policy_binding(
+                    PolicyBinding::new(
+                        "policy-provider-fetch",
+                        warehouse.clone(),
+                        Some(namespace),
+                        Some(table_name),
+                        true,
+                        json!({
+                            "uid": "policy:provider-fetch",
+                            "lakecat:read-restriction": {
+                                "allowed-columns": ["event_id"],
+                                "row-predicate": {
+                                    "type": "equal",
+                                    "term": "event_id",
+                                    "value": "evt-1"
+                                }
+                            }
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            let sail = Arc::new(RecordingSailEngine::default());
+            let provider = LakeCatCatalogProvider::new(
+                "lakecat",
+                warehouse,
+                store,
+                sail.clone(),
+                AllowAllGovernanceEngine::new(),
+                Principal::anonymous(),
+            );
+            let sail_namespace = SailNamespace::try_from(vec!["default"]).unwrap();
+
+            let fetched = provider
+                .fetch_table_scan_tasks(
+                    &sail_namespace,
+                    "events",
+                    ProviderFetchScanTasksRequest {
+                        plan_task: "manifest-list-token".to_string(),
+                    },
+                )
+                .await
+                .unwrap();
+            let recorded = sail.last_fetch.lock().await.clone().unwrap();
+
+            assert_eq!(fetched.planned_by, "recording-provider-test");
+            assert_eq!(recorded.plan_task, "manifest-list-token");
+            assert_eq!(recorded.required_projection, vec!["event_id".to_string()]);
+            assert_eq!(
+                recorded.required_filters,
+                vec![json!({
+                    "type": "equal",
+                    "term": "event_id",
+                    "value": "evt-1"
+                })]
+            );
+            assert_eq!(
+                recorded.metadata_location.as_deref(),
+                Some("file:///tmp/events/metadata/00000.json")
+            );
         }
 
         #[tokio::test]
