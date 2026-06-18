@@ -2498,7 +2498,10 @@ async fn fetch_scan_tasks_in_warehouse(
         delete_files: fetched.delete_files,
         plan_tasks: plan_task_tokens(&fetched.plan_tasks),
         lakecat_plan_tasks: fetched.plan_tasks,
-        residual_filter: fetched.residual_filter,
+        residual_filter: merge_fetch_scan_tasks_extensions(
+            fetched.residual_filter,
+            fetch_scan_tasks_extensions(capability.receipt())?,
+        ),
     }))
 }
 
@@ -2560,18 +2563,49 @@ fn merge_scan_request_extensions(
     residual_filter: Option<serde_json::Value>,
     extensions: serde_json::Value,
 ) -> Option<serde_json::Value> {
+    merge_lakecat_residual_extension(residual_filter, "lakecat:scan-request", extensions)
+}
+
+fn fetch_scan_tasks_extensions(
+    receipt: &AuthorizationReceipt,
+) -> Result<serde_json::Value, LakeCatHttpError> {
+    Ok(json!({
+        "read-restriction": receipt
+            .context
+            .get("read-restriction")
+            .cloned()
+            .unwrap_or_else(|| json!(ReadRestriction::unrestricted())),
+    }))
+}
+
+fn merge_fetch_scan_tasks_extensions(
+    residual_filter: Option<serde_json::Value>,
+    extensions: serde_json::Value,
+) -> Option<serde_json::Value> {
+    merge_lakecat_residual_extension(residual_filter, "lakecat:fetch-scan-tasks", extensions)
+}
+
+fn merge_lakecat_residual_extension(
+    residual_filter: Option<serde_json::Value>,
+    extension_key: &str,
+    extensions: serde_json::Value,
+) -> Option<serde_json::Value> {
     match residual_filter {
         Some(mut residual @ serde_json::Value::Object(_)) => {
-            residual["lakecat:scan-request"] = extensions;
+            residual[extension_key] = extensions;
             Some(residual)
         }
-        Some(residual) => Some(json!({
-            "lakecat:residual-filter": residual,
-            "lakecat:scan-request": extensions,
-        })),
-        None => Some(json!({
-            "lakecat:scan-request": extensions,
-        })),
+        Some(residual) => {
+            let mut object = serde_json::Map::new();
+            object.insert("lakecat:residual-filter".to_string(), residual);
+            object.insert(extension_key.to_string(), extensions);
+            Some(serde_json::Value::Object(object))
+        }
+        None => {
+            let mut object = serde_json::Map::new();
+            object.insert(extension_key.to_string(), extensions);
+            Some(serde_json::Value::Object(object))
+        }
     }
 }
 
@@ -5564,6 +5598,29 @@ mod tests {
     async fn fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens() {
         let fixture = local_manifest_fixture();
         let app = test_app();
+        let upsert_policy = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/policies/agent-id-read")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "namespace": ["default"],
+                    "table": "events",
+                    "enforced": true,
+                    "odrl": {
+                        "uid": "policy:agent-id-read",
+                        "lakecat:read-restriction": {
+                            "allowed-columns": ["id"],
+                            "row-predicate": {"type": "always-true"}
+                        }
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert_policy).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
         let create_payload = serde_json::json!({
             "name": "events",
             "location": fixture.table_location,
@@ -5607,6 +5664,22 @@ mod tests {
             serde_json::json!("id")
         );
         assert_eq!(
+            payload["residual-filter"]["lakecat:scan-request"]["read-restriction"],
+            serde_json::json!({
+                "allowed-columns": ["id"],
+                "row-predicate": {"type": "always-true"},
+                "policy-hashes": [
+                    lakecat_core::content_hash_json(&serde_json::json!({
+                        "uid": "policy:agent-id-read",
+                        "lakecat:read-restriction": {
+                            "allowed-columns": ["id"],
+                            "row-predicate": {"type": "always-true"}
+                        }
+                    })).unwrap()
+                ]
+            })
+        );
+        assert_eq!(
             payload["residual-filter"]["filters-accepted-by-sail"][0]["filter"],
             serde_json::json!({"type": "always-true"})
         );
@@ -5646,6 +5719,22 @@ mod tests {
         assert_eq!(
             payload["delete-files"][0]["file-path"],
             serde_json::json!(fixture.delete_file_path)
+        );
+        assert_eq!(
+            payload["residual-filter"]["lakecat:fetch-scan-tasks"]["read-restriction"],
+            serde_json::json!({
+                "allowed-columns": ["id"],
+                "row-predicate": {"type": "always-true"},
+                "policy-hashes": [
+                    lakecat_core::content_hash_json(&serde_json::json!({
+                        "uid": "policy:agent-id-read",
+                        "lakecat:read-restriction": {
+                            "allowed-columns": ["id"],
+                            "row-predicate": {"type": "always-true"}
+                        }
+                    })).unwrap()
+                ]
+            })
         );
 
         let _ = std::fs::remove_dir_all(fixture.root);

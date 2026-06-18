@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Surfaced the re-applied governed `ReadRestriction` in Iceberg REST
+  `fetchScanTasks` responses and extended the QGLake verifier to require the
+  governed scan to produce a plan-task token whose fetch response carries the
+  same policy hash proof.
 - Wired the in-process Sail `CatalogProvider` namespace drop path to LakeCat's
   governed durable namespace deletion, including typed `namespace.drop`
   capability validation, `if_exists` handling, and explicit rejection of

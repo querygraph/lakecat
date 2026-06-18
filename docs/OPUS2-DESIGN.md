@@ -175,12 +175,13 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
      column restrictions require a governed Sail-planned read; `table.scan-planned`
      audit/outbox payloads surface the effective restriction plus storage/metadata
      locations for OpenLineage and graph consumers; `table.scan-tasks-fetched` now
-     surfaces the same governed context and routes through the scan projection
-     sink path; governed credential-vend receipts are marked as raw-credential
-     exceptions, and the `credentials.vend-attempted` audit/outbox payload
-     surfaces the same restriction and exception marker at top level so
-     consumers can distinguish raw credential exceptions from the preferred
-     Sail-planned read path.*
+     surfaces the same governed context, routes through the scan projection
+     sink path, and the Iceberg REST `fetchScanTasks` response now carries a
+     `lakecat:fetch-scan-tasks` extension with the re-applied restriction;
+     governed credential-vend receipts are marked as raw-credential exceptions,
+     and the `credentials.vend-attempted` audit/outbox payload surfaces the same
+     restriction and exception marker at top level so consumers can distinguish
+     raw credential exceptions from the preferred Sail-planned read path.*
   3. Apply it as a mandatory projection/filter through a Sail-planned read that
      flows through `LakeCatCatalogProvider`; re-apply on `fetch-scan-tasks`.
      *Started: scan planning intersects client projection with allowed columns,
@@ -207,9 +208,12 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   narrowing, row predicates, and credential TTL before QueryGraph import; the
   fixture now performs a live scan-plan verification that asks for
   `raw_payload` and fails unless LakeCat narrows the effective projection and
-  preserves the row predicate; the fixture now also probes `loadCredentials`
-  for the restricted table and fails unless LakeCat withholds raw credentials,
-  proving agents stay on the governed Sail-planned read path; rerunning the
+  preserves the row predicate and policy hash; the fixture now also requires a
+  plan-task token, posts that token to `fetchScanTasks`, and fails unless the
+  fetch response carries the re-applied restriction with the same policy hash
+  proof; the fixture now also probes `loadCredentials` for the
+  restricted table and fails unless LakeCat withholds raw credentials, proving
+  agents stay on the governed Sail-planned read path; rerunning the
   fixture now accepts existing namespace/table resources only after validating
   that they still match the expected QGLake fixture shape; the fixture now
   verifies the exported QueryGraph bootstrap contains the enforced QGLake policy
