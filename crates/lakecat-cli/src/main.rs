@@ -819,6 +819,20 @@ fn empty_scan_request() -> PlanTableScanRequest {
 
 fn verify_qglake_scan_plan(plan: &PlanTableScanResponse) -> lakecat_core::LakeCatResult<()> {
     verify_qglake_sail_planner("scan plan", &plan.planned_by)?;
+    if plan.plan_tasks.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake governed scan plan did not expose an Iceberg REST plan-task token".to_string(),
+        ));
+    }
+    if !plan
+        .lakecat_plan_tasks
+        .iter()
+        .any(|task| task["task-type"] == json!("manifest-list"))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake governed scan plan did not include a manifest-list task".to_string(),
+        ));
+    }
     let extension = plan
         .residual_filter
         .as_ref()
@@ -2187,8 +2201,8 @@ mod tests {
             planned_by: "sail-rest-models".to_string(),
             status: "completed".to_string(),
             snapshot_id: None,
-            plan_tasks: Vec::new(),
-            lakecat_plan_tasks: Vec::new(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest-list".to_string()],
+            lakecat_plan_tasks: qglake_manifest_plan_tasks(),
             file_scan_tasks: Vec::new(),
             delete_files: Vec::new(),
             residual_filter: Some(serde_json::json!({
@@ -2214,6 +2228,90 @@ mod tests {
         };
 
         verify_qglake_scan_plan(&plan).unwrap();
+    }
+
+    #[test]
+    fn qglake_scan_plan_verifier_rejects_missing_plan_task_token() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let plan = PlanTableScanResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            status: "completed".to_string(),
+            snapshot_id: None,
+            plan_tasks: Vec::new(),
+            lakecat_plan_tasks: qglake_manifest_plan_tasks(),
+            file_scan_tasks: Vec::new(),
+            delete_files: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:scan-request": {
+                    "requested-projection": [
+                        "event_id",
+                        "occurred_at",
+                        "severity",
+                        "raw_payload"
+                    ],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_plan(&plan)
+            .expect_err("QGLake governed scan should expose a plan-task token");
+        assert!(err.to_string().contains("plan-task token"));
+    }
+
+    #[test]
+    fn qglake_scan_plan_verifier_rejects_missing_manifest_list_task() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let plan = PlanTableScanResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            status: "completed".to_string(),
+            snapshot_id: None,
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest-list".to_string()],
+            lakecat_plan_tasks: vec![serde_json::json!({"task-type": "metadata-only"})],
+            file_scan_tasks: Vec::new(),
+            delete_files: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:scan-request": {
+                    "requested-projection": [
+                        "event_id",
+                        "occurred_at",
+                        "severity",
+                        "raw_payload"
+                    ],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_plan(&plan)
+            .expect_err("QGLake governed scan should expose a manifest-list task");
+        assert!(err.to_string().contains("manifest-list task"));
     }
 
     #[test]
@@ -2268,8 +2366,8 @@ mod tests {
             planned_by: "sail-rest-models".to_string(),
             status: "completed".to_string(),
             snapshot_id: None,
-            plan_tasks: Vec::new(),
-            lakecat_plan_tasks: Vec::new(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest-list".to_string()],
+            lakecat_plan_tasks: qglake_manifest_plan_tasks(),
             file_scan_tasks: Vec::new(),
             delete_files: Vec::new(),
             residual_filter: Some(serde_json::json!({
@@ -2299,6 +2397,13 @@ mod tests {
             err.to_string()
                 .contains("read restriction did not include policy hashes")
         );
+    }
+
+    fn qglake_manifest_plan_tasks() -> Vec<Value> {
+        vec![serde_json::json!({
+            "task-type": "manifest-list",
+            "manifest-list": "file:///tmp/lakecat-qglake/events/metadata/snap-42.avro"
+        })]
     }
 
     #[test]

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required the QGLake governed scan-plan verifier to prove the plan exposes at
+  least one Iceberg REST plan-task token and a LakeCat manifest-list plan task,
+  ensuring acceptance starts from manifest-backed planning before task fetch.
 - Required the QGLake governed scan and `fetchScanTasks` verifiers to prove the
   response was planned by Sail's REST-model engine (`sail-rest-models`), so the
   acceptance path cannot pass with a non-Sail planner identity.
