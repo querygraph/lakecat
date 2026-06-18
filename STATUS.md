@@ -6,6 +6,19 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `d5b496a Preflight QGLake manifest lists`.
+- Paused after pushing the QGLake manifest-list preflight slice. QGLake fixture
+  reruns now reject existing fixture tables when snapshot manifest-list files
+  referenced by the table metadata are missing locally, failing before live
+  governed plan/fetch verification reaches Sail's manifest expansion.
+- Local verification for the pushed QGLake manifest-list preflight slice was
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_existing_table_verifier`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli qglake`.
+- This status commit records the pushed QGLake manifest-list preflight slice.
+- Previous implementation slice:
   `d38d1f2 Validate QGLake metadata pointer reruns`.
 - Paused after pushing the QGLake metadata-pointer rerun validation slice.
   `lakecat-cli qglake-fixture` now rejects existing fixture tables when the
