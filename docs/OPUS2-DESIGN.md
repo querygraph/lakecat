@@ -142,8 +142,8 @@ build is reproducible off this machine.
 | F3 | Commit idempotency unreachable from REST | MEDIUM | STARTED — REST header replay + mismatch guard wired |
 | F4 | Metadata written before CAS; no orphan handling/retry | MEDIUM | STARTED — local orphan cleanup |
 | F5 | Scans bypass the in-process provider | MEDIUM | STARTED — REST `sail-local` plan and fetch routes now use provider seams |
-| F6 | Catalog graph is event breadcrumbs | MEDIUM | OPEN — Grust seam ready |
-| F7 | Single warehouse; no Project/Server/View entities | LOW | OPEN |
+| F6 | Catalog graph is event breadcrumbs | MEDIUM | STARTED — bounded taxonomy replays through Grust |
+| F7 | Single warehouse; no Project/Server/View entities | LOW | STARTED — Warehouse records and management endpoints |
 | F8 | Production secret backends unexercised | LOW | OPEN (fails closed) |
 | F9 | v4 JSON passthrough | LOW | OPEN by design |
 | F10 | Sibling deps local-only; CI manual | LOW (process) | OPEN |
@@ -255,6 +255,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
 - **P5 — Tenancy (F7) + production credentials (F8).** Project/Warehouse as
   stored entities with management endpoints; real Vault/AWS/GCP/Azure resolvers
   behind the TypeSec gate. Needed for multi-tenant deployment, not for the demo.
+  *Started: governed warehouse list/upsert management endpoints now persist
+  durable `WarehouseRecord` values in memory and Turso stores, and
+  `warehouse.upserted` outbox replay emits a catalog-facing Warehouse graph
+  anchor; project records and full multi-warehouse request routing remain
+  pending.*
 - **P6 — Reproducibility (F10) + typed v4 (F9).** Land the Sail helper commits
   upstream (or pin a published Sail) and re-enable automatic CI; converge on
   typed v4 metadata once `sail-iceberg` provides it.

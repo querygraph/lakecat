@@ -34,6 +34,7 @@ pub enum CatalogAction {
     TableDrop,
     TableRestore,
     CredentialsVend,
+    WarehouseManage,
     StorageProfileManage,
     PolicyManage,
     GraphRead,
@@ -427,6 +428,9 @@ pub struct CanPlanScan;
 pub struct CanVendCredentials;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanManageWarehouses;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanManageStorageProfiles;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -454,6 +458,7 @@ pub type TableDropCapability = Capability<CanDropTable, TableIdent>;
 pub type TableRestoreCapability = Capability<CanRestoreTable, TableIdent>;
 pub type TableScanCapability = Capability<CanPlanScan, TableIdent>;
 pub type CredentialsVendCapability = Capability<CanVendCredentials, TableIdent>;
+pub type WarehouseManageCapability = Capability<CanManageWarehouses, ()>;
 pub type StorageProfileManageCapability = Capability<CanManageStorageProfiles, ()>;
 pub type PolicyManageCapability = Capability<CanManagePolicies, ()>;
 pub type GraphReadCapability = Capability<CanReadGraph, ()>;
@@ -559,6 +564,16 @@ impl StorageProfileManageCapability {
             receipt,
             CatalogAction::StorageProfileManage,
             "manage storage profiles",
+        )
+    }
+}
+
+impl WarehouseManageCapability {
+    pub fn from_receipt(receipt: AuthorizationReceipt) -> LakeCatResult<Self> {
+        catalog_capability_from_receipt(
+            receipt,
+            CatalogAction::WarehouseManage,
+            "manage warehouses",
         )
     }
 }
@@ -1025,6 +1040,21 @@ mod tests {
         };
         assert!(NamespaceListCapability::from_receipt(namespace_list_receipt).is_ok());
 
+        let warehouse_receipt = AuthorizationReceipt {
+            principal: Principal {
+                subject: "agent:operator".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            action: CatalogAction::WarehouseManage,
+            table: None,
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            context: serde_json::json!({}),
+            checked_at: Utc::now(),
+        };
+        assert!(WarehouseManageCapability::from_receipt(warehouse_receipt).is_ok());
+
         let storage_profile_receipt = AuthorizationReceipt {
             principal: Principal {
                 subject: "agent:operator".to_string(),
@@ -1363,6 +1393,7 @@ pub fn action_name(action: &CatalogAction) -> &'static str {
         CatalogAction::TableDrop => "table.drop",
         CatalogAction::TableRestore => "table.restore",
         CatalogAction::CredentialsVend => "credentials.vend",
+        CatalogAction::WarehouseManage => "warehouse.manage",
         CatalogAction::StorageProfileManage => "storage_profile.manage",
         CatalogAction::PolicyManage => "policy.manage",
         CatalogAction::GraphRead => "graph.read",

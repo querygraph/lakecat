@@ -52,6 +52,18 @@ impl GraphEvent {
         }
     }
 
+    pub fn warehouse(action: GraphAction, warehouse: WarehouseName, properties: Value) -> Self {
+        Self {
+            event_id: None,
+            subject: warehouse_stable_id(&warehouse),
+            label: GraphNodeLabel::Warehouse,
+            action,
+            table: None,
+            properties,
+            emitted_at: Utc::now(),
+        }
+    }
+
     pub fn policy(
         action: GraphAction,
         warehouse: WarehouseName,
@@ -152,6 +164,10 @@ impl GraphEvent {
         self.event_id = Some(event_id.into());
         self
     }
+}
+
+pub fn warehouse_stable_id(warehouse: &WarehouseName) -> String {
+    format!("lakecat:warehouse:{}", warehouse.as_str())
 }
 
 pub fn namespace_stable_id(warehouse: &WarehouseName, namespace: &Namespace) -> String {
@@ -272,6 +288,19 @@ mod tests {
 
         assert_eq!(event.label, GraphNodeLabel::Policy);
         assert_eq!(event.subject, "lakecat:warehouse:local:policy:agent-read");
+        assert!(event.table.is_none());
+    }
+
+    #[test]
+    fn warehouse_event_uses_stable_catalog_subject() {
+        let event = GraphEvent::warehouse(
+            GraphAction::Upserted,
+            WarehouseName::new("local").unwrap(),
+            serde_json::json!({"kind": "test"}),
+        );
+
+        assert_eq!(event.label, GraphNodeLabel::Warehouse);
+        assert_eq!(event.subject, "lakecat:warehouse:local");
         assert!(event.table.is_none());
     }
 
@@ -516,6 +545,26 @@ pub mod grust_integration {
                 Some(&Value::String("upserted".to_string()))
             );
             GraphIndex::new(&graph).expect("policy event graph should be valid");
+        }
+
+        #[test]
+        fn converts_warehouse_event_to_valid_grust_graph_event() {
+            let event = GraphEvent::warehouse(
+                GraphAction::Upserted,
+                WarehouseName::new("local").unwrap(),
+                serde_json::json!({"warehouse":"local"}),
+            )
+            .with_event_id("lakecat:outbox:warehouse");
+            let graph = graph_event_to_grust(&event);
+
+            assert_eq!(graph.nodes.len(), 1);
+            assert_eq!(graph.edges.len(), 0);
+            assert_eq!(graph.nodes[0].label.as_str(), "CatalogEvent");
+            assert_eq!(
+                graph.nodes[0].props.get("label"),
+                Some(&Value::String("Warehouse".to_string()))
+            );
+            GraphIndex::new(&graph).expect("warehouse event graph should be valid");
         }
 
         #[test]

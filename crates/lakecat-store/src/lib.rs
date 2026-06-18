@@ -34,6 +34,13 @@ pub trait CatalogStore: Send + Sync + 'static {
         start_version: u64,
         end_version: Option<u64>,
     ) -> LakeCatResult<Vec<TableCommitRecord>>;
+    async fn upsert_warehouse(&self, warehouse: WarehouseRecord) -> LakeCatResult<WarehouseRecord> {
+        warehouse.validate()?;
+        Ok(warehouse)
+    }
+    async fn list_warehouses(&self) -> LakeCatResult<Vec<WarehouseRecord>> {
+        Ok(Vec::new())
+    }
     async fn soft_delete_table(
         &self,
         ident: &TableIdent,
@@ -152,6 +159,51 @@ pub struct TableCommitRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idempotency_key_sha256: Option<String>,
     pub committed_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WarehouseRecord {
+    pub warehouse: WarehouseName,
+    pub project_id: String,
+    pub storage_root: Option<String>,
+    pub properties: BTreeMap<String, String>,
+    pub created: AuditStamp,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl WarehouseRecord {
+    pub fn new(
+        warehouse: WarehouseName,
+        project_id: impl Into<String>,
+        storage_root: Option<String>,
+        properties: BTreeMap<String, String>,
+        principal: Principal,
+    ) -> LakeCatResult<Self> {
+        let created = AuditStamp::now(principal);
+        let record = Self {
+            warehouse,
+            project_id: project_id.into(),
+            storage_root,
+            properties,
+            updated_at: created.at,
+            created,
+        };
+        record.validate()?;
+        Ok(record)
+    }
+
+    pub fn validate(&self) -> LakeCatResult<()> {
+        validate_project_id(&self.project_id)?;
+        if let Some(storage_root) = self.storage_root.as_deref()
+            && storage_root.trim().is_empty()
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "warehouse storage root must not be empty".to_string(),
+            ));
+        }
+        validate_public_config(&self.properties)?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -469,6 +521,7 @@ impl MemoryCatalogStore {
 
 #[derive(Debug, Default)]
 struct MemoryState {
+    warehouses: BTreeMap<String, WarehouseRecord>,
     namespaces: BTreeMap<String, BTreeSet<Namespace>>,
     tables: BTreeMap<String, TableRecord>,
     commits: Vec<TableCommitRecord>,
@@ -677,6 +730,22 @@ impl CatalogStore for MemoryCatalogStore {
             .filter(|commit| end_version.is_none_or(|end| commit.sequence_number <= end))
             .cloned()
             .collect())
+    }
+
+    async fn upsert_warehouse(&self, warehouse: WarehouseRecord) -> LakeCatResult<WarehouseRecord> {
+        warehouse.validate()?;
+        let mut state = self.state.write().await;
+        state
+            .warehouses
+            .insert(warehouse.warehouse.as_str().to_string(), warehouse.clone());
+        Ok(warehouse)
+    }
+
+    async fn list_warehouses(&self) -> LakeCatResult<Vec<WarehouseRecord>> {
+        let state = self.state.read().await;
+        let mut warehouses = state.warehouses.values().cloned().collect::<Vec<_>>();
+        warehouses.sort_by(|left, right| left.warehouse.as_str().cmp(right.warehouse.as_str()));
+        Ok(warehouses)
     }
 
     async fn soft_delete_table(
@@ -951,6 +1020,23 @@ fn validate_profile_id(profile_id: &str) -> LakeCatResult<()> {
     Ok(())
 }
 
+fn validate_project_id(project_id: &str) -> LakeCatResult<()> {
+    if project_id.is_empty() {
+        return Err(LakeCatError::InvalidArgument(
+            "project id must not be empty".to_string(),
+        ));
+    }
+    if !project_id
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+    {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "project id contains unsupported characters: {project_id}"
+        )));
+    }
+    Ok(())
+}
+
 fn validate_public_config(config: &BTreeMap<String, String>) -> LakeCatResult<()> {
     for key in config.keys() {
         let normalized = key.to_ascii_lowercase();
@@ -1042,9 +1128,40 @@ fn policy_bindings_for_table<'a>(
 
 #[cfg(test)]
 mod memory_tests {
+    use std::collections::BTreeMap;
+
     use lakecat_core::{Principal, TableName};
 
     use super::*;
+
+    #[tokio::test]
+    async fn memory_store_persists_warehouse_records() {
+        let store = MemoryCatalogStore::new();
+        assert_eq!(store.list_warehouses().await.unwrap(), vec![]);
+
+        let warehouse = WarehouseName::new("local").unwrap();
+        let record = WarehouseRecord::new(
+            warehouse.clone(),
+            "default",
+            Some("file:///tmp/lakecat".to_string()),
+            BTreeMap::from([("region".to_string(), "local".to_string())]),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_warehouse(record).await.unwrap();
+
+        let updated = WarehouseRecord::new(
+            warehouse.clone(),
+            "default",
+            Some("file:///tmp/lakecat-updated".to_string()),
+            BTreeMap::from([("region".to_string(), "test".to_string())]),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_warehouse(updated.clone()).await.unwrap();
+
+        assert_eq!(store.list_warehouses().await.unwrap(), vec![updated]);
+    }
 
     #[tokio::test]
     async fn memory_store_records_and_marks_audit_outbox_events() {
@@ -1130,8 +1247,9 @@ pub mod turso_store {
 
     use crate::{
         CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, SoftDeleteRecord,
-        StorageProfile, TableCommit, TableCommitRecord, TableRecord, policy_binding_key,
-        policy_bindings_for_table, storage_profile_key, storage_profile_match, table_key,
+        StorageProfile, TableCommit, TableCommitRecord, TableRecord, WarehouseRecord,
+        policy_binding_key, policy_bindings_for_table, storage_profile_key, storage_profile_match,
+        table_key,
     };
 
     #[derive(Debug, Clone)]
@@ -1774,6 +1892,52 @@ pub mod turso_store {
             Ok(commits)
         }
 
+        async fn upsert_warehouse(
+            &self,
+            warehouse: WarehouseRecord,
+        ) -> LakeCatResult<WarehouseRecord> {
+            warehouse.validate()?;
+            let conn = self.connect()?;
+            conn.execute(
+                "insert into warehouses (
+                    warehouse, project_id, storage_root, record_json, updated_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5)
+                 on conflict(warehouse) do update set
+                    project_id = excluded.project_id,
+                    storage_root = excluded.storage_root,
+                    record_json = excluded.record_json,
+                    updated_at = excluded.updated_at",
+                (
+                    warehouse.warehouse.as_str(),
+                    warehouse.project_id.as_str(),
+                    warehouse.storage_root.as_deref(),
+                    encode_json(&warehouse)?,
+                    warehouse.updated_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
+            Ok(warehouse)
+        }
+
+        async fn list_warehouses(&self) -> LakeCatResult<Vec<WarehouseRecord>> {
+            let conn = self.connect()?;
+            let mut rows = conn
+                .query(
+                    "select record_json from warehouses
+                     order by warehouse",
+                    (),
+                )
+                .await
+                .map_err(turso_error)?;
+            let mut warehouses = Vec::new();
+            while let Some(row) = rows.next().await.map_err(turso_error)? {
+                warehouses.push(decode_json(row_string(&row, 0)?)?);
+            }
+            Ok(warehouses)
+        }
+
         async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {
             let conn = self.connect()?;
             let event_id = content_hash_json(&serde_json::json!({
@@ -2003,6 +2167,13 @@ pub mod turso_store {
     }
 
     const TURSO_MIGRATION: &[&str] = &[
+        "create table if not exists warehouses (
+            warehouse text primary key,
+            project_id text not null,
+            storage_root text,
+            record_json text not null,
+            updated_at text not null
+        )",
         "create table if not exists namespaces (
             warehouse text not null,
             namespace_path text not null,
@@ -2209,6 +2380,35 @@ pub mod turso_store {
         use crate::{CredentialIssuanceMode, PolicyBinding, StorageProvider};
 
         use super::*;
+
+        #[tokio::test]
+        async fn turso_store_persists_warehouse_records() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            assert_eq!(store.list_warehouses().await.unwrap(), vec![]);
+
+            let warehouse = WarehouseName::new("local").unwrap();
+            let record = WarehouseRecord::new(
+                warehouse.clone(),
+                "default",
+                Some("file:///tmp/lakecat".to_string()),
+                BTreeMap::from([("region".to_string(), "local".to_string())]),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_warehouse(record).await.unwrap();
+
+            let updated = WarehouseRecord::new(
+                warehouse,
+                "default",
+                Some("file:///tmp/lakecat-updated".to_string()),
+                BTreeMap::from([("region".to_string(), "test".to_string())]),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_warehouse(updated.clone()).await.unwrap();
+
+            assert_eq!(store.list_warehouses().await.unwrap(), vec![updated]);
+        }
 
         #[tokio::test]
         async fn turso_store_round_trips_namespaces_tables_and_idempotent_commits() {

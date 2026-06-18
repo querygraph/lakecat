@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added durable warehouse records with management list/upsert endpoints,
+  TypeSec-governed warehouse management authorization, Turso persistence, and
+  outbox-drained `Warehouse` graph anchors for QueryGraph tenancy bootstrap.
 - Projected table metadata graph summaries from durable outbox replay into
   stable catalog-facing `Column` and `Snapshot` events, giving QueryGraph schema
   and snapshot anchors while leaving graph traversal semantics in Grust.

@@ -7,24 +7,34 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `40863e0 Project table metadata graph anchors`.
-- Paused after pushing column and snapshot graph projection from table metadata
-  graph summaries. Table create/load audit payloads now carry compact
-  current-schema/current-snapshot graph summaries, and durable outbox replay
-  emits stable catalog-facing `Column` and `Snapshot` graph events when those
-  summaries are present.
-- Local verification for the pushed slice was green:
-  `cargo fmt -p lakecat-graph -p lakecat-service`;
-  `cargo fmt -p lakecat-graph -p lakecat-service -p lakecat-api -- --check`;
+- Current working slice: durable warehouse management entities. LakeCat now has
+  governed warehouse list/upsert management endpoints, memory/Turso
+  `WarehouseRecord` persistence, and `warehouse.upserted` outbox replay to a
+  catalog-facing `Warehouse` graph anchor for QueryGraph tenancy bootstrap.
+- Local verification for the current slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service`;
+  `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
+  `cargo test -p lakecat-store memory_store_persists_warehouse_records`;
+  `cargo test -p lakecat-store --features turso-local turso_store_persists_warehouse_records`;
+  `cargo test -p lakecat-service management_warehouses_are_durable_management_entities -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_warehouse_upserts_to_graph -- --nocapture`;
+  `cargo test -p lakecat-graph --features grust-local converts_warehouse_event_to_valid_grust_graph_event`;
+  `cargo test -p lakecat-store`;
+  `cargo test -p lakecat-security`;
   `cargo test -p lakecat-graph`;
   `cargo test -p lakecat-graph --features grust-local`;
-  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
   `cargo test -p lakecat-store --features turso-local`;
   `cargo test -p lakecat-service`;
   `cargo test -p lakecat-service --features turso-local`;
   `cargo test -p lakecat-service --all-features`;
   `cargo test --workspace`;
   `cargo test --workspace --all-features`.
+- The all-feature service/workspace gates required another one-line local Grust
+  fix in `/Users/alexy/src/grust/crates/grust-cypher/src/lib.rs`: a stale
+  recursive `evaluate_scalar_return_projection` call still passed
+  `&split.target` after the current dirty Grust checkout changed the callee
+  signature. LakeCat did not stage the dirty sibling Grust repo.
 - The all-feature service/workspace gates required a one-token local Grust fix
   in `/Users/alexy/src/grust/crates/grust-cypher/src/lib.rs`: an accidental
   duplicated `target` argument inside a `matches!` macro in the current dirty
@@ -74,6 +84,11 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added governed warehouse list/upsert management endpoints and a
+  `WarehouseManage` capability action.
+- Added durable `WarehouseRecord` persistence to memory and Turso stores.
+- Added catalog-facing Warehouse graph events and durable `warehouse.upserted`
+  outbox replay to the graph sink.
 - Added stable catalog-facing `Column` and `Snapshot` graph event constructors
   plus default and `grust-local` graph-crate coverage.
 - Added compact table metadata graph summaries to table create/load audit

@@ -31,6 +31,8 @@ impl Default for CatalogConfigResponse {
                 "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks"
                     .to_string(),
                 "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials".to_string(),
+                "GET /management/v1/warehouses".to_string(),
+                "PUT /management/v1/warehouses/{warehouse}".to_string(),
                 "POST /management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/restore"
                     .to_string(),
                 "GET /management/v1/warehouses/{warehouse}/storage-profiles".to_string(),
@@ -106,6 +108,30 @@ pub struct LoadTableResponse {
 #[serde(rename_all = "kebab-case")]
 pub struct LoadCredentialsResponse {
     pub storage_credentials: Vec<StorageCredential>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct UpsertWarehouseRequest {
+    pub project_id: Option<String>,
+    pub storage_root: Option<String>,
+    #[serde(default)]
+    pub properties: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct WarehouseResponse {
+    pub warehouse: String,
+    pub project_id: String,
+    pub storage_root: Option<String>,
+    pub properties: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ListWarehousesResponse {
+    pub warehouses: Vec<WarehouseResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
