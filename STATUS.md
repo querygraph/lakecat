@@ -6,6 +6,28 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `da2a590 Replay view listings into lineage`.
+- Paused after adding `view.listed` outbox replay. Standard view listing reads
+  now emit namespace-scoped catalog graph events and LakeCat OpenLineage
+  receipts, while `view.upserted`, `view.loaded`, and `view.dropped` continue
+  to project single-view graph and lineage evidence. The book now documents why
+  list replay carries warehouse/namespace/view-count evidence without
+  fabricating a single `view-stable-id`.
+- Local verification for the view-list replay slice was green:
+  `cargo fmt -p lakecat-lineage -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-service outbox_drain_projects_view_events_to_graph_and_lineage`;
+  `cargo test -p lakecat-lineage projects_control_plane_upserts_to_openlineage_outputs`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-lineage -p lakecat-service -p lakecat-cli -p lakecat-api -p lakecat-sail -- --check`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `27af9ac Replay view loads into lineage`.
 - Paused after adding `view.loaded` outbox replay. Standard catalog view reads
   now emit catalog-facing View graph events and LakeCat OpenLineage receipts,
