@@ -6,21 +6,27 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `0a4ac68 Add warehouse-prefixed catalog routes`.
-- Current working slice requires warehouse-prefixed Iceberg REST routing to
-  resolve a durable `WarehouseRecord` before catalog access, while preserving
-  unprefixed default-warehouse compatibility for standard clients.
-- Local verification for the pushed slice was green:
-  `cargo fmt -p lakecat-service`;
+  `e445f1e Require registered warehouse prefixes`.
+- Paused after pushing registered warehouse-prefix enforcement. Prefixed
+  Iceberg REST catalog handlers now resolve a durable `WarehouseRecord` before
+  catalog access, while unprefixed routes remain the default-warehouse
+  compatibility path for standard clients.
+- Local verification for the pushed registered-prefix slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
-  `cargo test -p lakecat-service config_endpoint_reports_lakecat_capabilities -- --nocapture`;
+  `cargo test -p lakecat-store memory_store_persists_warehouse_records`;
+  `cargo test -p lakecat-store --features turso-local turso_store_persists_warehouse_records`;
   `cargo test -p lakecat-service prefixed_catalog_routes_target_requested_warehouse -- --nocapture`;
+  `cargo test -p lakecat-store`;
+  `cargo test -p lakecat-store --features turso-local`;
   `cargo test -p lakecat-service`;
   `cargo test -p lakecat-service --features turso-local`;
   `cargo test -p lakecat-service --all-features`;
   `cargo test --workspace`;
   `cargo test --workspace --all-features`.
+- This status commit records the pushed registered-prefix enforcement.
+- Previous implementation slice:
+  `0a4ac68 Add warehouse-prefixed catalog routes`.
 - The all-feature gates again required local syntax repairs in the dirty sibling
   `/Users/alexy/src/grust/crates/grust-cypher/src/lib.rs` checkout around
   return-projection helper edits. LakeCat did not stage the sibling Grust repo.
