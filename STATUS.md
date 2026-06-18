@@ -6,6 +6,22 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `97b6e60 Make QGLake fixture fetchable`.
+- Paused after pushing the QGLake fetchable fixture slice. `lakecat-cli
+  qglake-fixture` now creates local Iceberg manifest-list and data-manifest
+  files with Sail's Iceberg writer types, records a current snapshot in the
+  bootstrap table metadata, rejects existing QGLake tables that cannot support
+  governed scan planning and `fetchScanTasks`, and keeps OPUS2-DESIGN aligned
+  with the now-built ODRL restriction/plan/fetch proof.
+- Local verification for the pushed QGLake fetchable fixture slice was green:
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens --features sail-local,turso-local`;
+  `cargo test -p lakecat-cli`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_fixture_metadata_contains_restricted_raw_payload_column`;
+  `git diff --check`.
+- This status commit records the pushed QGLake fetchable fixture slice.
+- Previous implementation slice:
   `d0dc194 Stamp governed receipts with policy hashes`.
 - Paused after pushing governed receipt policy-hash stamping. Governed scan and
   credential-vend authorization receipts now get a deterministic top-level
