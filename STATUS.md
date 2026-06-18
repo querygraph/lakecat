@@ -6,11 +6,29 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `7bc33ab Add governed durable server records`.
+- Paused after pushing governed durable `ServerRecord` support with management
+  list/upsert endpoints, memory/Turso persistence, `server.manage`
+  authorization, audited `server.*` events, and docs updated to reflect the
+  Server > Project > Warehouse control-plane hierarchy now starting in code.
+- Local verification for the pushed governed-server slice was green:
+  `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-store memory_store_persists_server_records`;
+  `cargo test -p lakecat-store --features turso-local turso_store_persists_server_records`;
+  `cargo test -p lakecat-service management_servers_are_durable_management_entities -- --nocapture`;
+  `cargo test -p lakecat-store`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-security`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed governed-server slice.
+- Previous implementation slice:
   `a6669e5 Export views in QueryGraph bootstrap`.
-- Paused after pushing stored view projections through QueryGraph bootstrap with
-  manifest-covered view artifact hashes, view-aware graph edges, OpenLineage view
-  counts, service-level export, and verification coverage.
-- Local verification for the pushed QueryGraph view-bootstrap slice was green:
+- Local verification for the previous QueryGraph view-bootstrap slice was green:
   `cargo fmt -p lakecat-cli -p lakecat-querygraph -p lakecat-service -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-querygraph projects_catalog_views_into_querygraph_bundle -- --nocapture`;
@@ -21,7 +39,6 @@ Updated: 2026-06-18
   `cargo test -p lakecat-service --all-features`;
   `cargo test --workspace`;
   `cargo test --workspace --all-features`.
-- This status commit records the pushed QueryGraph view-bootstrap slice.
 - Previous implementation slice:
   `1c3cfb8 Add governed durable view records`.
 - Local verification for the previous governed-view slice was green:
