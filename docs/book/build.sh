@@ -42,7 +42,7 @@ kindle_short_title="$(
 )"
 
 if [[ -z "$kindle_short_title" ]]; then
-  kindle_short_title="lakesail"
+  kindle_short_title="lakecat"
 fi
 
 kindle_name="$kindle_short_title ($version)"
@@ -62,16 +62,16 @@ pandoc "$tmpdir/cover.md" \
   -o "$tmpdir/cover.pdf" \
   --pdf-engine=typst
 
-pandoc docs/book/lakesail.md \
+pandoc docs/book/lakecat.md \
   -o "$tmpdir/body.pdf" \
   --pdf-engine=typst \
   --toc \
   --number-sections
 
-pdfunite "$tmpdir/cover.pdf" "$tmpdir/body.pdf" docs/book/dist/lakesail.pdf
+pdfunite "$tmpdir/cover.pdf" "$tmpdir/body.pdf" docs/book/dist/lakecat.pdf
 
-pandoc "$tmpdir/cover.md" docs/book/lakesail.md \
-  -o docs/book/dist/lakesail.epub \
+pandoc "$tmpdir/cover.md" docs/book/lakecat.md \
+  -o docs/book/dist/lakecat.epub \
   --toc \
   --number-sections \
   --metadata-file docs/book/metadata.yaml \
@@ -79,11 +79,11 @@ pandoc "$tmpdir/cover.md" docs/book/lakesail.md \
   --css docs/book/epub.css \
   --epub-title-page=false
 
-docs/book/fix_epub_layout.sh docs/book/dist/lakesail.epub "$kindle_name"
+docs/book/fix_epub_layout.sh docs/book/dist/lakecat.epub "$kindle_name"
 find docs/book/dist -maxdepth 1 -name "$kindle_short_title (*).epub" -exec rm -f {} +
 ln -s "$(basename "$stable_epub")" "$kindle_epub"
-docs/book/check_epub_metadata.sh docs/book/dist/lakesail.epub "$kindle_name"
+docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$kindle_name"
 
 /Applications/calibre.app/Contents/MacOS/ebook-convert \
-  docs/book/dist/lakesail.epub \
-  docs/book/dist/lakesail.mobi
+  docs/book/dist/lakecat.epub \
+  docs/book/dist/lakecat.mobi

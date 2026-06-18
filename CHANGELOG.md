@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Renamed the docs/book publishing surface from LakeSail to LakeCat, expanded
+  the book with catalog-market context, Polaris positioning, Rust-first
+  Sail/Iceberg v3-v4 evolution, Responsible Semantic Layer handoff, and
+  QueryGraph.ai architecture, then rebuilt the PDF, EPUB, and MOBI artifacts.
 - Extended the QGLake fixture metadata to include a position-delete manifest and
   required governed `fetchScanTasks` acceptance to prove Sail attaches
   delete-file refs to data tasks and handles delete-manifest child tasks.

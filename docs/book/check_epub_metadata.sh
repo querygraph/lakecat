@@ -7,7 +7,7 @@ if [[ $# -lt 1 || $# -gt 2 ]]; then
 fi
 
 epub="$1"
-expected_title="${2:-LakeSail}"
+expected_title="${2:-LakeCat}"
 epub_path="$(cd "$(dirname "$epub")" && pwd)/$(basename "$epub")"
 dist_dir="$(dirname "$epub_path")"
 
@@ -74,12 +74,12 @@ require_pattern '<dc:language>en-US</dc:language>' "$opf" "missing dc:language"
 require_pattern '<dc:date[^>]*>[0-9]{4}-[0-9]{2}-[0-9]{2}</dc:date>' "$opf" "missing dc:date"
 require_pattern '<meta[^>]+property="dcterms:modified"' "$opf" "missing dcterms:modified"
 require_pattern '<spine toc="ncx">[[:space:]]*<itemref idref="ch001_xhtml" />[[:space:]]*<itemref idref="nav" linear="no" />' "$opf_flat" "cover is not first in the reading spine"
-require_pattern '<docTitle>[[:space:]]*<text>LakeSail</text>[[:space:]]*</docTitle>' "$toc_flat" "NCX title is not LakeSail"
-require_pattern '<title>LakeSail</title>' "$nav" "nav document title is not LakeSail"
-require_pattern '<h1[^>]*>LakeSail</h1>' "$nav" "nav table-of-contents heading is not LakeSail"
+require_pattern '<docTitle>[[:space:]]*<text>LakeCat</text>[[:space:]]*</docTitle>' "$toc_flat" "NCX title is not LakeCat"
+require_pattern '<title>LakeCat</title>' "$nav" "nav document title is not LakeCat"
+require_pattern '<h1[^>]*>LakeCat</h1>' "$nav" "nav table-of-contents heading is not LakeCat"
 require_pattern '<body epub:type="frontmatter">' "$cover" "cover XHTML is not frontmatter"
-require_pattern '<section id="lakesail" epub:type="titlepage"' "$cover" "custom cover is not the first cover section"
-require_pattern '<h1[^>]*text-align:[[:space:]]*center[^>]*>LakeSail</h1>' "$cover" "cover title is not explicitly centered"
+require_pattern '<section id="lakecat" epub:type="titlepage"' "$cover" "custom cover is not the first cover section"
+require_pattern '<h1[^>]*text-align:[[:space:]]*center[^>]*>LakeCat</h1>' "$cover" "cover title is not explicitly centered"
 require_pattern 'div\.sourceCode' "$stylesheet" "EPUB stylesheet is missing sourceCode wrapper rules"
 require_pattern '^pre[[:space:]]*\{' "$stylesheet" "EPUB stylesheet is missing pre rules"
 require_pattern 'line-height:[[:space:]]*1\.12' "$stylesheet" "EPUB stylesheet is missing compact code line-height"
@@ -90,7 +90,7 @@ require_pattern 'display:[[:space:]]*none' "$stylesheet" "EPUB stylesheet is mis
 reject_pattern 'UNTITLED|Unknown' "$opf" "fallback OPF metadata found"
 reject_pattern 'UNTITLED|Unknown' "$toc" "fallback NCX metadata found"
 reject_pattern 'UNTITLED|Unknown' "$nav" "fallback nav metadata found"
-reject_pattern '<h1 class="unnumbered">LakeSail</h1>' "$cover" "generated top-level cover heading found"
+reject_pattern '<h1 class="unnumbered">LakeCat</h1>' "$cover" "generated top-level cover heading found"
 reject_pattern 'display:[[:space:]]*flex' "$cover" "cover uses flexbox, which is fragile on Kindle"
 
 if unzip -l "$epub" | awk '{print $4}' | grep -qx 'EPUB/text/title_page.xhtml'; then

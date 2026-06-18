@@ -1,4 +1,4 @@
-kindle_name: lakesail (0.1.0)
+kindle_name: lakecat (0.1.0)
 built_at: 2026-06-18
-epub_file: lakesail.epub
-kindle_link: lakesail (0.1.0).epub
+epub_file: lakecat.epub
+kindle_link: lakecat (0.1.0).epub

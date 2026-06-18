@@ -1,14 +1,18 @@
-# LakeSail
+# LakeCat
 
 ## Preface
 
-LakeSail is the working name for a tighter relationship between a lakehouse
-catalog and the engine that understands the table format. In this repository the
-catalog is LakeCat and the engine-side lakehouse implementation is Sail. The
-idea is not to invent a new table format or to make every client learn a new
-protocol. It is to keep Iceberg compatibility at the boundary while moving the
-parts that need deep Iceberg knowledge closer to the Rust engine that can reason
-about them.
+LakeCat is a Rust-native Iceberg catalog foundation for QueryGraph. It starts
+from a deliberately conservative claim: the ordinary Iceberg REST catalog
+boundary must keep working for ordinary engines, but the next catalog also needs
+to become a governed control plane for Rust-first planning, semantic graph
+handoff, lineage, and agent access.
+
+In this repository the catalog is LakeCat and the engine-side lakehouse
+implementation is Sail. The idea is not to invent a new table format or to make
+every client learn a new protocol. It is to keep Iceberg compatibility at the
+boundary while moving the parts that need deep Iceberg knowledge closer to the
+Rust engine that can reason about them.
 
 This book starts from first principles. It explains what a catalog is, why
 Apache Iceberg puts so much responsibility into metadata, what Sail already does
@@ -18,10 +22,11 @@ identity, tenancy, metadata-pointer state, policy gates, idempotent commits, and
 integration events, while delegating reusable engine, graph, and security work
 to Sail, Grust, and TypeSec.
 
-The intended end state is QueryGraph. LakeCat should become the catalog
+The intended end state is QueryGraph.ai. LakeCat should become the catalog
 foundation for the next QueryGraph: a place where standard engines still see an
 Iceberg REST catalog, while QueryGraph can bootstrap Croissant, CDIF, OSI, ODRL,
-OpenLineage, and a Grust-backed graph from the same governed source of truth.
+OpenLineage, TypeSec security receipts, and a Grust-backed graph from the same
+governed source of truth.
 
 ## What A Catalog Is
 
@@ -90,9 +95,74 @@ semantics or proprietary metadata for normal table access. If standard clients
 have to call a non-standard endpoint to read an ordinary table, compatibility is
 already broken.
 
-LakeSail preserves that rule. Iceberg metadata stays pristine. Business
+LakeCat preserves that rule. Iceberg metadata stays pristine. Business
 semantics, policy, graph, lineage, and agent state are derived control-plane or
 graph data. The table remains an Iceberg table.
+
+## The Current Catalog State
+
+The current lakehouse catalog market is converging on a simple fact: the catalog
+is no longer a sidecar. It is the place where table identity, tenancy, commits,
+credentials, governance, and interoperability are negotiated.
+
+Hive Metastore gave early lakehouses a familiar namespace and table registry,
+but it was born for a different format era. Cloud warehouses built proprietary
+catalogs around their own engines. Nessie explored Git-like table references and
+branching. Unity Catalog turned governance and sharing into a central product
+surface. Lakekeeper has shown how a modern open Iceberg REST catalog can model
+warehouses, projects, credentials, soft deletion, and management APIs without
+polluting table metadata. Polaris has made the strongest standards-centered
+move: an open Iceberg REST catalog with vendor gravity, clear governance
+ambition, and a credible route for many engines to meet at the same catalog
+boundary.
+
+That is why Polaris is a winner. It is not because it is the last word in
+catalog architecture. It is winning because it occupies the obvious shared
+surface at the right moment:
+
+- It speaks Iceberg REST instead of asking every engine to learn a new table
+  protocol.
+- It treats the catalog as a security and governance surface, not merely a
+  pointer map.
+- It gives enterprises an open center of gravity around Iceberg while the
+  warehouse, query-engine, and cloud-storage layers remain plural.
+- It can be adopted incrementally: engines can keep reading tables, while
+  operators gain a real control plane.
+
+LakeCat should learn from that. The winning move is not to reject Polaris-style
+compatibility. The winning move is to keep that compatibility and then ask what
+a Rust-native, QueryGraph-facing catalog can do when it is allowed to plan near
+Sail, emit graph through Grust, and ask TypeSec for authorization proofs.
+
+## What Intermediation Loses
+
+Catalogs win by sitting between engines and data. That same position can also
+flatten the system.
+
+When the catalog is only an intermediary, it often sees the table name, the
+current metadata pointer, the caller, and perhaps a credential request. The
+engine sees the schema, manifests, statistics, deletes, partition evolution,
+scan filters, and physical plan. The governance system sees policy. The lineage
+system sees an event after the fact. The semantic layer sees a separate model.
+Each system receives a shard of the truth.
+
+The loss is not merely elegance. It is operational:
+
+- Policy can be checked before access but not carried into scan planning.
+- Credentials can be vended without proving why a raw credential exception was
+  allowed.
+- Lineage can describe that something happened but not bind to the exact
+  governed plan, snapshot, policy, and table metadata.
+- Semantic layers can drift from the physical tables they describe.
+- Agents can receive broad storage access when they should have received a
+  governed plan and short-lived, narrow task set.
+- Engines can optimize with file statistics while catalogs remain blind to the
+  consequences of those choices.
+
+The catalog should not become a replacement engine. But it should not be a blind
+intermediary either. LakeCat's thesis is that the catalog can stay thin and
+standard while still becoming engine-close at the moments where correctness,
+security, and semantics depend on planning evidence.
 
 ## Why Sail Matters
 
@@ -108,7 +178,7 @@ statistics, and expression models. If LakeCat reimplements those details, it
 becomes a second Iceberg engine. The same bug class appears twice, and the
 catalog begins to drift away from the planner that actually executes work.
 
-LakeSail takes the opposite path. Put reusable Iceberg and planning behavior in
+LakeCat takes the opposite path. Put reusable Iceberg and planning behavior in
 Sail. Let LakeCat call Sail for the parts that require engine-grade knowledge.
 Keep LakeCat responsible for the catalog boundary: identity, tenancy, durable
 state, policy gates, idempotency, audit, outbox, and standard REST
@@ -144,7 +214,7 @@ metadata pointer, hoping the client preserves the restriction. If the engine is
 too far from the catalog, it can plan efficiently but may not know the
 governance receipt or durable identity context.
 
-LakeSail fuses those two moments. LakeCat authorizes the request, derives the
+LakeCat fuses those two moments. LakeCat authorizes the request, derives the
 effective restriction, and asks Sail to plan or validate against the current
 metadata pointer. Sail performs the Iceberg work. LakeCat returns the standard
 shape and records the governance evidence.
@@ -188,7 +258,7 @@ top.
 
 ## The Read Path
 
-The LakeSail read path begins like a standard catalog request and ends with a
+The LakeCat read path begins like a standard catalog request and ends with a
 governed Sail plan.
 
 1. A client asks to load or plan a table through the Iceberg REST surface.
@@ -329,7 +399,35 @@ untrusted principals. When credentials must be issued, TypeSec checks the
 `credentials.issue` capability for the exact secret reference and LakeCat
 returns only scoped, short-lived credential configuration.
 
-## OSI, OpenLineage, And Semantic Handoff
+## Rust-First Engines And The V3 To V4 Path
+
+The new Rust-first engine path matters because it changes where catalog
+intelligence can live. Sail is not a Java service with Rust bindings bolted on
+the side. It is a Rust engine path built around Arrow, DataFusion, generated
+Iceberg REST models, catalog provider traits, manifest pruning, metadata-as-data
+scans, and table-status conversion.
+
+That shape gives LakeCat a better option than reimplementation. LakeCat can ask
+Sail for typed Iceberg behavior instead of parsing just enough JSON to survive a
+request. That matters for Iceberg v3 and the emerging v4 work. Format v3 already
+pushes catalogs and engines toward richer metadata, row lineage, deletion
+semantics, and better interoperability around advanced table state. Format v4 is
+still settling, but it is plainly moving the lakehouse toward more adaptive and
+structured metadata rather than less.
+
+LakeCat should evolve under three rules:
+
+1. Conform to Iceberg v3 for ordinary clients.
+2. Preserve unknown and emerging v4 metadata without claiming settled semantics.
+3. Prefer typed Sail support as soon as Sail exposes it, using JSON passthrough
+   only as a compatibility bridge.
+
+That gives LakeCat room to support v4-ready capability flags, round-trip tests,
+metadata extension preservation, and future metadata-tree planning without
+forking Iceberg. The catalog can become more intelligent while the table remains
+portable. The standard path stays boring. The governed Sail path becomes richer.
+
+## OSI, OpenLineage, And Responsible Semantic Handoff
 
 QueryGraph needs more than physical table access. It needs a semantic picture:
 datasets, fields, policies, lineage, graph relationships, and anchors that can
@@ -338,7 +436,7 @@ QueryGraph.
 
 The LakeCat bootstrap bundle contains:
 
-- Croissant and CDIF projections for dataset and field discovery.
+- Semantic Croissant and CDIF projections for dataset and field discovery.
 - An OSI handoff with stable dataset and field anchors.
 - ODRL policy artifacts and TypeSec policy context.
 - OpenLineage events for catalog changes, scan plans, commits, and maintenance.
@@ -350,19 +448,26 @@ business metrics, dimensions, joins, ontology claims, or authoritative semantic
 names. It can publish stable anchors and governed source metadata. QueryGraph
 owns the final semantic model.
 
+This is the Responsible Semantic Layer boundary. Semantic Croissant and CDIF
+make datasets and fields discoverable and exchangeable. OSI gives QueryGraph a
+stable handoff for semantic anchors without forcing LakeCat to own business
+meaning. OpenLineage records how catalog and planning events happened. Together
+they let the semantic layer be responsible because it can be traced back to
+catalog state, policy, and lineage, not just to a hand-authored model file.
+
 OpenLineage fits the catalog outbox. A committed table create, scan plan,
 commit, soft delete, restore, or maintenance action can become a lineage event.
 Because the event is drained from a durable outbox after the catalog transaction,
 lineage reflects committed state rather than a handler's best-effort side
 effect.
 
-## QueryGraph Inspiration
+## QueryGraph.ai When LakeCat Is Done
 
-QueryGraph inspired LakeCat because QueryGraph needs the catalog to be more
-than a storage address book. QueryGraph wants to answer questions over data,
-metadata, semantics, policy, and lineage as one governed graph. That requires a
-catalog foundation that can speak to ordinary Iceberg clients and also publish
-trustworthy control-plane facts.
+QueryGraph.ai is the enterprise lakehouse this work is pointing toward.
+QueryGraph needs the catalog to be more than a storage address book. It wants to
+answer questions over data, metadata, semantics, policy, and lineage as one
+governed graph. That requires a catalog foundation that can speak to ordinary
+Iceberg clients and also publish trustworthy control-plane facts.
 
 LakeCat supports that foundation by exposing a QueryGraph bootstrap endpoint:
 
@@ -376,7 +481,44 @@ TypeSec, and attach semantic modeling work to stable dataset and field anchors.
 The import path should prove that LakeCat is the substrate, not a standalone
 demo.
 
-That is the core motivation for LakeSail. The next QueryGraph should not bolt
+When LakeCat is done, the QueryGraph.ai architecture looks like this:
+
+```text
+Standard engines and tools
+  Spark, Trino, Flink, PyIceberg, notebooks
+    |
+    | Iceberg REST
+    v
+LakeCat catalog
+  identity, tenancy, metadata pointers, commits, policy gates,
+  idempotency, credential-vending decisions, audit, durable outbox
+    |
+    | typed planning and table semantics
+    v
+Sail
+  Rust-native Iceberg planning, metadata-as-data, scan pruning,
+  delete handling, commit validation, table maintenance
+    |
+    | graph events                  | authorization proofs
+    v                               v
+Grust                           TypeSec
+  catalog graph, traversal,        RBAC, ODRL, capabilities,
+  projection, graph stores         TypeDID, secure agents
+    |
+    | semantic and lineage bootstrap
+    v
+QueryGraph.ai
+  Responsible Semantic Layer over Croissant, CDIF, OSI,
+  OpenLineage, ODRL, graph, and governed table access
+```
+
+Basic catalog use remains optional and standard. A normal Iceberg engine can
+load and commit tables without knowing QueryGraph exists. The enhanced path is
+there for enterprises that want more: governed Sail-planned reads, TypeSec
+authorization receipts, ODRL rights, TypeDID agent identity, OpenLineage replay,
+Semantic Croissant/CDIF publication, OSI handoff, and Grust graph loading.
+
+That is the core motivation for LakeCat. The next QueryGraph.ai should not bolt
 governance, graph, and lineage onto tables after the fact. It should begin from
 a catalog that already records governed state transitions and exposes standard,
 engine-close planning.
@@ -454,7 +596,7 @@ export contracts that the service uses.
 
 ## What Comes Next
 
-LakeSail is a direction more than a single release. The next slices should keep
+LakeCat is a direction more than a single release. The next slices should keep
 making the architecture more true:
 
 1. Remove temporary Sail patch bridges when the required helpers are available

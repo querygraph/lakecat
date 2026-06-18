@@ -1,6 +1,6 @@
 ---
-title: LakeSail
-title_stem: lakesail
+title: LakeCat
+title_stem: lakecat
 subtitle: An Engine-Close Catalog Foundation for QueryGraph
 author:
   - Alexy Khrabrov

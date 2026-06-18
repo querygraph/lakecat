@@ -38,8 +38,8 @@ if [[ -n "$library_title" ]]; then
 fi
 
 perl -0pi -e '
-  s#<title>ch001.xhtml</title>#<title>LakeSail</title>#;
-  s#<body epub:type="bodymatter">\s*<section id="lakesail" class="level1 unnumbered">\s*<h1 class="unnumbered">LakeSail</h1>\s*<section epub:type="titlepage"#<body epub:type="frontmatter">\n<section id="lakesail" epub:type="titlepage"#s;
+  s#<title>ch001.xhtml</title>#<title>LakeCat</title>#;
+  s#<body epub:type="bodymatter">\s*<section id="lakecat" class="level1 unnumbered">\s*<h1 class="unnumbered">LakeCat</h1>\s*<section epub:type="titlepage"#<body epub:type="frontmatter">\n<section id="lakecat" epub:type="titlepage"#s;
   s#</section>\s*</section>\s*</body>#</section>\n</body>#s;
 ' "$cover_xhtml"
 
