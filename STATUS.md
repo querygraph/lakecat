@@ -6,6 +6,23 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `bd14b08 Verify bootstrap OpenLineage hashes at service boundary`.
+- Paused after pushing the QueryGraph bootstrap service-boundary hash proof
+  slice. The `/querygraph/v1/bootstrap` service tests now verify that the
+  OpenLineage `queryGraph_semanticBundle` graph, table, and view artifact hashes
+  exposed by the API match the QueryGraph manifest hashes returned in the same
+  bundle.
+- Local verification for the pushed service-boundary hash proof slice was
+  green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service querygraph_bootstrap_projects_catalog`;
+  `cargo test -p lakecat-service`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`.
+- This status commit records the pushed QueryGraph bootstrap service-boundary
+  hash proof slice.
+- Previous implementation slice:
   `a4c4975 Verify all QGLake OpenLineage artifacts`.
 - Paused after pushing the all-artifact OpenLineage proof slice. The
   `lakecat-cli qglake-fixture` bootstrap verifier now checks every table and
