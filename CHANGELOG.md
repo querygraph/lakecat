@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made the QGLake local fixture write the Iceberg table metadata JSON at its
+  advertised `metadata_location`, keeping the bootstrap pointer usable by
+  standard metadata consumers as well as LakeCat's inline REST response.
 - Made `lakecat-cli qglake-fixture` create fetchable local Iceberg manifest
   metadata for its bootstrap table, so the QGLake acceptance verifier exercises
   a real plan-task token and governed `fetchScanTasks` proof instead of a

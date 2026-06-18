@@ -1043,7 +1043,24 @@ fn qglake_table_metadata(
         &manifest_list_path,
         &data_file,
     )?;
+    write_qglake_metadata_file(&metadata_file, &metadata)?;
     Ok(metadata)
+}
+
+fn write_qglake_metadata_file(
+    metadata_file: &std::path::Path,
+    metadata: &Value,
+) -> lakecat_core::LakeCatResult<()> {
+    let bytes = serde_json::to_vec_pretty(metadata).map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to encode QGLake table metadata JSON: {err}"
+        ))
+    })?;
+    fs::write(metadata_file, bytes).map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to write QGLake table metadata {metadata_file:?}: {err}"
+        ))
+    })
 }
 
 fn write_qglake_manifest_files(
@@ -1771,6 +1788,11 @@ mod tests {
             )
             .unwrap()
             .exists()
+        );
+        let metadata_file = file_url_path(&metadata_location, "test").unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&fs::read(metadata_file).unwrap()).unwrap()["format-version"],
+            json!(3)
         );
     }
 
