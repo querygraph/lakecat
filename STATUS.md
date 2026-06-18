@@ -6,6 +6,22 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `d0dc194 Stamp governed receipts with policy hashes`.
+- Paused after pushing governed receipt policy-hash stamping. Governed scan and
+  credential-vend authorization receipts now get a deterministic top-level
+  `policy_hash` derived from enforced `ReadRestriction` policy hashes while
+  preserving any governance-engine hash as an input. The service authorization
+  boundary and in-process Sail provider scan path both use the shared
+  `lakecat-security` receipt helper.
+- Local verification for the pushed governed receipt policy-hash slice was
+  green:
+  `cargo fmt -p lakecat-security -p lakecat-service -p lakecat-sail -- --check`;
+  `cargo test -p lakecat-security`;
+  `cargo test -p lakecat-sail --features catalog-provider`;
+  `cargo test -p lakecat-service --all-features`;
+  `git diff --check`.
+- This status commit records the pushed governed receipt policy-hash slice.
+- Previous implementation slice:
   `5a20750 Expose governed fetch restriction proof`.
 - Paused after pushing the governed fetch restriction proof. Iceberg REST
   `fetchScanTasks` responses now surface a `lakecat:fetch-scan-tasks`
