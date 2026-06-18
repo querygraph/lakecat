@@ -588,6 +588,7 @@ pub mod catalog_provider {
                         new_metadata_location: plan.new_metadata_location,
                         new_metadata: Some(plan.new_metadata),
                         idempotency_key: None,
+                        idempotency_request_hash: None,
                         principal: capability.receipt().principal.clone(),
                         authorization_receipt: Some(
                             serde_json::to_value(capability.receipt()).map_err(catalog_error)?,

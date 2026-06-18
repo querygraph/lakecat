@@ -6,11 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `c026cce Clean up uncommitted metadata files`.
-- Current working slice: audit-safe idempotency evidence. Accepted keyed table
-  commits now persist only `idempotency_key_sha256` in commit records, audit
-  payloads, and outbox payloads so replay evidence is durable without exposing
-  raw idempotency keys.
+  working changes: `ec0f2f4 Record audit-safe idempotency evidence`.
+- Current working slice: strict idempotency replay. Keyed REST table commits now
+  compare a normalized hash of the original Iceberg commit request body with the
+  stored replay hash before returning a prior response; reused keys with
+  different commit bodies return conflict instead of silently replaying old
+  catalog state.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -97,6 +98,11 @@ Updated: 2026-06-18
   and outbox payload.
 - Extended store and REST commit idempotency tests to prove the durable hash is
   present and the raw idempotency key is not written to the outbox payload.
+- Hardened memory and Turso idempotency replay to persist/check a normalized
+  idempotency request hash and reject a reused idempotency key when the request
+  body differs from the accepted commit.
+- Extended REST and Turso idempotency tests to prove mismatched keyed retries
+  return conflict and do not create a second table version or pointer-log row.
 - Parsed a minimal enforceable ODRL subset from active policy bindings:
   `allowed-columns` / `allowedColumns` at the policy root, in
   `lakecat:read-restriction`, or in ODRL constraints, plus purpose and policy
@@ -182,6 +188,15 @@ Updated: 2026-06-18
 
 ## Verification Completed
 
+- Strict idempotency replay checks passed:
+  `cargo fmt -p lakecat-store -p lakecat-service -p lakecat-sail -- --check`,
+  `cargo test -p lakecat-service commit_replays_rest_idempotency_key -- --nocapture`,
+  `cargo test -p lakecat-service --all-features commit_replays_rest_idempotency_key -- --nocapture`,
+  `cargo test -p lakecat-store --features turso-local turso_store_round_trips_namespaces_tables_and_idempotent_commits -- --nocapture`,
+  `cargo test -p lakecat-store --features turso-local`,
+  `cargo test -p lakecat-service`,
+  `git diff --check`, and
+  `cargo test --workspace --all-features`.
 - Audit-safe idempotency evidence focused checks passed:
   `cargo fmt -p lakecat-store -p lakecat-service -- --check`,
   `cargo test -p lakecat-service commit_replays_rest_idempotency_key -- --nocapture`,

@@ -135,6 +135,8 @@ pub struct TableCommit {
     pub new_metadata_location: Option<String>,
     pub new_metadata: Option<Value>,
     pub idempotency_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_request_hash: Option<String>,
     pub principal: Principal,
     pub authorization_receipt: Option<Value>,
 }
@@ -470,10 +472,16 @@ struct MemoryState {
     namespaces: BTreeMap<String, BTreeSet<Namespace>>,
     tables: BTreeMap<String, TableRecord>,
     commits: Vec<TableCommitRecord>,
-    idempotency: BTreeMap<String, TableRecord>,
+    idempotency: BTreeMap<String, IdempotencyReplay>,
     storage_profiles: BTreeMap<String, StorageProfile>,
     policy_bindings: BTreeMap<String, PolicyBinding>,
     soft_deletes: BTreeMap<String, SoftDeleteRecord>,
+}
+
+#[derive(Debug, Clone)]
+struct IdempotencyReplay {
+    request_hash: String,
+    response: TableRecord,
 }
 
 #[async_trait]
@@ -559,12 +567,6 @@ impl CatalogStore for MemoryCatalogStore {
                 name: ident.stable_id(),
             });
         }
-        if let Some(idempotency_key) = &commit.idempotency_key {
-            let idem_key = format!("{}:{idempotency_key}", ident.stable_id());
-            if let Some(record) = state.idempotency.get(&idem_key) {
-                return Ok(record.clone());
-            }
-        }
 
         let request_hash = content_hash_json(&serde_json::json!({
             "requirements": &commit.requirements,
@@ -572,8 +574,23 @@ impl CatalogStore for MemoryCatalogStore {
             "expected_previous_metadata_location": &commit.expected_previous_metadata_location,
             "new_metadata_location": &commit.new_metadata_location,
             "new_metadata": &commit.new_metadata,
-            "authorization_receipt": &commit.authorization_receipt,
         }))?;
+        let idempotency_request_hash = commit
+            .idempotency_request_hash
+            .clone()
+            .unwrap_or_else(|| request_hash.clone());
+        if let Some(idempotency_key) = &commit.idempotency_key {
+            let idem_key = format!("{}:{idempotency_key}", ident.stable_id());
+            if let Some(replay) = state.idempotency.get(&idem_key) {
+                if replay.request_hash == idempotency_request_hash {
+                    return Ok(replay.response.clone());
+                }
+                return Err(LakeCatError::Conflict(format!(
+                    "idempotency key reused with different commit request for {}",
+                    ident.stable_id()
+                )));
+            }
+        }
         let idempotency_key_sha256 = commit
             .idempotency_key
             .as_ref()
@@ -626,12 +643,18 @@ impl CatalogStore for MemoryCatalogStore {
             idempotency_key_sha256,
             committed_at,
         };
+        let replay_request_hash = record.request_hash.clone();
         state.commits.push(record);
 
         if let Some(idempotency_key) = commit.idempotency_key {
             state.idempotency.insert(
                 format!("{}:{idempotency_key}", ident.stable_id()),
-                table.clone(),
+                IdempotencyReplay {
+                    request_hash: commit
+                        .idempotency_request_hash
+                        .unwrap_or(replay_request_hash),
+                    response: table.clone(),
+                },
             );
         }
         Ok(table)
@@ -1155,17 +1178,35 @@ pub mod turso_store {
         ) -> LakeCatResult<TableRecord> {
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
+            let request_hash = content_hash_json(&serde_json::json!({
+                "requirements": &commit.requirements,
+                "updates": &commit.updates,
+                "expected_previous_metadata_location": &commit.expected_previous_metadata_location,
+                "new_metadata_location": &commit.new_metadata_location,
+                "new_metadata": &commit.new_metadata,
+            }))?;
+            let idempotency_request_hash = commit
+                .idempotency_request_hash
+                .clone()
+                .unwrap_or_else(|| request_hash.clone());
             if let Some(idempotency_key) = &commit.idempotency_key {
                 let idem_key = idempotency_record_key(ident, idempotency_key);
                 let mut rows = tx
                     .query(
-                        "select response_json from idempotency_records where idem_key = ?1",
+                        "select request_hash, response_json from idempotency_records where idem_key = ?1",
                         (idem_key,),
                     )
                     .await
                     .map_err(turso_error)?;
                 if let Some(row) = rows.next().await.map_err(turso_error)? {
-                    let table = decode_json(row_string(&row, 0)?)?;
+                    let replay_hash = row_string(&row, 0)?;
+                    if replay_hash != idempotency_request_hash {
+                        return Err(LakeCatError::Conflict(format!(
+                            "idempotency key reused with different commit request for {}",
+                            ident.stable_id()
+                        )));
+                    }
+                    let table = decode_json(row_string(&row, 1)?)?;
                     tx.commit().await.map_err(turso_error)?;
                     return Ok(table);
                 }
@@ -1190,14 +1231,6 @@ pub mod turso_store {
             };
             let mut table: TableRecord = decode_json(row_string(&row, 0)?)?;
             let previous_metadata_location = table.metadata_location.clone();
-            let request_hash = content_hash_json(&serde_json::json!({
-                "requirements": &commit.requirements,
-                "updates": &commit.updates,
-                "expected_previous_metadata_location": &commit.expected_previous_metadata_location,
-                "new_metadata_location": &commit.new_metadata_location,
-                "new_metadata": &commit.new_metadata,
-                "authorization_receipt": &commit.authorization_receipt,
-            }))?;
             let idempotency_key_sha256 = commit
                 .idempotency_key
                 .as_ref()
@@ -1334,7 +1367,10 @@ pub mod turso_store {
                     (
                         idempotency_record_key(ident, &idempotency_key),
                         table_key(ident),
-                        record.request_hash.as_str(),
+                        commit
+                            .idempotency_request_hash
+                            .as_deref()
+                            .unwrap_or(record.request_hash.as_str()),
                         encode_json(&table)?,
                         table.updated_at.to_rfc3339(),
                     ),
@@ -2057,6 +2093,7 @@ pub mod turso_store {
                 new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
                 new_metadata: None,
                 idempotency_key: Some("commit-1".to_string()),
+                idempotency_request_hash: None,
                 principal: Principal::anonymous(),
                 authorization_receipt: Some(serde_json::json!({
                     "engine": "typesec",
@@ -2072,6 +2109,29 @@ pub mod turso_store {
             );
             let replayed = store.commit_table(&ident, commit).await.unwrap();
             assert_eq!(replayed.version, 1);
+
+            let mismatched = TableCommit {
+                requirements: vec![],
+                updates: vec![serde_json::json!({"action": "noop"})],
+                expected_previous_metadata_location: Some(
+                    "file:///tmp/events/metadata/00000.json".to_string(),
+                ),
+                new_metadata_location: Some("file:///tmp/events/metadata/00002.json".to_string()),
+                new_metadata: None,
+                idempotency_key: Some("commit-1".to_string()),
+                idempotency_request_hash: None,
+                principal: Principal::anonymous(),
+                authorization_receipt: Some(serde_json::json!({
+                    "engine": "typesec",
+                    "allowed": true,
+                    "action": "table.commit"
+                })),
+            };
+            let err = store.commit_table(&ident, mismatched).await.unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("idempotency key reused with different commit request")
+            );
 
             let commit_count = store.count_rows("metadata_pointer_log").await.unwrap();
             assert_eq!(commit_count, 1);
@@ -2158,6 +2218,7 @@ pub mod turso_store {
                         ),
                         new_metadata: None,
                         idempotency_key: None,
+                        idempotency_request_hash: None,
                         principal: Principal::anonymous(),
                         authorization_receipt: None,
                     },
@@ -2521,6 +2582,7 @@ pub mod turso_store {
                 new_metadata_location: Some("file:///tmp/events/metadata/00001-a.json".to_string()),
                 new_metadata: None,
                 idempotency_key: None,
+                idempotency_request_hash: None,
                 principal: Principal::anonymous(),
                 authorization_receipt: None,
             };
@@ -2533,6 +2595,7 @@ pub mod turso_store {
                 new_metadata_location: Some("file:///tmp/events/metadata/00001-b.json".to_string()),
                 new_metadata: None,
                 idempotency_key: None,
+                idempotency_request_hash: None,
                 principal: Principal::anonymous(),
                 authorization_receipt: None,
             };

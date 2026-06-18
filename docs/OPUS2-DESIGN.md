@@ -139,7 +139,7 @@ build is reproducible off this machine.
 | --- | --- | --- | --- |
 | F1 | Governed read gates but does not mask | HIGH | OPEN — critical path |
 | F2 | ODRL transported, not interpreted; `Delegate` → deny | HIGH | OPEN — critical path |
-| F3 | Commit idempotency unreachable from REST | MEDIUM | STARTED — REST header replay wired |
+| F3 | Commit idempotency unreachable from REST | MEDIUM | STARTED — REST header replay + mismatch guard wired |
 | F4 | Metadata written before CAS; no orphan handling/retry | MEDIUM | STARTED — local orphan cleanup |
 | F5 | Scans bypass the in-process provider | MEDIUM | OPEN — enables F1 |
 | F6 | Catalog graph is event breadcrumbs | MEDIUM | OPEN — Grust seam ready |
@@ -185,9 +185,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond
   `file://` to the declared `object_store` backends. *Started: REST commits now
   accept validated `x-lakecat-idempotency-key` values and replay through the
-  store idempotency record instead of creating a second pointer-log row; failed
-  pointer commits now clean up newly written local metadata objects when they do
-  not become the table's metadata pointer.*
+  store idempotency record instead of creating a second pointer-log row; reused
+  keys with different request hashes now return conflict; failed pointer commits
+  now clean up newly written local metadata objects when they do not become the
+  table's metadata pointer.*
 - **P4 — Semantic catalog graph (F6).** Emit the bounded typed taxonomy
   (Namespace/Table/Column/Snapshot/Policy/Principal/ScanPlan/Commit) through the
   outbox into Grust; keep file-granularity as metadata-as-data. Then OpenLineage

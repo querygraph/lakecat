@@ -1182,6 +1182,17 @@ async fn commit_table(
     let capability = authorize_table_commit(&state, identity, ident).await?;
     let current = state.store.load_table(capability.table()).await?;
     let current_metadata_location = current.metadata_location.clone();
+    let idempotency_request_hash = idempotency_key
+        .as_ref()
+        .map(|_| {
+            content_hash_json(&json!({
+                "requirements": &request.requirements,
+                "updates": &request.updates,
+                "metadata-location": &request.metadata_location,
+                "metadata": &request.metadata,
+            }))
+        })
+        .transpose()?;
     let commit_plan = state
         .sail
         .prepare_commit(CommitPreparationRequest {
@@ -1207,6 +1218,7 @@ async fn commit_table(
                 new_metadata_location: commit_plan.new_metadata_location.clone(),
                 new_metadata: Some(commit_plan.new_metadata.clone()),
                 idempotency_key,
+                idempotency_request_hash,
                 principal: capability.receipt().principal.clone(),
                 authorization_receipt: Some(serde_json::to_value(capability.receipt()).map_err(
                     |err| {
@@ -3194,6 +3206,18 @@ mod tests {
                 serde_json::json!("file:///tmp/events/metadata/00000.json")
             );
         }
+
+        let mismatched_commit = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/commit")
+            .header("content-type", "application/json")
+            .header("x-lakecat-idempotency-key", "commit:events:0001")
+            .body(Body::from(
+                r#"{"requirements":[],"updates":[],"metadata-location":"file:///tmp/events/metadata/00001.json"}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(mismatched_commit).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
 
         let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
         let records = store.table_commit_records(&ident, 0, None).await.unwrap();
