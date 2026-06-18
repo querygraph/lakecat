@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-fixture` probe the restricted table's
+  `loadCredentials` response and fail unless LakeCat withholds raw credentials,
+  proving QGLake acceptance uses governed Sail-planned reads for restricted data.
 - Blocked raw credential vending when an authorization receipt carries
   fine-grained row or column read restrictions, forcing those principals through
   governed Sail-planned reads and auditing the blocked credential attempt.

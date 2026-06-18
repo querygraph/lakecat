@@ -3,9 +3,9 @@ use std::{collections::BTreeMap, fs, path::PathBuf};
 use lakecat_api::{
     CatalogConfigResponse, CreateNamespaceRequest, CreateTableRequest, LineageDrainResponse,
     ListNamespacesResponse, ListPolicyBindingsResponse, ListStorageProfilesResponse,
-    LoadTableResponse, NamespaceResponse, PlanTableScanRequest, PlanTableScanResponse,
-    PolicyBindingResponse, StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest,
-    UpsertStorageProfileRequest,
+    LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
+    PlanTableScanResponse, PolicyBindingResponse, StorageProfileResponse, TableIdentifier,
+    UpsertPolicyBindingRequest, UpsertStorageProfileRequest,
 };
 use lakecat_querygraph::{QueryGraphBootstrap, QueryGraphBootstrapVerification};
 use serde::{Serialize, de::DeserializeOwned};
@@ -419,6 +419,7 @@ async fn qglake_fixture(
     .await?;
 
     verify_qglake_governed_scan(&catalog, &namespace_path, &table, principal).await?;
+    verify_qglake_credentials_blocked(&catalog, &namespace_path, &table, principal).await?;
     let (bundle, verification) = fetch_bootstrap_bundle(&catalog, principal).await?;
     verify_qglake_bootstrap_bundle(&bundle, &namespace, &table)?;
     write_bootstrap_bundle(&output, &bundle, &verification)?;
@@ -771,6 +772,34 @@ fn verify_qglake_scan_plan(plan: &PlanTableScanResponse) -> lakecat_core::LakeCa
         )));
     }
     Ok(())
+}
+
+async fn verify_qglake_credentials_blocked(
+    catalog: &str,
+    namespace_path: &str,
+    table: &str,
+    principal: Option<&str>,
+) -> lakecat_core::LakeCatResult<()> {
+    let credentials = get_json::<LoadCredentialsResponse>(
+        catalog,
+        &format!("/catalog/v1/namespaces/{namespace_path}/tables/{table}/credentials"),
+        principal,
+        "qglake restricted credentials probe",
+    )
+    .await?;
+    verify_qglake_credentials_response(&credentials)
+}
+
+fn verify_qglake_credentials_response(
+    credentials: &LoadCredentialsResponse,
+) -> lakecat_core::LakeCatResult<()> {
+    if credentials.storage_credentials.is_empty() {
+        return Ok(());
+    }
+    Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+        "qglake restricted table unexpectedly returned {} raw credential set(s)",
+        credentials.storage_credentials.len()
+    )))
 }
 
 fn verify_qglake_lineage_drain(drain: &LineageDrainResponse) -> lakecat_core::LakeCatResult<()> {
@@ -1628,6 +1657,29 @@ mod tests {
         };
 
         verify_qglake_scan_plan(&plan).unwrap();
+    }
+
+    #[test]
+    fn qglake_credentials_verifier_requires_empty_raw_credentials() {
+        verify_qglake_credentials_response(&LoadCredentialsResponse {
+            storage_credentials: Vec::new(),
+        })
+        .expect("QGLake restricted table should accept empty raw credentials");
+
+        let err = verify_qglake_credentials_response(&LoadCredentialsResponse {
+            storage_credentials: vec![lakecat_api::StorageCredential {
+                prefix: "file:///tmp/lakecat-qglake/events".to_string(),
+                config: vec![lakecat_api::ConfigEntry::new(
+                    "lakecat.credential-mode",
+                    "local-file-no-secret",
+                )],
+            }],
+        })
+        .expect_err("QGLake restricted table should reject raw credentials");
+        assert!(
+            err.to_string()
+                .contains("qglake restricted table unexpectedly returned")
+        );
     }
 
     #[test]

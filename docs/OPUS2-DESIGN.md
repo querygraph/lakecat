@@ -207,12 +207,14 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   narrowing, row predicates, and credential TTL before QueryGraph import; the
   fixture now performs a live scan-plan verification that asks for
   `raw_payload` and fails unless LakeCat narrows the effective projection and
-  preserves the row predicate; rerunning the fixture now accepts existing
-  namespace/table resources only after validating that they still match the
-  expected QGLake fixture shape; the fixture now verifies the exported
-  QueryGraph bootstrap contains the enforced QGLake policy binding, restricted
-  ODRL material, OpenLineage output, and the fixture table's graph node plus
-  namespace edge before writing the bundle; the bootstrap manifest now hashes
+  preserves the row predicate; the fixture now also probes `loadCredentials`
+  for the restricted table and fails unless LakeCat withholds raw credentials,
+  proving agents stay on the governed Sail-planned read path; rerunning the
+  fixture now accepts existing namespace/table resources only after validating
+  that they still match the expected QGLake fixture shape; the fixture now
+  verifies the exported QueryGraph bootstrap contains the enforced QGLake policy
+  binding, restricted ODRL material, OpenLineage output, and the fixture table's
+  graph node plus namespace edge before writing the bundle; the bootstrap manifest now hashes
   the catalog graph so QueryGraph import can reject graph projection drift;
   `querygraph.bootstrap` outbox events now project into LakeCat OpenLineage
   output events carrying the bootstrap authorization/request-identity payload

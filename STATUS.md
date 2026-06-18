@@ -7,10 +7,9 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `109e0dd Block credential bypass for restricted reads`.
-- Paused after pushing raw-credential bypass hardening. `loadCredentials` now
-  returns zero credentials when policy-derived row or column restrictions require
-  governed Sail-planned reads, records the reason in audit/outbox state, and
-  never dispatches the secret resolver for the blocked raw path.
+- Current working slice extends `lakecat-cli qglake-fixture` so QGLake
+  acceptance probes `loadCredentials` for the restricted table and fails unless
+  LakeCat withholds raw credentials.
 - Local verification for the pushed credential-bypass hardening slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
@@ -128,6 +127,9 @@ Updated: 2026-06-18
 
 ## Completed In Latest Implementation Slice
 
+- Extended `lakecat-cli qglake-fixture` to prove the restricted QGLake table does
+  not receive raw credentials, keeping the acceptance path on governed
+  Sail-planned reads.
 - Blocked raw credential vending for authorization receipts that carry
   fine-grained row or column read restrictions, and audited the blocked attempt
   with the same policy context.
