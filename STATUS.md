@@ -6,6 +6,29 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `f052cd6 Replay view events and expand book workflows`.
+- Paused after implementing the view outbox replay and book-workflow slice.
+  `view.upserted` and `view.dropped` durable events now replay into
+  catalog-facing View graph events and LakeCat OpenLineage receipts. The book
+  is now explicitly part of the development workflow in `GOAL.md`, and
+  `docs/book/lakecat.md` now includes substantial workflow examples from
+  service startup and PySpark through credential vending, QueryGraph bootstrap,
+  outbox draining, and agentic QGLake flows.
+- Local verification for the view/book slice was green:
+  `cargo fmt -p lakecat-graph -p lakecat-lineage -p lakecat-service`;
+  `cargo test -p lakecat-graph view_event --features grust-local`;
+  `cargo test -p lakecat-lineage projects_control_plane_upserts_to_openlineage_outputs`;
+  `cargo test -p lakecat-service outbox_drain_projects_view_events_to_graph_and_lineage`;
+  `cargo fmt -p lakecat-graph -p lakecat-lineage -p lakecat-service -p lakecat-sail -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `f13f729 Project storage profiles into lineage`.
 - Paused after implementing the storage-profile outbox lineage slice.
   `storage-profile.upserted` outbox replay now emits LakeCat
