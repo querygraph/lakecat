@@ -6,6 +6,27 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `c028ac3 Replay table restores into graph`.
+- Paused after adding catalog-facing graph replay for `table.restored` outbox
+  events and refreshing the persistent goal guidance. Table restore replay now
+  emits a Table graph event using the existing `Loaded` graph action plus the
+  existing LakeCat OpenLineage restore receipt, leaving restore-specific graph
+  taxonomy to Grust.
+- Local verification for the table-restore replay slice was green:
+  `cargo fmt -p lakecat-lineage -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_restores_to_graph_and_lineage`;
+  `cargo test -p lakecat-lineage projects_table_restore_to_openlineage_output`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `69ce88c Replay catalog config reads into lineage`.
 - Paused after adding `catalog.config-read` outbox replay. The standard Iceberg
   REST config entrypoint now emits warehouse-scoped catalog graph evidence and
