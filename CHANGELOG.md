@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake bootstrap OpenLineage acceptance to verify the LakeCat
+  producer, OpenLineage schema URL, and semantic-bundle table/view counts
+  before accepting the QueryGraph handoff bundle.
 - Added the QueryGraph handoff standards to the OpenLineage semantic-bundle
   facet and required QGLake bootstrap acceptance to verify those standards in
   OpenLineage, not only in the bundle manifest.

@@ -732,6 +732,20 @@ fn verify_qglake_bootstrap_open_lineage(
     bundle: &QueryGraphBootstrap,
     projection: &lakecat_querygraph::QueryGraphTableProjection,
 ) -> lakecat_core::LakeCatResult<()> {
+    if bundle.open_lineage["producer"] != json!("https://querygraph.ai/lakecat") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap OpenLineage producer was not LakeCat: {}",
+            bundle.open_lineage["producer"].clone()
+        )));
+    }
+    if bundle.open_lineage["schemaURL"]
+        != json!("https://openlineage.io/spec/2-0-2/OpenLineage.json")
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap OpenLineage schemaURL was not the expected OpenLineage schema: {}",
+            bundle.open_lineage["schemaURL"].clone()
+        )));
+    }
     let semantic_bundle = bundle
         .open_lineage
         .pointer("/run/facets/queryGraph_semanticBundle")
@@ -745,6 +759,12 @@ fn verify_qglake_bootstrap_open_lineage(
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "QGLake bootstrap OpenLineage tableCount did not match bundle tables: {}",
             semantic_bundle["tableCount"].clone()
+        )));
+    }
+    if semantic_bundle["viewCount"] != json!(bundle.views.len()) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap OpenLineage viewCount did not match bundle views: {}",
+            semantic_bundle["viewCount"].clone()
         )));
     }
     for expected in QGLAKE_BOOTSTRAP_STANDARDS {
@@ -2258,6 +2278,26 @@ mod tests {
     }
 
     #[test]
+    fn qglake_bootstrap_verifier_requires_openlineage_envelope() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let mut bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        bundle.open_lineage["producer"] = json!("https://example.invalid/catalog");
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect_err("QGLake bootstrap should reject non-LakeCat OpenLineage producer");
+        assert!(err.to_string().contains("producer was not LakeCat"));
+    }
+
+    #[test]
     fn qglake_bootstrap_verifier_requires_graph_table_anchor() {
         let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
         let output = serde_json::json!({
@@ -3203,6 +3243,8 @@ mod tests {
             views: Vec::new(),
             graph,
             open_lineage: serde_json::json!({
+                "producer": "https://querygraph.ai/lakecat",
+                "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json",
                 "run": {
                     "facets": {
                         "queryGraph_semanticBundle": {
