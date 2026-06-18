@@ -6,11 +6,26 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `109e0dd Block credential bypass for restricted reads`.
+- Paused after pushing raw-credential bypass hardening. `loadCredentials` now
+  returns zero credentials when policy-derived row or column restrictions require
+  governed Sail-planned reads, records the reason in audit/outbox state, and
+  never dispatches the secret resolver for the blocked raw path.
+- Local verification for the pushed credential-bypass hardening slice was green:
+  `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-service credential_vend_blocks_raw_credentials_for_fine_grained_restriction -- --nocapture`;
+  `cargo test -p lakecat-service credentials_vend_audit_payload_surfaces_policy_context`;
+  `cargo test -p lakecat-security read_restriction`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed credential-bypass hardening.
+- Previous implementation slice:
   `e445f1e Require registered warehouse prefixes`.
-- Current working slice blocks raw credential vending when policy-derived row or
-  column restrictions require governed Sail-planned reads, so agents cannot use
-  `loadCredentials` to bypass fine-grained restrictions.
-- Local verification for the pushed registered-prefix slice was green:
+- Local verification for the previous registered-prefix slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-store memory_store_persists_warehouse_records`;
@@ -23,9 +38,6 @@ Updated: 2026-06-18
   `cargo test -p lakecat-service --all-features`;
   `cargo test --workspace`;
   `cargo test --workspace --all-features`.
-- This status commit records the pushed registered-prefix enforcement.
-- Previous implementation slice:
-  `0a4ac68 Add warehouse-prefixed catalog routes`.
 - The all-feature gates again required local syntax repairs in the dirty sibling
   `/Users/alexy/src/grust/crates/grust-cypher/src/lib.rs` checkout around
   return-projection helper edits. LakeCat did not stage the sibling Grust repo.
