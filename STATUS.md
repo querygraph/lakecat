@@ -5,13 +5,13 @@ Updated: 2026-06-18
 ## Current State
 
 - LakeCat is on `master`.
-- Latest committed and pushed LakeCat implementation slice before this working
-  unit: `d467bdd Add durable warehouse management`.
-- Current working slice adds durable project management entities. LakeCat now has
+- Latest committed and pushed LakeCat implementation slice:
+  `fe03c29 Add durable project management`.
+- Paused after pushing durable project management entities. LakeCat now has
   governed project list/upsert management endpoints, memory/Turso
   `ProjectRecord` persistence, and `project.upserted` outbox replay to a
   catalog-facing `Project` graph anchor for QueryGraph tenancy bootstrap.
-- Local verification for this working slice is green:
+- Local verification for the pushed slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service`;
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
@@ -86,7 +86,7 @@ Updated: 2026-06-18
 - Sail remains the target for planner/table-status work, but `/Users/alexy/src/sail`
   has separate graph-extension WIP and should not be edited casually.
 
-## Completed In This Commit
+## Completed In Latest Implementation Slice
 
 - Added governed project list/upsert management endpoints and a
   `ProjectManage` capability action.
