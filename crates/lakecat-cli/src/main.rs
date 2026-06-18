@@ -1687,6 +1687,7 @@ fn verify_qglake_credential_replay(
                 .to_string(),
         ));
     }
+    verify_qglake_credential_lineage_projection(restricted_probe, "restricted")?;
 
     let Some(human_probe) = drain.events.iter().find(|event| {
         event.event_type == "credentials.vend-attempted"
@@ -1705,6 +1706,31 @@ fn verify_qglake_credential_replay(
             "qglake lineage drain trusted human credential replay did not prove audited standard credential vending"
                 .to_string(),
         ));
+    }
+    verify_qglake_credential_lineage_projection(human_probe, "trusted human")?;
+    Ok(())
+}
+
+fn verify_qglake_credential_lineage_projection(
+    event: &LineageDrainEventSummary,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    if event.lineage_events == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} credential replay emitted no lineage projection"
+        )));
+    }
+    if event.replay_event_hashes.is_empty()
+        || event.replay_event_hashes.iter().any(String::is_empty)
+        || event.replay_open_lineage_hashes.is_empty()
+        || event
+            .replay_open_lineage_hashes
+            .iter()
+            .any(String::is_empty)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} credential replay is missing sink receipt hashes"
+        )));
     }
     Ok(())
 }
@@ -4497,6 +4523,66 @@ mod tests {
                 .contains("qglake lineage drain did not replay the trusted human credential probe")
         );
 
+        let mut restricted_without_receipts = qglake_restricted_credential_summary();
+        restricted_without_receipts.lineage_events = 0;
+        restricted_without_receipts.replay_event_hashes.clear();
+        restricted_without_receipts
+            .replay_open_lineage_hashes
+            .clear();
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 4,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 3,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    restricted_without_receipts,
+                    qglake_human_credential_summary(),
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject missing restricted credential receipts");
+        assert!(err.to_string().contains(
+            "qglake lineage drain restricted credential replay emitted no lineage projection"
+        ));
+
+        let mut human_without_openlineage = qglake_human_credential_summary();
+        human_without_openlineage.replay_open_lineage_hashes.clear();
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 4,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 4,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                    human_without_openlineage,
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject missing trusted human credential receipts");
+        assert!(err.to_string().contains(
+            "qglake lineage drain trusted human credential replay is missing sink receipt hashes"
+        ));
+
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 4,
@@ -4584,7 +4670,7 @@ mod tests {
             agent_delegation_hash: Some("sha256:delegation".to_string()),
             agent_summary_signature_hash: Some("sha256:summary".to_string()),
             graph_events: 0,
-            lineage_events: 0,
+            lineage_events: 1,
             bundle_hash: None,
             graph_hash: None,
             open_lineage_hash: None,
@@ -4601,8 +4687,10 @@ mod tests {
             raw_credential_exception_reason: Some(
                 "fine-grained read restriction requires Sail-planned reads".to_string(),
             ),
-            replay_event_hashes: Vec::new(),
-            replay_open_lineage_hashes: Vec::new(),
+            replay_event_hashes: vec!["sha256:restricted-credential-replay".to_string()],
+            replay_open_lineage_hashes: vec![
+                "sha256:restricted-credential-openlineage".to_string(),
+            ],
         }
     }
 
@@ -4617,7 +4705,7 @@ mod tests {
             agent_delegation_hash: None,
             agent_summary_signature_hash: None,
             graph_events: 0,
-            lineage_events: 0,
+            lineage_events: 1,
             bundle_hash: None,
             graph_hash: None,
             open_lineage_hash: None,
@@ -4632,8 +4720,8 @@ mod tests {
             raw_credential_exception_reason: Some(
                 "trusted human principal may use audited raw credential vending".to_string(),
             ),
-            replay_event_hashes: Vec::new(),
-            replay_open_lineage_hashes: Vec::new(),
+            replay_event_hashes: vec!["sha256:human-credential-replay".to_string()],
+            replay_open_lineage_hashes: vec!["sha256:human-credential-openlineage".to_string()],
         }
     }
 

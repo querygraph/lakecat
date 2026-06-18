@@ -48,6 +48,7 @@ pub enum LineageEventType {
     TableCommitted,
     TableDeleted,
     TableRestored,
+    CredentialsVendAttempted,
     QueryGraphBootstrap,
 }
 
@@ -216,6 +217,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::TableCommitted => "table-committed",
         LineageEventType::TableDeleted => "table-deleted",
         LineageEventType::TableRestored => "table-restored",
+        LineageEventType::CredentialsVendAttempted => "credentials-vend-attempted",
         LineageEventType::QueryGraphBootstrap => "querygraph-bootstrap",
     }
 }
@@ -348,6 +350,41 @@ mod tests {
             projected["outputs"][0]["facets"]["queryGraph_bootstrap"]["payload"]["authorization-receipt"]
                 ["request-identity"]["attestation-state"],
             json!("verified")
+        );
+    }
+
+    #[test]
+    fn projects_credential_vend_attempt_to_openlineage_run_facet() {
+        let event = LineageEvent::new(
+            LineageEventType::CredentialsVendAttempted,
+            Principal {
+                subject: "agent:reader".to_string(),
+                kind: PrincipalKind::Agent,
+            },
+            None,
+            json!({
+                "credential-count": 0,
+                "lakecat:raw-credential-exception": {
+                    "allowed": false,
+                    "reason": "fine-grained read restriction requires Sail-planned reads"
+                },
+            }),
+        );
+        let projected = open_lineage_event(&event);
+        assert_eq!(
+            projected["job"]["name"],
+            json!("credentials-vend-attempted")
+        );
+        assert_eq!(projected["inputs"], json!([]));
+        assert_eq!(projected["outputs"], json!([]));
+        assert_eq!(
+            projected["run"]["facets"]["lakecat_catalogEvent"]["payload"]["credential-count"],
+            json!(0)
+        );
+        assert_eq!(
+            projected["run"]["facets"]["lakecat_catalogEvent"]["payload"]["lakecat:raw-credential-exception"]
+                ["allowed"],
+            json!(false)
         );
     }
 

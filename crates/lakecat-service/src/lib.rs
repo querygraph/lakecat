@@ -2952,6 +2952,17 @@ async fn project_outbox_event(
                 .await?;
             receipt.record_lineage(lineage_receipt);
         }
+    } else if event.event_type == "credentials.vend-attempted" {
+        let lineage_receipt = state
+            .lineage
+            .emit(LineageEvent::new(
+                LineageEventType::CredentialsVendAttempted,
+                principal,
+                table,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "querygraph.bootstrap" {
         let lineage_receipt = state
             .lineage
@@ -4894,7 +4905,7 @@ mod tests {
             ]
         );
         assert_eq!(drain.graph_events, 19);
-        assert_eq!(drain.lineage_events, 6);
+        assert_eq!(drain.lineage_events, 7);
         let credential_summary = drain
             .events
             .iter()
@@ -4906,7 +4917,7 @@ mod tests {
         );
         assert_eq!(credential_summary.principal_kind.as_deref(), Some("agent"));
         assert_eq!(credential_summary.graph_events, 1);
-        assert_eq!(credential_summary.lineage_events, 0);
+        assert_eq!(credential_summary.lineage_events, 1);
         assert_eq!(credential_summary.credential_count, Some(0));
         assert_eq!(
             credential_summary.credential_block_reason.as_deref(),
@@ -4921,6 +4932,14 @@ mod tests {
                 .raw_credential_exception_reason
                 .as_deref(),
             Some("fine-grained read restriction requires Sail-planned reads")
+        );
+        assert_eq!(
+            credential_summary.replay_event_hashes,
+            vec!["recorded".to_string()]
+        );
+        assert_eq!(
+            credential_summary.replay_open_lineage_hashes,
+            vec!["recorded-openlineage".to_string()]
         );
         let bootstrap_summary = drain
             .events
@@ -5122,7 +5141,7 @@ mod tests {
             Some("evt-namespace-drop")
         );
         let lineage_events = lineage.events.lock().await;
-        assert_eq!(lineage_events.len(), 6);
+        assert_eq!(lineage_events.len(), 7);
         assert_eq!(
             lineage_events[0].event_type,
             LineageEventType::NamespaceCreated
@@ -5146,38 +5165,50 @@ mod tests {
         );
         assert_eq!(
             lineage_events[4].event_type,
-            LineageEventType::QueryGraphBootstrap
+            LineageEventType::CredentialsVendAttempted
         );
         assert_eq!(
-            lineage_events[4].payload["authorization-receipt"]["request-identity"]["attestation-state"],
-            serde_json::json!("verified")
+            lineage_events[4].payload["credential-count"],
+            serde_json::json!(0)
         );
         assert_eq!(
-            lineage_events[4].payload["bundle-hash"],
-            serde_json::json!("sha256:bundle")
-        );
-        assert_eq!(
-            lineage_events[4].payload["graph-hash"],
-            serde_json::json!("sha256:graph")
-        );
-        assert_eq!(
-            lineage_events[4].payload["open-lineage-hash"],
-            serde_json::json!("sha256:openlineage")
-        );
-        assert_eq!(
-            lineage_events[4].payload["querygraph-import-hash"],
-            serde_json::json!("sha256:querygraph-import")
-        );
-        assert_eq!(
-            lineage_events[4].payload["table-artifacts"][0]["cdif-hash"],
-            serde_json::json!("sha256:cdif")
-        );
-        assert_eq!(
-            lineage_events[4].payload["view-artifacts"][0]["stable-id"],
-            serde_json::json!("lakecat:view:local:default:active_customers")
+            lineage_events[4].payload["lakecat:raw-credential-exception"]["allowed"],
+            serde_json::json!(false)
         );
         assert_eq!(
             lineage_events[5].event_type,
+            LineageEventType::QueryGraphBootstrap
+        );
+        assert_eq!(
+            lineage_events[5].payload["authorization-receipt"]["request-identity"]["attestation-state"],
+            serde_json::json!("verified")
+        );
+        assert_eq!(
+            lineage_events[5].payload["bundle-hash"],
+            serde_json::json!("sha256:bundle")
+        );
+        assert_eq!(
+            lineage_events[5].payload["graph-hash"],
+            serde_json::json!("sha256:graph")
+        );
+        assert_eq!(
+            lineage_events[5].payload["open-lineage-hash"],
+            serde_json::json!("sha256:openlineage")
+        );
+        assert_eq!(
+            lineage_events[5].payload["querygraph-import-hash"],
+            serde_json::json!("sha256:querygraph-import")
+        );
+        assert_eq!(
+            lineage_events[5].payload["table-artifacts"][0]["cdif-hash"],
+            serde_json::json!("sha256:cdif")
+        );
+        assert_eq!(
+            lineage_events[5].payload["view-artifacts"][0]["stable-id"],
+            serde_json::json!("lakecat:view:local:default:active_customers")
+        );
+        assert_eq!(
+            lineage_events[6].event_type,
             LineageEventType::NamespaceDropped
         );
         assert_eq!(

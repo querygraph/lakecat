@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Projected credential-vend outbox events into LakeCat lineage/OpenLineage sink
+  receipts and required QGLake lineage-drain acceptance to prove both credential
+  probes emitted replay hashes.
 - Added credential-vend replay evidence to lineage-drain summaries and required
   QGLake lineage-drain acceptance to prove both the restricted agent block and
   trusted-human raw credential exception survived outbox replay.
