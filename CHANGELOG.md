@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required warehouse-prefixed Iceberg REST catalog routes to resolve a durable
+  `WarehouseRecord`, preventing catalog operations under unregistered warehouse
+  prefixes while preserving unprefixed default-warehouse compatibility.
 - Added warehouse-prefixed Iceberg REST catalog routes for config, namespace,
   table, commit, scan-plan, fetch-scan-tasks, and credential access while
   preserving the existing unprefixed default-warehouse routes.

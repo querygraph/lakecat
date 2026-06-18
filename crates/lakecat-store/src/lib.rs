@@ -45,6 +45,16 @@ pub trait CatalogStore: Send + Sync + 'static {
         warehouse.validate()?;
         Ok(warehouse)
     }
+    async fn load_warehouse(&self, warehouse: &WarehouseName) -> LakeCatResult<WarehouseRecord> {
+        self.list_warehouses()
+            .await?
+            .into_iter()
+            .find(|record| record.warehouse == *warehouse)
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "warehouse",
+                name: warehouse.as_str().to_string(),
+            })
+    }
     async fn list_warehouses(&self) -> LakeCatResult<Vec<WarehouseRecord>> {
         Ok(Vec::new())
     }
@@ -807,6 +817,18 @@ impl CatalogStore for MemoryCatalogStore {
         Ok(warehouse)
     }
 
+    async fn load_warehouse(&self, warehouse: &WarehouseName) -> LakeCatResult<WarehouseRecord> {
+        let state = self.state.read().await;
+        state
+            .warehouses
+            .get(warehouse.as_str())
+            .cloned()
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "warehouse",
+                name: warehouse.as_str().to_string(),
+            })
+    }
+
     async fn list_warehouses(&self) -> LakeCatResult<Vec<WarehouseRecord>> {
         let state = self.state.read().await;
         let mut warehouses = state.warehouses.values().cloned().collect::<Vec<_>>();
@@ -1226,6 +1248,14 @@ mod memory_tests {
         .unwrap();
         store.upsert_warehouse(updated.clone()).await.unwrap();
 
+        assert_eq!(store.load_warehouse(&warehouse).await.unwrap(), updated);
+        assert!(matches!(
+            store
+                .load_warehouse(&WarehouseName::new("missing").unwrap())
+                .await,
+            Err(LakeCatError::NotFound { object, name })
+                if object == "warehouse" && name == "missing"
+        ));
         assert_eq!(store.list_warehouses().await.unwrap(), vec![updated]);
     }
 
@@ -2054,6 +2084,30 @@ pub mod turso_store {
             Ok(warehouse)
         }
 
+        async fn load_warehouse(
+            &self,
+            warehouse: &WarehouseName,
+        ) -> LakeCatResult<WarehouseRecord> {
+            let conn = self.connect()?;
+            let mut rows = conn
+                .query(
+                    "select record_json from warehouses
+                     where warehouse = ?1",
+                    (warehouse.as_str(),),
+                )
+                .await
+                .map_err(turso_error)?;
+            rows.next()
+                .await
+                .map_err(turso_error)?
+                .map(|row| decode_json(row_string(&row, 0)?))
+                .transpose()?
+                .ok_or_else(|| LakeCatError::NotFound {
+                    object: "warehouse",
+                    name: warehouse.as_str().to_string(),
+                })
+        }
+
         async fn list_warehouses(&self) -> LakeCatResult<Vec<WarehouseRecord>> {
             let conn = self.connect()?;
             let mut rows = conn
@@ -2537,7 +2591,7 @@ pub mod turso_store {
             store.upsert_warehouse(record).await.unwrap();
 
             let updated = WarehouseRecord::new(
-                warehouse,
+                warehouse.clone(),
                 "default",
                 Some("file:///tmp/lakecat-updated".to_string()),
                 BTreeMap::from([("region".to_string(), "test".to_string())]),
@@ -2546,6 +2600,14 @@ pub mod turso_store {
             .unwrap();
             store.upsert_warehouse(updated.clone()).await.unwrap();
 
+            assert_eq!(store.load_warehouse(&warehouse).await.unwrap(), updated);
+            assert!(matches!(
+                store
+                    .load_warehouse(&WarehouseName::new("missing").unwrap())
+                    .await,
+                Err(LakeCatError::NotFound { object, name })
+                    if object == "warehouse" && name == "missing"
+            ));
             assert_eq!(store.list_warehouses().await.unwrap(), vec![updated]);
         }
 

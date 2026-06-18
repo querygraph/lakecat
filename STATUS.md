@@ -7,11 +7,9 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `0a4ac68 Add warehouse-prefixed catalog routes`.
-- Paused after pushing warehouse-prefixed Iceberg REST routing. Standard
-  catalog handlers now accept `/catalog/v1/{warehouse}/...` for config,
-  namespace, table, commit, scan-plan, fetch-scan-tasks, and credential access,
-  while the existing unprefixed routes remain the default-warehouse
-  compatibility path.
+- Current working slice requires warehouse-prefixed Iceberg REST routing to
+  resolve a durable `WarehouseRecord` before catalog access, while preserving
+  unprefixed default-warehouse compatibility for standard clients.
 - Local verification for the pushed slice was green:
   `cargo fmt -p lakecat-service`;
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
@@ -113,6 +111,8 @@ Updated: 2026-06-18
 
 ## Completed In Latest Implementation Slice
 
+- Required warehouse-prefixed Iceberg REST catalog routes to resolve a stored
+  warehouse record before catalog state changes or loads.
 - Added warehouse-prefixed Iceberg REST catalog routes while preserving
   unprefixed default-warehouse routes for existing clients.
 - Allowed governed warehouse management endpoints to manage a second durable

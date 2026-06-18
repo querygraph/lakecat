@@ -899,7 +899,7 @@ async fn get_config_for_warehouse(
     headers: HeaderMap,
     Path(warehouse): Path<String>,
 ) -> Result<Json<CatalogConfigResponse>, LakeCatHttpError> {
-    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
     get_config_in_warehouse(warehouse, state, headers).await
 }
 
@@ -939,7 +939,7 @@ async fn create_namespace_for_warehouse(
     Path(warehouse): Path<String>,
     Json(request): Json<CreateNamespaceRequest>,
 ) -> Result<Json<NamespaceResponse>, LakeCatHttpError> {
-    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
     create_namespace_in_warehouse(warehouse, state, headers, request).await
 }
 
@@ -985,7 +985,7 @@ async fn list_namespaces_for_warehouse(
     headers: HeaderMap,
     Path(warehouse): Path<String>,
 ) -> Result<Json<ListNamespacesResponse>, LakeCatHttpError> {
-    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
     list_namespaces_in_warehouse(warehouse, state, headers).await
 }
 
@@ -1033,7 +1033,7 @@ async fn create_table_for_warehouse(
     Path((warehouse, namespace)): Path<(String, String)>,
     Json(request): Json<CreateTableRequest>,
 ) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
-    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
     create_table_in_warehouse(warehouse, state, headers, namespace, request).await
 }
 
@@ -1094,7 +1094,7 @@ async fn load_table_for_warehouse(
     headers: HeaderMap,
     Path((warehouse, namespace, table)): Path<(String, String, String)>,
 ) -> Result<Json<LoadTableResponse>, LakeCatHttpError> {
-    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
     load_table_in_warehouse(warehouse, state, headers, namespace, table).await
 }
 
@@ -1143,7 +1143,7 @@ async fn delete_table_for_warehouse(
     headers: HeaderMap,
     Path((warehouse, namespace, table)): Path<(String, String, String)>,
 ) -> Result<StatusCode, LakeCatHttpError> {
-    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
     delete_table_in_warehouse(warehouse, state, headers, namespace, table).await
 }
 
@@ -1206,7 +1206,7 @@ async fn load_credentials_for_warehouse(
     headers: HeaderMap,
     Path((warehouse, namespace, table)): Path<(String, String, String)>,
 ) -> Result<Json<LoadCredentialsResponse>, LakeCatHttpError> {
-    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
     load_credentials_in_warehouse(warehouse, state, headers, namespace, table).await
 }
 
@@ -1625,7 +1625,7 @@ async fn commit_table_for_warehouse(
     Path((warehouse, namespace, table)): Path<(String, String, String)>,
     Json(request): Json<CommitTableRequest>,
 ) -> Result<Json<CommitTableResponse>, LakeCatHttpError> {
-    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
     commit_table_in_warehouse(warehouse, state, headers, namespace, table, request).await
 }
 
@@ -1796,7 +1796,7 @@ async fn plan_table_scan_for_warehouse(
     Path((warehouse, namespace, table)): Path<(String, String, String)>,
     Json(request): Json<PlanTableScanRequest>,
 ) -> Result<Json<PlanTableScanResponse>, LakeCatHttpError> {
-    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
     plan_table_scan_in_warehouse(warehouse, state, headers, namespace, table, request).await
 }
 
@@ -1960,7 +1960,7 @@ async fn fetch_scan_tasks_for_warehouse(
     Path((warehouse, namespace, table)): Path<(String, String, String)>,
     Json(request): Json<ApiFetchScanTasksRequest>,
 ) -> Result<Json<FetchScanTasksResponse>, LakeCatHttpError> {
-    let warehouse = catalog_warehouse(&state, Some(warehouse))?;
+    let warehouse = prefixed_catalog_warehouse(&state, warehouse).await?;
     fetch_scan_tasks_in_warehouse(warehouse, state, headers, namespace, table, request).await
 }
 
@@ -2677,14 +2677,13 @@ fn management_warehouse(
     Ok(warehouse)
 }
 
-fn catalog_warehouse(
+async fn prefixed_catalog_warehouse(
     state: &LakeCatState,
-    warehouse: Option<String>,
+    warehouse: String,
 ) -> Result<WarehouseName, LakeCatHttpError> {
-    match warehouse {
-        Some(warehouse) => Ok(WarehouseName::new(warehouse)?),
-        None => Ok(state.warehouse.clone()),
-    }
+    let warehouse = WarehouseName::new(warehouse)?;
+    state.store.load_warehouse(&warehouse).await?;
+    Ok(warehouse)
 }
 
 #[derive(Debug, Clone)]
@@ -4390,6 +4389,22 @@ mod tests {
                 "22222222-2222-2222-2222-222222222222",
             ),
         ] {
+            let upsert_warehouse = Request::builder()
+                .method(Method::PUT)
+                .uri(format!("/management/v1/warehouses/{warehouse}"))
+                .header("content-type", "application/json")
+                .header("x-lakecat-principal", "operator@example.com")
+                .body(Body::from(
+                    serde_json::json!({
+                        "project-id": "default",
+                        "storage-root": location,
+                    })
+                    .to_string(),
+                ))
+                .unwrap();
+            let response = app.clone().oneshot(upsert_warehouse).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+
             let create = Request::builder()
                 .method(Method::POST)
                 .uri(format!("/catalog/v1/{warehouse}/namespaces/default/tables"))
@@ -4453,7 +4468,7 @@ mod tests {
             .uri("/catalog/v1/other/namespaces/default/tables/events")
             .body(Body::empty())
             .unwrap();
-        let response = app.oneshot(prefixed_load).await.unwrap();
+        let response = app.clone().oneshot(prefixed_load).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
@@ -4467,6 +4482,14 @@ mod tests {
             body["metadata"]["location"],
             serde_json::json!("file:///tmp/other-events")
         );
+
+        let missing_warehouse = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/missing/namespaces/default/tables/events")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(missing_warehouse).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
