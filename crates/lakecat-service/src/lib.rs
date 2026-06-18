@@ -2950,6 +2950,26 @@ async fn project_outbox_event(
                 .await?;
             receipt.record_lineage(lineage_receipt);
         }
+    } else if event.event_type == "catalog.config-read" {
+        let warehouse = outbox_warehouse(event, &state.warehouse)?;
+        state
+            .graph
+            .emit(
+                GraphEvent::warehouse(GraphAction::Loaded, warehouse, event_payload.clone())
+                    .with_event_id(event.event_id.clone()),
+            )
+            .await?;
+        receipt.graph_events += 1;
+        let lineage_receipt = state
+            .lineage
+            .emit(LineageEvent::new(
+                LineageEventType::CatalogConfigRead,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
     } else if matches!(
         event.event_type.as_str(),
         "namespace.created" | "namespace.dropped" | "namespace.loaded"
@@ -5553,6 +5573,86 @@ mod tests {
                 "evt-3".to_string(),
                 "evt-namespace-drop".to_string()
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_projects_catalog_config_reads_to_graph_and_lineage() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-config-read".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-config-read",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let drain = drain_outbox_once(&state, 10).await.unwrap();
+        assert_eq!(drain.delivered, 1);
+        assert_eq!(drain.event_types, vec!["catalog.config-read".to_string()]);
+        assert_eq!(drain.graph_events, 2);
+        assert_eq!(drain.lineage_events, 1);
+        assert_eq!(
+            store.delivered.lock().await.as_slice(),
+            &["evt-config-read".to_string()]
+        );
+        assert_eq!(drain.events.len(), 1);
+        assert_eq!(drain.events[0].graph_events, 2);
+        assert_eq!(drain.events[0].lineage_events, 1);
+
+        let graph_events = graph.events.lock().await;
+        assert_eq!(graph_events.len(), 2);
+        assert_eq!(graph_events[0].label, GraphNodeLabel::Principal);
+        assert_eq!(
+            graph_events[0].event_id.as_deref(),
+            Some("evt-config-read:principal")
+        );
+        assert_eq!(graph_events[1].label, GraphNodeLabel::Warehouse);
+        assert_eq!(graph_events[1].action, GraphAction::Loaded);
+        assert_eq!(graph_events[1].subject, "lakecat:warehouse:local");
+        assert_eq!(graph_events[1].event_id.as_deref(), Some("evt-config-read"));
+        assert_eq!(
+            graph_events[1].properties["authorization-receipt"]["principal"]["subject"],
+            serde_json::json!("agent:reader")
+        );
+        drop(graph_events);
+
+        let lineage_events = lineage.events.lock().await;
+        assert_eq!(lineage_events.len(), 1);
+        assert_eq!(
+            lineage_events[0].event_type,
+            LineageEventType::CatalogConfigRead
+        );
+        assert_eq!(
+            lineage_events[0].payload["warehouse"],
+            serde_json::json!("local")
         );
     }
 

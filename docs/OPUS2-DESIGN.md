@@ -265,6 +265,8 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   (Namespace/Table/Column/Snapshot/Policy/Principal/ScanPlan/Commit) through the
   outbox into Grust; keep file-granularity as metadata-as-data. Then OpenLineage
   transport + TypeDID attestation on the same events. *Started:
+  `catalog.config-read` replay now emits a warehouse-scoped graph event and
+  LakeCat OpenLineage receipt for the standard Iceberg REST config entrypoint;
   `namespace.created` outbox replay now emits a catalog-facing `Namespace` graph
   event with a stable namespace subject and the same authorization payload used
   for lineage; `namespace.listed` and `namespace.loaded` replay now carry

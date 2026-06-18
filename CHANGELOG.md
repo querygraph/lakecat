@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Replayed `catalog.config-read` outbox events into warehouse-scoped catalog
+  graph events and LakeCat OpenLineage receipts so the standard Iceberg REST
+  configuration entrypoint carries durable replay evidence.
 - Replayed `namespace.listed` and `namespace.loaded` outbox events into
   warehouse/namespace-scoped catalog graph events and LakeCat OpenLineage
   receipts so standard namespace reads carry durable replay evidence.

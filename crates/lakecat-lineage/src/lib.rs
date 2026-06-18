@@ -40,6 +40,7 @@ impl LineageEvent {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum LineageEventType {
+    CatalogConfigRead,
     NamespaceCreated,
     NamespaceDropped,
     NamespaceListed,
@@ -153,6 +154,21 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
             .as_ref()
             .map(|table| vec![open_lineage_dataset(table, &event.payload)])
             .unwrap_or_default(),
+        LineageEventType::CatalogConfigRead => vec![json!({
+            "namespace": "lakecat.catalog-config",
+            "name": event
+                .payload
+                .get("warehouse")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown"),
+            "facets": {
+                "lakecat_catalogConfig": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-catalog-config-facet/0.1.0.json",
+                    "payload": event.payload,
+                }
+            }
+        })],
         LineageEventType::NamespaceCreated
         | LineageEventType::NamespaceDropped
         | LineageEventType::NamespaceLoaded => vec![json!({
@@ -357,6 +373,7 @@ fn view_lineage_output_name(event: &LineageEvent) -> String {
 
 fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
     match event_type {
+        LineageEventType::CatalogConfigRead => "catalog-config-read",
         LineageEventType::NamespaceCreated => "namespace-created",
         LineageEventType::NamespaceDropped => "namespace-dropped",
         LineageEventType::NamespaceListed => "namespace-listed",
@@ -514,6 +531,33 @@ mod tests {
 
     #[test]
     fn projects_control_plane_upserts_to_openlineage_outputs() {
+        let config = open_lineage_event(&LineageEvent::new(
+            LineageEventType::CatalogConfigRead,
+            Principal::anonymous(),
+            None,
+            json!({
+                "warehouse": "local",
+                "authorization-receipt": {
+                    "principal": Principal::anonymous(),
+                    "action": "catalog-config",
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "checked_at": chrono::Utc::now()
+                }
+            }),
+        ));
+        assert_eq!(config["job"]["name"], json!("catalog-config-read"));
+        assert_eq!(
+            config["outputs"][0]["namespace"],
+            json!("lakecat.catalog-config")
+        );
+        assert_eq!(config["outputs"][0]["name"], json!("local"));
+        assert_eq!(
+            config["outputs"][0]["facets"]["lakecat_catalogConfig"]["payload"]["warehouse"],
+            json!("local")
+        );
+
         let namespace_list = open_lineage_event(&LineageEvent::new(
             LineageEventType::NamespaceListed,
             Principal::anonymous(),
