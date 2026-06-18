@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake fixture reruns to preflight local snapshot manifest-list
+  files referenced by existing fixture metadata before accepting a table for
+  governed plan/fetch verification.
 - Required QGLake fixture reruns to validate that an existing table's advertised
   local `metadata_location` JSON file exists and matches the Iceberg metadata
   returned by the catalog before accepting the table.

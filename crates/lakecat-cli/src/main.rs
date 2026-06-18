@@ -561,6 +561,7 @@ fn verify_qglake_existing_table(
                 .to_string(),
         ));
     }
+    verify_qglake_manifest_lists(&response.metadata)?;
     Ok(())
 }
 
@@ -602,6 +603,23 @@ fn metadata_has_manifest_list(metadata: &Value) -> bool {
         .into_iter()
         .flatten()
         .any(|snapshot| snapshot["manifest-list"].as_str().is_some())
+}
+
+fn verify_qglake_manifest_lists(metadata: &Value) -> lakecat_core::LakeCatResult<()> {
+    for manifest_list in metadata["snapshots"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|snapshot| snapshot["manifest-list"].as_str())
+    {
+        let manifest_list_file = file_url_path(manifest_list, "QGLake manifest list")?;
+        if !manifest_list_file.is_file() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "existing QGLake table manifest list is not readable at {manifest_list}"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn verify_qglake_bootstrap_bundle(
@@ -1945,6 +1963,38 @@ mod tests {
         )
         .expect_err("drifted QGLake metadata pointer should be rejected");
         assert!(err.to_string().contains("does not match"));
+    }
+
+    #[test]
+    fn qglake_existing_table_verifier_rejects_missing_manifest_list_file() {
+        let (location, metadata_location) = qglake_test_fixture_urls("missing-manifest-list");
+        let metadata = qglake_table_metadata(&location, &metadata_location).unwrap();
+        fs::remove_file(
+            file_url_path(
+                metadata["snapshots"][0]["manifest-list"].as_str().unwrap(),
+                "test",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let response = LoadTableResponse {
+            identifier: TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            metadata_location: Some(metadata_location.clone()),
+            metadata,
+            config: Vec::new(),
+        };
+
+        let err = verify_qglake_existing_table(
+            &response,
+            &["default".to_string()],
+            "events",
+            &metadata_location,
+        )
+        .expect_err("missing QGLake manifest list should be rejected");
+        assert!(err.to_string().contains("manifest list"));
     }
 
     fn qglake_test_fixture_urls(name: &str) -> (String, String) {
