@@ -6,6 +6,28 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `efd548a Add catalog view REST aliases`.
+- Paused after pushing catalog-path view REST aliases. Warehouse-prefixed catalog
+  callers can now list, load, and upsert durable `ViewRecord` values through
+  `/catalog/v1/{warehouse}/namespaces/{namespace}/views`, with governed
+  `view.load` authorization for reads and audited Iceberg REST `view.*` events.
+- Local verification for the pushed catalog view REST alias slice was green:
+  `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-security table_capabilities_require_matching_allowed_receipts`;
+  `cargo test -p lakecat-store memory_tests::memory_store_persists_view_records`;
+  `cargo test -p lakecat-store --features turso-local turso_store::tests::turso_store_persists_view_records`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities -- --nocapture`;
+  `cargo test -p lakecat-store`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-security`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed catalog view REST alias slice.
+- Previous implementation slice:
   `2680f95 Add project-scoped warehouse management`.
 - Paused after pushing project-scoped warehouse management routes. Management
   callers can now list and upsert warehouses through
