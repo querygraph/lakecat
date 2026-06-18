@@ -6,11 +6,26 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `ce4b82b Verify QGLake credential blocking`.
-- Current working slice routes commit metadata writes and stale-write cleanup
+  `d905f27 Route commit metadata through object_store`.
+- Paused after pushing commit metadata object writes and stale-write cleanup
   through the Rust `object_store` URL seam instead of hardcoding the local
   filesystem writer.
-- Local verification for the pushed QGLake credential-blocking slice was green:
+- Local verification for the pushed object-store metadata writer slice was green:
+  `cargo fmt -p lakecat-service`;
+  `cargo fmt -p lakecat-service -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-service commit_can_advance_metadata_location_extension -- --nocapture`;
+  `cargo test -p lakecat-service --all-features stale_commit_cleans_up_uncommitted_metadata_file -- --nocapture`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed object-store metadata writer slice.
+- Previous implementation slice:
+  `ce4b82b Verify QGLake credential blocking`.
+- Local verification for the previous QGLake credential-blocking slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `cargo fmt -p lakecat-cli -- --check`;
   `git diff --check`;
@@ -21,8 +36,7 @@ Updated: 2026-06-18
   `cargo test -p lakecat-service --all-features`;
   `cargo test --workspace`;
   `cargo test --workspace --all-features`.
-- This status commit records the pushed QGLake credential-blocking verification.
-- Previous implementation slice:
+- Prior implementation slice:
   `109e0dd Block credential bypass for restricted reads`.
 - Local verification for the previous credential-bypass hardening slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
