@@ -6,6 +6,30 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `3f45f69 Add durable view version evidence`.
+- Paused after adding store-assigned durable `view-version` counters to
+  `ViewRecord` values in memory and Turso stores. View responses now expose the
+  current version, QueryGraph bootstrap carries it through view graph nodes,
+  OSI handoff, and OpenLineage facets, and the docs/book describe it as the
+  first bridge toward full Iceberg view history and commit semantics.
+- Local verification for the durable view-version evidence slice was green:
+  `cargo fmt -p lakecat-store -p lakecat-api -p lakecat-service -p lakecat-querygraph`;
+  `cargo test -p lakecat-store memory_store_persists_view_records`;
+  `cargo test -p lakecat-store turso_store_persists_view_records --features turso-local`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities`;
+  `cargo test -p lakecat-querygraph projects_catalog_views_into_querygraph_bundle`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-querygraph`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-store -p lakecat-api -p lakecat-service -p lakecat-querygraph -p lakecat-sail -- --check`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `28d9939 Require QGLake tenant spine list replay`.
 - Paused after making QGLake acceptance establish and list its durable
   server/project/warehouse tenant spine. The fixture now upserts the
