@@ -864,6 +864,7 @@ implementation target.
   "view-namespace": ["default"],
   "view-name": "events_view",
   "view-stable-id": "lakecat:view:local:default:events_view",
+  "view-version": 1,
   "graph-events": 2,
   "lineage-events": 1,
   "replay-event-hashes": ["sha256:..."],
@@ -876,10 +877,11 @@ warehouse, namespace, view count, graph and lineage projection counts, and
 receipt hashes for the list read without fabricating a single
 `view-stable-id`.
 
-QGLake acceptance compares that `view-stable-id` with the accepted QueryGraph
-bootstrap view artifacts. That closes a small but important gap: the bootstrap
-bundle may say a view was exported, and the drain evidence can now prove the
-corresponding view catalog event was replayed with graph and lineage receipts.
+QGLake acceptance compares both that `view-stable-id` and `view-version` with
+the accepted QueryGraph bootstrap view artifacts. That closes a small but
+important gap: the bootstrap bundle may say a view was exported, and the drain
+evidence can now prove the corresponding view catalog event was replayed at the
+same durable catalog version with graph and lineage receipts.
 
 ### QueryGraph Bootstrap
 

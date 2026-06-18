@@ -1973,6 +1973,13 @@ fn verify_qglake_view_replay(
                 "qglake lineage drain view replay for {view_stable_id} did not emit graph and lineage projections"
             )));
         }
+        if let Some(expected_version) = verification.verified_view_versions.get(view_stable_id) {
+            if view_replay.view_version != Some(*expected_version) {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "qglake lineage drain view replay for {view_stable_id} did not preserve accepted view version {expected_version}"
+                )));
+            }
+        }
         if view_replay
             .view_warehouse
             .as_deref()
@@ -4735,6 +4742,7 @@ mod tests {
                     view_namespace: Vec::new(),
                     view_name: None,
                     view_stable_id: None,
+                    view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -4792,6 +4800,7 @@ mod tests {
                     view_namespace: Vec::new(),
                     view_name: None,
                     view_stable_id: None,
+                    view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -4849,6 +4858,7 @@ mod tests {
                     view_namespace: Vec::new(),
                     view_name: None,
                     view_stable_id: None,
+                    view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -4905,6 +4915,7 @@ mod tests {
                     view_namespace: Vec::new(),
                     view_name: None,
                     view_stable_id: None,
+                    view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -4961,6 +4972,7 @@ mod tests {
                     view_namespace: Vec::new(),
                     view_name: None,
                     view_stable_id: None,
+                    view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -5017,6 +5029,7 @@ mod tests {
                     view_namespace: Vec::new(),
                     view_name: None,
                     view_stable_id: None,
+                    view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -5073,6 +5086,7 @@ mod tests {
                     view_namespace: Vec::new(),
                     view_name: None,
                     view_stable_id: None,
+                    view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -5129,6 +5143,7 @@ mod tests {
                     view_namespace: Vec::new(),
                     view_name: None,
                     view_stable_id: None,
+                    view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -5186,6 +5201,7 @@ mod tests {
                     view_namespace: Vec::new(),
                     view_name: None,
                     view_stable_id: None,
+                    view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -5242,6 +5258,7 @@ mod tests {
                     view_namespace: Vec::new(),
                     view_name: None,
                     view_stable_id: None,
+                    view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -5298,6 +5315,7 @@ mod tests {
                     view_namespace: Vec::new(),
                     view_name: None,
                     view_stable_id: None,
+                    view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -5354,6 +5372,7 @@ mod tests {
                     view_namespace: Vec::new(),
                     view_name: None,
                     view_stable_id: None,
+                    view_version: None,
                     policy_binding_count: 0,
                     project_count: None,
                     server_count: None,
@@ -5410,6 +5429,7 @@ mod tests {
                     view_namespace: Vec::new(),
                     view_name: None,
                     view_stable_id: None,
+                    view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -5594,6 +5614,50 @@ mod tests {
         .expect_err("QGLake lineage drain should require accepted view replay");
         assert!(err.to_string().contains(
             "qglake lineage drain did not replay view evidence for lakecat:view:local:default:active_customers"
+        ));
+
+        let mut mismatched_view_replay = qglake_view_lineage_summary();
+        mismatched_view_replay.view_version = Some(2);
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 9,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 3,
+                lineage_events: 10,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    mismatched_view_replay,
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject mismatched view replay version");
+        assert!(err.to_string().contains(
+            "qglake lineage drain view replay for lakecat:view:local:default:active_customers did not preserve accepted view version 1"
         ));
 
         let err = verify_qglake_lineage_drain(
@@ -5847,6 +5911,8 @@ mod tests {
         verification.view_count = 1;
         verification.verified_views =
             vec!["lakecat:view:local:default:active_customers".to_string()];
+        verification.verified_view_versions =
+            BTreeMap::from([("lakecat:view:local:default:active_customers".to_string(), 1)]);
         verification
     }
 
@@ -5857,6 +5923,7 @@ mod tests {
             view_count: 0,
             verified_tables: vec!["local.default.events".to_string()],
             verified_views: Vec::new(),
+            verified_view_versions: BTreeMap::new(),
             bundle_hash: "sha256:bundle".to_string(),
             graph_hash: "sha256:graph".to_string(),
             open_lineage_hash: "sha256:openlineage".to_string(),
@@ -5895,6 +5962,7 @@ mod tests {
             view_namespace: Vec::new(),
             view_name: None,
             view_stable_id: None,
+            view_version: None,
             policy_binding_count: 1,
             project_count: None,
             server_count: None,
@@ -5934,6 +6002,7 @@ mod tests {
             view_namespace: vec!["default".to_string()],
             view_name: Some("active_customers".to_string()),
             view_stable_id: Some("lakecat:view:local:default:active_customers".to_string()),
+            view_version: Some(1),
             policy_binding_count: 0,
             project_count: None,
             server_count: None,
@@ -5973,6 +6042,7 @@ mod tests {
             view_namespace: Vec::new(),
             view_name: None,
             view_stable_id: None,
+            view_version: None,
             policy_binding_count: 1,
             project_count: None,
             server_count: None,
@@ -6014,6 +6084,7 @@ mod tests {
             view_namespace: Vec::new(),
             view_name: None,
             view_stable_id: None,
+            view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: None,
@@ -6053,6 +6124,7 @@ mod tests {
             view_namespace: Vec::new(),
             view_name: None,
             view_stable_id: None,
+            view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: Some(1),
@@ -6092,6 +6164,7 @@ mod tests {
             view_namespace: Vec::new(),
             view_name: None,
             view_stable_id: None,
+            view_version: None,
             policy_binding_count: 0,
             project_count: Some(1),
             server_count: None,
@@ -6131,6 +6204,7 @@ mod tests {
             view_namespace: Vec::new(),
             view_name: None,
             view_stable_id: None,
+            view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: None,
@@ -6170,6 +6244,7 @@ mod tests {
             view_namespace: Vec::new(),
             view_name: None,
             view_stable_id: None,
+            view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: None,
@@ -6215,6 +6290,7 @@ mod tests {
             view_namespace: Vec::new(),
             view_name: None,
             view_stable_id: None,
+            view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: None,

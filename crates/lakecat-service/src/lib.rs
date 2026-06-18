@@ -991,6 +991,9 @@ fn lineage_drain_event_summary(
         .and_then(|view| view.get("name"))
         .and_then(Value::as_str)
         .map(str::to_string);
+    let view_version = view
+        .and_then(|view| view.get("view-version"))
+        .and_then(Value::as_u64);
     let view_stable_id = match (
         view_warehouse.as_deref(),
         view_namespace.as_slice(),
@@ -1058,6 +1061,7 @@ fn lineage_drain_event_summary(
         view_namespace,
         view_name,
         view_stable_id,
+        view_version,
         policy_binding_count: payload
             .get("policy-binding-count")
             .or_else(|| payload.get("policy-count"))
@@ -6306,6 +6310,7 @@ mod tests {
                 "sql": "select event_id from default.events",
                 "dialect": "spark-sql",
                 "schema-version": 1,
+                "view-version": 1,
                 "columns": [{
                     "name": "event_id",
                     "data-type": {"type": "long"},
@@ -6428,6 +6433,7 @@ mod tests {
         assert_eq!(drain.events[1].view_warehouse.as_deref(), Some("local"));
         assert_eq!(drain.events[1].view_namespace, vec!["default"]);
         assert_eq!(drain.events[1].view_name.as_deref(), Some("events_view"));
+        assert_eq!(drain.events[1].view_version, Some(1));
 
         let graph_events = graph.events.lock().await;
         assert_eq!(graph_events.len(), 8);

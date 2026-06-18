@@ -3,6 +3,7 @@ use lakecat_core::{LakeCatResult, TableIdent, WarehouseName, content_hash_json};
 use lakecat_store::{PolicyBinding, TableRecord, ViewRecord};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
@@ -240,6 +241,11 @@ impl QueryGraphBootstrap {
                 .views
                 .iter()
                 .map(|view| view.stable_id.clone())
+                .collect(),
+            verified_view_versions: self
+                .views
+                .iter()
+                .map(|view| (view.stable_id.clone(), view.view_version))
                 .collect(),
             bundle_hash,
             graph_hash,
@@ -486,6 +492,8 @@ pub struct QueryGraphBootstrapVerification {
     pub view_count: usize,
     pub verified_tables: Vec<String>,
     pub verified_views: Vec<String>,
+    #[serde(default)]
+    pub verified_view_versions: BTreeMap<String, u64>,
     pub bundle_hash: String,
     pub graph_hash: String,
     pub open_lineage_hash: String,
@@ -1449,6 +1457,12 @@ mod tests {
         let verification = bundle.verify_manifest().unwrap();
         assert_eq!(verification.view_count, 1);
         assert_eq!(verification.verified_views[0], bundle.views[0].stable_id);
+        assert_eq!(
+            verification
+                .verified_view_versions
+                .get(&bundle.views[0].stable_id),
+            Some(&1)
+        );
     }
 
     #[test]

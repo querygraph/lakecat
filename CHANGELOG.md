@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added compact `view-version` replay evidence to lineage-drain event
+  summaries and made QGLake view replay acceptance compare it with the accepted
+  QueryGraph bootstrap view artifact version.
 - Mirrored the LakeCat `AGENTS.md` operating guidance into `GOAL.md` so the
   long-running goal permanently carries the thin catalog boundary, sibling-repo
   placement rules, QueryGraph target, Turso preference, and commit/status
