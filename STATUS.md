@@ -6,12 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `1e3b79e Export policy bindings in bootstrap`.
-- Current working slice: QGLake fixture live governed scan verification.
-  `lakecat-cli qglake-fixture` now performs a live scan-plan request that asks
-  for `raw_payload` and verifies LakeCat narrows the effective projection to the
-  allowed fixture columns while preserving the policy row predicate before
-  exporting the QueryGraph bootstrap bundle.
+  working changes: `f0431ff Verify QGLake governed scan fixture`.
+- Current working slice: repeatable QGLake fixture setup. `lakecat-cli
+  qglake-fixture` now treats namespace/table create conflicts as reruns only
+  after loading the existing resources and validating that the namespace exists
+  and the table still matches the expected QGLake fixture identifier, metadata
+  location, Iceberg v3 metadata, and restricted `raw_payload` column.
 - Local verification for the current slice is green:
   `cargo test -p lakecat-cli qglake -- --nocapture`;
   `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
@@ -65,6 +65,9 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Made `lakecat-cli qglake-fixture` repeatable by accepting existing namespace
+  and table resources only after loading and validating that they match the
+  expected QGLake fixture shape.
 - Added a live governed scan-plan verification step to
   `lakecat-cli qglake-fixture` after policy installation and before bootstrap
   export.

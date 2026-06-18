@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-fixture` repeatable: namespace and table creation
+  now tolerate existing resources only after loading and validating that they
+  match the expected QGLake fixture shape, while storage profile and policy
+  setup remain idempotent upserts.
 - Added a live governed scan-plan verification to `lakecat-cli qglake-fixture`,
   proving the fixture policy narrows `raw_payload` out of the effective
   projection and carries the policy row predicate before exporting the bootstrap.

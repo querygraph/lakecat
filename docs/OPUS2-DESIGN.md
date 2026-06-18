@@ -205,7 +205,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   narrowing, row predicates, and credential TTL before QueryGraph import; the
   fixture now performs a live scan-plan verification that asks for
   `raw_payload` and fails unless LakeCat narrows the effective projection and
-  preserves the row predicate;
+  preserves the row predicate; rerunning the fixture now accepts existing
+  namespace/table resources only after validating that they still match the
+  expected QGLake fixture shape;
   `/querygraph/v1/bootstrap` now exports the stored table policy bindings in
   each table projection and hashes them in the manifest, so QueryGraph imports
   the actual LakeCat policy documents used for governed planning.*

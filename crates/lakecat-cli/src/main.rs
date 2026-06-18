@@ -1,10 +1,10 @@
 use std::{collections::BTreeMap, fs, path::PathBuf};
 
 use lakecat_api::{
-    CatalogConfigResponse, CreateNamespaceRequest, CreateTableRequest, ListPolicyBindingsResponse,
-    ListStorageProfilesResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
-    PlanTableScanResponse, PolicyBindingResponse, StorageProfileResponse,
-    UpsertPolicyBindingRequest, UpsertStorageProfileRequest,
+    CatalogConfigResponse, CreateNamespaceRequest, CreateTableRequest, ListNamespacesResponse,
+    ListPolicyBindingsResponse, ListStorageProfilesResponse, LoadTableResponse, NamespaceResponse,
+    PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse, StorageProfileResponse,
+    TableIdentifier, UpsertPolicyBindingRequest, UpsertStorageProfileRequest,
 };
 use lakecat_querygraph::QueryGraphBootstrap;
 use serde::{Serialize, de::DeserializeOwned};
@@ -252,6 +252,42 @@ async fn post_json<B: Serialize, T: DeserializeOwned>(
     decode_json_response(response, label).await
 }
 
+async fn post_json_or_conflict<B: Serialize, T: DeserializeOwned>(
+    catalog: &str,
+    path: &str,
+    principal: Option<&str>,
+    label: &str,
+    body: &B,
+) -> lakecat_core::LakeCatResult<Option<T>> {
+    let endpoint = format!("{}{}", catalog.trim_end_matches('/'), path);
+    let client = reqwest::Client::new();
+    let mut request = client.post(endpoint).json(body);
+    if let Some(principal) = principal {
+        request = request.header("x-lakecat-principal", principal);
+    }
+    let response = request.send().await.map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!("failed to request {label}: {err}"))
+    })?;
+    let status = response.status();
+    let body = response.bytes().await.map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!("failed to read {label} response: {err}"))
+    })?;
+    if status == reqwest::StatusCode::CONFLICT {
+        return Ok(None);
+    }
+    if !status.is_success() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} failed with HTTP {status}: {}",
+            String::from_utf8_lossy(&body)
+        )));
+    }
+    serde_json::from_slice(&body).map(Some).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "LakeCat {label} response is not the expected JSON payload: {err}"
+        ))
+    })
+}
+
 async fn decode_json_response<T: DeserializeOwned>(
     response: reqwest::Response,
     label: &str,
@@ -296,27 +332,15 @@ async fn qglake_fixture(
     let storage_profile = format!("{table}-local");
     let policy = format!("{table}-agent-read");
 
-    let _: NamespaceResponse = post_json(
+    ensure_qglake_namespace(&catalog, &namespace, principal).await?;
+    ensure_qglake_table(
         &catalog,
-        "/catalog/v1/namespaces",
+        &namespace_path,
+        &namespace,
+        &table,
+        &location,
+        &metadata_location,
         principal,
-        "namespace create",
-        &CreateNamespaceRequest {
-            namespace: namespace.clone(),
-        },
-    )
-    .await?;
-    let _: LoadTableResponse = post_json(
-        &catalog,
-        &format!("/catalog/v1/namespaces/{namespace_path}/tables"),
-        principal,
-        "table create",
-        &CreateTableRequest {
-            name: table.clone(),
-            location: location.clone(),
-            metadata_location: Some(metadata_location),
-            metadata: qglake_table_metadata(),
-        },
     )
     .await?;
     let _: StorageProfileResponse = put_json(
@@ -333,6 +357,7 @@ async fn qglake_fixture(
         },
     )
     .await?;
+
     let _: PolicyBindingResponse = put_json(
         &catalog,
         &format!("/management/v1/warehouses/{warehouse}/policies/{policy}"),
@@ -349,6 +374,130 @@ async fn qglake_fixture(
 
     verify_qglake_governed_scan(&catalog, &namespace_path, &table, principal).await?;
     bootstrap_export(catalog, output, principal.map(ToString::to_string)).await
+}
+
+async fn ensure_qglake_namespace(
+    catalog: &str,
+    namespace: &[String],
+    principal: Option<&str>,
+) -> lakecat_core::LakeCatResult<()> {
+    if post_json_or_conflict::<_, NamespaceResponse>(
+        catalog,
+        "/catalog/v1/namespaces",
+        principal,
+        "namespace create",
+        &CreateNamespaceRequest {
+            namespace: namespace.to_vec(),
+        },
+    )
+    .await?
+    .is_some()
+    {
+        return Ok(());
+    }
+
+    let namespaces = get_json::<ListNamespacesResponse>(
+        catalog,
+        "/catalog/v1/namespaces",
+        principal,
+        "namespace list",
+    )
+    .await?;
+    if namespace_list_contains(&namespaces, namespace) {
+        return Ok(());
+    }
+    Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+        "namespace create conflicted but {} was not present in namespace list",
+        namespace.join(".")
+    )))
+}
+
+async fn ensure_qglake_table(
+    catalog: &str,
+    namespace_path: &str,
+    namespace: &[String],
+    table: &str,
+    location: &str,
+    metadata_location: &str,
+    principal: Option<&str>,
+) -> lakecat_core::LakeCatResult<()> {
+    let response = post_json_or_conflict::<_, LoadTableResponse>(
+        catalog,
+        &format!("/catalog/v1/namespaces/{namespace_path}/tables"),
+        principal,
+        "table create",
+        &CreateTableRequest {
+            name: table.to_string(),
+            location: location.to_string(),
+            metadata_location: Some(metadata_location.to_string()),
+            metadata: qglake_table_metadata(),
+        },
+    )
+    .await?;
+    if let Some(response) = response {
+        return verify_qglake_existing_table(&response, namespace, table, metadata_location);
+    }
+
+    let response = get_json::<LoadTableResponse>(
+        catalog,
+        &format!("/catalog/v1/namespaces/{namespace_path}/tables/{table}"),
+        principal,
+        "table load",
+    )
+    .await?;
+    verify_qglake_existing_table(&response, namespace, table, metadata_location)
+}
+
+fn namespace_list_contains(response: &ListNamespacesResponse, namespace: &[String]) -> bool {
+    response
+        .namespaces
+        .iter()
+        .any(|candidate| candidate == namespace)
+}
+
+fn verify_qglake_existing_table(
+    response: &LoadTableResponse,
+    namespace: &[String],
+    table: &str,
+    metadata_location: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let expected = TableIdentifier {
+        namespace: namespace.to_vec(),
+        name: table.to_string(),
+    };
+    if response.identifier != expected {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "existing QGLake table identifier did not match fixture target: {:?}",
+            response.identifier
+        )));
+    }
+    if response.metadata_location.as_deref() != Some(metadata_location) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "existing QGLake table metadata location did not match fixture target: {:?}",
+            response.metadata_location
+        )));
+    }
+    if response.metadata["format-version"] != json!(3) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "existing QGLake table is not Iceberg v3 fixture metadata: {}",
+            response.metadata["format-version"].clone()
+        )));
+    }
+    if !metadata_has_field(&response.metadata, "raw_payload") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "existing QGLake table does not include restricted raw_payload column".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn metadata_has_field(metadata: &Value, field_name: &str) -> bool {
+    metadata["schemas"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|schema| schema["fields"].as_array().into_iter().flatten())
+        .any(|field| field["name"] == field_name)
 }
 
 async fn verify_qglake_governed_scan(
@@ -999,6 +1148,73 @@ mod tests {
         let metadata = qglake_table_metadata();
         let fields = metadata["schemas"][0]["fields"].as_array().unwrap();
         assert!(fields.iter().any(|field| field["name"] == "raw_payload"));
+    }
+
+    #[test]
+    fn qglake_namespace_validator_accepts_matching_namespace() {
+        let response = ListNamespacesResponse {
+            namespaces: vec![
+                vec!["default".to_string()],
+                vec!["demo".to_string(), "ops".to_string()],
+            ],
+        };
+
+        assert!(namespace_list_contains(
+            &response,
+            &["demo".to_string(), "ops".to_string()]
+        ));
+        assert!(!namespace_list_contains(
+            &response,
+            &["missing".to_string()]
+        ));
+    }
+
+    #[test]
+    fn qglake_existing_table_verifier_accepts_matching_fixture_table() {
+        let response = LoadTableResponse {
+            identifier: TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            metadata_location: Some("file:///tmp/lakecat-qglake/events/metadata.json".to_string()),
+            metadata: qglake_table_metadata(),
+            config: Vec::new(),
+        };
+
+        verify_qglake_existing_table(
+            &response,
+            &["default".to_string()],
+            "events",
+            "file:///tmp/lakecat-qglake/events/metadata.json",
+        )
+        .expect("matching QGLake fixture table should be accepted");
+    }
+
+    #[test]
+    fn qglake_existing_table_verifier_rejects_drifted_fixture_table() {
+        let mut metadata = qglake_table_metadata();
+        metadata["schemas"][0]["fields"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|field| field["name"] != "raw_payload");
+        let response = LoadTableResponse {
+            identifier: TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            metadata_location: Some("file:///tmp/lakecat-qglake/events/metadata.json".to_string()),
+            metadata,
+            config: Vec::new(),
+        };
+
+        let err = verify_qglake_existing_table(
+            &response,
+            &["default".to_string()],
+            "events",
+            "file:///tmp/lakecat-qglake/events/metadata.json",
+        )
+        .expect_err("drifted QGLake fixture table should be rejected");
+        assert!(err.to_string().contains("raw_payload"));
     }
 
     #[test]
