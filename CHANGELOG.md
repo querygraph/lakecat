@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expanded `GOAL.md` with the permanent LakeCat agent guidance: current design
+  sources, Turso preference, Iceberg compatibility rules, sibling-repo
+  ownership boundaries, feature-gate expectations, and local verification gates.
 - Replayed `view.loaded` outbox events into catalog-facing View graph events
   and LakeCat OpenLineage receipts so standard catalog view reads carry the
   same replayable evidence as view management changes.

@@ -31,6 +31,8 @@ Before choosing or implementing a slice, read the current state from:
 - `ARCHITECTURE.md` for the target architecture and placement rules.
 - `docs/OPUS1.md` for the review findings and milestone intent.
 - `docs/OPUS1-DESIGN.md` for the living review log and working plan.
+- `docs/OPUS2-DESIGN.md` for the current QueryGraph, outbox, lineage, book,
+  and acceptance-test work plan.
 - The actual code, manifests, tests, and sibling repo APIs in the current
   checkout.
 
@@ -62,7 +64,8 @@ update the docs as part of the logical unit.
 Continue moving toward:
 
 - A durable Turso-backed local catalog spine with portable `CatalogStore`
-  semantics.
+  semantics. Prefer the Rust `turso` crate for the durable embedded/local spine
+  and do not reintroduce SQLx/SQLite unless explicitly requested.
 - In-process Sail catalog/provider integration so policy and planning fuse
   without unnecessary REST indirection.
 - Standard Iceberg REST compatibility plus typed v4-ready extension handling.
@@ -72,6 +75,32 @@ Continue moving toward:
   query surfaces such as Cypher without making LakeCat a graph engine.
 - QueryGraph acceptance flows that prove LakeCat is the catalog substrate, not a
   standalone demo.
+
+## Compatibility Rules
+
+- Do not fork Iceberg semantics or make standard clients depend on non-standard
+  endpoints for normal table access.
+- Keep Iceberg metadata pristine. Business semantics, policy, graph, lineage,
+  and agent state are derived control-plane or graph data, not required custom
+  Iceberg metadata.
+- For v4 work, prefer typed Sail support when available. JSON passthrough is a
+  compatibility bridge, not the long-term implementation.
+- Raw credential vending must be deliberate and audited. Governed Sail-planned
+  reads are the default path for agents and untrusted principals.
+
+## Implementation Priorities
+
+- Use the existing trait seams: `CatalogStore`, `SailCatalogEngine`,
+  `GovernanceEngine`, `CatalogGraphSink`, and `LineageSink`.
+- Keep defaults safe for embedded tests while wiring real integrations behind
+  explicit features such as `sail-local`, `typesec-local`, `grust-local`, and
+  `turso-local`.
+- Prefer pushing reusable fixes upstream to sibling repos, then depending on
+  them from LakeCat. Manifest-metric decoding belongs in Sail; reusable catalog
+  graph taxonomy belongs in Grust; reusable governance and agent authorization
+  semantics belong in TypeSec.
+- Move graph and lineage side effects toward the transactional outbox so catalog
+  state changes are not lost or blocked by external sinks.
 
 ## Working Rule
 
@@ -88,3 +117,17 @@ For each logical unit:
 5. Run focused tests plus the relevant LakeCat gates from `AGENTS.md`.
 6. Commit only the files belonging to that logical unit, then push when local
    verification is green.
+
+## Verification Preference
+
+For LakeCat changes, prefer these local gates before pushing:
+
+- `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`
+- `cargo test -p lakecat-store --features turso-local`
+- `cargo test -p lakecat-service --features turso-local`
+- `cargo test -p lakecat-service --all-features`
+- `cargo test --workspace --all-features`
+- `git diff --check`
+
+When a change touches Sail, Grust, TypeSec, or QueryGraph, run focused tests in
+that sibling repo too and report each repo separately.
