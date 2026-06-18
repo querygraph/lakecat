@@ -521,6 +521,7 @@ async fn qglake_fixture(
     .await?;
     verify_qglake_credentials_blocked(&catalog, &namespace_path, &table, principal, identity_mode)
         .await?;
+    verify_qglake_trusted_human_credentials(&catalog, &namespace_path, &table, &location).await?;
     let (bundle, verification) =
         fetch_bootstrap_bundle_with_identity(&catalog, principal, identity_mode).await?;
     verify_qglake_bootstrap_bundle(&bundle, &namespace, &table)?;
@@ -1441,6 +1442,52 @@ fn verify_qglake_credentials_response(
         "qglake restricted table unexpectedly returned {} raw credential set(s)",
         credentials.storage_credentials.len()
     )))
+}
+
+async fn verify_qglake_trusted_human_credentials(
+    catalog: &str,
+    namespace_path: &str,
+    table: &str,
+    table_location: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let credentials = get_json_with_identity::<LoadCredentialsResponse>(
+        catalog,
+        &format!("/catalog/v1/namespaces/{namespace_path}/tables/{table}/credentials"),
+        Some("human:qglake-operator"),
+        RequestIdentityMode::Principal,
+        "qglake trusted human credentials probe",
+    )
+    .await?;
+    verify_qglake_trusted_human_credentials_response(&credentials, table_location)
+}
+
+fn verify_qglake_trusted_human_credentials_response(
+    credentials: &LoadCredentialsResponse,
+    table_location: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let Some(credential) = credentials.storage_credentials.first() else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake trusted human credentials probe returned no standard credential set"
+                .to_string(),
+        ));
+    };
+    if credential.prefix != table_location {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake trusted human credential prefix did not match table location {table_location}: {}",
+            credential.prefix
+        )));
+    }
+    if credential
+        .config
+        .iter()
+        .any(|entry| entry.key.contains("secret") || entry.key.contains("token"))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake trusted human local credentials unexpectedly exposed secret material"
+                .to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn verify_qglake_lineage_drain(
@@ -3660,6 +3707,47 @@ mod tests {
             err.to_string()
                 .contains("qglake restricted table unexpectedly returned")
         );
+    }
+
+    #[test]
+    fn qglake_trusted_human_credentials_verifier_requires_standard_local_credentials() {
+        verify_qglake_trusted_human_credentials_response(
+            &LoadCredentialsResponse {
+                storage_credentials: vec![lakecat_api::StorageCredential {
+                    prefix: QGLAKE_TEST_LOCATION.to_string(),
+                    config: vec![lakecat_api::ConfigEntry::new(
+                        "lakecat.credential-mode",
+                        "local-file-no-secret",
+                    )],
+                }],
+            },
+            QGLAKE_TEST_LOCATION,
+        )
+        .expect("trusted human path should accept standard non-secret credentials");
+
+        let err = verify_qglake_trusted_human_credentials_response(
+            &LoadCredentialsResponse {
+                storage_credentials: Vec::new(),
+            },
+            QGLAKE_TEST_LOCATION,
+        )
+        .expect_err("trusted human path should require a standard credential set");
+        assert!(
+            err.to_string()
+                .contains("returned no standard credential set")
+        );
+
+        let err = verify_qglake_trusted_human_credentials_response(
+            &LoadCredentialsResponse {
+                storage_credentials: vec![lakecat_api::StorageCredential {
+                    prefix: QGLAKE_TEST_LOCATION.to_string(),
+                    config: vec![lakecat_api::ConfigEntry::new("aws.session-token", "token")],
+                }],
+            },
+            QGLAKE_TEST_LOCATION,
+        )
+        .expect_err("trusted human local credentials should not expose secrets");
+        assert!(err.to_string().contains("secret material"));
     }
 
     #[test]

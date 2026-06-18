@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Allowed trusted human principals to receive audited standard credential
+  responses for restricted QGLake tables while keeping agents on the governed
+  Sail-planned path, and added QGLake acceptance checks for the contrast.
 - Mirrored QueryGraph bootstrap proof hashes, including the import-compatibility
   hash, into the OpenLineage bootstrap facet and pinned lineage replay payload
   tests to preserve the import hash.

@@ -1444,9 +1444,22 @@ async fn load_credentials_in_warehouse(
     let table = state.store.load_table(capability.table()).await?;
     let storage_profile = state.store.storage_profile_for_table(&table).await?;
     let read_restriction = capability.read_restriction()?;
-    let credential_block_reason = read_restriction
-        .requires_governed_read()
-        .then_some("fine-grained read restriction requires Sail-planned reads");
+    let raw_exception = capability
+        .receipt()
+        .context
+        .get("lakecat:raw-credential-exception");
+    let credential_block_reason = if let Some(exception) = raw_exception {
+        (exception.get("allowed").and_then(Value::as_bool) == Some(false)).then(|| {
+            exception
+                .get("reason")
+                .and_then(Value::as_str)
+                .unwrap_or("fine-grained read restriction requires Sail-planned reads")
+        })
+    } else {
+        read_restriction
+            .requires_governed_read()
+            .then_some("fine-grained read restriction requires Sail-planned reads")
+    };
     let storage_credentials = if credential_block_reason.is_some() {
         Vec::new()
     } else {
@@ -3551,7 +3564,7 @@ async fn authorize(
     });
     if let Some(restriction) = read_restriction {
         let raw_exception = matches!(action, CatalogAction::CredentialsVend)
-            .then(|| raw_credential_exception_context(&restriction));
+            .then(|| raw_credential_exception_context(&restriction, &identity.principal));
         context["read-restriction"] = serde_json::to_value(restriction).map_err(|err| {
             LakeCatError::Internal(format!("failed to encode read restriction: {err}"))
         })?;
@@ -3575,13 +3588,17 @@ async fn authorize(
     }
 }
 
-fn raw_credential_exception_context(restriction: &ReadRestriction) -> Value {
-    let allowed = !restriction.requires_governed_read();
+fn raw_credential_exception_context(restriction: &ReadRestriction, principal: &Principal) -> Value {
+    let governed_read_required = restriction.requires_governed_read();
+    let trusted_human = principal.kind == PrincipalKind::Human;
+    let allowed = !governed_read_required || trusted_human;
     json!({
         "requested": true,
         "allowed": allowed,
-        "reason": if allowed {
+        "reason": if !governed_read_required {
             "restriction is compatible with short-lived credential vending"
+        } else if trusted_human {
+            "trusted human principal may use audited raw credential vending"
         } else {
             "fine-grained read restriction requires Sail-planned reads"
         },
@@ -7865,9 +7882,14 @@ mod tests {
             .await
             .unwrap();
 
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-lakecat-agent-did",
+            axum::http::HeaderValue::from_static("did:example:agent"),
+        );
         let response = load_credentials(
             State(state),
-            HeaderMap::new(),
+            headers,
             Path(("default".to_string(), "events".to_string())),
         )
         .await
@@ -7922,6 +7944,115 @@ mod tests {
         assert_eq!(
             event.payload["payload"]["lakecat:credential-block-reason"],
             serde_json::json!("fine-grained read restriction requires Sail-planned reads")
+        );
+    }
+
+    #[tokio::test]
+    async fn credential_vend_allows_trusted_human_raw_exception_for_restricted_table() {
+        let store = MemoryCatalogStore::new();
+        let issuer = Arc::new(RecordingCredentialIssuer::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_credential_issuer(issuer.clone());
+        let create = TableRecord::new(
+            TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            ),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({
+                "format-version": 3,
+                "current-schema-id": 1,
+                "schemas": [{
+                    "schema-id": 1,
+                    "fields": [
+                        {"id": 1, "name": "event_id", "type": "string", "required": true},
+                        {"id": 2, "name": "payload", "type": "string", "required": false}
+                    ]
+                }]
+            }),
+            Principal::anonymous(),
+        );
+        let ident = create.ident.clone();
+        store.create_table(create).await.unwrap();
+        store
+            .upsert_policy_binding(
+                PolicyBinding::new(
+                    "agent-credential-columns",
+                    WarehouseName::new("local").unwrap(),
+                    Some(ident.namespace.clone()),
+                    Some(ident.name.clone()),
+                    true,
+                    serde_json::json!({
+                        "uid": "policy:agent-credential-columns",
+                        "lakecat:read-restriction": {
+                            "allowed-columns": ["event_id"],
+                            "row-predicate": {
+                                "type": "eq",
+                                "term": "event_id",
+                                "value": "evt-1"
+                            },
+                            "max-credential-ttl-seconds": 300
+                        }
+                    }),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-lakecat-principal",
+            axum::http::HeaderValue::from_static("human:operator"),
+        );
+        let response = load_credentials(
+            State(state),
+            headers,
+            Path(("default".to_string(), "events".to_string())),
+        )
+        .await
+        .unwrap();
+        assert_eq!(response.0.storage_credentials.len(), 1);
+        assert_eq!(
+            response.0.storage_credentials[0].prefix,
+            "file:///tmp/events"
+        );
+
+        let requests = issuer.requests.lock().await;
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            requests[0].authorization_receipt.principal.kind,
+            PrincipalKind::Human
+        );
+        drop(requests);
+
+        let outbox = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        let event = outbox
+            .iter()
+            .find(|event| event.event_type == "credentials.vend-attempted")
+            .expect("credentials vend audit event");
+        let receipt = &event.payload["payload"]["authorization-receipt"];
+        assert_eq!(
+            receipt["context"]["lakecat:raw-credential-exception"]["allowed"],
+            serde_json::json!(true)
+        );
+        assert_eq!(
+            receipt["context"]["lakecat:raw-credential-exception"]["reason"],
+            serde_json::json!("trusted human principal may use audited raw credential vending")
+        );
+        assert_eq!(
+            event.payload["payload"]["credential-count"],
+            serde_json::json!(1)
+        );
+        assert!(
+            event.payload["payload"]
+                .get("lakecat:credential-block-reason")
+                .is_none()
         );
     }
 

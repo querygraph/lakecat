@@ -216,8 +216,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   proof; the fixture now writes fetchable local Iceberg manifest metadata for
   the bootstrap table so that acceptance exercises real plan-task expansion
   instead of a schema-only table; the fixture now also probes `loadCredentials` for the
-  restricted table and fails unless LakeCat withholds raw credentials, proving
-  agents stay on the governed Sail-planned read path; rerunning the
+  restricted table and fails unless LakeCat withholds raw credentials from
+  agents while still returning an audited standard credential response to a
+  trusted human principal for the same table; rerunning the
   fixture now accepts existing namespace/table resources only after validating
   that they still match the expected QGLake fixture shape; the fixture now
   verifies the exported QueryGraph bootstrap contains the enforced QGLake policy
@@ -317,8 +318,9 @@ LakeCat crossed the line OPUS1 drew: it is a real, governance-gated,
 durably-committing Iceberg catalog with the seams pointed the right way and the
 boundaries intact. The design bet is being vindicated by the code. The
 restriction is now parsed from ODRL, carried into governed scan/credential
-receipts, and re-applied through plan-task fetch. The remaining distance to the
-GOAL is short and specific — push more read execution upstream into Sail, keep
-QGLake's acceptance fixture on real manifest-backed metadata, and prove that a
-governed catalog can give agents strictly less than humans while staying
-byte-compatible with every standard Iceberg client.
+receipts, re-applied through plan-task fetch, and used to steer agents onto the
+governed Sail-planned path while trusted humans keep audited standard credential
+vending. The remaining distance to the GOAL is short and specific — push more
+read execution upstream into Sail, keep QGLake's acceptance fixture on real
+manifest-backed metadata, and continue tightening the byte-compatible proof for
+standard Iceberg clients.
