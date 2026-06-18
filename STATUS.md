@@ -6,12 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `ec6963b Project namespace outbox events to graph`.
-- Current working slice: policy-binding graph projection from the durable
-  outbox. `policy-binding.upserted` replay now emits a catalog-facing `Policy`
-  graph event with a stable policy subject, ODRL payload, and the same
-  authorization receipt used for audit.
-- Local verification for the current slice is green:
+  `745ce5f Project policy bindings to graph`.
+- Paused after pushing policy-binding graph projection from the durable outbox.
+  `policy-binding.upserted` replay now emits a catalog-facing `Policy` graph
+  event with a stable policy subject, ODRL payload, and the same authorization
+  receipt used for audit.
+- Local verification for the pushed slice was green:
   `cargo fmt -p lakecat-graph -p lakecat-service -p lakecat-api -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-graph`;
