@@ -6,6 +6,22 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `5a20750 Expose governed fetch restriction proof`.
+- Paused after pushing the governed fetch restriction proof. Iceberg REST
+  `fetchScanTasks` responses now surface a `lakecat:fetch-scan-tasks`
+  extension carrying the re-applied `ReadRestriction`, and the QGLake verifier
+  now requires a governed plan-task token whose fetch response carries the same
+  policy hash proof as the scan plan.
+- Local verification for the pushed governed fetch restriction proof slice was
+  green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens --features sail-local,turso-local`;
+  `cargo test -p lakecat-service --features sail-local,turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `git diff --check`.
+- This status commit records the pushed governed fetch restriction proof slice.
+- Previous implementation slice:
   `b4b5116 Add Sail provider namespace drop`.
 - Paused after pushing the Sail provider namespace-drop bridge. The in-process
   Sail `CatalogProvider` now routes `drop_database` through LakeCat's governed
