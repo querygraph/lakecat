@@ -6,20 +6,23 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `f0431ff Verify QGLake governed scan fixture`.
-- Current working slice: repeatable QGLake fixture setup. `lakecat-cli
-  qglake-fixture` now treats namespace/table create conflicts as reruns only
-  after loading the existing resources and validating that the namespace exists
-  and the table still matches the expected QGLake fixture identifier, metadata
-  location, Iceberg v3 metadata, and restricted `raw_payload` column.
+  working changes: `ff96a14 Make QGLake fixture repeatable`.
+- Current working slice: QGLake QueryGraph bootstrap verification.
+  `lakecat-cli qglake-fixture` now verifies the exported QueryGraph bootstrap
+  bundle contains the enforced fixture policy binding, the restricted ODRL
+  read policy, and the OpenLineage output for the fixture table before writing
+  the bootstrap file.
 - Local verification for the current slice is green:
   `cargo test -p lakecat-cli qglake -- --nocapture`;
+  `cargo fmt -p lakecat-cli`;
   `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
   `cargo test -p lakecat-cli`;
   `cargo test -p lakecat-service`;
   `cargo test -p lakecat-service --all-features`;
   `cargo test -p lakecat-store --features turso-local`;
-  `cargo test --workspace --all-features`;
+  `cargo test --workspace --all-features`. The workspace all-features run
+  completed green with one warning in sibling Grust's `grust-cypher` crate for
+  an unused `CypherReturnTargetMaterialization` enum;
   `git diff --check`.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
@@ -65,6 +68,9 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added QGLake-specific QueryGraph bootstrap verification to
+  `lakecat-cli qglake-fixture`, covering policy bindings, ODRL restriction
+  export, and OpenLineage output presence before the bootstrap file is written.
 - Made `lakecat-cli qglake-fixture` repeatable by accepting existing namespace
   and table resources only after loading and validating that they match the
   expected QGLake fixture shape.

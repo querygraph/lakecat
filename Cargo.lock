@@ -3779,6 +3779,7 @@ dependencies = [
 name = "lakecat-cli"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "lakecat-api",
  "lakecat-core",
  "lakecat-querygraph",

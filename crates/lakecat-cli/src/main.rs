@@ -6,7 +6,7 @@ use lakecat_api::{
     PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse, StorageProfileResponse,
     TableIdentifier, UpsertPolicyBindingRequest, UpsertStorageProfileRequest,
 };
-use lakecat_querygraph::QueryGraphBootstrap;
+use lakecat_querygraph::{QueryGraphBootstrap, QueryGraphBootstrapVerification};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
@@ -133,6 +133,14 @@ async fn bootstrap_export(
     output: PathBuf,
     principal: Option<String>,
 ) -> lakecat_core::LakeCatResult<()> {
+    let (bundle, verification) = fetch_bootstrap_bundle(&catalog, principal.as_deref()).await?;
+    write_bootstrap_bundle(&output, &bundle, &verification)
+}
+
+async fn fetch_bootstrap_bundle(
+    catalog: &str,
+    principal: Option<&str>,
+) -> lakecat_core::LakeCatResult<(QueryGraphBootstrap, QueryGraphBootstrapVerification)> {
     let endpoint = format!("{}/querygraph/v1/bootstrap", catalog.trim_end_matches('/'));
     let client = reqwest::Client::new();
     let mut request = client.get(endpoint);
@@ -158,6 +166,14 @@ async fn bootstrap_export(
         ))
     })?;
     let verification = bundle.verify_manifest()?;
+    Ok((bundle, verification))
+}
+
+fn write_bootstrap_bundle(
+    output: &PathBuf,
+    bundle: &QueryGraphBootstrap,
+    verification: &QueryGraphBootstrapVerification,
+) -> lakecat_core::LakeCatResult<()> {
     let pretty = serde_json::to_vec_pretty(&bundle).map_err(|err| {
         lakecat_core::LakeCatError::Internal(format!("failed to encode bootstrap bundle: {err}"))
     })?;
@@ -364,7 +380,7 @@ async fn qglake_fixture(
         principal,
         "policy upsert",
         &UpsertPolicyBindingRequest {
-            namespace: Some(namespace),
+            namespace: Some(namespace.clone()),
             table: Some(table.clone()),
             enforced: true,
             odrl: qglake_odrl_policy(&table),
@@ -373,7 +389,9 @@ async fn qglake_fixture(
     .await?;
 
     verify_qglake_governed_scan(&catalog, &namespace_path, &table, principal).await?;
-    bootstrap_export(catalog, output, principal.map(ToString::to_string)).await
+    let (bundle, verification) = fetch_bootstrap_bundle(&catalog, principal).await?;
+    verify_qglake_bootstrap_bundle(&bundle, &namespace, &table)?;
+    write_bootstrap_bundle(&output, &bundle, &verification)
 }
 
 async fn ensure_qglake_namespace(
@@ -498,6 +516,113 @@ fn metadata_has_field(metadata: &Value, field_name: &str) -> bool {
         .flatten()
         .flat_map(|schema| schema["fields"].as_array().into_iter().flatten())
         .any(|field| field["name"] == field_name)
+}
+
+fn verify_qglake_bootstrap_bundle(
+    bundle: &QueryGraphBootstrap,
+    namespace: &[String],
+    table: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let projection = bundle
+        .tables
+        .iter()
+        .find(|candidate| {
+            candidate.ident.namespace.parts() == namespace && candidate.ident.name.as_str() == table
+        })
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap did not include table {}.{}",
+                namespace.join("."),
+                table
+            ))
+        })?;
+    verify_qglake_bootstrap_projection(projection, namespace, table)?;
+    verify_qglake_bootstrap_open_lineage(bundle, projection)
+}
+
+fn verify_qglake_bootstrap_projection(
+    projection: &lakecat_querygraph::QueryGraphTableProjection,
+    namespace: &[String],
+    table: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let expected_policy = format!("{table}-agent-read");
+    let binding = projection
+        .policy_bindings
+        .iter()
+        .find(|binding| binding.policy_id == expected_policy)
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap table {} did not include policy binding {expected_policy}",
+                projection.stable_id
+            ))
+        })?;
+    if !binding.enforced {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap policy binding {expected_policy} is not enforced"
+        )));
+    }
+    if binding.namespace.as_deref() != Some(namespace) || binding.table.as_deref() != Some(table) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap policy binding {expected_policy} is not scoped to {}.{table}",
+            namespace.join(".")
+        )));
+    }
+    let restriction = &binding.odrl["lakecat:read-restriction"];
+    if restriction["allowed-columns"] != json!(["event_id", "occurred_at", "severity"]) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap policy allowed columns were not exported as expected: {}",
+            restriction["allowed-columns"].clone()
+        )));
+    }
+    if restriction["row-predicate"]
+        != json!({
+            "type": "not_eq",
+            "term": "severity",
+            "value": "debug"
+        })
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap policy row predicate was not exported as expected: {}",
+            restriction["row-predicate"].clone()
+        )));
+    }
+    if projection.odrl["lakecat:policy-bindings"][0]["policy-id"] != expected_policy {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap ODRL table projection did not embed {expected_policy}"
+        )));
+    }
+    Ok(())
+}
+
+fn verify_qglake_bootstrap_open_lineage(
+    bundle: &QueryGraphBootstrap,
+    projection: &lakecat_querygraph::QueryGraphTableProjection,
+) -> lakecat_core::LakeCatResult<()> {
+    let output = bundle
+        .open_lineage
+        .get("outputs")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find(|output| {
+            output["name"] == projection.ident.name.as_str()
+                && output["facets"]["queryGraph_catalog"]["stableId"] == projection.stable_id
+        })
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap OpenLineage output did not include {}",
+                projection.stable_id
+            ))
+        })?;
+    if output["facets"]["queryGraph_catalog"]["metadataLocation"]
+        != json!(projection.metadata_location)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap OpenLineage metadata location did not match table projection: {}",
+            output["facets"]["queryGraph_catalog"]["metadataLocation"].clone()
+        )));
+    }
+    Ok(())
 }
 
 async fn verify_qglake_governed_scan(
@@ -1218,6 +1343,53 @@ mod tests {
     }
 
     #[test]
+    fn qglake_bootstrap_projection_verifier_accepts_exported_policy_binding() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+
+        verify_qglake_bootstrap_projection(&projection, &["default".to_string()], "events")
+            .expect("QGLake bootstrap projection should include exported policy binding");
+    }
+
+    #[test]
+    fn qglake_bootstrap_projection_verifier_rejects_missing_policy_binding() {
+        let mut projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        projection.policy_bindings.clear();
+
+        let err =
+            verify_qglake_bootstrap_projection(&projection, &["default".to_string()], "events")
+                .expect_err("missing QGLake policy binding should be rejected");
+        assert!(err.to_string().contains("events-agent-read"));
+    }
+
+    #[test]
+    fn qglake_bootstrap_verifier_requires_openlineage_output() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let bundle = qglake_querygraph_bundle(vec![projection], Vec::new());
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .unwrap_err();
+        assert!(err.to_string().contains("OpenLineage output"));
+    }
+
+    #[test]
+    fn qglake_bootstrap_verifier_accepts_policy_and_openlineage_export() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+
+        verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect("QGLake bootstrap should include policy binding and OpenLineage output");
+    }
+
+    #[test]
     fn qglake_fixture_policy_installs_read_restriction() {
         let policy = qglake_odrl_policy("events");
         assert_eq!(
@@ -1295,5 +1467,67 @@ mod tests {
         };
 
         verify_qglake_scan_plan(&plan).unwrap();
+    }
+
+    fn qglake_querygraph_projection(
+        policy: serde_json::Value,
+    ) -> lakecat_querygraph::QueryGraphTableProjection {
+        let warehouse = lakecat_core::WarehouseName::new("local").unwrap();
+        let namespace = lakecat_core::Namespace::new(vec!["default".to_string()]).unwrap();
+        let table = lakecat_core::TableName::new("events").unwrap();
+        let ident = lakecat_core::TableIdent::new(warehouse, namespace, table);
+        let stable_id = ident.stable_id();
+        lakecat_querygraph::QueryGraphTableProjection {
+            ident,
+            stable_id: stable_id.clone(),
+            location: "file:///tmp/lakecat-qglake/events".to_string(),
+            metadata_location: Some(
+                "file:///tmp/lakecat-qglake/events/metadata/00000.json".to_string(),
+            ),
+            version: 0,
+            format_version: Some(3),
+            croissant: serde_json::json!({}),
+            cdif: serde_json::json!({}),
+            osi: serde_json::json!({}),
+            odrl: serde_json::json!({
+                "lakecat:policy-bindings": [{
+                    "policy-id": "events-agent-read",
+                    "odrl": policy.clone()
+                }]
+            }),
+            policy_bindings: vec![lakecat_querygraph::QueryGraphPolicyBindingProjection {
+                policy_id: "events-agent-read".to_string(),
+                enforced: true,
+                namespace: Some(vec!["default".to_string()]),
+                table: Some("events".to_string()),
+                odrl: policy,
+            }],
+        }
+    }
+
+    fn qglake_querygraph_bundle(
+        tables: Vec<lakecat_querygraph::QueryGraphTableProjection>,
+        open_lineage_outputs: Vec<serde_json::Value>,
+    ) -> QueryGraphBootstrap {
+        QueryGraphBootstrap {
+            warehouse: lakecat_core::WarehouseName::new("local").unwrap(),
+            generated_at: chrono::Utc::now(),
+            bundle_hash: "test".to_string(),
+            manifest: lakecat_querygraph::QueryGraphBundleManifest {
+                schema_version: "lakecat.querygraph.bootstrap.v1".to_string(),
+                producer: "https://querygraph.ai/lakecat".to_string(),
+                standards: vec!["ODRL".to_string(), "OpenLineage".to_string()],
+                table_artifacts: Vec::new(),
+                open_lineage_hash: "test".to_string(),
+            },
+            tables,
+            graph: lakecat_querygraph::QueryGraphCatalogGraph {
+                nodes: Vec::new(),
+                edges: Vec::new(),
+            },
+            open_lineage: serde_json::json!({
+                "outputs": open_lineage_outputs
+            }),
+        }
     }
 }

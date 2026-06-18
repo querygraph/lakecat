@@ -207,7 +207,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   `raw_payload` and fails unless LakeCat narrows the effective projection and
   preserves the row predicate; rerunning the fixture now accepts existing
   namespace/table resources only after validating that they still match the
-  expected QGLake fixture shape;
+  expected QGLake fixture shape; the fixture now verifies the exported
+  QueryGraph bootstrap contains the enforced QGLake policy binding, restricted
+  ODRL material, and OpenLineage output before writing the bundle;
   `/querygraph/v1/bootstrap` now exports the stored table policy bindings in
   each table projection and hashes them in the manifest, so QueryGraph imports
   the actual LakeCat policy documents used for governed planning.*

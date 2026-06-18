@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added QGLake-specific QueryGraph bootstrap verification to
+  `lakecat-cli qglake-fixture`, proving the exported bundle carries the
+  enforced fixture policy binding, restricted ODRL material, and OpenLineage
+  output before writing the bootstrap file.
 - Made `lakecat-cli qglake-fixture` repeatable: namespace and table creation
   now tolerate existing resources only after loading and validating that they
   match the expected QGLake fixture shape, while storage profile and policy
