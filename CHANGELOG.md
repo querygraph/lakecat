@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Extended the governed lineage-drain response with delivered event types plus
+  graph and lineage projection counts, and made `lakecat-cli qglake-fixture`
+  require `querygraph.bootstrap` lineage replay in the drain summary.
 - Added embedded memory-store audit/outbox delivery parity for catalog audit
   events and made `lakecat-cli qglake-fixture` fail if the lineage drain
   delivers zero events, so local QGLake acceptance proves replay actually

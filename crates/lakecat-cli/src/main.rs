@@ -220,6 +220,11 @@ async fn lineage_drain(
 ) -> lakecat_core::LakeCatResult<()> {
     let response = drain_lineage_outbox(&catalog, principal.as_deref()).await?;
     println!("delivered {}", response.delivered);
+    println!("graph events {}", response.graph_events);
+    println!("lineage events {}", response.lineage_events);
+    if !response.event_types.is_empty() {
+        println!("event types {}", response.event_types.join(","));
+    }
     Ok(())
 }
 
@@ -736,6 +741,20 @@ fn verify_qglake_lineage_drain(drain: &LineageDrainResponse) -> lakecat_core::La
     if drain.delivered == 0 {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain delivered no outbox events".to_string(),
+        ));
+    }
+    if drain.lineage_events == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain emitted no lineage events".to_string(),
+        ));
+    }
+    if !drain
+        .event_types
+        .iter()
+        .any(|event_type| event_type == "querygraph.bootstrap")
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain did not replay querygraph.bootstrap".to_string(),
         ));
     }
     Ok(())
@@ -1557,15 +1576,52 @@ mod tests {
 
     #[test]
     fn qglake_lineage_drain_verifier_requires_delivered_events() {
-        let err = verify_qglake_lineage_drain(&LineageDrainResponse { delivered: 0 })
-            .expect_err("QGLake lineage drain should reject zero deliveries");
+        let err = verify_qglake_lineage_drain(&LineageDrainResponse {
+            delivered: 0,
+            event_types: Vec::new(),
+            graph_events: 0,
+            lineage_events: 0,
+        })
+        .expect_err("QGLake lineage drain should reject zero deliveries");
         assert!(
             err.to_string()
                 .contains("qglake lineage drain delivered no outbox events")
         );
 
-        verify_qglake_lineage_drain(&LineageDrainResponse { delivered: 2 })
-            .expect("QGLake lineage drain should accept delivered outbox events");
+        let err = verify_qglake_lineage_drain(&LineageDrainResponse {
+            delivered: 1,
+            event_types: vec!["querygraph.bootstrap".to_string()],
+            graph_events: 0,
+            lineage_events: 0,
+        })
+        .expect_err("QGLake lineage drain should reject missing lineage emissions");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain emitted no lineage events")
+        );
+
+        let err = verify_qglake_lineage_drain(&LineageDrainResponse {
+            delivered: 1,
+            event_types: vec!["table.scan-planned".to_string()],
+            graph_events: 1,
+            lineage_events: 1,
+        })
+        .expect_err("QGLake lineage drain should require bootstrap replay");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain did not replay querygraph.bootstrap")
+        );
+
+        verify_qglake_lineage_drain(&LineageDrainResponse {
+            delivered: 2,
+            event_types: vec![
+                "table.scan-planned".to_string(),
+                "querygraph.bootstrap".to_string(),
+            ],
+            graph_events: 1,
+            lineage_events: 2,
+        })
+        .expect("QGLake lineage drain should accept delivered outbox events");
     }
 
     fn qglake_querygraph_projection(

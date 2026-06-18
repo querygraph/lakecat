@@ -176,6 +176,9 @@ pub struct ListPolicyBindingsResponse {
 #[serde(rename_all = "kebab-case")]
 pub struct LineageDrainResponse {
     pub delivered: usize,
+    pub event_types: Vec<String>,
+    pub graph_events: usize,
+    pub lineage_events: usize,
 }
 
 fn default_enforced() -> bool {

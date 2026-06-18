@@ -804,17 +804,38 @@ pub fn app(state: LakeCatState) -> Router {
         .with_state(state)
 }
 
-pub async fn drain_outbox_once(state: &LakeCatState, limit: usize) -> Result<usize, LakeCatError> {
+#[derive(Debug, Default)]
+struct OutboxProjectionReceipt {
+    graph_events: usize,
+    lineage_events: usize,
+}
+
+pub async fn drain_outbox_once(
+    state: &LakeCatState,
+    limit: usize,
+) -> Result<LineageDrainResponse, LakeCatError> {
     let events = state
         .store
         .pending_outbox_events(Some("lakecat.lineage-and-graph"), limit)
         .await?;
     let mut delivered = Vec::with_capacity(events.len());
+    let mut event_types = Vec::with_capacity(events.len());
+    let mut graph_events = 0usize;
+    let mut lineage_events = 0usize;
     for event in events {
-        project_outbox_event(state, &event).await?;
+        let receipt = project_outbox_event(state, &event).await?;
+        graph_events += receipt.graph_events;
+        lineage_events += receipt.lineage_events;
+        event_types.push(event.event_type);
         delivered.push(event.event_id);
     }
-    state.store.mark_outbox_delivered(&delivered).await
+    let delivered = state.store.mark_outbox_delivered(&delivered).await?;
+    Ok(LineageDrainResponse {
+        delivered,
+        event_types,
+        graph_events,
+        lineage_events,
+    })
 }
 
 async fn get_config(
@@ -1673,14 +1694,13 @@ async fn drain_lineage_outbox(
     headers: HeaderMap,
 ) -> Result<Json<LineageDrainResponse>, LakeCatHttpError> {
     let _capability = authorize_lineage_read(&state, request_identity(&headers)?).await?;
-    let delivered = drain_outbox_once(&state, 100).await?;
-    Ok(Json(LineageDrainResponse { delivered }))
+    Ok(Json(drain_outbox_once(&state, 100).await?))
 }
 
 async fn project_outbox_event(
     state: &LakeCatState,
     event: &OutboxEvent,
-) -> Result<(), LakeCatError> {
+) -> Result<OutboxProjectionReceipt, LakeCatError> {
     let event_payload = event
         .payload
         .get("payload")
@@ -1688,6 +1708,7 @@ async fn project_outbox_event(
         .clone();
     let table = outbox_table(event)?;
     let principal = outbox_principal(event)?;
+    let mut receipt = OutboxProjectionReceipt::default();
     if let Some((graph_action, lineage_type)) = outbox_table_projection(event.event_type.as_str()) {
         if let Some(table) = table.clone() {
             state
@@ -1697,6 +1718,7 @@ async fn project_outbox_event(
                         .with_event_id(event.event_id.clone()),
                 )
                 .await?;
+            receipt.graph_events += 1;
             state
                 .lineage
                 .emit(LineageEvent::new(
@@ -1706,6 +1728,7 @@ async fn project_outbox_event(
                     event_payload,
                 ))
                 .await?;
+            receipt.lineage_events += 1;
         }
     } else if event.event_type == "namespace.created" {
         state
@@ -1717,6 +1740,7 @@ async fn project_outbox_event(
                 event_payload,
             ))
             .await?;
+        receipt.lineage_events += 1;
     } else if event.event_type == "table.restored" {
         if let Some(table) = table {
             state
@@ -1728,6 +1752,7 @@ async fn project_outbox_event(
                     event_payload,
                 ))
                 .await?;
+            receipt.lineage_events += 1;
         }
     } else if event.event_type == "querygraph.bootstrap" {
         state
@@ -1739,8 +1764,9 @@ async fn project_outbox_event(
                 event_payload,
             ))
             .await?;
+        receipt.lineage_events += 1;
     }
-    Ok(())
+    Ok(receipt)
 }
 
 fn outbox_table(event: &OutboxEvent) -> Result<Option<TableIdent>, LakeCatError> {
@@ -2897,7 +2923,18 @@ mod tests {
                 lineage.clone(),
             );
 
-        assert_eq!(drain_outbox_once(&state, 10).await.unwrap(), 3);
+        let drain = drain_outbox_once(&state, 10).await.unwrap();
+        assert_eq!(drain.delivered, 3);
+        assert_eq!(
+            drain.event_types,
+            vec![
+                "table.created".to_string(),
+                "table.scan-tasks-fetched".to_string(),
+                "querygraph.bootstrap".to_string()
+            ]
+        );
+        assert_eq!(drain.graph_events, 2);
+        assert_eq!(drain.lineage_events, 3);
 
         let graph_events = graph.events.lock().await;
         assert_eq!(graph_events.len(), 2);
@@ -3003,6 +3040,12 @@ mod tests {
             .unwrap();
         let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(payload["delivered"], serde_json::json!(1));
+        assert_eq!(
+            payload["event-types"],
+            serde_json::json!(["querygraph.bootstrap"])
+        );
+        assert_eq!(payload["graph-events"], serde_json::json!(0));
+        assert_eq!(payload["lineage-events"], serde_json::json!(1));
         assert_eq!(
             store.delivered.lock().await.as_slice(),
             &["evt-bootstrap".to_string()]

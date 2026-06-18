@@ -6,20 +6,18 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `b5b1797 Verify QGLake lineage drain delivery`.
-- Current working slice: paused after memory audit/outbox parity plus QGLake
-  drain verification. The embedded `MemoryCatalogStore` now records catalog audit
-  events into the same `lakecat.lineage-and-graph` outbox envelope used by the
-  Turso store, and `lakecat-cli qglake-fixture` now fails if the governed
-  lineage drain delivers zero events.
+  `e6de2fe Record QGLake drain delivery status`.
+- Current working slice: governed lineage-drain receipt summaries for QGLake
+  acceptance. The drain response now includes delivered event types plus graph
+  and lineage projection counts, and `lakecat-cli qglake-fixture` now requires
+  the drain to replay `querygraph.bootstrap` into lineage.
 - Local verification for the current slice is green:
-  `cargo fmt -p lakecat-store -p lakecat-cli -- --check`;
-  `cargo test -p lakecat-store memory_store_records_and_marks_audit_outbox_events -- --nocapture`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `git diff --check`;
   `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --nocapture`;
   `cargo test -p lakecat-cli qglake -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
   `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox -- --nocapture`;
-  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
-  `git diff --check`;
   `cargo test -p lakecat-cli`;
   `cargo test -p lakecat-service`;
   `cargo test -p lakecat-store --features turso-local`;
@@ -70,6 +68,10 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Extended the lineage drain API response with delivered event types, graph
+  event count, and lineage event count.
+- Made `lakecat-cli qglake-fixture` require the drain summary to include
+  `querygraph.bootstrap` and at least one lineage emission.
 - Added embedded memory-store audit/outbox delivery parity for explicit catalog
   audit events, matching the Turso lineage-and-graph outbox envelope.
 - Made `lakecat-cli qglake-fixture` reject a lineage drain that delivers zero
