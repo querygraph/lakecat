@@ -214,8 +214,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   plan-task token, posts that token to `fetchScanTasks`, and fails unless the
   fetch response carries the re-applied restriction with the same policy hash
   proof; the fixture now writes fetchable local Iceberg manifest metadata for
-  the bootstrap table so that acceptance exercises real plan-task expansion
-  instead of a schema-only table; the fixture now also probes `loadCredentials` for the
+  the bootstrap table, including a position-delete manifest, so that acceptance
+  exercises real plan-task expansion and Sail delete-file references instead of
+  a schema-only table; the fixture now also probes `loadCredentials` for the
   restricted table and fails unless LakeCat withholds raw credentials from
   agents while still returning an audited standard credential response to a
   trusted human principal for the same table, and lineage-drain acceptance now

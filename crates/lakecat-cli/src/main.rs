@@ -1275,7 +1275,7 @@ async fn verify_qglake_fetch_scan_tasks(
                 .to_string(),
         ));
     }
-    for child_plan_task in &fetched.plan_tasks {
+    for (index, child_plan_task) in fetched.plan_tasks.iter().enumerate() {
         let manifest_fetched = post_json_with_identity::<_, FetchScanTasksResponse>(
             catalog,
             &format!("/catalog/v1/namespaces/{namespace_path}/tables/{table}/tasks"),
@@ -1287,7 +1287,12 @@ async fn verify_qglake_fetch_scan_tasks(
             },
         )
         .await?;
-        verify_qglake_leaf_scan_tasks(&manifest_fetched, table_location)?;
+        let child_descriptor = fetched.lakecat_plan_tasks.get(index);
+        if child_descriptor.and_then(|task| task["content"].as_str()) == Some("deletes") {
+            verify_qglake_delete_manifest_scan_tasks(&manifest_fetched, table_location)?;
+        } else {
+            verify_qglake_leaf_scan_tasks(&manifest_fetched, table_location)?;
+        }
     }
     Ok(())
 }
@@ -1312,6 +1317,21 @@ fn verify_qglake_scan_tasks(
             "qglake governed fetchScanTasks did not include a manifest child task".to_string(),
         ));
     }
+    if fetched.delete_files.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake governed fetchScanTasks did not expose Iceberg delete-file refs".to_string(),
+        ));
+    }
+    if !fetched.file_scan_tasks.iter().any(|task| {
+        task.get("delete-file-references")
+            .and_then(Value::as_array)
+            .is_some_and(|refs| !refs.is_empty())
+    }) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake governed fetchScanTasks did not attach delete-file references to data tasks"
+                .to_string(),
+        ));
+    }
     Ok(())
 }
 
@@ -1332,6 +1352,44 @@ fn verify_qglake_leaf_scan_tasks(
             fetched.lakecat_plan_tasks.len()
         )));
     }
+    Ok(())
+}
+
+fn verify_qglake_delete_manifest_scan_tasks(
+    fetched: &FetchScanTasksResponse,
+    table_location: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    verify_qglake_sail_planner("delete manifest fetchScanTasks", &fetched.planned_by)?;
+    if !fetched.plan_tasks.is_empty() || !fetched.lakecat_plan_tasks.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake governed delete manifest fetchScanTasks unexpectedly exposed child tasks"
+                .to_string(),
+        ));
+    }
+    if !fetched.file_scan_tasks.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake governed delete manifest fetchScanTasks unexpectedly exposed data scan tasks"
+                .to_string(),
+        ));
+    }
+    if fetched.delete_files.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake governed delete manifest fetchScanTasks produced no delete files".to_string(),
+        ));
+    }
+    let table_prefix = format!("{}/", table_location.trim_end_matches('/'));
+    for delete_file_path in fetched
+        .delete_files
+        .iter()
+        .filter_map(|file| file.get("file-path").and_then(Value::as_str))
+    {
+        if !delete_file_path.starts_with(&table_prefix) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake governed delete file escaped table location {table_location}: {delete_file_path}"
+            )));
+        }
+    }
+    verify_qglake_fetch_restriction(fetched)?;
     Ok(())
 }
 
@@ -1363,6 +1421,12 @@ fn verify_qglake_scan_task_common(
             )));
         }
     }
+    verify_qglake_fetch_restriction(fetched)
+}
+
+fn verify_qglake_fetch_restriction(
+    fetched: &FetchScanTasksResponse,
+) -> lakecat_core::LakeCatResult<()> {
     let extension = fetched
         .residual_filter
         .as_ref()
@@ -1765,24 +1829,34 @@ fn qglake_table_metadata(
 
     let table_dir = file_url_path(location, "QGLake table location")?;
     let data_dir = table_dir.join("data");
+    let delete_dir = table_dir.join("delete");
     fs::create_dir_all(&data_dir).map_err(|err| {
         lakecat_core::LakeCatError::Internal(format!(
             "failed to create QGLake data directory {data_dir:?}: {err}"
         ))
     })?;
+    fs::create_dir_all(&delete_dir).map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to create QGLake delete directory {delete_dir:?}: {err}"
+        ))
+    })?;
 
     let manifest_list_path = metadata_dir.join("snap-42.avro");
     let manifest_path = metadata_dir.join("manifest-1.avro");
+    let delete_manifest_path = metadata_dir.join("delete-manifest-1.avro");
     let data_file_path = data_dir.join("part-1.parquet");
+    let delete_file_path = delete_dir.join("pos-delete-1.parquet");
     let manifest_list = file_path_url(&manifest_list_path, "QGLake manifest list")?;
     let manifest = file_path_url(&manifest_path, "QGLake data manifest")?;
+    let delete_manifest = file_path_url(&delete_manifest_path, "QGLake delete manifest")?;
     let data_file = file_path_url(&data_file_path, "QGLake data file")?;
+    let delete_file = file_path_url(&delete_file_path, "QGLake delete file")?;
 
     let metadata = json!({
         "format-version": 3,
         "table-uuid": "22222222-2222-2222-2222-222222222222",
         "location": location,
-        "last-sequence-number": 7,
+        "last-sequence-number": 8,
         "last-updated-ms": 1710000000000_i64,
         "last-column-id": 4,
         "current-schema-id": 1,
@@ -1827,7 +1901,7 @@ fn qglake_table_metadata(
         "current-snapshot-id": 42,
         "snapshots": [{
             "snapshot-id": 42,
-            "sequence-number": 7,
+            "sequence-number": 8,
             "timestamp-ms": 1710000000000_i64,
             "manifest-list": manifest_list,
             "summary": {"operation": "append"},
@@ -1843,8 +1917,11 @@ fn qglake_table_metadata(
         &metadata,
         &manifest_path,
         &manifest,
+        &delete_manifest_path,
+        &delete_manifest,
         &manifest_list_path,
         &data_file,
+        &delete_file,
     )?;
     write_qglake_metadata_file(&metadata_file, &metadata)?;
     Ok(metadata)
@@ -1870,8 +1947,11 @@ fn write_qglake_manifest_files(
     metadata: &Value,
     manifest_path: &std::path::Path,
     manifest: &str,
+    delete_manifest_path: &std::path::Path,
+    delete_manifest: &str,
     manifest_list_path: &std::path::Path,
     data_file: &str,
+    delete_file: &str,
 ) -> lakecat_core::LakeCatResult<()> {
     let table_metadata =
         TableMetadata::from_json(&serde_json::to_vec(metadata).map_err(|err| {
@@ -1946,6 +2026,69 @@ fn write_qglake_manifest_files(
         ))
     })?;
 
+    let delete_manifest_metadata = ManifestMetadata::new(
+        Arc::new(
+            table_metadata
+                .current_schema()
+                .ok_or_else(|| {
+                    lakecat_core::LakeCatError::InvalidArgument(
+                        "QGLake fixture metadata has no current schema".to_string(),
+                    )
+                })?
+                .clone(),
+        ),
+        table_metadata.current_schema_id,
+        table_metadata
+            .default_partition_spec()
+            .ok_or_else(|| {
+                lakecat_core::LakeCatError::InvalidArgument(
+                    "QGLake fixture metadata has no default partition spec".to_string(),
+                )
+            })?
+            .clone(),
+        FormatVersion::V2,
+        ManifestContentType::Deletes,
+    );
+    let mut delete_writer =
+        ManifestWriterBuilder::new(Some(42), None, delete_manifest_metadata).build();
+    delete_writer.add(DataFile {
+        content: DataContentType::PositionDeletes,
+        file_path: delete_file.to_string(),
+        file_format: DataFileFormat::Parquet,
+        partition: Vec::new(),
+        record_count: 1,
+        file_size_in_bytes: 64,
+        column_sizes: Default::default(),
+        value_counts: Default::default(),
+        null_value_counts: Default::default(),
+        nan_value_counts: Default::default(),
+        lower_bounds: Default::default(),
+        upper_bounds: Default::default(),
+        block_size_in_bytes: None,
+        key_metadata: None,
+        split_offsets: Vec::new(),
+        equality_ids: Vec::new(),
+        sort_order_id: None,
+        first_row_id: None,
+        partition_spec_id: 0,
+        referenced_data_file: Some(data_file.to_string()),
+        content_offset: None,
+        content_size_in_bytes: None,
+    });
+    fs::write(
+        delete_manifest_path,
+        delete_writer.to_avro_bytes_v2().map_err(|err| {
+            lakecat_core::LakeCatError::Internal(format!(
+                "failed to encode QGLake delete manifest: {err}"
+            ))
+        })?,
+    )
+    .map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to write QGLake delete manifest {delete_manifest_path:?}: {err}"
+        ))
+    })?;
+
     let mut list_writer = ManifestListWriter::new();
     list_writer.append(
         ManifestFile::builder()
@@ -1962,6 +2105,24 @@ fn write_qglake_manifest_files(
             .map_err(|err| {
                 lakecat_core::LakeCatError::Internal(format!(
                     "failed to build QGLake manifest-list entry: {err}"
+                ))
+            })?,
+    );
+    list_writer.append(
+        ManifestFile::builder()
+            .with_manifest_path(delete_manifest)
+            .with_manifest_length(10)
+            .with_partition_spec_id(0)
+            .with_content(ManifestContentType::Deletes)
+            .with_sequence_number(8)
+            .with_min_sequence_number(8)
+            .with_added_snapshot_id(42)
+            .with_file_counts(1, 0, 0)
+            .with_row_counts(1, 0, 0)
+            .build()
+            .map_err(|err| {
+                lakecat_core::LakeCatError::Internal(format!(
+                    "failed to build QGLake delete manifest-list entry: {err}"
                 ))
             })?,
     );
@@ -3281,7 +3442,24 @@ mod tests {
         vec![serde_json::json!({
             "task-type": "manifest",
             "manifest-list": "file:///tmp/lakecat-qglake/events/metadata/snap-42.avro",
-            "manifest-path": "file:///tmp/lakecat-qglake/events/metadata/manifest-42.avro"
+            "manifest-path": "file:///tmp/lakecat-qglake/events/metadata/manifest-42.avro",
+            "content": "data"
+        })]
+    }
+
+    fn qglake_file_scan_task_with_delete_ref() -> Value {
+        serde_json::json!({
+            "data-file": {
+                "file-path": "file:///tmp/lakecat-qglake/events/data/part-1.parquet"
+            },
+            "delete-file-references": [0]
+        })
+    }
+
+    fn qglake_delete_files() -> Vec<Value> {
+        vec![serde_json::json!({
+            "content": "position-deletes",
+            "file-path": "file:///tmp/lakecat-qglake/events/delete/pos-delete-1.parquet"
         })]
     }
 
@@ -3363,6 +3541,81 @@ mod tests {
     }
 
     #[test]
+    fn qglake_delete_manifest_fetch_scan_tasks_verifier_accepts_terminal_delete_work() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            plan_task: "lakecat:sail-json-hmac:delete-manifest".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: Vec::new(),
+            delete_files: qglake_delete_files(),
+            plan_tasks: Vec::new(),
+            lakecat_plan_tasks: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        verify_qglake_delete_manifest_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect("QGLake delete manifest fetch should be terminal and governed");
+    }
+
+    #[test]
+    fn qglake_delete_manifest_fetch_scan_tasks_verifier_rejects_escaped_delete_files() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            plan_task: "lakecat:sail-json-hmac:delete-manifest".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: Vec::new(),
+            delete_files: vec![serde_json::json!({
+                "content": "position-deletes",
+                "file-path": "file:///tmp/lakecat-qglake/other/delete/pos-delete-1.parquet"
+            })],
+            plan_tasks: Vec::new(),
+            lakecat_plan_tasks: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_delete_manifest_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake delete manifest fetch should reject escaped delete files");
+        assert!(
+            err.to_string()
+                .contains("delete file escaped table location")
+        );
+    }
+
+    #[test]
     fn qglake_fetch_scan_tasks_verifier_requires_reapplied_policy_hash_binding() {
         let expected_policy_hash = qglake_policy_hash("events").unwrap();
         let fetched = FetchScanTasksResponse {
@@ -3373,12 +3626,8 @@ mod tests {
             planned_by: "sail-rest-models".to_string(),
             plan_task: "lakecat:sail-json-hmac:test".to_string(),
             snapshot_id: Some(42),
-            file_scan_tasks: vec![serde_json::json!({
-                "data-file": {
-                    "file-path": "file:///tmp/lakecat-qglake/events/data/part-1.parquet"
-                }
-            })],
-            delete_files: Vec::new(),
+            file_scan_tasks: vec![qglake_file_scan_task_with_delete_ref()],
+            delete_files: qglake_delete_files(),
             plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
             lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
             residual_filter: Some(serde_json::json!({
@@ -3400,7 +3649,7 @@ mod tests {
     }
 
     #[test]
-    fn qglake_fetch_scan_tasks_verifier_accepts_multiple_manifest_children() {
+    fn qglake_fetch_scan_tasks_verifier_requires_delete_file_refs() {
         let expected_policy_hash = qglake_policy_hash("events").unwrap();
         let fetched = FetchScanTasksResponse {
             table: lakecat_api::TableIdentifier {
@@ -3415,7 +3664,77 @@ mod tests {
                     "file-path": "file:///tmp/lakecat-qglake/events/data/part-1.parquet"
                 }
             })],
+            delete_files: qglake_delete_files(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake governed fetch should require delete-file references");
+        assert!(err.to_string().contains("delete-file references"));
+    }
+
+    #[test]
+    fn qglake_fetch_scan_tasks_verifier_requires_delete_files() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            plan_task: "lakecat:sail-json-hmac:test".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![qglake_file_scan_task_with_delete_ref()],
             delete_files: Vec::new(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake governed fetch should require delete-file entries");
+        assert!(err.to_string().contains("delete-file refs"));
+    }
+
+    #[test]
+    fn qglake_fetch_scan_tasks_verifier_accepts_multiple_manifest_children() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            plan_task: "lakecat:sail-json-hmac:test".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![qglake_file_scan_task_with_delete_ref()],
+            delete_files: qglake_delete_files(),
             plan_tasks: vec![
                 "lakecat:sail-json-hmac:manifest:1".to_string(),
                 "lakecat:sail-json-hmac:manifest:2".to_string(),
@@ -3424,12 +3743,14 @@ mod tests {
                 serde_json::json!({
                     "task-type": "manifest",
                     "manifest-list": "file:///tmp/lakecat-qglake/events/metadata/snap-42.avro",
-                    "manifest-path": "file:///tmp/lakecat-qglake/events/metadata/manifest-42-a.avro"
+                    "manifest-path": "file:///tmp/lakecat-qglake/events/metadata/manifest-42-a.avro",
+                    "content": "data"
                 }),
                 serde_json::json!({
                     "task-type": "manifest",
                     "manifest-list": "file:///tmp/lakecat-qglake/events/metadata/snap-42.avro",
-                    "manifest-path": "file:///tmp/lakecat-qglake/events/metadata/manifest-42-b.avro"
+                    "manifest-path": "file:///tmp/lakecat-qglake/events/metadata/delete-manifest-42.avro",
+                    "content": "deletes"
                 }),
             ],
             residual_filter: Some(serde_json::json!({

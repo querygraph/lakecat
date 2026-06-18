@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Extended the QGLake fixture metadata to include a position-delete manifest and
+  required governed `fetchScanTasks` acceptance to prove Sail attaches
+  delete-file refs to data tasks and handles delete-manifest child tasks.
 - Projected credential-vend outbox events into LakeCat lineage/OpenLineage sink
   receipts and required QGLake lineage-drain acceptance to prove both credential
   probes emitted replay hashes.
