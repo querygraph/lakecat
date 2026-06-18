@@ -402,7 +402,7 @@ async fn qglake_fixture(
         principal,
         "storage profile upsert",
         &UpsertStorageProfileRequest {
-            location_prefix: location,
+            location_prefix: location.clone(),
             provider: "file".to_string(),
             issuance_mode: "local-file-no-secret".to_string(),
             secret_ref: None,
@@ -425,7 +425,7 @@ async fn qglake_fixture(
     )
     .await?;
 
-    verify_qglake_governed_scan(&catalog, &namespace_path, &table, principal).await?;
+    verify_qglake_governed_scan(&catalog, &namespace_path, &table, &location, principal).await?;
     verify_qglake_credentials_blocked(&catalog, &namespace_path, &table, principal).await?;
     let (bundle, verification) = fetch_bootstrap_bundle(&catalog, principal).await?;
     verify_qglake_bootstrap_bundle(&bundle, &namespace, &table)?;
@@ -769,6 +769,7 @@ async fn verify_qglake_governed_scan(
     catalog: &str,
     namespace_path: &str,
     table: &str,
+    table_location: &str,
     principal: Option<&str>,
 ) -> lakecat_core::LakeCatResult<()> {
     let plan = post_json::<_, PlanTableScanResponse>(
@@ -789,7 +790,15 @@ async fn verify_qglake_governed_scan(
     )
     .await?;
     verify_qglake_scan_plan(&plan)?;
-    verify_qglake_fetch_scan_tasks(catalog, namespace_path, table, principal, &plan).await
+    verify_qglake_fetch_scan_tasks(
+        catalog,
+        namespace_path,
+        table,
+        table_location,
+        principal,
+        &plan,
+    )
+    .await
 }
 
 fn empty_scan_request() -> PlanTableScanRequest {
@@ -869,6 +878,7 @@ async fn verify_qglake_fetch_scan_tasks(
     catalog: &str,
     namespace_path: &str,
     table: &str,
+    table_location: &str,
     principal: Option<&str>,
     plan: &PlanTableScanResponse,
 ) -> lakecat_core::LakeCatResult<()> {
@@ -888,23 +898,35 @@ async fn verify_qglake_fetch_scan_tasks(
         },
     )
     .await?;
-    verify_qglake_scan_tasks(&fetched)
+    verify_qglake_scan_tasks(&fetched, table_location)
 }
 
-fn verify_qglake_scan_tasks(fetched: &FetchScanTasksResponse) -> lakecat_core::LakeCatResult<()> {
+fn verify_qglake_scan_tasks(
+    fetched: &FetchScanTasksResponse,
+    table_location: &str,
+) -> lakecat_core::LakeCatResult<()> {
     if fetched.file_scan_tasks.is_empty() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake governed fetchScanTasks produced no file scan tasks".to_string(),
         ));
     }
-    if !fetched.file_scan_tasks.iter().any(|task| {
-        task.pointer("/data-file/file-path")
-            .and_then(Value::as_str)
-            .is_some()
-    }) {
+    let data_file_paths = fetched
+        .file_scan_tasks
+        .iter()
+        .filter_map(|task| task.pointer("/data-file/file-path").and_then(Value::as_str))
+        .collect::<Vec<_>>();
+    if data_file_paths.is_empty() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake governed fetchScanTasks produced no data-file file paths".to_string(),
         ));
+    }
+    let table_prefix = format!("{}/", table_location.trim_end_matches('/'));
+    for data_file_path in data_file_paths {
+        if !data_file_path.starts_with(&table_prefix) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake governed fetchScanTasks data file escaped table location {table_location}: {data_file_path}"
+            )));
+        }
     }
     let extension = fetched
         .residual_filter
@@ -1677,6 +1699,8 @@ fn usage_error() -> lakecat_core::LakeCatError {
 mod tests {
     use super::*;
 
+    const QGLAKE_TEST_LOCATION: &str = "file:///tmp/lakecat-qglake/events";
+
     #[test]
     fn parses_config_command_defaults() {
         let command = Command::parse(["config".to_string()]).unwrap();
@@ -2250,7 +2274,7 @@ mod tests {
             })),
         };
 
-        verify_qglake_scan_tasks(&fetched).unwrap();
+        verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION).unwrap();
     }
 
     #[test]
@@ -2283,7 +2307,7 @@ mod tests {
             })),
         };
 
-        let err = verify_qglake_scan_tasks(&fetched)
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
             .expect_err("QGLake governed fetch should require scan work");
         assert!(err.to_string().contains("produced no file scan tasks"));
     }
@@ -2318,9 +2342,48 @@ mod tests {
             })),
         };
 
-        let err = verify_qglake_scan_tasks(&fetched)
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
             .expect_err("QGLake governed fetch should require data-file paths");
         assert!(err.to_string().contains("no data-file file paths"));
+    }
+
+    #[test]
+    fn qglake_fetch_scan_tasks_verifier_rejects_escaped_data_file_paths() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "lakecat-sail".to_string(),
+            plan_task: "lakecat:sail-json-hmac:test".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![serde_json::json!({
+                "data-file": {
+                    "file-path": "file:///tmp/lakecat-qglake/other-table/data/part-1.parquet"
+                }
+            })],
+            delete_files: Vec::new(),
+            plan_tasks: Vec::new(),
+            lakecat_plan_tasks: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake governed fetch should reject escaped data files");
+        assert!(err.to_string().contains("escaped table location"));
     }
 
     #[test]
@@ -2355,7 +2418,7 @@ mod tests {
             })),
         };
 
-        let err = verify_qglake_scan_tasks(&fetched)
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
             .expect_err("QGLake governed fetch should require a policy hash binding");
         assert!(
             err.to_string()

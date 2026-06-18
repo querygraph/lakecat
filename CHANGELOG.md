@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required the QGLake governed `fetchScanTasks` verifier to prove fetched
+  Iceberg data-file paths remain under the fixture table location, rejecting
+  escaped or wrong-table scan work.
 - Required the QGLake governed `fetchScanTasks` verifier to prove at least one
   fetched file scan task carries an Iceberg REST `data-file.file-path`, so
   placeholder task JSON cannot satisfy the acceptance proof.
