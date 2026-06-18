@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added governed durable view deletion on management and warehouse-prefixed
+  catalog REST paths, with memory/Turso persistence, a typed `view.drop`
+  capability, and audited `view.dropped` events.
 - Exercised TypeSec-gated production secret-ref handling for `vault://`,
   `aws-sm://`, `gcp-sm://`, and `azure-kv://`, proving each accepted provider
   authorizes the exact secret URI before failing closed when no resolver backend

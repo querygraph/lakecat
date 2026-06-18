@@ -132,6 +132,15 @@ pub trait CatalogStore: Send + Sync + 'static {
                 name: view.as_str().to_string(),
             })
     }
+    async fn drop_view(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+        view: &TableName,
+    ) -> LakeCatResult<ViewRecord> {
+        let record = self.load_view(warehouse, namespace, view).await?;
+        Ok(record)
+    }
     async fn list_views(
         &self,
         _warehouse: &WarehouseName,
@@ -1178,6 +1187,22 @@ impl CatalogStore for MemoryCatalogStore {
             })
     }
 
+    async fn drop_view(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+        view: &TableName,
+    ) -> LakeCatResult<ViewRecord> {
+        let mut state = self.state.write().await;
+        state
+            .views
+            .remove(&view_key_parts(warehouse, namespace, view))
+            .ok_or_else(|| LakeCatError::NotFound {
+                object: "view",
+                name: view.as_str().to_string(),
+            })
+    }
+
     async fn list_views(
         &self,
         warehouse: &WarehouseName,
@@ -1711,8 +1736,34 @@ mod memory_tests {
         ));
         assert_eq!(
             store.list_views(&warehouse, &namespace).await.unwrap(),
-            vec![updated]
+            vec![updated.clone()]
         );
+        assert_eq!(
+            store
+                .drop_view(
+                    &warehouse,
+                    &namespace,
+                    &TableName::new("active_customers").unwrap()
+                )
+                .await
+                .unwrap(),
+            updated
+        );
+        assert_eq!(
+            store.list_views(&warehouse, &namespace).await.unwrap(),
+            Vec::<ViewRecord>::new()
+        );
+        assert!(matches!(
+            store
+                .drop_view(
+                    &warehouse,
+                    &namespace,
+                    &TableName::new("active_customers").unwrap()
+                )
+                .await,
+            Err(LakeCatError::NotFound { object, name })
+                if object == "view" && name == "active_customers"
+        ));
     }
 
     #[tokio::test]
@@ -2722,6 +2773,24 @@ pub mod turso_store {
             })
         }
 
+        async fn drop_view(
+            &self,
+            warehouse: &WarehouseName,
+            namespace: &Namespace,
+            view: &TableName,
+        ) -> LakeCatResult<ViewRecord> {
+            let conn = self.connect()?;
+            let view_key = view_key_parts(warehouse, namespace, view);
+            let record = self.load_view(warehouse, namespace, view).await?;
+            conn.execute(
+                "delete from views where view_key = ?1",
+                (view_key.as_str(),),
+            )
+            .await
+            .map_err(turso_error)?;
+            Ok(record)
+        }
+
         async fn list_views(
             &self,
             warehouse: &WarehouseName,
@@ -3424,8 +3493,34 @@ pub mod turso_store {
             ));
             assert_eq!(
                 store.list_views(&warehouse, &namespace).await.unwrap(),
-                vec![updated]
+                vec![updated.clone()]
             );
+            assert_eq!(
+                store
+                    .drop_view(
+                        &warehouse,
+                        &namespace,
+                        &TableName::new("active_customers").unwrap()
+                    )
+                    .await
+                    .unwrap(),
+                updated
+            );
+            assert_eq!(
+                store.list_views(&warehouse, &namespace).await.unwrap(),
+                Vec::<ViewRecord>::new()
+            );
+            assert!(matches!(
+                store
+                    .drop_view(
+                        &warehouse,
+                        &namespace,
+                        &TableName::new("active_customers").unwrap()
+                    )
+                    .await,
+                Err(LakeCatError::NotFound { object, name })
+                    if object == "view" && name == "active_customers"
+            ));
         }
 
         #[tokio::test]

@@ -101,7 +101,7 @@ though every seam it needs now exists.
 | 4 | No persistence backend | **CLOSED (Turso spine)** — namespaces, tables, pointer log, idempotency, audit, outbox, storage profiles, policy bindings, soft-delete |
 | 5 | Service can't activate real engines | **CLOSED** — `sail-local`/`typesec-local`/`grust-local` passthroughs + CLI wiring |
 | 6 | Sail used as struct library | **PARTIAL** — in-process `CatalogProvider` (Tier 1) for catalog ops; scans still walk manifests in-process (see F5) |
-| 7 | Plan ↔ impl drift; no CLI | **PARTIAL** — CLI landed, `CatalogAction` expanded, stable IDs aligned; Server/Project/Warehouse plus semantic views are durable management entities; standard Iceberg view REST and richer hierarchy routing remain (see F7) |
+| 7 | Plan ↔ impl drift; no CLI | **PARTIAL** — CLI landed, `CatalogAction` expanded, stable IDs aligned; Server/Project/Warehouse plus semantic views are durable management entities; catalog view list/load/upsert/drop aliases are wired; richer hierarchy routing and typed view metadata remain (see F7) |
 | 8 | Grust graph placeholder | **PARTIAL** — taxonomy + ingestion moved into Grust; emission is still event→table breadcrumbs (see F6) |
 | 9 | `list_namespaces` fabricates default | **CLOSED** — memory + Turso return empty |
 | 10 | Side effects coupled to request | **CLOSED** — transactional outbox + drain |
@@ -259,8 +259,8 @@ records must attach to stored projects. Project-scoped management routes can now
 list and upsert those warehouses for QueryGraph/bootstrap callers without
 changing standard table access. Governed view list/upsert endpoints persist
 `ViewRecord` values in memory and Turso. Warehouse-prefixed catalog REST aliases
-now list, load, and upsert those durable views while preserving standard table
-access semantics. QueryGraph bootstrap now exports those views with
+now list, load, upsert, and drop those durable views while preserving standard
+table access semantics. QueryGraph bootstrap now exports those views with
 manifest-covered OSI hashes, view-aware graph edges, and OpenLineage view counts.
 The remaining tenancy gap is narrower but real: full typed Iceberg view metadata
 and view commit semantics are not fully modeled yet.

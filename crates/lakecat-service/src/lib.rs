@@ -43,7 +43,7 @@ use lakecat_security::{
     PolicyManageCapability, ProjectManageCapability, ReadRestriction, ServerManageCapability,
     StorageProfileManageCapability, TableCommitCapability, TableCreateCapability,
     TableDropCapability, TableLoadCapability, TableRestoreCapability, TableScanCapability,
-    ViewLoadCapability, ViewManageCapability, WarehouseManageCapability,
+    ViewDropCapability, ViewLoadCapability, ViewManageCapability, WarehouseManageCapability,
 };
 use lakecat_store::{
     CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, PolicyBinding,
@@ -795,7 +795,8 @@ pub fn app(state: LakeCatState) -> Router {
             "/catalog/v1/{warehouse}/namespaces/{namespace}/views/{view}",
             get(catalog_load_view)
                 .post(catalog_upsert_view)
-                .put(catalog_upsert_view),
+                .put(catalog_upsert_view)
+                .delete(catalog_drop_view),
         )
         .route(
             "/catalog/v1/namespaces",
@@ -865,7 +866,7 @@ pub fn app(state: LakeCatState) -> Router {
         )
         .route(
             "/management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}",
-            post(upsert_view).put(upsert_view),
+            post(upsert_view).put(upsert_view).delete(drop_view),
         )
         .route(
             "/management/v1/warehouses/{warehouse}/policies",
@@ -1836,6 +1837,23 @@ async fn upsert_view(
     Ok(Json(view_response(&record)))
 }
 
+async fn drop_view(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, view)): Path<(String, String, String)>,
+) -> Result<StatusCode, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let namespace = namespace.parse::<Namespace>()?;
+    let view_name = TableName::new(view)?;
+    let capability = authorize_view_drop(&state, request_identity(&headers)?).await?;
+    let record = state
+        .store
+        .drop_view(&warehouse, &namespace, &view_name)
+        .await?;
+    record_view_drop_audit(&state, &warehouse, &namespace, &record, &capability, None).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn catalog_upsert_view(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
@@ -1873,6 +1891,61 @@ async fn catalog_upsert_view(
         )?)
         .await?;
     Ok(Json(view_response(&record)))
+}
+
+async fn catalog_drop_view(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, view)): Path<(String, String, String)>,
+) -> Result<StatusCode, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let namespace = namespace.parse::<Namespace>()?;
+    let view_name = TableName::new(view)?;
+    let capability = authorize_view_drop(&state, request_identity(&headers)?).await?;
+    let record = state
+        .store
+        .drop_view(&warehouse, &namespace, &view_name)
+        .await?;
+    record_view_drop_audit(
+        &state,
+        &warehouse,
+        &namespace,
+        &record,
+        &capability,
+        Some("iceberg-rest"),
+    )
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn record_view_drop_audit(
+    state: &LakeCatState,
+    warehouse: &WarehouseName,
+    namespace: &Namespace,
+    record: &ViewRecord,
+    capability: &ViewDropCapability,
+    interface: Option<&str>,
+) -> Result<(), LakeCatHttpError> {
+    let mut payload = json!({
+        "event-type": "view.dropped",
+        "warehouse": warehouse.as_str(),
+        "namespace": namespace.parts(),
+        "view": view_response(record),
+        "authorization-receipt": capability.receipt(),
+    });
+    if let Some(interface) = interface {
+        payload["interface"] = json!(interface);
+    }
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "view.dropped",
+            None,
+            capability.receipt().principal.clone(),
+            payload,
+        )?)
+        .await?;
+    Ok(())
 }
 
 async fn list_policy_bindings(
@@ -3435,6 +3508,14 @@ async fn authorize_view_load(
 ) -> Result<ViewLoadCapability, LakeCatHttpError> {
     let receipt = authorize(state, identity, CatalogAction::ViewLoad, None).await?;
     Ok(ViewLoadCapability::from_receipt(receipt)?)
+}
+
+async fn authorize_view_drop(
+    state: &LakeCatState,
+    identity: RequestIdentity,
+) -> Result<ViewDropCapability, LakeCatHttpError> {
+    let receipt = authorize(state, identity, CatalogAction::ViewDrop, None).await?;
+    Ok(ViewDropCapability::from_receipt(receipt)?)
 }
 
 async fn authorize_policy_manage(
@@ -6071,6 +6152,56 @@ mod tests {
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["name"], serde_json::json!("catalog_customers"));
         assert_eq!(body["schema-version"], serde_json::json!(2));
+
+        let catalog_drop = Request::builder()
+            .method(Method::DELETE)
+            .uri("/catalog/v1/local/namespaces/default/views/catalog_customers")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(catalog_drop).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        let dropped_catalog_load = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/local/namespaces/default/views/catalog_customers")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(dropped_catalog_load).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let management_drop = Request::builder()
+            .method(Method::DELETE)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/active_customers")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(management_drop).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        let list = Request::builder()
+            .method(Method::GET)
+            .uri("/management/v1/warehouses/local/namespaces/default/views")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(list).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["views"].as_array().unwrap().len(), 0);
+
+        let repeated_drop = Request::builder()
+            .method(Method::DELETE)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/active_customers")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(repeated_drop).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
         let missing = Request::builder()
             .method(Method::GET)
