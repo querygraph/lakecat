@@ -83,6 +83,23 @@ impl GraphEvent {
         }
     }
 
+    pub fn commit(
+        action: GraphAction,
+        table: &TableIdent,
+        sequence_number: u64,
+        properties: Value,
+    ) -> Self {
+        Self {
+            event_id: None,
+            subject: commit_stable_id(table, sequence_number),
+            label: GraphNodeLabel::Commit,
+            action,
+            table: Some(table.clone()),
+            properties,
+            emitted_at: Utc::now(),
+        }
+    }
+
     pub fn with_event_id(mut self, event_id: impl Into<String>) -> Self {
         self.event_id = Some(event_id.into());
         self
@@ -107,6 +124,10 @@ pub fn policy_stable_id(warehouse: &WarehouseName, policy_id: &str) -> String {
 
 pub fn scan_plan_stable_id(plan_id: &str) -> String {
     format!("lakecat:scan-plan:{plan_id}")
+}
+
+pub fn commit_stable_id(table: &TableIdent, sequence_number: u64) -> String {
+    format!("lakecat:commit:{}:{sequence_number}", table.stable_id())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -205,6 +226,28 @@ mod tests {
         assert_eq!(event.label, GraphNodeLabel::ScanPlan);
         assert_eq!(event.subject, "lakecat:scan-plan:evt-scan");
         assert!(event.table.is_none());
+    }
+
+    #[test]
+    fn commit_event_uses_stable_catalog_subject() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            lakecat_core::TableName::new("events").unwrap(),
+        );
+        let event = GraphEvent::commit(
+            GraphAction::Committed,
+            &table,
+            7,
+            serde_json::json!({"kind": "test"}),
+        );
+
+        assert_eq!(event.label, GraphNodeLabel::Commit);
+        assert_eq!(
+            event.subject,
+            "lakecat:commit:lakecat:table:local:default:events:7"
+        );
+        assert_eq!(event.table.as_ref(), Some(&table));
     }
 }
 
@@ -378,6 +421,41 @@ pub mod grust_integration {
                 Some(&Value::String("planned-scan".to_string()))
             );
             GraphIndex::new(&graph).expect("scan plan event graph should be valid");
+        }
+
+        #[test]
+        fn converts_commit_event_to_valid_grust_graph_event() {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let event = GraphEvent::commit(
+                GraphAction::Committed,
+                &table,
+                7,
+                serde_json::json!({"kind":"test"}),
+            )
+            .with_event_id("lakecat:outbox:commit-1:commit");
+            let graph = graph_event_to_grust(&event);
+
+            assert_eq!(graph.nodes.len(), 4);
+            assert_eq!(graph.edges.len(), 3);
+            assert!(
+                graph
+                    .edges
+                    .iter()
+                    .any(|edge| edge.label.as_str() == "AFFECTS_TABLE")
+            );
+            assert_eq!(
+                graph.nodes[0].props.get("label"),
+                Some(&Value::String("Commit".to_string()))
+            );
+            assert_eq!(
+                graph.nodes[0].props.get("action"),
+                Some(&Value::String("committed".to_string()))
+            );
+            GraphIndex::new(&graph).expect("commit event graph should be valid");
         }
 
         #[tokio::test]

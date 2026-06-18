@@ -1740,6 +1740,22 @@ async fn project_outbox_event(
                     .await?;
                 receipt.graph_events += 1;
             }
+            if event.event_type == "table.commit" {
+                let sequence_number = outbox_commit_sequence_number(event)?;
+                state
+                    .graph
+                    .emit(
+                        GraphEvent::commit(
+                            GraphAction::Committed,
+                            &table,
+                            sequence_number,
+                            event_payload.clone(),
+                        )
+                        .with_event_id(format!("{}:commit", event.event_id)),
+                    )
+                    .await?;
+                receipt.graph_events += 1;
+            }
             state
                 .lineage
                 .emit(LineageEvent::new(
@@ -1911,6 +1927,30 @@ fn outbox_policy_binding(
         })?
         .to_string();
     Ok((warehouse, policy_id))
+}
+
+fn outbox_commit_sequence_number(event: &OutboxEvent) -> Result<u64, LakeCatError> {
+    let commit = event
+        .payload
+        .get("payload")
+        .and_then(|payload| payload.get("commit"))
+        .or_else(|| event.payload.get("commit"))
+        .ok_or_else(|| {
+            LakeCatError::Internal(format!(
+                "outbox event {} is missing commit payload",
+                event.event_id
+            ))
+        })?;
+    commit
+        .get("sequence_number")
+        .or_else(|| commit.get("sequence-number"))
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| {
+            LakeCatError::Internal(format!(
+                "outbox event {} commit payload is missing sequence number",
+                event.event_id
+            ))
+        })
 }
 
 fn outbox_principal(event: &OutboxEvent) -> Result<Principal, LakeCatError> {
@@ -3080,6 +3120,36 @@ mod tests {
                     delivered_at: None,
                 },
                 OutboxEvent {
+                    event_id: "evt-commit".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.commit".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-commit",
+                        "event-type": "table.commit",
+                        "table": table,
+                        "commit": {
+                            "table": table,
+                            "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+                            "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+                            "sequence_number": 7,
+                            "principal": principal,
+                            "request_hash": "sha256:request",
+                            "idempotency_key_sha256": "sha256:idempotency",
+                            "committed_at": chrono::Utc::now(),
+                        },
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-commit",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
                     event_id: "evt-3".to_string(),
                     sink: "lakecat.lineage-and-graph".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -3126,7 +3196,7 @@ mod tests {
             );
 
         let drain = drain_outbox_once(&state, 10).await.unwrap();
-        assert_eq!(drain.delivered, 5);
+        assert_eq!(drain.delivered, 6);
         assert_eq!(
             drain.event_types,
             vec![
@@ -3134,14 +3204,15 @@ mod tests {
                 "policy-binding.upserted".to_string(),
                 "table.created".to_string(),
                 "table.scan-tasks-fetched".to_string(),
+                "table.commit".to_string(),
                 "querygraph.bootstrap".to_string()
             ]
         );
-        assert_eq!(drain.graph_events, 5);
-        assert_eq!(drain.lineage_events, 4);
+        assert_eq!(drain.graph_events, 7);
+        assert_eq!(drain.lineage_events, 5);
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 5);
+        assert_eq!(graph_events.len(), 7);
         assert_eq!(graph_events[0].label, GraphNodeLabel::Namespace);
         assert_eq!(
             graph_events[0].subject,
@@ -3179,8 +3250,28 @@ mod tests {
             graph_events[4].properties["read-restriction"]["allowed-columns"],
             serde_json::json!(["event_id"])
         );
+        assert_eq!(graph_events[5].label, GraphNodeLabel::Table);
+        assert_eq!(graph_events[5].action, GraphAction::Committed);
+        assert_eq!(graph_events[5].event_id.as_deref(), Some("evt-commit"));
+        assert_eq!(
+            graph_events[5].properties["commit"]["new_metadata_location"],
+            serde_json::json!("file:///tmp/events/metadata/00001.json")
+        );
+        assert_eq!(graph_events[6].label, GraphNodeLabel::Commit);
+        assert_eq!(
+            graph_events[6].subject,
+            "lakecat:commit:lakecat:table:local:default:events:7"
+        );
+        assert_eq!(
+            graph_events[6].event_id.as_deref(),
+            Some("evt-commit:commit")
+        );
+        assert_eq!(
+            graph_events[6].properties["commit"]["idempotency_key_sha256"],
+            serde_json::json!("sha256:idempotency")
+        );
         let lineage_events = lineage.events.lock().await;
-        assert_eq!(lineage_events.len(), 4);
+        assert_eq!(lineage_events.len(), 5);
         assert_eq!(
             lineage_events[0].event_type,
             LineageEventType::NamespaceCreated
@@ -3196,22 +3287,30 @@ mod tests {
         );
         assert_eq!(
             lineage_events[3].event_type,
+            LineageEventType::TableCommitted
+        );
+        assert_eq!(
+            lineage_events[3].payload["commit"]["new_metadata_location"],
+            serde_json::json!("file:///tmp/events/metadata/00001.json")
+        );
+        assert_eq!(
+            lineage_events[4].event_type,
             LineageEventType::QueryGraphBootstrap
         );
         assert_eq!(
-            lineage_events[3].payload["authorization-receipt"]["request-identity"]["attestation-state"],
+            lineage_events[4].payload["authorization-receipt"]["request-identity"]["attestation-state"],
             serde_json::json!("verified")
         );
         assert_eq!(
-            lineage_events[3].payload["bundle-hash"],
+            lineage_events[4].payload["bundle-hash"],
             serde_json::json!("sha256:bundle")
         );
         assert_eq!(
-            lineage_events[3].payload["graph-hash"],
+            lineage_events[4].payload["graph-hash"],
             serde_json::json!("sha256:graph")
         );
         assert_eq!(
-            lineage_events[3].payload["open-lineage-hash"],
+            lineage_events[4].payload["open-lineage-hash"],
             serde_json::json!("sha256:openlineage")
         );
         assert_eq!(
@@ -3221,6 +3320,7 @@ mod tests {
                 "evt-policy".to_string(),
                 "evt-1".to_string(),
                 "evt-2".to_string(),
+                "evt-commit".to_string(),
                 "evt-3".to_string()
             ]
         );

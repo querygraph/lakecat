@@ -7,11 +7,11 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `f3d963b Project scan plans to graph`.
-- Paused after pushing scan-plan graph projection from the durable outbox.
-  `table.scan-planned` and `table.scan-tasks-fetched` replay now emit stable
-  catalog-facing `ScanPlan` graph events derived from durable outbox IDs while
-  preserving the governed read restriction payload.
-- Local verification for the pushed slice was green:
+- Current working slice: commit graph projection from the durable outbox.
+  `table.commit` replay now emits a stable catalog-facing `Commit` graph event
+  keyed by table stable ID and committed sequence number while preserving
+  metadata pointer movement and idempotency hash payloads.
+- Local verification for the current slice is green:
   `cargo fmt -p lakecat-graph -p lakecat-service -p lakecat-api -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-graph`;
@@ -67,6 +67,10 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added commit graph projection to durable outbox drain for `table.commit`, while
+  preserving the existing table graph and OpenLineage replay.
+- Added a stable commit subject helper plus default and `grust-local`
+  graph-crate coverage for the catalog-facing commit event shape.
 - Added scan-plan graph projection to durable outbox drain for
   `table.scan-planned` and `table.scan-tasks-fetched`, while preserving the
   existing table graph and OpenLineage replay.

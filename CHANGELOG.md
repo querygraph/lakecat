@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Projected `table.commit` outbox events into LakeCat's catalog-facing graph
+  sink as stable `Commit` events keyed by table and committed sequence number,
+  preserving metadata pointer movement and idempotency hashes for replay.
 - Projected scan-planning outbox events into LakeCat's catalog-facing graph sink
   as stable `ScanPlan` events derived from durable outbox IDs, preserving the
   governed read restriction payload for QueryGraph replay.
