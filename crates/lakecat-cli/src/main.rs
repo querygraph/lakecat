@@ -436,7 +436,7 @@ async fn qglake_fixture(
     verify_qglake_bootstrap_bundle(&bundle, &namespace, &table)?;
     write_bootstrap_bundle(&output, &bundle, &verification)?;
     let drain = drain_lineage_outbox(&catalog, principal).await?;
-    verify_qglake_lineage_drain(&drain, &verification)?;
+    verify_qglake_lineage_drain(&drain, &verification, principal)?;
     println!("drained {} lineage/outbox event(s)", drain.delivered);
     Ok(())
 }
@@ -1299,6 +1299,7 @@ fn verify_qglake_credentials_response(
 fn verify_qglake_lineage_drain(
     drain: &LineageDrainResponse,
     verification: &QueryGraphBootstrapVerification,
+    principal: Option<&str>,
 ) -> lakecat_core::LakeCatResult<()> {
     if drain.delivered == 0 {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
@@ -1343,6 +1344,12 @@ fn verify_qglake_lineage_drain(
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain replay evidence is missing QueryGraph hashes".to_string(),
         ));
+    }
+    let expected_principal = principal.unwrap_or("anonymous");
+    if bootstrap.principal_subject.as_deref() != Some(expected_principal) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain replay principal did not match accepted principal {expected_principal}"
+        )));
     }
     if bootstrap.bundle_hash.as_deref() != Some(verification.bundle_hash.as_str())
         || bootstrap.graph_hash.as_deref() != Some(verification.graph_hash.as_str())
@@ -3428,6 +3435,7 @@ mod tests {
                 events: Vec::new(),
             },
             &verification,
+            Some("did:example:agent"),
         )
         .expect_err("QGLake lineage drain should reject zero deliveries");
         assert!(
@@ -3444,6 +3452,7 @@ mod tests {
                 events: Vec::new(),
             },
             &verification,
+            Some("did:example:agent"),
         )
         .expect_err("QGLake lineage drain should reject missing lineage emissions");
         assert!(
@@ -3460,6 +3469,7 @@ mod tests {
                 events: Vec::new(),
             },
             &verification,
+            Some("did:example:agent"),
         )
         .expect_err("QGLake lineage drain should reject missing graph emissions");
         assert!(
@@ -3476,6 +3486,7 @@ mod tests {
                 events: Vec::new(),
             },
             &verification,
+            Some("did:example:agent"),
         )
         .expect_err("QGLake lineage drain should require bootstrap replay");
         assert!(
@@ -3492,6 +3503,7 @@ mod tests {
                 events: Vec::new(),
             },
             &verification,
+            Some("did:example:agent"),
         )
         .expect_err("QGLake lineage drain should require bootstrap evidence");
         assert!(
@@ -3509,6 +3521,7 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    principal_subject: Some("did:example:agent".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3522,6 +3535,7 @@ mod tests {
                 }],
             },
             &verification,
+            Some("did:example:agent"),
         )
         .expect_err("QGLake lineage drain should require sink receipt evidence");
         assert!(
@@ -3538,6 +3552,7 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    principal_subject: Some("did:example:agent".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:other-bundle".to_string()),
@@ -3551,6 +3566,7 @@ mod tests {
                 }],
             },
             &verification,
+            Some("did:example:agent"),
         )
         .expect_err("QGLake lineage drain should reject mismatched replay hashes");
         assert!(err.to_string().contains(
@@ -3566,6 +3582,37 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    principal_subject: Some("did:example:other".to_string()),
+                    graph_events: 0,
+                    lineage_events: 1,
+                    bundle_hash: Some("sha256:bundle".to_string()),
+                    graph_hash: Some("sha256:graph".to_string()),
+                    open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    table_artifact_count: 1,
+                    view_artifact_count: 0,
+                    standards: qglake_lineage_standards(),
+                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
+                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                }],
+            },
+            &verification,
+            Some("did:example:agent"),
+        )
+        .expect_err("QGLake lineage drain should reject mismatched replay principal");
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay principal did not match accepted principal did:example:agent"
+        ));
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                events: vec![LineageDrainEventSummary {
+                    event_id: "evt-bootstrap".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    principal_subject: Some("did:example:agent".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3579,6 +3626,7 @@ mod tests {
                 }],
             },
             &verification,
+            Some("did:example:agent"),
         )
         .expect_err("QGLake lineage drain should reject mismatched artifact counts");
         assert!(err.to_string().contains(
@@ -3594,6 +3642,7 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    principal_subject: Some("did:example:agent".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3607,6 +3656,7 @@ mod tests {
                 }],
             },
             &verification,
+            Some("did:example:agent"),
         )
         .expect_err("QGLake lineage drain should reject mismatched replay standards");
         assert!(err.to_string().contains(
@@ -3622,6 +3672,7 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    principal_subject: Some("did:example:agent".to_string()),
                     graph_events: 0,
                     lineage_events: 0,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3635,6 +3686,7 @@ mod tests {
                 }],
             },
             &verification,
+            Some("did:example:agent"),
         )
         .expect_err("QGLake lineage drain should reject missing bootstrap lineage projection");
         assert!(
@@ -3654,6 +3706,7 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    principal_subject: Some("did:example:agent".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3667,6 +3720,7 @@ mod tests {
                 }],
             },
             &verification,
+            Some("did:example:agent"),
         )
         .expect("QGLake lineage drain should accept delivered outbox events");
     }

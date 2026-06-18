@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Exposed the QueryGraph bootstrap replay principal in lineage-drain evidence
+  and required QGLake acceptance to match it against the principal used for the
+  accepted handoff.
 - Exposed QueryGraph bootstrap standards in lineage-drain replay evidence and
   required QGLake acceptance to match them against the accepted bootstrap
   bundle.
