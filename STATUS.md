@@ -6,6 +6,22 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `d5ec6d4 Persist QueryGraph artifact hashes in outbox`.
+- Paused after pushing the QueryGraph bootstrap outbox artifact-hash proof
+  slice. The `querygraph.bootstrap` audit/outbox payload now persists the
+  QueryGraph manifest table/view artifact hashes, and lineage-drain replay tests
+  prove those hashes survive into the replayed OpenLineage-facing event payload.
+- Local verification for the pushed outbox artifact-hash proof slice was green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `cargo test -p lakecat-service`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`.
+- This status commit records the pushed QueryGraph bootstrap outbox
+  artifact-hash proof slice.
+- Previous implementation slice:
   `bd14b08 Verify bootstrap OpenLineage hashes at service boundary`.
 - Paused after pushing the QueryGraph bootstrap service-boundary hash proof
   slice. The `/querygraph/v1/bootstrap` service tests now verify that the
