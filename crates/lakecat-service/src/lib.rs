@@ -1027,27 +1027,51 @@ async fn load_credentials(
         })
         .await?;
     let ident = capability.table().clone();
+    let audit_payload = credentials_vend_audit_payload(
+        &ident,
+        &table,
+        &storage_profile,
+        storage_credentials.len(),
+        capability.receipt(),
+    );
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
             "credentials.vend-attempted",
             Some(ident.clone()),
             capability.receipt().principal.clone(),
-            json!({
-                "event-type": "credentials.vend-attempted",
-                "table": ident,
-                "authorization-receipt": capability.receipt(),
-                "storage-location": table.location,
-                "storage-profile-id": storage_profile.profile_id,
-                "secret-ref-present": storage_profile.secret_ref.is_some(),
-                "credential-count": storage_credentials.len(),
-                "mode": storage_profile.issuance_mode.as_str(),
-            }),
+            audit_payload,
         )?)
         .await?;
     Ok(Json(LoadCredentialsResponse {
         storage_credentials,
     }))
+}
+
+fn credentials_vend_audit_payload(
+    ident: &TableIdent,
+    table: &TableRecord,
+    storage_profile: &StorageProfile,
+    credential_count: usize,
+    receipt: &AuthorizationReceipt,
+) -> Value {
+    let mut audit_payload = json!({
+        "event-type": "credentials.vend-attempted",
+        "table": ident.clone(),
+        "authorization-receipt": receipt,
+        "storage-location": table.location,
+        "storage-profile-id": storage_profile.profile_id,
+        "secret-ref-present": storage_profile.secret_ref.is_some(),
+        "credential-count": credential_count,
+        "mode": storage_profile.issuance_mode.as_str(),
+    });
+    if let Some(restriction) = receipt.context.get("read-restriction") {
+        audit_payload["read-restriction"] = restriction.clone();
+    }
+    if let Some(exception) = receipt.context.get("lakecat:raw-credential-exception") {
+        audit_payload["lakecat:raw-credential-exception"] = exception.clone();
+    }
+    audit_payload
 }
 
 async fn list_storage_profiles(
@@ -4256,6 +4280,70 @@ mod tests {
         assert_eq!(
             receipt.context["read-restriction"]["max-credential-ttl-seconds"],
             serde_json::json!(300)
+        );
+    }
+
+    #[test]
+    fn credentials_vend_audit_payload_surfaces_policy_context() {
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let table = TableRecord::new(
+            ident.clone(),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({ "format-version": 3 }),
+            Principal::anonymous(),
+        );
+        let profile = StorageProfile::inferred_for_table(&table);
+        let receipt = AuthorizationReceipt {
+            principal: Principal::new("did:example:agent", PrincipalKind::Agent).unwrap(),
+            action: CatalogAction::CredentialsVend,
+            table: Some(ident.clone()),
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: Some("policy-hash".to_string()),
+            context: serde_json::json!({
+                "read-restriction": {
+                    "allowed-columns": ["event_id"],
+                    "row-predicate": {
+                        "type": "eq",
+                        "term": "event_id",
+                        "value": "evt-1"
+                    },
+                    "max-credential-ttl-seconds": 300
+                },
+                "lakecat:raw-credential-exception": true
+            }),
+            checked_at: chrono::Utc::now(),
+        };
+
+        let payload = credentials_vend_audit_payload(&ident, &table, &profile, 1, &receipt);
+        assert_eq!(
+            payload["lakecat:raw-credential-exception"],
+            serde_json::json!(true)
+        );
+        assert_eq!(
+            payload["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            payload["read-restriction"]["row-predicate"],
+            serde_json::json!({
+                "type": "eq",
+                "term": "event_id",
+                "value": "evt-1"
+            })
+        );
+        assert_eq!(
+            payload["read-restriction"]["max-credential-ttl-seconds"],
+            serde_json::json!(300)
+        );
+        assert_eq!(
+            payload["authorization-receipt"]["context"]["read-restriction"],
+            payload["read-restriction"]
         );
     }
 

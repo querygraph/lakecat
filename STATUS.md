@@ -6,20 +6,22 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `45008c4 Load TypeSec RBAC policy for service`.
-- Current working slice: governed credential-vending receipts. When active
-  policy bindings produce a `ReadRestriction`, credential-vending authorization
-  now carries the same restriction context and marks the request as a
-  `lakecat:raw-credential-exception`, making raw credential access visibly
-  distinct from the default governed Sail-planned read path.
+  working changes: `c0b8560 Mark governed credential vending exceptions`.
+- Current working slice: governed credential-vending audit payloads. When
+  active policy bindings produce a `ReadRestriction`, the
+  `credentials.vend-attempted` audit/outbox payload now surfaces the effective
+  `read-restriction` and `lakecat:raw-credential-exception` marker at top level,
+  matching the nested authorization receipt context for QueryGraph, lineage, and
+  graph consumers.
 - Local verification for the current slice is green:
-  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
   `cargo test -p lakecat-service credential_vend_authorization_carries_policy_read_restriction -- --nocapture`;
-  `cargo test -p lakecat-service table_scan_authorization_carries_policy_read_restriction -- --nocapture`;
+  `cargo test -p lakecat-service credentials_vend_audit_payload_surfaces_policy_context -- --nocapture`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
   `cargo test -p lakecat-service`;
   `cargo test -p lakecat-service --all-features`;
   `cargo test -p lakecat-store --features turso-local`;
-  `cargo test --workspace --all-features`.
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -67,6 +69,10 @@ Updated: 2026-06-18
 - Extended authorization restriction derivation from scan planning to credential
   vending so raw credential issuance sees the same policy-derived allowed
   columns, row predicate, TTL, purpose, and policy hashes.
+- Surfaced governed credential-vending `read-restriction` and
+  `lakecat:raw-credential-exception` markers in the top-level
+  `credentials.vend-attempted` audit/outbox payload, matching the nested
+  authorization receipt context.
 - Marked governed credential-vending authorization context with
   `lakecat:raw-credential-exception = true` so audit/outbox receipts distinguish
   the deliberate exception path from the preferred governed Sail-planned reads.

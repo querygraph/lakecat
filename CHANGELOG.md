@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Surfaced governed credential-vending `read-restriction` and
+  `lakecat:raw-credential-exception` markers at the top level of the
+  `credentials.vend-attempted` audit/outbox payload, matching the nested
+  authorization receipt context for QueryGraph and lineage consumers.
 - Attached policy-derived `ReadRestriction` context to credential-vending
   authorization receipts and marked governed raw credential requests as explicit
   LakeCat raw-credential exceptions for audit and issuer decisions.
