@@ -6,13 +6,13 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `eb97d69 Allow multi-warehouse management routing`.
-- Current working slice adds warehouse-prefixed Iceberg REST routing. Standard
+  `0a4ac68 Add warehouse-prefixed catalog routes`.
+- Paused after pushing warehouse-prefixed Iceberg REST routing. Standard
   catalog handlers now accept `/catalog/v1/{warehouse}/...` for config,
   namespace, table, commit, scan-plan, fetch-scan-tasks, and credential access,
   while the existing unprefixed routes remain the default-warehouse
   compatibility path.
-- Local verification for this working slice is green:
+- Local verification for the pushed slice was green:
   `cargo fmt -p lakecat-service`;
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
@@ -26,7 +26,7 @@ Updated: 2026-06-18
 - The all-feature gates again required local syntax repairs in the dirty sibling
   `/Users/alexy/src/grust/crates/grust-cypher/src/lib.rs` checkout around
   return-projection helper edits. LakeCat did not stage the sibling Grust repo.
-- Local verification for the pushed management-routing slice was green:
+- Local verification for the previous management-routing slice was green:
   `cargo fmt -p lakecat-service`;
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-graph -p lakecat-service -- --check`;
   `git diff --check`;
