@@ -6,12 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `bf1583b Record QueryGraph bootstrap hash receipts`.
-- Current working slice: namespace graph projection from the durable outbox.
+  `ec6963b Project namespace outbox events to graph`.
+- Paused after pushing namespace graph projection from the durable outbox.
   `namespace.created` replay now emits a catalog-facing `Namespace` graph event
   with a stable namespace subject and the same authorization payload used for
   lineage.
-- Local verification for the current slice is green:
+- Local verification for the pushed slice was green:
   `cargo fmt -p lakecat-graph -p lakecat-service -p lakecat-api -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-graph`;
