@@ -6,12 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `745ce5f Project policy bindings to graph`.
-- Current working slice: scan-plan graph projection from the durable outbox.
+  `f3d963b Project scan plans to graph`.
+- Paused after pushing scan-plan graph projection from the durable outbox.
   `table.scan-planned` and `table.scan-tasks-fetched` replay now emit stable
   catalog-facing `ScanPlan` graph events derived from durable outbox IDs while
   preserving the governed read restriction payload.
-- Local verification for the current slice is green:
+- Local verification for the pushed slice was green:
   `cargo fmt -p lakecat-graph -p lakecat-service -p lakecat-api -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-graph`;
