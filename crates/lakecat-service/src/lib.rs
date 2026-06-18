@@ -828,6 +828,14 @@ pub fn app(state: LakeCatState) -> Router {
             "/management/v1/projects/{project}",
             post(upsert_project).put(upsert_project),
         )
+        .route(
+            "/management/v1/projects/{project}/warehouses",
+            get(list_project_warehouses),
+        )
+        .route(
+            "/management/v1/projects/{project}/warehouses/{warehouse}",
+            post(upsert_project_warehouse).put(upsert_project_warehouse),
+        )
         .route("/management/v1/warehouses", get(list_warehouses))
         .route(
             "/management/v1/warehouses/{warehouse}",
@@ -1441,6 +1449,32 @@ async fn list_warehouses(
     }))
 }
 
+async fn list_project_warehouses(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path(project): Path<String>,
+) -> Result<Json<ListWarehousesResponse>, LakeCatHttpError> {
+    let capability = authorize_warehouse_manage(&state, request_identity(&headers)?).await?;
+    let warehouses = state.store.list_project_warehouses(&project).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "warehouse.listed",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "warehouse.listed",
+                "project-id": project.as_str(),
+                "warehouse-count": warehouses.len(),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(ListWarehousesResponse {
+        warehouses: warehouses.iter().map(warehouse_response).collect(),
+    }))
+}
+
 async fn list_projects(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
@@ -1577,6 +1611,48 @@ async fn upsert_warehouse(
             capability.receipt().principal.clone(),
             json!({
                 "event-type": "warehouse.upserted",
+                "warehouse": warehouse.as_str(),
+                "warehouse-record": warehouse_response(&record),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(warehouse_response(&record)))
+}
+
+async fn upsert_project_warehouse(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((project, warehouse)): Path<(String, String)>,
+    Json(request): Json<UpsertWarehouseRequest>,
+) -> Result<Json<WarehouseResponse>, LakeCatHttpError> {
+    if let Some(request_project) = request.project_id.as_deref()
+        && request_project != project
+    {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "warehouse project id {request_project} does not match route project {project}"
+        ))
+        .into());
+    }
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let capability = authorize_warehouse_manage(&state, request_identity(&headers)?).await?;
+    let record = WarehouseRecord::new(
+        warehouse.clone(),
+        project,
+        request.storage_root,
+        request.properties,
+        capability.receipt().principal.clone(),
+    )?;
+    let record = state.store.upsert_warehouse(record).await?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "warehouse.upserted",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "warehouse.upserted",
+                "project-id": record.project_id.as_str(),
                 "warehouse": warehouse.as_str(),
                 "warehouse-record": warehouse_response(&record),
                 "authorization-receipt": capability.receipt(),
@@ -5489,6 +5565,64 @@ mod tests {
         let response = app.clone().oneshot(upsert_project).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
+        let upsert_scoped = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/projects/default/warehouses/project_local")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "storage-root": "file:///tmp/lakecat-project-local",
+                    "properties": {
+                        "region": "project-scoped"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert_scoped).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["warehouse"], serde_json::json!("project_local"));
+        assert_eq!(body["project-id"], serde_json::json!("default"));
+
+        let scoped_list = Request::builder()
+            .method(Method::GET)
+            .uri("/management/v1/projects/default/warehouses")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(scoped_list).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["warehouses"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            body["warehouses"][0]["warehouse"],
+            serde_json::json!("project_local")
+        );
+
+        let mismatched_project = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/projects/default/warehouses/mismatch")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "project-id": "other",
+                    "storage-root": "file:///tmp/mismatch"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(mismatched_project).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
         let upsert = Request::builder()
             .method(Method::PUT)
             .uri("/management/v1/warehouses/local")
@@ -5531,10 +5665,13 @@ mod tests {
             .await
             .unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(body["warehouses"].as_array().unwrap().len(), 1);
-        assert_eq!(
-            body["warehouses"][0]["warehouse"],
-            serde_json::json!("local")
+        assert_eq!(body["warehouses"].as_array().unwrap().len(), 2);
+        assert!(
+            body["warehouses"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|warehouse| { warehouse["warehouse"] == serde_json::json!("local") })
         );
 
         let other_warehouse = Request::builder()
@@ -5577,10 +5714,13 @@ mod tests {
             .await
             .unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(body["warehouses"].as_array().unwrap().len(), 2);
-        assert_eq!(
-            body["warehouses"][1]["warehouse"],
-            serde_json::json!("other")
+        assert_eq!(body["warehouses"].as_array().unwrap().len(), 3);
+        assert!(
+            body["warehouses"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|warehouse| { warehouse["warehouse"] == serde_json::json!("other") })
         );
 
         let missing_project = Request::builder()

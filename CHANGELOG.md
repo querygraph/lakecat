@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added project-scoped warehouse management routes for listing and upserting
+  warehouses under `/management/v1/projects/{project}/warehouses`, using the
+  existing durable Warehouse records without changing standard Iceberg REST
+  table access routes.
 - Enforced warehouse-to-project attachment in memory and Turso stores, with
   governed warehouse management rejecting warehouses that point at missing
   projects while preserving standard Iceberg table access routes.

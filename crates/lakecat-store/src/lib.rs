@@ -65,6 +65,29 @@ pub trait CatalogStore: Send + Sync + 'static {
     async fn list_warehouses(&self) -> LakeCatResult<Vec<WarehouseRecord>> {
         Ok(Vec::new())
     }
+    async fn list_project_warehouses(
+        &self,
+        project_id: &str,
+    ) -> LakeCatResult<Vec<WarehouseRecord>> {
+        validate_project_id(project_id)?;
+        if !self
+            .list_projects()
+            .await?
+            .iter()
+            .any(|project| project.project_id == project_id)
+        {
+            return Err(LakeCatError::NotFound {
+                object: "project",
+                name: project_id.to_string(),
+            });
+        }
+        Ok(self
+            .list_warehouses()
+            .await?
+            .into_iter()
+            .filter(|warehouse| warehouse.project_id == project_id)
+            .collect())
+    }
     async fn soft_delete_table(
         &self,
         ident: &TableIdent,
@@ -1006,6 +1029,28 @@ impl CatalogStore for MemoryCatalogStore {
         Ok(warehouses)
     }
 
+    async fn list_project_warehouses(
+        &self,
+        project_id: &str,
+    ) -> LakeCatResult<Vec<WarehouseRecord>> {
+        validate_project_id(project_id)?;
+        let state = self.state.read().await;
+        if !state.projects.contains_key(project_id) {
+            return Err(LakeCatError::NotFound {
+                object: "project",
+                name: project_id.to_string(),
+            });
+        }
+        let mut warehouses = state
+            .warehouses
+            .values()
+            .filter(|warehouse| warehouse.project_id == project_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        warehouses.sort_by(|left, right| left.warehouse.as_str().cmp(right.warehouse.as_str()));
+        Ok(warehouses)
+    }
+
     async fn soft_delete_table(
         &self,
         ident: &TableIdent,
@@ -1494,7 +1539,19 @@ mod memory_tests {
             Err(LakeCatError::NotFound { object, name })
                 if object == "warehouse" && name == "missing"
         ));
-        assert_eq!(store.list_warehouses().await.unwrap(), vec![updated]);
+        assert_eq!(
+            store.list_warehouses().await.unwrap(),
+            vec![updated.clone()]
+        );
+        assert_eq!(
+            store.list_project_warehouses("default").await.unwrap(),
+            vec![updated.clone()]
+        );
+        assert!(matches!(
+            store.list_project_warehouses("missing-project").await,
+            Err(LakeCatError::NotFound { object, name })
+                if object == "project" && name == "missing-project"
+        ));
 
         let missing_project = WarehouseRecord::new(
             WarehouseName::new("orphaned").unwrap(),
@@ -1694,7 +1751,7 @@ pub mod turso_store {
         CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, ProjectRecord, ServerRecord,
         SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord, ViewRecord,
         WarehouseRecord, policy_binding_key, policy_bindings_for_table, storage_profile_key,
-        storage_profile_match, table_key, view_key,
+        storage_profile_match, table_key, validate_project_id, view_key,
     };
 
     #[derive(Debug, Clone)]
@@ -2522,6 +2579,44 @@ pub mod turso_store {
             Ok(warehouses)
         }
 
+        async fn list_project_warehouses(
+            &self,
+            project_id: &str,
+        ) -> LakeCatResult<Vec<WarehouseRecord>> {
+            validate_project_id(project_id)?;
+            let conn = self.connect()?;
+            let project_exists = {
+                let mut rows = conn
+                    .query(
+                        "select 1 from projects where project_id = ?1 limit 1",
+                        (project_id,),
+                    )
+                    .await
+                    .map_err(turso_error)?;
+                rows.next().await.map_err(turso_error)?.is_some()
+            };
+            if !project_exists {
+                return Err(LakeCatError::NotFound {
+                    object: "project",
+                    name: project_id.to_string(),
+                });
+            }
+            let mut rows = conn
+                .query(
+                    "select record_json from warehouses
+                     where project_id = ?1
+                     order by warehouse",
+                    (project_id,),
+                )
+                .await
+                .map_err(turso_error)?;
+            let mut warehouses = Vec::new();
+            while let Some(row) = rows.next().await.map_err(turso_error)? {
+                warehouses.push(decode_json(row_string(&row, 0)?)?);
+            }
+            Ok(warehouses)
+        }
+
         async fn upsert_view(&self, view: ViewRecord) -> LakeCatResult<ViewRecord> {
             view.validate()?;
             let conn = self.connect()?;
@@ -3112,7 +3207,19 @@ pub mod turso_store {
                 Err(LakeCatError::NotFound { object, name })
                     if object == "warehouse" && name == "missing"
             ));
-            assert_eq!(store.list_warehouses().await.unwrap(), vec![updated]);
+            assert_eq!(
+                store.list_warehouses().await.unwrap(),
+                vec![updated.clone()]
+            );
+            assert_eq!(
+                store.list_project_warehouses("default").await.unwrap(),
+                vec![updated.clone()]
+            );
+            assert!(matches!(
+                store.list_project_warehouses("missing-project").await,
+                Err(LakeCatError::NotFound { object, name })
+                    if object == "project" && name == "missing-project"
+            ));
 
             let missing_project = WarehouseRecord::new(
                 WarehouseName::new("orphaned").unwrap(),

@@ -49,6 +49,8 @@ impl Default for CatalogConfigResponse {
                 "PUT /management/v1/servers/{server}".to_string(),
                 "GET /management/v1/projects".to_string(),
                 "PUT /management/v1/projects/{project}".to_string(),
+                "GET /management/v1/projects/{project}/warehouses".to_string(),
+                "PUT /management/v1/projects/{project}/warehouses/{warehouse}".to_string(),
                 "GET /management/v1/warehouses".to_string(),
                 "PUT /management/v1/warehouses/{warehouse}".to_string(),
                 "POST /management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/restore"
