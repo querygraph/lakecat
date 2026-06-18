@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Extended QGLake governed `fetchScanTasks` acceptance to follow every child
+  manifest plan-task token returned by manifest-list expansion, proving each
+  terminal manifest fetch remains governed.
 - Extended QGLake governed `fetchScanTasks` acceptance to fetch the child
   manifest plan-task token and verify terminal manifest expansion still returns
   governed data-file scan work under the table location.
