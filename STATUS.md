@@ -6,6 +6,26 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `47d1666 Expose QueryGraph import compatibility hash`.
+- Paused after pushing the QueryGraph import-compatibility slice. Bootstrap
+  manifests now carry a `querygraph-import` contract with a table-only bundle
+  hash matching the current QueryGraph Rust importer hash domain, the manifest
+  verifier recomputes that evidence, `/querygraph/v1/bootstrap` exposes it, and
+  QGLake rejects bootstrap bundles that drop the import contract.
+- Local verification for the pushed QueryGraph import-compatibility slice was
+  green:
+  `cargo fmt -p lakecat-querygraph -p lakecat-cli -p lakecat-service`;
+  `cargo test -p lakecat-querygraph`;
+  `cargo test -p lakecat-cli qglake_bootstrap`;
+  `cargo test -p lakecat-service querygraph_bootstrap_projects_catalog_tables`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service`;
+  `cargo fmt -p lakecat-querygraph -p lakecat-cli -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed QueryGraph import-compatibility slice.
+- Previous implementation slice:
   `88955ec Bind QGLake replay agent summary proofs`.
 - Paused after pushing the QGLake replay agent-summary proof slice. The QGLake
   agent-DID fixture mode now sends deterministic local delegation and
