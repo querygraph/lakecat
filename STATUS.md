@@ -6,6 +6,28 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `27af9ac Replay view loads into lineage`.
+- Paused after adding `view.loaded` outbox replay. Standard catalog view reads
+  now emit catalog-facing View graph events and LakeCat OpenLineage receipts,
+  alongside `view.upserted` and `view.dropped`, so view access through the
+  Iceberg-compatible catalog surface has replayable graph/lineage evidence. The
+  book now documents that view reads and management changes share the same
+  durable replay proof shape.
+- Local verification for the view-load replay slice was green:
+  `cargo fmt -p lakecat-lineage -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-service outbox_drain_projects_view_events_to_graph_and_lineage`;
+  `cargo test -p lakecat-lineage projects_control_plane_upserts_to_openlineage_outputs`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-lineage -p lakecat-service -p lakecat-cli -p lakecat-api -p lakecat-sail -- --check`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `f6ca1e0 Require QGLake view replay evidence`.
 - Paused after adding compact view replay identity to lineage-drain event
   summaries and tightening QGLake lineage-drain acceptance so every accepted
