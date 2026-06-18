@@ -996,14 +996,16 @@ fn lineage_drain_event_summary(
     let view_name = view
         .and_then(|view| view.get("name"))
         .and_then(Value::as_str)
+        .or_else(|| payload.get("view").and_then(Value::as_str))
         .map(str::to_string);
+    let view_name_ref = view_name.as_deref();
     let view_version = view
         .and_then(|view| view.get("view-version"))
         .and_then(Value::as_u64);
     let view_stable_id = match (
         view_warehouse.as_deref(),
         view_namespace.as_slice(),
-        view_name.as_deref(),
+        view_name_ref,
     ) {
         (Some(warehouse), namespace, Some(name)) if !namespace.is_empty() => Some(format!(
             "lakecat:view:{warehouse}:{}:{name}",
@@ -1011,6 +1013,32 @@ fn lineage_drain_event_summary(
         )),
         _ => None,
     };
+    let view_version_receipt_hashes = payload
+        .get("view-version-receipts")
+        .and_then(Value::as_array)
+        .map(|receipts| {
+            receipts
+                .iter()
+                .filter_map(|receipt| {
+                    receipt
+                        .get("receipt-hash")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
+                .collect()
+        })
+        .or_else(|| {
+            payload.get("drop-receipt-hashes").and_then(|hashes| {
+                hashes.as_array().map(|hashes| {
+                    hashes
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_string)
+                        .collect()
+                })
+            })
+        })
+        .unwrap_or_default();
     LineageDrainEventSummary {
         event_id: event.event_id.clone(),
         event_type: event.event_type.clone(),
@@ -1063,21 +1091,7 @@ fn lineage_drain_event_summary(
             .get("view-artifacts")
             .and_then(Value::as_array)
             .map_or(0, Vec::len),
-        view_version_receipt_hashes: payload
-            .get("view-version-receipts")
-            .and_then(Value::as_array)
-            .map(|receipts| {
-                receipts
-                    .iter()
-                    .filter_map(|receipt| {
-                        receipt
-                            .get("receipt-hash")
-                            .and_then(Value::as_str)
-                            .map(str::to_string)
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
+        view_version_receipt_hashes,
         view_warehouse,
         view_namespace,
         view_name,
@@ -2119,6 +2133,11 @@ async fn list_view_version_receipts(
         .iter()
         .map(view_version_receipt_response)
         .collect::<LakeCatResult<Vec<_>>>()?;
+    let drop_receipt_hashes = response_receipts
+        .iter()
+        .filter(|receipt| receipt.operation == "drop")
+        .map(|receipt| receipt.receipt_hash.clone())
+        .collect::<Vec<_>>();
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -2135,6 +2154,7 @@ async fn list_view_version_receipts(
                     .iter()
                     .map(|receipt| receipt.receipt_hash.clone())
                     .collect::<Vec<_>>(),
+                "drop-receipt-hashes": drop_receipt_hashes,
                 "authorization-receipt": capability.receipt(),
             }),
         )?)
@@ -3196,6 +3216,17 @@ async fn project_outbox_event(
             .lineage
             .emit(LineageEvent::new(
                 LineageEventType::ViewListed,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
+    } else if event.event_type == "view.version-receipts-listed" {
+        let lineage_receipt = state
+            .lineage
+            .emit(LineageEvent::new(
+                LineageEventType::ViewVersionReceiptsListed,
                 principal,
                 None,
                 event_payload,
@@ -6532,6 +6563,33 @@ mod tests {
                     created_at: chrono::Utc::now(),
                     delivered_at: None,
                 },
+                OutboxEvent {
+                    event_id: "evt-view-receipts".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "view.version-receipts-listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-view-receipts",
+                        "event-type": "view.version-receipts-listed",
+                        "payload": {
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "view": "events_view",
+                            "receipt-count": 2,
+                            "receipt-hashes": ["sha256:view-upsert-receipt", "sha256:view-drop-receipt"],
+                            "drop-receipt-hashes": ["sha256:view-drop-receipt"],
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "view-load",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            }
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
             ]),
             delivered: Mutex::default(),
         });
@@ -6546,28 +6604,30 @@ mod tests {
             );
 
         let drain = drain_outbox_once(&state, 10).await.unwrap();
-        assert_eq!(drain.delivered, 4);
+        assert_eq!(drain.delivered, 5);
         assert_eq!(
             drain.event_types,
             vec![
                 "view.listed".to_string(),
                 "view.upserted".to_string(),
                 "view.loaded".to_string(),
-                "view.dropped".to_string()
+                "view.dropped".to_string(),
+                "view.version-receipts-listed".to_string()
             ]
         );
-        assert_eq!(drain.graph_events, 8);
-        assert_eq!(drain.lineage_events, 4);
+        assert_eq!(drain.graph_events, 9);
+        assert_eq!(drain.lineage_events, 5);
         assert_eq!(
             store.delivered.lock().await.as_slice(),
             &[
                 "evt-view-list".to_string(),
                 "evt-view-upsert".to_string(),
                 "evt-view-load".to_string(),
-                "evt-view-drop".to_string()
+                "evt-view-drop".to_string(),
+                "evt-view-receipts".to_string()
             ]
         );
-        assert_eq!(drain.events.len(), 4);
+        assert_eq!(drain.events.len(), 5);
         assert_eq!(
             drain.events[1].view_stable_id.as_deref(),
             Some("lakecat:view:local:default:events_view")
@@ -6576,9 +6636,17 @@ mod tests {
         assert_eq!(drain.events[1].view_namespace, vec!["default"]);
         assert_eq!(drain.events[1].view_name.as_deref(), Some("events_view"));
         assert_eq!(drain.events[1].view_version, Some(1));
+        assert_eq!(
+            drain.events[4].view_stable_id.as_deref(),
+            Some("lakecat:view:local:default:events_view")
+        );
+        assert_eq!(
+            drain.events[4].view_version_receipt_hashes,
+            vec!["sha256:view-drop-receipt".to_string()]
+        );
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 8);
+        assert_eq!(graph_events.len(), 9);
         let view_events = graph_events
             .iter()
             .filter(|event| event.label == GraphNodeLabel::View)
@@ -6599,11 +6667,15 @@ mod tests {
         drop(graph_events);
 
         let lineage_events = lineage.events.lock().await;
-        assert_eq!(lineage_events.len(), 4);
+        assert_eq!(lineage_events.len(), 5);
         assert_eq!(lineage_events[0].event_type, LineageEventType::ViewListed);
         assert_eq!(lineage_events[1].event_type, LineageEventType::ViewUpserted);
         assert_eq!(lineage_events[2].event_type, LineageEventType::ViewLoaded);
         assert_eq!(lineage_events[3].event_type, LineageEventType::ViewDropped);
+        assert_eq!(
+            lineage_events[4].event_type,
+            LineageEventType::ViewVersionReceiptsListed
+        );
         assert_eq!(
             lineage_events[1].payload["view"]["name"],
             serde_json::json!("events_view")

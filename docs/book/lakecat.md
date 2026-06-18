@@ -903,7 +903,12 @@ compact receipt hashes:
 QGLake acceptance requires one non-empty receipt hash for each accepted view
 artifact. That keeps normal Iceberg view access standard, but gives the
 QueryGraph handoff a durable proof that the exported view version came from
-LakeCat's catalog spine.
+LakeCat's catalog spine. The fixture also exercises the deletion side of the
+same workflow: it creates a transient view, accepts a QueryGraph bootstrap that
+contains that view, drops the view, reads the receipt chain through the governed
+management endpoint, and then requires lineage-drain replay to include
+`view.dropped` plus `view.version-receipts-listed` evidence with a non-empty
+tombstone receipt hash.
 
 QueryGraph and operators can also read the compact receipt chain directly from
 the governed management surface:
@@ -941,6 +946,12 @@ The response is catalog evidence, not Iceberg table metadata. It lets
 QueryGraph verify the version chain, including tombstones after the current
 view row is gone, while keeping the richer view history model available for a
 future Sail-owned implementation.
+
+That tombstone read is replayable too. LakeCat projects
+`view.version-receipts-listed` as lineage evidence, not as graph topology. The
+graph taxonomy stays in Grust; LakeCat only proves that the governed read saw
+the tombstone receipt needed to explain why a previously accepted view is now
+deleted.
 
 ### QueryGraph Bootstrap
 

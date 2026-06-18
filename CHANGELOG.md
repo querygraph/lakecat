@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound QGLake lineage-drain acceptance to view tombstone receipt evidence by
+  replaying governed `view.version-receipts-listed` reads into lineage and
+  making the fixture create, bootstrap, drop, and receipt-check a transient
+  catalog view.
 - Recorded compact view drop/tombstone receipts in memory and Turso stores so
   governed receipt-chain reads preserve the last durable view version and
   content hash after the current view row has been deleted.

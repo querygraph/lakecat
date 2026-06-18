@@ -9,11 +9,12 @@ use lakecat_api::{
     CatalogConfigResponse, CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest,
     FetchScanTasksResponse, LineageDrainEventSummary, LineageDrainResponse, ListNamespacesResponse,
     ListPolicyBindingsResponse, ListProjectsResponse, ListServersResponse,
-    ListStorageProfilesResponse, ListWarehousesResponse, LoadCredentialsResponse,
-    LoadTableResponse, NamespaceResponse, PlanTableScanRequest, PlanTableScanResponse,
-    PolicyBindingResponse, ProjectResponse, ServerResponse, StorageProfileResponse,
-    TableIdentifier, UpsertPolicyBindingRequest, UpsertProjectRequest, UpsertServerRequest,
-    UpsertStorageProfileRequest, UpsertWarehouseRequest, WarehouseResponse,
+    ListStorageProfilesResponse, ListViewVersionReceiptsResponse, ListWarehousesResponse,
+    LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
+    PlanTableScanResponse, PolicyBindingResponse, ProjectResponse, ServerResponse,
+    StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest, UpsertProjectRequest,
+    UpsertServerRequest, UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest,
+    ViewResponse, WarehouseResponse,
 };
 use lakecat_core::content_hash_json;
 use lakecat_querygraph::{QueryGraphBootstrap, QueryGraphBootstrapVerification};
@@ -403,6 +404,33 @@ async fn post_json_or_conflict_with_identity<B: Serialize, T: DeserializeOwned>(
     })
 }
 
+async fn delete_with_identity(
+    catalog: &str,
+    path: &str,
+    principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let endpoint = format!("{}{}", catalog.trim_end_matches('/'), path);
+    let client = reqwest::Client::new();
+    let mut request = client.delete(endpoint);
+    request = identity_mode.apply(request, principal);
+    let response = request.send().await.map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!("failed to request {label}: {err}"))
+    })?;
+    let status = response.status();
+    let body = response.bytes().await.map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!("failed to read {label} response: {err}"))
+    })?;
+    if !status.is_success() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} failed with HTTP {status}: {}",
+            String::from_utf8_lossy(&body)
+        )));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy)]
 enum RequestIdentityMode {
     Principal,
@@ -591,10 +619,31 @@ async fn qglake_fixture(
     verify_qglake_credentials_blocked(&catalog, &namespace_path, &table, principal, identity_mode)
         .await?;
     verify_qglake_trusted_human_credentials(&catalog, &namespace_path, &table, &location).await?;
+    let view = "active_customers_view";
+    ensure_qglake_transient_view(
+        &catalog,
+        &warehouse,
+        &namespace_path,
+        &namespace,
+        view,
+        &table,
+        principal,
+        identity_mode,
+    )
+    .await?;
     let (bundle, verification) =
         fetch_bootstrap_bundle_with_identity(&catalog, principal, identity_mode).await?;
     verify_qglake_bootstrap_bundle(&bundle, &namespace, &table)?;
     write_bootstrap_bundle(&output, &bundle, &verification)?;
+    drop_qglake_transient_view(
+        &catalog,
+        &warehouse,
+        &namespace_path,
+        view,
+        principal,
+        identity_mode,
+    )
+    .await?;
     let drain = drain_lineage_outbox_with_identity(&catalog, principal, identity_mode).await?;
     verify_qglake_lineage_drain(
         &drain,
@@ -682,6 +731,110 @@ async fn ensure_qglake_table(
     )
     .await?;
     verify_qglake_existing_table(&response, namespace, table, metadata_location)
+}
+
+async fn ensure_qglake_transient_view(
+    catalog: &str,
+    warehouse: &str,
+    namespace_path: &str,
+    namespace: &[String],
+    view: &str,
+    table: &str,
+    principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
+) -> lakecat_core::LakeCatResult<()> {
+    let response = put_json_with_identity::<_, ViewResponse>(
+        catalog,
+        &format!("/management/v1/warehouses/{warehouse}/namespaces/{namespace_path}/views/{view}"),
+        principal,
+        identity_mode,
+        "transient view upsert",
+        &UpsertViewRequest {
+            sql: format!(
+                "select event_id from {}.{} where event_type = 'purchase'",
+                namespace.join("."),
+                table
+            ),
+            dialect: "spark-sql".to_string(),
+            schema_version: Some(1),
+            columns: vec![lakecat_api::ViewColumnRequest {
+                name: "event_id".to_string(),
+                data_type: json!({"type": "long"}),
+                nullable: false,
+                comment: Some("Projected event identifier".to_string()),
+            }],
+            properties: BTreeMap::from([("lakecat.fixture".to_string(), "qglake".to_string())]),
+        },
+    )
+    .await?;
+    if response.name != view || response.namespace != namespace {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake transient view response did not match fixture target: {} {:?}",
+            response.name, response.namespace
+        )));
+    }
+    if response.view_version == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake transient view expected a durable nonzero view version, got {}",
+            response.view_version
+        )));
+    }
+    Ok(())
+}
+
+async fn drop_qglake_transient_view(
+    catalog: &str,
+    warehouse: &str,
+    namespace_path: &str,
+    view: &str,
+    principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
+) -> lakecat_core::LakeCatResult<()> {
+    delete_with_identity(
+        catalog,
+        &format!("/management/v1/warehouses/{warehouse}/namespaces/{namespace_path}/views/{view}"),
+        principal,
+        identity_mode,
+        "transient view drop",
+    )
+    .await?;
+    let receipts = get_json_with_identity::<ListViewVersionReceiptsResponse>(
+        catalog,
+        &format!(
+            "/management/v1/warehouses/{warehouse}/namespaces/{namespace_path}/views/{view}/version-receipts"
+        ),
+        principal,
+        identity_mode,
+        "transient view receipt list",
+    )
+    .await?;
+    verify_qglake_transient_view_tombstone_receipts(&receipts, view)
+}
+
+fn verify_qglake_transient_view_tombstone_receipts(
+    receipts: &ListViewVersionReceiptsResponse,
+    view: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let Some(drop_receipt) = receipts
+        .receipts
+        .iter()
+        .find(|receipt| receipt.name == view && receipt.operation == "drop")
+    else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake transient view {view} did not expose a drop tombstone receipt"
+        )));
+    };
+    if drop_receipt.receipt_hash.is_empty() || drop_receipt.view_hash.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake transient view {view} tombstone receipt is missing hashes"
+        )));
+    }
+    if drop_receipt.previous_view_version != Some(drop_receipt.view_version) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake transient view {view} tombstone receipt did not preserve the deleted view version"
+        )));
+    }
+    Ok(())
 }
 
 fn namespace_list_contains(response: &ListNamespacesResponse, namespace: &[String]) -> bool {
@@ -2009,6 +2162,29 @@ fn verify_qglake_view_replay(
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "qglake lineage drain view replay for {view_stable_id} is missing compact identity or receipt hashes"
             )));
+        }
+        if drain.events.iter().any(|event| {
+            event.event_type == "view.dropped"
+                && event.view_stable_id.as_deref() == Some(view_stable_id.as_str())
+        }) {
+            let Some(tombstone_receipts) = drain.events.iter().find(|event| {
+                event.event_type == "view.version-receipts-listed"
+                    && event.view_stable_id.as_deref() == Some(view_stable_id.as_str())
+                    && !event.view_version_receipt_hashes.is_empty()
+                    && event
+                        .view_version_receipt_hashes
+                        .iter()
+                        .all(|hash| !hash.is_empty())
+            }) else {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "qglake lineage drain view drop replay for {view_stable_id} is missing tombstone receipt evidence"
+                )));
+            };
+            if tombstone_receipts.lineage_events == 0 {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "qglake lineage drain tombstone receipt replay for {view_stable_id} emitted no lineage projection"
+                )));
+            }
         }
     }
     Ok(())
@@ -5902,6 +6078,93 @@ mod tests {
                 .contains("qglake lineage drain did not replay server list evidence")
         );
 
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 10,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 11,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require tombstone receipt evidence for dropped accepted views");
+        assert!(err.to_string().contains(
+            "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing tombstone receipt evidence"
+        ));
+
+        verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 11,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 12,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect("QGLake lineage drain should accept dropped view evidence with tombstone receipts");
+
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 9,
@@ -6093,6 +6356,29 @@ mod tests {
             replay_event_hashes: vec!["sha256:view-replay-event".to_string()],
             replay_open_lineage_hashes: vec!["sha256:view-replay-openlineage".to_string()],
         }
+    }
+
+    fn qglake_view_drop_lineage_summary() -> LineageDrainEventSummary {
+        let mut summary = qglake_view_lineage_summary();
+        summary.event_id = "evt-view-drop".to_string();
+        summary.event_type = "view.dropped".to_string();
+        summary.replay_event_hashes = vec!["sha256:view-drop-replay-event".to_string()];
+        summary.replay_open_lineage_hashes =
+            vec!["sha256:view-drop-replay-openlineage".to_string()];
+        summary
+    }
+
+    fn qglake_view_tombstone_receipt_lineage_summary() -> LineageDrainEventSummary {
+        let mut summary = qglake_view_lineage_summary();
+        summary.event_id = "evt-view-receipts".to_string();
+        summary.event_type = "view.version-receipts-listed".to_string();
+        summary.graph_events = 0;
+        summary.lineage_events = 1;
+        summary.view_version_receipt_hashes = vec!["sha256:view-drop-receipt".to_string()];
+        summary.replay_event_hashes = vec!["sha256:view-receipts-replay-event".to_string()];
+        summary.replay_open_lineage_hashes =
+            vec!["sha256:view-receipts-replay-openlineage".to_string()];
+        summary
     }
 
     fn qglake_policy_list_lineage_summary() -> LineageDrainEventSummary {

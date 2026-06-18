@@ -62,6 +62,7 @@ pub enum LineageEventType {
     ViewDropped,
     ViewLoaded,
     ViewListed,
+    ViewVersionReceiptsListed,
     ViewUpserted,
     WarehouseListed,
     WarehouseUpserted,
@@ -321,8 +322,12 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
         LineageEventType::ViewDropped
         | LineageEventType::ViewLoaded
         | LineageEventType::ViewListed
+        | LineageEventType::ViewVersionReceiptsListed
         | LineageEventType::ViewUpserted => vec![json!({
-            "namespace": if event.event_type == LineageEventType::ViewListed {
+            "namespace": if matches!(
+                event.event_type,
+                LineageEventType::ViewListed | LineageEventType::ViewVersionReceiptsListed
+            ) {
                 "lakecat.view-list"
             } else {
                 "lakecat.view"
@@ -434,6 +439,9 @@ fn view_lineage_output_name(event: &LineageEvent) -> String {
     if let Some(name) = event.payload.pointer("/view/name").and_then(Value::as_str) {
         return name.to_string();
     }
+    if let Some(name) = event.payload.get("view").and_then(Value::as_str) {
+        return name.to_string();
+    }
     match event.payload.get("namespace") {
         Some(Value::Array(parts)) => parts
             .iter()
@@ -469,6 +477,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::ViewDropped => "view-dropped",
         LineageEventType::ViewLoaded => "view-loaded",
         LineageEventType::ViewListed => "view-listed",
+        LineageEventType::ViewVersionReceiptsListed => "view-version-receipts-listed",
         LineageEventType::ViewUpserted => "view-upserted",
         LineageEventType::WarehouseListed => "warehouse-listed",
         LineageEventType::WarehouseUpserted => "warehouse-upserted",
