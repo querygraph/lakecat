@@ -45,6 +45,53 @@ Treat the guidance in `AGENTS.md` as part of this goal, not as separate
 session-only advice. Keep this file and `AGENTS.md` aligned when the operating
 model changes.
 
+The current `AGENTS.md` guidance is a permanent goal constraint:
+
+- LakeCat is the Rust Iceberg-compatible catalog foundation for QueryGraph.
+  Keep the catalog boundary thin: identity, tenancy, Iceberg REST
+  compatibility, metadata-pointer state, policy gates, and integration events
+  belong here.
+- Push Iceberg format, manifest, scan-planning, pruning, delete handling,
+  metadata-as-data, and engine work into Sail (`/Users/alexy/src/sail`)
+  whenever it can be reusable. LakeCat should prefer Sail APIs and generated
+  Iceberg REST models over local reimplementation.
+- Push graph schema, graph taxonomy, projection logic, graph stores, traversal,
+  and graph query behavior into Grust (`/Users/alexy/src/grust`). LakeCat
+  should keep only catalog-facing graph sink/projection boundaries and call
+  Grust APIs.
+- Push governance, policy composition, capabilities, TypeDID envelopes, secure
+  agents, and authorization semantics into TypeSec
+  (`/Users/alexy/src/typesec`). LakeCat should ask TypeSec for decisions and
+  proofs, then persist receipts.
+- Treat QueryGraph (`/Users/alexy/src/querygraph`) as the end-to-end
+  integration target. LakeCat changes should naturally support QueryGraph
+  bootstrap, Croissant/CDIF/OSI/ODRL/OpenLineage projection, and the QGLake
+  acceptance flow.
+- Do not fork Iceberg semantics or make standard clients depend on
+  non-standard endpoints for normal table access. Keep Iceberg metadata
+  pristine; business semantics, policy, graph, lineage, and agent state are
+  derived control-plane or graph data, not required custom Iceberg metadata.
+- For v4 work, prefer typed Sail support when available. JSON passthrough is an
+  explicit compatibility bridge, not the long-term implementation.
+- Raw credential vending must be a deliberate, audited exception. Governed
+  Sail-planned reads are the default path for agents and untrusted principals.
+- Use the existing trait seams: `CatalogStore`, `SailCatalogEngine`,
+  `GovernanceEngine`, `CatalogGraphSink`, and `LineageSink`.
+- Keep defaults safe for embedded tests. Wire real integrations through
+  explicit features such as `sail-local`, `typesec-local`, `grust-local`, and
+  `turso-local`.
+- Side effects to graph and lineage should move toward a transactional outbox
+  so catalog state changes are not lost or blocked by external sinks.
+- Prefer the Rust `turso` crate for LakeCat's durable local catalog spine.
+  Keep the store contract portable, but do not reintroduce SQLx/SQLite unless
+  explicitly asked for that backend.
+- Check in after each logical unit of work. Before committing, add or update
+  `CHANGELOG.md` with a concise description of that unit, then stage only the
+  files that belong to the unit.
+- For LakeCat changes, prefer the local verification gates listed below, and
+  run focused sibling-repo tests separately when changes touch Sail, Grust,
+  TypeSec, or QueryGraph.
+
 - LakeCat is the Rust Iceberg-compatible catalog foundation for QueryGraph.
   Keep its boundary thin: identity, tenancy, Iceberg REST compatibility,
   metadata-pointer state, policy gates, and integration events belong here.

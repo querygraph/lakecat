@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Mirrored the current `AGENTS.md` operating contract into `GOAL.md` as a
+  permanent goal constraint, including sibling-repo placement, compatibility,
+  Turso, feature-gate, outbox, and commit-discipline guidance.
 - Added a namespace-level governed `view-version-receipt-chains` read that
   groups active and tombstoned view receipt chains for QueryGraph/operators and
   replays the read as compact lineage evidence.
