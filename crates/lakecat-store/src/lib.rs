@@ -155,6 +155,14 @@ pub trait CatalogStore: Send + Sync + 'static {
         view.validate()?;
         Ok(view)
     }
+    async fn list_view_version_receipts(
+        &self,
+        _warehouse: &WarehouseName,
+        _namespace: &Namespace,
+        _view: &TableName,
+    ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
+        Ok(Vec::new())
+    }
     async fn load_view(
         &self,
         warehouse: &WarehouseName,
@@ -539,6 +547,51 @@ fn default_view_version() -> u64 {
     1
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ViewVersionOperation {
+    Upsert,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ViewVersionReceipt {
+    pub stable_id: String,
+    pub warehouse: WarehouseName,
+    pub namespace: Namespace,
+    pub name: TableName,
+    pub view_version: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_view_version: Option<u64>,
+    pub operation: ViewVersionOperation,
+    pub view_hash: String,
+    pub principal: Principal,
+    pub recorded_at: DateTime<Utc>,
+}
+
+impl ViewVersionReceipt {
+    fn upsert(
+        previous: Option<&ViewRecord>,
+        view: &ViewRecord,
+        principal: Principal,
+    ) -> LakeCatResult<Self> {
+        Ok(Self {
+            stable_id: view_stable_id(view),
+            warehouse: view.warehouse.clone(),
+            namespace: view.namespace.clone(),
+            name: view.name.clone(),
+            view_version: view.view_version,
+            previous_view_version: previous.map(|previous| previous.view_version),
+            operation: ViewVersionOperation::Upsert,
+            view_hash: content_hash_json(&serde_json::to_value(view).map_err(|err| {
+                LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
+            })?)?,
+            principal,
+            recorded_at: Utc::now(),
+        })
+    }
+}
+
 impl ViewColumnRecord {
     pub fn validate(&self) -> LakeCatResult<()> {
         if self.name.trim().is_empty() {
@@ -890,6 +943,7 @@ struct MemoryState {
     idempotency: BTreeMap<String, IdempotencyReplay>,
     storage_profiles: BTreeMap<String, StorageProfile>,
     views: BTreeMap<String, ViewRecord>,
+    view_version_receipts: Vec<ViewVersionReceipt>,
     policy_bindings: BTreeMap<String, PolicyBinding>,
     soft_deletes: BTreeMap<String, SoftDeleteRecord>,
 }
@@ -1335,10 +1389,32 @@ impl CatalogStore for MemoryCatalogStore {
         view.validate()?;
         let mut state = self.state.write().await;
         let view_key = view_key(&view);
+        let principal = view.created.principal.clone();
         let previous = state.views.get(&view_key);
         let view = view.with_next_version(previous)?;
+        let receipt = ViewVersionReceipt::upsert(previous, &view, principal)?;
         state.views.insert(view_key, view.clone());
+        state.view_version_receipts.push(receipt);
         Ok(view)
+    }
+
+    async fn list_view_version_receipts(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+        view: &TableName,
+    ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
+        let state = self.state.read().await;
+        Ok(state
+            .view_version_receipts
+            .iter()
+            .filter(|receipt| {
+                receipt.warehouse == *warehouse
+                    && receipt.namespace == *namespace
+                    && receipt.name == *view
+            })
+            .cloned()
+            .collect())
     }
 
     async fn load_view(
@@ -1502,6 +1578,13 @@ fn table_key(ident: &TableIdent) -> String {
 
 fn view_key(view: &ViewRecord) -> String {
     view_key_parts(&view.warehouse, &view.namespace, &view.name)
+}
+
+fn view_stable_id(view: &ViewRecord) -> String {
+    format!(
+        "lakecat:view:{}:{}:{}",
+        view.warehouse, view.namespace, view.name
+    )
 }
 
 fn view_key_parts(warehouse: &WarehouseName, namespace: &Namespace, name: &TableName) -> String {
@@ -2010,6 +2093,26 @@ mod memory_tests {
         .unwrap();
         let updated = store.upsert_view(updated).await.unwrap();
         assert_eq!(updated.view_version, 2);
+        let receipts = store
+            .list_view_version_receipts(
+                &warehouse,
+                &namespace,
+                &TableName::new("active_customers").unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(receipts.len(), 2);
+        assert_eq!(
+            receipts[0].stable_id,
+            "lakecat:view:local:default:active_customers"
+        );
+        assert_eq!(receipts[0].view_version, 1);
+        assert_eq!(receipts[0].previous_view_version, None);
+        assert_eq!(receipts[0].operation, ViewVersionOperation::Upsert);
+        assert!(!receipts[0].view_hash.is_empty());
+        assert_eq!(receipts[1].view_version, 2);
+        assert_eq!(receipts[1].previous_view_version, Some(1));
+        assert_ne!(receipts[0].view_hash, receipts[1].view_hash);
 
         assert_eq!(
             store
@@ -2146,9 +2249,9 @@ pub mod turso_store {
     use crate::{
         CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, ProjectRecord, ServerRecord,
         SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord, ViewRecord,
-        WarehouseRecord, namespace_not_empty, namespace_not_found, policy_binding_key,
-        policy_bindings_for_table, storage_profile_key, storage_profile_match, table_key,
-        validate_project_id, view_key, view_key_parts,
+        ViewVersionReceipt, WarehouseRecord, namespace_not_empty, namespace_not_found,
+        policy_binding_key, policy_bindings_for_table, storage_profile_key, storage_profile_match,
+        table_key, validate_project_id, view_key, view_key_parts,
     };
 
     #[derive(Debug, Clone)]
@@ -3076,9 +3179,11 @@ pub mod turso_store {
 
         async fn upsert_view(&self, view: ViewRecord) -> LakeCatResult<ViewRecord> {
             view.validate()?;
-            let conn = self.connect()?;
+            let mut conn = self.connect()?;
+            let tx = conn.transaction().await.map_err(turso_error)?;
             let view_key = view_key(&view);
-            let previous = conn
+            let principal = view.created.principal.clone();
+            let previous = tx
                 .query(
                     "select record_json from views
                      where view_key = ?1
@@ -3093,7 +3198,7 @@ pub mod turso_store {
                 .map(|row| decode_json::<ViewRecord>(row_string(&row, 0)?))
                 .transpose()?;
             let view = view.with_next_version(previous.as_ref())?;
-            conn.execute(
+            tx.execute(
                 "insert into views (
                     view_key, warehouse, namespace_path, view_name, dialect, record_json, updated_at
                  )
@@ -3114,7 +3219,65 @@ pub mod turso_store {
             )
             .await
             .map_err(turso_error)?;
+            let receipt = ViewVersionReceipt::upsert(previous.as_ref(), &view, principal)?;
+            let receipt_id =
+                content_hash_json(&serde_json::to_value(&receipt).map_err(|err| {
+                    LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
+                })?)?;
+            let previous_view_version = receipt
+                .previous_view_version
+                .map(|version| checked_i64(version, "previous view version"))
+                .transpose()?;
+            tx.execute(
+                "insert into view_version_receipts (
+                    receipt_id, view_key, warehouse, namespace_path, view_name,
+                    view_version, previous_view_version, operation, view_hash,
+                    principal_json, receipt_json, recorded_at
+                 )
+                 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                (
+                    receipt_id.as_str(),
+                    view_key.as_str(),
+                    receipt.warehouse.as_str(),
+                    receipt.namespace.path().as_str(),
+                    receipt.name.as_str(),
+                    checked_i64(receipt.view_version, "view version")?,
+                    previous_view_version,
+                    "upsert",
+                    receipt.view_hash.as_str(),
+                    encode_json(&receipt.principal)?,
+                    encode_json(&receipt)?,
+                    receipt.recorded_at.to_rfc3339(),
+                ),
+            )
+            .await
+            .map_err(turso_error)?;
+            tx.commit().await.map_err(turso_error)?;
             Ok(view)
+        }
+
+        async fn list_view_version_receipts(
+            &self,
+            warehouse: &WarehouseName,
+            namespace: &Namespace,
+            view: &TableName,
+        ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
+            let conn = self.connect()?;
+            let view_key = view_key_parts(warehouse, namespace, view);
+            let mut rows = conn
+                .query(
+                    "select receipt_json from view_version_receipts
+                     where view_key = ?1
+                     order by view_version, recorded_at, receipt_id",
+                    (view_key.as_str(),),
+                )
+                .await
+                .map_err(turso_error)?;
+            let mut receipts = Vec::new();
+            while let Some(row) = rows.next().await.map_err(turso_error)? {
+                receipts.push(decode_json(row_string(&row, 0)?)?);
+            }
+            Ok(receipts)
         }
 
         async fn load_view(
@@ -3509,6 +3672,22 @@ pub mod turso_store {
         )",
         "create index if not exists idx_views_warehouse_namespace
             on views (warehouse, namespace_path, view_name)",
+        "create table if not exists view_version_receipts (
+            receipt_id text primary key,
+            view_key text not null,
+            warehouse text not null,
+            namespace_path text not null,
+            view_name text not null,
+            view_version integer not null,
+            previous_view_version integer,
+            operation text not null,
+            view_hash text not null,
+            principal_json text not null,
+            receipt_json text not null,
+            recorded_at text not null
+        )",
+        "create index if not exists idx_view_version_receipts_view
+            on view_version_receipts (view_key, view_version)",
         "create table if not exists policy_bindings (
             policy_key text primary key,
             policy_id text not null,
@@ -3676,7 +3855,7 @@ pub mod turso_store {
 
         use crate::{
             CredentialIssuanceMode, PolicyBinding, ServerRecord, StorageProvider, ViewColumnRecord,
-            ViewRecord,
+            ViewRecord, ViewVersionOperation,
         };
 
         use super::*;
@@ -3880,6 +4059,26 @@ pub mod turso_store {
             .unwrap();
             let updated = store.upsert_view(updated).await.unwrap();
             assert_eq!(updated.view_version, 2);
+            let receipts = store
+                .list_view_version_receipts(
+                    &warehouse,
+                    &namespace,
+                    &TableName::new("active_customers").unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(receipts.len(), 2);
+            assert_eq!(
+                receipts[0].stable_id,
+                "lakecat:view:local:default:active_customers"
+            );
+            assert_eq!(receipts[0].view_version, 1);
+            assert_eq!(receipts[0].previous_view_version, None);
+            assert_eq!(receipts[0].operation, ViewVersionOperation::Upsert);
+            assert!(!receipts[0].view_hash.is_empty());
+            assert_eq!(receipts[1].view_version, 2);
+            assert_eq!(receipts[1].previous_view_version, Some(1));
+            assert_ne!(receipts[0].view_hash, receipts[1].view_hash);
 
             assert_eq!(
                 store

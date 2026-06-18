@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Persisted compact view-version receipts in memory and Turso stores, exposed
+  matching receipt hashes through QueryGraph bootstrap replay summaries, and
+  required QGLake view-bearing replay to preserve those receipt hashes.
 - Added compact `view-version` replay evidence to lineage-drain event
   summaries and made QGLake view replay acceptance compare it with the accepted
   QueryGraph bootstrap view artifact version.

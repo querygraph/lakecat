@@ -391,6 +391,8 @@ pub struct LineageDrainEventSummary {
     pub table_artifact_count: usize,
     #[serde(default)]
     pub view_artifact_count: usize,
+    #[serde(default)]
+    pub view_version_receipt_hashes: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view_warehouse: Option<String>,
     #[serde(default)]

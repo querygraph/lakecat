@@ -854,8 +854,10 @@ compact view replay identity:
 That `view-version` is assigned by the durable store on each upsert, not by the
 caller. It is the first compatibility bridge toward Iceberg view commit history:
 QueryGraph can compare a bootstrap view artifact with the catalog's current
-view version today, while fuller version-log semantics remain a Sail-aligned
-implementation target.
+view version today. LakeCat also writes a compact view-version receipt in the
+durable store. The receipt records the stable view id, assigned version,
+previous version, content hash, principal, operation, and timestamp. Fuller
+version-log semantics remain a Sail-aligned implementation target.
 
 ```json
 {
@@ -882,6 +884,22 @@ the accepted QueryGraph bootstrap view artifacts. That closes a small but
 important gap: the bootstrap bundle may say a view was exported, and the drain
 evidence can now prove the corresponding view catalog event was replayed at the
 same durable catalog version with graph and lineage receipts.
+
+When QueryGraph bootstrap is replayed through the outbox, LakeCat includes only
+compact receipt hashes:
+
+```json
+{
+  "event-type": "querygraph.bootstrap",
+  "view-artifact-count": 1,
+  "view-version-receipt-hashes": ["sha256:..."]
+}
+```
+
+QGLake acceptance requires one non-empty receipt hash for each accepted view
+artifact. That keeps normal Iceberg view access standard, but gives the
+QueryGraph handoff a durable proof that the exported view version came from
+LakeCat's catalog spine.
 
 ### QueryGraph Bootstrap
 

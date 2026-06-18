@@ -1057,6 +1057,21 @@ fn lineage_drain_event_summary(
             .get("view-artifacts")
             .and_then(Value::as_array)
             .map_or(0, Vec::len),
+        view_version_receipt_hashes: payload
+            .get("view-version-receipts")
+            .and_then(Value::as_array)
+            .map(|receipts| {
+                receipts
+                    .iter()
+                    .filter_map(|receipt| {
+                        receipt
+                            .get("receipt-hash")
+                            .and_then(Value::as_str)
+                            .map(str::to_string)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
         view_warehouse,
         view_namespace,
         view_name,
@@ -2846,6 +2861,7 @@ async fn querygraph_bootstrap(
     for namespace in namespaces {
         views.extend(state.store.list_views(&state.warehouse, &namespace).await?);
     }
+    let view_version_receipts = querygraph_view_version_receipts(&state, &views).await?;
     let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
         state.warehouse.clone(),
         table_policy_bindings,
@@ -2867,6 +2883,8 @@ async fn querygraph_bootstrap(
                 "policy-binding-count": policy_binding_count,
                 "verified-tables": verification.verified_tables,
                 "verified-views": verification.verified_views,
+                "verified-view-versions": verification.verified_view_versions,
+                "view-version-receipts": view_version_receipts,
                 "bundle-hash": verification.bundle_hash,
                 "graph-hash": verification.graph_hash,
                 "open-lineage-hash": verification.open_lineage_hash,
@@ -2878,6 +2896,35 @@ async fn querygraph_bootstrap(
         )?)
         .await?;
     Ok(Json(bundle))
+}
+
+async fn querygraph_view_version_receipts(
+    state: &LakeCatState,
+    views: &[ViewRecord],
+) -> LakeCatResult<Vec<Value>> {
+    let mut receipts = Vec::new();
+    for view in views {
+        let version_receipts = state
+            .store
+            .list_view_version_receipts(&view.warehouse, &view.namespace, &view.name)
+            .await?;
+        if let Some(receipt) = version_receipts
+            .iter()
+            .rev()
+            .find(|receipt| receipt.view_version == view.view_version)
+        {
+            let receipt_hash =
+                content_hash_json(&serde_json::to_value(receipt).map_err(|err| {
+                    LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
+                })?)?;
+            receipts.push(json!({
+                "stable-id": receipt.stable_id,
+                "view-version": receipt.view_version,
+                "receipt-hash": receipt_hash,
+            }));
+        }
+    }
+    Ok(receipts)
 }
 
 async fn drain_lineage_outbox(
@@ -6671,6 +6718,11 @@ mod tests {
                             "stable-id": "lakecat:view:local:default:active_customers",
                             "osi-hash": "sha256:view-osi"
                         }],
+                        "view-version-receipts": [{
+                            "stable-id": "lakecat:view:local:default:active_customers",
+                            "view-version": 1,
+                            "receipt-hash": "sha256:view-version-receipt"
+                        }],
                         "standards": ["OpenLineage", "Grust catalog graph"]
                     }
                 }),
@@ -6789,6 +6841,10 @@ mod tests {
         assert_eq!(
             payload["events"][0]["view-artifact-count"],
             serde_json::json!(1)
+        );
+        assert_eq!(
+            payload["events"][0]["view-version-receipt-hashes"],
+            serde_json::json!(["sha256:view-version-receipt"])
         );
         assert_eq!(
             payload["events"][0]["policy-binding-count"],
