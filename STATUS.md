@@ -6,6 +6,22 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `5147cfb Verify QGLake OpenLineage job output`.
+- Paused after pushing the QGLake OpenLineage job/output proof slice. The
+  `lakecat-cli qglake-fixture` bootstrap verifier now rejects QueryGraph
+  bundles whose OpenLineage event is not COMPLETE, whose job identity is not
+  the LakeCat QueryGraph bootstrap job, or whose output data-source URI does
+  not match the exported table location.
+- Local verification for the pushed QGLake OpenLineage job/output proof slice
+  was green:
+  `cargo fmt -p lakecat-cli -p lakecat-querygraph -- --check`;
+  `cargo test -p lakecat-cli qglake_bootstrap`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-querygraph`;
+  `git diff --check`.
+- This status commit records the pushed QGLake OpenLineage job/output proof
+  slice.
+- Previous implementation slice:
   `5dc9884 Verify QGLake OpenLineage envelope`.
 - Paused after pushing the QGLake OpenLineage envelope proof slice. The
   `lakecat-cli qglake-fixture` bootstrap verifier now rejects QueryGraph
