@@ -977,6 +977,31 @@ fn lineage_drain_event_summary(
     receipt: &OutboxProjectionReceipt,
 ) -> LineageDrainEventSummary {
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
+    let view = payload.get("view");
+    let view_warehouse = view
+        .and_then(|view| view.get("warehouse"))
+        .or_else(|| payload.get("warehouse"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let view_namespace = namespace_summary_parts(
+        view.and_then(|view| view.get("namespace"))
+            .or_else(|| payload.get("namespace")),
+    );
+    let view_name = view
+        .and_then(|view| view.get("name"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let view_stable_id = match (
+        view_warehouse.as_deref(),
+        view_namespace.as_slice(),
+        view_name.as_deref(),
+    ) {
+        (Some(warehouse), namespace, Some(name)) if !namespace.is_empty() => Some(format!(
+            "lakecat:view:{warehouse}:{}:{name}",
+            namespace.join(".")
+        )),
+        _ => None,
+    };
     LineageDrainEventSummary {
         event_id: event.event_id.clone(),
         event_type: event.event_type.clone(),
@@ -1029,6 +1054,10 @@ fn lineage_drain_event_summary(
             .get("view-artifacts")
             .and_then(Value::as_array)
             .map_or(0, Vec::len),
+        view_warehouse,
+        view_namespace,
+        view_name,
+        view_stable_id,
         policy_binding_count: payload
             .get("policy-binding-count")
             .and_then(Value::as_u64)
@@ -1062,6 +1091,18 @@ fn lineage_drain_event_summary(
             .map(str::to_string),
         replay_event_hashes: receipt.lineage_event_hashes.clone(),
         replay_open_lineage_hashes: receipt.open_lineage_hashes.clone(),
+    }
+}
+
+fn namespace_summary_parts(value: Option<&Value>) -> Vec<String> {
+    match value {
+        Some(Value::Array(parts)) => parts
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect(),
+        Some(Value::String(path)) => path.split('.').map(str::to_string).collect(),
+        _ => Vec::new(),
     }
 }
 
@@ -5703,6 +5744,14 @@ mod tests {
             store.delivered.lock().await.as_slice(),
             &["evt-view-upsert".to_string(), "evt-view-drop".to_string()]
         );
+        assert_eq!(drain.events.len(), 2);
+        assert_eq!(
+            drain.events[0].view_stable_id.as_deref(),
+            Some("lakecat:view:local:default:events_view")
+        );
+        assert_eq!(drain.events[0].view_warehouse.as_deref(), Some("local"));
+        assert_eq!(drain.events[0].view_namespace, vec!["default"]);
+        assert_eq!(drain.events[0].view_name.as_deref(), Some("events_view"));
 
         let graph_events = graph.events.lock().await;
         assert_eq!(graph_events.len(), 4);

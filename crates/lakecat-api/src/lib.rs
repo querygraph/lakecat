@@ -390,6 +390,14 @@ pub struct LineageDrainEventSummary {
     pub table_artifact_count: usize,
     #[serde(default)]
     pub view_artifact_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view_warehouse: Option<String>,
+    #[serde(default)]
+    pub view_namespace: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view_stable_id: Option<String>,
     #[serde(default)]
     pub policy_binding_count: usize,
     #[serde(default)]

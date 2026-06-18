@@ -1756,7 +1756,48 @@ fn verify_qglake_lineage_drain(
             "qglake lineage drain replay evidence is missing sink receipt hashes".to_string(),
         ));
     }
+    verify_qglake_view_replay(drain, verification)?;
     verify_qglake_credential_replay(drain, principal)?;
+    Ok(())
+}
+
+fn verify_qglake_view_replay(
+    drain: &LineageDrainResponse,
+    verification: &QueryGraphBootstrapVerification,
+) -> lakecat_core::LakeCatResult<()> {
+    for view_stable_id in &verification.verified_views {
+        let Some(view_replay) = drain.events.iter().find(|event| {
+            matches!(event.event_type.as_str(), "view.upserted" | "view.dropped")
+                && event.view_stable_id.as_deref() == Some(view_stable_id.as_str())
+        }) else {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain did not replay view evidence for {view_stable_id}"
+            )));
+        };
+        if view_replay.graph_events == 0 || view_replay.lineage_events == 0 {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain view replay for {view_stable_id} did not emit graph and lineage projections"
+            )));
+        }
+        if view_replay
+            .view_warehouse
+            .as_deref()
+            .map_or(true, str::is_empty)
+            || view_replay.view_namespace.is_empty()
+            || view_replay.view_name.as_deref().map_or(true, str::is_empty)
+            || view_replay.replay_event_hashes.is_empty()
+            || view_replay.replay_event_hashes.iter().any(String::is_empty)
+            || view_replay.replay_open_lineage_hashes.is_empty()
+            || view_replay
+                .replay_open_lineage_hashes
+                .iter()
+                .any(String::is_empty)
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain view replay for {view_stable_id} is missing compact identity or receipt hashes"
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -4373,6 +4414,10 @@ mod tests {
                     querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    view_warehouse: None,
+                    view_namespace: Vec::new(),
+                    view_name: None,
+                    view_stable_id: None,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
@@ -4420,6 +4465,10 @@ mod tests {
                     querygraph_import_hash: None,
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    view_warehouse: None,
+                    view_namespace: Vec::new(),
+                    view_name: None,
+                    view_stable_id: None,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
@@ -4467,6 +4516,10 @@ mod tests {
                     querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    view_warehouse: None,
+                    view_namespace: Vec::new(),
+                    view_name: None,
+                    view_stable_id: None,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
@@ -4513,6 +4566,10 @@ mod tests {
                     querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    view_warehouse: None,
+                    view_namespace: Vec::new(),
+                    view_name: None,
+                    view_stable_id: None,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
@@ -4559,6 +4616,10 @@ mod tests {
                     querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    view_warehouse: None,
+                    view_namespace: Vec::new(),
+                    view_name: None,
+                    view_stable_id: None,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
@@ -4605,6 +4666,10 @@ mod tests {
                     querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    view_warehouse: None,
+                    view_namespace: Vec::new(),
+                    view_name: None,
+                    view_stable_id: None,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
@@ -4651,6 +4716,10 @@ mod tests {
                     querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    view_warehouse: None,
+                    view_namespace: Vec::new(),
+                    view_name: None,
+                    view_stable_id: None,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
@@ -4697,6 +4766,10 @@ mod tests {
                     querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    view_warehouse: None,
+                    view_namespace: Vec::new(),
+                    view_name: None,
+                    view_stable_id: None,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
@@ -4744,6 +4817,10 @@ mod tests {
                     querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    view_warehouse: None,
+                    view_namespace: Vec::new(),
+                    view_name: None,
+                    view_stable_id: None,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
@@ -4790,6 +4867,10 @@ mod tests {
                     querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 2,
                     view_artifact_count: 0,
+                    view_warehouse: None,
+                    view_namespace: Vec::new(),
+                    view_name: None,
+                    view_stable_id: None,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
@@ -4836,6 +4917,10 @@ mod tests {
                     querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    view_warehouse: None,
+                    view_namespace: Vec::new(),
+                    view_name: None,
+                    view_stable_id: None,
                     policy_binding_count: 1,
                     standards: vec!["OpenLineage".to_string()],
                     credential_count: None,
@@ -4882,6 +4967,10 @@ mod tests {
                     querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    view_warehouse: None,
+                    view_namespace: Vec::new(),
+                    view_name: None,
+                    view_stable_id: None,
                     policy_binding_count: 0,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
@@ -4928,6 +5017,10 @@ mod tests {
                     querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
+                    view_warehouse: None,
+                    view_namespace: Vec::new(),
+                    view_name: None,
+                    view_stable_id: None,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
@@ -5075,6 +5168,68 @@ mod tests {
             "qglake lineage drain trusted human credential replay is missing sink receipt hashes"
         ));
 
+        let view_verification = qglake_view_lineage_verification();
+        let mut bootstrap_with_view = qglake_bootstrap_lineage_summary();
+        bootstrap_with_view.view_artifact_count = 1;
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 4,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 4,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require accepted view replay");
+        assert!(err.to_string().contains(
+            "qglake lineage drain did not replay view evidence for lakecat:view:local:default:active_customers"
+        ));
+
+        verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 5,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 3,
+                lineage_events: 5,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                events: vec![
+                    bootstrap_with_view,
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect("QGLake lineage drain should accept replayed view evidence");
+
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 4,
@@ -5101,6 +5256,14 @@ mod tests {
             1,
         )
         .expect("QGLake lineage drain should accept delivered outbox events");
+    }
+
+    fn qglake_view_lineage_verification() -> QueryGraphBootstrapVerification {
+        let mut verification = qglake_lineage_verification();
+        verification.view_count = 1;
+        verification.verified_views =
+            vec!["lakecat:view:local:default:active_customers".to_string()];
+        verification
     }
 
     fn qglake_lineage_verification() -> QueryGraphBootstrapVerification {
@@ -5144,6 +5307,10 @@ mod tests {
             querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
             table_artifact_count: 1,
             view_artifact_count: 0,
+            view_warehouse: None,
+            view_namespace: Vec::new(),
+            view_name: None,
+            view_stable_id: None,
             policy_binding_count: 1,
             standards: qglake_lineage_standards(),
             credential_count: None,
@@ -5152,6 +5319,39 @@ mod tests {
             raw_credential_exception_reason: None,
             replay_event_hashes: vec!["sha256:replay-event".to_string()],
             replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+        }
+    }
+
+    fn qglake_view_lineage_summary() -> LineageDrainEventSummary {
+        LineageDrainEventSummary {
+            event_id: "evt-view".to_string(),
+            event_type: "view.upserted".to_string(),
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:view-authorization".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            agent_delegation_hash: Some("sha256:delegation".to_string()),
+            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            graph_events: 2,
+            lineage_events: 1,
+            bundle_hash: None,
+            graph_hash: None,
+            open_lineage_hash: None,
+            querygraph_import_hash: None,
+            table_artifact_count: 0,
+            view_artifact_count: 0,
+            view_warehouse: Some("local".to_string()),
+            view_namespace: vec!["default".to_string()],
+            view_name: Some("active_customers".to_string()),
+            view_stable_id: Some("lakecat:view:local:default:active_customers".to_string()),
+            policy_binding_count: 0,
+            standards: Vec::new(),
+            credential_count: None,
+            credential_block_reason: None,
+            raw_credential_exception_allowed: None,
+            raw_credential_exception_reason: None,
+            replay_event_hashes: vec!["sha256:view-replay-event".to_string()],
+            replay_open_lineage_hashes: vec!["sha256:view-replay-openlineage".to_string()],
         }
     }
 
@@ -5173,6 +5373,10 @@ mod tests {
             querygraph_import_hash: None,
             table_artifact_count: 0,
             view_artifact_count: 0,
+            view_warehouse: None,
+            view_namespace: Vec::new(),
+            view_name: None,
+            view_stable_id: None,
             policy_binding_count: 0,
             standards: Vec::new(),
             credential_count: Some(0),
@@ -5208,6 +5412,10 @@ mod tests {
             querygraph_import_hash: None,
             table_artifact_count: 0,
             view_artifact_count: 0,
+            view_warehouse: None,
+            view_namespace: Vec::new(),
+            view_name: None,
+            view_stable_id: None,
             policy_binding_count: 0,
             standards: Vec::new(),
             credential_count: Some(1),

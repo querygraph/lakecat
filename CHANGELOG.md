@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added compact view replay identity to lineage-drain event summaries and made
+  QGLake lineage-drain acceptance require replayed view evidence to match the
+  accepted QueryGraph bootstrap view artifacts.
 - Replayed `view.upserted` and `view.dropped` outbox events into catalog-facing
   View graph events and LakeCat OpenLineage receipts, and added focused
   coverage for Grust ingestion plus service replay counts.

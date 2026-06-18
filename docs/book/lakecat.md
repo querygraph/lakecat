@@ -837,7 +837,26 @@ about a view object. LakeCat records `view.upserted` and `view.dropped` audit
 events. Outbox replay projects those changes to a catalog-facing View graph
 event and a LakeCat OpenLineage view dataset receipt. QueryGraph bootstrap can
 then include views with OSI hashes, view-aware graph edges, and OpenLineage view
-counts.
+counts. The lineage-drain summary also carries compact view replay identity:
+
+```json
+{
+  "event-type": "view.upserted",
+  "view-warehouse": "local",
+  "view-namespace": ["default"],
+  "view-name": "events_view",
+  "view-stable-id": "lakecat:view:local:default:events_view",
+  "graph-events": 2,
+  "lineage-events": 1,
+  "replay-event-hashes": ["sha256:..."],
+  "replay-open-lineage-hashes": ["sha256:..."]
+}
+```
+
+QGLake acceptance compares that `view-stable-id` with the accepted QueryGraph
+bootstrap view artifacts. That closes a small but important gap: the bootstrap
+bundle may say a view was exported, and the drain evidence can now prove the
+corresponding view catalog event was replayed with graph and lineage receipts.
 
 ### QueryGraph Bootstrap
 
@@ -887,7 +906,9 @@ A useful drain response includes delivered event types, graph projection counts,
 lineage projection counts, receipt hashes, and the authorization proof for the
 drain request itself. That last part is easy to overlook. Reading the replay
 stream is also privileged, so LakeCat records that the drainer was allowed to
-read lineage evidence.
+read lineage evidence. For view events, the response includes the warehouse,
+namespace, view name, and QueryGraph-compatible stable id, so downstream
+acceptance can check replay identity without parsing the full audit payload.
 
 The end-to-end result is a chain:
 
