@@ -6,6 +6,31 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `28d9939 Require QGLake tenant spine list replay`.
+- Paused after making QGLake acceptance establish and list its durable
+  server/project/warehouse tenant spine. The fixture now upserts the
+  `lakecat-local` server, `default` project, and selected warehouse before
+  table setup, lists each management level, and lineage-drain verification
+  rejects runs that do not replay matching `server.listed`, `project.listed`,
+  and `warehouse.listed` count evidence with sink receipt hashes alongside the
+  existing policy and storage-profile list evidence.
+- Local verification for the QGLake tenant-spine list acceptance slice was
+  green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo check -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-cli -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test -p lakecat-cli`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `b92e8d9 Require QGLake storage profile list replay`.
 - Paused after making QGLake acceptance exercise the governed
   storage-profile-list management read. The QGLake fixture now lists warehouse
