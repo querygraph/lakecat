@@ -242,7 +242,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   transport + TypeDID attestation on the same events. *Started:
   `namespace.created` outbox replay now emits a catalog-facing `Namespace` graph
   event with a stable namespace subject and the same authorization payload used
-  for lineage, while table and scan events continue through the Grust-owned
+  for lineage; `policy-binding.upserted` replay now emits a catalog-facing
+  `Policy` graph event with stable policy subject, ODRL material, and
+  authorization payload; table and scan events continue through the Grust-owned
   event graph adapter.*
 - **P5 — Tenancy (F7) + production credentials (F8).** Project/Warehouse as
   stored entities with management endpoints; real Vault/AWS/GCP/Azure resolvers

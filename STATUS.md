@@ -7,11 +7,11 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `ec6963b Project namespace outbox events to graph`.
-- Paused after pushing namespace graph projection from the durable outbox.
-  `namespace.created` replay now emits a catalog-facing `Namespace` graph event
-  with a stable namespace subject and the same authorization payload used for
-  lineage.
-- Local verification for the pushed slice was green:
+- Current working slice: policy-binding graph projection from the durable
+  outbox. `policy-binding.upserted` replay now emits a catalog-facing `Policy`
+  graph event with a stable policy subject, ODRL payload, and the same
+  authorization receipt used for audit.
+- Local verification for the current slice is green:
   `cargo fmt -p lakecat-graph -p lakecat-service -p lakecat-api -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-graph`;
@@ -67,6 +67,11 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added policy-binding graph projection to the durable outbox drain, so
+  `policy-binding.upserted` events now replay to the graph sink with ODRL and
+  authorization payloads intact.
+- Added a stable policy subject helper plus default and `grust-local` graph-crate
+  coverage for the catalog-facing policy event shape.
 - Added namespace graph projection to the durable outbox drain, so
   `namespace.created` events now replay to both graph and lineage sinks.
 - Added a stable namespace subject helper and graph-crate unit coverage for the

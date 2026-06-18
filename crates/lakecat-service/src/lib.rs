@@ -1762,6 +1762,21 @@ async fn project_outbox_event(
             ))
             .await?;
         receipt.lineage_events += 1;
+    } else if event.event_type == "policy-binding.upserted" {
+        let (warehouse, policy_id) = outbox_policy_binding(event, &state.warehouse)?;
+        state
+            .graph
+            .emit(
+                GraphEvent::policy(
+                    GraphAction::Upserted,
+                    warehouse,
+                    policy_id,
+                    event_payload.clone(),
+                )
+                .with_event_id(event.event_id.clone()),
+            )
+            .await?;
+        receipt.graph_events += 1;
     } else if event.event_type == "table.restored" {
         if let Some(table) = table {
             state
@@ -1850,6 +1865,38 @@ fn outbox_namespace(
         }
     };
     Ok((warehouse, namespace))
+}
+
+fn outbox_policy_binding(
+    event: &OutboxEvent,
+    default_warehouse: &WarehouseName,
+) -> Result<(WarehouseName, String), LakeCatError> {
+    let payload = event.payload.get("payload").unwrap_or(&event.payload);
+    let policy = payload.get("policy").ok_or_else(|| {
+        LakeCatError::Internal(format!(
+            "outbox event {} is missing policy payload",
+            event.event_id
+        ))
+    })?;
+    let warehouse = policy
+        .get("warehouse")
+        .or_else(|| payload.get("warehouse"))
+        .and_then(serde_json::Value::as_str)
+        .map(WarehouseName::new)
+        .transpose()?
+        .unwrap_or_else(|| default_warehouse.clone());
+    let policy_id = policy
+        .get("policy-id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|policy_id| !policy_id.is_empty())
+        .ok_or_else(|| {
+            LakeCatError::Internal(format!(
+                "outbox event {} policy payload is missing policy-id",
+                event.event_id
+            ))
+        })?
+        .to_string();
+    Ok((warehouse, policy_id))
 }
 
 fn outbox_principal(event: &OutboxEvent) -> Result<Principal, LakeCatError> {
@@ -2927,6 +2974,41 @@ mod tests {
                     delivered_at: None,
                 },
                 OutboxEvent {
+                    event_id: "evt-policy".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "policy-binding.upserted".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-policy",
+                        "event-type": "policy-binding.upserted",
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "policy-manage",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            },
+                            "warehouse": "local",
+                            "policy": {
+                                "policy-id": "agent-read",
+                                "warehouse": "local",
+                                "namespace": ["default"],
+                                "table": "events",
+                                "enforced": true,
+                                "odrl": {
+                                    "uid": "policy:agent-read",
+                                    "lakecat:read-restriction": {
+                                        "allowed-columns": ["event_id"]
+                                    }
+                                }
+                            }
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
                     event_id: "evt-1".to_string(),
                     sink: "lakecat.lineage-and-graph".to_string(),
                     event_type: "table.created".to_string(),
@@ -3023,21 +3105,22 @@ mod tests {
             );
 
         let drain = drain_outbox_once(&state, 10).await.unwrap();
-        assert_eq!(drain.delivered, 4);
+        assert_eq!(drain.delivered, 5);
         assert_eq!(
             drain.event_types,
             vec![
                 "namespace.created".to_string(),
+                "policy-binding.upserted".to_string(),
                 "table.created".to_string(),
                 "table.scan-tasks-fetched".to_string(),
                 "querygraph.bootstrap".to_string()
             ]
         );
-        assert_eq!(drain.graph_events, 3);
+        assert_eq!(drain.graph_events, 4);
         assert_eq!(drain.lineage_events, 4);
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 3);
+        assert_eq!(graph_events.len(), 4);
         assert_eq!(graph_events[0].label, GraphNodeLabel::Namespace);
         assert_eq!(
             graph_events[0].subject,
@@ -3048,12 +3131,23 @@ mod tests {
             graph_events[0].properties["authorization-receipt"]["principal"]["subject"],
             serde_json::json!("agent:writer")
         );
-        assert_eq!(graph_events[1].label, GraphNodeLabel::Table);
-        assert_eq!(graph_events[1].action, GraphAction::Created);
-        assert_eq!(graph_events[1].event_id.as_deref(), Some("evt-1"));
-        assert_eq!(graph_events[2].action, GraphAction::PlannedScan);
+        assert_eq!(graph_events[1].label, GraphNodeLabel::Policy);
+        assert_eq!(graph_events[1].action, GraphAction::Upserted);
         assert_eq!(
-            graph_events[2].properties["read-restriction"]["allowed-columns"],
+            graph_events[1].subject,
+            "lakecat:warehouse:local:policy:agent-read"
+        );
+        assert_eq!(graph_events[1].event_id.as_deref(), Some("evt-policy"));
+        assert_eq!(
+            graph_events[1].properties["policy"]["odrl"]["uid"],
+            serde_json::json!("policy:agent-read")
+        );
+        assert_eq!(graph_events[2].label, GraphNodeLabel::Table);
+        assert_eq!(graph_events[2].action, GraphAction::Created);
+        assert_eq!(graph_events[2].event_id.as_deref(), Some("evt-1"));
+        assert_eq!(graph_events[3].action, GraphAction::PlannedScan);
+        assert_eq!(
+            graph_events[3].properties["read-restriction"]["allowed-columns"],
             serde_json::json!(["event_id"])
         );
         let lineage_events = lineage.events.lock().await;
@@ -3095,6 +3189,7 @@ mod tests {
             store.delivered.lock().await.as_slice(),
             &[
                 "evt-namespace".to_string(),
+                "evt-policy".to_string(),
                 "evt-1".to_string(),
                 "evt-2".to_string(),
                 "evt-3".to_string()
