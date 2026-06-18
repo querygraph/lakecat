@@ -818,6 +818,7 @@ fn empty_scan_request() -> PlanTableScanRequest {
 }
 
 fn verify_qglake_scan_plan(plan: &PlanTableScanResponse) -> lakecat_core::LakeCatResult<()> {
+    verify_qglake_sail_planner("scan plan", &plan.planned_by)?;
     let extension = plan
         .residual_filter
         .as_ref()
@@ -870,6 +871,15 @@ fn verify_qglake_scan_plan(plan: &PlanTableScanResponse) -> lakecat_core::LakeCa
     Ok(())
 }
 
+fn verify_qglake_sail_planner(label: &str, planned_by: &str) -> lakecat_core::LakeCatResult<()> {
+    if planned_by != "sail-rest-models" {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake governed {label} was not planned by Sail REST models: {planned_by}"
+        )));
+    }
+    Ok(())
+}
+
 fn qglake_policy_hash(table: &str) -> lakecat_core::LakeCatResult<String> {
     content_hash_json(&qglake_odrl_policy(table))
 }
@@ -905,6 +915,7 @@ fn verify_qglake_scan_tasks(
     fetched: &FetchScanTasksResponse,
     table_location: &str,
 ) -> lakecat_core::LakeCatResult<()> {
+    verify_qglake_sail_planner("fetchScanTasks", &fetched.planned_by)?;
     if fetched.file_scan_tasks.is_empty() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake governed fetchScanTasks produced no file scan tasks".to_string(),
@@ -2173,7 +2184,7 @@ mod tests {
                 namespace: vec!["default".to_string()],
                 name: "events".to_string(),
             },
-            planned_by: "lakecat-sail".to_string(),
+            planned_by: "sail-rest-models".to_string(),
             status: "completed".to_string(),
             snapshot_id: None,
             plan_tasks: Vec::new(),
@@ -2206,13 +2217,55 @@ mod tests {
     }
 
     #[test]
+    fn qglake_scan_plan_verifier_rejects_non_sail_planner() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let plan = PlanTableScanResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "memory-test-planner".to_string(),
+            status: "completed".to_string(),
+            snapshot_id: None,
+            plan_tasks: Vec::new(),
+            lakecat_plan_tasks: Vec::new(),
+            file_scan_tasks: Vec::new(),
+            delete_files: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:scan-request": {
+                    "requested-projection": [
+                        "event_id",
+                        "occurred_at",
+                        "severity",
+                        "raw_payload"
+                    ],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_plan(&plan)
+            .expect_err("QGLake governed scan should require Sail planning");
+        assert!(err.to_string().contains("not planned by Sail REST models"));
+    }
+
+    #[test]
     fn qglake_scan_plan_verifier_requires_policy_hash_binding() {
         let plan = PlanTableScanResponse {
             table: lakecat_api::TableIdentifier {
                 namespace: vec!["default".to_string()],
                 name: "events".to_string(),
             },
-            planned_by: "lakecat-sail".to_string(),
+            planned_by: "sail-rest-models".to_string(),
             status: "completed".to_string(),
             snapshot_id: None,
             plan_tasks: Vec::new(),
@@ -2256,7 +2309,7 @@ mod tests {
                 namespace: vec!["default".to_string()],
                 name: "events".to_string(),
             },
-            planned_by: "lakecat-sail".to_string(),
+            planned_by: "sail-rest-models".to_string(),
             plan_task: "lakecat:sail-json-hmac:test".to_string(),
             snapshot_id: Some(42),
             file_scan_tasks: vec![serde_json::json!({
@@ -2286,6 +2339,45 @@ mod tests {
     }
 
     #[test]
+    fn qglake_fetch_scan_tasks_verifier_rejects_non_sail_planner() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "memory-test-planner".to_string(),
+            plan_task: "lakecat:sail-json-hmac:test".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![serde_json::json!({
+                "data-file": {
+                    "file-path": "file:///tmp/lakecat-qglake/events/data/part-1.parquet"
+                }
+            })],
+            delete_files: Vec::new(),
+            plan_tasks: Vec::new(),
+            lakecat_plan_tasks: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake governed fetch should require Sail planning");
+        assert!(err.to_string().contains("not planned by Sail REST models"));
+    }
+
+    #[test]
     fn qglake_fetch_scan_tasks_verifier_rejects_empty_scan_work() {
         let expected_policy_hash = qglake_policy_hash("events").unwrap();
         let fetched = FetchScanTasksResponse {
@@ -2293,7 +2385,7 @@ mod tests {
                 namespace: vec!["default".to_string()],
                 name: "events".to_string(),
             },
-            planned_by: "lakecat-sail".to_string(),
+            planned_by: "sail-rest-models".to_string(),
             plan_task: "lakecat:sail-json-hmac:test".to_string(),
             snapshot_id: Some(42),
             file_scan_tasks: Vec::new(),
@@ -2328,7 +2420,7 @@ mod tests {
                 namespace: vec!["default".to_string()],
                 name: "events".to_string(),
             },
-            planned_by: "lakecat-sail".to_string(),
+            planned_by: "sail-rest-models".to_string(),
             plan_task: "lakecat:sail-json-hmac:test".to_string(),
             snapshot_id: Some(42),
             file_scan_tasks: vec![serde_json::json!({"placeholder": true})],
@@ -2363,7 +2455,7 @@ mod tests {
                 namespace: vec!["default".to_string()],
                 name: "events".to_string(),
             },
-            planned_by: "lakecat-sail".to_string(),
+            planned_by: "sail-rest-models".to_string(),
             plan_task: "lakecat:sail-json-hmac:test".to_string(),
             snapshot_id: Some(42),
             file_scan_tasks: vec![serde_json::json!({
@@ -2402,7 +2494,7 @@ mod tests {
                 namespace: vec!["default".to_string()],
                 name: "events".to_string(),
             },
-            planned_by: "lakecat-sail".to_string(),
+            planned_by: "sail-rest-models".to_string(),
             plan_task: "lakecat:sail-json-hmac:test".to_string(),
             snapshot_id: Some(42),
             file_scan_tasks: vec![serde_json::json!({
@@ -2445,7 +2537,7 @@ mod tests {
                 namespace: vec!["default".to_string()],
                 name: "events".to_string(),
             },
-            planned_by: "lakecat-sail".to_string(),
+            planned_by: "sail-rest-models".to_string(),
             plan_task: "lakecat:sail-json-hmac:test".to_string(),
             snapshot_id: Some(42),
             file_scan_tasks: vec![serde_json::json!({

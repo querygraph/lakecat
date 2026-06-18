@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required the QGLake governed scan and `fetchScanTasks` verifiers to prove the
+  response was planned by Sail's REST-model engine (`sail-rest-models`), so the
+  acceptance path cannot pass with a non-Sail planner identity.
 - Required the QGLake governed `fetchScanTasks` verifier to prove the fetched
   residual read restriction still carries the narrowed allowed-column set,
   preventing `raw_payload` from reappearing during task materialization.
