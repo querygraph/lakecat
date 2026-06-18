@@ -408,7 +408,16 @@ impl RequestIdentityMode {
         };
         match self {
             Self::Principal => request.header("x-lakecat-principal", principal),
-            Self::AgentDid => request.header("x-lakecat-agent-did", principal),
+            Self::AgentDid => request
+                .header("x-lakecat-agent-did", principal)
+                .header(
+                    "x-lakecat-agent-delegation",
+                    format!("qglake-fixture-delegation:{principal}"),
+                )
+                .header(
+                    "x-lakecat-agent-summary-signature",
+                    format!("qglake-fixture-summary:{principal}"),
+                ),
         }
     }
 }
@@ -1481,6 +1490,27 @@ fn verify_qglake_lineage_drain(
             "qglake lineage drain replay evidence is missing request identity attestation state"
                 .to_string(),
         ));
+    }
+    if principal.is_some() {
+        if bootstrap
+            .agent_delegation_hash
+            .as_deref()
+            .map_or(true, str::is_empty)
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain replay evidence is missing agent delegation hash".to_string(),
+            ));
+        }
+        if bootstrap
+            .agent_summary_signature_hash
+            .as_deref()
+            .map_or(true, str::is_empty)
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain replay evidence is missing agent summary signature hash"
+                    .to_string(),
+            ));
+        }
     }
     if bootstrap.bundle_hash.as_deref() != Some(verification.bundle_hash.as_str())
         || bootstrap.graph_hash.as_deref() != Some(verification.graph_hash.as_str())
@@ -3675,6 +3705,8 @@ mod tests {
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
+                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3711,6 +3743,8 @@ mod tests {
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
+                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:other-bundle".to_string()),
@@ -3746,6 +3780,8 @@ mod tests {
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
+                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3781,6 +3817,8 @@ mod tests {
                     principal_kind: Some("human".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
+                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3816,6 +3854,8 @@ mod tests {
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: None,
                     request_identity_state: Some("verified".to_string()),
+                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3851,6 +3891,8 @@ mod tests {
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: None,
+                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3886,6 +3928,83 @@ mod tests {
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
+                    agent_delegation_hash: None,
+                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                    graph_events: 0,
+                    lineage_events: 1,
+                    bundle_hash: Some("sha256:bundle".to_string()),
+                    graph_hash: Some("sha256:graph".to_string()),
+                    open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    table_artifact_count: 1,
+                    view_artifact_count: 0,
+                    policy_binding_count: 1,
+                    standards: qglake_lineage_standards(),
+                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
+                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                }],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject missing agent delegation proof");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain replay evidence is missing agent delegation hash")
+        );
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                events: vec![LineageDrainEventSummary {
+                    event_id: "evt-bootstrap".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    principal_subject: Some("did:example:agent".to_string()),
+                    principal_kind: Some("agent".to_string()),
+                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    request_identity_state: Some("verified".to_string()),
+                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_summary_signature_hash: None,
+                    graph_events: 0,
+                    lineage_events: 1,
+                    bundle_hash: Some("sha256:bundle".to_string()),
+                    graph_hash: Some("sha256:graph".to_string()),
+                    open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    table_artifact_count: 1,
+                    view_artifact_count: 0,
+                    policy_binding_count: 1,
+                    standards: qglake_lineage_standards(),
+                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
+                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                }],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject missing agent summary proof");
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay evidence is missing agent summary signature hash"
+        ));
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                events: vec![LineageDrainEventSummary {
+                    event_id: "evt-bootstrap".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    principal_subject: Some("did:example:agent".to_string()),
+                    principal_kind: Some("agent".to_string()),
+                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    request_identity_state: Some("verified".to_string()),
+                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3921,6 +4040,8 @@ mod tests {
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
+                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3956,6 +4077,8 @@ mod tests {
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
+                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -3991,6 +4114,8 @@ mod tests {
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
+                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
                     graph_events: 0,
                     lineage_events: 0,
                     bundle_hash: Some("sha256:bundle".to_string()),
@@ -4030,6 +4155,8 @@ mod tests {
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: Some("verified".to_string()),
+                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),

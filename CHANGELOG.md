@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added QGLake agent delegation and signed-summary hash evidence to
+  lineage-drain replay summaries and required explicit QGLake agent runs to
+  preserve both hashes.
 - Made QGLake fixture requests use agent-DID identity headers for explicit
   principals and required lineage-drain replay evidence to preserve the
   accepted bootstrap principal kind.

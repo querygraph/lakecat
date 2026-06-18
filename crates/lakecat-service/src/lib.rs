@@ -967,6 +967,14 @@ fn lineage_drain_event_summary(
             .pointer("/authorization-receipt/request-identity/attestation-state")
             .and_then(Value::as_str)
             .map(str::to_string),
+        agent_delegation_hash: payload
+            .pointer("/authorization-receipt/request-identity/agent-delegation-sha256")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        agent_summary_signature_hash: payload
+            .pointer("/authorization-receipt/request-identity/agent-summary-signature-sha256")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         graph_events: receipt.graph_events,
         lineage_events: receipt.lineage_events,
         bundle_hash: payload
@@ -4729,6 +4737,8 @@ mod tests {
                                 "checked_at": chrono::Utc::now(),
                                 "request-identity": {
                                     "attestation-state": "verified",
+                                    "agent-delegation-sha256": "sha256:delegation",
+                                    "agent-summary-signature-sha256": "sha256:summary",
                                     "typedid": "did:example:agent"
                                 }
                             },
@@ -4829,6 +4839,18 @@ mod tests {
         assert_eq!(
             bootstrap_summary.request_identity_state.as_deref(),
             Some("verified")
+        );
+        assert!(
+            bootstrap_summary
+                .agent_delegation_hash
+                .as_deref()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert!(
+            bootstrap_summary
+                .agent_summary_signature_hash
+                .as_deref()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
         );
         assert_eq!(bootstrap_summary.graph_events, 1);
         assert_eq!(bootstrap_summary.lineage_events, 1);
@@ -5214,6 +5236,8 @@ mod tests {
                             "checked_at": chrono::Utc::now(),
                             "request-identity": {
                                 "attestation-state": "verified",
+                                "agent-delegation-sha256": "sha256:delegation",
+                                "agent-summary-signature-sha256": "sha256:summary",
                                 "typedid": "did:example:agent"
                             }
                         },
@@ -5305,6 +5329,16 @@ mod tests {
         assert_eq!(
             payload["events"][0]["request-identity-state"],
             serde_json::json!("verified")
+        );
+        assert!(
+            payload["events"][0]["agent-delegation-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert!(
+            payload["events"][0]["agent-summary-signature-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
         );
         assert_eq!(payload["events"][0]["graph-events"], serde_json::json!(1));
         assert_eq!(payload["events"][0]["lineage-events"], serde_json::json!(1));
