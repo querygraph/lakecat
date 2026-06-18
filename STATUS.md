@@ -6,6 +6,20 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `b4b5116 Add Sail provider namespace drop`.
+- Paused after pushing the Sail provider namespace-drop bridge. The in-process
+  Sail `CatalogProvider` now routes `drop_database` through LakeCat's governed
+  durable namespace deletion with typed `namespace.drop` capability validation,
+  `if_exists` handling, and explicit rejection of unsupported cascading drops.
+  LakeCat's store remains the enforcement point for non-empty namespace guards.
+- Local verification for the pushed Sail provider namespace-drop slice was
+  green:
+  `cargo fmt -p lakecat-sail -- --check`;
+  `cargo test -p lakecat-sail --features catalog-provider provider_drops_durable_namespaces`;
+  `cargo test -p lakecat-sail --features catalog-provider`;
+  `git diff --check`.
+- This status commit records the pushed Sail provider namespace-drop slice.
+- Previous implementation slice:
   `28c044e Require QGLake scan policy hash proof`.
 - Paused after pushing the QGLake scan policy-hash proof. The QGLake governed
   scan verifier now requires the enforced `ReadRestriction` to carry the
