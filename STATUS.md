@@ -6,12 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
-  `f3d963b Project scan plans to graph`.
-- Current working slice: commit graph projection from the durable outbox.
+  `8975d55 Project table commits to graph`.
+- Paused after pushing commit graph projection from the durable outbox.
   `table.commit` replay now emits a stable catalog-facing `Commit` graph event
   keyed by table stable ID and committed sequence number while preserving
   metadata pointer movement and idempotency hash payloads.
-- Local verification for the current slice is green:
+- Local verification for the pushed slice was green:
   `cargo fmt -p lakecat-graph -p lakecat-service -p lakecat-api -- --check`;
   `git diff --check`;
   `cargo test -p lakecat-graph`;
