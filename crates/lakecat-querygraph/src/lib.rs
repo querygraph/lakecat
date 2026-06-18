@@ -220,15 +220,7 @@ impl QueryGraphBundleManifest {
         Ok(Self {
             schema_version: "lakecat.querygraph.bootstrap.v1".to_string(),
             producer: "https://querygraph.ai/lakecat".to_string(),
-            standards: vec![
-                "Iceberg REST".to_string(),
-                "Croissant".to_string(),
-                "CDIF".to_string(),
-                "OSI handoff".to_string(),
-                "ODRL".to_string(),
-                "Grust catalog graph".to_string(),
-                "OpenLineage".to_string(),
-            ],
+            standards: querygraph_bootstrap_standards(),
             table_artifacts: tables
                 .iter()
                 .map(QueryGraphTableArtifactHashes::from_table)
@@ -241,6 +233,18 @@ impl QueryGraphBundleManifest {
             open_lineage_hash: content_hash_json(open_lineage)?,
         })
     }
+}
+
+fn querygraph_bootstrap_standards() -> Vec<String> {
+    vec![
+        "Iceberg REST".to_string(),
+        "Croissant".to_string(),
+        "CDIF".to_string(),
+        "OSI handoff".to_string(),
+        "ODRL".to_string(),
+        "Grust catalog graph".to_string(),
+        "OpenLineage".to_string(),
+    ]
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -786,7 +790,8 @@ fn bootstrap_open_lineage(
                     "_producer": "https://querygraph.ai/lakecat",
                     "_schemaURL": "https://querygraph.ai/schemas/openlineage/querygraph-semantic-bundle-facet/0.1.0.json",
                     "tableCount": tables.len(),
-                    "viewCount": views.len()
+                    "viewCount": views.len(),
+                    "standards": querygraph_bootstrap_standards()
                 }
             }
         },
@@ -1028,6 +1033,13 @@ mod tests {
                 .standards
                 .iter()
                 .any(|item| item == "Grust catalog graph")
+        );
+        assert!(
+            bundle.open_lineage["run"]["facets"]["queryGraph_semanticBundle"]["standards"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| item == "CDIF")
         );
         assert_eq!(
             bundle.tables[0].cdif["dct:accessRights"]["odrl:policy"]["@type"],

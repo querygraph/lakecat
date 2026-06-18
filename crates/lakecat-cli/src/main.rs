@@ -646,23 +646,25 @@ fn verify_qglake_bootstrap_bundle(
     verify_qglake_bootstrap_open_lineage(bundle, projection)
 }
 
+const QGLAKE_BOOTSTRAP_STANDARDS: &[&str] = &[
+    "Iceberg REST",
+    "Croissant",
+    "CDIF",
+    "OSI handoff",
+    "ODRL",
+    "Grust catalog graph",
+    "OpenLineage",
+];
+
 fn verify_qglake_bootstrap_standards(
     bundle: &QueryGraphBootstrap,
 ) -> lakecat_core::LakeCatResult<()> {
-    for expected in [
-        "Iceberg REST",
-        "Croissant",
-        "CDIF",
-        "OSI handoff",
-        "ODRL",
-        "Grust catalog graph",
-        "OpenLineage",
-    ] {
+    for expected in QGLAKE_BOOTSTRAP_STANDARDS {
         if !bundle
             .manifest
             .standards
             .iter()
-            .any(|standard| standard == expected)
+            .any(|standard| standard == *expected)
         {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "QGLake bootstrap manifest did not advertise required standard {expected}"
@@ -730,6 +732,36 @@ fn verify_qglake_bootstrap_open_lineage(
     bundle: &QueryGraphBootstrap,
     projection: &lakecat_querygraph::QueryGraphTableProjection,
 ) -> lakecat_core::LakeCatResult<()> {
+    let semantic_bundle = bundle
+        .open_lineage
+        .pointer("/run/facets/queryGraph_semanticBundle")
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(
+                "QGLake bootstrap OpenLineage did not include queryGraph_semanticBundle facet"
+                    .to_string(),
+            )
+        })?;
+    if semantic_bundle["tableCount"] != json!(bundle.tables.len()) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap OpenLineage tableCount did not match bundle tables: {}",
+            semantic_bundle["tableCount"].clone()
+        )));
+    }
+    for expected in QGLAKE_BOOTSTRAP_STANDARDS {
+        let standards = semantic_bundle["standards"].as_array().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(
+                "QGLake bootstrap OpenLineage semantic bundle did not list standards".to_string(),
+            )
+        })?;
+        if !standards
+            .iter()
+            .any(|standard| standard.as_str() == Some(*expected))
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap OpenLineage semantic bundle did not advertise required standard {expected}"
+            )));
+        }
+    }
     let output = bundle
         .open_lineage
         .get("outputs")
@@ -2201,6 +2233,31 @@ mod tests {
     }
 
     #[test]
+    fn qglake_bootstrap_verifier_requires_openlineage_semantic_standards() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let mut bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        bundle.open_lineage["run"]["facets"]["queryGraph_semanticBundle"]["standards"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|standard| standard.as_str() != Some("OpenLineage"));
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect_err("QGLake bootstrap should reject missing OpenLineage standards facet");
+        assert!(err.to_string().contains(
+            "OpenLineage semantic bundle did not advertise required standard OpenLineage"
+        ));
+    }
+
+    #[test]
     fn qglake_bootstrap_verifier_requires_graph_table_anchor() {
         let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
         let output = serde_json::json!({
@@ -3119,6 +3176,7 @@ mod tests {
         tables: Vec<lakecat_querygraph::QueryGraphTableProjection>,
         open_lineage_outputs: Vec<serde_json::Value>,
     ) -> QueryGraphBootstrap {
+        let table_count = tables.len();
         let graph = lakecat_querygraph::QueryGraphCatalogGraph::from_tables(&tables);
         QueryGraphBootstrap {
             warehouse: lakecat_core::WarehouseName::new("local").unwrap(),
@@ -3145,6 +3203,23 @@ mod tests {
             views: Vec::new(),
             graph,
             open_lineage: serde_json::json!({
+                "run": {
+                    "facets": {
+                        "queryGraph_semanticBundle": {
+                            "tableCount": table_count,
+                            "viewCount": 0,
+                            "standards": [
+                                "Iceberg REST",
+                                "Croissant",
+                                "CDIF",
+                                "OSI handoff",
+                                "ODRL",
+                                "Grust catalog graph",
+                                "OpenLineage"
+                            ]
+                        }
+                    }
+                },
                 "outputs": open_lineage_outputs
             }),
         }

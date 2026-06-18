@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added the QueryGraph handoff standards to the OpenLineage semantic-bundle
+  facet and required QGLake bootstrap acceptance to verify those standards in
+  OpenLineage, not only in the bundle manifest.
 - Required QGLake bootstrap acceptance to prove the QueryGraph manifest
   advertises the expected Iceberg REST, Croissant, CDIF, OSI handoff, ODRL,
   Grust catalog graph, and OpenLineage standards before writing the bundle.
