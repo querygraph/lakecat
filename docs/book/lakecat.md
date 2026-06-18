@@ -901,6 +901,34 @@ artifact. That keeps normal Iceberg view access standard, but gives the
 QueryGraph handoff a durable proof that the exported view version came from
 LakeCat's catalog spine.
 
+QueryGraph and operators can also read the compact receipt chain directly from
+the governed management surface:
+
+```sh
+curl -s \
+  http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/views/events_view/version-receipts \
+  -H 'x-lakecat-agent-did: did:example:resilience-agent'
+```
+
+```json
+{
+  "receipts": [
+    {
+      "stable-id": "lakecat:view:local:default:events_view",
+      "view-version": 1,
+      "previous-view-version": null,
+      "operation": "upsert",
+      "view-hash": "sha256:...",
+      "receipt-hash": "sha256:..."
+    }
+  ]
+}
+```
+
+The response is catalog evidence, not Iceberg table metadata. It lets
+QueryGraph verify the version chain while keeping the richer view history model
+available for a future Sail-owned implementation.
+
 ### QueryGraph Bootstrap
 
 QueryGraph should import LakeCat facts through a verified handoff, not by

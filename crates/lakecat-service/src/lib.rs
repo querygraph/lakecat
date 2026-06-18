@@ -11,12 +11,13 @@ use lakecat_api::{
     CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest,
     FetchScanTasksResponse, LineageDrainEventSummary, LineageDrainResponse, ListNamespacesResponse,
     ListPolicyBindingsResponse, ListProjectsResponse, ListServersResponse,
-    ListStorageProfilesResponse, ListViewsResponse, ListWarehousesResponse,
-    LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
-    PlanTableScanResponse, PolicyBindingResponse, ProjectResponse, ServerResponse,
-    StorageCredential, StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest,
-    UpsertProjectRequest, UpsertServerRequest, UpsertStorageProfileRequest, UpsertViewRequest,
-    UpsertWarehouseRequest, ViewColumnResponse, ViewResponse, WarehouseResponse,
+    ListStorageProfilesResponse, ListViewVersionReceiptsResponse, ListViewsResponse,
+    ListWarehousesResponse, LoadCredentialsResponse, LoadTableResponse, NamespaceResponse,
+    PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse, ProjectResponse,
+    ServerResponse, StorageCredential, StorageProfileResponse, TableIdentifier,
+    UpsertPolicyBindingRequest, UpsertProjectRequest, UpsertServerRequest,
+    UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest, ViewColumnResponse,
+    ViewResponse, ViewVersionReceiptResponse, WarehouseResponse,
 };
 use lakecat_core::{
     LakeCatError, LakeCatResult, Namespace, Principal, PrincipalKind, TableIdent, TableName,
@@ -51,7 +52,8 @@ use lakecat_security::{
 use lakecat_store::{
     CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, PolicyBinding,
     ProjectRecord, ServerRecord, StorageProfile, StorageProvider, TableCommit, TableRecord,
-    ViewColumnRecord, ViewRecord, WarehouseRecord, table_ident,
+    ViewColumnRecord, ViewRecord, ViewVersionOperation, ViewVersionReceipt, WarehouseRecord,
+    table_ident,
 };
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStore, ObjectStoreExt, PutPayload};
@@ -878,6 +880,10 @@ pub fn app(state: LakeCatState) -> Router {
         .route(
             "/management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}",
             post(upsert_view).put(upsert_view).delete(drop_view),
+        )
+        .route(
+            "/management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}/version-receipts",
+            get(list_view_version_receipts),
         )
         .route(
             "/management/v1/warehouses/{warehouse}/policies",
@@ -2093,6 +2099,48 @@ async fn catalog_list_views(
         .await?;
     Ok(Json(ListViewsResponse {
         views: views.iter().map(view_response).collect(),
+    }))
+}
+
+async fn list_view_version_receipts(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, view)): Path<(String, String, String)>,
+) -> Result<Json<ListViewVersionReceiptsResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let namespace = namespace.parse::<Namespace>()?;
+    let view_name = TableName::new(view)?;
+    let capability = authorize_view_load(&state, request_identity(&headers)?).await?;
+    let receipts = state
+        .store
+        .list_view_version_receipts(&warehouse, &namespace, &view_name)
+        .await?;
+    let response_receipts = receipts
+        .iter()
+        .map(view_version_receipt_response)
+        .collect::<LakeCatResult<Vec<_>>>()?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "view.version-receipts-listed",
+            None,
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "view.version-receipts-listed",
+                "warehouse": warehouse.as_str(),
+                "namespace": namespace.parts(),
+                "view": view_name.as_str(),
+                "receipt-count": response_receipts.len(),
+                "receipt-hashes": response_receipts
+                    .iter()
+                    .map(|receipt| receipt.receipt_hash.clone())
+                    .collect::<Vec<_>>(),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(ListViewVersionReceiptsResponse {
+        receipts: response_receipts,
     }))
 }
 
@@ -3788,6 +3836,42 @@ fn view_response(record: &ViewRecord) -> ViewResponse {
             })
             .collect(),
         properties: record.properties.clone(),
+    }
+}
+
+fn view_version_receipt_response(
+    receipt: &ViewVersionReceipt,
+) -> LakeCatResult<ViewVersionReceiptResponse> {
+    Ok(ViewVersionReceiptResponse {
+        stable_id: receipt.stable_id.clone(),
+        warehouse: receipt.warehouse.as_str().to_string(),
+        namespace: receipt.namespace.parts().to_vec(),
+        name: receipt.name.as_str().to_string(),
+        view_version: receipt.view_version,
+        previous_view_version: receipt.previous_view_version,
+        operation: view_version_operation(&receipt.operation).to_string(),
+        view_hash: receipt.view_hash.clone(),
+        receipt_hash: content_hash_json(&serde_json::to_value(receipt).map_err(|err| {
+            LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
+        })?)?,
+        principal_subject: receipt.principal.subject.clone(),
+        principal_kind: principal_kind_name(&receipt.principal.kind).to_string(),
+        recorded_at: receipt.recorded_at.to_rfc3339(),
+    })
+}
+
+fn principal_kind_name(kind: &PrincipalKind) -> &'static str {
+    match kind {
+        PrincipalKind::Anonymous => "anonymous",
+        PrincipalKind::Human => "human",
+        PrincipalKind::Service => "service",
+        PrincipalKind::Agent => "agent",
+    }
+}
+
+fn view_version_operation(operation: &ViewVersionOperation) -> &'static str {
+    match operation {
+        ViewVersionOperation::Upsert => "upsert",
     }
 }
 
@@ -8412,6 +8496,63 @@ mod tests {
             body["properties"]["semantic-domain"],
             serde_json::json!("customer")
         );
+
+        let update = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/active_customers")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "sql": "select id from customers where active",
+                    "dialect": "sql",
+                    "schema-version": 2,
+                    "properties": {
+                        "semantic-domain": "customer"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(update).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["view-version"], serde_json::json!(2));
+
+        let receipts = Request::builder()
+            .method(Method::GET)
+            .uri(
+                "/management/v1/warehouses/local/namespaces/default/views/active_customers/version-receipts",
+            )
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(receipts).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let receipts = body["receipts"].as_array().unwrap();
+        assert_eq!(receipts.len(), 2);
+        assert_eq!(
+            receipts[0]["stable-id"],
+            serde_json::json!("lakecat:view:local:default:active_customers")
+        );
+        assert_eq!(receipts[0]["view-version"], serde_json::json!(1));
+        assert!(receipts[0]["previous-view-version"].is_null());
+        assert_eq!(receipts[0]["operation"], serde_json::json!("upsert"));
+        assert!(
+            receipts[0]["receipt-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert_eq!(receipts[1]["view-version"], serde_json::json!(2));
+        assert_eq!(receipts[1]["previous-view-version"], serde_json::json!(1));
+        assert_ne!(receipts[0]["view-hash"], receipts[1]["view-hash"]);
 
         let catalog_upsert = Request::builder()
             .method(Method::PUT)

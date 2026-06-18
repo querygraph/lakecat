@@ -331,13 +331,14 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   catalog-facing View graph events and LakeCat OpenLineage receipts; lineage
   drain summaries expose compact view warehouse/namespace/name/stable-id/version
   evidence and QueryGraph bootstrap replay exposes matching view-version receipt
-  hashes for QGLake acceptance while leaving reusable view graph topology to
-  Grust; QueryGraph bootstrap now exports those stored views with
-  manifest-covered OSI hashes, typed view columns, durable view versions,
-  view-aware graph edges, and OpenLineage view counts, and QGLake lineage-drain
-  acceptance rejects replay that does not preserve the accepted view version or
-  its compact durable receipt hash. Full Iceberg view history and commit
-  semantics remain pending.*
+  hashes for QGLake acceptance, and a governed management read endpoint exposes
+  compact view-version receipt chains for QueryGraph/operators while leaving
+  reusable view graph topology to Grust; QueryGraph bootstrap now exports those
+  stored views with manifest-covered OSI hashes, typed view columns, durable
+  view versions, view-aware graph edges, and OpenLineage view counts, and QGLake
+  lineage-drain acceptance rejects replay that does not preserve the accepted
+  view version or its compact durable receipt hash. Full Iceberg view history
+  and commit semantics remain pending.*
 - **P6 — Reproducibility (F10) + typed v4 (F9).** Land the Sail helper commits
   upstream (or pin a published Sail) and re-enable automatic CI; converge on
   typed v4 metadata once `sail-iceberg` provides it.

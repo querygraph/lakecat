@@ -70,6 +70,8 @@ impl Default for CatalogConfigResponse {
                     .to_string(),
                 "PUT /management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}"
                     .to_string(),
+                "GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}/version-receipts"
+                    .to_string(),
                 "DELETE /management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}"
                     .to_string(),
                 "GET /management/v1/warehouses/{warehouse}/policies".to_string(),
@@ -309,6 +311,29 @@ pub struct ViewColumnResponse {
 #[serde(rename_all = "kebab-case")]
 pub struct ListViewsResponse {
     pub views: Vec<ViewResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ViewVersionReceiptResponse {
+    pub stable_id: String,
+    pub warehouse: String,
+    pub namespace: Vec<String>,
+    pub name: String,
+    pub view_version: u64,
+    pub previous_view_version: Option<u64>,
+    pub operation: String,
+    pub view_hash: String,
+    pub receipt_hash: String,
+    pub principal_subject: String,
+    pub principal_kind: String,
+    pub recorded_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ListViewVersionReceiptsResponse {
+    pub receipts: Vec<ViewVersionReceiptResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a governed management read endpoint for compact view-version receipts
+  so QueryGraph and operators can inspect the durable receipt chain without
+  using non-standard Iceberg metadata or backend-specific storage access.
 - Persisted compact view-version receipts in memory and Turso stores, exposed
   matching receipt hashes through QueryGraph bootstrap replay summaries, and
   required QGLake view-bearing replay to preserve those receipt hashes.
