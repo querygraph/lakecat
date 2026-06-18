@@ -989,6 +989,10 @@ fn lineage_drain_event_summary(
             .get("open-lineage-hash")
             .and_then(Value::as_str)
             .map(str::to_string),
+        querygraph_import_hash: payload
+            .get("querygraph-import-hash")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         table_artifact_count: payload
             .get("table-artifacts")
             .and_then(Value::as_array)
@@ -2740,6 +2744,7 @@ async fn querygraph_bootstrap(
                 "bundle-hash": verification.bundle_hash,
                 "graph-hash": verification.graph_hash,
                 "open-lineage-hash": verification.open_lineage_hash,
+                "querygraph-import-hash": verification.querygraph_import_hash,
                 "table-artifacts": &bundle.manifest.table_artifacts,
                 "view-artifacts": &bundle.manifest.view_artifacts,
                 "standards": verification.standards,
@@ -4750,6 +4755,7 @@ mod tests {
                             "bundle-hash": "sha256:bundle",
                             "graph-hash": "sha256:graph",
                             "open-lineage-hash": "sha256:openlineage",
+                            "querygraph-import-hash": "sha256:querygraph-import",
                             "table-artifacts": [{
                                 "stable-id": "local.default.events",
                                 "croissant-hash": "sha256:croissant",
@@ -4865,6 +4871,10 @@ mod tests {
         assert_eq!(
             bootstrap_summary.open_lineage_hash.as_deref(),
             Some("sha256:openlineage")
+        );
+        assert_eq!(
+            bootstrap_summary.querygraph_import_hash.as_deref(),
+            Some("sha256:querygraph-import")
         );
         assert_eq!(bootstrap_summary.table_artifact_count, 1);
         assert_eq!(bootstrap_summary.view_artifact_count, 1);
@@ -5249,6 +5259,7 @@ mod tests {
                         "bundle-hash": "sha256:bundle",
                         "graph-hash": "sha256:graph",
                         "open-lineage-hash": "sha256:openlineage",
+                        "querygraph-import-hash": "sha256:querygraph-import",
                         "table-artifacts": [{
                             "stable-id": "local.default.events",
                             "croissant-hash": "sha256:croissant",
@@ -5353,6 +5364,10 @@ mod tests {
         assert_eq!(
             payload["events"][0]["open-lineage-hash"],
             serde_json::json!("sha256:openlineage")
+        );
+        assert_eq!(
+            payload["events"][0]["querygraph-import-hash"],
+            serde_json::json!("sha256:querygraph-import")
         );
         assert_eq!(
             payload["events"][0]["table-artifact-count"],

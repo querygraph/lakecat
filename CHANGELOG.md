@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added QueryGraph import-hash evidence to `querygraph.bootstrap`
+  outbox/replay summaries and required QGLake lineage-drain acceptance to match
+  it against the accepted bootstrap import contract.
 - Added a QueryGraph import-compatibility contract to bootstrap manifests with a
   table-only bundle hash for the current QueryGraph Rust importer and required
   QGLake bootstrap acceptance to preserve that import evidence.

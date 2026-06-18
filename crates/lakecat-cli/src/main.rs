@@ -1488,6 +1488,10 @@ fn verify_qglake_lineage_drain(
             .open_lineage_hash
             .as_deref()
             .map_or(true, str::is_empty)
+        || bootstrap
+            .querygraph_import_hash
+            .as_deref()
+            .map_or(true, str::is_empty)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain replay evidence is missing QueryGraph hashes".to_string(),
@@ -1553,6 +1557,8 @@ fn verify_qglake_lineage_drain(
     if bootstrap.bundle_hash.as_deref() != Some(verification.bundle_hash.as_str())
         || bootstrap.graph_hash.as_deref() != Some(verification.graph_hash.as_str())
         || bootstrap.open_lineage_hash.as_deref() != Some(verification.open_lineage_hash.as_str())
+        || bootstrap.querygraph_import_hash.as_deref()
+            != Some(verification.querygraph_import_hash.as_str())
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain replay evidence does not match the accepted QueryGraph bundle"
@@ -3770,6 +3776,7 @@ mod tests {
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     policy_binding_count: 1,
@@ -3805,9 +3812,49 @@ mod tests {
                     agent_summary_signature_hash: Some("sha256:summary".to_string()),
                     graph_events: 0,
                     lineage_events: 1,
+                    bundle_hash: Some("sha256:bundle".to_string()),
+                    graph_hash: Some("sha256:graph".to_string()),
+                    open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: None,
+                    table_artifact_count: 1,
+                    view_artifact_count: 0,
+                    policy_binding_count: 1,
+                    standards: qglake_lineage_standards(),
+                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
+                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                }],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require QueryGraph import replay hash");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain replay evidence is missing QueryGraph hashes")
+        );
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                events: vec![LineageDrainEventSummary {
+                    event_id: "evt-bootstrap".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    principal_subject: Some("did:example:agent".to_string()),
+                    principal_kind: Some("agent".to_string()),
+                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    request_identity_state: Some("verified".to_string()),
+                    agent_delegation_hash: Some("sha256:delegation".to_string()),
+                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                    graph_events: 0,
+                    lineage_events: 1,
                     bundle_hash: Some("sha256:other-bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     policy_binding_count: 1,
@@ -3845,6 +3892,7 @@ mod tests {
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     policy_binding_count: 1,
@@ -3882,6 +3930,7 @@ mod tests {
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     policy_binding_count: 1,
@@ -3919,6 +3968,7 @@ mod tests {
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     policy_binding_count: 1,
@@ -3956,6 +4006,7 @@ mod tests {
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     policy_binding_count: 1,
@@ -3993,6 +4044,7 @@ mod tests {
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     policy_binding_count: 1,
@@ -4031,6 +4083,7 @@ mod tests {
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     policy_binding_count: 1,
@@ -4068,6 +4121,7 @@ mod tests {
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 2,
                     view_artifact_count: 0,
                     policy_binding_count: 1,
@@ -4105,6 +4159,7 @@ mod tests {
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     policy_binding_count: 1,
@@ -4142,6 +4197,7 @@ mod tests {
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     policy_binding_count: 0,
@@ -4179,6 +4235,7 @@ mod tests {
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     policy_binding_count: 1,
@@ -4220,6 +4277,7 @@ mod tests {
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
                     open_lineage_hash: Some("sha256:openlineage".to_string()),
+                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
                     table_artifact_count: 1,
                     view_artifact_count: 0,
                     policy_binding_count: 1,

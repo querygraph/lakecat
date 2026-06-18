@@ -376,6 +376,8 @@ pub struct LineageDrainEventSummary {
     pub graph_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub open_lineage_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub querygraph_import_hash: Option<String>,
     #[serde(default)]
     pub table_artifact_count: usize,
     #[serde(default)]
