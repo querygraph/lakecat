@@ -952,6 +952,8 @@ fn lineage_drain_event_summary(
     LineageDrainEventSummary {
         event_id: event.event_id.clone(),
         event_type: event.event_type.clone(),
+        graph_events: receipt.graph_events,
+        lineage_events: receipt.lineage_events,
         bundle_hash: payload
             .get("bundle-hash")
             .and_then(Value::as_str)
@@ -4782,6 +4784,8 @@ mod tests {
             .iter()
             .find(|event| event.event_type == "querygraph.bootstrap")
             .expect("bootstrap replay summary should be exposed");
+        assert_eq!(bootstrap_summary.graph_events, 1);
+        assert_eq!(bootstrap_summary.lineage_events, 1);
         assert_eq!(
             bootstrap_summary.bundle_hash.as_deref(),
             Some("sha256:bundle")
@@ -5234,6 +5238,8 @@ mod tests {
             payload["events"][0]["event-type"],
             serde_json::json!("querygraph.bootstrap")
         );
+        assert_eq!(payload["events"][0]["graph-events"], serde_json::json!(1));
+        assert_eq!(payload["events"][0]["lineage-events"], serde_json::json!(1));
         assert_eq!(
             payload["events"][0]["bundle-hash"],
             serde_json::json!("sha256:bundle")

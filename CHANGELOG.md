@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added per-event graph and lineage projection counts to lineage-drain evidence
+  and required QGLake acceptance to prove the drain replayed graph projections
+  plus a bootstrap lineage projection.
 - Bound QGLake lineage-drain acceptance to the exact QueryGraph bootstrap bundle
   it accepted, rejecting replay evidence whose bundle, graph, OpenLineage, or
   artifact-count hashes drift from the exported handoff.

@@ -354,6 +354,10 @@ pub struct LineageDrainResponse {
 pub struct LineageDrainEventSummary {
     pub event_id: String,
     pub event_type: String,
+    #[serde(default)]
+    pub graph_events: usize,
+    #[serde(default)]
+    pub lineage_events: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bundle_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
