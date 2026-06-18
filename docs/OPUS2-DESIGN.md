@@ -170,9 +170,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   2. Carry the effective restriction in `TableScanCapability` and record it in
      the audit receipt (`policy_hash` includes the binding's ODRL hash).
      *Started: scan and credential-vend receipts now carry `read-restriction`
-     with allowed columns and policy hashes; governed credential-vend receipts
-     are marked as raw-credential exceptions, and the
-     `credentials.vend-attempted` audit/outbox payload now surfaces the same
+     with allowed columns and policy hashes; `table.scan-planned` audit/outbox
+     payloads surface the effective restriction plus storage/metadata locations
+     for OpenLineage and graph consumers; governed credential-vend receipts are
+     marked as raw-credential exceptions, and the
+     `credentials.vend-attempted` audit/outbox payload surfaces the same
      restriction and exception marker at top level so consumers can distinguish
      raw credential exceptions from the preferred Sail-planned read path.*
   3. Apply it as a mandatory projection/filter through a Sail-planned read that

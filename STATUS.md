@@ -6,18 +6,19 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `c0b8560 Mark governed credential vending exceptions`.
-- Current working slice: governed credential-vending audit payloads. When
-  active policy bindings produce a `ReadRestriction`, the
-  `credentials.vend-attempted` audit/outbox payload now surfaces the effective
-  `read-restriction` and `lakecat:raw-credential-exception` marker at top level,
-  matching the nested authorization receipt context for QueryGraph, lineage, and
-  graph consumers.
+  working changes: `1bb0599 Surface credential vend audit restrictions`.
+- Current working slice: governed scan-planning audit and lineage payloads.
+  When active policy bindings produce a `ReadRestriction`,
+  `table.scan-planned` audit/outbox payloads now surface the effective
+  `read-restriction`, storage location, and metadata location at top level,
+  matching the nested authorization receipt context and giving OpenLineage /
+  graph consumers a stable governed dataset handle.
 - Local verification for the current slice is green:
-  `cargo test -p lakecat-service credential_vend_authorization_carries_policy_read_restriction -- --nocapture`;
-  `cargo test -p lakecat-service credentials_vend_audit_payload_surfaces_policy_context -- --nocapture`;
+  `cargo test -p lakecat-service scan_planned_audit_payload_surfaces_policy_context -- --nocapture`;
+  `cargo test -p lakecat-lineage projects_table_scan_to_openlineage_input -- --nocapture`;
   `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
   `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-lineage`;
   `cargo test -p lakecat-service --all-features`;
   `cargo test -p lakecat-store --features turso-local`;
   `cargo test --workspace --all-features`;
@@ -66,6 +67,12 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Surfaced governed scan-planning `read-restriction`, storage location, and
+  metadata location in the top-level `table.scan-planned` audit/outbox payload,
+  matching the nested authorization receipt context.
+- Extended the OpenLineage table-scan projection test to prove the governed
+  restriction is preserved in the LakeCat catalog dataset facet for QueryGraph
+  consumers.
 - Extended authorization restriction derivation from scan planning to credential
   vending so raw credential issuance sees the same policy-derived allowed
   columns, row predicate, TTL, purpose, and policy hashes.

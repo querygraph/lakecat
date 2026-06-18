@@ -1074,6 +1074,28 @@ fn credentials_vend_audit_payload(
     audit_payload
 }
 
+fn table_scan_planned_audit_payload(
+    ident: &TableIdent,
+    table: &TableRecord,
+    receipt: &AuthorizationReceipt,
+    scan: &lakecat_sail::ScanPlan,
+) -> Value {
+    let mut audit_payload = json!({
+        "event-type": "table.scan-planned",
+        "table": ident,
+        "authorization-receipt": receipt,
+        "planned-by": scan.planned_by,
+        "snapshot-id": scan.snapshot_id,
+        "scan-task-count": scan.scan_tasks.len(),
+        "storage-location": table.location,
+        "metadata-location": table.metadata_location,
+    });
+    if let Some(restriction) = receipt.context.get("read-restriction") {
+        audit_payload["read-restriction"] = restriction.clone();
+    }
+    audit_payload
+}
+
 async fn list_storage_profiles(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
@@ -1352,23 +1374,18 @@ async fn plan_table_scan(
     let capability = authorize_table_scan(&state, identity, ident.clone()).await?;
     let table = state.store.load_table(capability.table()).await?;
     let (scan, scan_request_extensions) =
-        plan_scan_with_capability(&state, &capability, table, request).await?;
+        plan_scan_with_capability(&state, &capability, &table, request).await?;
     let ident = capability.table().clone();
     let principal = capability.receipt().principal.clone();
+    let audit_payload =
+        table_scan_planned_audit_payload(&ident, &table, capability.receipt(), &scan);
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
             "table.scan-planned",
             Some(ident.clone()),
             principal.clone(),
-            json!({
-                "event-type": "table.scan-planned",
-                "table": ident,
-                "authorization-receipt": capability.receipt(),
-                "planned-by": scan.planned_by,
-                "snapshot-id": scan.snapshot_id,
-                "scan-task-count": scan.scan_tasks.len(),
-            }),
+            audit_payload,
         )?)
         .await?;
     Ok(Json(PlanTableScanResponse {
@@ -1390,7 +1407,7 @@ async fn plan_table_scan(
 async fn plan_scan_with_capability(
     state: &LakeCatState,
     capability: &TableScanCapability,
-    table: TableRecord,
+    table: &TableRecord,
     request: PlanTableScanRequest,
 ) -> Result<(lakecat_sail::ScanPlan, serde_json::Value), LakeCatHttpError> {
     request.validate_scan_mode()?;
@@ -4345,6 +4362,66 @@ mod tests {
             payload["authorization-receipt"]["context"]["read-restriction"],
             payload["read-restriction"]
         );
+    }
+
+    #[test]
+    fn scan_planned_audit_payload_surfaces_policy_context() {
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let table = TableRecord::new(
+            ident.clone(),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({ "format-version": 3 }),
+            Principal::anonymous(),
+        );
+        let receipt = AuthorizationReceipt {
+            principal: Principal::new("did:example:agent", PrincipalKind::Agent).unwrap(),
+            action: CatalogAction::TablePlanScan,
+            table: Some(ident.clone()),
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: Some("policy-hash".to_string()),
+            context: serde_json::json!({
+                "read-restriction": {
+                    "allowed-columns": ["event_id"],
+                    "row-predicate": {
+                        "type": "eq",
+                        "term": "event_id",
+                        "value": "evt-1"
+                    }
+                }
+            }),
+            checked_at: chrono::Utc::now(),
+        };
+        let scan = lakecat_sail::ScanPlan {
+            planned_by: "lakecat-sail".to_string(),
+            snapshot_id: Some(42),
+            scan_tasks: vec![serde_json::json!({"task": 1})],
+            residual_filter: None,
+        };
+
+        let payload = table_scan_planned_audit_payload(&ident, &table, &receipt, &scan);
+        assert_eq!(
+            payload["storage-location"],
+            serde_json::json!("file:///tmp/events")
+        );
+        assert_eq!(
+            payload["metadata-location"],
+            serde_json::json!("file:///tmp/events/metadata/00000.json")
+        );
+        assert_eq!(
+            payload["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            payload["authorization-receipt"]["context"]["read-restriction"],
+            payload["read-restriction"]
+        );
+        assert_eq!(payload["scan-task-count"], serde_json::json!(1));
     }
 
     #[test]

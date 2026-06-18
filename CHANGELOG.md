@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Surfaced governed scan-planning `read-restriction`, storage location, and
+  metadata location at the top level of `table.scan-planned` audit/outbox
+  payloads, and proved OpenLineage carries the restriction through the LakeCat
+  catalog dataset facet.
 - Surfaced governed credential-vending `read-restriction` and
   `lakecat:raw-credential-exception` markers at the top level of the
   `credentials.vend-attempted` audit/outbox payload, matching the nested

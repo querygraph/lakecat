@@ -221,6 +221,14 @@ mod tests {
             json!({
                 "planned-by": "lakecat-sail",
                 "storage-location": "file:///tmp/events",
+                "read-restriction": {
+                    "allowed-columns": ["event_id"],
+                    "row-predicate": {
+                        "type": "eq",
+                        "term": "event_id",
+                        "value": "evt-1"
+                    }
+                },
             }),
         );
         let projected = open_lineage_event(&event);
@@ -230,6 +238,10 @@ mod tests {
         assert_eq!(
             projected["inputs"][0]["facets"]["dataSource"]["uri"],
             json!("file:///tmp/events")
+        );
+        assert_eq!(
+            projected["inputs"][0]["facets"]["lakecat_catalog"]["payload"]["read-restriction"]["allowed-columns"],
+            json!(["event_id"])
         );
         assert_eq!(projected["outputs"], json!([]));
     }
