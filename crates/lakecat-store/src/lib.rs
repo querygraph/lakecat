@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use lakecat_core::{
     AuditStamp, LakeCatError, LakeCatResult, Namespace, Principal, TableIdent, TableName,
-    WarehouseName, content_hash_json,
+    WarehouseName, content_hash_bytes, content_hash_json,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -147,6 +147,8 @@ pub struct TableCommitRecord {
     pub sequence_number: u64,
     pub principal: Principal,
     pub request_hash: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_key_sha256: Option<String>,
     pub committed_at: DateTime<Utc>,
 }
 
@@ -572,6 +574,10 @@ impl CatalogStore for MemoryCatalogStore {
             "new_metadata": &commit.new_metadata,
             "authorization_receipt": &commit.authorization_receipt,
         }))?;
+        let idempotency_key_sha256 = commit
+            .idempotency_key
+            .as_ref()
+            .map(|key| content_hash_bytes(key.as_bytes()));
         let (
             previous_metadata_location,
             new_metadata_location,
@@ -617,6 +623,7 @@ impl CatalogStore for MemoryCatalogStore {
             sequence_number,
             principal: commit.principal.clone(),
             request_hash,
+            idempotency_key_sha256,
             committed_at,
         };
         state.commits.push(record);
@@ -935,7 +942,7 @@ pub mod turso_store {
     use chrono::Utc;
     use lakecat_core::{
         LakeCatError, LakeCatResult, Namespace, TableIdent, TableName, WarehouseName,
-        content_hash_json,
+        content_hash_bytes, content_hash_json,
     };
     use serde::de::DeserializeOwned;
     use serde_json::Value as JsonValue;
@@ -1191,6 +1198,10 @@ pub mod turso_store {
                 "new_metadata": &commit.new_metadata,
                 "authorization_receipt": &commit.authorization_receipt,
             }))?;
+            let idempotency_key_sha256 = commit
+                .idempotency_key
+                .as_ref()
+                .map(|key| content_hash_bytes(key.as_bytes()));
             if previous_metadata_location != commit.expected_previous_metadata_location {
                 return Err(LakeCatError::Conflict(format!(
                     "metadata pointer changed for {}",
@@ -1241,6 +1252,7 @@ pub mod turso_store {
                 sequence_number: table.version,
                 principal: commit.principal.clone(),
                 request_hash,
+                idempotency_key_sha256,
                 committed_at: table.updated_at,
             };
             tx.execute(
@@ -2067,6 +2079,10 @@ pub mod turso_store {
             assert_eq!(commit_records.len(), 1);
             assert_eq!(commit_records[0].sequence_number, 1);
             assert_eq!(
+                commit_records[0].idempotency_key_sha256.as_deref(),
+                Some(content_hash_bytes("commit-1".as_bytes()).as_str())
+            );
+            assert_eq!(
                 commit_records[0].new_metadata_location.as_deref(),
                 Some("file:///tmp/events/metadata/00001.json")
             );
@@ -2089,6 +2105,11 @@ pub mod turso_store {
                 pending[0].payload["commit"]["new_metadata_location"],
                 serde_json::json!("file:///tmp/events/metadata/00001.json")
             );
+            assert_eq!(
+                pending[0].payload["commit"]["idempotency_key_sha256"],
+                serde_json::json!(content_hash_bytes("commit-1".as_bytes()))
+            );
+            assert!(!pending[0].payload.to_string().contains("commit-1"));
             assert_eq!(
                 pending[0].payload["authorization-receipt"]["engine"],
                 serde_json::json!("typesec")

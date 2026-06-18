@@ -3199,6 +3199,10 @@ mod tests {
         let records = store.table_commit_records(&ident, 0, None).await.unwrap();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].sequence_number, 1);
+        assert_eq!(
+            records[0].idempotency_key_sha256.as_deref(),
+            Some(content_hash_bytes("commit:events:0001".as_bytes()).as_str())
+        );
         assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
     }
 

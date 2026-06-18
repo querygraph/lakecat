@@ -6,11 +6,11 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `c3f9bae Expose REST commit idempotency keys`.
-- Current working slice: bounded metadata orphan cleanup. File-backed metadata
-  objects written during commit planning are now deleted when the subsequent
-  catalog pointer commit fails, unless the object is the previous metadata
-  location.
+  working changes: `c026cce Clean up uncommitted metadata files`.
+- Current working slice: audit-safe idempotency evidence. Accepted keyed table
+  commits now persist only `idempotency_key_sha256` in commit records, audit
+  payloads, and outbox payloads so replay evidence is durable without exposing
+  raw idempotency keys.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -92,6 +92,11 @@ Updated: 2026-06-18
 - Added a `sail-local` service test proving a stale commit requirement that
   writes a new metadata location returns `409 Conflict` and removes the
   uncommitted metadata file.
+- Added `TableCommitRecord::idempotency_key_sha256`, populated from accepted
+  keyed commits and serialized through the metadata pointer log, audit payload,
+  and outbox payload.
+- Extended store and REST commit idempotency tests to prove the durable hash is
+  present and the raw idempotency key is not written to the outbox payload.
 - Parsed a minimal enforceable ODRL subset from active policy bindings:
   `allowed-columns` / `allowedColumns` at the policy root, in
   `lakecat:read-restriction`, or in ODRL constraints, plus purpose and policy
@@ -177,6 +182,14 @@ Updated: 2026-06-18
 
 ## Verification Completed
 
+- Audit-safe idempotency evidence focused checks passed:
+  `cargo fmt -p lakecat-store -p lakecat-service -- --check`,
+  `cargo test -p lakecat-service commit_replays_rest_idempotency_key -- --nocapture`,
+  `cargo test -p lakecat-store --features turso-local turso_store_round_trips_namespaces_tables_and_idempotent_commits -- --nocapture`,
+  `cargo test -p lakecat-store --features turso-local`,
+  `cargo test -p lakecat-service`,
+  `git diff --check`, and
+  `cargo test --workspace --all-features`.
 - Bounded metadata orphan cleanup focused checks passed:
   `cargo fmt -p lakecat-service -- --check`,
   `cargo test -p lakecat-service --features sail-local stale_commit_cleans_up_uncommitted_metadata_file -- --nocapture`,

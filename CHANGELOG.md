@@ -23,6 +23,9 @@
 - Added bounded cleanup for local metadata objects written during commit
   planning when the subsequent catalog pointer commit fails, preventing stale
   CAS/rejected commits from leaving orphaned `file://` metadata JSON behind.
+- Added audit-safe idempotency evidence to table commit records, audit payloads,
+  and outbox payloads by persisting only the idempotency key SHA-256 hash when
+  a keyed commit is accepted.
 - Changed the QueryGraph bootstrap OSI artifact from a LakeCat-authored semantic
   model into a stable OSI handoff: LakeCat now publishes dataset/field anchors
   and governed Sail/LakeCat source metadata while leaving metrics, dimensions,
