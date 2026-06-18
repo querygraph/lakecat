@@ -2651,6 +2651,8 @@ async fn querygraph_bootstrap(
                 "bundle-hash": verification.bundle_hash,
                 "graph-hash": verification.graph_hash,
                 "open-lineage-hash": verification.open_lineage_hash,
+                "table-artifacts": &bundle.manifest.table_artifacts,
+                "view-artifacts": &bundle.manifest.view_artifacts,
                 "standards": verification.standards,
             }),
         )?)
@@ -4653,9 +4655,22 @@ mod tests {
                             "table-count": 1,
                             "policy-binding-count": 1,
                             "verified-tables": ["local.default.events"],
+                            "verified-views": ["lakecat:view:local:default:active_customers"],
                             "bundle-hash": "sha256:bundle",
                             "graph-hash": "sha256:graph",
                             "open-lineage-hash": "sha256:openlineage",
+                            "table-artifacts": [{
+                                "stable-id": "local.default.events",
+                                "croissant-hash": "sha256:croissant",
+                                "cdif-hash": "sha256:cdif",
+                                "osi-hash": "sha256:osi",
+                                "odrl-hash": "sha256:odrl",
+                                "policy-bindings-hash": "sha256:policies"
+                            }],
+                            "view-artifacts": [{
+                                "stable-id": "lakecat:view:local:default:active_customers",
+                                "osi-hash": "sha256:view-osi"
+                            }],
                             "standards": ["OpenLineage", "Grust catalog graph"]
                         }
                     }),
@@ -4887,6 +4902,14 @@ mod tests {
             serde_json::json!("sha256:openlineage")
         );
         assert_eq!(
+            lineage_events[4].payload["table-artifacts"][0]["cdif-hash"],
+            serde_json::json!("sha256:cdif")
+        );
+        assert_eq!(
+            lineage_events[4].payload["view-artifacts"][0]["stable-id"],
+            serde_json::json!("lakecat:view:local:default:active_customers")
+        );
+        assert_eq!(
             lineage_events[5].event_type,
             LineageEventType::NamespaceDropped
         );
@@ -5068,9 +5091,22 @@ mod tests {
                         "table-count": 1,
                         "policy-binding-count": 1,
                         "verified-tables": ["local.default.events"],
+                        "verified-views": ["lakecat:view:local:default:active_customers"],
                         "bundle-hash": "sha256:bundle",
                         "graph-hash": "sha256:graph",
                         "open-lineage-hash": "sha256:openlineage",
+                        "table-artifacts": [{
+                            "stable-id": "local.default.events",
+                            "croissant-hash": "sha256:croissant",
+                            "cdif-hash": "sha256:cdif",
+                            "osi-hash": "sha256:osi",
+                            "odrl-hash": "sha256:odrl",
+                            "policy-bindings-hash": "sha256:policies"
+                        }],
+                        "view-artifacts": [{
+                            "stable-id": "lakecat:view:local:default:active_customers",
+                            "osi-hash": "sha256:view-osi"
+                        }],
                         "standards": ["OpenLineage", "Grust catalog graph"]
                     }
                 }),
@@ -5145,6 +5181,18 @@ mod tests {
         assert_eq!(
             lineage_events[0].payload["graph-hash"],
             serde_json::json!("sha256:graph")
+        );
+        assert_eq!(
+            lineage_events[0].payload["table-artifacts"][0]["croissant-hash"],
+            serde_json::json!("sha256:croissant")
+        );
+        assert_eq!(
+            lineage_events[0].payload["table-artifacts"][0]["policy-bindings-hash"],
+            serde_json::json!("sha256:policies")
+        );
+        assert_eq!(
+            lineage_events[0].payload["view-artifacts"][0]["osi-hash"],
+            serde_json::json!("sha256:view-osi")
         );
         assert_eq!(
             lineage_events[0].payload["standards"],

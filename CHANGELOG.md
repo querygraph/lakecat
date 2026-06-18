@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Persisted QueryGraph manifest table/view artifact hashes in the
+  `querygraph.bootstrap` audit/outbox payload and verified lineage-drain replay
+  preserves them.
 - Verified the `/querygraph/v1/bootstrap` response exposes OpenLineage
   semantic-bundle table/view artifact hashes that match the QueryGraph manifest.
 - Required QGLake bootstrap acceptance to verify every table and view artifact
