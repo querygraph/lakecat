@@ -938,6 +938,14 @@ fn verify_qglake_scan_tasks(
                     .to_string(),
             )
         })?;
+    if extension["read-restriction"]["allowed-columns"]
+        != json!(["event_id", "occurred_at", "severity"])
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake governed fetchScanTasks allowed columns were not re-applied as expected: {}",
+            extension["read-restriction"]["allowed-columns"].clone()
+        )));
+    }
     if extension["read-restriction"]["row-predicate"]
         != json!({
             "type": "not_eq",
@@ -2384,6 +2392,50 @@ mod tests {
         let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
             .expect_err("QGLake governed fetch should reject escaped data files");
         assert!(err.to_string().contains("escaped table location"));
+    }
+
+    #[test]
+    fn qglake_fetch_scan_tasks_verifier_rejects_widened_allowed_columns() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "lakecat-sail".to_string(),
+            plan_task: "lakecat:sail-json-hmac:test".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![serde_json::json!({
+                "data-file": {
+                    "file-path": "file:///tmp/lakecat-qglake/events/data/part-1.parquet"
+                }
+            })],
+            delete_files: Vec::new(),
+            plan_tasks: Vec::new(),
+            lakecat_plan_tasks: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": [
+                            "event_id",
+                            "occurred_at",
+                            "severity",
+                            "raw_payload"
+                        ],
+                        "row-predicate": {
+                            "type": "not_eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake governed fetch should reject widened columns");
+        assert!(err.to_string().contains("allowed columns"));
     }
 
     #[test]

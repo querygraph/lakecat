@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required the QGLake governed `fetchScanTasks` verifier to prove the fetched
+  residual read restriction still carries the narrowed allowed-column set,
+  preventing `raw_payload` from reappearing during task materialization.
 - Required the QGLake governed `fetchScanTasks` verifier to prove fetched
   Iceberg data-file paths remain under the fixture table location, rejecting
   escaped or wrong-table scan work.
