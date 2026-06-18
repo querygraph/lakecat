@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reconciled `GOAL.md` with the current `AGENTS.md` operating contract so the
+  durable goal carries one canonical copy of the LakeCat boundary, sibling-repo
+  placement, Turso, feature-gate, verification, and commit-discipline guidance.
 - Added view receipt evidence to the QueryGraph import compatibility contract,
   making view-bearing bootstrap verification require a compact receipt hash for
   each exported view version.
