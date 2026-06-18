@@ -274,11 +274,13 @@ metadata and commit semantics when upstream model support is ready.
 
 The TypeSec-gated issuer is well-shaped: `typesec://env/VAR` resolves locally,
 `vault://` resolves over HTTP after authorization, and `aws-sm://` / `gcp-sm://` /
-`azure-kv://` fail closed with explicit not-configured errors. Good posture. But
-Vault is HTTP-only with a mock-backed test, and the cloud resolvers are
-unimplemented — the GOAL lists production credential issuance as a milestone, and
-raw vending must stay the audited exception, so this needs real backends before
-any non-local deployment.
+`azure-kv://` fail closed with explicit not-configured errors. Every accepted
+production scheme is now exercised through the exact-secret-ref TypeSec
+authorization gate before failing closed when no resolver backend is configured.
+Good posture. But Vault is HTTP-only with a mock-backed test, and the cloud
+resolvers are unimplemented — the GOAL lists production credential issuance as a
+milestone, and raw vending must stay the audited exception, so this still needs
+real backends before any non-local deployment.
 
 ### F9. (LOW, by design) v4 remains JSON passthrough
 

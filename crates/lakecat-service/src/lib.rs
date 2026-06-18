@@ -6390,7 +6390,8 @@ mod tests {
     #[tokio::test]
     async fn typesec_credential_issuer_gates_production_secret_refs_before_dispatch() {
         use crate::typesec_credential_issuer::{
-            ExternalSecretRefCredentialResolver, TypeSecCredentialIssuer,
+            ExternalSecretRefCredentialResolver, SecretRefProvider, TypeSecCredentialIssuer,
+            secret_ref_provider,
         };
 
         let principal = Principal::new("did:example:agent", PrincipalKind::Agent).unwrap();
@@ -6426,33 +6427,62 @@ mod tests {
             },
         };
 
-        let issuer = TypeSecCredentialIssuer::new(
-            Arc::new(AllowCredentialIssuePolicy {
-                subject: "did:example:agent".to_string(),
-                resource: "vault://secret/data/lakecat/s3-events".to_string(),
-            }),
-            ExternalSecretRefCredentialResolver::new(),
-        );
-        let err = issuer.issue(request.clone()).await.unwrap_err();
-        assert!(matches!(err, LakeCatError::InvalidArgument(_)));
-        assert!(
-            err.to_string()
-                .contains("credential secret resolver for vault is not configured")
-        );
+        for (secret_ref, provider_label) in [
+            (
+                "vault://secret/data/lakecat/s3-events",
+                SecretRefProvider::Vault.as_str(),
+            ),
+            (
+                "aws-sm://lakecat/s3-events",
+                SecretRefProvider::AwsSecretsManager.as_str(),
+            ),
+            (
+                "gcp-sm://lakecat/s3-events",
+                SecretRefProvider::GcpSecretManager.as_str(),
+            ),
+            (
+                "azure-kv://lakecat/s3-events",
+                SecretRefProvider::AzureKeyVault.as_str(),
+            ),
+        ] {
+            let mut request = request.clone();
+            request.profile.secret_ref = Some(secret_ref.to_string());
+            assert_eq!(
+                secret_ref_provider(secret_ref).unwrap().as_str(),
+                provider_label
+            );
 
-        let denied = TypeSecCredentialIssuer::new(
-            Arc::new(AllowCredentialIssuePolicy {
-                subject: "did:example:other".to_string(),
-                resource: "vault://secret/data/lakecat/s3-events".to_string(),
-            }),
-            ExternalSecretRefCredentialResolver::new(),
-        );
-        let err = denied.issue(request).await.unwrap_err();
-        assert!(matches!(err, LakeCatError::Conflict(_)));
-        assert!(
-            err.to_string()
-                .contains("TypeSec denied credential issuance")
-        );
+            let issuer = TypeSecCredentialIssuer::new(
+                Arc::new(AllowCredentialIssuePolicy {
+                    subject: "did:example:agent".to_string(),
+                    resource: secret_ref.to_string(),
+                }),
+                ExternalSecretRefCredentialResolver::with_env_reader(|_| {
+                    Err(std::env::VarError::NotPresent)
+                }),
+            );
+            let err = issuer.issue(request.clone()).await.unwrap_err();
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            assert!(err.to_string().contains(&format!(
+                "credential secret resolver for {provider_label} is not configured"
+            )));
+
+            let denied = TypeSecCredentialIssuer::new(
+                Arc::new(AllowCredentialIssuePolicy {
+                    subject: "did:example:other".to_string(),
+                    resource: secret_ref.to_string(),
+                }),
+                ExternalSecretRefCredentialResolver::with_env_reader(|_| {
+                    Err(std::env::VarError::NotPresent)
+                }),
+            );
+            let err = denied.issue(request).await.unwrap_err();
+            assert!(matches!(err, LakeCatError::Conflict(_)));
+            assert!(
+                err.to_string()
+                    .contains("TypeSec denied credential issuance")
+            );
+        }
     }
 
     #[cfg(feature = "typesec-local")]

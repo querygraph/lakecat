@@ -144,7 +144,7 @@ build is reproducible off this machine.
 | F5 | Scans bypass the in-process provider | MEDIUM | STARTED — REST `sail-local` plan and fetch routes now use provider seams |
 | F6 | Catalog graph is event breadcrumbs | MEDIUM | STARTED — bounded taxonomy replays through Grust |
 | F7 | Tenancy hierarchy durable but not fully routed | LOW | STARTED — Server/Project/Warehouse/View records and registered warehouse-prefixed routing |
-| F8 | Production secret backends unexercised | LOW | OPEN (fails closed) |
+| F8 | Production secret backends unexercised | LOW | STARTED — all accepted production secret-ref schemes are TypeSec-gated before fail-closed resolver errors |
 | F9 | v4 JSON passthrough | LOW | OPEN by design |
 | F10 | Sibling deps local-only; CI manual | LOW (process) | OPEN |
 
@@ -275,7 +275,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   warehouses under their durable project while keeping the unprefixed
   default-warehouse compatibility path; credential-vend attempts with
   fine-grained restrictions now fail closed into governed Sail-planned reads
-  before any secret resolver is called; governed view list/upsert management
+  before any secret resolver is called; all accepted production secret-ref
+  schemes are now exercised through TypeSec authorization before failing closed
+  when no resolver backend is configured; governed view list/upsert management
   endpoints now persist durable `ViewRecord` values in memory and Turso and emit
   audited `view.*` events; warehouse-prefixed catalog REST aliases now list,
   load, and upsert those durable views; QueryGraph bootstrap now exports those

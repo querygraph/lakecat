@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Exercised TypeSec-gated production secret-ref handling for `vault://`,
+  `aws-sm://`, `gcp-sm://`, and `azure-kv://`, proving each accepted provider
+  authorizes the exact secret URI before failing closed when no resolver backend
+  is configured.
 - Added catalog-path view REST aliases for listing, loading, and upserting
   durable views under
   `/catalog/v1/{warehouse}/namespaces/{namespace}/views`, with governed

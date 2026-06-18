@@ -308,8 +308,11 @@ the same TypeSec authorization boundary. `vault://` refs can resolve through a
 Vault HTTP backend when `LAKECAT_VAULT_ADDR` / `LAKECAT_VAULT_TOKEN` (or the
 standard `VAULT_ADDR` / `VAULT_TOKEN`) are configured; the remaining production
 providers fail closed with explicit not-configured errors until their SDK
-resolvers are enabled. Governed management endpoints can now upsert and list
-warehouse storage profiles, and Turso persists those profiles for
+resolvers are enabled. Tests now cover every accepted production secret-ref
+scheme (`vault://`, `aws-sm://`, `gcp-sm://`, and `azure-kv://`) through the
+TypeSec authorization gate before that fail-closed resolver boundary. Governed
+management endpoints can now upsert and list warehouse storage profiles, and
+Turso persists those profiles for
 longest-prefix credential selection. Production external secret-store resolver
 backend coverage beyond Vault remains pending. Governed management endpoints can
 also upsert and list durable semantic view records in memory and Turso, giving
