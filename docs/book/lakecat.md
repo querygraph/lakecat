@@ -906,9 +906,10 @@ QueryGraph handoff a durable proof that the exported view version came from
 LakeCat's catalog spine. The fixture also exercises the deletion side of the
 same workflow: it creates a transient view, accepts a QueryGraph bootstrap that
 contains that view, drops the view, reads the receipt chain through the governed
-management endpoint, and then requires lineage-drain replay to include
-`view.dropped` plus `view.version-receipts-listed` evidence with a non-empty
-tombstone receipt hash.
+management endpoints by view name and namespace, and then requires
+lineage-drain replay to include `view.dropped`,
+`view.version-receipts-listed`, and `view.version-receipt-chains-listed`
+evidence with non-empty tombstone receipt hashes.
 
 QueryGraph and operators can also read the compact receipt chain directly from
 the governed management surface:
@@ -976,7 +977,10 @@ That tombstone read is replayable too. LakeCat projects
 `view.version-receipts-listed` and `view.version-receipt-chains-listed` as
 lineage evidence, not as graph topology. The graph taxonomy stays in Grust;
 LakeCat only proves that the governed read saw the tombstone receipt needed to
-explain why a previously accepted view is now deleted.
+explain why a previously accepted view is now deleted. The QGLake fixture now
+fails if the namespace-level receipt-chain read is absent from lineage-drain
+replay, so QueryGraph acceptance can depend on the compact chain evidence
+without scraping store internals.
 
 ### QueryGraph Bootstrap
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made QGLake consume the namespace-level `view-version-receipt-chains` read
+  after dropping its transient view and reject lineage drains that do not replay
+  the chain read as compact tombstone evidence.
 - Mirrored the current `AGENTS.md` operating contract into `GOAL.md` as a
   permanent goal constraint, including sibling-repo placement, compatibility,
   Turso, feature-gate, outbox, and commit-discipline guidance.

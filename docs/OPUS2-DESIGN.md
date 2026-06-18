@@ -338,8 +338,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   reusable view graph topology to Grust; governed view receipt-chain reads now
   replay into lineage, and a namespace-level `view-version-receipt-chains`
   read groups active and tombstoned chains for QueryGraph/operators so QGLake
-  can create, bootstrap, drop, receipt-check, and drain a transient view while
-  rejecting dropped-view replay that lacks tombstone receipt evidence;
+  can create, bootstrap, drop, receipt-check by view and namespace, and drain a
+  transient view while rejecting dropped-view replay that lacks either per-view
+  tombstone receipt evidence or namespace-level receipt-chain evidence;
   QueryGraph bootstrap now exports those stored views with manifest-covered OSI
   hashes, typed view columns, durable view versions, view-aware graph edges,
   and OpenLineage view counts, and QGLake

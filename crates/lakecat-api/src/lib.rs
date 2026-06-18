@@ -72,6 +72,8 @@ impl Default for CatalogConfigResponse {
                     .to_string(),
                 "GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}/version-receipts"
                     .to_string(),
+                "GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/view-version-receipt-chains"
+                    .to_string(),
                 "DELETE /management/v1/warehouses/{warehouse}/namespaces/{namespace}/views/{view}"
                     .to_string(),
                 "GET /management/v1/warehouses/{warehouse}/policies".to_string(),
