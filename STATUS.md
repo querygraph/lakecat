@@ -6,6 +6,22 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `a4c4975 Verify all QGLake OpenLineage artifacts`.
+- Paused after pushing the all-artifact OpenLineage proof slice. The
+  `lakecat-cli qglake-fixture` bootstrap verifier now checks every table and
+  view artifact listed in the QueryGraph manifest against the OpenLineage
+  semantic-bundle hash evidence, so a bundle cannot pass by matching only the
+  selected fixture table while carrying drifted evidence for another artifact.
+- Local verification for the pushed all-artifact OpenLineage proof slice was
+  green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_bootstrap`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`.
+- This status commit records the pushed all-artifact OpenLineage proof slice.
+- Previous implementation slice:
   `570b973 Mirror QueryGraph artifact hashes in OpenLineage`.
 - Paused after pushing the QueryGraph OpenLineage artifact-hash proof slice. The
   QueryGraph bootstrap OpenLineage `queryGraph_semanticBundle` facet now carries
