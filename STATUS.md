@@ -6,11 +6,11 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `ee37279 Reapply governed scan restrictions on fetch`.
-- Current working slice: TypeSec delegate fallback composition. LakeCat's
-  TypeSec governance wrapper now exposes a TypeSec-owned priority fallback
-  composition path so a delegated primary policy decision can fall through to an
-  RBAC-style fallback instead of being treated as an implicit catalog denial.
+  working changes: `509d8f3 Compose TypeSec delegated governance fallback`.
+- Current working slice: REST commit idempotency. Table commit requests now
+  accept a validated `x-lakecat-idempotency-key` header and pass it into the
+  store replay path so duplicate keyed REST commits do not create a second
+  metadata pointer-log row.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -80,6 +80,12 @@ Updated: 2026-06-18
 - Added a `typesec-local` test proving a delegated primary policy allows
   authorization through a fallback engine while preserving the authorization
   context and policy hash.
+- Wired REST table commits to the store's existing idempotency replay by
+  parsing `x-lakecat-idempotency-key` and passing it into `TableCommit`.
+- Added conservative idempotency-key validation: non-empty ASCII keys up to 128
+  characters using alphanumeric characters plus `-`, `_`, `.`, and `:`.
+- Added a service-level test proving two REST commits with the same
+  idempotency key replay to one table version and one commit-log row.
 - Parsed a minimal enforceable ODRL subset from active policy bindings:
   `allowed-columns` / `allowedColumns` at the policy root, in
   `lakecat:read-restriction`, or in ODRL constraints, plus purpose and policy
@@ -165,6 +171,13 @@ Updated: 2026-06-18
 
 ## Verification Completed
 
+- REST commit idempotency focused checks passed:
+  `cargo fmt -p lakecat-service -- --check`,
+  `cargo test -p lakecat-service commit_replays_rest_idempotency_key -- --nocapture`,
+  `cargo test -p lakecat-service`,
+  `cargo test -p lakecat-store --features turso-local`,
+  `git diff --check`, and
+  `cargo test --workspace --all-features`.
 - TypeSec delegate fallback focused checks passed:
   `cargo fmt -p lakecat-security -- --check`,
   `cargo test -p lakecat-security --features typesec-local delegates_to_typesec_fallback_policy_engine -- --nocapture`,

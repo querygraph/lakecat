@@ -16,6 +16,10 @@
   TypeSec's priority fallback semantics, letting delegated ODRL-style policy
   decisions fall through to an RBAC-style policy engine instead of becoming an
   implicit catalog denial.
+- Wired REST table commits to the store's idempotency replay path via the
+  `x-lakecat-idempotency-key` header, with conservative header validation and
+  a service test proving duplicate keyed commits produce a single pointer-log
+  record.
 - Changed the QueryGraph bootstrap OSI artifact from a LakeCat-authored semantic
   model into a stable OSI handoff: LakeCat now publishes dataset/field anchors
   and governed Sail/LakeCat source metadata while leaving metrics, dimensions,

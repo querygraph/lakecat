@@ -1176,6 +1176,7 @@ async fn commit_table(
     Path((namespace, table)): Path<(String, String)>,
     Json(request): Json<CommitTableRequest>,
 ) -> Result<Json<CommitTableResponse>, LakeCatHttpError> {
+    let idempotency_key = request_idempotency_key(&headers)?;
     let identity = request_identity(&headers)?;
     let ident = table_ident(state.warehouse.as_str(), namespace, table)?;
     let capability = authorize_table_commit(&state, identity, ident).await?;
@@ -1205,7 +1206,7 @@ async fn commit_table(
                 expected_previous_metadata_location: current_metadata_location.clone(),
                 new_metadata_location: commit_plan.new_metadata_location.clone(),
                 new_metadata: Some(commit_plan.new_metadata.clone()),
-                idempotency_key: None,
+                idempotency_key,
                 principal: capability.receipt().principal.clone(),
                 authorization_receipt: Some(serde_json::to_value(capability.receipt()).map_err(
                     |err| {
@@ -1987,6 +1988,34 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
         envelope,
         typedid_envelope: typedid_envelope.map(ToString::to_string),
     })
+}
+
+fn request_idempotency_key(headers: &HeaderMap) -> Result<Option<String>, LakeCatHttpError> {
+    let Some(value) = headers.get("x-lakecat-idempotency-key") else {
+        return Ok(None);
+    };
+    let key = value.to_str().map_err(|_| {
+        LakeCatError::InvalidArgument(
+            "invalid UTF-8 in x-lakecat-idempotency-key header".to_string(),
+        )
+    })?;
+    if key.is_empty() || key.len() > 128 {
+        return Err(LakeCatError::InvalidArgument(
+            "x-lakecat-idempotency-key must be 1..=128 ASCII characters".to_string(),
+        )
+        .into());
+    }
+    if !key
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | ':'))
+    {
+        return Err(LakeCatError::InvalidArgument(
+            "x-lakecat-idempotency-key may only contain A-Z, a-z, 0-9, '-', '_', '.', or ':'"
+                .to_string(),
+        )
+        .into());
+    }
+    Ok(Some(key.to_string()))
 }
 
 async fn verify_typedid_identity(
@@ -3090,6 +3119,51 @@ mod tests {
             serde_json::json!(43)
         );
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn commit_replays_rest_idempotency_key() {
+        let store = MemoryCatalogStore::new();
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            store.clone(),
+        ));
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"table-uuid":"11111111-1111-1111-1111-111111111111","location":"file:///tmp/events","last-sequence-number":7,"last-updated-ms":1710000000000,"last-column-id":1,"schemas":[{"type":"struct","schema-id":1,"fields":[{"id":1,"name":"id","type":"string","required":true}]}],"current-schema-id":1,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"current-snapshot-id":42,"snapshots":[{"snapshot-id":42,"sequence-number":7,"timestamp-ms":1710000000000,"summary":{"operation":"append"},"schema-id":1}],"snapshot-log":[{"timestamp-ms":1710000000000,"snapshot-id":42}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        for _ in 0..2 {
+            let commit = Request::builder()
+                .method(Method::POST)
+                .uri("/catalog/v1/namespaces/default/tables/events/commit")
+                .header("content-type", "application/json")
+                .header("x-lakecat-idempotency-key", "commit:events:0001")
+                .body(Body::from(r#"{"requirements":[],"updates":[]}"#))
+                .unwrap();
+            let response = app.clone().oneshot(commit).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(
+                payload["metadata-location"],
+                serde_json::json!("file:///tmp/events/metadata/00000.json")
+            );
+        }
+
+        let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+        let records = store.table_commit_records(&ident, 0, None).await.unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].sequence_number, 1);
+        assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
     }
 
     #[cfg(feature = "sail-local")]

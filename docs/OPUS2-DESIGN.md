@@ -139,7 +139,7 @@ build is reproducible off this machine.
 | --- | --- | --- | --- |
 | F1 | Governed read gates but does not mask | HIGH | OPEN — critical path |
 | F2 | ODRL transported, not interpreted; `Delegate` → deny | HIGH | OPEN — critical path |
-| F3 | Commit idempotency unreachable from REST | MEDIUM | OPEN — store-side ready |
+| F3 | Commit idempotency unreachable from REST | MEDIUM | STARTED — REST header replay wired |
 | F4 | Metadata written before CAS; no orphan handling/retry | MEDIUM | OPEN |
 | F5 | Scans bypass the in-process provider | MEDIUM | OPEN — enables F1 |
 | F6 | Catalog graph is event breadcrumbs | MEDIUM | OPEN — Grust seam ready |
@@ -183,7 +183,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond
-  `file://` to the declared `object_store` backends.
+  `file://` to the declared `object_store` backends. *Started: REST commits now
+  accept validated `x-lakecat-idempotency-key` values and replay through the
+  store idempotency record instead of creating a second pointer-log row.*
 - **P4 — Semantic catalog graph (F6).** Emit the bounded typed taxonomy
   (Namespace/Table/Column/Snapshot/Policy/Principal/ScanPlan/Commit) through the
   outbox into Grust; keep file-granularity as metadata-as-data. Then OpenLineage
