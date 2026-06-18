@@ -3168,6 +3168,14 @@ async fn project_outbox_event(
         receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "table.restored" {
         if let Some(table) = table {
+            state
+                .graph
+                .emit(
+                    GraphEvent::table(GraphAction::Loaded, table.clone(), event_payload.clone())
+                        .with_event_id(event.event_id.clone()),
+                )
+                .await?;
+            receipt.graph_events += 1;
             let lineage_receipt = state
                 .lineage
                 .emit(LineageEvent::new(
@@ -5653,6 +5661,101 @@ mod tests {
         assert_eq!(
             lineage_events[0].payload["warehouse"],
             serde_json::json!("local")
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_projects_table_restores_to_graph_and_lineage() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-table-restore".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.restored".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-table-restore",
+                    "event-type": "table.restored",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-restore",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "table": "events",
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let drain = drain_outbox_once(&state, 10).await.unwrap();
+        assert_eq!(drain.delivered, 1);
+        assert_eq!(drain.event_types, vec!["table.restored".to_string()]);
+        assert_eq!(drain.graph_events, 2);
+        assert_eq!(drain.lineage_events, 1);
+        assert_eq!(
+            store.delivered.lock().await.as_slice(),
+            &["evt-table-restore".to_string()]
+        );
+        assert_eq!(drain.events.len(), 1);
+        assert_eq!(drain.events[0].graph_events, 2);
+        assert_eq!(drain.events[0].lineage_events, 1);
+
+        let graph_events = graph.events.lock().await;
+        assert_eq!(graph_events.len(), 2);
+        assert_eq!(graph_events[0].label, GraphNodeLabel::Principal);
+        assert_eq!(
+            graph_events[0].event_id.as_deref(),
+            Some("evt-table-restore:principal")
+        );
+        assert_eq!(graph_events[1].label, GraphNodeLabel::Table);
+        assert_eq!(graph_events[1].action, GraphAction::Loaded);
+        assert_eq!(
+            graph_events[1].subject,
+            "lakecat:table:local:default:events"
+        );
+        assert_eq!(
+            graph_events[1].event_id.as_deref(),
+            Some("evt-table-restore")
+        );
+        assert_eq!(
+            graph_events[1].properties["metadata-location"],
+            serde_json::json!("file:///tmp/events/metadata/00000.json")
+        );
+        drop(graph_events);
+
+        let lineage_events = lineage.events.lock().await;
+        assert_eq!(lineage_events.len(), 1);
+        assert_eq!(
+            lineage_events[0].event_type,
+            LineageEventType::TableRestored
+        );
+        assert_eq!(
+            lineage_events[0].payload["metadata-location"],
+            serde_json::json!("file:///tmp/events/metadata/00000.json")
         );
     }
 

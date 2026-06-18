@@ -42,16 +42,20 @@ update the docs as part of the logical unit.
 ## Repo Boundaries
 
 - Push reusable Iceberg format, manifest, scan-planning, pruning, delete
-  handling, metadata-as-data, and engine work into Sail.
+  handling, metadata-as-data, and engine work into Sail
+  (`/Users/alexy/src/sail`) whenever it can be reusable. LakeCat should prefer
+  Sail APIs and generated Iceberg REST models over local reimplementation.
 - Push graph schema, taxonomy, projection, traversal, query, storage, and Cypher
-  behavior into Grust. LakeCat may keep only the catalog-facing sink/projection
-  boundary and must call Grust APIs.
+  behavior into Grust (`/Users/alexy/src/grust`). LakeCat may keep only the
+  catalog-facing sink/projection boundary and must call Grust APIs.
 - Push governance, policy composition, TypeDID envelopes, secure agents,
-  capabilities, and authorization semantics into TypeSec. LakeCat asks TypeSec
-  for decisions and proofs, then persists receipts.
-- Treat QueryGraph as the end-to-end acceptance target. LakeCat should naturally
-  support QueryGraph bootstrap, QGLake flows, Croissant/CDIF/OSI/ODRL/OpenLineage
-  projection, and governed agent access without importing QueryGraph.
+  capabilities, and authorization semantics into TypeSec
+  (`/Users/alexy/src/typesec`). LakeCat asks TypeSec for decisions and proofs,
+  then persists receipts.
+- Treat QueryGraph (`/Users/alexy/src/querygraph`) as the end-to-end acceptance
+  target. LakeCat should naturally support QueryGraph bootstrap, QGLake flows,
+  Croissant/CDIF/OSI/ODRL/OpenLineage projection, and governed agent access
+  without importing QueryGraph.
 - Treat the LakeCat book as part of the development workflow, not a side
   artifact. Keep growing it as implementation lands, with substantial
   end-to-end examples that show how the catalog participates in real user
@@ -101,6 +105,12 @@ Continue moving toward:
   semantics belong in TypeSec.
 - Move graph and lineage side effects toward the transactional outbox so catalog
   state changes are not lost or blocked by external sinks.
+- Keep feature gates honest. Default-feature tests should pass, and real
+  integrations must remain explicit rather than quietly becoming required for
+  embedded or unit-test use.
+- Keep LakeCat's durable local spine on the Rust `turso` crate. The
+  `CatalogStore` contract should stay portable, but SQLx/SQLite should not be
+  reintroduced unless explicitly requested.
 
 ## Working Rule
 

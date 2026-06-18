@@ -337,6 +337,9 @@ audited `catalog.config-read`, `namespace.listed`, `namespace.loaded`, and
 Governed table lifecycle now records soft-delete rows, hides deleted tables from
 normal catalog reads, restores soft-deleted tables through a governed management
 endpoint, and emits `table.deleted` / `table.restored` audit/outbox events.
+Restore replay now produces catalog-facing table graph evidence plus a LakeCat
+OpenLineage restore receipt, with richer restore-specific graph semantics left
+to Grust.
 Governed policy management endpoints can now upsert/list enforced ODRL policy
 bindings, and active table bindings are attached to authorization context before
 TypeSec runs.

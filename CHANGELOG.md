@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Clarified `GOAL.md` with path-qualified Sail, Grust, TypeSec, and QueryGraph
+  boundaries plus explicit feature-gate and Turso durable-spine guidance.
+- Replayed `table.restored` outbox events into catalog-facing Table graph
+  events alongside the existing LakeCat OpenLineage restore receipt, keeping
+  restore evidence durable without adding restore-specific graph semantics in
+  LakeCat.
 - Replayed `catalog.config-read` outbox events into warehouse-scoped catalog
   graph events and LakeCat OpenLineage receipts so the standard Iceberg REST
   configuration entrypoint carries durable replay evidence.

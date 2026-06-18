@@ -920,7 +920,9 @@ listing at the warehouse; and `namespace.loaded` records the specific namespace
 resolved through the standard catalog route. For view events, the response
 includes the warehouse, namespace, view name, and QueryGraph-compatible stable
 id, so downstream acceptance can check replay identity without parsing the full
-audit payload.
+audit payload. Table restores replay as table graph evidence plus a restore
+OpenLineage receipt, so a soft-deleted table returning to service is visible to
+QueryGraph without forcing LakeCat to invent restore-specific graph taxonomy.
 
 The end-to-end result is a chain:
 
