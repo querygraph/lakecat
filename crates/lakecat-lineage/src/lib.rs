@@ -45,6 +45,7 @@ pub enum LineageEventType {
     PolicyBindingUpserted,
     ProjectUpserted,
     ServerUpserted,
+    StorageProfileUpserted,
     TableCreated,
     TableLoaded,
     TableScanPlanned,
@@ -207,6 +208,22 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
                 }
             }
         })],
+        LineageEventType::StorageProfileUpserted => vec![json!({
+            "namespace": "lakecat.storage-profile",
+            "name": event
+                .payload
+                .pointer("/storage-profile/profile-id")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown"),
+            "facets": {
+                "lakecat_storageProfile": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-storage-profile-facet/0.1.0.json",
+                    "warehouse": event.payload.get("warehouse"),
+                    "payload": event.payload,
+                }
+            }
+        })],
         LineageEventType::WarehouseUpserted => vec![json!({
             "namespace": "lakecat.warehouse",
             "name": event
@@ -279,6 +296,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::PolicyBindingUpserted => "policy-binding-upserted",
         LineageEventType::ProjectUpserted => "project-upserted",
         LineageEventType::ServerUpserted => "server-upserted",
+        LineageEventType::StorageProfileUpserted => "storage-profile-upserted",
         LineageEventType::TableCreated => "table-created",
         LineageEventType::TableLoaded => "table-loaded",
         LineageEventType::TableScanPlanned => "table-scan-planned",
@@ -482,6 +500,39 @@ mod tests {
         assert_eq!(
             server["outputs"][0]["facets"]["lakecat_server"]["payload"]["server-record"]["display-name"],
             json!("Production")
+        );
+
+        let storage_profile = open_lineage_event(&LineageEvent::new(
+            LineageEventType::StorageProfileUpserted,
+            Principal::anonymous(),
+            None,
+            json!({
+                "warehouse": "local",
+                "storage-profile": {
+                    "profile-id": "s3-events",
+                    "location-prefix": "s3://lakecat/events",
+                    "provider": "s3",
+                    "issuance-mode": "secret-ref"
+                }
+            }),
+        ));
+        assert_eq!(
+            storage_profile["job"]["name"],
+            json!("storage-profile-upserted")
+        );
+        assert_eq!(
+            storage_profile["outputs"][0]["namespace"],
+            json!("lakecat.storage-profile")
+        );
+        assert_eq!(storage_profile["outputs"][0]["name"], json!("s3-events"));
+        assert_eq!(
+            storage_profile["outputs"][0]["facets"]["lakecat_storageProfile"]["warehouse"],
+            json!("local")
+        );
+        assert_eq!(
+            storage_profile["outputs"][0]["facets"]["lakecat_storageProfile"]["payload"]["storage-profile"]
+                ["provider"],
+            json!("s3")
         );
 
         let warehouse = open_lineage_event(&LineageEvent::new(
