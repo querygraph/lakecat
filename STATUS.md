@@ -6,6 +6,23 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `db252d3 Require QGLake Sail planner identity`.
+- Paused after pushing the QGLake Sail planner-identity proof slice. The
+  `lakecat-cli qglake-fixture` governed scan-plan and `fetchScanTasks`
+  verifiers now reject responses whose `planned_by` value is not
+  `sail-rest-models`, proving the acceptance path is the Sail REST-model
+  planner/fetch expansion rather than a non-Sail compatible response.
+- Local verification for the pushed QGLake Sail planner-identity proof slice
+  was green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_scan_plan_verifier`;
+  `cargo test -p lakecat-cli qglake_fetch_scan_tasks_verifier`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service fetch_scan_tasks_exposes_iceberg_rest_plan_task_tokens --features sail-local,turso-local`.
+- This status commit records the pushed QGLake Sail planner-identity proof
+  slice.
+- Previous implementation slice:
   `7df6e99 Require QGLake fetched column proof`.
 - Paused after pushing the QGLake fetched-column proof slice. The
   `lakecat-cli qglake-fixture` governed `fetchScanTasks` verifier now rejects
