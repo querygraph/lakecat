@@ -6,6 +6,21 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `d38d1f2 Validate QGLake metadata pointer reruns`.
+- Paused after pushing the QGLake metadata-pointer rerun validation slice.
+  `lakecat-cli qglake-fixture` now rejects existing fixture tables when the
+  advertised local `metadata_location` file is missing, invalid, or drifted
+  from the Iceberg metadata returned by the catalog, so reruns cannot silently
+  accept a non-openable metadata pointer.
+- Local verification for the pushed QGLake metadata-pointer rerun validation
+  slice was green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_existing_table_verifier`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli qglake`.
+- This status commit records the pushed QGLake metadata-pointer rerun
+  validation slice.
+- Previous implementation slice:
   `e201570 Write QGLake metadata pointer file`.
 - Paused after pushing the QGLake metadata-pointer file slice. The local
   QGLake fixture now writes the Iceberg table metadata JSON at the advertised
