@@ -6,6 +6,32 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `cbda084 Add Sail provider view column bridge`.
+- Paused after pushing the Sail provider view-column bridge. `ViewRecord` now
+  persists typed view columns in memory and Turso, the management/catalog view
+  APIs accept and return those columns, QueryGraph bootstrap exports them in
+  view projections and OSI handoff, and the in-process Sail `CatalogProvider`
+  can create, load, list, and drop durable LakeCat views as `TableKind::View`
+  statuses. Full Iceberg view version/commit semantics remain pending.
+- Local verification for the pushed Sail provider view-column bridge slice was
+  green:
+  `cargo fmt -p lakecat-api -p lakecat-store -p lakecat-service -p lakecat-querygraph -p lakecat-sail -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-sail --features catalog-provider provider_manages_durable_views_with_typed_columns -- --nocapture`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities -- --nocapture`;
+  `cargo test -p lakecat-querygraph projects_catalog_views_into_querygraph_bundle`;
+  `cargo test -p lakecat-store memory_store_persists_view_records`;
+  `cargo test -p lakecat-store --features turso-local turso_store_persists_view_records`;
+  `cargo test -p lakecat-store`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-querygraph`;
+  `cargo test -p lakecat-sail --features catalog-provider`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`.
+- This status commit records the pushed Sail provider view-column bridge slice.
+- Previous implementation slice:
   `b73f503 Add governed namespace load and drop`.
 - Paused after pushing governed namespace load/drop. Unprefixed and
   warehouse-prefixed Iceberg REST catalog paths can now load and delete durable
