@@ -6,11 +6,11 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `509d8f3 Compose TypeSec delegated governance fallback`.
-- Current working slice: REST commit idempotency. Table commit requests now
-  accept a validated `x-lakecat-idempotency-key` header and pass it into the
-  store replay path so duplicate keyed REST commits do not create a second
-  metadata pointer-log row.
+  working changes: `c3f9bae Expose REST commit idempotency keys`.
+- Current working slice: bounded metadata orphan cleanup. File-backed metadata
+  objects written during commit planning are now deleted when the subsequent
+  catalog pointer commit fails, unless the object is the previous metadata
+  location.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -86,6 +86,12 @@ Updated: 2026-06-18
   characters using alphanumeric characters plus `-`, `_`, `.`, and `:`.
 - Added a service-level test proving two REST commits with the same
   idempotency key replay to one table version and one commit-log row.
+- Added a `PlannedMetadataWrite` handle for local `file://` metadata writes so
+  the service can clean up a newly written metadata JSON object if the store
+  commit/CAS step rejects the commit.
+- Added a `sail-local` service test proving a stale commit requirement that
+  writes a new metadata location returns `409 Conflict` and removes the
+  uncommitted metadata file.
 - Parsed a minimal enforceable ODRL subset from active policy bindings:
   `allowed-columns` / `allowedColumns` at the policy root, in
   `lakecat:read-restriction`, or in ODRL constraints, plus purpose and policy
@@ -171,6 +177,13 @@ Updated: 2026-06-18
 
 ## Verification Completed
 
+- Bounded metadata orphan cleanup focused checks passed:
+  `cargo fmt -p lakecat-service -- --check`,
+  `cargo test -p lakecat-service --features sail-local stale_commit_cleans_up_uncommitted_metadata_file -- --nocapture`,
+  `cargo test -p lakecat-service --features sail-local stale_commit_requirement_returns_conflict_with_sail_local_engine -- --nocapture`,
+  `cargo test -p lakecat-service --features sail-local`,
+  `git diff --check`, and
+  `cargo test --workspace --all-features`.
 - REST commit idempotency focused checks passed:
   `cargo fmt -p lakecat-service -- --check`,
   `cargo test -p lakecat-service commit_replays_rest_idempotency_key -- --nocapture`,

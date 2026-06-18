@@ -20,6 +20,9 @@
   `x-lakecat-idempotency-key` header, with conservative header validation and
   a service test proving duplicate keyed commits produce a single pointer-log
   record.
+- Added bounded cleanup for local metadata objects written during commit
+  planning when the subsequent catalog pointer commit fails, preventing stale
+  CAS/rejected commits from leaving orphaned `file://` metadata JSON behind.
 - Changed the QueryGraph bootstrap OSI artifact from a LakeCat-authored semantic
   model into a stable OSI handoff: LakeCat now publishes dataset/field anchors
   and governed Sail/LakeCat source metadata while leaving metrics, dimensions,

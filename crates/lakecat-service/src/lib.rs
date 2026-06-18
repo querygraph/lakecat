@@ -1195,8 +1195,8 @@ async fn commit_table(
             updates: request.updates,
         })
         .await?;
-    write_planned_metadata(&commit_plan).await?;
-    let table = state
+    let metadata_write = write_planned_metadata(&commit_plan).await?;
+    let table = match state
         .store
         .commit_table(
             capability.table(),
@@ -1217,21 +1217,34 @@ async fn commit_table(
                 )?),
             },
         )
-        .await?;
+        .await
+    {
+        Ok(table) => table,
+        Err(err) => {
+            cleanup_planned_metadata(metadata_write, current_metadata_location.as_deref()).await?;
+            return Err(err.into());
+        }
+    };
     Ok(Json(CommitTableResponse {
         metadata_location: table.metadata_location,
         metadata: table.metadata,
     }))
 }
 
+#[derive(Debug, Clone)]
+struct PlannedMetadataWrite {
+    location: String,
+    object_path: ObjectPath,
+}
+
 async fn write_planned_metadata(
     commit_plan: &lakecat_sail::CommitPlan,
-) -> Result<(), LakeCatError> {
+) -> Result<Option<PlannedMetadataWrite>, LakeCatError> {
     if !commit_plan.metadata_write_required {
-        return Ok(());
+        return Ok(None);
     }
     let Some(location) = commit_plan.new_metadata_location.as_deref() else {
-        return Ok(());
+        return Ok(None);
     };
     let url = Url::parse(location).map_err(|err| {
         LakeCatError::InvalidArgument(format!("invalid metadata location '{location}': {err}"))
@@ -1261,6 +1274,29 @@ async fn write_planned_metadata(
                 "failed to write metadata object '{location}': {err}"
             ))
         })?;
+    Ok(Some(PlannedMetadataWrite {
+        location: location.to_string(),
+        object_path,
+    }))
+}
+
+async fn cleanup_planned_metadata(
+    write: Option<PlannedMetadataWrite>,
+    previous_metadata_location: Option<&str>,
+) -> Result<(), LakeCatError> {
+    let Some(write) = write else {
+        return Ok(());
+    };
+    if previous_metadata_location == Some(write.location.as_str()) {
+        return Ok(());
+    }
+    let store = LocalFileSystem::new();
+    store.delete(&write.object_path).await.map_err(|err| {
+        LakeCatError::Internal(format!(
+            "failed to clean up uncommitted metadata object '{}': {err}",
+            write.location
+        ))
+    })?;
     Ok(())
 }
 
@@ -4443,6 +4479,101 @@ mod tests {
             .unwrap();
         let response = app.oneshot(commit).await.unwrap();
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[cfg(feature = "sail-local")]
+    #[tokio::test]
+    async fn stale_commit_cleans_up_uncommitted_metadata_file() {
+        let app = test_app();
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lakecat-orphan-cleanup-{unique}"));
+        let table_dir = root.join("events");
+        let metadata_dir = table_dir.join("metadata");
+        std::fs::create_dir_all(&metadata_dir).unwrap();
+        let table_location = url::Url::from_directory_path(&table_dir)
+            .expect("table dir URL")
+            .to_string();
+        let initial_metadata_location = url::Url::from_file_path(metadata_dir.join("00000.json"))
+            .unwrap()
+            .to_string();
+        let rejected_metadata_path = metadata_dir.join("00001.json");
+        let rejected_metadata_location = url::Url::from_file_path(&rejected_metadata_path)
+            .unwrap()
+            .to_string();
+        let base_metadata = serde_json::json!({
+            "format-version": 3,
+            "table-uuid": "11111111-1111-1111-1111-111111111111",
+            "location": table_location,
+            "last-sequence-number": 7,
+            "last-updated-ms": 1710000000000_i64,
+            "last-column-id": 1,
+            "schemas": [{
+                "type": "struct",
+                "schema-id": 1,
+                "fields": [{
+                    "id": 1,
+                    "name": "id",
+                    "type": "string",
+                    "required": true
+                }]
+            }],
+            "current-schema-id": 1,
+            "partition-specs": [{"spec-id": 0, "fields": []}],
+            "default-spec-id": 0,
+            "current-snapshot-id": 42,
+            "snapshots": [{
+                "snapshot-id": 42,
+                "sequence-number": 7,
+                "timestamp-ms": 1710000000000_i64,
+                "summary": {"operation": "append"},
+                "schema-id": 1
+            }],
+            "snapshot-log": [{"timestamp-ms": 1710000000000_i64, "snapshot-id": 42}]
+        });
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "name": "events",
+                    "location": table_location,
+                    "metadata-location": initial_metadata_location,
+                    "metadata": base_metadata,
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let mut rejected_metadata = base_metadata;
+        rejected_metadata["last-sequence-number"] = serde_json::json!(8);
+        rejected_metadata["last-updated-ms"] = serde_json::json!(1710000000100_i64);
+        let commit = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/commit")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "requirements": [{
+                        "type": "assert-current-schema-id",
+                        "current-schema-id": 9
+                    }],
+                    "updates": [],
+                    "metadata-location": rejected_metadata_location,
+                    "metadata": rejected_metadata,
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(commit).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert!(!rejected_metadata_path.exists());
+        let _ = std::fs::remove_dir_all(root);
     }
 
     fn test_app() -> Router {
