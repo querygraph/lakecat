@@ -6,6 +6,33 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `9433b18 Persist view version receipts`.
+- Paused after adding compact durable view-version receipts to memory and Turso
+  stores. Each view upsert now records the store-assigned version, previous
+  version, stable view id, content hash, principal, operation, and timestamp;
+  QueryGraph bootstrap audit/outbox payloads include matching compact receipt
+  hashes; lineage-drain summaries expose those hashes; and QGLake rejects
+  view-bearing replay that omits them.
+- Local verification for the view-version receipt slice was green:
+  `cargo fmt -p lakecat-store -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-store memory_store_persists_view_records`;
+  `cargo test -p lakecat-store turso_store_persists_view_records --features turso-local`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-service querygraph_bootstrap_projects_catalog_views`;
+  `cargo test -p lakecat-service outbox_drain_projects_view_events_to_graph_and_lineage`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-store -p lakecat-api -p lakecat-service -p lakecat-cli -p lakecat-sail -- --check`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Previous committed LakeCat implementation slice:
   `67ebd4f Bind QGLake view replay to view version`.
 - Paused after adding compact `view-version` evidence to lineage-drain event
   summaries and binding QGLake view replay acceptance to the accepted
@@ -2053,8 +2080,8 @@ Updated: 2026-06-18
 ## Next Recommended Slice
 
 Continue the local-first view semantics track by adding the next narrow bridge
-toward Iceberg view history: persist a compact view version audit/commit-log
-receipt or push the reusable history model into Sail if the work stops being
+toward Iceberg view history: expose a read-side receipt surface for QueryGraph
+or push the reusable history model into Sail if the work stops being
 catalog-boundary state. Keep CI manual-only until local gates are green and the
 temporary Sail patch bridge can be replaced by an upstream branch or published
 Sail helper crate.
