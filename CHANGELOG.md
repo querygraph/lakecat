@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake bootstrap acceptance to run the QueryGraph bundle manifest
+  verifier, rejecting tampered Croissant/CDIF/OSI/ODRL, graph, OpenLineage, or
+  bundle-hash content before accepting the handoff.
 - Required QGLake bootstrap OpenLineage acceptance to verify the event type,
   QueryGraph bootstrap job identity, and output data-source URI before accepting
   the handoff bundle.

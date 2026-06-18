@@ -643,7 +643,9 @@ fn verify_qglake_bootstrap_bundle(
     verify_qglake_bootstrap_standards(bundle)?;
     verify_qglake_bootstrap_projection(projection, namespace, table)?;
     verify_qglake_bootstrap_graph(bundle, projection)?;
-    verify_qglake_bootstrap_open_lineage(bundle, projection)
+    verify_qglake_bootstrap_open_lineage(bundle, projection)?;
+    bundle.verify_manifest()?;
+    Ok(())
 }
 
 const QGLAKE_BOOTSTRAP_STANDARDS: &[&str] = &[
@@ -2388,6 +2390,26 @@ mod tests {
     }
 
     #[test]
+    fn qglake_bootstrap_verifier_requires_manifest_hash_integrity() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let mut bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        bundle.tables[0].croissant["tampered"] = json!(true);
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect_err("QGLake bootstrap should reject tampered artifact content");
+        assert!(err.to_string().contains("Croissant hash mismatch"));
+    }
+
+    #[test]
     fn qglake_bootstrap_verifier_accepts_policy_and_openlineage_export() {
         let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
         let output = serde_json::json!({
@@ -3264,6 +3286,20 @@ mod tests {
         open_lineage_outputs: Vec<serde_json::Value>,
     ) -> QueryGraphBootstrap {
         let table_count = tables.len();
+        let table_artifacts = tables
+            .iter()
+            .map(|table| lakecat_querygraph::QueryGraphTableArtifactHashes {
+                stable_id: table.stable_id.clone(),
+                croissant_hash: content_hash_json(&table.croissant).unwrap(),
+                cdif_hash: content_hash_json(&table.cdif).unwrap(),
+                osi_hash: content_hash_json(&table.osi).unwrap(),
+                odrl_hash: content_hash_json(&table.odrl).unwrap(),
+                policy_bindings_hash: content_hash_json(
+                    &serde_json::to_value(&table.policy_bindings).unwrap(),
+                )
+                .unwrap(),
+            })
+            .collect::<Vec<_>>();
         let open_lineage_outputs = open_lineage_outputs
             .into_iter()
             .map(|mut output| {
@@ -3276,57 +3312,69 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let graph = lakecat_querygraph::QueryGraphCatalogGraph::from_tables(&tables);
-        QueryGraphBootstrap {
-            warehouse: lakecat_core::WarehouseName::new("local").unwrap(),
-            generated_at: chrono::Utc::now(),
-            bundle_hash: "test".to_string(),
-            manifest: lakecat_querygraph::QueryGraphBundleManifest {
-                schema_version: "lakecat.querygraph.bootstrap.v1".to_string(),
-                producer: "https://querygraph.ai/lakecat".to_string(),
-                standards: vec![
-                    "Iceberg REST".to_string(),
-                    "Croissant".to_string(),
-                    "CDIF".to_string(),
-                    "OSI handoff".to_string(),
-                    "ODRL".to_string(),
-                    "Grust catalog graph".to_string(),
-                    "OpenLineage".to_string(),
-                ],
-                table_artifacts: Vec::new(),
-                view_artifacts: Vec::new(),
-                graph_hash: "test".to_string(),
-                open_lineage_hash: "test".to_string(),
+        let open_lineage = serde_json::json!({
+            "eventType": "COMPLETE",
+            "job": {
+                "namespace": "lakecat.local",
+                "name": "querygraph-bootstrap"
             },
+            "producer": "https://querygraph.ai/lakecat",
+            "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json",
+            "run": {
+                "facets": {
+                    "queryGraph_semanticBundle": {
+                        "tableCount": table_count,
+                        "viewCount": 0,
+                        "standards": [
+                            "Iceberg REST",
+                            "Croissant",
+                            "CDIF",
+                            "OSI handoff",
+                            "ODRL",
+                            "Grust catalog graph",
+                            "OpenLineage"
+                        ]
+                    }
+                }
+            },
+            "outputs": open_lineage_outputs
+        });
+        let manifest = lakecat_querygraph::QueryGraphBundleManifest {
+            schema_version: "lakecat.querygraph.bootstrap.v1".to_string(),
+            producer: "https://querygraph.ai/lakecat".to_string(),
+            standards: vec![
+                "Iceberg REST".to_string(),
+                "Croissant".to_string(),
+                "CDIF".to_string(),
+                "OSI handoff".to_string(),
+                "ODRL".to_string(),
+                "Grust catalog graph".to_string(),
+                "OpenLineage".to_string(),
+            ],
+            table_artifacts,
+            view_artifacts: Vec::new(),
+            graph_hash: content_hash_json(&serde_json::to_value(&graph).unwrap()).unwrap(),
+            open_lineage_hash: content_hash_json(&open_lineage).unwrap(),
+        };
+        let warehouse = lakecat_core::WarehouseName::new("local").unwrap();
+        let bundle_hash = content_hash_json(&serde_json::json!({
+            "warehouse": warehouse.as_str(),
+            "manifest": &manifest,
+            "tables": &tables,
+            "views": Vec::<serde_json::Value>::new(),
+            "graph": &graph,
+            "openLineage": &open_lineage,
+        }))
+        .unwrap();
+        QueryGraphBootstrap {
+            warehouse,
+            generated_at: chrono::Utc::now(),
+            bundle_hash,
+            manifest,
             tables,
             views: Vec::new(),
             graph,
-            open_lineage: serde_json::json!({
-                "eventType": "COMPLETE",
-                "job": {
-                    "namespace": "lakecat.local",
-                    "name": "querygraph-bootstrap"
-                },
-                "producer": "https://querygraph.ai/lakecat",
-                "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json",
-                "run": {
-                    "facets": {
-                        "queryGraph_semanticBundle": {
-                            "tableCount": table_count,
-                            "viewCount": 0,
-                            "standards": [
-                                "Iceberg REST",
-                                "Croissant",
-                                "CDIF",
-                                "OSI handoff",
-                                "ODRL",
-                                "Grust catalog graph",
-                                "OpenLineage"
-                            ]
-                        }
-                    }
-                },
-                "outputs": open_lineage_outputs
-            }),
+            open_lineage,
         }
     }
 }
