@@ -926,7 +926,9 @@ QueryGraph without forcing LakeCat to invent restore-specific graph taxonomy.
 Management list reads for policy bindings, projects, servers, storage profiles,
 and warehouses replay as OpenLineage receipts too. They intentionally do not
 create list-specific graph nodes in LakeCat; Grust owns the reusable hierarchy
-and traversal model.
+and traversal model. The drain response lifts their counts and management scope
+into compact fields, so QueryGraph can verify the control-plane read evidence
+without opening the raw lineage payload.
 
 The end-to-end result is a chain:
 

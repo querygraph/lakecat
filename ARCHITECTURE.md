@@ -346,7 +346,9 @@ TypeSec runs.
 Management list reads for policy bindings, projects, servers, storage profiles,
 and warehouses now replay into LakeCat OpenLineage receipts, giving QueryGraph
 durable control-plane read evidence without adding list-specific graph nodes in
-LakeCat.
+LakeCat. The lineage-drain response exposes compact list counts and management
+scope fields so QueryGraph can validate those reads without parsing raw lineage
+payloads.
 
 Required tables:
 

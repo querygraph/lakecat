@@ -400,6 +400,18 @@ pub struct LineageDrainEventSummary {
     pub view_stable_id: Option<String>,
     #[serde(default)]
     pub policy_binding_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_profile_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warehouse_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub management_scope_project_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub management_scope_warehouse: Option<String>,
     #[serde(default)]
     pub standards: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

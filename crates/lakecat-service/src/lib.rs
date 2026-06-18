@@ -1060,9 +1060,34 @@ fn lineage_drain_event_summary(
         view_stable_id,
         policy_binding_count: payload
             .get("policy-binding-count")
+            .or_else(|| payload.get("policy-count"))
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok())
             .unwrap_or_default(),
+        project_count: payload
+            .get("project-count")
+            .and_then(Value::as_u64)
+            .and_then(|count| usize::try_from(count).ok()),
+        server_count: payload
+            .get("server-count")
+            .and_then(Value::as_u64)
+            .and_then(|count| usize::try_from(count).ok()),
+        storage_profile_count: payload
+            .get("storage-profile-count")
+            .and_then(Value::as_u64)
+            .and_then(|count| usize::try_from(count).ok()),
+        warehouse_count: payload
+            .get("warehouse-count")
+            .and_then(Value::as_u64)
+            .and_then(|count| usize::try_from(count).ok()),
+        management_scope_project_id: payload
+            .get("project-id")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        management_scope_warehouse: payload
+            .get("warehouse")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         standards: payload
             .get("standards")
             .and_then(Value::as_array)
@@ -5911,6 +5936,24 @@ mod tests {
                 "evt-storage-profile-list".to_string(),
                 "evt-warehouse-list".to_string(),
             ]
+        );
+        assert_eq!(drain.events.len(), 5);
+        assert_eq!(drain.events[0].policy_binding_count, 2);
+        assert_eq!(
+            drain.events[0].management_scope_warehouse.as_deref(),
+            Some("local")
+        );
+        assert_eq!(drain.events[1].project_count, Some(1));
+        assert_eq!(drain.events[2].server_count, Some(1));
+        assert_eq!(drain.events[3].storage_profile_count, Some(2));
+        assert_eq!(
+            drain.events[3].management_scope_warehouse.as_deref(),
+            Some("local")
+        );
+        assert_eq!(drain.events[4].warehouse_count, Some(3));
+        assert_eq!(
+            drain.events[4].management_scope_project_id.as_deref(),
+            Some("analytics")
         );
 
         let graph_events = graph.events.lock().await;

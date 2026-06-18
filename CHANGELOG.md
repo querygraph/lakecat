@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added compact management-list count fields to lineage-drain event summaries
+  so QueryGraph can verify replayed policy, project, server, storage-profile,
+  and warehouse list evidence without parsing raw lineage payloads.
 - Replayed management list outbox events for policy bindings, projects,
   servers, storage profiles, and warehouses into LakeCat OpenLineage receipts
   so control-plane read paths carry durable replay evidence without inventing
