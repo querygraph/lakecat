@@ -70,12 +70,20 @@ impl QueryGraphBootstrap {
             &graph_hash,
             generated_at,
         );
-        let manifest = QueryGraphBundleManifest::from_hashes(
+        let mut manifest = QueryGraphBundleManifest::from_hashes(
             table_artifacts,
             view_artifacts,
             graph_hash,
             &open_lineage,
         )?;
+        manifest.querygraph_import = Some(QueryGraphImportCompatibility::from_table_only_bundle(
+            &warehouse,
+            &manifest,
+            &tables,
+            &graph,
+            &open_lineage,
+            views.len(),
+        )?);
         let bundle_payload = json!({
             "warehouse": warehouse.as_str(),
             "manifest": manifest,
@@ -178,6 +186,39 @@ impl QueryGraphBootstrap {
             expected.verify(view)?;
         }
 
+        let import_contract = self.manifest.querygraph_import.as_ref().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(
+                "QueryGraph bootstrap manifest is missing querygraph-import compatibility contract"
+                    .to_string(),
+            )
+        })?;
+        let table_only_bundle_hash = table_only_querygraph_import_hash(
+            &self.warehouse,
+            &self.manifest,
+            &self.tables,
+            &self.graph,
+            &self.open_lineage,
+        )?;
+        if import_contract.table_only_bundle_hash != table_only_bundle_hash {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap import hash mismatch: manifest {}, computed {}",
+                import_contract.table_only_bundle_hash, table_only_bundle_hash
+            )));
+        }
+        if import_contract.view_count != self.views.len() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap import contract view count {} does not match bundle views {}",
+                import_contract.view_count,
+                self.views.len()
+            )));
+        }
+        if import_contract.graph_hash != self.manifest.graph_hash {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap import contract graph hash {} does not match manifest {}",
+                import_contract.graph_hash, self.manifest.graph_hash
+            )));
+        }
+
         let bundle_hash = self.computed_bundle_hash()?;
         if self.bundle_hash != bundle_hash {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -203,6 +244,7 @@ impl QueryGraphBootstrap {
             bundle_hash,
             graph_hash,
             open_lineage_hash,
+            querygraph_import_hash: import_contract.table_only_bundle_hash.clone(),
             standards: self.manifest.standards.clone(),
         })
     }
@@ -229,6 +271,8 @@ pub struct QueryGraphBundleManifest {
     pub view_artifacts: Vec<QueryGraphViewArtifactHashes>,
     pub graph_hash: String,
     pub open_lineage_hash: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub querygraph_import: Option<QueryGraphImportCompatibility>,
 }
 
 impl QueryGraphBundleManifest {
@@ -246,6 +290,40 @@ impl QueryGraphBundleManifest {
             view_artifacts,
             graph_hash,
             open_lineage_hash: content_hash_json(open_lineage)?,
+            querygraph_import: None,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct QueryGraphImportCompatibility {
+    pub schema_version: String,
+    pub table_only_bundle_hash: String,
+    pub view_count: usize,
+    pub graph_hash: String,
+}
+
+impl QueryGraphImportCompatibility {
+    fn from_table_only_bundle(
+        warehouse: &WarehouseName,
+        manifest: &QueryGraphBundleManifest,
+        tables: &[QueryGraphTableProjection],
+        graph: &QueryGraphCatalogGraph,
+        open_lineage: &Value,
+        view_count: usize,
+    ) -> LakeCatResult<Self> {
+        Ok(Self {
+            schema_version: "lakecat.querygraph.import-compat.v1".to_string(),
+            table_only_bundle_hash: table_only_querygraph_import_hash(
+                warehouse,
+                manifest,
+                tables,
+                graph,
+                open_lineage,
+            )?,
+            view_count,
+            graph_hash: manifest.graph_hash.clone(),
         })
     }
 }
@@ -337,6 +415,69 @@ fn graph_hash(graph: &QueryGraphCatalogGraph) -> LakeCatResult<String> {
     content_hash_json(&value)
 }
 
+fn table_only_querygraph_import_hash(
+    warehouse: &WarehouseName,
+    manifest: &QueryGraphBundleManifest,
+    tables: &[QueryGraphTableProjection],
+    graph: &QueryGraphCatalogGraph,
+    open_lineage: &Value,
+) -> LakeCatResult<String> {
+    let graph = serde_json::to_value(graph).map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!(
+            "failed to encode QueryGraph catalog graph for import hash: {err}"
+        ))
+    })?;
+    content_hash_json(&json!({
+        "warehouse": warehouse.as_str(),
+        "manifest": table_only_querygraph_import_manifest(manifest),
+        "tables": tables
+            .iter()
+            .map(table_only_querygraph_import_table)
+            .collect::<Vec<_>>(),
+        "graph": graph,
+        "openLineage": open_lineage,
+    }))
+}
+
+fn table_only_querygraph_import_manifest(manifest: &QueryGraphBundleManifest) -> Value {
+    json!({
+        "schema-version": manifest.schema_version,
+        "producer": manifest.producer,
+        "standards": manifest.standards,
+        "table-artifacts": manifest
+            .table_artifacts
+            .iter()
+            .map(table_only_querygraph_import_table_artifact)
+            .collect::<Vec<_>>(),
+        "open-lineage-hash": manifest.open_lineage_hash,
+    })
+}
+
+fn table_only_querygraph_import_table_artifact(artifact: &QueryGraphTableArtifactHashes) -> Value {
+    json!({
+        "stable-id": artifact.stable_id,
+        "croissant-hash": artifact.croissant_hash,
+        "cdif-hash": artifact.cdif_hash,
+        "osi-hash": artifact.osi_hash,
+        "odrl-hash": artifact.odrl_hash,
+    })
+}
+
+fn table_only_querygraph_import_table(table: &QueryGraphTableProjection) -> Value {
+    json!({
+        "ident": table.ident,
+        "stable-id": table.stable_id,
+        "location": table.location,
+        "metadata-location": table.metadata_location,
+        "version": table.version,
+        "format-version": table.format_version,
+        "croissant": table.croissant,
+        "cdif": table.cdif,
+        "osi": table.osi,
+        "odrl": table.odrl,
+    })
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct QueryGraphBootstrapVerification {
@@ -348,6 +489,7 @@ pub struct QueryGraphBootstrapVerification {
     pub bundle_hash: String,
     pub graph_hash: String,
     pub open_lineage_hash: String,
+    pub querygraph_import_hash: String,
     pub standards: Vec<String>,
 }
 
@@ -1065,6 +1207,28 @@ mod tests {
             bundle.manifest.graph_hash,
             graph_hash(&bundle.graph).unwrap()
         );
+        let import_contract = bundle
+            .manifest
+            .querygraph_import
+            .as_ref()
+            .expect("QueryGraph import compatibility contract");
+        assert_eq!(
+            import_contract.schema_version,
+            "lakecat.querygraph.import-compat.v1"
+        );
+        assert_eq!(import_contract.view_count, 0);
+        assert_eq!(import_contract.graph_hash, bundle.manifest.graph_hash);
+        assert_eq!(
+            import_contract.table_only_bundle_hash,
+            table_only_querygraph_import_hash(
+                &bundle.warehouse,
+                &bundle.manifest,
+                &bundle.tables,
+                &bundle.graph,
+                &bundle.open_lineage
+            )
+            .unwrap()
+        );
         assert!(bundle.manifest.standards.iter().any(|item| item == "CDIF"));
         assert!(
             bundle
@@ -1123,6 +1287,10 @@ mod tests {
         assert_eq!(verification.table_count, 1);
         assert_eq!(verification.bundle_hash, bundle.bundle_hash);
         assert_eq!(verification.graph_hash, bundle.manifest.graph_hash);
+        assert_eq!(
+            verification.querygraph_import_hash,
+            import_contract.table_only_bundle_hash
+        );
     }
 
     #[test]
@@ -1323,5 +1491,40 @@ mod tests {
 
         let err = bundle.verify_manifest().unwrap_err();
         assert!(err.to_string().contains("graph hash mismatch"));
+    }
+
+    #[test]
+    fn verification_rejects_querygraph_import_hash_mismatch() {
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            Namespace::new(vec!["default".to_string()]).unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let table = TableRecord::new(
+            ident,
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            json!({
+                "format-version": 3,
+                "current-schema-id": 1,
+                "schemas": [{
+                    "schema-id": 1,
+                    "fields": [{"id": 1, "name": "event_id", "type": "string"}]
+                }]
+            }),
+            Principal::anonymous(),
+        );
+        let mut bundle =
+            QueryGraphBootstrap::from_tables(WarehouseName::new("local").unwrap(), vec![table])
+                .unwrap();
+        bundle
+            .manifest
+            .querygraph_import
+            .as_mut()
+            .unwrap()
+            .table_only_bundle_hash = "sha256:bad".to_string();
+
+        let err = bundle.verify_manifest().unwrap_err();
+        assert!(err.to_string().contains("import hash mismatch"));
     }
 }

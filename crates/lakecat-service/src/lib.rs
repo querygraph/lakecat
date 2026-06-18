@@ -6174,6 +6174,23 @@ mod tests {
                 .is_some_and(|value| !value.is_empty())
         );
         assert_eq!(
+            body["manifest"]["querygraph-import"]["schema-version"],
+            serde_json::json!("lakecat.querygraph.import-compat.v1")
+        );
+        assert!(
+            body["manifest"]["querygraph-import"]["table-only-bundle-hash"]
+                .as_str()
+                .is_some_and(|value| value.starts_with("sha256:"))
+        );
+        assert_eq!(
+            body["manifest"]["querygraph-import"]["graph-hash"],
+            body["manifest"]["graph-hash"]
+        );
+        assert_eq!(
+            body["manifest"]["querygraph-import"]["view-count"],
+            serde_json::json!(0)
+        );
+        assert_eq!(
             body["open-lineage"]["run"]["facets"]["queryGraph_semanticBundle"]["graphHash"],
             body["manifest"]["graph-hash"]
         );

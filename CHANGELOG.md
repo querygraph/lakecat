@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a QueryGraph import-compatibility contract to bootstrap manifests with a
+  table-only bundle hash for the current QueryGraph Rust importer and required
+  QGLake bootstrap acceptance to preserve that import evidence.
 - Added QGLake agent delegation and signed-summary hash evidence to
   lineage-drain replay summaries and required explicit QGLake agent runs to
   preserve both hashes.

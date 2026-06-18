@@ -238,7 +238,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   no-op drain;
   `/querygraph/v1/bootstrap` now exports the stored table policy bindings in
   each table projection and hashes them in the manifest, so QueryGraph imports
-  the actual LakeCat policy documents used for governed planning.*
+  the actual LakeCat policy documents used for governed planning; bootstrap
+  manifests now also carry a `querygraph-import` compatibility contract with a
+  table-only bundle hash matching the current QueryGraph Rust importer hash
+  domain, and QGLake acceptance refuses bundles that drop that import evidence.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond

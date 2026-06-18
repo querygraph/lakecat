@@ -751,6 +751,7 @@ fn verify_qglake_bootstrap_bundle(
     verify_qglake_bootstrap_graph(bundle, projection)?;
     verify_qglake_bootstrap_open_lineage(bundle, projection)?;
     bundle.verify_manifest()?;
+    verify_qglake_querygraph_import_contract(bundle)?;
     Ok(())
 }
 
@@ -778,6 +779,43 @@ fn verify_qglake_bootstrap_standards(
                 "QGLake bootstrap manifest did not advertise required standard {expected}"
             )));
         }
+    }
+    Ok(())
+}
+
+fn verify_qglake_querygraph_import_contract(
+    bundle: &QueryGraphBootstrap,
+) -> lakecat_core::LakeCatResult<()> {
+    let import_contract = bundle.manifest.querygraph_import.as_ref().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "QGLake bootstrap manifest did not include QueryGraph import compatibility evidence"
+                .to_string(),
+        )
+    })?;
+    if import_contract.schema_version != "lakecat.querygraph.import-compat.v1" {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap QueryGraph import contract used unsupported schema {}",
+            import_contract.schema_version
+        )));
+    }
+    if import_contract.table_only_bundle_hash.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "QGLake bootstrap QueryGraph import contract did not include table-only bundle hash"
+                .to_string(),
+        ));
+    }
+    if import_contract.graph_hash != bundle.manifest.graph_hash {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap QueryGraph import contract graph hash did not match manifest: {}",
+            import_contract.graph_hash
+        )));
+    }
+    if import_contract.view_count != bundle.views.len() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap QueryGraph import contract view count {} did not match bundle views {}",
+            import_contract.view_count,
+            bundle.views.len()
+        )));
     }
     Ok(())
 }
@@ -2793,6 +2831,26 @@ mod tests {
     }
 
     #[test]
+    fn qglake_bootstrap_verifier_requires_querygraph_import_contract() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let mut bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        bundle.manifest.querygraph_import = None;
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect_err("QGLake bootstrap should reject missing QueryGraph import contract");
+        assert!(err.to_string().contains("querygraph-import"));
+    }
+
+    #[test]
     fn qglake_bootstrap_verifier_requires_manifest_hash_integrity() {
         let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
         let output = serde_json::json!({
@@ -4187,6 +4245,7 @@ mod tests {
             bundle_hash: "sha256:bundle".to_string(),
             graph_hash: "sha256:graph".to_string(),
             open_lineage_hash: "sha256:openlineage".to_string(),
+            querygraph_import_hash: "sha256:querygraph-import".to_string(),
             standards: vec![
                 "Iceberg REST".to_string(),
                 "Croissant".to_string(),
@@ -4316,7 +4375,7 @@ mod tests {
             },
             "outputs": open_lineage_outputs
         });
-        let manifest = lakecat_querygraph::QueryGraphBundleManifest {
+        let mut manifest = lakecat_querygraph::QueryGraphBundleManifest {
             schema_version: "lakecat.querygraph.bootstrap.v1".to_string(),
             producer: "https://querygraph.ai/lakecat".to_string(),
             standards: vec![
@@ -4332,8 +4391,21 @@ mod tests {
             view_artifacts: Vec::new(),
             graph_hash,
             open_lineage_hash: content_hash_json(&open_lineage).unwrap(),
+            querygraph_import: None,
         };
         let warehouse = lakecat_core::WarehouseName::new("local").unwrap();
+        manifest.querygraph_import = Some(lakecat_querygraph::QueryGraphImportCompatibility {
+            schema_version: "lakecat.querygraph.import-compat.v1".to_string(),
+            table_only_bundle_hash: qglake_querygraph_import_hash(
+                &warehouse,
+                &manifest,
+                &tables,
+                &graph,
+                &open_lineage,
+            ),
+            view_count: 0,
+            graph_hash: manifest.graph_hash.clone(),
+        });
         let bundle_hash = content_hash_json(&serde_json::json!({
             "warehouse": warehouse.as_str(),
             "manifest": &manifest,
@@ -4353,6 +4425,46 @@ mod tests {
             graph,
             open_lineage,
         }
+    }
+
+    fn qglake_querygraph_import_hash(
+        warehouse: &lakecat_core::WarehouseName,
+        manifest: &lakecat_querygraph::QueryGraphBundleManifest,
+        tables: &[lakecat_querygraph::QueryGraphTableProjection],
+        graph: &lakecat_querygraph::QueryGraphCatalogGraph,
+        open_lineage: &serde_json::Value,
+    ) -> String {
+        content_hash_json(&serde_json::json!({
+            "warehouse": warehouse.as_str(),
+            "manifest": {
+                "schema-version": manifest.schema_version,
+                "producer": manifest.producer,
+                "standards": manifest.standards,
+                "table-artifacts": manifest.table_artifacts.iter().map(|artifact| serde_json::json!({
+                    "stable-id": artifact.stable_id,
+                    "croissant-hash": artifact.croissant_hash,
+                    "cdif-hash": artifact.cdif_hash,
+                    "osi-hash": artifact.osi_hash,
+                    "odrl-hash": artifact.odrl_hash,
+                })).collect::<Vec<_>>(),
+                "open-lineage-hash": manifest.open_lineage_hash,
+            },
+            "tables": tables.iter().map(|table| serde_json::json!({
+                "ident": table.ident,
+                "stable-id": table.stable_id,
+                "location": table.location,
+                "metadata-location": table.metadata_location,
+                "version": table.version,
+                "format-version": table.format_version,
+                "croissant": table.croissant,
+                "cdif": table.cdif,
+                "osi": table.osi,
+                "odrl": table.odrl,
+            })).collect::<Vec<_>>(),
+            "graph": graph,
+            "openLineage": open_lineage,
+        }))
+        .unwrap()
     }
 
     fn qglake_open_lineage_table_artifact(
