@@ -6,12 +6,12 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice before the current
-  working changes: `ec0f2f4 Record audit-safe idempotency evidence`.
-- Current working slice: strict idempotency replay. Keyed REST table commits now
-  compare a normalized hash of the original Iceberg commit request body with the
-  stored replay hash before returning a prior response; reused keys with
-  different commit bodies return conflict instead of silently replaying old
-  catalog state.
+  working changes: `8090862 Reject mismatched idempotency retries`.
+- Current working slice: reusable security read-restriction parsing. ODRL
+  allowed-column, row-predicate, purpose, credential-TTL, and policy-hash
+  composition now lives in `lakecat-security` instead of the REST service, so
+  the future in-process provider scan route can reuse the same governance
+  primitive without duplicating policy parsing.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
   default workspace, `sail-local service`, `typesec-local service`,
@@ -103,6 +103,15 @@ Updated: 2026-06-18
   body differs from the accepted commit.
 - Extended REST and Turso idempotency tests to prove mismatched keyed retries
   return conflict and do not create a second table version or pointer-log row.
+- Moved ODRL read-restriction parsing and composition into
+  `ReadRestriction::from_odrl_policies` in `lakecat-security`.
+- Kept the REST authorization path behavior-equivalent by deriving
+  table-scan restrictions from stored `PolicyBinding` ODRL documents through
+  the shared security primitive.
+- Added security-crate tests proving ODRL policy documents compose allowed
+  columns by intersection, row predicates by `and`, and purpose/credential TTL
+  into one `ReadRestriction`, plus a negative guard for non-object row
+  predicates.
 - Parsed a minimal enforceable ODRL subset from active policy bindings:
   `allowed-columns` / `allowedColumns` at the policy root, in
   `lakecat:read-restriction`, or in ODRL constraints, plus purpose and policy
@@ -188,6 +197,14 @@ Updated: 2026-06-18
 
 ## Verification Completed
 
+- Reusable read-restriction parser checks passed:
+  `cargo fmt -p lakecat-security -p lakecat-service -- --check`,
+  `cargo test -p lakecat-security read_restriction -- --nocapture`,
+  `cargo test -p lakecat-security`,
+  `cargo test -p lakecat-service table_scan_authorization_carries_policy_read_restriction -- --nocapture`, and
+  `cargo test -p lakecat-service --features sail-local scan_planning_applies_policy_column_restriction_before_sail -- --nocapture`,
+  `git diff --check`, and
+  `cargo test --workspace --all-features`.
 - Strict idempotency replay checks passed:
   `cargo fmt -p lakecat-store -p lakecat-service -p lakecat-sail -- --check`,
   `cargo test -p lakecat-service commit_replays_rest_idempotency_key -- --nocapture`,

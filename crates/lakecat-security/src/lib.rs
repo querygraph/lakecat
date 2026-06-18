@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use lakecat_core::{LakeCatError, LakeCatResult, Principal, TableIdent};
+use lakecat_core::{LakeCatError, LakeCatResult, Principal, TableIdent, content_hash_json};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 #[async_trait]
 pub trait GovernanceEngine: Send + Sync + 'static {
@@ -78,6 +78,223 @@ impl ReadRestriction {
             && self.purpose.is_none()
             && self.max_credential_ttl_seconds.is_none()
     }
+
+    pub fn from_odrl_policies<'a>(
+        policies: impl IntoIterator<Item = &'a Value>,
+    ) -> LakeCatResult<Self> {
+        let mut restriction = Self::unrestricted();
+        for odrl in policies {
+            let policy_hash = content_hash_json(odrl)?;
+            restriction.policy_hashes.push(policy_hash);
+            if let Some(columns) = allowed_columns_from_odrl(odrl)? {
+                restriction.allowed_columns = Some(match restriction.allowed_columns.take() {
+                    Some(existing) => intersect_columns(&existing, &columns),
+                    None => columns,
+                });
+            }
+            if let Some(row_predicate) = row_predicate_from_odrl(odrl)? {
+                restriction.row_predicate = Some(match restriction.row_predicate.take() {
+                    Some(existing) => and_row_predicates(existing, row_predicate),
+                    None => row_predicate,
+                });
+            }
+            if restriction.purpose.is_none() {
+                restriction.purpose = purpose_from_odrl(odrl);
+            }
+            if restriction.max_credential_ttl_seconds.is_none() {
+                restriction.max_credential_ttl_seconds = ttl_from_odrl(odrl);
+            }
+        }
+        Ok(restriction)
+    }
+}
+
+fn allowed_columns_from_odrl(odrl: &Value) -> LakeCatResult<Option<Vec<String>>> {
+    for value in [
+        odrl.get("allowed-columns"),
+        odrl.get("allowedColumns"),
+        odrl.get("columns"),
+        odrl.get("lakecat:read-restriction")
+            .and_then(|value| value.get("allowed-columns")),
+        odrl.get("lakecat:read-restriction")
+            .and_then(|value| value.get("allowedColumns")),
+        odrl.get("read-restriction")
+            .and_then(|value| value.get("allowed-columns")),
+        odrl.get("readRestriction")
+            .and_then(|value| value.get("allowedColumns")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        return Ok(Some(string_list(value, "ODRL allowed columns")?));
+    }
+
+    let mut columns = Vec::new();
+    for constraint in odrl_constraints(odrl) {
+        let left = constraint
+            .get("leftOperand")
+            .or_else(|| constraint.get("left-operand"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if matches!(
+            left,
+            "column" | "columns" | "allowed-columns" | "allowedColumns" | "lakecat:allowed-columns"
+        ) && let Some(value) = constraint
+            .get("rightOperand")
+            .or_else(|| constraint.get("right-operand"))
+        {
+            columns.extend(string_list(value, "ODRL allowed columns")?);
+        }
+    }
+    if columns.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(dedup_columns(columns)))
+    }
+}
+
+fn row_predicate_from_odrl(odrl: &Value) -> LakeCatResult<Option<Value>> {
+    for value in [
+        odrl.get("row-predicate"),
+        odrl.get("rowPredicate"),
+        odrl.get("lakecat:row-predicate"),
+        odrl.get("lakecat:read-restriction")
+            .and_then(|value| value.get("row-predicate")),
+        odrl.get("lakecat:read-restriction")
+            .and_then(|value| value.get("rowPredicate")),
+        odrl.get("read-restriction")
+            .and_then(|value| value.get("row-predicate")),
+        odrl.get("readRestriction")
+            .and_then(|value| value.get("rowPredicate")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        return Ok(Some(row_predicate_value(value)?));
+    }
+
+    let mut predicate = None;
+    for constraint in odrl_constraints(odrl) {
+        let left = constraint
+            .get("leftOperand")
+            .or_else(|| constraint.get("left-operand"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if matches!(
+            left,
+            "row-predicate" | "rowPredicate" | "lakecat:row-predicate"
+        ) && let Some(value) = constraint
+            .get("rightOperand")
+            .or_else(|| constraint.get("right-operand"))
+        {
+            let next = row_predicate_value(value)?;
+            predicate = Some(match predicate {
+                Some(existing) => and_row_predicates(existing, next),
+                None => next,
+            });
+        }
+    }
+    Ok(predicate)
+}
+
+fn row_predicate_value(value: &Value) -> LakeCatResult<Value> {
+    match value {
+        Value::Object(_) => Ok(value.clone()),
+        _ => Err(LakeCatError::InvalidArgument(
+            "ODRL row predicate must be an Iceberg expression object".to_string(),
+        )),
+    }
+}
+
+fn and_row_predicates(left: Value, right: Value) -> Value {
+    json!({
+        "type": "and",
+        "left": left,
+        "right": right,
+    })
+}
+
+fn purpose_from_odrl(odrl: &Value) -> Option<String> {
+    odrl.get("purpose")
+        .and_then(Value::as_str)
+        .map(ToString::to_string)
+        .or_else(|| {
+            odrl_constraints(odrl).into_iter().find_map(|constraint| {
+                let left = constraint
+                    .get("leftOperand")
+                    .or_else(|| constraint.get("left-operand"))
+                    .and_then(Value::as_str)?;
+                if left == "purpose" {
+                    constraint
+                        .get("rightOperand")
+                        .or_else(|| constraint.get("right-operand"))
+                        .and_then(Value::as_str)
+                        .map(ToString::to_string)
+                } else {
+                    None
+                }
+            })
+        })
+}
+
+fn ttl_from_odrl(odrl: &Value) -> Option<u64> {
+    odrl.get("max-credential-ttl-seconds")
+        .or_else(|| odrl.get("maxCredentialTtlSeconds"))
+        .and_then(Value::as_u64)
+}
+
+fn odrl_constraints(odrl: &Value) -> Vec<&Value> {
+    let mut constraints = Vec::new();
+    for permission in values_as_slice(odrl.get("permission")) {
+        constraints.extend(values_as_slice(permission.get("constraint")));
+    }
+    constraints.extend(values_as_slice(odrl.get("constraint")));
+    constraints
+}
+
+fn values_as_slice(value: Option<&Value>) -> Vec<&Value> {
+    match value {
+        Some(Value::Array(values)) => values.iter().collect(),
+        Some(value) => vec![value],
+        None => Vec::new(),
+    }
+}
+
+fn string_list(value: &Value, label: &str) -> LakeCatResult<Vec<String>> {
+    let raw = match value {
+        Value::Array(values) => values
+            .iter()
+            .map(|item| {
+                item.as_str().map(ToString::to_string).ok_or_else(|| {
+                    LakeCatError::InvalidArgument(format!("{label} must be strings"))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        Value::String(value) => vec![value.clone()],
+        _ => {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "{label} must be a string or string array"
+            )));
+        }
+    };
+    Ok(dedup_columns(raw))
+}
+
+fn dedup_columns(columns: Vec<String>) -> Vec<String> {
+    let mut out = Vec::with_capacity(columns.len());
+    for column in columns {
+        if !out.iter().any(|existing| existing == &column) {
+            out.push(column);
+        }
+    }
+    out
+}
+
+fn intersect_columns(left: &[String], right: &[String]) -> Vec<String> {
+    left.iter()
+        .filter(|column| right.iter().any(|allowed| allowed == *column))
+        .cloned()
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -351,6 +568,86 @@ mod tests {
     use lakecat_core::{Namespace, PrincipalKind, TableName, WarehouseName};
 
     use super::*;
+
+    #[test]
+    fn read_restriction_composes_odrl_policy_documents() {
+        let policy_a = serde_json::json!({
+            "uid": "policy-a",
+            "purpose": "resilience-demo",
+            "lakecat:read-restriction": {
+                "allowed-columns": ["event_id", "payload"],
+                "row-predicate": {
+                    "type": "equal",
+                    "term": "region",
+                    "value": "west"
+                }
+            }
+        });
+        let policy_b = serde_json::json!({
+            "uid": "policy-b",
+            "max-credential-ttl-seconds": 300,
+            "permission": [{
+                "constraint": [
+                    {
+                        "leftOperand": "allowed-columns",
+                        "operator": "eq",
+                        "rightOperand": ["event_id", "severity"]
+                    },
+                    {
+                        "leftOperand": "row-predicate",
+                        "operator": "eq",
+                        "rightOperand": {
+                            "type": "greater-than-or-equal",
+                            "term": "severity",
+                            "value": 3
+                        }
+                    }
+                ]
+            }]
+        });
+
+        let restriction = ReadRestriction::from_odrl_policies([&policy_a, &policy_b]).unwrap();
+
+        assert_eq!(
+            restriction.allowed_columns,
+            Some(vec!["event_id".to_string()])
+        );
+        assert_eq!(restriction.purpose.as_deref(), Some("resilience-demo"));
+        assert_eq!(restriction.max_credential_ttl_seconds, Some(300));
+        assert_eq!(restriction.policy_hashes.len(), 2);
+        assert_eq!(
+            restriction.row_predicate,
+            Some(serde_json::json!({
+                "type": "and",
+                "left": {
+                    "type": "equal",
+                    "term": "region",
+                    "value": "west"
+                },
+                "right": {
+                    "type": "greater-than-or-equal",
+                    "term": "severity",
+                    "value": 3
+                }
+            }))
+        );
+    }
+
+    #[test]
+    fn read_restriction_rejects_non_object_row_predicates() {
+        let policy = serde_json::json!({
+            "read-restriction": {
+                "row-predicate": "severity >= 3"
+            }
+        });
+
+        let err = ReadRestriction::from_odrl_policies([&policy]).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("ODRL row predicate must be an Iceberg expression object")
+        );
+    }
 
     #[test]
     fn table_capabilities_require_matching_allowed_receipts() {

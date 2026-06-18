@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added the LakeSail book under `docs/book/`, with a TypeSec-style publishing
+  pipeline, EPUB metadata validation, and generated PDF/EPUB/MOBI artifacts
+  explaining the LakeCat/Sail catalog foundation for QueryGraph.
 - Added the first server-owned governed read restriction: enforced policy
   bindings can now provide allowed scan columns, table-scan capabilities carry
   the resulting `ReadRestriction`, and scan planning intersects client
@@ -29,6 +32,10 @@
 - Hardened idempotency-key replay so REST commits compare a normalized hash of
   the original Iceberg commit request and the memory/Turso stores reject reused
   keys with different commit bodies as conflicts.
+- Moved ODRL read-restriction parsing/composition into `lakecat-security` so
+  the REST service and future in-process provider scan path share one
+  governance primitive for allowed columns, row predicates, purpose, TTL, and
+  policy hashes.
 - Changed the QueryGraph bootstrap OSI artifact from a LakeCat-authored semantic
   model into a stable OSI handoff: LakeCat now publishes dataset/field anchors
   and governed Sail/LakeCat source metadata while leaving metrics, dimensions,
