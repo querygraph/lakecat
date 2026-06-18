@@ -6,6 +6,23 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `b08a2e7 Mirror QueryGraph standards in OpenLineage`.
+- Paused after pushing the QueryGraph OpenLineage standards facet slice. The
+  QueryGraph bootstrap OpenLineage `queryGraph_semanticBundle` facet now carries
+  the same Iceberg REST, Croissant, CDIF, OSI handoff, ODRL, Grust catalog
+  graph, and OpenLineage standards as the manifest, and the QGLake bootstrap
+  verifier rejects bundles whose OpenLineage facet omits any required standard.
+- Local verification for the pushed QueryGraph OpenLineage standards facet
+  slice was green:
+  `cargo fmt -p lakecat-cli -p lakecat-querygraph -- --check`;
+  `cargo test -p lakecat-cli qglake_bootstrap`;
+  `cargo test -p lakecat-querygraph projects_iceberg_table_into_querygraph_bundle`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-querygraph`;
+  `git diff --check`.
+- This status commit records the pushed QueryGraph OpenLineage standards facet
+  slice.
+- Previous implementation slice:
   `12a6d18 Require QGLake bootstrap standards`.
 - Paused after pushing the QGLake bootstrap-standards proof slice. The
   `lakecat-cli qglake-fixture` bootstrap verifier now rejects QueryGraph
