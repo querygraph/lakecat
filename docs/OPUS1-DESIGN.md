@@ -682,9 +682,9 @@ only once **P2** gives it a governed path to run on.
   authoritative OSI metrics, dimensions, joins, ontology claims, or business
   semantic names; those belong in QueryGraph. The QGLake fixture now verifies
   governed scan planning, exported policy bindings, graph table anchors,
-  OpenLineage output presence, and bootstrap OpenLineage replay before writing
-  the bundle, then drains the lineage/outbox stream through the governed
-  management endpoint.*
+  OpenLineage output presence, and bootstrap OpenLineage replay with manifest
+  hash evidence before writing the bundle, then drains the lineage/outbox stream
+  through the governed management endpoint.*
 - **Deferred — Tier-0 pruning depth and typed v4.** Good but diminishing-returns
   until P1–P3 land; HMAC-signed plan-task tokens are now implemented for new
   Sail scan-planning tokens. (Milestone 10; Finding 12.)

@@ -454,6 +454,9 @@ QueryGraph importers should verify those hashes before loading the semantic
 bundle or asking Grust to ingest catalog graph projections. LakeCat may publish
 stable dataset and field anchors for OSI import, but QueryGraph owns metrics,
 dimensions, joins, business ontology, and authoritative semantic names.
+The corresponding `querygraph.bootstrap` audit/outbox event carries the verified
+bundle, graph, and OpenLineage hashes so downstream lineage replay can prove it
+is describing the same bootstrap material QueryGraph imported.
 
 ## Lakekeeper Lessons To Adopt
 

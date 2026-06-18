@@ -214,7 +214,8 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   the catalog graph so QueryGraph import can reject graph projection drift;
   `querygraph.bootstrap` outbox events now project into LakeCat OpenLineage
   output events carrying the bootstrap authorization/request-identity payload
-  for QueryGraph replay; LakeCat now exposes a governed lineage-drain
+  plus verified bundle, graph, and OpenLineage hashes for QueryGraph replay;
+  LakeCat now exposes a governed lineage-drain
   management endpoint and `lakecat-cli qglake-fixture` drains the outbox after
   writing the verified bootstrap bundle, failing the fixture if the drain
   delivered zero events and requiring the drain receipt to show

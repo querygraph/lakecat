@@ -1668,6 +1668,11 @@ async fn querygraph_bootstrap(
         policy_binding_count += policy_bindings.len();
         table_policy_bindings.push((table, policy_bindings));
     }
+    let bundle = QueryGraphBootstrap::from_tables_with_policy_bindings(
+        state.warehouse.clone(),
+        table_policy_bindings,
+    )?;
+    let verification = bundle.verify_manifest()?;
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -1678,15 +1683,17 @@ async fn querygraph_bootstrap(
                 "event-type": "querygraph.bootstrap",
                 "authorization-receipt": capability.receipt(),
                 "warehouse": state.warehouse.as_str(),
-                "table-count": table_policy_bindings.len(),
+                "table-count": verification.table_count,
                 "policy-binding-count": policy_binding_count,
+                "verified-tables": verification.verified_tables,
+                "bundle-hash": verification.bundle_hash,
+                "graph-hash": verification.graph_hash,
+                "open-lineage-hash": verification.open_lineage_hash,
+                "standards": verification.standards,
             }),
         )?)
         .await?;
-    Ok(Json(QueryGraphBootstrap::from_tables_with_policy_bindings(
-        state.warehouse.clone(),
-        table_policy_bindings,
-    )?))
+    Ok(Json(bundle))
 }
 
 async fn drain_lineage_outbox(
@@ -2904,7 +2911,12 @@ mod tests {
                             },
                             "warehouse": "local",
                             "table-count": 1,
-                            "policy-binding-count": 1
+                            "policy-binding-count": 1,
+                            "verified-tables": ["local.default.events"],
+                            "bundle-hash": "sha256:bundle",
+                            "graph-hash": "sha256:graph",
+                            "open-lineage-hash": "sha256:openlineage",
+                            "standards": ["OpenLineage", "Grust catalog graph"]
                         }
                     }),
                     created_at: chrono::Utc::now(),
@@ -2965,6 +2977,18 @@ mod tests {
             serde_json::json!("verified")
         );
         assert_eq!(
+            lineage_events[2].payload["bundle-hash"],
+            serde_json::json!("sha256:bundle")
+        );
+        assert_eq!(
+            lineage_events[2].payload["graph-hash"],
+            serde_json::json!("sha256:graph")
+        );
+        assert_eq!(
+            lineage_events[2].payload["open-lineage-hash"],
+            serde_json::json!("sha256:openlineage")
+        );
+        assert_eq!(
             store.delivered.lock().await.as_slice(),
             &[
                 "evt-1".to_string(),
@@ -3003,7 +3027,12 @@ mod tests {
                         },
                         "warehouse": "local",
                         "table-count": 1,
-                        "policy-binding-count": 1
+                        "policy-binding-count": 1,
+                        "verified-tables": ["local.default.events"],
+                        "bundle-hash": "sha256:bundle",
+                        "graph-hash": "sha256:graph",
+                        "open-lineage-hash": "sha256:openlineage",
+                        "standards": ["OpenLineage", "Grust catalog graph"]
                     }
                 }),
                 created_at: chrono::Utc::now(),
@@ -3057,6 +3086,18 @@ mod tests {
             LineageEventType::QueryGraphBootstrap
         );
         assert_eq!(lineage_events[0].principal.subject, "did:example:agent");
+        assert_eq!(
+            lineage_events[0].payload["bundle-hash"],
+            serde_json::json!("sha256:bundle")
+        );
+        assert_eq!(
+            lineage_events[0].payload["graph-hash"],
+            serde_json::json!("sha256:graph")
+        );
+        assert_eq!(
+            lineage_events[0].payload["standards"],
+            serde_json::json!(["OpenLineage", "Grust catalog graph"])
+        );
     }
 
     #[tokio::test]
@@ -3600,6 +3641,28 @@ mod tests {
             .await
             .unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(
+            body["bundle-hash"]
+                .as_str()
+                .is_some_and(|value| !value.is_empty())
+        );
+        assert!(
+            body["manifest"]["graph-hash"]
+                .as_str()
+                .is_some_and(|value| !value.is_empty())
+        );
+        assert!(
+            body["manifest"]["open-lineage-hash"]
+                .as_str()
+                .is_some_and(|value| !value.is_empty())
+        );
+        assert!(
+            body["manifest"]["standards"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|standard| standard == "Grust catalog graph")
+        );
         assert_eq!(
             body["tables"][0]["policy-bindings"][0]["policy-id"],
             "agent-read"

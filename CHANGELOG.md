@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added verified QueryGraph bootstrap bundle, graph, OpenLineage, standards, and
+  table hash evidence to the `querygraph.bootstrap` audit/outbox payload so
+  lineage replay carries the same integrity facts as the manifest.
 - Added a QueryGraph bootstrap `graph-hash` manifest entry, verified graph hash
   validation, and made `lakecat-cli qglake-fixture` require the fixture table's
   graph node and namespace edge before writing the bundle.
