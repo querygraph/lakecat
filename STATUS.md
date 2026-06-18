@@ -6,6 +6,22 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `12a6d18 Require QGLake bootstrap standards`.
+- Paused after pushing the QGLake bootstrap-standards proof slice. The
+  `lakecat-cli qglake-fixture` bootstrap verifier now rejects QueryGraph
+  bundles whose manifest does not advertise the expected Iceberg REST,
+  Croissant, CDIF, OSI handoff, ODRL, Grust catalog graph, and OpenLineage
+  standards, so QGLake acceptance proves the exported bundle carries the full
+  QueryGraph handoff surface.
+- Local verification for the pushed QGLake bootstrap-standards proof slice was
+  green:
+  `cargo fmt -p lakecat-cli -p lakecat-querygraph -- --check`;
+  `cargo test -p lakecat-cli qglake_bootstrap`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-querygraph projects_iceberg_table_into_querygraph_bundle`;
+  `git diff --check`.
+- This status commit records the pushed QGLake bootstrap-standards proof slice.
+- Previous implementation slice:
   `dadf1ad Verify all QGLake manifest children`.
 - Paused after pushing the QGLake all-manifest-children proof slice. The
   `lakecat-cli qglake-fixture` governed `fetchScanTasks` verifier now follows
