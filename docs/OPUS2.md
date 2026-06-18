@@ -253,9 +253,11 @@ Storage profiles, policy bindings, projects, warehouses, and semantic views are
 now first-class durable management entities. LakeCat can resolve warehouse
 prefixes from stored `WarehouseRecord` values instead of only trusting the
 configured default, and governed view list/upsert endpoints persist `ViewRecord`
-values in memory and Turso. The remaining tenancy gap is narrower but real:
-Server entities, standard Iceberg view REST semantics, and richer project-scoped
-routing are not modeled yet.
+values in memory and Turso. QueryGraph bootstrap now exports those views with
+manifest-covered OSI hashes, view-aware graph edges, and OpenLineage view
+counts. The remaining tenancy gap is narrower but real: Server entities,
+standard Iceberg view REST semantics, and richer project-scoped routing are not
+modeled yet.
 
 **Fix:** introduce Server and Iceberg-compatible view REST entities around the
 existing Project/Warehouse/View records; keep the served catalog scoped to a

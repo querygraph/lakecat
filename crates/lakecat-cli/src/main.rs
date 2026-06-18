@@ -1782,10 +1782,12 @@ mod tests {
                 producer: "https://querygraph.ai/lakecat".to_string(),
                 standards: vec!["ODRL".to_string(), "OpenLineage".to_string()],
                 table_artifacts: Vec::new(),
+                view_artifacts: Vec::new(),
                 graph_hash: "test".to_string(),
                 open_lineage_hash: "test".to_string(),
             },
             tables,
+            views: Vec::new(),
             graph,
             open_lineage: serde_json::json!({
                 "outputs": open_lineage_outputs

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use lakecat_core::{LakeCatResult, TableIdent, WarehouseName, content_hash_json};
-use lakecat_store::{PolicyBinding, TableRecord};
+use lakecat_store::{PolicyBinding, TableRecord, ViewRecord};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -12,6 +12,7 @@ pub struct QueryGraphBootstrap {
     pub bundle_hash: String,
     pub manifest: QueryGraphBundleManifest,
     pub tables: Vec<QueryGraphTableProjection>,
+    pub views: Vec<QueryGraphViewProjection>,
     pub graph: QueryGraphCatalogGraph,
     pub open_lineage: Value,
 }
@@ -31,6 +32,14 @@ impl QueryGraphBootstrap {
         warehouse: WarehouseName,
         tables: impl IntoIterator<Item = (TableRecord, Vec<PolicyBinding>)>,
     ) -> LakeCatResult<Self> {
+        Self::from_tables_views_with_policy_bindings(warehouse, tables, Vec::new())
+    }
+
+    pub fn from_tables_views_with_policy_bindings(
+        warehouse: WarehouseName,
+        tables: impl IntoIterator<Item = (TableRecord, Vec<PolicyBinding>)>,
+        views: impl IntoIterator<Item = ViewRecord>,
+    ) -> LakeCatResult<Self> {
         let generated_at = Utc::now();
         let tables = tables
             .into_iter()
@@ -38,13 +47,19 @@ impl QueryGraphBootstrap {
                 QueryGraphTableProjection::from_table_with_policy_bindings(table, policy_bindings)
             })
             .collect::<Vec<_>>();
-        let graph = QueryGraphCatalogGraph::from_tables(&tables);
-        let open_lineage = bootstrap_open_lineage(&warehouse, &tables, generated_at);
-        let manifest = QueryGraphBundleManifest::from_parts(&tables, &graph, &open_lineage)?;
+        let views = views
+            .into_iter()
+            .map(QueryGraphViewProjection::from_view)
+            .collect::<Vec<_>>();
+        let graph = QueryGraphCatalogGraph::from_tables_and_views(&tables, &views);
+        let open_lineage = bootstrap_open_lineage(&warehouse, &tables, &views, generated_at);
+        let manifest =
+            QueryGraphBundleManifest::from_parts(&tables, &views, &graph, &open_lineage)?;
         let bundle_payload = json!({
             "warehouse": warehouse.as_str(),
             "manifest": manifest,
             "tables": tables,
+            "views": views,
             "graph": graph,
             "openLineage": open_lineage,
         });
@@ -59,12 +74,18 @@ impl QueryGraphBootstrap {
                 "failed to rebuild QueryGraph catalog graph: {err}"
             ))
         })?;
+        let views = serde_json::from_value(bundle_payload["views"].clone()).map_err(|err| {
+            lakecat_core::LakeCatError::Internal(format!(
+                "failed to rebuild QueryGraph view projections: {err}"
+            ))
+        })?;
         Ok(Self {
             warehouse,
             generated_at,
             bundle_hash,
             manifest,
             tables,
+            views,
             graph,
             open_lineage,
         })
@@ -82,6 +103,13 @@ impl QueryGraphBootstrap {
                 "QueryGraph bootstrap manifest lists {} table artifacts for {} tables",
                 self.manifest.table_artifacts.len(),
                 self.tables.len()
+            )));
+        }
+        if self.manifest.view_artifacts.len() != self.views.len() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap manifest lists {} view artifacts for {} views",
+                self.manifest.view_artifacts.len(),
+                self.views.len()
             )));
         }
 
@@ -114,6 +142,20 @@ impl QueryGraphBootstrap {
                 })?;
             expected.verify(table)?;
         }
+        for view in &self.views {
+            let expected = self
+                .manifest
+                .view_artifacts
+                .iter()
+                .find(|artifact| artifact.stable_id == view.stable_id)
+                .ok_or_else(|| {
+                    lakecat_core::LakeCatError::InvalidArgument(format!(
+                        "QueryGraph bootstrap manifest is missing view {}",
+                        view.stable_id
+                    ))
+                })?;
+            expected.verify(view)?;
+        }
 
         let bundle_hash = self.computed_bundle_hash()?;
         if self.bundle_hash != bundle_hash {
@@ -126,10 +168,16 @@ impl QueryGraphBootstrap {
         Ok(QueryGraphBootstrapVerification {
             warehouse: self.warehouse.as_str().to_string(),
             table_count: self.tables.len(),
+            view_count: self.views.len(),
             verified_tables: self
                 .tables
                 .iter()
                 .map(|table| table.stable_id.clone())
+                .collect(),
+            verified_views: self
+                .views
+                .iter()
+                .map(|view| view.stable_id.clone())
                 .collect(),
             bundle_hash,
             graph_hash,
@@ -143,6 +191,7 @@ impl QueryGraphBootstrap {
             "warehouse": self.warehouse.as_str(),
             "manifest": self.manifest,
             "tables": self.tables,
+            "views": self.views,
             "graph": self.graph,
             "openLineage": self.open_lineage,
         }))
@@ -156,6 +205,7 @@ pub struct QueryGraphBundleManifest {
     pub producer: String,
     pub standards: Vec<String>,
     pub table_artifacts: Vec<QueryGraphTableArtifactHashes>,
+    pub view_artifacts: Vec<QueryGraphViewArtifactHashes>,
     pub graph_hash: String,
     pub open_lineage_hash: String,
 }
@@ -163,6 +213,7 @@ pub struct QueryGraphBundleManifest {
 impl QueryGraphBundleManifest {
     fn from_parts(
         tables: &[QueryGraphTableProjection],
+        views: &[QueryGraphViewProjection],
         graph: &QueryGraphCatalogGraph,
         open_lineage: &Value,
     ) -> LakeCatResult<Self> {
@@ -182,9 +233,34 @@ impl QueryGraphBundleManifest {
                 .iter()
                 .map(QueryGraphTableArtifactHashes::from_table)
                 .collect::<LakeCatResult<Vec<_>>>()?,
+            view_artifacts: views
+                .iter()
+                .map(QueryGraphViewArtifactHashes::from_view)
+                .collect::<LakeCatResult<Vec<_>>>()?,
             graph_hash: graph_hash(graph)?,
             open_lineage_hash: content_hash_json(open_lineage)?,
         })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct QueryGraphViewArtifactHashes {
+    pub stable_id: String,
+    pub osi_hash: String,
+}
+
+impl QueryGraphViewArtifactHashes {
+    fn from_view(view: &QueryGraphViewProjection) -> LakeCatResult<Self> {
+        Ok(Self {
+            stable_id: view.stable_id.clone(),
+            osi_hash: content_hash_json(&view.osi)?,
+        })
+    }
+
+    fn verify(&self, view: &QueryGraphViewProjection) -> LakeCatResult<()> {
+        verify_hash("view OSI", &self.osi_hash, &view.osi)?;
+        Ok(())
     }
 }
 
@@ -247,11 +323,46 @@ fn graph_hash(graph: &QueryGraphCatalogGraph) -> LakeCatResult<String> {
 pub struct QueryGraphBootstrapVerification {
     pub warehouse: String,
     pub table_count: usize,
+    pub view_count: usize,
     pub verified_tables: Vec<String>,
+    pub verified_views: Vec<String>,
     pub bundle_hash: String,
     pub graph_hash: String,
     pub open_lineage_hash: String,
     pub standards: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct QueryGraphViewProjection {
+    pub stable_id: String,
+    pub warehouse: String,
+    pub namespace: Vec<String>,
+    pub name: String,
+    pub sql: String,
+    pub dialect: String,
+    pub schema_version: Option<u64>,
+    pub properties: Value,
+    pub osi: Value,
+}
+
+impl QueryGraphViewProjection {
+    pub fn from_view(view: ViewRecord) -> Self {
+        let stable_id = view_stable_id(&view);
+        let properties = json!(view.properties);
+        let osi = view_osi_handoff(&view, &stable_id);
+        Self {
+            stable_id,
+            warehouse: view.warehouse.as_str().to_string(),
+            namespace: view.namespace.parts().to_vec(),
+            name: view.name.as_str().to_string(),
+            sql: view.sql,
+            dialect: view.dialect,
+            schema_version: view.schema_version,
+            properties,
+            osi,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -338,8 +449,15 @@ pub struct QueryGraphCatalogGraph {
 
 impl QueryGraphCatalogGraph {
     pub fn from_tables(tables: &[QueryGraphTableProjection]) -> Self {
-        let mut nodes = Vec::with_capacity(tables.len() * 3 + 1);
-        let mut edges = Vec::with_capacity(tables.len() * 3);
+        Self::from_tables_and_views(tables, &[])
+    }
+
+    pub fn from_tables_and_views(
+        tables: &[QueryGraphTableProjection],
+        views: &[QueryGraphViewProjection],
+    ) -> Self {
+        let mut nodes = Vec::with_capacity(tables.len() * 3 + views.len() * 2 + 1);
+        let mut edges = Vec::with_capacity(tables.len() * 3 + views.len() * 2);
         nodes.push(QueryGraphNode {
             id: "lakecat:catalog".to_string(),
             label: "Catalog".to_string(),
@@ -393,6 +511,40 @@ impl QueryGraphCatalogGraph {
                 from: table.stable_id.clone(),
                 to: policy_id,
                 label: "GOVERNED_BY".to_string(),
+            });
+        }
+        for view in views {
+            let namespace_id = format!(
+                "lakecat:namespace:{}:{}",
+                view.warehouse,
+                view.namespace.join(".")
+            );
+            nodes.push(QueryGraphNode {
+                id: namespace_id.clone(),
+                label: "Namespace".to_string(),
+                properties: json!({
+                    "warehouse": view.warehouse,
+                    "namespace": view.namespace.join("."),
+                }),
+            });
+            nodes.push(QueryGraphNode {
+                id: view.stable_id.clone(),
+                label: "View".to_string(),
+                properties: json!({
+                    "name": view.name,
+                    "dialect": view.dialect,
+                    "schemaVersion": view.schema_version,
+                }),
+            });
+            edges.push(QueryGraphEdge {
+                from: "lakecat:catalog".to_string(),
+                to: namespace_id.clone(),
+                label: "HAS_NAMESPACE".to_string(),
+            });
+            edges.push(QueryGraphEdge {
+                from: namespace_id,
+                to: view.stable_id.clone(),
+                label: "CONTAINS_VIEW".to_string(),
             });
         }
         Self { nodes, edges }
@@ -561,6 +713,35 @@ fn osi_handoff(table: &TableRecord, stable_id: &str, fields: &[IcebergFieldProje
     })
 }
 
+fn view_osi_handoff(view: &ViewRecord, stable_id: &str) -> Value {
+    json!({
+        "schemaVersion": "lakecat.querygraph.view-osi-handoff.v1",
+        "standard": "Open Semantic Interchange",
+        "ownership": {
+            "authoritativeSystem": "QueryGraph",
+            "lakecatRole": "catalog-view-discovery-handoff"
+        },
+        "view": {
+            "stableId": stable_id,
+            "name": safe_sql_name(view.name.as_str()),
+            "warehouse": view.warehouse.as_str(),
+            "namespace": view.namespace.path(),
+            "dialect": view.dialect,
+            "schemaVersion": view.schema_version,
+            "sql": view.sql,
+            "properties": view.properties
+        },
+        "policy": {
+            "governance": "View access is governed by LakeCat and TypeSec before QueryGraph or agents materialize dependent reads."
+        },
+        "queryGraphImport": {
+            "semanticModelStatus": "delegated",
+            "expectedOwner": "QueryGraph",
+            "notes": "LakeCat publishes catalog-owned view definitions, not authoritative business metrics, dimensions, measures, or joins."
+        }
+    })
+}
+
 fn odrl_policy(stable_id: &str, policy_bindings: &[QueryGraphPolicyBindingProjection]) -> Value {
     json!({
         "@type": "odrl:Policy",
@@ -587,6 +768,7 @@ fn odrl_policy(stable_id: &str, policy_bindings: &[QueryGraphPolicyBindingProjec
 fn bootstrap_open_lineage(
     warehouse: &WarehouseName,
     tables: &[QueryGraphTableProjection],
+    views: &[QueryGraphViewProjection],
     generated_at: DateTime<Utc>,
 ) -> Value {
     json!({
@@ -598,7 +780,8 @@ fn bootstrap_open_lineage(
                 "queryGraph_semanticBundle": {
                     "_producer": "https://querygraph.ai/lakecat",
                     "_schemaURL": "https://querygraph.ai/schemas/openlineage/querygraph-semantic-bundle-facet/0.1.0.json",
-                    "tableCount": tables.len()
+                    "tableCount": tables.len(),
+                    "viewCount": views.len()
                 }
             }
         },
@@ -627,10 +810,31 @@ fn bootstrap_open_lineage(
                     }
                 }
             })
-        }).collect::<Vec<_>>(),
+        }).chain(views.iter().map(|view| {
+            json!({
+                "namespace": format!("lakecat.{}.{}", view.warehouse, view.namespace.join(".")),
+                "name": view.name,
+                "facets": {
+                    "queryGraph_catalogView": {
+                        "_producer": "https://querygraph.ai/lakecat",
+                        "_schemaURL": "https://querygraph.ai/schemas/openlineage/querygraph-catalog-view-facet/0.1.0.json",
+                        "stableId": view.stable_id,
+                        "dialect": view.dialect,
+                        "schemaVersion": view.schema_version
+                    }
+                }
+            })
+        })).collect::<Vec<_>>(),
         "producer": "https://querygraph.ai/lakecat",
         "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json"
     })
+}
+
+fn view_stable_id(view: &ViewRecord) -> String {
+    format!(
+        "lakecat:view:{}:{}:{}",
+        view.warehouse, view.namespace, view.name
+    )
 }
 
 fn croissant_field(field: &IcebergFieldProjection) -> Value {
@@ -735,6 +939,8 @@ fn verify_hash(label: &str, expected: &str, value: &Value) -> LakeCatResult<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
+
     use lakecat_core::{Namespace, Principal, TableName};
 
     #[test]
@@ -907,6 +1113,57 @@ mod tests {
         );
         let verification = bundle.verify_manifest().unwrap();
         assert_eq!(verification.table_count, 1);
+    }
+
+    #[test]
+    fn projects_catalog_views_into_querygraph_bundle() {
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = Namespace::new(vec!["default".to_string()]).unwrap();
+        let view = ViewRecord::new(
+            warehouse.clone(),
+            namespace,
+            TableName::new("active_customers").unwrap(),
+            "select id, email from customers where active",
+            "sql",
+            Some(1),
+            BTreeMap::from([("semantic-domain".to_string(), "customer".to_string())]),
+            Principal::anonymous(),
+        )
+        .unwrap();
+
+        let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
+            warehouse,
+            Vec::new(),
+            vec![view],
+        )
+        .unwrap();
+
+        assert_eq!(bundle.tables.len(), 0);
+        assert_eq!(bundle.views.len(), 1);
+        assert_eq!(bundle.views[0].name, "active_customers");
+        assert_eq!(bundle.manifest.view_artifacts.len(), 1);
+        assert_eq!(
+            bundle.manifest.view_artifacts[0].stable_id,
+            bundle.views[0].stable_id
+        );
+        assert_eq!(
+            bundle.manifest.view_artifacts[0].osi_hash,
+            content_hash_json(&bundle.views[0].osi).unwrap()
+        );
+        assert!(
+            bundle
+                .graph
+                .edges
+                .iter()
+                .any(|edge| edge.label == "CONTAINS_VIEW")
+        );
+        assert_eq!(
+            bundle.open_lineage["run"]["facets"]["queryGraph_semanticBundle"]["viewCount"],
+            json!(1)
+        );
+        let verification = bundle.verify_manifest().unwrap();
+        assert_eq!(verification.view_count, 1);
+        assert_eq!(verification.verified_views[0], bundle.views[0].stable_id);
     }
 
     #[test]

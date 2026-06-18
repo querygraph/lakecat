@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added stored view projections to QueryGraph bootstrap bundles, including
+  manifest view artifact hashes, view-aware graph edges, OpenLineage view counts,
+  service-level export, and verification coverage.
 - Added governed durable view records with management list/upsert endpoints,
   memory/Turso persistence, and audited outbox-backed `view.*` events as the
   next Lakekeeper-style tenancy entity after Project and Warehouse.

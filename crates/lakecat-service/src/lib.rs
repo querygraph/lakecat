@@ -2168,9 +2168,15 @@ async fn querygraph_bootstrap(
         policy_binding_count += policy_bindings.len();
         table_policy_bindings.push((table, policy_bindings));
     }
-    let bundle = QueryGraphBootstrap::from_tables_with_policy_bindings(
+    let namespaces = state.store.list_namespaces(&state.warehouse).await?;
+    let mut views = Vec::new();
+    for namespace in namespaces {
+        views.extend(state.store.list_views(&state.warehouse, &namespace).await?);
+    }
+    let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
         state.warehouse.clone(),
         table_policy_bindings,
+        views,
     )?;
     let verification = bundle.verify_manifest()?;
     state
@@ -2184,8 +2190,10 @@ async fn querygraph_bootstrap(
                 "authorization-receipt": capability.receipt(),
                 "warehouse": state.warehouse.as_str(),
                 "table-count": verification.table_count,
+                "view-count": verification.view_count,
                 "policy-binding-count": policy_binding_count,
                 "verified-tables": verification.verified_tables,
+                "verified-views": verification.verified_views,
                 "bundle-hash": verification.bundle_hash,
                 "graph-hash": verification.graph_hash,
                 "open-lineage-hash": verification.open_lineage_hash,
@@ -5089,6 +5097,70 @@ mod tests {
             body["tables"][0]["odrl"]["lakecat:policy-bindings"][0]["odrl"]["lakecat:read-restriction"]
                 ["allowed-columns"],
             serde_json::json!(["event_id"])
+        );
+    }
+
+    #[tokio::test]
+    async fn querygraph_bootstrap_projects_catalog_views() {
+        let app = test_app();
+        let namespace = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"namespace":["default"]}"#))
+            .unwrap();
+        let response = app.clone().oneshot(namespace).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let view = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/active_customers")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "sql": "select id, email from customers where active",
+                    "dialect": "sql",
+                    "schema-version": 1,
+                    "properties": {
+                        "semantic-domain": "customer"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(view).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let bootstrap = Request::builder()
+            .method(Method::GET)
+            .uri("/querygraph/v1/bootstrap")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(bootstrap).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["views"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            body["views"][0]["name"],
+            serde_json::json!("active_customers")
+        );
+        assert_eq!(
+            body["manifest"]["view-artifacts"].as_array().unwrap().len(),
+            1
+        );
+        assert!(
+            body["graph"]["edges"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|edge| edge["label"] == serde_json::json!("CONTAINS_VIEW"))
+        );
+        assert_eq!(
+            body["open-lineage"]["run"]["facets"]["queryGraph_semanticBundle"]["viewCount"],
+            serde_json::json!(1)
         );
     }
 

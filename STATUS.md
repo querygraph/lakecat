@@ -7,8 +7,9 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `1c3cfb8 Add governed durable view records`.
-- Paused after pushing governed durable view records with management list/upsert
-  endpoints, memory/Turso persistence, and audited `view.*` events.
+- Current working slice exports stored views through QueryGraph bootstrap with
+  manifest-covered view artifact hashes, view-aware graph edges, and OpenLineage
+  view counts.
 - Local verification for the pushed governed-view slice was green:
   `cargo fmt -p lakecat-api -p lakecat-security -p lakecat-store -p lakecat-service -- --check`;
   `git diff --check`;
@@ -167,6 +168,9 @@ Updated: 2026-06-18
 
 ## Completed In Latest Implementation Slice
 
+- Added stored view projections to QueryGraph bootstrap bundles, including
+  manifest view artifact hashes, view-aware graph edges, OpenLineage view counts,
+  service-level export, and verification coverage.
 - Added governed durable view records with management list/upsert endpoints,
   memory/Turso persistence, and audited `view.*` events as the next
   Lakekeeper-style catalog entity after Project and Warehouse.

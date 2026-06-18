@@ -271,7 +271,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   compatibility path; credential-vend attempts with fine-grained restrictions
   now fail closed into governed Sail-planned reads before any secret resolver is
   called; governed view list/upsert management endpoints now persist durable
-  `ViewRecord` values in memory and Turso and emit audited `view.*` events.
+  `ViewRecord` values in memory and Turso and emit audited `view.*` events;
+  QueryGraph bootstrap now exports those stored views with manifest-covered OSI
+  hashes, view-aware graph edges, and OpenLineage view counts.
   Server entities, standard Iceberg view REST semantics, and richer
   project-scoped routing remain pending.*
 - **P6 — Reproducibility (F10) + typed v4 (F9).** Land the Sail helper commits
