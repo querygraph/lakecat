@@ -1738,6 +1738,20 @@ async fn project_outbox_event(
             receipt.lineage_events += 1;
         }
     } else if event.event_type == "namespace.created" {
+        let (warehouse, namespace) = outbox_namespace(event, &state.warehouse)?;
+        state
+            .graph
+            .emit(
+                GraphEvent::namespace(
+                    GraphAction::Created,
+                    warehouse,
+                    namespace,
+                    event_payload.clone(),
+                )
+                .with_event_id(event.event_id.clone()),
+            )
+            .await?;
+        receipt.graph_events += 1;
         state
             .lineage
             .emit(LineageEvent::new(
@@ -1787,6 +1801,55 @@ fn outbox_table(event: &OutboxEvent) -> Result<Option<TableIdent>, LakeCatError>
             })
         })
         .transpose()
+}
+
+fn outbox_namespace(
+    event: &OutboxEvent,
+    default_warehouse: &WarehouseName,
+) -> Result<(WarehouseName, Namespace), LakeCatError> {
+    let warehouse = event
+        .payload
+        .get("payload")
+        .and_then(|payload| payload.get("warehouse"))
+        .or_else(|| event.payload.get("warehouse"))
+        .and_then(serde_json::Value::as_str)
+        .map(WarehouseName::new)
+        .transpose()?
+        .unwrap_or_else(|| default_warehouse.clone());
+    let namespace = event
+        .payload
+        .get("payload")
+        .and_then(|payload| payload.get("namespace"))
+        .or_else(|| event.payload.get("namespace"))
+        .ok_or_else(|| {
+            LakeCatError::Internal(format!(
+                "outbox event {} is missing namespace payload",
+                event.event_id
+            ))
+        })?;
+    let namespace = match namespace {
+        serde_json::Value::Array(parts) => Namespace::new(
+            parts
+                .iter()
+                .map(|part| {
+                    part.as_str().map(ToString::to_string).ok_or_else(|| {
+                        LakeCatError::Internal(format!(
+                            "outbox event {} namespace components must be strings",
+                            event.event_id
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        )?,
+        serde_json::Value::String(path) => path.parse::<Namespace>()?,
+        _ => {
+            return Err(LakeCatError::Internal(format!(
+                "outbox event {} namespace payload must be an array or string",
+                event.event_id
+            )));
+        }
+    };
+    Ok((warehouse, namespace))
 }
 
 fn outbox_principal(event: &OutboxEvent) -> Result<Principal, LakeCatError> {
@@ -2291,6 +2354,7 @@ mod tests {
     use async_trait::async_trait;
     use axum::body::Body;
     use http::{Method, Request, StatusCode};
+    use lakecat_graph::GraphNodeLabel;
     use lakecat_lineage::LineageReceipt;
     use lakecat_store::{MemoryCatalogStore, OutboxEvent};
     use tokio::sync::Mutex;
@@ -2840,6 +2904,29 @@ mod tests {
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![
                 OutboxEvent {
+                    event_id: "evt-namespace".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "namespace.created".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-namespace",
+                        "event-type": "namespace.created",
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "namespace-create",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            },
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
                     event_id: "evt-1".to_string(),
                     sink: "lakecat.lineage-and-graph".to_string(),
                     event_type: "table.created".to_string(),
@@ -2936,61 +3023,78 @@ mod tests {
             );
 
         let drain = drain_outbox_once(&state, 10).await.unwrap();
-        assert_eq!(drain.delivered, 3);
+        assert_eq!(drain.delivered, 4);
         assert_eq!(
             drain.event_types,
             vec![
+                "namespace.created".to_string(),
                 "table.created".to_string(),
                 "table.scan-tasks-fetched".to_string(),
                 "querygraph.bootstrap".to_string()
             ]
         );
-        assert_eq!(drain.graph_events, 2);
-        assert_eq!(drain.lineage_events, 3);
+        assert_eq!(drain.graph_events, 3);
+        assert_eq!(drain.lineage_events, 4);
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 2);
-        assert_eq!(graph_events[0].action, GraphAction::Created);
-        assert_eq!(graph_events[0].event_id.as_deref(), Some("evt-1"));
-        assert_eq!(graph_events[1].action, GraphAction::PlannedScan);
+        assert_eq!(graph_events.len(), 3);
+        assert_eq!(graph_events[0].label, GraphNodeLabel::Namespace);
         assert_eq!(
-            graph_events[1].properties["read-restriction"]["allowed-columns"],
+            graph_events[0].subject,
+            "lakecat:warehouse:local:namespace:default"
+        );
+        assert_eq!(graph_events[0].event_id.as_deref(), Some("evt-namespace"));
+        assert_eq!(
+            graph_events[0].properties["authorization-receipt"]["principal"]["subject"],
+            serde_json::json!("agent:writer")
+        );
+        assert_eq!(graph_events[1].label, GraphNodeLabel::Table);
+        assert_eq!(graph_events[1].action, GraphAction::Created);
+        assert_eq!(graph_events[1].event_id.as_deref(), Some("evt-1"));
+        assert_eq!(graph_events[2].action, GraphAction::PlannedScan);
+        assert_eq!(
+            graph_events[2].properties["read-restriction"]["allowed-columns"],
             serde_json::json!(["event_id"])
         );
         let lineage_events = lineage.events.lock().await;
-        assert_eq!(lineage_events.len(), 3);
-        assert_eq!(lineage_events[0].event_type, LineageEventType::TableCreated);
+        assert_eq!(lineage_events.len(), 4);
         assert_eq!(
-            lineage_events[1].event_type,
+            lineage_events[0].event_type,
+            LineageEventType::NamespaceCreated
+        );
+        assert_eq!(lineage_events[1].event_type, LineageEventType::TableCreated);
+        assert_eq!(
+            lineage_events[2].event_type,
             LineageEventType::TableScanPlanned
         );
         assert_eq!(
-            lineage_events[1].payload["read-restriction"]["allowed-columns"],
+            lineage_events[2].payload["read-restriction"]["allowed-columns"],
             serde_json::json!(["event_id"])
         );
         assert_eq!(
-            lineage_events[2].event_type,
+            lineage_events[3].event_type,
             LineageEventType::QueryGraphBootstrap
         );
         assert_eq!(
-            lineage_events[2].payload["authorization-receipt"]["request-identity"]["attestation-state"],
+            lineage_events[3].payload["authorization-receipt"]["request-identity"]["attestation-state"],
             serde_json::json!("verified")
         );
         assert_eq!(
-            lineage_events[2].payload["bundle-hash"],
+            lineage_events[3].payload["bundle-hash"],
             serde_json::json!("sha256:bundle")
         );
         assert_eq!(
-            lineage_events[2].payload["graph-hash"],
+            lineage_events[3].payload["graph-hash"],
             serde_json::json!("sha256:graph")
         );
         assert_eq!(
-            lineage_events[2].payload["open-lineage-hash"],
+            lineage_events[3].payload["open-lineage-hash"],
             serde_json::json!("sha256:openlineage")
         );
         assert_eq!(
             store.delivered.lock().await.as_slice(),
             &[
+                "evt-namespace".to_string(),
                 "evt-1".to_string(),
                 "evt-2".to_string(),
                 "evt-3".to_string()

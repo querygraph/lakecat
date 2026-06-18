@@ -7,18 +7,21 @@ Updated: 2026-06-18
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
   `bf1583b Record QueryGraph bootstrap hash receipts`.
-- Paused after pushing QueryGraph bootstrap integrity receipts for lineage.
-  The `querygraph.bootstrap` audit/outbox payload includes the verified bundle
-  hash, graph hash, OpenLineage hash, standards, and verified table IDs from
-  the bundle manifest.
-- Local verification for the pushed slice was green:
-  `cargo fmt -p lakecat-service -- --check`;
+- Current working slice: namespace graph projection from the durable outbox.
+  `namespace.created` replay now emits a catalog-facing `Namespace` graph event
+  with a stable namespace subject and the same authorization payload used for
+  lineage.
+- Local verification for the current slice is green:
+  `cargo fmt -p lakecat-graph -p lakecat-service -p lakecat-api -- --check`;
   `git diff --check`;
+  `cargo test -p lakecat-graph`;
+  `cargo test -p lakecat-graph --features grust-local`;
   `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
-  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox -- --nocapture`;
-  `cargo test -p lakecat-service querygraph_bootstrap_projects_catalog_tables -- --nocapture`;
   `cargo test -p lakecat-service`;
   `cargo test --workspace`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
   `cargo test --workspace --all-features`.
 - Manual cloud gate status: run `27722995692` was started only after local
   workflow reproduction. It completed with all focused rows green, including
@@ -64,6 +67,10 @@ Updated: 2026-06-18
 
 ## Completed In This Commit
 
+- Added namespace graph projection to the durable outbox drain, so
+  `namespace.created` events now replay to both graph and lineage sinks.
+- Added a stable namespace subject helper and graph-crate unit coverage for the
+  catalog-facing namespace event shape.
 - Added verified QueryGraph bootstrap bundle, graph, OpenLineage, standards, and
   table hash evidence to the `querygraph.bootstrap` audit/outbox payload.
 - Extended lineage replay tests to prove bootstrap hash evidence survives the

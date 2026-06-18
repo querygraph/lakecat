@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use lakecat_core::{LakeCatResult, TableIdent};
+use lakecat_core::{LakeCatResult, Namespace, TableIdent, WarehouseName};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -35,10 +35,35 @@ impl GraphEvent {
         }
     }
 
+    pub fn namespace(
+        action: GraphAction,
+        warehouse: WarehouseName,
+        namespace: Namespace,
+        properties: Value,
+    ) -> Self {
+        Self {
+            event_id: None,
+            subject: namespace_stable_id(&warehouse, &namespace),
+            label: GraphNodeLabel::Namespace,
+            action,
+            table: None,
+            properties,
+            emitted_at: Utc::now(),
+        }
+    }
+
     pub fn with_event_id(mut self, event_id: impl Into<String>) -> Self {
         self.event_id = Some(event_id.into());
         self
     }
+}
+
+pub fn namespace_stable_id(warehouse: &WarehouseName, namespace: &Namespace) -> String {
+    format!(
+        "lakecat:warehouse:{}:namespace:{}",
+        warehouse.as_str(),
+        namespace.path()
+    )
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -84,6 +109,30 @@ impl NoopCatalogGraphSink {
 impl CatalogGraphSink for NoopCatalogGraphSink {
     async fn emit(&self, _event: GraphEvent) -> LakeCatResult<()> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn namespace_event_uses_stable_catalog_subject() {
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default.ops".parse::<Namespace>().unwrap();
+        let event = GraphEvent::namespace(
+            GraphAction::Created,
+            warehouse,
+            namespace,
+            serde_json::json!({"kind": "test"}),
+        );
+
+        assert_eq!(event.label, GraphNodeLabel::Namespace);
+        assert_eq!(
+            event.subject,
+            "lakecat:warehouse:local:namespace:default.ops"
+        );
+        assert!(event.table.is_none());
     }
 }
 

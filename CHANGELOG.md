@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Projected `namespace.created` outbox events into LakeCat's catalog-facing graph
+  sink with stable namespace subjects and authorization payloads, extending the
+  durable graph replay path beyond table events.
 - Added verified QueryGraph bootstrap bundle, graph, OpenLineage, standards, and
   table hash evidence to the `querygraph.bootstrap` audit/outbox payload so
   lineage replay carries the same integrity facts as the manifest.
