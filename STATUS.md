@@ -6,6 +6,27 @@ Updated: 2026-06-18
 
 - LakeCat is on `master`.
 - Latest committed and pushed LakeCat implementation slice:
+  `9f7ec88 Bind QGLake replay principal kind`.
+- Paused after pushing the QGLake replay principal-kind slice. The CLI now uses
+  agent-DID request headers for explicit `qglake-fixture` principals while
+  leaving normal admin commands on `x-lakecat-principal`; lineage-drain replay
+  summaries now expose `principal-kind`, and QGLake rejects bootstrap replay
+  evidence whose principal kind does not match the accepted agent/anonymous
+  actor.
+- Local verification for the pushed QGLake replay principal-kind slice was
+  green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-cli parses_qglake_fixture_command_defaults`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `git diff --check`;
+  `cargo test --workspace`.
+- This status commit records the pushed QGLake replay principal-kind slice.
+- Previous implementation slice:
   `d7b6da6 Bind QGLake replay identity state`.
 - Paused after pushing the QGLake replay request-identity-state slice. The
   lineage-drain event summary now exposes `request-identity-state` for replayed
