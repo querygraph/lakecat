@@ -386,6 +386,14 @@ pub struct LineageDrainEventSummary {
     pub policy_binding_count: usize,
     #[serde(default)]
     pub standards: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_block_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_credential_exception_allowed: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_credential_exception_reason: Option<String>,
     #[serde(default)]
     pub replay_event_hashes: Vec<String>,
     #[serde(default)]

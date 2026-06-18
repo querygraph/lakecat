@@ -1017,6 +1017,21 @@ fn lineage_drain_event_summary(
                     .collect()
             })
             .unwrap_or_default(),
+        credential_count: payload
+            .get("credential-count")
+            .and_then(Value::as_u64)
+            .and_then(|count| usize::try_from(count).ok()),
+        credential_block_reason: payload
+            .get("lakecat:credential-block-reason")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        raw_credential_exception_allowed: payload
+            .pointer("/lakecat:raw-credential-exception/allowed")
+            .and_then(Value::as_bool),
+        raw_credential_exception_reason: payload
+            .pointer("/lakecat:raw-credential-exception/reason")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         replay_event_hashes: receipt.lineage_event_hashes.clone(),
         replay_open_lineage_hashes: receipt.open_lineage_hashes.clone(),
     }
@@ -4743,6 +4758,42 @@ mod tests {
                     delivered_at: None,
                 },
                 OutboxEvent {
+                    event_id: "evt-credentials".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "credentials.vend-attempted".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-credentials",
+                        "event-type": "credentials.vend-attempted",
+                        "table": table,
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "credentials-vend",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": "sha256:policy",
+                                "checked_at": chrono::Utc::now(),
+                                "context": {
+                                    "lakecat:raw-credential-exception": {
+                                        "requested": true,
+                                        "allowed": false,
+                                        "reason": "fine-grained read restriction requires Sail-planned reads"
+                                    }
+                                }
+                            },
+                            "credential-count": 0,
+                            "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
+                            "lakecat:raw-credential-exception": {
+                                "requested": true,
+                                "allowed": false,
+                                "reason": "fine-grained read restriction requires Sail-planned reads"
+                            }
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
                     event_id: "evt-3".to_string(),
                     sink: "lakecat.lineage-and-graph".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
@@ -4828,7 +4879,7 @@ mod tests {
             );
 
         let drain = drain_outbox_once(&state, 10).await.unwrap();
-        assert_eq!(drain.delivered, 7);
+        assert_eq!(drain.delivered, 8);
         assert_eq!(
             drain.event_types,
             vec![
@@ -4837,12 +4888,40 @@ mod tests {
                 "table.created".to_string(),
                 "table.scan-tasks-fetched".to_string(),
                 "table.commit".to_string(),
+                "credentials.vend-attempted".to_string(),
                 "querygraph.bootstrap".to_string(),
                 "namespace.dropped".to_string()
             ]
         );
-        assert_eq!(drain.graph_events, 18);
+        assert_eq!(drain.graph_events, 19);
         assert_eq!(drain.lineage_events, 6);
+        let credential_summary = drain
+            .events
+            .iter()
+            .find(|event| event.event_type == "credentials.vend-attempted")
+            .expect("credential replay summary should be exposed");
+        assert_eq!(
+            credential_summary.principal_subject.as_deref(),
+            Some("agent:writer")
+        );
+        assert_eq!(credential_summary.principal_kind.as_deref(), Some("agent"));
+        assert_eq!(credential_summary.graph_events, 1);
+        assert_eq!(credential_summary.lineage_events, 0);
+        assert_eq!(credential_summary.credential_count, Some(0));
+        assert_eq!(
+            credential_summary.credential_block_reason.as_deref(),
+            Some("fine-grained read restriction requires Sail-planned reads")
+        );
+        assert_eq!(
+            credential_summary.raw_credential_exception_allowed,
+            Some(false)
+        );
+        assert_eq!(
+            credential_summary
+                .raw_credential_exception_reason
+                .as_deref(),
+            Some("fine-grained read restriction requires Sail-planned reads")
+        );
         let bootstrap_summary = drain
             .events
             .iter()
@@ -4910,7 +4989,7 @@ mod tests {
         );
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 18);
+        assert_eq!(graph_events.len(), 19);
         assert_eq!(graph_events[0].label, GraphNodeLabel::Principal);
         assert_eq!(graph_events[0].subject, "lakecat:principal:agent:writer");
         assert_eq!(
@@ -5020,21 +5099,26 @@ mod tests {
         assert_eq!(graph_events[15].label, GraphNodeLabel::Principal);
         assert_eq!(
             graph_events[15].event_id.as_deref(),
-            Some("evt-3:principal")
+            Some("evt-credentials:principal")
         );
         assert_eq!(graph_events[16].label, GraphNodeLabel::Principal);
         assert_eq!(
             graph_events[16].event_id.as_deref(),
+            Some("evt-3:principal")
+        );
+        assert_eq!(graph_events[17].label, GraphNodeLabel::Principal);
+        assert_eq!(
+            graph_events[17].event_id.as_deref(),
             Some("evt-namespace-drop:principal")
         );
-        assert_eq!(graph_events[17].label, GraphNodeLabel::Namespace);
-        assert_eq!(graph_events[17].action, GraphAction::Deleted);
+        assert_eq!(graph_events[18].label, GraphNodeLabel::Namespace);
+        assert_eq!(graph_events[18].action, GraphAction::Deleted);
         assert_eq!(
-            graph_events[17].subject,
+            graph_events[18].subject,
             "lakecat:warehouse:local:namespace:archived"
         );
         assert_eq!(
-            graph_events[17].event_id.as_deref(),
+            graph_events[18].event_id.as_deref(),
             Some("evt-namespace-drop")
         );
         let lineage_events = lineage.events.lock().await;
@@ -5104,6 +5188,7 @@ mod tests {
                 "evt-1".to_string(),
                 "evt-2".to_string(),
                 "evt-commit".to_string(),
+                "evt-credentials".to_string(),
                 "evt-3".to_string(),
                 "evt-namespace-drop".to_string()
             ]

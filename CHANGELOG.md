@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added credential-vend replay evidence to lineage-drain summaries and required
+  QGLake lineage-drain acceptance to prove both the restricted agent block and
+  trusted-human raw credential exception survived outbox replay.
 - Allowed trusted human principals to receive audited standard credential
   responses for restricted QGLake tables while keeping agents on the governed
   Sail-planned path, and added QGLake acceptance checks for the contrast.

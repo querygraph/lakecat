@@ -1654,6 +1654,58 @@ fn verify_qglake_lineage_drain(
             "qglake lineage drain replay evidence is missing sink receipt hashes".to_string(),
         ));
     }
+    verify_qglake_credential_replay(drain, principal)?;
+    Ok(())
+}
+
+fn verify_qglake_credential_replay(
+    drain: &LineageDrainResponse,
+    principal: Option<&str>,
+) -> lakecat_core::LakeCatResult<()> {
+    let expected_restricted_subject = principal.unwrap_or("anonymous");
+    let expected_restricted_kind = if principal.is_some() {
+        "agent"
+    } else {
+        "anonymous"
+    };
+    let Some(restricted_probe) = drain.events.iter().find(|event| {
+        event.event_type == "credentials.vend-attempted"
+            && event.principal_subject.as_deref() == Some(expected_restricted_subject)
+            && event.principal_kind.as_deref() == Some(expected_restricted_kind)
+    }) else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain did not replay the restricted credential probe".to_string(),
+        ));
+    };
+    if restricted_probe.credential_count != Some(0)
+        || restricted_probe.raw_credential_exception_allowed != Some(false)
+        || restricted_probe.credential_block_reason.as_deref()
+            != Some("fine-grained read restriction requires Sail-planned reads")
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain restricted credential replay did not prove raw credentials were blocked"
+                .to_string(),
+        ));
+    }
+
+    let Some(human_probe) = drain.events.iter().find(|event| {
+        event.event_type == "credentials.vend-attempted"
+            && event.principal_subject.as_deref() == Some("human:qglake-operator")
+            && event.principal_kind.as_deref() == Some("human")
+    }) else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain did not replay the trusted human credential probe".to_string(),
+        ));
+    };
+    if human_probe.credential_count.unwrap_or_default() == 0
+        || human_probe.raw_credential_exception_allowed != Some(true)
+        || human_probe.credential_block_reason.is_some()
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain trusted human credential replay did not prove audited standard credential vending"
+                .to_string(),
+        ));
+    }
     Ok(())
 }
 
@@ -3869,6 +3921,10 @@ mod tests {
                     view_artifact_count: 0,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
+                    credential_count: None,
+                    credential_block_reason: None,
+                    raw_credential_exception_allowed: None,
+                    raw_credential_exception_reason: None,
                     replay_event_hashes: Vec::new(),
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -3908,6 +3964,10 @@ mod tests {
                     view_artifact_count: 0,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
+                    credential_count: None,
+                    credential_block_reason: None,
+                    raw_credential_exception_allowed: None,
+                    raw_credential_exception_reason: None,
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -3947,6 +4007,10 @@ mod tests {
                     view_artifact_count: 0,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
+                    credential_count: None,
+                    credential_block_reason: None,
+                    raw_credential_exception_allowed: None,
+                    raw_credential_exception_reason: None,
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -3985,6 +4049,10 @@ mod tests {
                     view_artifact_count: 0,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
+                    credential_count: None,
+                    credential_block_reason: None,
+                    raw_credential_exception_allowed: None,
+                    raw_credential_exception_reason: None,
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -4023,6 +4091,10 @@ mod tests {
                     view_artifact_count: 0,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
+                    credential_count: None,
+                    credential_block_reason: None,
+                    raw_credential_exception_allowed: None,
+                    raw_credential_exception_reason: None,
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -4061,6 +4133,10 @@ mod tests {
                     view_artifact_count: 0,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
+                    credential_count: None,
+                    credential_block_reason: None,
+                    raw_credential_exception_allowed: None,
+                    raw_credential_exception_reason: None,
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -4099,6 +4175,10 @@ mod tests {
                     view_artifact_count: 0,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
+                    credential_count: None,
+                    credential_block_reason: None,
+                    raw_credential_exception_allowed: None,
+                    raw_credential_exception_reason: None,
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -4137,6 +4217,10 @@ mod tests {
                     view_artifact_count: 0,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
+                    credential_count: None,
+                    credential_block_reason: None,
+                    raw_credential_exception_allowed: None,
+                    raw_credential_exception_reason: None,
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -4176,6 +4260,10 @@ mod tests {
                     view_artifact_count: 0,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
+                    credential_count: None,
+                    credential_block_reason: None,
+                    raw_credential_exception_allowed: None,
+                    raw_credential_exception_reason: None,
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -4214,6 +4302,10 @@ mod tests {
                     view_artifact_count: 0,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
+                    credential_count: None,
+                    credential_block_reason: None,
+                    raw_credential_exception_allowed: None,
+                    raw_credential_exception_reason: None,
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -4252,6 +4344,10 @@ mod tests {
                     view_artifact_count: 0,
                     policy_binding_count: 1,
                     standards: vec!["OpenLineage".to_string()],
+                    credential_count: None,
+                    credential_block_reason: None,
+                    raw_credential_exception_allowed: None,
+                    raw_credential_exception_reason: None,
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -4290,6 +4386,10 @@ mod tests {
                     view_artifact_count: 0,
                     policy_binding_count: 0,
                     standards: qglake_lineage_standards(),
+                    credential_count: None,
+                    credential_block_reason: None,
+                    raw_credential_exception_allowed: None,
+                    raw_credential_exception_reason: None,
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -4328,6 +4428,10 @@ mod tests {
                     view_artifact_count: 0,
                     policy_binding_count: 1,
                     standards: qglake_lineage_standards(),
+                    credential_count: None,
+                    credential_block_reason: None,
+                    raw_credential_exception_allowed: None,
+                    raw_credential_exception_reason: None,
                     replay_event_hashes: vec!["sha256:replay-event".to_string()],
                     replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
                 }],
@@ -4342,37 +4446,73 @@ mod tests {
                 .contains("qglake lineage drain bootstrap replay emitted no lineage projection")
         );
 
-        verify_qglake_lineage_drain(
+        let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 2,
+                delivered: 3,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
                 graph_events: 1,
-                lineage_events: 2,
-                events: vec![LineageDrainEventSummary {
-                    event_id: "evt-bootstrap".to_string(),
-                    event_type: "querygraph.bootstrap".to_string(),
-                    principal_subject: Some("did:example:agent".to_string()),
-                    principal_kind: Some("agent".to_string()),
-                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
-                    request_identity_state: Some("verified".to_string()),
-                    agent_delegation_hash: Some("sha256:delegation".to_string()),
-                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
-                    graph_events: 0,
-                    lineage_events: 1,
-                    bundle_hash: Some("sha256:bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
-                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
-                    table_artifact_count: 1,
-                    view_artifact_count: 0,
-                    policy_binding_count: 1,
-                    standards: qglake_lineage_standards(),
-                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
-                }],
+                lineage_events: 3,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_human_credential_summary(),
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require restricted credential replay");
+        let err = err.to_string();
+        assert!(
+            err.contains("qglake lineage drain did not replay the restricted credential probe"),
+            "{err}"
+        );
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 3,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 3,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require trusted human credential replay");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain did not replay the trusted human credential probe")
+        );
+
+        verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 4,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 4,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                ],
             },
             &verification,
             Some("did:example:agent"),
@@ -4401,6 +4541,99 @@ mod tests {
                 "Grust catalog graph".to_string(),
                 "OpenLineage".to_string(),
             ],
+        }
+    }
+
+    fn qglake_bootstrap_lineage_summary() -> LineageDrainEventSummary {
+        LineageDrainEventSummary {
+            event_id: "evt-bootstrap".to_string(),
+            event_type: "querygraph.bootstrap".to_string(),
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:authorization".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            agent_delegation_hash: Some("sha256:delegation".to_string()),
+            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            graph_events: 0,
+            lineage_events: 1,
+            bundle_hash: Some("sha256:bundle".to_string()),
+            graph_hash: Some("sha256:graph".to_string()),
+            open_lineage_hash: Some("sha256:openlineage".to_string()),
+            querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+            table_artifact_count: 1,
+            view_artifact_count: 0,
+            policy_binding_count: 1,
+            standards: qglake_lineage_standards(),
+            credential_count: None,
+            credential_block_reason: None,
+            raw_credential_exception_allowed: None,
+            raw_credential_exception_reason: None,
+            replay_event_hashes: vec!["sha256:replay-event".to_string()],
+            replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+        }
+    }
+
+    fn qglake_restricted_credential_summary() -> LineageDrainEventSummary {
+        LineageDrainEventSummary {
+            event_id: "evt-agent-credentials".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:agent-credential-authorization".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            agent_delegation_hash: Some("sha256:delegation".to_string()),
+            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            graph_events: 0,
+            lineage_events: 0,
+            bundle_hash: None,
+            graph_hash: None,
+            open_lineage_hash: None,
+            querygraph_import_hash: None,
+            table_artifact_count: 0,
+            view_artifact_count: 0,
+            policy_binding_count: 0,
+            standards: Vec::new(),
+            credential_count: Some(0),
+            credential_block_reason: Some(
+                "fine-grained read restriction requires Sail-planned reads".to_string(),
+            ),
+            raw_credential_exception_allowed: Some(false),
+            raw_credential_exception_reason: Some(
+                "fine-grained read restriction requires Sail-planned reads".to_string(),
+            ),
+            replay_event_hashes: Vec::new(),
+            replay_open_lineage_hashes: Vec::new(),
+        }
+    }
+
+    fn qglake_human_credential_summary() -> LineageDrainEventSummary {
+        LineageDrainEventSummary {
+            event_id: "evt-human-credentials".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            principal_subject: Some("human:qglake-operator".to_string()),
+            principal_kind: Some("human".to_string()),
+            authorization_receipt_hash: Some("sha256:human-credential-authorization".to_string()),
+            request_identity_state: Some("header-principal".to_string()),
+            agent_delegation_hash: None,
+            agent_summary_signature_hash: None,
+            graph_events: 0,
+            lineage_events: 0,
+            bundle_hash: None,
+            graph_hash: None,
+            open_lineage_hash: None,
+            querygraph_import_hash: None,
+            table_artifact_count: 0,
+            view_artifact_count: 0,
+            policy_binding_count: 0,
+            standards: Vec::new(),
+            credential_count: Some(1),
+            credential_block_reason: None,
+            raw_credential_exception_allowed: Some(true),
+            raw_credential_exception_reason: Some(
+                "trusted human principal may use audited raw credential vending".to_string(),
+            ),
+            replay_event_hashes: Vec::new(),
+            replay_open_lineage_hashes: Vec::new(),
         }
     }
 
