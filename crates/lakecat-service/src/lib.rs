@@ -2979,6 +2979,18 @@ async fn project_outbox_event(
             ))
             .await?;
         receipt.record_lineage(lineage_receipt);
+    } else if event.event_type == "server.upserted" {
+        let _server_id = outbox_server(event)?;
+        let lineage_receipt = state
+            .lineage
+            .emit(LineageEvent::new(
+                LineageEventType::ServerUpserted,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "warehouse.upserted" {
         let warehouse = outbox_warehouse(event, &state.warehouse)?;
         state
@@ -3246,6 +3258,26 @@ fn outbox_project(event: &OutboxEvent) -> Result<String, LakeCatError> {
         .ok_or_else(|| {
             LakeCatError::Internal(format!(
                 "outbox event {} is missing project payload",
+                event.event_id
+            ))
+        })
+}
+
+fn outbox_server(event: &OutboxEvent) -> Result<String, LakeCatError> {
+    let payload = event.payload.get("payload").unwrap_or(&event.payload);
+    payload
+        .get("server-id")
+        .or_else(|| {
+            payload
+                .get("server-record")
+                .and_then(|record| record.get("server-id"))
+        })
+        .and_then(Value::as_str)
+        .filter(|server_id| !server_id.is_empty())
+        .map(ToString::to_string)
+        .ok_or_else(|| {
+            LakeCatError::Internal(format!(
+                "outbox event {} is missing server payload",
                 event.event_id
             ))
         })
@@ -5307,6 +5339,78 @@ mod tests {
                 "evt-3".to_string(),
                 "evt-namespace-drop".to_string()
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_projects_server_upserts_to_lineage() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-server".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "server.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-server",
+                    "event-type": "server.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "server-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "server-id": "prod",
+                        "server-record": {
+                            "server-id": "prod",
+                            "display-name": "Production",
+                            "endpoint-url": "https://lakecat.example",
+                            "properties": {"region": "global"}
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let drain = drain_outbox_once(&state, 10).await.unwrap();
+        assert_eq!(drain.delivered, 1);
+        assert_eq!(drain.event_types, vec!["server.upserted".to_string()]);
+        assert_eq!(drain.graph_events, 1);
+        assert_eq!(drain.lineage_events, 1);
+        assert_eq!(
+            store.delivered.lock().await.as_slice(),
+            &["evt-server".to_string()]
+        );
+
+        let graph_events = graph.events.lock().await;
+        assert_eq!(graph_events.len(), 1);
+        assert_eq!(graph_events[0].label, GraphNodeLabel::Principal);
+        assert_eq!(graph_events[0].subject, "lakecat:principal:agent:operator");
+        drop(graph_events);
+
+        let lineage_events = lineage.events.lock().await;
+        assert_eq!(lineage_events.len(), 1);
+        assert_eq!(
+            lineage_events[0].event_type,
+            LineageEventType::ServerUpserted
+        );
+        assert_eq!(
+            lineage_events[0].payload["server-record"]["display-name"],
+            serde_json::json!("Production")
         );
     }
 

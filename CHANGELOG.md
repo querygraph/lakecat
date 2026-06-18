@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Projected `server.upserted` outbox events into LakeCat lineage/OpenLineage
+  receipts while leaving reusable server graph hierarchy work to Grust.
 - Projected policy-binding, project, and warehouse upsert outbox events into
   LakeCat lineage/OpenLineage receipts so control-plane graph anchors also carry
   replayable lineage evidence.

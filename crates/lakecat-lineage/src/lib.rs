@@ -44,6 +44,7 @@ pub enum LineageEventType {
     NamespaceDropped,
     PolicyBindingUpserted,
     ProjectUpserted,
+    ServerUpserted,
     TableCreated,
     TableLoaded,
     TableScanPlanned,
@@ -191,6 +192,21 @@ fn lineage_outputs(event: &LineageEvent) -> Vec<Value> {
                 }
             }
         })],
+        LineageEventType::ServerUpserted => vec![json!({
+            "namespace": "lakecat.server",
+            "name": event
+                .payload
+                .get("server-id")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown"),
+            "facets": {
+                "lakecat_server": {
+                    "_producer": "https://querygraph.ai/lakecat",
+                    "_schemaURL": "https://querygraph.ai/schemas/openlineage/lakecat-server-facet/0.1.0.json",
+                    "payload": event.payload,
+                }
+            }
+        })],
         LineageEventType::WarehouseUpserted => vec![json!({
             "namespace": "lakecat.warehouse",
             "name": event
@@ -262,6 +278,7 @@ fn lineage_event_type_name(event_type: &LineageEventType) -> &'static str {
         LineageEventType::NamespaceDropped => "namespace-dropped",
         LineageEventType::PolicyBindingUpserted => "policy-binding-upserted",
         LineageEventType::ProjectUpserted => "project-upserted",
+        LineageEventType::ServerUpserted => "server-upserted",
         LineageEventType::TableCreated => "table-created",
         LineageEventType::TableLoaded => "table-loaded",
         LineageEventType::TableScanPlanned => "table-scan-planned",
@@ -446,6 +463,25 @@ mod tests {
         assert_eq!(
             project["outputs"][0]["facets"]["lakecat_project"]["payload"]["project-record"]["display-name"],
             json!("Default Project")
+        );
+
+        let server = open_lineage_event(&LineageEvent::new(
+            LineageEventType::ServerUpserted,
+            Principal::anonymous(),
+            None,
+            json!({
+                "server-id": "prod",
+                "server-record": {
+                    "display-name": "Production"
+                }
+            }),
+        ));
+        assert_eq!(server["job"]["name"], json!("server-upserted"));
+        assert_eq!(server["outputs"][0]["namespace"], json!("lakecat.server"));
+        assert_eq!(server["outputs"][0]["name"], json!("prod"));
+        assert_eq!(
+            server["outputs"][0]["facets"]["lakecat_server"]["payload"]["server-record"]["display-name"],
+            json!("Production")
         );
 
         let warehouse = open_lineage_event(&LineageEvent::new(
