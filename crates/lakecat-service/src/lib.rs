@@ -29,7 +29,9 @@ use lakecat_graph::{CatalogGraphSink, GraphAction, GraphEvent, NoopCatalogGraphS
 use lakecat_lineage::{
     HashOnlyLineageSink, LineageEvent, LineageEventType, LineageReceipt, LineageSink,
 };
-use lakecat_querygraph::{QueryGraphBootstrap, QueryGraphViewReceiptEvidence};
+use lakecat_querygraph::{
+    QueryGraphBootstrap, QueryGraphTenantProjection, QueryGraphViewReceiptEvidence,
+};
 #[cfg(not(feature = "sail-local"))]
 use lakecat_sail::DeferredSailCatalogEngine;
 #[cfg(not(feature = "sail-local"))]
@@ -3355,11 +3357,13 @@ async fn querygraph_bootstrap(
     for namespace in namespaces {
         views.extend(state.store.list_views(&state.warehouse, &namespace).await?);
     }
+    let tenant = querygraph_tenant_projection(&state).await?;
     let view_version_receipts = querygraph_view_version_receipts(&state, &views).await?;
-    let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
+    let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings_and_tenant(
         state.warehouse.clone(),
         table_policy_bindings,
         views,
+        tenant,
     )?
     .with_view_receipt_evidence(view_version_receipts)?;
     let verification = bundle.verify_manifest()?;
@@ -3403,6 +3407,42 @@ async fn querygraph_bootstrap(
         )?)
         .await?;
     Ok(Json(bundle))
+}
+
+async fn querygraph_tenant_projection(
+    state: &LakeCatState,
+) -> LakeCatResult<QueryGraphTenantProjection> {
+    let warehouse_record = match state.store.load_warehouse(&state.warehouse).await {
+        Ok(record) => Some(record),
+        Err(LakeCatError::NotFound {
+            object: "warehouse",
+            ..
+        }) => None,
+        Err(err) => return Err(err),
+    };
+    let projects = state.store.list_projects().await?;
+    let project_record = warehouse_record.as_ref().and_then(|warehouse| {
+        projects
+            .iter()
+            .find(|project| project.project_id == warehouse.project_id)
+            .cloned()
+    });
+    let servers = state.store.list_servers().await?;
+    let server_record = project_record
+        .as_ref()
+        .and_then(|project| project.server_id.as_ref())
+        .and_then(|server_id| {
+            servers
+                .iter()
+                .find(|server| server.server_id == *server_id)
+                .cloned()
+        });
+    Ok(QueryGraphTenantProjection::from_records(
+        &state.warehouse,
+        warehouse_record.as_ref(),
+        project_record.as_ref(),
+        server_record.as_ref(),
+    ))
 }
 
 async fn querygraph_view_version_receipts(
@@ -9671,6 +9711,53 @@ mod tests {
     #[tokio::test]
     async fn querygraph_bootstrap_projects_catalog_tables() {
         let app = test_app();
+        let server = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/servers/prod-server")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "display-name": "Production LakeCat",
+                    "endpoint-url": "https://lakecat.example.com"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(server).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let project = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/projects/analytics")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "server-id": "prod-server",
+                    "display-name": "Analytics"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(project).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let warehouse = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/projects/analytics/warehouses/local")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "storage-root": "file:///tmp/lakecat-analytics"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(warehouse).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
         let create = Request::builder()
             .method(Method::POST)
             .uri("/catalog/v1/namespaces/default/tables")
@@ -9730,6 +9817,61 @@ mod tests {
                 .as_str()
                 .is_some_and(|value| !value.is_empty())
         );
+        let graph_nodes = body["graph"]["nodes"].as_array().unwrap();
+        let server_node = graph_nodes
+            .iter()
+            .find(|node| node["id"] == serde_json::json!("lakecat:server:prod-server"))
+            .expect("bootstrap graph should include durable server node");
+        assert_eq!(server_node["label"], serde_json::json!("Server"));
+        assert_eq!(
+            server_node["properties"]["displayName"],
+            serde_json::json!("Production LakeCat")
+        );
+        assert_eq!(
+            server_node["properties"]["source"],
+            serde_json::json!("lakecat-management-records")
+        );
+        let project_node = graph_nodes
+            .iter()
+            .find(|node| node["id"] == serde_json::json!("lakecat:project:analytics"))
+            .expect("bootstrap graph should include durable project node");
+        assert_eq!(project_node["label"], serde_json::json!("Project"));
+        assert_eq!(
+            project_node["properties"]["serverId"],
+            serde_json::json!("prod-server")
+        );
+        let warehouse_node = graph_nodes
+            .iter()
+            .find(|node| node["id"] == serde_json::json!("lakecat:warehouse:local"))
+            .expect("bootstrap graph should include durable warehouse node");
+        assert_eq!(warehouse_node["label"], serde_json::json!("Warehouse"));
+        assert_eq!(
+            warehouse_node["properties"]["projectId"],
+            serde_json::json!("analytics")
+        );
+        assert_eq!(
+            warehouse_node["properties"]["storageRoot"],
+            serde_json::json!("file:///tmp/lakecat-analytics")
+        );
+        let graph_edges = body["graph"]["edges"].as_array().unwrap();
+        assert!(graph_edges.iter().any(|edge| edge
+            == &serde_json::json!({
+                "from": "lakecat:catalog",
+                "to": "lakecat:server:prod-server",
+                "label": "HAS_SERVER"
+            })));
+        assert!(graph_edges.iter().any(|edge| edge
+            == &serde_json::json!({
+                "from": "lakecat:server:prod-server",
+                "to": "lakecat:project:analytics",
+                "label": "HAS_PROJECT"
+            })));
+        assert!(graph_edges.iter().any(|edge| edge
+            == &serde_json::json!({
+                "from": "lakecat:project:analytics",
+                "to": "lakecat:warehouse:local",
+                "label": "HAS_WAREHOUSE"
+            })));
         assert_eq!(
             body["manifest"]["querygraph-import"]["schema-version"],
             serde_json::json!("lakecat.querygraph.import-compat.v1")

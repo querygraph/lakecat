@@ -1,6 +1,8 @@
 use chrono::{DateTime, Utc};
 use lakecat_core::{LakeCatResult, TableIdent, WarehouseName, content_hash_json};
-use lakecat_store::{PolicyBinding, TableRecord, ViewRecord};
+use lakecat_store::{
+    PolicyBinding, ProjectRecord, ServerRecord, TableRecord, ViewRecord, WarehouseRecord,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -41,6 +43,20 @@ impl QueryGraphBootstrap {
         tables: impl IntoIterator<Item = (TableRecord, Vec<PolicyBinding>)>,
         views: impl IntoIterator<Item = ViewRecord>,
     ) -> LakeCatResult<Self> {
+        Self::from_tables_views_with_policy_bindings_and_tenant(
+            warehouse,
+            tables,
+            views,
+            QueryGraphTenantProjection::default(),
+        )
+    }
+
+    pub fn from_tables_views_with_policy_bindings_and_tenant(
+        warehouse: WarehouseName,
+        tables: impl IntoIterator<Item = (TableRecord, Vec<PolicyBinding>)>,
+        views: impl IntoIterator<Item = ViewRecord>,
+        tenant: QueryGraphTenantProjection,
+    ) -> LakeCatResult<Self> {
         let generated_at = Utc::now();
         let tables = tables
             .into_iter()
@@ -53,7 +69,7 @@ impl QueryGraphBootstrap {
             .map(QueryGraphViewProjection::from_view)
             .collect::<Vec<_>>();
         let graph = QueryGraphCatalogGraph::from_tables_and_views_for_warehouse(
-            &warehouse, &tables, &views,
+            &warehouse, &tables, &views, &tenant,
         );
         let table_artifacts = tables
             .iter()
@@ -311,6 +327,76 @@ impl QueryGraphBootstrap {
             "graph": self.graph,
             "openLineage": self.open_lineage,
         }))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct QueryGraphTenantProjection {
+    pub server_id: String,
+    pub server_display_name: Option<String>,
+    pub server_endpoint_url: Option<String>,
+    pub project_id: String,
+    pub project_display_name: Option<String>,
+    pub warehouse: Option<String>,
+    pub warehouse_project_id: Option<String>,
+    pub warehouse_storage_root: Option<String>,
+    pub source: String,
+}
+
+impl QueryGraphTenantProjection {
+    pub fn from_records(
+        warehouse: &WarehouseName,
+        warehouse_record: Option<&WarehouseRecord>,
+        project_record: Option<&ProjectRecord>,
+        server_record: Option<&ServerRecord>,
+    ) -> Self {
+        let project_id = warehouse_record
+            .map(|record| record.project_id.clone())
+            .or_else(|| project_record.map(|record| record.project_id.clone()))
+            .unwrap_or_else(|| "default".to_string());
+        let server_id = project_record
+            .and_then(|record| record.server_id.clone())
+            .or_else(|| server_record.map(|record| record.server_id.clone()))
+            .unwrap_or_else(|| "default".to_string());
+        Self {
+            server_id,
+            server_display_name: server_record.and_then(|record| record.display_name.clone()),
+            server_endpoint_url: server_record.and_then(|record| record.endpoint_url.clone()),
+            project_id,
+            project_display_name: project_record.and_then(|record| record.display_name.clone()),
+            warehouse: Some(
+                warehouse_record
+                    .map(|record| record.warehouse.as_str().to_string())
+                    .unwrap_or_else(|| warehouse.as_str().to_string()),
+            ),
+            warehouse_project_id: warehouse_record.map(|record| record.project_id.clone()),
+            warehouse_storage_root: warehouse_record.and_then(|record| record.storage_root.clone()),
+            source: if warehouse_record.is_some()
+                || project_record.is_some()
+                || server_record.is_some()
+            {
+                "lakecat-management-records".to_string()
+            } else {
+                "lakecat-querygraph-bootstrap".to_string()
+            },
+        }
+    }
+}
+
+impl Default for QueryGraphTenantProjection {
+    fn default() -> Self {
+        Self {
+            server_id: "default".to_string(),
+            server_display_name: None,
+            server_endpoint_url: None,
+            project_id: "default".to_string(),
+            project_display_name: None,
+            warehouse: None,
+            warehouse_project_id: None,
+            warehouse_storage_root: None,
+            source: "lakecat-querygraph-bootstrap".to_string(),
+        }
     }
 }
 
@@ -757,13 +843,19 @@ impl QueryGraphCatalogGraph {
                     .and_then(|view| WarehouseName::new(view.warehouse.clone()).ok())
             })
             .unwrap_or_else(|| WarehouseName::new("default").expect("static warehouse name"));
-        Self::from_tables_and_views_for_warehouse(&warehouse, tables, views)
+        Self::from_tables_and_views_for_warehouse(
+            &warehouse,
+            tables,
+            views,
+            &QueryGraphTenantProjection::default(),
+        )
     }
 
     pub fn from_tables_and_views_for_warehouse(
         warehouse: &WarehouseName,
         tables: &[QueryGraphTableProjection],
         views: &[QueryGraphViewProjection],
+        tenant: &QueryGraphTenantProjection,
     ) -> Self {
         let mut nodes = BTreeMap::new();
         let mut edges = BTreeSet::new();
@@ -775,7 +867,7 @@ impl QueryGraphCatalogGraph {
                 properties: json!({ "name": "LakeCat" }),
             },
         );
-        insert_tenant_spine(&mut nodes, &mut edges, warehouse);
+        insert_tenant_spine(&mut nodes, &mut edges, warehouse, tenant);
         for table in tables {
             let namespace_id = format!(
                 "lakecat:namespace:{}:{}",
@@ -900,9 +992,10 @@ fn insert_tenant_spine(
     nodes: &mut BTreeMap<String, QueryGraphNode>,
     edges: &mut BTreeSet<QueryGraphEdge>,
     warehouse: &WarehouseName,
+    tenant: &QueryGraphTenantProjection,
 ) {
-    let server_id = "lakecat:server:default".to_string();
-    let project_id = "lakecat:project:default".to_string();
+    let server_id = server_graph_id(&tenant.server_id);
+    let project_id = project_graph_id(&tenant.project_id);
     let warehouse_id = warehouse_graph_id(warehouse);
     insert_node(
         nodes,
@@ -910,8 +1003,10 @@ fn insert_tenant_spine(
             id: server_id.clone(),
             label: "Server".to_string(),
             properties: json!({
-                "serverId": "default",
-                "source": "lakecat-querygraph-bootstrap"
+                "serverId": tenant.server_id,
+                "displayName": tenant.server_display_name,
+                "endpointUrl": tenant.server_endpoint_url,
+                "source": tenant.source
             }),
         },
     );
@@ -921,8 +1016,10 @@ fn insert_tenant_spine(
             id: project_id.clone(),
             label: "Project".to_string(),
             properties: json!({
-                "projectId": "default",
-                "source": "lakecat-querygraph-bootstrap"
+                "projectId": tenant.project_id,
+                "displayName": tenant.project_display_name,
+                "serverId": tenant.server_id,
+                "source": tenant.source
             }),
         },
     );
@@ -932,8 +1029,16 @@ fn insert_tenant_spine(
             id: warehouse_id.clone(),
             label: "Warehouse".to_string(),
             properties: json!({
-                "warehouse": warehouse.as_str(),
-                "source": "lakecat-querygraph-bootstrap"
+                "warehouse": tenant
+                    .warehouse
+                    .as_deref()
+                    .unwrap_or_else(|| warehouse.as_str()),
+                "projectId": tenant
+                    .warehouse_project_id
+                    .as_deref()
+                    .unwrap_or_else(|| tenant.project_id.as_str()),
+                "storageRoot": tenant.warehouse_storage_root,
+                "source": tenant.source
             }),
         },
     );
@@ -952,6 +1057,14 @@ fn insert_tenant_spine(
         to: warehouse_id,
         label: "HAS_WAREHOUSE".to_string(),
     });
+}
+
+fn server_graph_id(server_id: &str) -> String {
+    format!("lakecat:server:{server_id}")
+}
+
+fn project_graph_id(project_id: &str) -> String {
+    format!("lakecat:project:{project_id}")
 }
 
 fn warehouse_graph_id(warehouse: &WarehouseName) -> String {

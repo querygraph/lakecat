@@ -6,6 +6,15 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QueryGraph bootstrap tenant spine to management records`.
+  QueryGraph bootstrap graphs now prefer durable `ServerRecord`,
+  `ProjectRecord`, and `WarehouseRecord` values for the manifest-covered
+  Server > Project > Warehouse path, including display/endpoint/storage-root
+  evidence. The older deterministic default tenant spine remains the fallback
+  when management rows are absent, so existing bootstrap and import flows keep
+  working while QueryGraph can bind namespace/table/view imports to real
+  tenant records when LakeCat has them.
+- Latest completed implementation slice:
   `Add QueryGraph bootstrap tenant spine`.
   QueryGraph bootstrap graphs now include deterministic Server, Project, and
   Warehouse anchors plus Warehouse-to-Namespace edges inside the manifest-hashed

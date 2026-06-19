@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made QueryGraph bootstrap graphs prefer durable LakeCat management records
+  for the Server > Project > Warehouse tenant spine, while preserving the
+  deterministic default spine as a compatibility fallback when management rows
+  are absent.
 - Added a manifest-hashed QueryGraph bootstrap tenant spine so exported catalog
   graphs now carry deterministic Server, Project, and Warehouse anchors plus
   Warehouse-to-Namespace edges before table/view import.

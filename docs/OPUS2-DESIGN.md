@@ -426,10 +426,12 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   now replay as stable catalog-facing `Server` graph events, completing the
   thin tenant spine anchors beside Project and Warehouse while hierarchy
   semantics remain Grust-owned; QueryGraph bootstrap graphs now also carry a
-  manifest-hashed deterministic Server/Project/Warehouse tenant spine and
-  Warehouse-to-Namespace edges, preserving the older Catalog-to-Namespace edge
-  for importer compatibility; policy-binding, project, and warehouse upserts
-  now also emit LakeCat lineage/OpenLineage receipts from the same durable
+  manifest-hashed Server/Project/Warehouse tenant spine and
+  Warehouse-to-Namespace edges, preferring durable management records when
+  present and falling back to deterministic default anchors for compatibility,
+  while preserving the older Catalog-to-Namespace edge for importer
+  compatibility; policy-binding, project, and warehouse upserts now also emit
+  LakeCat lineage/OpenLineage receipts from the same durable
   outbox replay; management list reads for
   policy bindings, projects, servers, storage profiles, and warehouses replay
   into LakeCat OpenLineage receipts without adding list-specific graph nodes in

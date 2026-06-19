@@ -1187,7 +1187,7 @@ QueryGraph should import LakeCat facts through a verified handoff, not by
 scraping service internals. The bootstrap endpoint publishes a bundle with
 artifact hashes:
 
-The exported graph includes a deterministic tenant spine:
+The exported graph includes a tenant spine:
 
 ```text
 Catalog HAS_SERVER Server
@@ -1196,11 +1196,20 @@ Project HAS_WAREHOUSE Warehouse
 Warehouse HAS_NAMESPACE Namespace
 ```
 
+When LakeCat has durable management rows, those graph nodes come from the
+stored `ServerRecord`, `ProjectRecord`, and `WarehouseRecord`. That means a
+QueryGraph import can see the real server id, project id, warehouse id, display
+names, endpoint URL, and storage root that operators manage through LakeCat's
+management API. When those records do not exist yet, LakeCat falls back to the
+old deterministic default anchors so bootstrap remains compatible with minimal
+embedded tests and older import flows.
+
 LakeCat also keeps the older `Catalog HAS_NAMESPACE Namespace` edge in the
 bundle so existing QueryGraph importers can keep working while newer flows read
-the tenant path. Those tenant anchors are part of the manifest-covered graph
-hash, so an importer or handoff verifier can reject a bundle whose namespace is
-silently detached from the warehouse.
+the tenant path. The tenant anchors and warehouse-to-namespace edges are part
+of the manifest-covered graph hash, so an importer or handoff verifier can
+reject a bundle whose namespace is silently detached from the warehouse or
+rebound to a different durable tenant chain.
 
 ```sh
 curl -s \
