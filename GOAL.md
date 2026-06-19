@@ -59,8 +59,9 @@ store direction, explicit feature gates, transactional-outbox direction,
 CHANGELOG-before-commit discipline, local verification gates, and the rule that
 sibling-repo changes must be tested and reported separately.
 
-The current `/Users/alexy/src/lakecat/AGENTS.md` instructions are permanent
-goal constraints and must be read as the following contract.
+The current user-supplied `/Users/alexy/src/lakecat/AGENTS.md` instructions are
+permanent goal constraints, not temporary chat context. They are imported into
+this goal and must be read as the following contract.
 
 ### Repo Boundaries
 
