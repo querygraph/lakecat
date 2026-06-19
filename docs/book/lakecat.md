@@ -391,10 +391,11 @@ catalog state decides which metadata file is current.
 
 ## Grust For Graph Concepts
 
-Catalog events naturally form a graph. A warehouse contains namespaces. A
-namespace contains tables. A table has columns, snapshots, manifests, files,
-policies, commits, scan plans, principals, and lineage runs. QueryGraph needs
-that graph, but LakeCat should not become a graph database.
+Catalog events naturally form a graph. A warehouse contains namespaces and
+storage profiles that define credential roots. A namespace contains tables. A
+table has columns, snapshots, manifests, files, policies, commits, scan plans,
+principals, and lineage runs. QueryGraph needs that graph, but LakeCat should
+not become a graph database.
 
 Grust owns the graph layer. It is the place for reusable graph taxonomy,
 projection builders, graph stores, traversal indexes, Cypher support, and typed
@@ -409,6 +410,7 @@ Warehouse CONTAINS Namespace
 Namespace CONTAINS Table
 Table HAS_COLUMN Column
 Table GOVERNED_BY Policy
+Warehouse HAS_STORAGE_PROFILE StorageProfile
 Principal CAN_PLAN ScanPlan
 Commit DERIVED_FROM Snapshot
 LineageRun USED_BY QueryGraphModel
@@ -424,8 +426,10 @@ The current local direction already proves the boundary: LakeCat's
 Cypher boundary test verifies catalog graph projection without making LakeCat
 own Cypher parsing, traversal, or graph execution. The current boundary test
 writes table-adjacent `Column`, `Snapshot`, and `Commit` events plus
-`Principal` and `ScanPlan` catalog events through Grust, then matches the
-`Column` and `Snapshot` catalog-event labels through Grust Cypher. That proves
+`Principal`, `ScanPlan`, and credential-root `StorageProfile` catalog events
+through Grust, then matches catalog-event labels through Grust Cypher. Storage
+profile replay uses redacted evidence such as `secret-ref-present` and the
+secret-reference provider, never the full secret-store URI. That proves
 QueryGraph can discover the semantic anchors LakeCat emits while the richer
 node/edge materialization remains reusable Grust work.
 

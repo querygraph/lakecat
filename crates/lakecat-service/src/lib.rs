@@ -3749,8 +3749,21 @@ async fn project_outbox_event(
             .await?;
         receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "storage-profile.upserted" {
-        let _profile_id = outbox_storage_profile(event)?;
+        let (warehouse, profile_id) = outbox_storage_profile(event, &state.warehouse)?;
         let event_payload = redact_storage_profile_event_payload(event_payload);
+        state
+            .graph
+            .emit(
+                GraphEvent::storage_profile(
+                    GraphAction::Upserted,
+                    warehouse,
+                    profile_id,
+                    event_payload.clone(),
+                )
+                .with_event_id(event.event_id.clone()),
+            )
+            .await?;
+        receipt.graph_events += 1;
         let lineage_receipt = state
             .lineage
             .emit(LineageEvent::new(
@@ -4095,11 +4108,26 @@ fn outbox_server(event: &OutboxEvent) -> Result<String, LakeCatError> {
         })
 }
 
-fn outbox_storage_profile(event: &OutboxEvent) -> Result<String, LakeCatError> {
+fn outbox_storage_profile(
+    event: &OutboxEvent,
+    default_warehouse: &WarehouseName,
+) -> Result<(WarehouseName, String), LakeCatError> {
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
-    payload
-        .get("storage-profile")
-        .and_then(|profile| profile.get("profile-id"))
+    let storage_profile = payload.get("storage-profile").ok_or_else(|| {
+        LakeCatError::Internal(format!(
+            "outbox event {} is missing storage profile payload",
+            event.event_id
+        ))
+    })?;
+    let warehouse = storage_profile
+        .get("warehouse")
+        .or_else(|| payload.get("warehouse"))
+        .and_then(Value::as_str)
+        .map(WarehouseName::new)
+        .transpose()?
+        .unwrap_or_else(|| default_warehouse.clone());
+    let profile_id = storage_profile
+        .get("profile-id")
         .and_then(Value::as_str)
         .filter(|profile_id| !profile_id.is_empty())
         .map(ToString::to_string)
@@ -4108,7 +4136,8 @@ fn outbox_storage_profile(event: &OutboxEvent) -> Result<String, LakeCatError> {
                 "outbox event {} is missing storage profile payload",
                 event.event_id
             ))
-        })
+        })?;
+    Ok((warehouse, profile_id))
 }
 
 fn outbox_view(
@@ -7188,7 +7217,7 @@ mod tests {
             drain.event_types,
             vec!["storage-profile.upserted".to_string()]
         );
-        assert_eq!(drain.graph_events, 1);
+        assert_eq!(drain.graph_events, 2);
         assert_eq!(drain.lineage_events, 1);
         assert_eq!(
             drain.events[0].storage_profile_id.as_deref(),
@@ -7228,9 +7257,28 @@ mod tests {
         );
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 1);
+        assert_eq!(graph_events.len(), 2);
         assert_eq!(graph_events[0].label, GraphNodeLabel::Principal);
         assert_eq!(graph_events[0].subject, "lakecat:principal:agent:operator");
+        assert_eq!(graph_events[1].label, GraphNodeLabel::StorageProfile);
+        assert_eq!(
+            graph_events[1].subject,
+            "lakecat:warehouse:local:storage-profile:s3-events"
+        );
+        assert_eq!(
+            graph_events[1].properties["storage-profile"]["secret-ref-present"],
+            serde_json::json!(true)
+        );
+        assert_eq!(
+            graph_events[1].properties["storage-profile"]["secret-ref-provider"],
+            serde_json::json!("vault")
+        );
+        assert!(
+            graph_events[1].properties["storage-profile"]
+                .get("secret-ref")
+                .is_none(),
+            "storage profile graph projection must not expose the secret-ref URI"
+        );
         drop(graph_events);
 
         let lineage_events = lineage.events.lock().await;

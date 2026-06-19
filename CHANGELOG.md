@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added a catalog-facing `StorageProfile` graph anchor for
+  `storage-profile.upserted` outbox replay, using a stable warehouse-scoped
+  subject and the same redacted secret-reference evidence as OpenLineage so
+  QueryGraph can reason about credential roots without LakeCat exposing secret
+  URIs or owning graph query behavior.
 - Recorded the reconciled sibling Sail state after scoped local commits:
   Iceberg REST model exposure, manifest-bound Avro preservation, and the Sail
   Cypher graph query extension are committed on `/Users/alexy/src/sail`

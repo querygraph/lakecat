@@ -114,6 +114,24 @@ impl GraphEvent {
         }
     }
 
+    pub fn storage_profile(
+        action: GraphAction,
+        warehouse: WarehouseName,
+        profile_id: impl Into<String>,
+        properties: Value,
+    ) -> Self {
+        let profile_id = profile_id.into();
+        Self {
+            event_id: None,
+            subject: storage_profile_stable_id(&warehouse, &profile_id),
+            label: GraphNodeLabel::StorageProfile,
+            action,
+            table: None,
+            properties,
+            emitted_at: Utc::now(),
+        }
+    }
+
     pub fn scan_plan(action: GraphAction, plan_id: impl Into<String>, properties: Value) -> Self {
         let plan_id = plan_id.into();
         Self {
@@ -230,6 +248,14 @@ pub fn policy_stable_id(warehouse: &WarehouseName, policy_id: &str) -> String {
     )
 }
 
+pub fn storage_profile_stable_id(warehouse: &WarehouseName, profile_id: &str) -> String {
+    format!(
+        "lakecat:warehouse:{}:storage-profile:{}",
+        warehouse.as_str(),
+        profile_id
+    )
+}
+
 pub fn scan_plan_stable_id(plan_id: &str) -> String {
     format!("lakecat:scan-plan:{plan_id}")
 }
@@ -263,6 +289,7 @@ pub enum GraphNodeLabel {
     DataFile,
     DeleteFile,
     Policy,
+    StorageProfile,
     Principal,
     ScanPlan,
     Commit,
@@ -345,6 +372,24 @@ mod tests {
 
         assert_eq!(event.label, GraphNodeLabel::Policy);
         assert_eq!(event.subject, "lakecat:warehouse:local:policy:agent-read");
+        assert!(event.table.is_none());
+    }
+
+    #[test]
+    fn storage_profile_event_uses_stable_catalog_subject() {
+        let warehouse = WarehouseName::new("local").unwrap();
+        let event = GraphEvent::storage_profile(
+            GraphAction::Upserted,
+            warehouse,
+            "s3-events",
+            serde_json::json!({"kind": "test"}),
+        );
+
+        assert_eq!(event.label, GraphNodeLabel::StorageProfile);
+        assert_eq!(
+            event.subject,
+            "lakecat:warehouse:local:storage-profile:s3-events"
+        );
         assert!(event.table.is_none());
     }
 
@@ -544,6 +589,7 @@ pub mod grust_integration {
             GraphNodeLabel::DataFile => "DataFile",
             GraphNodeLabel::DeleteFile => "DeleteFile",
             GraphNodeLabel::Policy => "Policy",
+            GraphNodeLabel::StorageProfile => "StorageProfile",
             GraphNodeLabel::Principal => "Principal",
             GraphNodeLabel::ScanPlan => "ScanPlan",
             GraphNodeLabel::Commit => "Commit",
@@ -620,6 +666,40 @@ pub mod grust_integration {
                 Some(&Value::String("upserted".to_string()))
             );
             GraphIndex::new(&graph).expect("policy event graph should be valid");
+        }
+
+        #[test]
+        fn converts_storage_profile_event_to_valid_grust_graph_event() {
+            let event = GraphEvent::storage_profile(
+                GraphAction::Upserted,
+                WarehouseName::new("local").unwrap(),
+                "s3-events",
+                serde_json::json!({
+                    "storage-profile": {
+                        "profile-id": "s3-events",
+                        "provider": "s3",
+                        "secret-ref-present": true,
+                        "secret-ref-provider": "vault"
+                    }
+                }),
+            )
+            .with_event_id("lakecat:outbox:storage-profile-1");
+            let graph = graph_event_to_grust(&event);
+
+            assert_eq!(graph.nodes.len(), 1);
+            assert_eq!(graph.edges.len(), 0);
+            assert_eq!(graph.nodes[0].label.as_str(), "CatalogEvent");
+            assert_eq!(
+                graph.nodes[0].props.get("label"),
+                Some(&Value::String("StorageProfile".to_string()))
+            );
+            assert_eq!(
+                graph.nodes[0].props.get("subject"),
+                Some(&Value::String(
+                    "lakecat:warehouse:local:storage-profile:s3-events".to_string()
+                ))
+            );
+            GraphIndex::new(&graph).expect("storage profile event graph should be valid");
         }
 
         #[test]

@@ -401,9 +401,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   `object_store` semantics so an existing non-current target returns conflict
   instead of being overwritten.*
 - **P4 — Semantic catalog graph (F6).** Emit the bounded typed taxonomy
-  (Namespace/Table/Column/Snapshot/Policy/Principal/ScanPlan/Commit) through the
-  outbox into Grust; keep file-granularity as metadata-as-data. Then OpenLineage
-  transport + TypeDID attestation on the same events. *Started:
+  (Namespace/Table/Column/Snapshot/Policy/StorageProfile/Principal/ScanPlan/Commit)
+  through the outbox into Grust; keep file-granularity as metadata-as-data. Then
+  OpenLineage transport + TypeDID attestation on the same events. *Started:
   `catalog.config-read` replay now emits a warehouse-scoped graph event and
   LakeCat OpenLineage receipt for the standard Iceberg REST config entrypoint;
   `namespace.created` outbox replay now emits a catalog-facing `Namespace` graph
@@ -420,7 +420,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   OpenLineage restore receipt while leaving restore-specific graph taxonomy to
   Grust; non-anonymous resolved principals now replay as stable catalog-facing
   `Principal` graph events; table metadata graph summaries now replay as stable
-  catalog-facing `Column` and `Snapshot` graph events; policy-binding,
+  catalog-facing `Column` and `Snapshot` graph events; storage-profile upserts
+  now replay as stable catalog-facing `StorageProfile` graph events with the
+  same redacted secret-reference evidence used for OpenLineage; policy-binding,
   project, and warehouse upserts now also emit LakeCat lineage/OpenLineage
   receipts from the same durable outbox replay; management list reads for
   policy bindings, projects, servers, storage profiles, and warehouses replay

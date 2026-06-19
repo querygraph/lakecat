@@ -6,6 +6,14 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Project storage-profile upserts to graph`.
+  `lakecat-graph` now has a warehouse-scoped `StorageProfile` catalog subject,
+  and durable `storage-profile.upserted` replay emits that graph event beside
+  the existing OpenLineage receipt. The graph payload uses the redacted
+  storage-profile evidence (`secret-ref-present` and provider only), so
+  QueryGraph can see credential-root anchors without LakeCat leaking
+  secret-store URIs or taking over Grust graph semantics.
+- Latest completed implementation slice:
   `Reconcile sibling Sail commit state`.
   The local Sail checkout at `/Users/alexy/src/sail` is on `codex/graph` with
   tracked source changes committed in scoped local commits:
