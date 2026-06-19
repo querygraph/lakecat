@@ -311,6 +311,9 @@ fn qglake_verify_replay(
     println!("querygraph import {}", verification.querygraph_import_hash);
     println!("tables {}", verification.table_count);
     println!("views {}", verification.view_count);
+    if let Some(line) = qglake_scan_replay_line(&drain) {
+        println!("{line}");
+    }
     if let Some(line) = qglake_management_replay_line(&drain) {
         println!("{line}");
     }
@@ -375,6 +378,18 @@ fn qglake_table_commit_history_replay_line(drain: &LineageDrainResponse) -> Opti
         commit_history.table_commit_count.unwrap_or_default(),
         join_u64s(&commit_history.table_commit_sequence_numbers),
         commit_history.table_commit_hashes.join(",")
+    ))
+}
+
+fn qglake_scan_replay_line(drain: &LineageDrainResponse) -> Option<String> {
+    let planned = qglake_drain_event(drain, "table.scan-planned")?;
+    let fetched = qglake_drain_event(drain, "table.scan-tasks-fetched")?;
+    Some(format!(
+        "scan replay plan_tasks={} file_tasks={} delete_files={} child_plan_tasks={}",
+        planned.scan_task_count.unwrap_or_default(),
+        fetched.file_scan_task_count.unwrap_or_default(),
+        fetched.delete_file_count.unwrap_or_default(),
+        fetched.child_plan_task_count.unwrap_or_default()
     ))
 }
 
@@ -2485,6 +2500,70 @@ fn verify_qglake_lineage_drain(
     verify_qglake_credential_replay(drain, principal)?;
     verify_qglake_management_list_replay(drain, expected_policy_binding_count)?;
     verify_qglake_table_commit_history_replay(drain)?;
+    verify_qglake_scan_replay(drain)?;
+    Ok(())
+}
+
+fn verify_qglake_scan_replay(drain: &LineageDrainResponse) -> lakecat_core::LakeCatResult<()> {
+    let planned = qglake_drain_event(drain, "table.scan-planned").ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain did not replay scan planning evidence".to_string(),
+        )
+    })?;
+    if planned.lineage_events == 0
+        || planned
+            .authorization_receipt_hash
+            .as_deref()
+            .map_or(true, str::is_empty)
+        || planned
+            .request_identity_state
+            .as_deref()
+            .map_or(true, str::is_empty)
+        || planned.replay_event_hashes.is_empty()
+        || planned.replay_event_hashes.iter().any(String::is_empty)
+        || planned.replay_open_lineage_hashes.is_empty()
+        || planned
+            .replay_open_lineage_hashes
+            .iter()
+            .any(String::is_empty)
+        || planned.scan_task_count.unwrap_or_default() == 0
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain scan planning replay is missing compact task evidence"
+                .to_string(),
+        ));
+    }
+
+    let fetched = qglake_drain_event(drain, "table.scan-tasks-fetched").ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain did not replay scan task fetch evidence".to_string(),
+        )
+    })?;
+    if fetched.lineage_events == 0
+        || fetched
+            .authorization_receipt_hash
+            .as_deref()
+            .map_or(true, str::is_empty)
+        || fetched
+            .request_identity_state
+            .as_deref()
+            .map_or(true, str::is_empty)
+        || fetched.replay_event_hashes.is_empty()
+        || fetched.replay_event_hashes.iter().any(String::is_empty)
+        || fetched.replay_open_lineage_hashes.is_empty()
+        || fetched
+            .replay_open_lineage_hashes
+            .iter()
+            .any(String::is_empty)
+        || fetched.file_scan_task_count.unwrap_or_default() == 0
+        || fetched.delete_file_count.unwrap_or_default() == 0
+        || fetched.child_plan_task_count.unwrap_or_default() == 0
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain scan task fetch replay is missing compact file/delete task evidence"
+                .to_string(),
+        ));
+    }
     Ok(())
 }
 
@@ -4358,9 +4437,10 @@ mod tests {
         let verification = bundle.verify_manifest().unwrap();
         let policy_binding_count = qglake_policy_binding_count(&bundle);
         let drain = LineageDrainResponse {
-            delivered: 9,
+            delivered: 11,
             event_types: vec![
                 "table.scan-planned".to_string(),
+                "table.scan-tasks-fetched".to_string(),
                 "credentials.vend-attempted".to_string(),
                 "credentials.vend-attempted".to_string(),
                 "policy-binding.listed".to_string(),
@@ -4372,7 +4452,7 @@ mod tests {
                 "querygraph.bootstrap".to_string(),
             ],
             graph_events: 1,
-            lineage_events: 10,
+            lineage_events: 12,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
@@ -4387,6 +4467,8 @@ mod tests {
                 qglake_project_list_lineage_summary(),
                 qglake_warehouse_list_lineage_summary(),
                 qglake_table_commit_history_lineage_summary(),
+                qglake_scan_planned_lineage_summary(),
+                qglake_scan_tasks_fetched_lineage_summary(),
             ],
         };
 
@@ -5412,6 +5494,33 @@ mod tests {
     }
 
     #[test]
+    fn qglake_scan_replay_line_summarizes_verified_evidence() {
+        let line = qglake_scan_replay_line(&LineageDrainResponse {
+            delivered: 2,
+            event_types: vec![
+                "table.scan-planned".to_string(),
+                "table.scan-tasks-fetched".to_string(),
+            ],
+            graph_events: 0,
+            lineage_events: 2,
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            events: vec![
+                qglake_scan_planned_lineage_summary(),
+                qglake_scan_tasks_fetched_lineage_summary(),
+            ],
+        })
+        .expect("scan replay line should be present");
+
+        assert_eq!(
+            line,
+            "scan replay plan_tasks=1 file_tasks=1 delete_files=1 child_plan_tasks=1"
+        );
+    }
+
+    #[test]
     fn qglake_management_replay_line_summarizes_verified_evidence() {
         let line = qglake_management_replay_line(&LineageDrainResponse {
             delivered: 5,
@@ -5676,6 +5785,10 @@ mod tests {
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
+                    scan_task_count: None,
+                    file_scan_task_count: None,
+                    delete_file_count: None,
+                    child_plan_task_count: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -5740,6 +5853,10 @@ mod tests {
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
+                    scan_task_count: None,
+                    file_scan_task_count: None,
+                    delete_file_count: None,
+                    child_plan_task_count: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -5804,6 +5921,10 @@ mod tests {
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
+                    scan_task_count: None,
+                    file_scan_task_count: None,
+                    delete_file_count: None,
+                    child_plan_task_count: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -5867,6 +5988,10 @@ mod tests {
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
+                    scan_task_count: None,
+                    file_scan_task_count: None,
+                    delete_file_count: None,
+                    child_plan_task_count: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -5930,6 +6055,10 @@ mod tests {
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
+                    scan_task_count: None,
+                    file_scan_task_count: None,
+                    delete_file_count: None,
+                    child_plan_task_count: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -5993,6 +6122,10 @@ mod tests {
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
+                    scan_task_count: None,
+                    file_scan_task_count: None,
+                    delete_file_count: None,
+                    child_plan_task_count: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -6056,6 +6189,10 @@ mod tests {
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
+                    scan_task_count: None,
+                    file_scan_task_count: None,
+                    delete_file_count: None,
+                    child_plan_task_count: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -6119,6 +6256,10 @@ mod tests {
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
+                    scan_task_count: None,
+                    file_scan_task_count: None,
+                    delete_file_count: None,
+                    child_plan_task_count: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -6183,6 +6324,10 @@ mod tests {
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
+                    scan_task_count: None,
+                    file_scan_task_count: None,
+                    delete_file_count: None,
+                    child_plan_task_count: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -6246,6 +6391,10 @@ mod tests {
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
+                    scan_task_count: None,
+                    file_scan_task_count: None,
+                    delete_file_count: None,
+                    child_plan_task_count: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -6309,6 +6458,10 @@ mod tests {
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
+                    scan_task_count: None,
+                    file_scan_task_count: None,
+                    delete_file_count: None,
+                    child_plan_task_count: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: vec!["OpenLineage".to_string()],
@@ -6372,6 +6525,10 @@ mod tests {
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
+                    scan_task_count: None,
+                    file_scan_task_count: None,
+                    delete_file_count: None,
+                    child_plan_task_count: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -6435,6 +6592,10 @@ mod tests {
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
+                    scan_task_count: None,
+                    file_scan_task_count: None,
+                    delete_file_count: None,
+                    child_plan_task_count: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -6461,6 +6622,7 @@ mod tests {
                 delivered: 3,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
@@ -6491,6 +6653,7 @@ mod tests {
                 delivered: 3,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
@@ -6526,6 +6689,7 @@ mod tests {
                 delivered: 4,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "querygraph.bootstrap".to_string(),
@@ -6558,6 +6722,7 @@ mod tests {
                 delivered: 4,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "querygraph.bootstrap".to_string(),
@@ -6590,6 +6755,7 @@ mod tests {
                 delivered: 4,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "querygraph.bootstrap".to_string(),
@@ -6625,6 +6791,7 @@ mod tests {
                 delivered: 4,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "querygraph.bootstrap".to_string(),
@@ -6659,6 +6826,7 @@ mod tests {
                 delivered: 9,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
@@ -6703,6 +6871,7 @@ mod tests {
                 delivered: 9,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
@@ -6745,6 +6914,7 @@ mod tests {
                 delivered: 4,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "querygraph.bootstrap".to_string(),
@@ -6778,6 +6948,7 @@ mod tests {
                 delivered: 5,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
@@ -6810,6 +6981,7 @@ mod tests {
                 delivered: 5,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
@@ -6845,6 +7017,7 @@ mod tests {
                 delivered: 6,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
@@ -6879,6 +7052,7 @@ mod tests {
                 delivered: 6,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
@@ -6914,6 +7088,7 @@ mod tests {
                 delivered: 10,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
@@ -6958,6 +7133,7 @@ mod tests {
                 delivered: 11,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
@@ -7004,6 +7180,7 @@ mod tests {
                 delivered: 12,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
@@ -7060,6 +7237,7 @@ mod tests {
                 delivered: 13,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
@@ -7105,9 +7283,9 @@ mod tests {
             "qglake lineage drain table commit history replay is missing compact commit summary evidence"
         ));
 
-        verify_qglake_lineage_drain(
+        let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 13,
+                delivered: 14,
                 event_types: vec![
                     "table.scan-planned".to_string(),
                     "credentials.vend-attempted".to_string(),
@@ -7125,7 +7303,7 @@ mod tests {
                     "querygraph.bootstrap".to_string(),
                 ],
                 graph_events: 4,
-                lineage_events: 14,
+                lineage_events: 15,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
@@ -7144,6 +7322,61 @@ mod tests {
                     qglake_project_list_lineage_summary(),
                     qglake_warehouse_list_lineage_summary(),
                     qglake_table_commit_history_lineage_summary(),
+                    qglake_scan_planned_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require fetched scan task replay");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain did not replay scan task fetch evidence")
+        );
+
+        verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 15,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "view.version-receipt-chains-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "table.commits-listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 16,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    qglake_view_receipt_chain_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                    qglake_table_commit_history_lineage_summary(),
+                    qglake_scan_planned_lineage_summary(),
+                    qglake_scan_tasks_fetched_lineage_summary(),
                 ],
             },
             &view_verification,
@@ -7154,9 +7387,10 @@ mod tests {
 
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 10,
+                delivered: 12,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
@@ -7169,7 +7403,7 @@ mod tests {
                     "querygraph.bootstrap".to_string(),
                 ],
                 graph_events: 3,
-                lineage_events: 11,
+                lineage_events: 13,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
@@ -7185,6 +7419,8 @@ mod tests {
                     qglake_project_list_lineage_summary(),
                     qglake_warehouse_list_lineage_summary(),
                     qglake_table_commit_history_lineage_summary(),
+                    qglake_scan_planned_lineage_summary(),
+                    qglake_scan_tasks_fetched_lineage_summary(),
                 ],
             },
             &view_verification,
@@ -7195,9 +7431,10 @@ mod tests {
 
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 9,
+                delivered: 11,
                 event_types: vec![
                     "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
@@ -7209,7 +7446,7 @@ mod tests {
                     "querygraph.bootstrap".to_string(),
                 ],
                 graph_events: 1,
-                lineage_events: 10,
+                lineage_events: 12,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
@@ -7224,6 +7461,8 @@ mod tests {
                     qglake_project_list_lineage_summary(),
                     qglake_warehouse_list_lineage_summary(),
                     qglake_table_commit_history_lineage_summary(),
+                    qglake_scan_planned_lineage_summary(),
+                    qglake_scan_tasks_fetched_lineage_summary(),
                 ],
             },
             &verification,
@@ -7331,6 +7570,10 @@ mod tests {
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
+            scan_task_count: None,
+            file_scan_task_count: None,
+            delete_file_count: None,
+            child_plan_task_count: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: qglake_lineage_standards(),
@@ -7398,6 +7641,10 @@ mod tests {
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
+            scan_task_count: None,
+            file_scan_task_count: None,
+            delete_file_count: None,
+            child_plan_task_count: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -7487,6 +7734,10 @@ mod tests {
             table_commit_count: Some(1),
             table_commit_sequence_numbers: vec![1],
             table_commit_hashes: vec!["sha256:table-commit".to_string()],
+            scan_task_count: None,
+            file_scan_task_count: None,
+            delete_file_count: None,
+            child_plan_task_count: None,
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -7496,6 +7747,106 @@ mod tests {
             raw_credential_exception_reason: None,
             replay_event_hashes: vec!["sha256:table-commits-replay-event".to_string()],
             replay_open_lineage_hashes: vec!["sha256:table-commits-openlineage".to_string()],
+        }
+    }
+
+    fn qglake_scan_planned_lineage_summary() -> LineageDrainEventSummary {
+        LineageDrainEventSummary {
+            event_id: "evt-scan-planned".to_string(),
+            event_type: "table.scan-planned".to_string(),
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:scan-planned-authorization".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            agent_delegation_hash: Some("sha256:delegation".to_string()),
+            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            graph_events: 0,
+            lineage_events: 1,
+            bundle_hash: None,
+            graph_hash: None,
+            open_lineage_hash: None,
+            querygraph_import_hash: None,
+            table_artifact_count: 0,
+            view_artifact_count: 0,
+            view_version_receipt_hashes: Vec::new(),
+            view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
+            view_warehouse: None,
+            view_namespace: Vec::new(),
+            view_name: None,
+            view_stable_id: None,
+            view_version: None,
+            policy_binding_count: 0,
+            project_count: None,
+            server_count: None,
+            storage_profile_count: None,
+            warehouse_count: None,
+            table_commit_count: None,
+            table_commit_sequence_numbers: Vec::new(),
+            table_commit_hashes: Vec::new(),
+            scan_task_count: Some(1),
+            file_scan_task_count: None,
+            delete_file_count: None,
+            child_plan_task_count: None,
+            management_scope_project_id: None,
+            management_scope_warehouse: Some("local".to_string()),
+            standards: Vec::new(),
+            credential_count: None,
+            credential_block_reason: None,
+            raw_credential_exception_allowed: None,
+            raw_credential_exception_reason: None,
+            replay_event_hashes: vec!["sha256:scan-planned-replay".to_string()],
+            replay_open_lineage_hashes: vec!["sha256:scan-planned-openlineage".to_string()],
+        }
+    }
+
+    fn qglake_scan_tasks_fetched_lineage_summary() -> LineageDrainEventSummary {
+        LineageDrainEventSummary {
+            event_id: "evt-scan-tasks-fetched".to_string(),
+            event_type: "table.scan-tasks-fetched".to_string(),
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:scan-fetch-authorization".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            agent_delegation_hash: Some("sha256:delegation".to_string()),
+            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            graph_events: 0,
+            lineage_events: 1,
+            bundle_hash: None,
+            graph_hash: None,
+            open_lineage_hash: None,
+            querygraph_import_hash: None,
+            table_artifact_count: 0,
+            view_artifact_count: 0,
+            view_version_receipt_hashes: Vec::new(),
+            view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
+            view_warehouse: None,
+            view_namespace: Vec::new(),
+            view_name: None,
+            view_stable_id: None,
+            view_version: None,
+            policy_binding_count: 0,
+            project_count: None,
+            server_count: None,
+            storage_profile_count: None,
+            warehouse_count: None,
+            table_commit_count: None,
+            table_commit_sequence_numbers: Vec::new(),
+            table_commit_hashes: Vec::new(),
+            scan_task_count: None,
+            file_scan_task_count: Some(1),
+            delete_file_count: Some(1),
+            child_plan_task_count: Some(1),
+            management_scope_project_id: None,
+            management_scope_warehouse: Some("local".to_string()),
+            standards: Vec::new(),
+            credential_count: None,
+            credential_block_reason: None,
+            raw_credential_exception_allowed: None,
+            raw_credential_exception_reason: None,
+            replay_event_hashes: vec!["sha256:scan-fetch-replay".to_string()],
+            replay_open_lineage_hashes: vec!["sha256:scan-fetch-openlineage".to_string()],
         }
     }
 
@@ -7533,6 +7884,10 @@ mod tests {
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
+            scan_task_count: None,
+            file_scan_task_count: None,
+            delete_file_count: None,
+            child_plan_task_count: None,
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -7581,6 +7936,10 @@ mod tests {
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
+            scan_task_count: None,
+            file_scan_task_count: None,
+            delete_file_count: None,
+            child_plan_task_count: None,
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -7627,6 +7986,10 @@ mod tests {
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
+            scan_task_count: None,
+            file_scan_task_count: None,
+            delete_file_count: None,
+            child_plan_task_count: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -7673,6 +8036,10 @@ mod tests {
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
+            scan_task_count: None,
+            file_scan_task_count: None,
+            delete_file_count: None,
+            child_plan_task_count: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -7719,6 +8086,10 @@ mod tests {
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
+            scan_task_count: None,
+            file_scan_task_count: None,
+            delete_file_count: None,
+            child_plan_task_count: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -7765,6 +8136,10 @@ mod tests {
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
+            scan_task_count: None,
+            file_scan_task_count: None,
+            delete_file_count: None,
+            child_plan_task_count: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -7815,6 +8190,10 @@ mod tests {
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
+            scan_task_count: None,
+            file_scan_task_count: None,
+            delete_file_count: None,
+            child_plan_task_count: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),

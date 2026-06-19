@@ -1172,13 +1172,16 @@ and traversal model. The drain response lifts their counts and management scope
 into compact fields, so QueryGraph can verify the control-plane read evidence
 without opening the raw lineage payload. The QGLake acceptance workflow now
 establishes its server/project/warehouse tenant spine, performs governed
-server, project, warehouse, policy-list, storage-profile-list, and table
-commit-history reads before bootstrap, and rejects a drain that does not replay
-matching `server.listed`, `project.listed`, `warehouse.listed`,
-`policy-binding.listed`, `storage-profile.listed`, and `table.commits-listed`
-evidence. For commit-history replay, the typed drain summary carries the commit
-count, committed sequence numbers, and commit hashes, so QueryGraph can verify
-the pointer-history inspection without parsing the full lineage payload.
+server, project, warehouse, policy-list, storage-profile-list, scan-planning,
+scan-task-fetch, and table commit-history reads before bootstrap, and rejects a
+drain that does not replay matching `server.listed`, `project.listed`,
+`warehouse.listed`, `policy-binding.listed`, `storage-profile.listed`,
+`table.scan-planned`, `table.scan-tasks-fetched`, and `table.commits-listed`
+evidence. For scan replay, the typed drain summary carries scan-plan task
+counts plus fetched file-scan, delete-file, and child-plan task counts; for
+commit-history replay, it carries the commit count, committed sequence numbers,
+and commit hashes. This lets QueryGraph verify the governed Sail-planned read
+and pointer-history inspection without parsing the full lineage payload.
 
 For handoff testing, LakeCat can verify a saved bootstrap bundle and a saved
 drain response together:
@@ -1193,12 +1196,14 @@ cargo run -p lakecat-cli -- qglake-verify-replay \
 That offline check replays the same boundary assertions used by the live
 QGLake fixture: the bundle manifest must verify, the QueryGraph import
 compatibility contract must match, and the lineage drain must carry matching
-bootstrap hashes, credential-denial receipts, management-list evidence, and
-table commit-history receipt evidence, plus view receipt evidence when views
-are present. On success, the command prints the accepted bundle and QueryGraph
-import hashes, table/view counts, and compact control-plane lines such as:
+bootstrap hashes, credential-denial receipts, management-list evidence,
+scan/fetch task evidence, and table commit-history receipt evidence, plus view
+receipt evidence when views are present. On success, the command prints the
+accepted bundle and QueryGraph import hashes, table/view counts, and compact
+control-plane lines such as:
 
 ```text
+scan replay plan_tasks=1 file_tasks=1 delete_files=1 child_plan_tasks=1
 management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1
 credential replay restricted=blocked:sail-planned-read-required restricted_count=0 human=allowed:trusted-human-audited-raw human_count=1
 table commit history commits=1 sequences=1 hashes=sha256:...

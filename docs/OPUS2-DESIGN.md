@@ -180,6 +180,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
      surfaces the same governed context, routes through the scan projection
      sink path, and the Iceberg REST `fetchScanTasks` response now carries a
      `lakecat:fetch-scan-tasks` extension with the re-applied restriction;
+     lineage-drain summaries now expose compact scan-plan, file-scan,
+     delete-file, and child-plan task counts, and QGLake saved replay rejects a
+     drain that does not prove both scan planning and scan-task fetch replay;
      governed credential-vend receipts are marked as raw-credential exceptions,
      and the `credentials.vend-attempted` audit/outbox payload surfaces the same
      restriction and exception marker at top level so consumers can distinguish
@@ -307,7 +310,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   policy bindings, projects, servers, storage profiles, and warehouses replay
   into LakeCat OpenLineage receipts without adding list-specific graph nodes in
   LakeCat, and lineage-drain summaries expose compact list counts/scope for
-  QueryGraph verification; QGLake acceptance now establishes a durable
+  QueryGraph verification; lineage-drain summaries also expose compact
+  scan/fetch/delete task counts so QueryGraph can verify the governed
+  Sail-planned read path without parsing raw lineage payloads; QGLake
+  acceptance now establishes a durable
   server/project/warehouse tenant spine, performs governed server, project,
   warehouse, policy-list, and storage-profile-list reads, and requires matching
   `server.listed`, `project.listed`, `warehouse.listed`,

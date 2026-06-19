@@ -6,6 +6,29 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify QGLake scan replay counts`. `LineageDrainEventSummary` now carries
+  compact scan-plan, file-scan, delete-file, and child-plan task counts from
+  scan/fetch outbox payloads. `lakecat-cli qglake-verify-replay` prints a
+  compact scan replay line and QGLake saved replay now rejects drains that do
+  not prove both `table.scan-planned` and `table.scan-tasks-fetched` evidence,
+  including delete-file counts for governed Sail-planned reads.
+- Local verification for the QGLake scan replay slice was green:
+  `cargo test -p lakecat-cli qglake_scan_replay_line_summarizes_verified_evidence`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`;
+  `cargo fmt -p lakecat-sail -p lakecat-store -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Verify QGLake credential replay reasons`. `lakecat-cli qglake-verify-replay`
   now requires the trusted-human raw credential exception reason to survive
   lineage replay, and prints compact restricted-agent and trusted-human

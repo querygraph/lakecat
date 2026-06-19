@@ -1206,6 +1206,22 @@ fn lineage_drain_event_summary(
                     .collect()
             })
             .unwrap_or_default(),
+        scan_task_count: payload
+            .get("scan-task-count")
+            .and_then(Value::as_u64)
+            .and_then(|count| usize::try_from(count).ok()),
+        file_scan_task_count: payload
+            .get("file-scan-task-count")
+            .and_then(Value::as_u64)
+            .and_then(|count| usize::try_from(count).ok()),
+        delete_file_count: payload
+            .get("delete-file-count")
+            .and_then(Value::as_u64)
+            .and_then(|count| usize::try_from(count).ok()),
+        child_plan_task_count: payload
+            .get("child-plan-task-count")
+            .and_then(Value::as_u64)
+            .and_then(|count| usize::try_from(count).ok()),
         management_scope_project_id: payload
             .get("project-id")
             .and_then(Value::as_str)
@@ -5640,6 +5656,9 @@ mod tests {
                             },
                             "storage-location": "file:///tmp/events",
                             "metadata-location": "file:///tmp/events/metadata/00000.json",
+                            "file-scan-task-count": 1,
+                            "delete-file-count": 1,
+                            "child-plan-task-count": 1,
                         },
                     }),
                     created_at: chrono::Utc::now(),
@@ -5852,6 +5871,15 @@ mod tests {
             credential_summary.replay_open_lineage_hashes,
             vec!["recorded-openlineage".to_string()]
         );
+        let scan_fetch_summary = drain
+            .events
+            .iter()
+            .find(|event| event.event_type == "table.scan-tasks-fetched")
+            .expect("scan task fetch replay summary should be exposed");
+        assert_eq!(scan_fetch_summary.file_scan_task_count, Some(1));
+        assert_eq!(scan_fetch_summary.delete_file_count, Some(1));
+        assert_eq!(scan_fetch_summary.child_plan_task_count, Some(1));
+        assert_eq!(scan_fetch_summary.scan_task_count, None);
         let bootstrap_summary = drain
             .events
             .iter()

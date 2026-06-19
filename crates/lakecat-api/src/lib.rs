@@ -477,6 +477,14 @@ pub struct LineageDrainEventSummary {
     #[serde(default)]
     pub table_commit_hashes: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scan_task_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_scan_task_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delete_file_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub child_plan_task_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub management_scope_project_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub management_scope_warehouse: Option<String>,

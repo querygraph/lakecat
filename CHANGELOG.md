@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added compact scan/fetch task counts to lineage-drain event summaries and
+  made QGLake saved replay require `table.scan-planned` plus
+  `table.scan-tasks-fetched` evidence, including delete-file counts for
+  governed Sail-planned reads.
 - Clarified `GOAL.md` so the latest `/Users/alexy/src/lakecat/AGENTS.md`
   guidance is imported as permanent operating direction for repo boundaries,
   QueryGraph integration, Turso, feature gates, verification, and
