@@ -334,7 +334,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   matched storage profile prefix before object storage is touched; metadata
   object writes and cleanup now route through `object_store::parse_url_opts`,
   preserving local `file://` behavior while moving the writer toward configured
-  object-store backends.*
+  object-store backends; metadata-object writes now use create-only
+  `object_store` semantics so an existing non-current target returns conflict
+  instead of being overwritten.*
 - **P4 — Semantic catalog graph (F6).** Emit the bounded typed taxonomy
   (Namespace/Table/Column/Snapshot/Policy/Principal/ScanPlan/Commit) through the
   outbox into Grust; keep file-granularity as metadata-as-data. Then OpenLineage

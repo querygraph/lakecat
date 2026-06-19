@@ -58,7 +58,7 @@ use lakecat_store::{
     WarehouseRecord, table_ident,
 };
 use object_store::path::Path as ObjectPath;
-use object_store::{ObjectStore, ObjectStoreExt, PutPayload};
+use object_store::{ObjectStore, ObjectStoreExt, PutMode, PutPayload};
 use serde_json::{Value, json};
 use url::Url;
 
@@ -2837,12 +2837,19 @@ async fn write_planned_metadata(
     let payload = serde_json::to_vec_pretty(&commit_plan.new_metadata)
         .map_err(|err| LakeCatError::Internal(format!("failed to encode metadata JSON: {err}")))?;
     store
-        .put(&object_path, PutPayload::from(payload))
+        .put_opts(
+            &object_path,
+            PutPayload::from(payload),
+            PutMode::Create.into(),
+        )
         .await
-        .map_err(|err| {
-            LakeCatError::Internal(format!(
+        .map_err(|err| match err {
+            object_store::Error::AlreadyExists { .. } => LakeCatError::Conflict(format!(
+                "metadata object '{location}' already exists; refusing to overwrite existing metadata"
+            )),
+            err => LakeCatError::Internal(format!(
                 "failed to write metadata object '{location}': {err}"
-            ))
+            )),
         })?;
     Ok(Some(PlannedMetadataWrite {
         location: location.to_string(),
@@ -8254,13 +8261,96 @@ mod tests {
             WarehouseName::new("local").unwrap(),
             store.clone(),
         ));
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lakecat-commit-history-{unique}"));
+        let table_dir = root.join("events");
+        let metadata_dir = table_dir.join("metadata");
+        std::fs::create_dir_all(&metadata_dir).unwrap();
+        let table_location = url::Url::from_directory_path(&table_dir)
+            .expect("table dir URL")
+            .to_string();
+        let initial_metadata_location = url::Url::from_file_path(metadata_dir.join("00000.json"))
+            .unwrap()
+            .to_string();
+        let committed_metadata_location = url::Url::from_file_path(metadata_dir.join("00001.json"))
+            .unwrap()
+            .to_string();
+        let base_metadata = serde_json::json!({
+            "format-version": 3,
+            "table-uuid": "11111111-1111-1111-1111-111111111111",
+            "location": table_location,
+            "last-sequence-number": 7,
+            "last-updated-ms": 1710000000000_i64,
+            "last-column-id": 1,
+            "schemas": [{
+                "type": "struct",
+                "schema-id": 1,
+                "fields": [{
+                    "id": 1,
+                    "name": "id",
+                    "type": "string",
+                    "required": true
+                }]
+            }],
+            "current-schema-id": 1,
+            "partition-specs": [{"spec-id": 0, "fields": []}],
+            "default-spec-id": 0,
+            "current-snapshot-id": 42,
+            "snapshots": [{
+                "snapshot-id": 42,
+                "sequence-number": 7,
+                "timestamp-ms": 1710000000000_i64,
+                "summary": {"operation": "append"},
+                "schema-id": 1
+            }],
+            "snapshot-log": [{"timestamp-ms": 1710000000000_i64, "snapshot-id": 42}]
+        });
+        let advanced_metadata = serde_json::json!({
+            "format-version": 3,
+            "table-uuid": "11111111-1111-1111-1111-111111111111",
+            "location": table_location,
+            "last-sequence-number": 8,
+            "last-updated-ms": 1710000000100_i64,
+            "last-column-id": 1,
+            "schemas": [{
+                "type": "struct",
+                "schema-id": 1,
+                "fields": [{
+                    "id": 1,
+                    "name": "id",
+                    "type": "string",
+                    "required": true
+                }]
+            }],
+            "current-schema-id": 1,
+            "partition-specs": [{"spec-id": 0, "fields": []}],
+            "default-spec-id": 0,
+            "current-snapshot-id": 43,
+            "snapshots": [{
+                "snapshot-id": 43,
+                "sequence-number": 8,
+                "timestamp-ms": 1710000000100_i64,
+                "summary": {"operation": "append"},
+                "schema-id": 1
+            }],
+            "snapshot-log": [{"timestamp-ms": 1710000000100_i64, "snapshot-id": 43}]
+        });
         let create = Request::builder()
             .method(Method::POST)
             .uri("/catalog/v1/namespaces/default/tables")
             .header("content-type", "application/json")
             .header("x-lakecat-principal", "operator@example.com")
             .body(Body::from(
-                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"table-uuid":"11111111-1111-1111-1111-111111111111","location":"file:///tmp/events","last-sequence-number":7,"last-updated-ms":1710000000000,"last-column-id":1,"schemas":[{"type":"struct","schema-id":1,"fields":[{"id":1,"name":"id","type":"string","required":true}]}],"current-schema-id":1,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"current-snapshot-id":42,"snapshots":[{"snapshot-id":42,"sequence-number":7,"timestamp-ms":1710000000000,"summary":{"operation":"append"},"schema-id":1}],"snapshot-log":[{"timestamp-ms":1710000000000,"snapshot-id":42}]}}"#,
+                serde_json::json!({
+                    "name": "events",
+                    "location": table_location,
+                    "metadata-location": initial_metadata_location,
+                    "metadata": base_metadata,
+                })
+                .to_string(),
             ))
             .unwrap();
         let response = app.clone().oneshot(create).await.unwrap();
@@ -8273,7 +8363,13 @@ mod tests {
             .header("x-lakecat-principal", "operator@example.com")
             .header("x-lakecat-idempotency-key", "commit:events:history")
             .body(Body::from(
-                r#"{"requirements":[],"updates":[],"metadata-location":"file:///tmp/events/metadata/00001.json","metadata":{"format-version":3,"table-uuid":"11111111-1111-1111-1111-111111111111","location":"file:///tmp/events","last-sequence-number":8,"last-updated-ms":1710000000100,"last-column-id":1,"schemas":[{"type":"struct","schema-id":1,"fields":[{"id":1,"name":"id","type":"string","required":true}]}],"current-schema-id":1,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"current-snapshot-id":43,"snapshots":[{"snapshot-id":43,"sequence-number":8,"timestamp-ms":1710000000100,"summary":{"operation":"append"},"schema-id":1}],"snapshot-log":[{"timestamp-ms":1710000000100,"snapshot-id":43}]}}"#,
+                serde_json::json!({
+                    "requirements": [],
+                    "updates": [],
+                    "metadata-location": committed_metadata_location,
+                    "metadata": advanced_metadata,
+                })
+                .to_string(),
             ))
             .unwrap();
         let response = app.clone().oneshot(commit).await.unwrap();
@@ -8380,6 +8476,7 @@ mod tests {
             commit_read_summary["table-commit-hashes"],
             serde_json::json!([commits[0]["commit-hash"].clone()])
         );
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[tokio::test]
@@ -8644,6 +8741,138 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
             std::fs::read_to_string(&initial_metadata_path).unwrap(),
+            sentinel
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn commit_rejects_metadata_object_overwrite_of_existing_target() {
+        let app = test_app();
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lakecat-existing-metadata-guard-{unique}"));
+        let table_dir = root.join("events");
+        let metadata_dir = table_dir.join("metadata");
+        std::fs::create_dir_all(&metadata_dir).unwrap();
+        let table_location = url::Url::from_directory_path(&table_dir)
+            .expect("table dir URL")
+            .to_string();
+        let initial_metadata_location = url::Url::from_file_path(metadata_dir.join("00000.json"))
+            .unwrap()
+            .to_string();
+        let target_metadata_path = metadata_dir.join("00001.json");
+        let target_metadata_location = url::Url::from_file_path(&target_metadata_path)
+            .unwrap()
+            .to_string();
+        let base_metadata = serde_json::json!({
+            "format-version": 3,
+            "table-uuid": "11111111-1111-1111-1111-111111111111",
+            "location": table_location,
+            "last-sequence-number": 7,
+            "last-updated-ms": 1710000000000_i64,
+            "last-column-id": 1,
+            "schemas": [{
+                "type": "struct",
+                "schema-id": 1,
+                "fields": [{
+                    "id": 1,
+                    "name": "id",
+                    "type": "string",
+                    "required": true
+                }]
+            }],
+            "current-schema-id": 1,
+            "partition-specs": [{"spec-id": 0, "fields": []}],
+            "default-spec-id": 0,
+            "current-snapshot-id": 42,
+            "snapshots": [{
+                "snapshot-id": 42,
+                "sequence-number": 7,
+                "timestamp-ms": 1710000000000_i64,
+                "summary": {"operation": "append"},
+                "schema-id": 1
+            }],
+            "snapshot-log": [{"timestamp-ms": 1710000000000_i64, "snapshot-id": 42}]
+        });
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "name": "events",
+                    "location": table_location,
+                    "metadata-location": initial_metadata_location,
+                    "metadata": base_metadata,
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let sentinel = "{\n  \"sentinel\": \"existing target must not be overwritten\"\n}\n";
+        std::fs::write(&target_metadata_path, sentinel).unwrap();
+        let commit = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/commit")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "requirements": [],
+                    "updates": [],
+                    "metadata-location": target_metadata_location,
+                    "metadata": {
+                        "format-version": 3,
+                        "table-uuid": "11111111-1111-1111-1111-111111111111",
+                        "location": table_location,
+                        "last-sequence-number": 8,
+                        "last-updated-ms": 1710000000100_i64,
+                        "last-column-id": 1,
+                        "schemas": [{
+                            "type": "struct",
+                            "schema-id": 1,
+                            "fields": [{
+                                "id": 1,
+                                "name": "id",
+                                "type": "string",
+                                "required": true
+                            }]
+                        }],
+                        "current-schema-id": 1,
+                        "partition-specs": [{"spec-id": 0, "fields": []}],
+                        "default-spec-id": 0,
+                        "current-snapshot-id": 43,
+                        "snapshots": [{
+                            "snapshot-id": 43,
+                            "sequence-number": 8,
+                            "timestamp-ms": 1710000000100_i64,
+                            "summary": {"operation": "append"},
+                            "schema-id": 1
+                        }],
+                        "snapshot-log": [{"timestamp-ms": 1710000000100_i64, "snapshot-id": 43}]
+                    },
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(commit).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(
+            payload["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("refusing to overwrite existing metadata")
+        );
+        assert_eq!(
+            std::fs::read_to_string(&target_metadata_path).unwrap(),
             sentinel
         );
         let _ = std::fs::remove_dir_all(root);

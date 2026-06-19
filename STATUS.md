@@ -6,6 +6,28 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject metadata object overwrite targets`.
+  REST metadata-object commits now write through `object_store` with
+  create-only semantics (`PutMode::Create`). A commit whose requested new
+  metadata location already exists now fails with conflict instead of
+  overwriting a non-current, orphaned, or concurrently created metadata file.
+  This extends the earlier current-pointer overwrite guard to every existing
+  metadata object target while preserving idempotent replay before object
+  writes.
+- Local verification for the metadata overwrite guard slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_object_overwrite`;
+  `cargo test -p lakecat-service commit_can_advance_metadata_location_extension`;
+  `cargo test -p lakecat-service --features turso-local management_table_commits_lists_pointer_log_evidence`;
+  `cargo test -p lakecat-service --features turso-local metadata_object_overwrite`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Verify QGLake captured-output semantics`.
   `lakecat-cli qglake-verify-handoff --summary ... [--json]` now parses the
   captured LakeCat replay JSON and QueryGraph verify/import JSON files named

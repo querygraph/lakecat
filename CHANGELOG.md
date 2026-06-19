@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made REST metadata-object commits use create-only object-store writes, so an
+  existing non-current metadata file is treated as a conflict instead of being
+  overwritten.
 - Made `lakecat-cli qglake-verify-handoff` parse the captured LakeCat replay
   and QueryGraph verify/import JSON outputs and reject summaries whose saved
   captures no longer agree on schema/status, table/view counts, semantic
