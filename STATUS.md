@@ -6,6 +6,25 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate storage profile issuance modes`. Storage profiles now reject unsafe
+  issuance/provider combinations at the durable model boundary and through the
+  management API: `local-file-no-secret` is limited to file storage, and
+  `short-lived-secret-ref` is limited to configured remote providers.
+- Local verification for the storage-profile issuance-mode validation slice was
+  green:
+  `cargo fmt -p lakecat-store -p lakecat-service`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_reject_provider_issuance_mismatch`;
+  `cargo test -p lakecat-service management_storage_profile_rejects_remote_local_no_secret_mode`;
+  `cargo test -p lakecat-service remote_storage_profile_accepts_secret_ref_without_vending_raw_secrets`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-store -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --all-features`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate storage profile providers`. Storage profile creation now rejects
   provider/location-prefix mismatches at the durable model boundary and through
   the management API, preventing contradictory credential roots such as a

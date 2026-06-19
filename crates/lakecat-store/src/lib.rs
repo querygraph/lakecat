@@ -769,6 +769,7 @@ impl StorageProfile {
             ));
         }
         validate_location_prefix_provider(&location_prefix, provider)?;
+        validate_issuance_mode_provider(issuance_mode, provider)?;
         if let Some(secret_ref) = secret_ref.as_deref() {
             validate_secret_ref(secret_ref)?;
         }
@@ -793,6 +794,7 @@ impl StorageProfile {
 
     pub fn validate(&self) -> LakeCatResult<()> {
         validate_location_prefix_provider(&self.location_prefix, self.provider)?;
+        validate_issuance_mode_provider(self.issuance_mode, self.provider)?;
         if let Some(secret_ref) = self.secret_ref.as_deref() {
             validate_secret_ref(secret_ref)?;
         }
@@ -1867,6 +1869,32 @@ fn validate_location_prefix_provider(
         )));
     }
     Ok(())
+}
+
+fn validate_issuance_mode_provider(
+    issuance_mode: CredentialIssuanceMode,
+    provider: StorageProvider,
+) -> LakeCatResult<()> {
+    match issuance_mode {
+        CredentialIssuanceMode::LocalFileNoSecret if provider != StorageProvider::File => {
+            Err(LakeCatError::InvalidArgument(format!(
+                "local-file-no-secret issuance mode requires file provider, got '{}'",
+                provider.as_str()
+            )))
+        }
+        CredentialIssuanceMode::ShortLivedSecretRef
+            if !matches!(
+                provider,
+                StorageProvider::S3 | StorageProvider::Gcs | StorageProvider::Azure
+            ) =>
+        {
+            Err(LakeCatError::InvalidArgument(format!(
+                "short-lived-secret-ref issuance mode requires s3, gcs, or azure provider, got '{}'",
+                provider.as_str()
+            )))
+        }
+        _ => Ok(()),
+    }
 }
 
 fn validate_project_id(project_id: &str) -> LakeCatResult<()> {
@@ -5260,6 +5288,44 @@ pub mod turso_store {
 
             assert!(matches!(err, LakeCatError::InvalidArgument(_)));
             assert!(err.to_string().contains("does not match location prefix"));
+        }
+
+        #[test]
+        fn storage_profiles_reject_provider_issuance_mismatch() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            let remote_no_secret = StorageProfile::new(
+                "remote-no-secret",
+                warehouse.clone(),
+                "s3://lakecat-demo/events",
+                StorageProvider::S3,
+                CredentialIssuanceMode::LocalFileNoSecret,
+                None,
+                BTreeMap::new(),
+            )
+            .unwrap_err();
+            assert!(matches!(remote_no_secret, LakeCatError::InvalidArgument(_)));
+            assert!(
+                remote_no_secret
+                    .to_string()
+                    .contains("local-file-no-secret issuance mode requires file provider")
+            );
+
+            let local_secret_ref = StorageProfile::new(
+                "local-secret-ref",
+                warehouse,
+                "file:///tmp/events",
+                StorageProvider::File,
+                CredentialIssuanceMode::ShortLivedSecretRef,
+                Some("typesec://lakecat/local/events".to_string()),
+                BTreeMap::new(),
+            )
+            .unwrap_err();
+            assert!(matches!(local_secret_ref, LakeCatError::InvalidArgument(_)));
+            assert!(
+                local_secret_ref
+                    .to_string()
+                    .contains("short-lived-secret-ref issuance mode requires s3, gcs, or azure")
+            );
         }
 
         #[tokio::test]

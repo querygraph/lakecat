@@ -760,6 +760,9 @@ authorize issuance before any resolver sees the secret reference.
 LakeCat rejects profiles whose declared provider conflicts with the URI scheme
 of the location prefix, so a credential root cannot claim to be local while
 pointing at an S3 prefix.
+It also rejects unsafe issuance-mode combinations: `local-file-no-secret` is
+for file storage only, while `short-lived-secret-ref` is for configured remote
+providers such as S3, GCS, and Azure.
 
 ```sh
 curl -s -X PUT \

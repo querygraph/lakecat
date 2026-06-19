@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected unsafe storage-profile issuance/provider combinations, including
+  remote `local-file-no-secret` profiles and local `short-lived-secret-ref`
+  profiles.
 - Rejected storage profiles whose declared provider does not match the location
   prefix provider, and refreshed the book's storage-profile examples to use the
   current management API vocabulary.
