@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added the current LakeCat `AGENTS.md` guidance snapshot to `GOAL.md`,
+  including repo boundaries, compatibility rules, Turso direction, verification
+  gates, and commit discipline.
 - Added a compact `tableCommitHistoryProof` object to QGLake
   `handoff-summary.json`, proving pointer-log commit-history replay with
   sequence numbers, commit hashes, and replay/OpenLineage hashes.
