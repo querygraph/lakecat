@@ -5,6 +5,16 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Refresh QGLake replay transcript example`.
+  The LakeCat book's saved QGLake replay transcript example now matches the
+  verified CLI output for management and credential replay lines, including the
+  `location_prefix_hash` storage-scope evidence required by the current
+  verifiers.
+- Local verification for this book transcript sync slice is green:
+  `docs/book/build.sh`;
+  `rg -n "credential_roots=|credential_root=|location_prefix_hash=sha256:storage-location-prefix" docs/book/lakecat.md`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Expose management replay storage-scope hash`.
   QGLake management replay verification now requires storage-profile upsert

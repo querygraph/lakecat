@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Updated the LakeCat book's saved QGLake replay transcript example so the
+  management and credential replay lines show the same storage-scope hash fields
+  required by the CLI verifiers.
 - Tightened QGLake management replay output so storage-profile upsert replay
   must carry a SHA-256 `location-prefix-hash` and the operator-readable
   management replay line prints the same redacted credential-root storage-scope
