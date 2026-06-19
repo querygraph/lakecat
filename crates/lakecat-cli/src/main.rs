@@ -1321,36 +1321,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "credentialVendingProof",
         "lakecatReplayVerification",
     )?;
-    let restricted = required_object(credentials, "restricted", "credentialVendingProof")?;
-    require_u64_match(
-        restricted,
-        "credentialCount",
-        0,
-        "credentialVendingProof.restricted",
-    )?;
-    require_string_eq(
-        restricted,
-        "blockReason",
-        QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
-        "credentialVendingProof.restricted",
-    )?;
-    let trusted = required_object(credentials, "trustedHuman", "credentialVendingProof")?;
-    require_positive_u64(
-        trusted,
-        "credentialCount",
-        "credentialVendingProof.trustedHuman",
-    )?;
-    if required_bool(
-        trusted,
-        "rawCredentialExceptionAllowed",
-        "credentialVendingProof.trustedHuman",
-    )? != true
-    {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "handoff summary trusted-human proof must allow the audited raw credential exception"
-                .to_string(),
-        ));
-    }
+    require_credential_vending_evidence(credentials, principal)?;
 
     let views = required_object(
         lakecat,
@@ -1379,6 +1350,94 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "queryGraphBootstrapProof": bootstrap,
         "requestIdentityProof": request_identity,
     }))
+}
+
+fn require_credential_vending_evidence(
+    credentials: &serde_json::Map<String, Value>,
+    principal: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let restricted = required_object(credentials, "restricted", "credentialVendingProof")?;
+    require_string_eq(
+        restricted,
+        "principalSubject",
+        principal,
+        "credentialVendingProof.restricted",
+    )?;
+    require_string_eq(
+        restricted,
+        "principalKind",
+        "agent",
+        "credentialVendingProof.restricted",
+    )?;
+    require_u64_match(
+        restricted,
+        "credentialCount",
+        0,
+        "credentialVendingProof.restricted",
+    )?;
+    require_string_eq(
+        restricted,
+        "blockReason",
+        QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
+        "credentialVendingProof.restricted",
+    )?;
+    require_hash_array(
+        restricted,
+        "replayEventHashes",
+        "credentialVendingProof.restricted",
+    )?;
+    require_hash_array(
+        restricted,
+        "openLineageHashes",
+        "credentialVendingProof.restricted",
+    )?;
+
+    let trusted = required_object(credentials, "trustedHuman", "credentialVendingProof")?;
+    require_non_empty_str(
+        trusted,
+        "principalSubject",
+        "credentialVendingProof.trustedHuman",
+    )?;
+    require_string_eq(
+        trusted,
+        "principalKind",
+        "human",
+        "credentialVendingProof.trustedHuman",
+    )?;
+    require_positive_u64(
+        trusted,
+        "credentialCount",
+        "credentialVendingProof.trustedHuman",
+    )?;
+    if required_bool(
+        trusted,
+        "rawCredentialExceptionAllowed",
+        "credentialVendingProof.trustedHuman",
+    )? != true
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "handoff summary trusted-human proof must allow the audited raw credential exception"
+                .to_string(),
+        ));
+    }
+    require_string_eq(
+        trusted,
+        "rawCredentialExceptionReason",
+        QGLAKE_HUMAN_RAW_CREDENTIAL_EXCEPTION_REASON,
+        "credentialVendingProof.trustedHuman",
+    )?;
+    require_hash_array(
+        trusted,
+        "replayEventHashes",
+        "credentialVendingProof.trustedHuman",
+    )?;
+    require_hash_array(
+        trusted,
+        "openLineageHashes",
+        "credentialVendingProof.trustedHuman",
+    )?;
+
+    Ok(())
 }
 
 fn require_read_restriction_evidence(
@@ -6191,6 +6250,37 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("allowed-columns mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_restricted_credential_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["replayEventHashes"] =
+            json!([]);
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject missing restricted credential replay hashes",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("replayEventHashes"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_trusted_human_exception_reason() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]["rawCredentialExceptionReason"] =
+            json!("because I feel like it");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject unaudited trusted-human exception reasons");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("rawCredentialExceptionReason"));
+        assert!(
+            err.to_string()
+                .contains(QGLAKE_HUMAN_RAW_CREDENTIAL_EXCEPTION_REASON)
+        );
     }
 
     #[test]

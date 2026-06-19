@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made compact `credentialVendingProof` validation self-sufficient in
+  `lakecat-cli qglake-verify-handoff`, requiring restricted-agent identity,
+  Sail-planned-read block reason, trusted-human identity, audited exception
+  reason, and replay/OpenLineage hashes.
 - Made `lakecat-cli qglake-verify-handoff` independently reject compact
   `viewReceiptChainProof` summaries whose view receipt-chain evidence lacks
   matching view counts, accepted view identity, accepted view-version proof,

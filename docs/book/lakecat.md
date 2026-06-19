@@ -1307,6 +1307,12 @@ the captured `replay-evidence.credentials` restricted-agent and trusted-human
 branches with the compact `credentialVendingProof`, so a saved handoff cannot
 claim that agents were blocked onto Sail-planned reads or that humans used an
 audited exception unless the captured LakeCat replay proves the same decision.
+The compact handoff verifier also validates that credential proof directly:
+the restricted branch must name the accepted agent principal, carry the
+Sail-planned-read block reason, prove zero credentials, and include
+replay/OpenLineage hashes; the trusted-human branch must name a human
+principal, prove a positive credential count, carry the exact audited
+raw-credential exception reason, and include replay/OpenLineage hashes.
 That makes the handoff repeatable from the LakeCat repo while keeping
 QueryGraph responsible for graph validation and import semantics.
 The handoff script refuses to write the summary unless LakeCat replay JSON

@@ -6,6 +6,25 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify credential-vending handoff proof`.
+  `lakecat-cli qglake-verify-handoff` now independently validates compact
+  `credentialVendingProof` identity and receipt evidence instead of relying on
+  captured-output comparison alone. The restricted branch must name the
+  accepted agent principal, prove zero credentials, carry the governed
+  Sail-planned-read block reason, and include replay/OpenLineage hashes. The
+  trusted-human branch must name a human principal, prove a positive credential
+  count, carry the audited raw-credential exception decision and exact reason,
+  and include replay/OpenLineage hashes.
+- Local verification for this credential-vending handoff-proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Verify view receipt-chain handoff identity proof`.
   `lakecat-cli qglake-verify-handoff` now independently validates the compact
   `viewReceiptChainProof` receipt-chain evidence instead of only checking that
