@@ -295,10 +295,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   without ad hoc JSON checks; the same verifier now recomputes the recorded
   raw bundle, lineage-drain, and QueryGraph import-plan file hashes so the
   accepted compact summary cannot silently drift away from the artifact files
-  it names; it now also parses the saved QueryGraph bootstrap bundle and saved
-  QueryGraph import-plan artifacts, binding them to the accepted tenant graph,
-  table/view ids, semantic hashes, standards, and graph node/edge evidence
-  recorded in the compact summary; the summary now also records captured-output hashes for the
+  it names; it now also parses the saved QueryGraph bootstrap bundle, saved
+  QueryGraph import-plan artifact, and saved lineage-drain artifact, binding
+  them to the accepted tenant graph, table/view ids, semantic hashes,
+  standards, graph node/edge evidence, and regenerated outbox/lineage replay
+  proof recorded in the compact summary; the summary now also records captured-output hashes for the
   LakeCat replay JSON and QueryGraph verify/import JSON captures, and the
   handoff verifier rejects drift in those captured outputs too; the verifier
   now also parses those captured JSON outputs and rejects a handoff whose saved

@@ -6,6 +6,16 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify saved QGLake lineage-drain artifact semantics`.
+  `lakecat-cli qglake-verify-handoff` now parses the saved
+  `lineage-drain.json` artifact, reruns the typed QGLake lineage-drain
+  verifier against the compact accepted QueryGraph proof, regenerates LakeCat
+  replay evidence from the archived drain response, and compares that evidence
+  with `lakecatReplayVerification`. This closes the saved-drain gap where a
+  handoff could keep a stale replay capture and compact summary while the
+  archived drain artifact itself lost or changed outbox/lineage receipt
+  evidence.
+- Latest completed implementation slice:
   `Verify saved QueryGraph import plan artifact semantics`.
   `lakecat-cli qglake-verify-handoff` now parses the saved
   `querygraph-import-plan.json` artifact and compares its embedded QueryGraph

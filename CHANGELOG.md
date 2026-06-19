@@ -3,6 +3,10 @@
 ## Unreleased
 
 - Made `lakecat-cli qglake-verify-handoff` parse and verify the saved
+  lineage-drain artifact, regenerating LakeCat replay evidence from the
+  archived drain JSON and rejecting handoffs whose saved outbox/lineage replay
+  no longer matches the compact replay proof.
+- Made `lakecat-cli qglake-verify-handoff` parse and verify the saved
   QueryGraph import-plan artifact, binding archived import plans to the compact
   QueryGraph import proof, accepted table/view ids, semantic hashes, standards,
   and graph node/edge evidence.

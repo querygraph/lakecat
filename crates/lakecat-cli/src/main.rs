@@ -358,6 +358,8 @@ fn qglake_verify_handoff(
         verify_qglake_handoff_bundle_artifact_semantics(&summary_path, &summary)?;
     let querygraph_import_plan_semantics =
         verify_qglake_handoff_querygraph_import_plan_semantics(&summary_path, &summary)?;
+    let lineage_drain_artifact_semantics =
+        verify_qglake_handoff_lineage_drain_artifact_semantics(&summary_path, &summary)?;
     verification
         .as_object_mut()
         .ok_or_else(|| {
@@ -398,6 +400,17 @@ fn qglake_verify_handoff(
         .insert(
             "querygraphImportPlanSemantics".to_string(),
             querygraph_import_plan_semantics,
+        );
+    verification
+        .as_object_mut()
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::Internal(
+                "handoff verification must be an object".to_string(),
+            )
+        })?
+        .insert(
+            "lineageDrainArtifactSemantics".to_string(),
+            lineage_drain_artifact_semantics,
         );
     if json_output {
         print_json(&verification)?;
@@ -937,6 +950,136 @@ fn require_import_plan_list_covers_verified_ids(
         }
     }
     Ok(())
+}
+
+fn verify_qglake_handoff_lineage_drain_artifact_semantics(
+    summary_path: &Path,
+    summary: &Value,
+) -> lakecat_core::LakeCatResult<Value> {
+    let summary = summary.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "handoff summary root must be an object".to_string(),
+        )
+    })?;
+    let principal = required_str(summary, "principal", "handoff summary")?;
+    let warehouse = required_str(summary, "warehouse", "handoff summary")?;
+    let querygraph = required_object(summary, "querygraphVerification", "handoff summary")?;
+    let lakecat = required_object(summary, "lakecatReplayVerification", "handoff summary")?;
+    let bootstrap = required_object(
+        lakecat,
+        "queryGraphBootstrapProof",
+        "lakecatReplayVerification",
+    )?;
+    let policy_binding_count =
+        required_u64(bootstrap, "policyBindingCount", "queryGraphBootstrapProof")? as usize;
+    let artifacts = required_object(summary, "artifacts", "handoff summary")?;
+    let base_dir = summary_path.parent().unwrap_or_else(|| Path::new(""));
+    let drain_value = read_qglake_handoff_artifact_json(artifacts, "lineageDrain", base_dir)?;
+    let drain: LineageDrainResponse = serde_json::from_value(drain_value).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff lineage drain artifact is not a LakeCat lineage-drain response: {err}"
+        ))
+    })?;
+    let verification = qglake_verification_from_handoff_summary(warehouse, querygraph, lakecat)?;
+    verify_qglake_lineage_drain(&drain, &verification, Some(principal), policy_binding_count)?;
+    let replay_evidence = qglake_replay_evidence_json(&drain, Some(principal), &verification);
+    let replay = qglake_replay_verification_json(
+        &verification,
+        qglake_scan_replay_line(&drain),
+        qglake_management_replay_line(&drain),
+        qglake_credential_replay_line(&drain, Some(principal)),
+        qglake_table_commit_history_replay_line(&drain),
+        replay_evidence,
+    );
+    let replay = replay.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::Internal(
+            "lineage drain replay verification must be an object".to_string(),
+        )
+    })?;
+    verify_lakecat_replay_capture_matches_summary(replay, lakecat, querygraph)?;
+
+    Ok(json!({
+        "delivered": drain.delivered,
+        "eventTypes": drain.event_types,
+        "graphEvents": drain.graph_events,
+        "lineageEvents": drain.lineage_events,
+        "principalSubject": drain.principal_subject,
+        "principalKind": drain.principal_kind,
+        "authorizationReceiptHash": drain.authorization_receipt_hash,
+        "requestIdentityState": drain.request_identity_state,
+        "tableCount": verification.table_count,
+        "viewCount": verification.view_count,
+        "verifiedTables": verification.verified_tables,
+        "verifiedViews": verification.verified_views,
+        "bundleHash": verification.bundle_hash,
+        "graphHash": verification.graph_hash,
+        "openLineageHash": verification.open_lineage_hash,
+        "queryGraphImportHash": verification.querygraph_import_hash,
+        "standards": verification.standards,
+    }))
+}
+
+fn qglake_verification_from_handoff_summary(
+    warehouse: &str,
+    querygraph: &serde_json::Map<String, Value>,
+    lakecat: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<QueryGraphBootstrapVerification> {
+    let view_receipts = required_object(
+        lakecat,
+        "viewReceiptChainProof",
+        "lakecatReplayVerification",
+    )?;
+    let mut verified_view_versions = BTreeMap::new();
+    let mut verified_view_receipt_hashes = BTreeMap::new();
+    for (index, view) in required_array(view_receipts, "views", "viewReceiptChainProof")?
+        .iter()
+        .enumerate()
+    {
+        let view = view.as_object().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.views[{index}] must be an object"
+            ))
+        })?;
+        let stable_id = required_str(view, "stableId", "viewReceiptChainProof.views[]")?;
+        verified_view_versions.insert(
+            stable_id.to_string(),
+            required_u64(view, "acceptedViewVersion", "viewReceiptChainProof.views[]")?,
+        );
+        verified_view_receipt_hashes.insert(
+            stable_id.to_string(),
+            require_hash_str(view, "acceptedReceiptHash", "viewReceiptChainProof.views[]")?
+                .to_string(),
+        );
+    }
+
+    Ok(QueryGraphBootstrapVerification {
+        warehouse: warehouse.to_string(),
+        table_count: required_u64(querygraph, "tableCount", "querygraphVerification")? as usize,
+        view_count: required_u64(querygraph, "viewCount", "querygraphVerification")? as usize,
+        verified_tables: required_string_array(
+            querygraph,
+            "verifiedTables",
+            "querygraphVerification",
+        )?,
+        verified_views: required_string_array(
+            querygraph,
+            "verifiedViews",
+            "querygraphVerification",
+        )?,
+        verified_view_versions,
+        verified_view_receipt_hashes,
+        bundle_hash: required_str(querygraph, "bundleHash", "querygraphVerification")?.to_string(),
+        graph_hash: required_str(querygraph, "graphHash", "querygraphVerification")?.to_string(),
+        open_lineage_hash: required_str(querygraph, "openLineageHash", "querygraphVerification")?
+            .to_string(),
+        querygraph_import_hash: required_str(
+            querygraph,
+            "querygraphImportHash",
+            "querygraphVerification",
+        )?
+        .to_string(),
+        standards: required_string_array(querygraph, "standards", "querygraphVerification")?,
+    })
 }
 
 fn read_qglake_handoff_artifact_json(
@@ -6251,6 +6394,24 @@ fn required_array<'a>(
     })
 }
 
+fn required_string_array(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<Vec<String>> {
+    required_array(value, field, label)?
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            item.as_str().map(ToString::to_string).ok_or_else(|| {
+                lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "{label}.{field}[{index}] must be a string"
+                ))
+            })
+        })
+        .collect()
+}
+
 fn required_str<'a>(
     value: &'a serde_json::Map<String, Value>,
     field: &str,
@@ -6997,6 +7158,126 @@ mod tests {
         fs::write(dir.join("querygraph-import-plan.json"), &bytes).expect("write import plan");
         summary["artifacts"]["querygraphImportPlan"]["sha256"] = json!(content_hash_bytes(&bytes));
         plan
+    }
+
+    fn qglake_handoff_lineage_verification() -> QueryGraphBootstrapVerification {
+        QueryGraphBootstrapVerification {
+            warehouse: "local".to_string(),
+            table_count: 1,
+            view_count: 1,
+            verified_tables: vec!["lakecat:table:local:default:events".to_string()],
+            verified_views: vec!["lakecat:view:local:default:active_customers_view".to_string()],
+            verified_view_versions: BTreeMap::from([(
+                "lakecat:view:local:default:active_customers_view".to_string(),
+                1,
+            )]),
+            verified_view_receipt_hashes: BTreeMap::from([(
+                "lakecat:view:local:default:active_customers_view".to_string(),
+                "sha256:view-receipt".to_string(),
+            )]),
+            bundle_hash: "sha256:bundle".to_string(),
+            graph_hash: "sha256:graph".to_string(),
+            open_lineage_hash: "sha256:openlineage".to_string(),
+            querygraph_import_hash: "sha256:querygraph-import".to_string(),
+            standards: qglake_lineage_standards(),
+        }
+    }
+
+    fn qglake_handoff_lineage_drain() -> LineageDrainResponse {
+        let verification = qglake_handoff_lineage_verification();
+        let mut view = qglake_view_lineage_summary();
+        view.view_name = Some("active_customers_view".to_string());
+        view.view_stable_id = Some("lakecat:view:local:default:active_customers_view".to_string());
+        view.view_version = Some(1);
+        view.expected_view_version = None;
+        view.replay_event_hashes = vec!["sha256:view-replay".to_string()];
+        view.replay_open_lineage_hashes = vec!["sha256:view-openlineage".to_string()];
+
+        LineageDrainResponse {
+            delivered: 12,
+            event_types: vec![
+                "table.scan-planned".to_string(),
+                "table.scan-tasks-fetched".to_string(),
+                "credentials.vend-attempted".to_string(),
+                "credentials.vend-attempted".to_string(),
+                "view.upserted".to_string(),
+                "policy-binding.listed".to_string(),
+                "storage-profile.listed".to_string(),
+                "storage-profile.upserted".to_string(),
+                "server.listed".to_string(),
+                "project.listed".to_string(),
+                "warehouse.listed".to_string(),
+                "table.commits-listed".to_string(),
+                "querygraph.bootstrap".to_string(),
+            ],
+            graph_events: 4,
+            lineage_events: 13,
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:identity".to_string()),
+            request_identity_state: Some("unverified".to_string()),
+            request_identity_source: Some("x-lakecat-agent-did".to_string()),
+            typedid_envelope_hash: None,
+            typedid_proof_hash: None,
+            events: vec![
+                qglake_bootstrap_lineage_summary_for(&verification, 1),
+                qglake_restricted_credential_summary(),
+                qglake_human_credential_summary(),
+                view,
+                qglake_policy_list_lineage_summary(),
+                qglake_storage_profile_list_lineage_summary(),
+                qglake_storage_profile_upsert_lineage_summary(),
+                qglake_server_list_lineage_summary(),
+                qglake_project_list_lineage_summary(),
+                qglake_warehouse_list_lineage_summary(),
+                qglake_table_commit_history_lineage_summary(),
+                qglake_scan_planned_lineage_summary(),
+                qglake_scan_tasks_fetched_lineage_summary(),
+            ],
+        }
+    }
+
+    fn qglake_write_handoff_lineage_drain_artifact(
+        dir: &Path,
+        summary: &mut Value,
+        drain: &LineageDrainResponse,
+    ) {
+        let verification = qglake_handoff_lineage_verification();
+        for section in ["querygraphVerification", "querygraphImportVerification"] {
+            summary[section]["tableCount"] = json!(verification.table_count);
+            summary[section]["viewCount"] = json!(verification.view_count);
+            summary[section]["verifiedTables"] = json!(verification.verified_tables);
+            summary[section]["verifiedViews"] = json!(verification.verified_views);
+            summary[section]["bundleHash"] = json!(verification.bundle_hash);
+            summary[section]["graphHash"] = json!(verification.graph_hash);
+            summary[section]["openLineageHash"] = json!(verification.open_lineage_hash);
+            summary[section]["querygraphImportHash"] = json!(verification.querygraph_import_hash);
+            summary[section]["standards"] = json!(verification.standards);
+        }
+        let replay = qglake_replay_verification_json(
+            &verification,
+            qglake_scan_replay_line(drain),
+            qglake_management_replay_line(drain),
+            qglake_credential_replay_line(drain, Some("did:example:agent")),
+            qglake_table_commit_history_replay_line(drain),
+            qglake_replay_evidence_json(drain, Some("did:example:agent"), &verification),
+        );
+        summary["lakecatReplayVerification"] = json!({
+            "schemaVersion": replay["schema-version"],
+            "status": replay["status"],
+            "matchesQueryGraph": true,
+            "requestIdentityProof": replay["replay-evidence"]["requestIdentity"],
+            "queryGraphBootstrapProof": replay["replay-evidence"]["queryGraphBootstrap"],
+            "governedScanProof": replay["replay-evidence"]["scan"],
+            "tableCommitHistoryProof": replay["replay-evidence"]["tableCommitHistory"],
+            "viewReceiptChainProof": replay["replay-evidence"]["views"],
+            "storageProfileUpsertProof": replay["replay-evidence"]["management"]["storageProfileUpsert"],
+            "credentialVendingProof": replay["replay-evidence"]["credentials"],
+            "replayEvidence": replay["replay-evidence"],
+        });
+        let bytes = serde_json::to_vec_pretty(drain).expect("lineage drain JSON");
+        fs::write(dir.join("lineage-drain.json"), &bytes).expect("write lineage drain");
+        summary["artifacts"]["lineageDrain"]["sha256"] = json!(content_hash_bytes(&bytes));
     }
 
     fn qglake_resync_bundle_hashes(bundle: &mut QueryGraphBootstrap) {
@@ -7889,6 +8170,55 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("tables must include stable-id lakecat:table:local:default:events")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_lineage_drain_artifact_semantics_accept_matching_drain() {
+        let temp = qglake_temp_dir("handoff-lineage-drain-semantics-ok");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let drain = qglake_handoff_lineage_drain();
+        qglake_write_handoff_lineage_drain_artifact(&temp, &mut summary, &drain);
+
+        let semantics =
+            verify_qglake_handoff_lineage_drain_artifact_semantics(&summary_path, &summary)
+                .expect("lineage drain artifact semantics should verify");
+
+        assert_eq!(semantics["delivered"], json!(12));
+        assert_eq!(
+            semantics["verifiedViews"],
+            json!(["lakecat:view:local:default:active_customers_view"])
+        );
+        assert_eq!(
+            semantics["queryGraphImportHash"],
+            json!("sha256:querygraph-import")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_lineage_drain_artifact_semantics_rejects_replay_drift() {
+        let temp = qglake_temp_dir("handoff-lineage-drain-semantics-replay-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drain = qglake_handoff_lineage_drain();
+        qglake_write_handoff_lineage_drain_artifact(&temp, &mut summary, &drain);
+        let bootstrap = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "querygraph.bootstrap")
+            .expect("bootstrap replay event");
+        bootstrap.replay_event_hashes = vec!["sha256:drifted-bootstrap-replay".to_string()];
+        let bytes = serde_json::to_vec_pretty(&drain).expect("drifted lineage drain JSON");
+        fs::write(temp.join("lineage-drain.json"), &bytes).expect("write drifted lineage drain");
+        summary["artifacts"]["lineageDrain"]["sha256"] = json!(content_hash_bytes(&bytes));
+
+        let err = verify_qglake_handoff_lineage_drain_artifact_semantics(&summary_path, &summary)
+            .expect_err("lineage drain artifact semantics should reject replay drift");
+
+        assert!(
+            err.to_string()
+                .contains("captured LakeCat replay output.replay-evidence.queryGraphBootstrap")
         );
     }
 

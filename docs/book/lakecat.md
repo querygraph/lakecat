@@ -1547,8 +1547,14 @@ tampered artifact files before automation consumes them. It parses the saved
 bootstrap bundle and reruns the tenant graph and semantic hash verifier. It
 also parses the saved QueryGraph import plan and requires its embedded
 verification, table/view stable ids, semantic hashes, standards, and graph
-node/edge evidence to match the compact QueryGraph import proof. It also
-recomputes the captured LakeCat replay and QueryGraph verify/import output
+node/edge evidence to match the compact QueryGraph import proof. It also parses
+the saved lineage-drain response, reruns the typed QGLake replay verifier, and
+regenerates the LakeCat replay evidence that proves request identity,
+QueryGraph bootstrap replay, governed scan replay, pointer history, view
+receipt chains, storage-profile replay, and credential-vending decisions. It
+then compares that regenerated replay evidence to the compact
+`lakecatReplayVerification` proof. It also recomputes the captured LakeCat
+replay and QueryGraph verify/import output
 hashes, so terminal captures cannot drift from the compact summary. Then it
 parses those captured JSON files and checks that the replay schema/status,
 table/view counts, semantic hashes, standards, request-identity proof,
