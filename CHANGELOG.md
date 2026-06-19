@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened ODRL restriction parsing so enforceable constraint forms for allowed
+  columns, row predicates, purpose, and credential TTL fail closed when they use
+  missing or unsupported operators, preventing deny-shaped constraints from
+  being interpreted as allowed read restrictions.
 - Consolidated the active OPUS review/design guidance into root `DESIGN.md`,
   archived the original OPUS files under `docs/completed/`, and rewired
   `AGENTS.md`, `GOAL.md`, `ARCHITECTURE.md`, and `STATUS.md` so the OPUS files

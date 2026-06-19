@@ -140,7 +140,9 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
 - TypeSec-backed governance is wired through the service layer, with receipts
   and fail-closed credential behavior.
 - ODRL restrictions are no longer only transported as opaque context; the
-  enforceable subset is moving through restrictions and receipts.
+  enforceable subset is moving through restrictions and receipts, and
+  constraint-form operators now fail closed when they are missing or do not
+  mean "use this value as the allowed/narrowing restriction."
 - Graph and lineage side effects are moving through bounded catalog events and
   replayable outbox evidence. Grust owns reusable graph behavior.
 - QueryGraph bootstrap and QGLake handoff flows now carry table and view
@@ -158,7 +160,7 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
 | Finding | Status | Current meaning |
 | --- | --- | --- |
 | F1 governed reads gate but must narrow | Started | Restrictions now flow through governed planning/fetch proof, but Sail should own more read execution. |
-| F2 ODRL transported but not fully interpreted | Started | Enforceable ODRL subset is becoming restriction input; broader composition stays in TypeSec/QueryGraph. |
+| F2 ODRL transported but not fully interpreted | Started | Enforceable ODRL subset is becoming restriction input; unsupported constraint operators now fail closed; broader composition stays in TypeSec/QueryGraph. |
 | F3 REST commit idempotency | Started | Store support exists; REST-visible behavior needs continued hardening. |
 | F4 metadata write before CAS orphan handling | Started | Commit hardening exists; cleanup and proof paths still matter. |
 | F5 scans bypass in-process provider | Started | Plan/fetch paths are guarded; reusable Sail planner integration remains the target. |

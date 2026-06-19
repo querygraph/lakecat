@@ -136,7 +136,7 @@ impl ReadRestriction {
                 });
             }
             if restriction.purpose.is_none() {
-                restriction.purpose = purpose_from_odrl(odrl);
+                restriction.purpose = purpose_from_odrl(odrl)?;
             }
             if let Some(ttl) = ttl_from_odrl(odrl)? {
                 restriction.max_credential_ttl_seconds =
@@ -227,6 +227,11 @@ fn allowed_columns_from_odrl(odrl: &Value) -> LakeCatResult<Option<Vec<String>>>
             .get("rightOperand")
             .or_else(|| constraint.get("right-operand"))
         {
+            require_constraint_operator(
+                constraint,
+                "allowed columns",
+                &["eq", "isAnyOf", "isAllOf"],
+            )?;
             columns.extend(string_list(value, "ODRL allowed columns")?);
         }
     }
@@ -271,6 +276,7 @@ fn row_predicate_from_odrl(odrl: &Value) -> LakeCatResult<Option<Value>> {
             .get("rightOperand")
             .or_else(|| constraint.get("right-operand"))
         {
+            require_constraint_operator(constraint, "row predicate", &["eq"])?;
             let next = row_predicate_value(value)?;
             predicate = Some(match predicate {
                 Some(existing) => and_row_predicates(existing, next),
@@ -298,27 +304,32 @@ fn and_row_predicates(left: Value, right: Value) -> Value {
     })
 }
 
-fn purpose_from_odrl(odrl: &Value) -> Option<String> {
-    odrl.get("purpose")
-        .and_then(Value::as_str)
-        .map(ToString::to_string)
-        .or_else(|| {
-            odrl_constraints(odrl).into_iter().find_map(|constraint| {
-                let left = constraint
-                    .get("leftOperand")
-                    .or_else(|| constraint.get("left-operand"))
-                    .and_then(Value::as_str)?;
-                if left == "purpose" {
-                    constraint
-                        .get("rightOperand")
-                        .or_else(|| constraint.get("right-operand"))
-                        .and_then(Value::as_str)
-                        .map(ToString::to_string)
-                } else {
-                    None
-                }
-            })
-        })
+fn purpose_from_odrl(odrl: &Value) -> LakeCatResult<Option<String>> {
+    if let Some(purpose) = odrl.get("purpose").and_then(Value::as_str) {
+        return Ok(Some(purpose.to_string()));
+    }
+
+    for constraint in odrl_constraints(odrl) {
+        let left = constraint
+            .get("leftOperand")
+            .or_else(|| constraint.get("left-operand"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if left == "purpose" {
+            require_constraint_operator(constraint, "purpose", &["eq"])?;
+            return constraint
+                .get("rightOperand")
+                .or_else(|| constraint.get("right-operand"))
+                .and_then(Value::as_str)
+                .map(|purpose| Some(purpose.to_string()))
+                .ok_or_else(|| {
+                    LakeCatError::InvalidArgument(
+                        "ODRL purpose constraint must use a string right operand".to_string(),
+                    )
+                });
+        }
+    }
+    Ok(None)
 }
 
 fn ttl_from_odrl(odrl: &Value) -> LakeCatResult<Option<u64>> {
@@ -357,10 +368,41 @@ fn ttl_from_odrl(odrl: &Value) -> LakeCatResult<Option<u64>> {
             .get("rightOperand")
             .or_else(|| constraint.get("right-operand"))
         {
+            require_constraint_operator(constraint, "max credential TTL", &["eq", "lteq", "lt"])?;
             return ttl_value(value);
         }
     }
     Ok(None)
+}
+
+fn require_constraint_operator(
+    constraint: &Value,
+    label: &str,
+    allowed: &[&str],
+) -> LakeCatResult<()> {
+    let Some(operator) = constraint_operator(constraint) else {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "ODRL {label} constraint must include an operator"
+        )));
+    };
+    let normalized = operator
+        .strip_prefix("odrl:")
+        .or_else(|| operator.strip_prefix("http://www.w3.org/ns/odrl/2/"))
+        .unwrap_or(operator);
+    if allowed.iter().any(|allowed| allowed == &normalized) {
+        Ok(())
+    } else {
+        Err(LakeCatError::InvalidArgument(format!(
+            "ODRL {label} constraint uses unsupported operator {operator}"
+        )))
+    }
+}
+
+fn constraint_operator(constraint: &Value) -> Option<&str> {
+    constraint
+        .get("operator")
+        .or_else(|| constraint.get("odrl:operator"))
+        .and_then(Value::as_str)
 }
 
 fn ttl_value(value: &Value) -> LakeCatResult<Option<u64>> {
@@ -889,6 +931,69 @@ mod tests {
         let restriction = ReadRestriction::from_odrl_policies([&policy_a, &policy_b]).unwrap();
 
         assert_eq!(restriction.max_credential_ttl_seconds, Some(300));
+    }
+
+    #[test]
+    fn read_restriction_rejects_unsupported_odrl_constraint_operators() {
+        let policy = serde_json::json!({
+            "permission": [{
+                "constraint": {
+                    "leftOperand": "allowed-columns",
+                    "operator": "neq",
+                    "rightOperand": ["secret_payload"]
+                }
+            }]
+        });
+
+        let err = ReadRestriction::from_odrl_policies([&policy]).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("ODRL allowed columns constraint uses unsupported operator")
+        );
+    }
+
+    #[test]
+    fn read_restriction_rejects_missing_odrl_constraint_operator() {
+        let policy = serde_json::json!({
+            "permission": [{
+                "constraint": {
+                    "leftOperand": "row-predicate",
+                    "rightOperand": {
+                        "type": "equal",
+                        "term": "region",
+                        "value": "west"
+                    }
+                }
+            }]
+        });
+
+        let err = ReadRestriction::from_odrl_policies([&policy]).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("ODRL row predicate constraint must include an operator")
+        );
+    }
+
+    #[test]
+    fn read_restriction_rejects_non_equality_purpose_constraint() {
+        let policy = serde_json::json!({
+            "permission": [{
+                "constraint": {
+                    "leftOperand": "purpose",
+                    "operator": "neq",
+                    "rightOperand": "resilience-demo"
+                }
+            }]
+        });
+
+        let err = ReadRestriction::from_odrl_policies([&policy]).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("ODRL purpose constraint uses unsupported operator")
+        );
     }
 
     #[test]

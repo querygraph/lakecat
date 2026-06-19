@@ -5,6 +5,14 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Fail closed on unsupported ODRL restriction operators`.
+  `lakecat-security` now rejects enforceable ODRL constraint forms for allowed
+  columns, row predicates, purpose, and credential TTL when the constraint uses
+  a missing or unsupported operator. This keeps F2 moving in the right
+  direction: direct LakeCat read-restriction objects still work, while ODRL
+  constraints must use allow/narrowing operators before LakeCat turns them into
+  governed read restrictions.
 - Latest completed documentation slice:
   `Consolidate OPUS design docs`.
   The OPUS review/design files are archived under `docs/completed/`, and the

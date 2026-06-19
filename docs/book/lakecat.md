@@ -470,6 +470,10 @@ principal may read only certain columns, only for a purpose, or only with an
 enforced row predicate. LakeCat parses the minimal enforceable subset it needs
 to narrow the plan, but policy composition and authorization semantics belong to
 TypeSec. LakeCat should ask TypeSec, not grow a parallel security language.
+When that subset is expressed through ODRL constraints, LakeCat accepts only
+operators that actually mean "use this as the allowed or narrowing value";
+missing or deny-shaped operators fail closed instead of being treated as
+governed read permission.
 
 Credential vending follows the same rule. Raw credential vending is an audited
 exception. Governed Sail-planned reads are the default path for agents and
