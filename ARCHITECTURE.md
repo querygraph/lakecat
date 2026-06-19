@@ -569,7 +569,10 @@ not match that scope, so automation cannot accidentally attach a verified bundle
 to the wrong catalog tenant. The same compact verifier requires QueryGraph's
 captured `verified-tables` set to contain the stable LakeCat table id derived
 from that scope, binding the accepted artifact set to the declared
-warehouse/namespace/table.
+warehouse/namespace/table. Accepted views are bound the same way: every stable
+LakeCat view id in the replayed `viewReceiptChainProof.views` array must appear
+in QueryGraph's captured `verified-views`, so a bundle cannot swap in a different
+view while preserving the table scope.
 
 ## Lakekeeper Lessons To Adopt
 

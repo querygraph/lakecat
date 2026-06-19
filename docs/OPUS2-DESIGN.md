@@ -304,7 +304,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   captured QueryGraph verify/import outputs must carry the same warehouse so the
   verified artifact set cannot be rebound to the wrong catalog tenant; those
   captured QueryGraph outputs must also list the stable LakeCat table id derived
-  from the summary's warehouse/namespace/table in `verified-tables`; the
+  from the summary's warehouse/namespace/table in `verified-tables` and every
+  accepted LakeCat view stable id from `viewReceiptChainProof.views` in
+  `verified-views`; the
   captured LakeCat replay `replay-evidence.management.storageProfileUpsert`
   object must now
   also match the compact `storageProfileUpsertProof` fields for profile id,

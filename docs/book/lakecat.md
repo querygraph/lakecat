@@ -1246,8 +1246,12 @@ table scope to be present before accepting the summary, and it rejects captured
 QueryGraph verify/import output whose warehouse no longer matches the summary.
 It also requires QueryGraph's captured `verified-tables` list to include the
 stable LakeCat table id derived from that scope, such as
-`lakecat:table:local:default:events`. That keeps a verified artifact set from
-being replayed against the wrong catalog tenant or table. It also records
+`lakecat:table:local:default:events`. The same handoff check requires
+QueryGraph's captured `verified-views` list to include every accepted stable
+view id from LakeCat replay, such as
+`lakecat:view:local:default:active_customers_view`. That keeps a verified
+artifact set from being replayed against the wrong catalog tenant, table, or
+view. It also records
 structured request-identity, scan, management,
 credential, table-commit, and view replay evidence, plus compact
 `requestIdentityProof`, `queryGraphBootstrapProof`, `governedScanProof`,

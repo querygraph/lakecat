@@ -526,16 +526,20 @@ fn verify_qglake_handoff_captured_output_semantics(
     })?;
 
     verify_lakecat_replay_capture_matches_summary(lakecat_replay, lakecat, querygraph)?;
+    let table_scope = HandoffTableScope::from_summary(summary, warehouse)?;
+    let view_scope = HandoffViewScope::from_lakecat(lakecat)?;
     verify_querygraph_capture_matches_summary(
         querygraph_verify,
         querygraph,
-        &HandoffTableScope::from_summary(summary, warehouse)?,
+        &table_scope,
+        &view_scope,
         "captured QueryGraph verify output",
     )?;
     verify_querygraph_capture_matches_summary(
         querygraph_import,
         querygraph,
-        &HandoffTableScope::from_summary(summary, warehouse)?,
+        &table_scope,
+        &view_scope,
         "captured QueryGraph import output",
     )?;
     let request_identity = Value::Object(lakecat_replay_request_identity(lakecat_replay)?.clone());
@@ -1005,11 +1009,13 @@ fn lakecat_replay_evidence(
 fn verify_querygraph_capture_matches_summary(
     capture: &serde_json::Map<String, Value>,
     querygraph: &serde_json::Map<String, Value>,
-    scope: &HandoffTableScope,
+    table_scope: &HandoffTableScope,
+    view_scope: &HandoffViewScope,
     label: &str,
 ) -> lakecat_core::LakeCatResult<()> {
-    require_string_match(capture, "warehouse", scope.warehouse.as_str(), label)?;
-    require_verified_table_scope(capture, scope, label)?;
+    require_string_match(capture, "warehouse", table_scope.warehouse.as_str(), label)?;
+    require_verified_table_scope(capture, table_scope, label)?;
+    require_verified_view_scope(capture, view_scope, label)?;
     require_handoff_summary_fields_match_capture(capture, querygraph, label)
 }
 
@@ -1069,6 +1075,7 @@ fn querygraph_capture_semantics_json(
     Ok(json!({
         "warehouse": required_str(capture, "warehouse", label)?,
         "verifiedTables": required_value(capture, "verified-tables", label)?,
+        "verifiedViews": required_value(capture, "verified-views", label)?,
         "tableCount": required_u64(capture, "table-count", label)?,
         "viewCount": required_u64(capture, "view-count", label)?,
         "bundleHash": required_str(capture, "bundle-hash", label)?,
@@ -1105,6 +1112,34 @@ impl HandoffTableScope {
     }
 }
 
+struct HandoffViewScope {
+    stable_view_ids: Vec<String>,
+}
+
+impl HandoffViewScope {
+    fn from_lakecat(lakecat: &serde_json::Map<String, Value>) -> lakecat_core::LakeCatResult<Self> {
+        let views = required_object(
+            lakecat,
+            "viewReceiptChainProof",
+            "lakecatReplayVerification",
+        )?;
+        let mut stable_view_ids = Vec::new();
+        for (index, view) in required_array(views, "views", "viewReceiptChainProof")?
+            .iter()
+            .enumerate()
+        {
+            let view = view.as_object().ok_or_else(|| {
+                lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "viewReceiptChainProof.views[{index}] must be an object"
+                ))
+            })?;
+            stable_view_ids
+                .push(required_str(view, "stableId", "viewReceiptChainProof.views[]")?.to_string());
+        }
+        Ok(Self { stable_view_ids })
+    }
+}
+
 fn require_verified_table_scope(
     capture: &serde_json::Map<String, Value>,
     scope: &HandoffTableScope,
@@ -1119,6 +1154,25 @@ fn require_verified_table_scope(
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "{label}.verified-tables must include {expected_table}"
         )));
+    }
+    Ok(())
+}
+
+fn require_verified_view_scope(
+    capture: &serde_json::Map<String, Value>,
+    scope: &HandoffViewScope,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let views = required_array(capture, "verified-views", label)?;
+    for expected_view in &scope.stable_view_ids {
+        if !views
+            .iter()
+            .any(|view| view.as_str() == Some(expected_view.as_str()))
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label}.verified-views must include {expected_view}"
+            )));
+        }
     }
     Ok(())
 }
@@ -6891,6 +6945,10 @@ mod tests {
             json!(["lakecat:table:local:default:events"])
         );
         assert_eq!(
+            semantics["querygraphVerify"]["verifiedViews"],
+            json!(["lakecat:view:local:default:active_customers_view"])
+        );
+        assert_eq!(
             semantics["querygraphImport"]["queryGraphImportHash"],
             json!("sha256:querygraph-import")
         );
@@ -6970,6 +7028,9 @@ mod tests {
             "verified-tables": [
                 "lakecat:table:local:default:events"
             ],
+            "verified-views": [
+                "lakecat:view:local:default:active_customers_view"
+            ],
             "bundle-hash": "sha256:other-bundle",
             "graph-hash": "sha256:graph",
             "open-lineage-hash": "sha256:openlineage",
@@ -7045,6 +7106,33 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("lakecat:table:local:default:events")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_querygraph_view_scope_drift() {
+        let temp = qglake_temp_dir("handoff-captured-view-scope-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("querygraph-verify.json")).expect("read QueryGraph verify");
+        drifted["verified-views"] = json!(["lakecat:view:local:default:other_view"]);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("querygraph-verify.json"), &drifted_bytes)
+            .expect("write drifted QueryGraph verify output");
+        summary["artifacts"]["capturedOutputs"]["querygraphVerify"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured QueryGraph view-scope drift should be rejected");
+
+        assert!(
+            err.to_string()
+                .contains("captured QueryGraph verify output.verified-views")
+        );
+        assert!(
+            err.to_string()
+                .contains("lakecat:view:local:default:active_customers_view")
         );
     }
 

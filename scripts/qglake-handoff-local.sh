@@ -685,6 +685,32 @@ if (!Array.isArray(tables) || !tables.includes(expectedTable)) {
 ' "$source_file" "$expected_table"
 }
 
+require_verified_view_scope() {
+  local source_file="$1"
+  local view_receipt_chain_evidence="$2"
+  node -e '
+const fs = require("fs");
+const [file, evidenceJson] = process.argv.slice(1);
+const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+const evidence = JSON.parse(evidenceJson);
+const verifiedViews = parsed["verified-views"];
+if (!Array.isArray(verifiedViews)) {
+  console.error("Handoff summary mismatch for verified-views: missing verified-views array");
+  process.exit(1);
+}
+for (const [index, view] of (evidence.views || []).entries()) {
+  if (!view || typeof view !== "object" || !view.stableId) {
+    console.error(`Handoff summary mismatch for verified-views: view evidence ${index} is missing stableId`);
+    process.exit(1);
+  }
+  if (!verifiedViews.includes(view.stableId)) {
+    console.error(`Handoff summary mismatch for verified-views: expected ${view.stableId}`);
+    process.exit(1);
+  }
+}
+' "$source_file" "$view_receipt_chain_evidence"
+}
+
 write_summary() {
   local bundle_sha drain_sha import_plan_sha lakecat_replay_sha querygraph_verify_sha querygraph_import_sha
   local verified_tables verified_views verified_warehouse bundle_hash graph_hash open_lineage_hash querygraph_import_hash
@@ -773,6 +799,8 @@ write_summary() {
   expected_verified_table="lakecat:table:$WAREHOUSE:$NAMESPACE:$TABLE"
   require_verified_table_scope "$QUERYGRAPH_VERIFY_OUTPUT" "$expected_verified_table"
   require_verified_table_scope "$QUERYGRAPH_IMPORT_OUTPUT" "$expected_verified_table"
+  require_verified_view_scope "$QUERYGRAPH_VERIFY_OUTPUT" "$lakecat_view_receipt_chain_evidence"
+  require_verified_view_scope "$QUERYGRAPH_IMPORT_OUTPUT" "$lakecat_view_receipt_chain_evidence"
   require_field_match "bundle-hash" "$imported_bundle_hash" "$bundle_hash"
   require_field_match "graph-hash" "$imported_graph_hash" "$graph_hash"
   require_field_match "open-lineage-hash" "$imported_open_lineage_hash" "$open_lineage_hash"

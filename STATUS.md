@@ -6,6 +6,28 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake handoff view scope`.
+  `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness now
+  require QueryGraph verify/import captures to list every accepted LakeCat view
+  stable id from `viewReceiptChainProof.views` in `verified-views`. This keeps
+  a compact handoff from preserving the declared table scope while swapping or
+  dropping the governed view evidence that LakeCat replay accepted.
+- Local verification for this QGLake handoff view-scope slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 outbox events, verified LakeCat replay, ran QueryGraph `lakecat-verify`
+  and `lakecat-import`, then verified `handoff-summary.json` with QueryGraph
+  verify/import `verified-views` containing
+  `lakecat:view:local:default:active_customers_view`);
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`;
+  `cargo test --workspace`.
+- Latest completed implementation slice:
   `Bind QGLake handoff table scope`.
   `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness now
   require QueryGraph verify/import captures to list the stable table id derived
