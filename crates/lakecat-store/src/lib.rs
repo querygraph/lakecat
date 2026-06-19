@@ -66,6 +66,14 @@ pub trait CatalogStore: Send + Sync + 'static {
         ident: &TableIdent,
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord>;
+    async fn replay_table_commit(
+        &self,
+        _ident: &TableIdent,
+        _idempotency_key: &str,
+        _idempotency_request_hash: &str,
+    ) -> LakeCatResult<Option<TableRecord>> {
+        Ok(None)
+    }
     async fn table_commit_records(
         &self,
         ident: &TableIdent,
@@ -1247,6 +1255,26 @@ impl CatalogStore for MemoryCatalogStore {
             );
         }
         Ok(table)
+    }
+
+    async fn replay_table_commit(
+        &self,
+        ident: &TableIdent,
+        idempotency_key: &str,
+        idempotency_request_hash: &str,
+    ) -> LakeCatResult<Option<TableRecord>> {
+        let state = self.state.read().await;
+        let idem_key = format!("{}:{idempotency_key}", ident.stable_id());
+        let Some(replay) = state.idempotency.get(&idem_key) else {
+            return Ok(None);
+        };
+        if replay.request_hash != idempotency_request_hash {
+            return Err(LakeCatError::Conflict(format!(
+                "idempotency key reused with different commit request for {}",
+                ident.stable_id()
+            )));
+        }
+        Ok(Some(replay.response.clone()))
     }
 
     async fn table_commit_records(
@@ -2846,6 +2874,33 @@ pub mod turso_store {
 
             tx.commit().await.map_err(turso_error)?;
             Ok(table)
+        }
+
+        async fn replay_table_commit(
+            &self,
+            ident: &TableIdent,
+            idempotency_key: &str,
+            idempotency_request_hash: &str,
+        ) -> LakeCatResult<Option<TableRecord>> {
+            let conn = self.connect()?;
+            let mut rows = conn
+                .query(
+                    "select request_hash, response_json from idempotency_records where idem_key = ?1",
+                    (idempotency_record_key(ident, idempotency_key),),
+                )
+                .await
+                .map_err(turso_error)?;
+            let Some(row) = rows.next().await.map_err(turso_error)? else {
+                return Ok(None);
+            };
+            let replay_hash = row_string(&row, 0)?;
+            if replay_hash != idempotency_request_hash {
+                return Err(LakeCatError::Conflict(format!(
+                    "idempotency key reused with different commit request for {}",
+                    ident.stable_id()
+                )));
+            }
+            Ok(Some(decode_json(row_string(&row, 1)?)?))
         }
 
         async fn soft_delete_table(
@@ -4521,6 +4576,21 @@ pub mod turso_store {
             let commit_records = store.table_commit_records(&ident, 1, None).await.unwrap();
             assert_eq!(commit_records.len(), 1);
             assert_eq!(commit_records[0].sequence_number, 1);
+            let replayed_probe = store
+                .replay_table_commit(&ident, "commit-1", &commit_records[0].request_hash)
+                .await
+                .unwrap()
+                .expect("idempotency replay should be available before commit planning");
+            assert_eq!(replayed_probe.version, 1);
+            let replay_mismatch = store
+                .replay_table_commit(&ident, "commit-1", "sha256:different-request")
+                .await
+                .unwrap_err();
+            assert!(
+                replay_mismatch
+                    .to_string()
+                    .contains("idempotency key reused with different commit request")
+            );
             assert_eq!(
                 commit_records[0].idempotency_key_sha256.as_deref(),
                 Some(content_hash_bytes("commit-1".as_bytes()).as_str())

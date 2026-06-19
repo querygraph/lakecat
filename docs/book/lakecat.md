@@ -293,17 +293,20 @@ Sail owns reusable Iceberg validation and metadata preparation.
 1. A client sends an Iceberg commit request, optionally with an idempotency key.
 2. LakeCat validates the request shape and the idempotency key.
 3. LakeCat resolves identity and asks TypeSec for the commit capability.
-4. LakeCat loads the current metadata pointer from the store.
-5. LakeCat delegates Iceberg update validation and metadata assembly to Sail.
-6. LakeCat writes the new metadata object through the warehouse storage profile.
-7. LakeCat advances the table pointer with compare-and-swap.
-8. LakeCat persists idempotency, audit, pointer-log, and outbox records.
-9. If the store rejects the commit after a local metadata write, LakeCat cleans
+4. If the idempotency key already has an exact stored response, LakeCat returns
+   that response before Sail validation or metadata-object writes.
+5. LakeCat loads the current metadata pointer from the store.
+6. LakeCat delegates Iceberg update validation and metadata assembly to Sail.
+7. LakeCat writes the new metadata object through the warehouse storage profile.
+8. LakeCat advances the table pointer with compare-and-swap.
+9. LakeCat persists idempotency, audit, pointer-log, and outbox records.
+10. If the store rejects the commit after a local metadata write, LakeCat cleans
    up the uncommitted metadata object when it can do so safely.
-10. Outbox draining projects the committed event to graph and lineage sinks.
+11. Outbox draining projects the committed event to graph and lineage sinks.
 
 Idempotency is part of correctness. Reusing the same key for the same commit can
-return the stored response. Reusing the same key for a different body must
+return the stored response even after the table has advanced beyond the
+original commit requirements. Reusing the same key for a different body must
 conflict. LakeCat persists a normalized request hash and stores only audit-safe
 evidence, not raw secrets or raw idempotency keys.
 

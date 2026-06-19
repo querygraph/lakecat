@@ -2575,8 +2575,6 @@ async fn commit_table_in_warehouse(
     let identity = request_identity(&headers)?;
     let ident = table_ident(warehouse.as_str(), namespace, table)?;
     let capability = authorize_table_commit(&state, identity, ident).await?;
-    let current = state.store.load_table(capability.table()).await?;
-    let current_metadata_location = current.metadata_location.clone();
     let idempotency_request_hash = idempotency_key
         .as_ref()
         .map(|_| {
@@ -2588,6 +2586,24 @@ async fn commit_table_in_warehouse(
             }))
         })
         .transpose()?;
+    if let (Some(idempotency_key), Some(idempotency_request_hash)) =
+        (&idempotency_key, &idempotency_request_hash)
+        && let Some(table) = state
+            .store
+            .replay_table_commit(
+                capability.table(),
+                idempotency_key,
+                idempotency_request_hash,
+            )
+            .await?
+    {
+        return Ok(Json(CommitTableResponse {
+            metadata_location: table.metadata_location,
+            metadata: table.metadata,
+        }));
+    }
+    let current = state.store.load_table(capability.table()).await?;
+    let current_metadata_location = current.metadata_location.clone();
     let commit_plan = state
         .sail
         .prepare_commit(CommitPreparationRequest {
@@ -7792,6 +7808,174 @@ mod tests {
             Some(content_hash_bytes("commit:events:0001".as_bytes()).as_str())
         );
         assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
+    }
+
+    #[cfg(feature = "sail-local")]
+    #[tokio::test]
+    async fn idempotent_commit_replay_skips_stale_sail_revalidation() {
+        let store = MemoryCatalogStore::new();
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            store.clone(),
+        ));
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lakecat-idempotent-replay-{unique}"));
+        let table_dir = root.join("events");
+        let metadata_dir = table_dir.join("metadata");
+        std::fs::create_dir_all(&metadata_dir).unwrap();
+        let table_location = url::Url::from_directory_path(&table_dir)
+            .expect("table dir URL")
+            .to_string();
+        let initial_metadata_location = url::Url::from_file_path(metadata_dir.join("00000.json"))
+            .unwrap()
+            .to_string();
+        let committed_metadata_location = url::Url::from_file_path(metadata_dir.join("00001.json"))
+            .unwrap()
+            .to_string();
+        let base_metadata = serde_json::json!({
+            "format-version": 3,
+            "table-uuid": "11111111-1111-1111-1111-111111111111",
+            "location": table_location,
+            "last-sequence-number": 7,
+            "last-updated-ms": 1710000000000_i64,
+            "last-column-id": 1,
+            "schemas": [{
+                "type": "struct",
+                "schema-id": 1,
+                "fields": [{
+                    "id": 1,
+                    "name": "id",
+                    "type": "string",
+                    "required": true
+                }]
+            }],
+            "current-schema-id": 1,
+            "partition-specs": [{"spec-id": 0, "fields": []}],
+            "default-spec-id": 0,
+            "current-snapshot-id": 42,
+            "snapshots": [{
+                "snapshot-id": 42,
+                "sequence-number": 7,
+                "timestamp-ms": 1710000000000_i64,
+                "summary": {"operation": "append"},
+                "schema-id": 1
+            }],
+            "snapshot-log": [{"timestamp-ms": 1710000000000_i64, "snapshot-id": 42}]
+        });
+        let advanced_metadata = serde_json::json!({
+            "format-version": 3,
+            "table-uuid": "11111111-1111-1111-1111-111111111111",
+            "location": table_location,
+            "last-sequence-number": 8,
+            "last-updated-ms": 1710000000100_i64,
+            "last-column-id": 2,
+            "schemas": [
+                {
+                    "type": "struct",
+                    "schema-id": 1,
+                    "fields": [{
+                        "id": 1,
+                        "name": "id",
+                        "type": "string",
+                        "required": true
+                    }]
+                },
+                {
+                    "type": "struct",
+                    "schema-id": 2,
+                    "fields": [
+                        {
+                            "id": 1,
+                            "name": "id",
+                            "type": "string",
+                            "required": true
+                        },
+                        {
+                            "id": 2,
+                            "name": "payload",
+                            "type": "string",
+                            "required": false
+                        }
+                    ]
+                }
+            ],
+            "current-schema-id": 2,
+            "partition-specs": [{"spec-id": 0, "fields": []}],
+            "default-spec-id": 0,
+            "current-snapshot-id": 43,
+            "snapshots": [{
+                "snapshot-id": 43,
+                "sequence-number": 8,
+                "timestamp-ms": 1710000000100_i64,
+                "summary": {"operation": "append"},
+                "schema-id": 2
+            }],
+            "snapshot-log": [{"timestamp-ms": 1710000000100_i64, "snapshot-id": 43}]
+        });
+
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "name": "events",
+                    "location": table_location,
+                    "metadata-location": initial_metadata_location,
+                    "metadata": base_metadata,
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let commit_body = serde_json::json!({
+            "requirements": [{
+                "type": "assert-current-schema-id",
+                "current-schema-id": 1
+            }],
+            "updates": [],
+            "metadata-location": committed_metadata_location,
+            "metadata": advanced_metadata,
+        })
+        .to_string();
+        for attempt in 0..2 {
+            let commit = Request::builder()
+                .method(Method::POST)
+                .uri("/catalog/v1/namespaces/default/tables/events/commit")
+                .header("content-type", "application/json")
+                .header("x-lakecat-idempotency-key", "commit:events:schema-2")
+                .body(Body::from(commit_body.clone()))
+                .unwrap();
+            let response = app.clone().oneshot(commit).await.unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "idempotent commit attempt {attempt} should replay before Sail validation"
+            );
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(
+                payload["metadata-location"],
+                serde_json::json!(committed_metadata_location)
+            );
+            assert_eq!(
+                payload["metadata"]["current-schema-id"],
+                serde_json::json!(2)
+            );
+        }
+
+        let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+        let records = store.table_commit_records(&ident, 0, None).await.unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[cfg(feature = "sail-local")]

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a pre-Sail commit idempotency replay probe on the `CatalogStore` seam so
+  exact REST commit retries return the stored response before Sail validation or
+  metadata-object writes, with direct Turso coverage and a stale-requirement
+  replay regression test.
 - Added focused `lakecat-sail` v4 fetch-token fixtures proving that the JSON
   bridge accepts signed manifest-list plan tasks during `fetchScanTasks` while
   rejecting drifted manifest-list metadata without claiming typed v4 support.

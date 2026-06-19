@@ -6,6 +6,26 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Replay commit idempotency before Sail`. `CatalogStore` now exposes a
+  side-effect-free table-commit replay probe, implemented for memory and Turso
+  stores, so exact REST commit retries return the stored response before Sail
+  commit validation, current-pointer loading, or metadata-object writes. The
+  service regression proves a retry with an originally valid but now-stale
+  commit requirement still replays safely after the table has advanced.
+- Local verification for the commit idempotency replay slice was green:
+  `cargo fmt -p lakecat-store -p lakecat-service`;
+  `cargo test -p lakecat-store turso_store_round_trips_namespaces_tables_and_idempotent_commits --features turso-local`;
+  `cargo test -p lakecat-service --features sail-local idempotent_commit_replay_skips_stale_sail_revalidation`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-store -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Verify v4 extension plan tokens`. `lakecat-sail` now proves that a signed
   format-version 4 JSON-bridge manifest-list plan token can be revalidated
   during `fetchScanTasks` with required projection/filter context, while
