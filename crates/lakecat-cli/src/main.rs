@@ -315,6 +315,7 @@ fn qglake_verify_replay(
     let replay_evidence = qglake_replay_evidence_json(&drain, principal.as_deref());
     if json_output {
         print_json(&json!({
+            "schema-version": "lakecat.qglake.replay-verification.v1",
             "status": "verified",
             "bundle-hash": verification.bundle_hash,
             "graph-hash": verification.graph_hash,

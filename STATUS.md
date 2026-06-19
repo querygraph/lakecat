@@ -6,6 +6,31 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Version QGLake handoff contracts`. `lakecat-cli qglake-verify-replay
+  --json` now emits `schema-version:
+  lakecat.qglake.replay-verification.v1`, and
+  `scripts/qglake-handoff-local.sh` requires that replay schema before writing
+  `handoff-summary.json` with `schemaVersion:
+  lakecat.qglake.handoff-summary.v1`. The summary also records the replay
+  schema under `lakecatReplayVerification.schemaVersion`.
+- Local verification for the QGLake handoff contract-version slice was green:
+  `cargo fmt -p lakecat-cli`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli`;
+  `scripts/qglake-handoff-local.sh` with local socket binding allowed;
+  `node -e` JSON parse/assertion check for
+  `target/qglake-handoff/handoff-summary.json`. The live handoff generated one
+  table and one view, drained 26 outbox events, verified LakeCat replay through
+  schema-versioned JSON output, ran QueryGraph `lakecat-verify` and
+  `lakecat-import`, and wrote both the handoff summary schema and replay
+  verification schema into the summary;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Structure QGLake replay evidence`. `lakecat-cli qglake-verify-replay --json`
   now emits structured scan, management, credential, and table-commit replay
   evidence in addition to the human-readable replay lines. The local handoff

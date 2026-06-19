@@ -72,9 +72,11 @@ it starts LakeCat on `127.0.0.1:18181`, generates paired QGLake bootstrap and
 lineage-drain artifacts, verifies saved replay with LakeCat, then runs
 QueryGraph's `lakecat-verify` and `lakecat-import` over the same bundle while
 writing all generated artifacts under `target/qglake-handoff/`. It also writes
-`target/qglake-handoff/handoff-summary.json`, which records the verified
-LakeCat replay status, QueryGraph table/view counts, semantic hashes, and
-standards after LakeCat replay, `lakecat-verify`, and `lakecat-import` agree,
-structured scan/management/credential/commit replay evidence, artifact paths,
-raw file hashes, captured LakeCat replay output, QueryGraph verify output,
-QueryGraph import output, and service log path for automation.
+`target/qglake-handoff/handoff-summary.json`, a
+`lakecat.qglake.handoff-summary.v1` contract which records the verified
+LakeCat replay status from `lakecat.qglake.replay-verification.v1`,
+QueryGraph table/view counts, semantic hashes, and standards after LakeCat
+replay, `lakecat-verify`, and `lakecat-import` agree, structured
+scan/management/credential/commit replay evidence, artifact paths, raw file
+hashes, captured LakeCat replay output, QueryGraph verify output, QueryGraph
+import output, and service log path for automation.

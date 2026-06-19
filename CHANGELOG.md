@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added explicit schema-version fields for QGLake replay verification JSON and
+  the local handoff summary, and made the handoff harness require the replay
+  schema before accepting artifacts.
 - Added structured scan, management, credential, and table-commit replay
   evidence to `lakecat-cli qglake-verify-replay --json` and embedded that
   object in the local handoff summary.
