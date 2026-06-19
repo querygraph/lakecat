@@ -1299,6 +1299,7 @@ fn lineage_drain_event_summary(
             .get("child-plan-task-count")
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok()),
+        read_restriction: payload.get("read-restriction").cloned(),
         management_scope_project_id: payload
             .get("project-id")
             .and_then(Value::as_str)
@@ -5899,7 +5900,13 @@ mod tests {
                                 "checked_at": chrono::Utc::now(),
                             },
                             "read-restriction": {
-                                "allowed-columns": ["event_id"]
+                                "allowed-columns": ["event_id"],
+                                "row-predicate": {
+                                    "type": "not-eq",
+                                    "term": "severity",
+                                    "value": "debug"
+                                },
+                                "policy-hashes": ["sha256:policy"]
                             },
                             "storage-location": "file:///tmp/events",
                             "metadata-location": "file:///tmp/events/metadata/00000.json",
@@ -6130,6 +6137,18 @@ mod tests {
         assert_eq!(scan_fetch_summary.delete_file_count, Some(1));
         assert_eq!(scan_fetch_summary.child_plan_task_count, Some(1));
         assert_eq!(scan_fetch_summary.scan_task_count, None);
+        assert_eq!(
+            scan_fetch_summary.read_restriction.as_ref().unwrap()["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            scan_fetch_summary.read_restriction.as_ref().unwrap()["row-predicate"],
+            serde_json::json!({
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            })
+        );
         let bootstrap_summary = drain
             .events
             .iter()

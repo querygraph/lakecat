@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Mirrored the active `AGENTS.md` contract directly into `GOAL.md`, including
+  the repo boundaries, compatibility rules, Turso preference, local verification
+  gates, and commit discipline.
+- Lifted governed scan read-restriction evidence into QGLake replay and
+  `governedScanProof`, and made the handoff verifier reject missing or drifted
+  plan/fetch restriction proof.
 - Made `lakecat-cli qglake-verify-handoff` independently reject compact
   `viewReceiptChainProof` tombstone receipts whose `expectedViewVersion` is
   missing or does not match the accepted view version.

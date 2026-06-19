@@ -410,11 +410,34 @@ requireHashArray(evidence.plannedReplayEventHashes, "plannedReplayEventHashes");
 requireHashArray(evidence.fetchedReplayEventHashes, "fetchedReplayEventHashes");
 requireHashArray(evidence.plannedOpenLineageHashes, "plannedOpenLineageHashes");
 requireHashArray(evidence.fetchedOpenLineageHashes, "fetchedOpenLineageHashes");
+function requireRestriction(value, label) {
+  if (!value || typeof value !== "object") {
+    console.error(`LakeCat scan replay evidence is missing ${label}`);
+    process.exit(1);
+  }
+  if (!Array.isArray(value["allowed-columns"]) || value["allowed-columns"].length === 0) {
+    console.error(`LakeCat scan replay evidence ${label} is missing allowed-columns`);
+    process.exit(1);
+  }
+  if (!value["row-predicate"] || typeof value["row-predicate"] !== "object") {
+    console.error(`LakeCat scan replay evidence ${label} is missing row-predicate`);
+    process.exit(1);
+  }
+  requireHashArray(value["policy-hashes"], `${label} policy-hashes`);
+}
+requireRestriction(evidence.plannedReadRestriction, "plannedReadRestriction");
+requireRestriction(evidence.fetchedReadRestriction, "fetchedReadRestriction");
+if (JSON.stringify(evidence.plannedReadRestriction) !== JSON.stringify(evidence.fetchedReadRestriction)) {
+  console.error("LakeCat scan replay evidence planned/fetched read restrictions do not match");
+  process.exit(1);
+}
 process.stdout.write(JSON.stringify({
   planTaskCount: evidence.planTaskCount,
   fileTaskCount: evidence.fileTaskCount,
   deleteFileCount: evidence.deleteFileCount,
   childPlanTaskCount: evidence.childPlanTaskCount,
+  plannedReadRestriction: evidence.plannedReadRestriction,
+  fetchedReadRestriction: evidence.fetchedReadRestriction,
   plannedReplayEventHashes: evidence.plannedReplayEventHashes,
   fetchedReplayEventHashes: evidence.fetchedReplayEventHashes,
   plannedOpenLineageHashes: evidence.plannedOpenLineageHashes,

@@ -311,8 +311,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   handoff proofs for principal, authorization, TypeDID slots, delegation,
   summary-signature, bootstrap hashes, artifact counts, standards, and replay
   hashes; captured `replay-evidence.scan` must match `governedScanProof` for
-  plan/file/delete/child task counts plus planned/fetched replay and
-  OpenLineage hashes; captured `replay-evidence.tableCommitHistory` must match
+  plan/file/delete/child task counts, the planned and fetched governed
+  read-restriction objects, plus planned/fetched replay and OpenLineage hashes,
+  and the handoff verifier rejects fetched restriction drift from the planned
+  restriction; captured `replay-evidence.tableCommitHistory` must match
   `tableCommitHistoryProof` for commit count, sequence numbers, commit hashes,
   replay hashes, and OpenLineage hashes, and captured `replay-evidence.views`
   must match `viewReceiptChainProof` for accepted view receipts, tombstone

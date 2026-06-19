@@ -226,10 +226,11 @@ Flow:
 1. Client calls Iceberg REST scan-planning endpoint.
 2. LakeCat authenticates the principal and loads table state.
 3. TypeSec checks whether the principal can plan this table, columns,
-   partitions, row filters, and credential scope.
+   partitions, row filters, and credential scope, and LakeCat derives the
+   enforceable read restriction from active policy bindings.
 4. LakeCat asks Sail to plan the scan against the current metadata pointer,
-   requested projection, filters, limit, point-in-time snapshot, or incremental
-   start/end snapshot range.
+   effective server-owned projection, mandatory row filters, limit,
+   point-in-time snapshot, or incremental start/end snapshot range.
 5. Sail performs manifest, partition, stats, delete, and limit pruning using
    its Iceberg/DataFusion code. The current local implementation already uses
    Sail manifest-list I/O for append-only incremental parent-chain planning,
@@ -240,7 +241,11 @@ Flow:
    models and schema metadata, preserved in structured opaque plan-task tokens,
    and applied conservatively to file bounds during local manifest expansion
    whenever metrics are present.
-6. LakeCat returns Iceberg file scan tasks and records a scan-plan event.
+6. LakeCat returns Iceberg file scan tasks and records scan-plan/fetch events
+   whose replay summaries preserve the governed read restriction. QGLake
+   handoff summaries now require the planned and fetched restriction evidence
+   to match, proving allowed columns, row predicate, and policy hashes alongside
+   the Sail task counts.
 7. QueryGraph receives graph and lineage edges for who planned what, from which
    snapshot, under which policy.
 

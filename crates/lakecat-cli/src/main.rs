@@ -751,6 +751,8 @@ fn verify_lakecat_replay_scan_matches_summary(
         "fileTaskCount",
         "deleteFileCount",
         "childPlanTaskCount",
+        "plannedReadRestriction",
+        "fetchedReadRestriction",
         "plannedReplayEventHashes",
         "fetchedReplayEventHashes",
         "plannedOpenLineageHashes",
@@ -1223,6 +1225,48 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     let governed_scan = required_object(lakecat, "governedScanProof", "lakecatReplayVerification")?;
     require_positive_u64(governed_scan, "planTaskCount", "governedScanProof")?;
     require_positive_u64(governed_scan, "fileTaskCount", "governedScanProof")?;
+    let planned_restriction =
+        required_object(governed_scan, "plannedReadRestriction", "governedScanProof")?;
+    let fetched_restriction =
+        required_object(governed_scan, "fetchedReadRestriction", "governedScanProof")?;
+    require_read_restriction_evidence(
+        planned_restriction,
+        "governedScanProof.plannedReadRestriction",
+    )?;
+    require_read_restriction_evidence(
+        fetched_restriction,
+        "governedScanProof.fetchedReadRestriction",
+    )?;
+    require_value_match(
+        planned_restriction,
+        "policy-hashes",
+        required_value(
+            fetched_restriction,
+            "policy-hashes",
+            "governedScanProof.fetchedReadRestriction",
+        )?,
+        "governedScanProof.plannedReadRestriction",
+    )?;
+    require_value_match(
+        planned_restriction,
+        "allowed-columns",
+        required_value(
+            fetched_restriction,
+            "allowed-columns",
+            "governedScanProof.fetchedReadRestriction",
+        )?,
+        "governedScanProof.plannedReadRestriction",
+    )?;
+    require_value_match(
+        planned_restriction,
+        "row-predicate",
+        required_value(
+            fetched_restriction,
+            "row-predicate",
+            "governedScanProof.fetchedReadRestriction",
+        )?,
+        "governedScanProof.plannedReadRestriction",
+    )?;
     require_hash_array(
         governed_scan,
         "plannedReplayEventHashes",
@@ -1334,6 +1378,21 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "queryGraphBootstrapProof": bootstrap,
         "requestIdentityProof": request_identity,
     }))
+}
+
+fn require_read_restriction_evidence(
+    restriction: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let allowed_columns = required_array(restriction, "allowed-columns", label)?;
+    if allowed_columns.is_empty() || allowed_columns.iter().any(|column| !column.is_string()) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.allowed-columns must contain column names"
+        )));
+    }
+    required_object(restriction, "row-predicate", label)?;
+    require_hash_array(restriction, "policy-hashes", label)?;
+    Ok(())
 }
 
 fn require_view_tombstone_expected_versions(
@@ -1504,6 +1563,8 @@ fn qglake_scan_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Valu
         "fileTaskCount": fetched.file_scan_task_count.unwrap_or_default(),
         "deleteFileCount": fetched.delete_file_count.unwrap_or_default(),
         "childPlanTaskCount": fetched.child_plan_task_count.unwrap_or_default(),
+        "plannedReadRestriction": planned.read_restriction.as_ref(),
+        "fetchedReadRestriction": fetched.read_restriction.as_ref(),
         "plannedReplayEventHashes": &planned.replay_event_hashes,
         "fetchedReplayEventHashes": &fetched.replay_event_hashes,
         "plannedOpenLineageHashes": &planned.replay_open_lineage_hashes,
@@ -5460,6 +5521,24 @@ mod tests {
                     "fileTaskCount": 1,
                     "deleteFileCount": 1,
                     "childPlanTaskCount": 2,
+                    "plannedReadRestriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not-eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": ["sha256:scan-policy"]
+                    },
+                    "fetchedReadRestriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not-eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": ["sha256:scan-policy"]
+                    },
                     "plannedReplayEventHashes": ["sha256:scan-plan-replay"],
                     "fetchedReplayEventHashes": ["sha256:scan-fetch-replay"],
                     "plannedOpenLineageHashes": ["sha256:scan-plan-openlineage"],
@@ -5608,6 +5687,24 @@ mod tests {
                     "fileTaskCount": 1,
                     "deleteFileCount": 1,
                     "childPlanTaskCount": 2,
+                    "plannedReadRestriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not-eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": ["sha256:scan-policy"]
+                    },
+                    "fetchedReadRestriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not-eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": ["sha256:scan-policy"]
+                    },
                     "plannedReplayEventHashes": ["sha256:scan-plan-replay"],
                     "fetchedReplayEventHashes": ["sha256:scan-fetch-replay"],
                     "plannedOpenLineageHashes": ["sha256:scan-plan-openlineage"],
@@ -5934,6 +6031,34 @@ mod tests {
 
         assert!(err.to_string().contains("storageProfileUpsertProof"));
         assert!(err.to_string().contains("locationPrefixHash"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_governed_scan_read_restriction() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("plannedReadRestriction");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing governed scan restriction");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("plannedReadRestriction"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_scan_restriction_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["fetchedReadRestriction"]["allowed-columns"] =
+            json!(["event_id", "raw_payload"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject drifted scan restriction");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("allowed-columns mismatch"));
     }
 
     #[test]
@@ -8424,6 +8549,7 @@ mod tests {
                     file_scan_task_count: None,
                     delete_file_count: None,
                     child_plan_task_count: None,
+                    read_restriction: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -8505,6 +8631,7 @@ mod tests {
                     file_scan_task_count: None,
                     delete_file_count: None,
                     child_plan_task_count: None,
+                    read_restriction: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -8586,6 +8713,7 @@ mod tests {
                     file_scan_task_count: None,
                     delete_file_count: None,
                     child_plan_task_count: None,
+                    read_restriction: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -8666,6 +8794,7 @@ mod tests {
                     file_scan_task_count: None,
                     delete_file_count: None,
                     child_plan_task_count: None,
+                    read_restriction: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -8746,6 +8875,7 @@ mod tests {
                     file_scan_task_count: None,
                     delete_file_count: None,
                     child_plan_task_count: None,
+                    read_restriction: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -8826,6 +8956,7 @@ mod tests {
                     file_scan_task_count: None,
                     delete_file_count: None,
                     child_plan_task_count: None,
+                    read_restriction: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -8906,6 +9037,7 @@ mod tests {
                     file_scan_task_count: None,
                     delete_file_count: None,
                     child_plan_task_count: None,
+                    read_restriction: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -8986,6 +9118,7 @@ mod tests {
                     file_scan_task_count: None,
                     delete_file_count: None,
                     child_plan_task_count: None,
+                    read_restriction: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -9067,6 +9200,7 @@ mod tests {
                     file_scan_task_count: None,
                     delete_file_count: None,
                     child_plan_task_count: None,
+                    read_restriction: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -9147,6 +9281,7 @@ mod tests {
                     file_scan_task_count: None,
                     delete_file_count: None,
                     child_plan_task_count: None,
+                    read_restriction: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -9227,6 +9362,7 @@ mod tests {
                     file_scan_task_count: None,
                     delete_file_count: None,
                     child_plan_task_count: None,
+                    read_restriction: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: vec!["OpenLineage".to_string()],
@@ -9307,6 +9443,7 @@ mod tests {
                     file_scan_task_count: None,
                     delete_file_count: None,
                     child_plan_task_count: None,
+                    read_restriction: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -9387,6 +9524,7 @@ mod tests {
                     file_scan_task_count: None,
                     delete_file_count: None,
                     child_plan_task_count: None,
+                    read_restriction: None,
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -10508,6 +10646,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
+            read_restriction: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: qglake_lineage_standards(),
@@ -10589,6 +10728,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
+            read_restriction: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -10695,6 +10835,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
+            read_restriction: None,
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -10705,6 +10846,18 @@ mod tests {
             replay_event_hashes: vec!["sha256:table-commits-replay-event".to_string()],
             replay_open_lineage_hashes: vec!["sha256:table-commits-openlineage".to_string()],
         }
+    }
+
+    fn qglake_read_restriction_summary() -> Value {
+        json!({
+            "allowed-columns": ["event_id", "occurred_at", "severity"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "policy-hashes": ["sha256:scan-policy"]
+        })
     }
 
     fn qglake_scan_planned_lineage_summary() -> LineageDrainEventSummary {
@@ -10755,6 +10908,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
+            read_restriction: Some(qglake_read_restriction_summary()),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -10815,6 +10969,7 @@ mod tests {
             file_scan_task_count: Some(1),
             delete_file_count: Some(1),
             child_plan_task_count: Some(1),
+            read_restriction: Some(qglake_read_restriction_summary()),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -10875,6 +11030,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
+            read_restriction: None,
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -10937,6 +11093,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
+            read_restriction: None,
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -11001,6 +11158,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
+            read_restriction: None,
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -11063,6 +11221,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
+            read_restriction: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -11123,6 +11282,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
+            read_restriction: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -11183,6 +11343,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
+            read_restriction: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -11243,6 +11404,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
+            read_restriction: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -11307,6 +11469,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
+            read_restriction: None,
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),

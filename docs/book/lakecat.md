@@ -1270,8 +1270,12 @@ principal, authorization hash, TypeDID hash slots, delegation and summary
 signature hashes, artifact counts, standards, replay hashes, and the accepted
 bundle, graph, OpenLineage, and QueryGraph import hashes. It compares captured
 `replay-evidence.scan` with `governedScanProof`, including the plan task, file
-task, delete file, and child plan task counts plus the planned/fetched replay
-and OpenLineage hashes that prove the Sail-planned read path. It also compares
+task, delete file, and child plan task counts plus the planned and fetched
+read-restriction objects. The verifier rejects a summary if the fetched
+restriction drifts from the planned restriction, so the compact handoff proves
+the narrowed allowed columns, row predicate, and policy hashes alongside the
+planned/fetched replay and OpenLineage hashes that prove the Sail-planned read
+path. It also compares
 the captured `replay-evidence.tableCommitHistory` object with
 `tableCommitHistoryProof`, including the commit count, sequence numbers, commit
 hashes, replay hashes, and OpenLineage hashes that prove the pointer-log commit

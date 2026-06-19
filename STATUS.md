@@ -13,6 +13,36 @@ Updated: 2026-06-19
   QueryGraph integration, Turso preference, local verification, changelog, and
   commit/push discipline.
 - Latest completed implementation slice:
+  `Prove governed scan restrictions in handoff`.
+  Lineage-drain event summaries now preserve the governed scan
+  `read-restriction` from scan-planned and scan-task-fetched outbox payloads.
+  QGLake replay JSON lifts the planned and fetched restriction into
+  `replay-evidence.scan`, the local handoff harness writes both into compact
+  `governedScanProof`, and `lakecat-cli qglake-verify-handoff` rejects
+  summaries where either restriction is missing or where the fetched branch
+  drifts from the planned branch. The compact QueryGraph handoff now proves the
+  narrowed allowed columns, row predicate, and policy hashes, not just Sail task
+  counts and replay hashes.
+- Local verification for this governed scan restriction-proof slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh`. The live handoff generated one table and
+  one view, drained 26 outbox events, verified LakeCat replay, ran QueryGraph
+  `lakecat-verify` and `lakecat-import`, then verified
+  `handoff-summary.json` with matching
+  `governedScanProof.plannedReadRestriction` and
+  `governedScanProof.fetchedReadRestriction` containing the restricted columns,
+  `severity != debug` row predicate, max credential TTL, and policy hash;
+  `cargo test --workspace`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Verify guarded tombstone handoff proof`.
   `lakecat-cli qglake-verify-handoff` now independently rejects compact
   `viewReceiptChainProof.tombstoneReceipts` entries whose

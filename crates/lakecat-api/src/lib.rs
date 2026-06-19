@@ -513,6 +513,8 @@ pub struct LineageDrainEventSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub child_plan_task_count: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_restriction: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub management_scope_project_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub management_scope_warehouse: Option<String>,
