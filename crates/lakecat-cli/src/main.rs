@@ -1536,7 +1536,12 @@ fn verify_lakecat_replay_credentials_match_summary(
                 "captured LakeCat replay output.replay-evidence.credentials",
             )?;
         }
-        for field in ["credentialCount", "replayEventHashes", "openLineageHashes"] {
+        for field in [
+            "credentialCount",
+            "maxCredentialTtlSeconds",
+            "replayEventHashes",
+            "openLineageHashes",
+        ] {
             require_value_match(
                 captured,
                 field,
@@ -2333,6 +2338,11 @@ fn require_credential_vending_evidence(
         "openLineageHashes",
         "credentialVendingProof.restricted",
     )?;
+    require_positive_u64(
+        restricted,
+        "maxCredentialTtlSeconds",
+        "credentialVendingProof.restricted",
+    )?;
     require_credential_storage_profile_evidence(restricted, "credentialVendingProof.restricted")?;
 
     let trusted = required_object(credentials, "trustedHuman", "credentialVendingProof")?;
@@ -2379,6 +2389,11 @@ fn require_credential_vending_evidence(
         "openLineageHashes",
         "credentialVendingProof.trustedHuman",
     )?;
+    require_positive_u64(
+        trusted,
+        "maxCredentialTtlSeconds",
+        "credentialVendingProof.trustedHuman",
+    )?;
     require_credential_storage_profile_evidence(trusted, "credentialVendingProof.trustedHuman")?;
 
     Ok(())
@@ -2419,6 +2434,7 @@ fn require_read_restriction_evidence(
     }
     required_object(restriction, "row-predicate", label)?;
     require_hash_array(restriction, "policy-hashes", label)?;
+    require_positive_u64(restriction, "max-credential-ttl-seconds", label)?;
     Ok(())
 }
 
@@ -2824,6 +2840,7 @@ fn qglake_credential_replay_evidence_json(
             "principalKind": restricted.principal_kind.as_deref(),
             "credentialCount": restricted.credential_count.unwrap_or_default(),
             "blockReason": restricted.credential_block_reason.as_deref(),
+            "maxCredentialTtlSeconds": qglake_credential_max_ttl_seconds(restricted),
             "storageProfile": qglake_credential_storage_profile_evidence_json(restricted),
             "replayEventHashes": &restricted.replay_event_hashes,
             "openLineageHashes": &restricted.replay_open_lineage_hashes,
@@ -2834,11 +2851,20 @@ fn qglake_credential_replay_evidence_json(
             "credentialCount": human.credential_count.unwrap_or_default(),
             "rawCredentialExceptionAllowed": human.raw_credential_exception_allowed.unwrap_or_default(),
             "rawCredentialExceptionReason": human.raw_credential_exception_reason.as_deref(),
+            "maxCredentialTtlSeconds": qglake_credential_max_ttl_seconds(human),
             "storageProfile": qglake_credential_storage_profile_evidence_json(human),
             "replayEventHashes": &human.replay_event_hashes,
             "openLineageHashes": &human.replay_open_lineage_hashes,
         }
     }))
+}
+
+fn qglake_credential_max_ttl_seconds(event: &LineageDrainEventSummary) -> Option<u64> {
+    event
+        .read_restriction
+        .as_ref()
+        .and_then(|restriction| restriction.get("max-credential-ttl-seconds"))
+        .and_then(Value::as_u64)
 }
 
 fn qglake_credential_storage_profile_evidence_json(event: &LineageDrainEventSummary) -> Value {
@@ -2979,11 +3005,15 @@ fn qglake_credential_replay_line(
     }
     let restricted_profile = qglake_credential_storage_profile_line(restricted)?;
     let human_profile = qglake_credential_storage_profile_line(human)?;
+    let restricted_ttl = qglake_credential_max_ttl_seconds(restricted)?;
+    let human_ttl = qglake_credential_max_ttl_seconds(human)?;
     Some(format!(
-        "credential replay restricted=blocked:sail-planned-read-required restricted_count={} restricted_profile={} human=allowed:trusted-human-audited-raw human_count={} human_profile={}",
+        "credential replay restricted=blocked:sail-planned-read-required restricted_count={} restricted_ttl={} restricted_profile={} human=allowed:trusted-human-audited-raw human_count={} human_ttl={} human_profile={}",
         restricted.credential_count.unwrap_or_default(),
+        restricted_ttl,
         restricted_profile,
         human.credential_count.unwrap_or_default(),
+        human_ttl,
         human_profile
     ))
 }
@@ -5494,6 +5524,11 @@ fn verify_qglake_credential_lineage_projection(
             "qglake lineage drain {label} credential replay emitted no credential-root graph projection"
         )));
     }
+    if qglake_credential_max_ttl_seconds(event).is_none() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} credential replay is missing max credential TTL evidence"
+        )));
+    }
     verify_qglake_credential_storage_profile_projection(event, label)?;
     if event.replay_event_hashes.is_empty()
         || event.replay_event_hashes.iter().any(String::is_empty)
@@ -6968,6 +7003,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
                     "fetchedReadRestriction": {
@@ -6977,6 +7013,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
                     "plannedReplayEventHashes": ["sha256:scan-plan-replay"],
@@ -7040,6 +7077,7 @@ mod tests {
                         "principalKind": "agent",
                         "credentialCount": 0,
                         "blockReason": QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
+                        "maxCredentialTtlSeconds": 300,
                         "storageProfile": {
                             "profileId": "events-local",
                             "provider": "file",
@@ -7057,6 +7095,7 @@ mod tests {
                         "credentialCount": 1,
                         "rawCredentialExceptionAllowed": true,
                         "rawCredentialExceptionReason": QGLAKE_HUMAN_RAW_CREDENTIAL_EXCEPTION_REASON,
+                        "maxCredentialTtlSeconds": 300,
                         "storageProfile": {
                             "profileId": "events-local",
                             "provider": "file",
@@ -7153,6 +7192,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
                     "fetchedReadRestriction": {
@@ -7162,6 +7202,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
                     "plannedReplayEventHashes": ["sha256:scan-plan-replay"],
@@ -7227,6 +7268,7 @@ mod tests {
                         "principalKind": "agent",
                         "credentialCount": 0,
                         "blockReason": QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
+                        "maxCredentialTtlSeconds": 300,
                         "storageProfile": {
                             "profileId": "events-local",
                             "provider": "file",
@@ -7244,6 +7286,7 @@ mod tests {
                         "credentialCount": 1,
                         "rawCredentialExceptionAllowed": true,
                         "rawCredentialExceptionReason": QGLAKE_HUMAN_RAW_CREDENTIAL_EXCEPTION_REASON,
+                        "maxCredentialTtlSeconds": 300,
                         "storageProfile": {
                             "profileId": "events-local",
                             "provider": "file",
@@ -8133,6 +8176,21 @@ mod tests {
 
         assert!(err.to_string().contains("credentialVendingProof"));
         assert!(err.to_string().contains("replayEventHashes"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_credential_ttl_cap() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]
+            .as_object_mut()
+            .unwrap()
+            .remove("maxCredentialTtlSeconds");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing credential TTL evidence");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("maxCredentialTtlSeconds"));
     }
 
     #[test]
@@ -10909,7 +10967,7 @@ mod tests {
 
         assert_eq!(
             line,
-            "credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_profile=events-local:file:local-file-no-secret:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_profile=events-local:file:local-file-no-secret:secret_ref=none:graph_events=2"
+            "credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:secret_ref=none:graph_events=2"
         );
     }
 
@@ -12212,9 +12270,10 @@ mod tests {
             1,
         )
         .expect_err("QGLake lineage drain should require trusted human credential replay");
+        let err = err.to_string();
         assert!(
-            err.to_string()
-                .contains("qglake lineage drain did not replay the trusted human credential probe")
+            err.contains("qglake lineage drain did not replay the trusted human credential probe"),
+            "{err}"
         );
 
         let mut restricted_without_receipts = qglake_restricted_credential_summary();
@@ -12328,6 +12387,43 @@ mod tests {
         assert!(err.to_string().contains(
             "qglake lineage drain trusted human credential replay did not prove audited standard credential vending"
         ));
+
+        let mut human_without_ttl = qglake_human_credential_summary();
+        human_without_ttl.read_restriction = None;
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 4,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 4,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                    human_without_ttl,
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject missing credential TTL evidence");
+        assert!(
+            err.to_string()
+                .contains("trusted human credential replay is missing max credential TTL evidence")
+        );
 
         let view_verification = qglake_view_lineage_verification();
         let mut bootstrap_with_view = qglake_bootstrap_lineage_summary();
@@ -13465,6 +13561,7 @@ mod tests {
                 "term": "severity",
                 "value": "debug"
             },
+            "max-credential-ttl-seconds": 300,
             "policy-hashes": ["sha256:scan-policy"]
         })
     }
@@ -14013,7 +14110,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
-            read_restriction: None,
+            read_restriction: Some(qglake_read_restriction_summary()),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -14078,7 +14175,7 @@ mod tests {
             file_scan_task_count: None,
             delete_file_count: None,
             child_plan_task_count: None,
-            read_restriction: None,
+            read_restriction: Some(qglake_read_restriction_summary()),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),

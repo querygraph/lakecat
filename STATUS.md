@@ -6,6 +6,14 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake credential proof to TTL caps`.
+  QGLake replay evidence, compact handoff summaries, and saved lineage-drain
+  verification now require the restricted-agent and trusted-human credential
+  branches to carry the policy-derived `maxCredentialTtlSeconds` cap. The local
+  handoff script derives that value from replay JSON/read restrictions before
+  writing a summary, so credential exceptions cannot be replayed into
+  QueryGraph without the same duration bound that LakeCat used at issuance.
+- Latest completed implementation slice:
   `Carry policy TTL caps into credential issuance`.
   `CredentialIssuanceRequest` now includes the effective
   `max-credential-ttl-seconds` value derived from the read restriction, and the

@@ -389,6 +389,14 @@ function requireStorageProfile(value, label) {
     graphEvents: value.graphEvents,
   };
 }
+function requireMaxCredentialTtl(value, label) {
+  const ttl = value.maxCredentialTtlSeconds ?? value.max_credential_ttl_seconds ?? value.readRestriction?.["max-credential-ttl-seconds"] ?? value.read_restriction?.["max-credential-ttl-seconds"];
+  if (!Number.isInteger(ttl) || ttl <= 0) {
+    console.error(`LakeCat credential replay evidence is missing ${label} max credential TTL evidence`);
+    process.exit(1);
+  }
+  return ttl;
+}
 if (!restricted || typeof restricted !== "object") {
   console.error("LakeCat replay evidence is missing credentials.restricted");
   process.exit(1);
@@ -404,6 +412,7 @@ if (restricted.credentialCount !== 0 || restricted.blockReason !== "fine-grained
 requireHashArray(restricted.replayEventHashes, "restricted replayEventHashes");
 requireHashArray(restricted.openLineageHashes, "restricted openLineageHashes");
 const restrictedStorageProfile = requireStorageProfile(restricted.storageProfile, "restricted");
+const restrictedMaxCredentialTtlSeconds = requireMaxCredentialTtl(restricted, "restricted");
 if (!trustedHuman || typeof trustedHuman !== "object") {
   console.error("LakeCat replay evidence is missing credentials.trustedHuman");
   process.exit(1);
@@ -423,12 +432,14 @@ if (trustedHuman.rawCredentialExceptionReason !== "trusted human principal may u
 requireHashArray(trustedHuman.replayEventHashes, "trusted-human replayEventHashes");
 requireHashArray(trustedHuman.openLineageHashes, "trusted-human openLineageHashes");
 const trustedHumanStorageProfile = requireStorageProfile(trustedHuman.storageProfile, "trusted-human");
+const trustedHumanMaxCredentialTtlSeconds = requireMaxCredentialTtl(trustedHuman, "trusted-human");
 process.stdout.write(JSON.stringify({
   restricted: {
     principalSubject: restricted.principalSubject,
     principalKind: restricted.principalKind,
     credentialCount: restricted.credentialCount,
     blockReason: restricted.blockReason,
+    maxCredentialTtlSeconds: restrictedMaxCredentialTtlSeconds,
     storageProfile: restrictedStorageProfile,
     replayEventHashes: restricted.replayEventHashes,
     openLineageHashes: restricted.openLineageHashes,
@@ -439,6 +450,7 @@ process.stdout.write(JSON.stringify({
     credentialCount: trustedHuman.credentialCount,
     rawCredentialExceptionAllowed: trustedHuman.rawCredentialExceptionAllowed,
     rawCredentialExceptionReason: trustedHuman.rawCredentialExceptionReason,
+    maxCredentialTtlSeconds: trustedHumanMaxCredentialTtlSeconds,
     storageProfile: trustedHumanStorageProfile,
     replayEventHashes: trustedHuman.replayEventHashes,
     openLineageHashes: trustedHuman.openLineageHashes,

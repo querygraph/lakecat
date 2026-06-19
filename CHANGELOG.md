@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound QGLake credential replay and handoff evidence to the policy-derived
+  credential TTL cap, requiring both restricted-agent and trusted-human compact
+  credential proofs to carry `maxCredentialTtlSeconds` and rejecting lineage
+  replay that omits the underlying `max-credential-ttl-seconds` restriction.
 - Carried policy-derived `max-credential-ttl-seconds` into the credential
   issuance contract and returned credential config, so audited raw credential
   exceptions and secret-ref issuers receive a concrete TTL cap instead of only

@@ -139,7 +139,8 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
   into Sail.
 - TypeSec-backed governance is wired through the service layer, with receipts
   and fail-closed credential behavior. Policy-derived credential TTL caps are
-  carried into issuance requests and returned credential config.
+  carried into issuance requests, returned credential config, and QGLake
+  credential replay/handoff evidence.
 - ODRL restrictions are no longer only transported as opaque context; the
   enforceable subset is moving through restrictions and receipts, and
   constraint-form operators now fail closed when they are missing or do not
@@ -167,7 +168,7 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
 | F5 scans bypass in-process provider | Started | Plan/fetch paths are guarded; reusable Sail planner integration remains the target. |
 | F6 graph projection still shallow | Started | Catalog graph events are bounded and expanding; reusable taxonomy/query behavior belongs in Grust. |
 | F7 tenancy hierarchy not fully routed | Started | Server/project/warehouse/namespace anchors are projected and used in bootstrap. |
-| F8 production secret refs | Started | Explicit provider dispatch seams fail closed and receive policy TTL caps; SDK-backed resolvers beyond configured backends remain pending. |
+| F8 production secret refs | Started | Explicit provider dispatch seams fail closed and receive policy TTL caps; QGLake credential replay now proves the same TTL cap; SDK-backed resolvers beyond configured backends remain pending. |
 | F9 v4 JSON passthrough | Open by design | Keep compatibility bridge until typed Sail v4 support is available. |
 | F10 sibling dependency drift | Open but guarded | Local dependency-contract audits check Grust/TypeSec, Sail, QueryGraph, and manual CI state. |
 
@@ -184,7 +185,8 @@ receipts. Prefer upstream Sail APIs for any reusable planner or manifest work.
 Keep the live QGLake handoff harness in the verification loop. QueryGraph must
 continue importing LakeCat evidence without losing view receipt-chain hashes,
 accepted view versions, graph proof, import proof, or OpenLineage replay
-anchors.
+anchors. Credential replay must preserve the policy-derived TTL cap in both the
+captured LakeCat replay evidence and compact handoff summary.
 
 ### P3 Commit Hardening
 

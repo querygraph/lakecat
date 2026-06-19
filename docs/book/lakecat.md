@@ -1442,10 +1442,11 @@ claim that agents were blocked onto Sail-planned reads or that humans used an
 audited exception unless the captured LakeCat replay proves the same decision.
 The compact handoff verifier also validates that credential proof directly:
 the restricted branch must name the accepted agent principal, carry the
-Sail-planned-read block reason, prove zero credentials, and include
-replay/OpenLineage hashes; the trusted-human branch must name a human
-principal, prove a positive credential count, carry the exact audited
-raw-credential exception reason, and include replay/OpenLineage hashes.
+Sail-planned-read block reason, prove zero credentials, carry the
+policy-derived `maxCredentialTtlSeconds` cap, and include replay/OpenLineage
+hashes; the trusted-human branch must name a human principal, prove a positive
+credential count, carry the same policy-derived TTL cap, carry the exact
+audited raw-credential exception reason, and include replay/OpenLineage hashes.
 That makes the handoff repeatable from the LakeCat repo while keeping
 QueryGraph responsible for graph validation and import semantics.
 The handoff script refuses to write the summary unless LakeCat replay JSON
@@ -1462,7 +1463,9 @@ and a hash of the configured location prefix, without receiving the underlying
 secret-store URI or full storage prefix in the compact proof. The script also
 refuses to write a summary unless LakeCat
 replay proves both sides of credential vending: untrusted agents get no raw
-credentials, and trusted humans receive only the audited standard exception.
+credentials, trusted humans receive only the audited standard exception, and
+both branches preserve the `max-credential-ttl-seconds` restriction as
+`maxCredentialTtlSeconds` in compact evidence.
 For reads, the summary similarly refuses to omit proof that scan planning and
 scan-task fetch both replayed with sink receipt hashes. For catalog state, it
 refuses to omit proof that the table commit-history read replayed with
@@ -1557,7 +1560,7 @@ control-plane lines such as:
 ```text
 scan replay plan_tasks=1 file_tasks=1 delete_files=1 child_plan_tasks=1
 management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_roots=file
-credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_profile=events-local:file:local-file-no-secret:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_profile=events-local:file:local-file-no-secret:secret_ref=none:graph_events=2
+credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:secret_ref=none:graph_events=2
 table commit history commits=1 sequences=1 hashes=sha256:...
 ```
 
@@ -1592,10 +1595,11 @@ receipt chains, storage-profile replay, and credential-vending decisions. It
 then compares that regenerated replay evidence to the compact
 `lakecatReplayVerification` proof. Credential-vending proof is not just a count:
 each restricted-agent and trusted-human branch carries the redacted
-`storageProfile` graph anchor, including profile id, provider, issuance mode,
-secret-reference presence, and the graph event count emitted by replay. A saved
-handoff is rejected if the archived lineage drain proves lineage receipt hashes
-but omits that credential-root graph projection. It also recomputes the
+`storageProfile` graph anchor and `maxCredentialTtlSeconds`, including profile
+id, provider, issuance mode, secret-reference presence, and the graph event
+count emitted by replay. A saved handoff is rejected if the archived lineage
+drain proves lineage receipt hashes but omits that credential TTL cap or
+credential-root graph projection. It also recomputes the
 captured LakeCat replay and QueryGraph verify/import output hashes, so terminal
 captures cannot drift from the compact summary. It compares the legacy string
 path aliases for the LakeCat replay, QueryGraph verify, and QueryGraph import
