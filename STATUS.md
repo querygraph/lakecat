@@ -6,6 +6,25 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require storage profile proof in handoff`. `scripts/qglake-handoff-local.sh`
+  now fails closed before writing `handoff-summary.json` unless LakeCat replay
+  JSON includes `replay-evidence.management.storageProfileUpsert` with profile
+  id, provider, explicit `secretRefPresent`, replay event hashes, and
+  OpenLineage hashes. `GOAL.md` also now carries a dedicated book-workflow
+  section requiring substantial workflow examples as LakeCat behavior lands.
+- Local verification for the handoff storage-profile proof and goal guidance
+  slice is green:
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  minimal Node replay-shape check for
+  `replay-evidence.management.storageProfileUpsert`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-cli`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Print storage profile upsert replay proof`. `lakecat-cli
   qglake-verify-replay` now surfaces the redacted storage-profile upsert proof
   it already verifies: the management replay line reports

@@ -1186,6 +1186,10 @@ LakeCat replay output, captured QueryGraph verification output, captured
 QueryGraph import output, and service log path.
 That makes the handoff repeatable from the LakeCat repo while keeping
 QueryGraph responsible for graph validation and import semantics.
+The handoff script also refuses to write the summary unless LakeCat replay JSON
+contains redacted `storageProfileUpsert` evidence with replay and OpenLineage
+hashes. QueryGraph gets proof that the credential root was configured without
+receiving the underlying secret-store URI.
 
 This gives the semantic layer a responsible starting point. LakeCat says:
 

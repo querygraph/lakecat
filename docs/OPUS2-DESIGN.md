@@ -364,7 +364,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   lineage-drain summaries plus QGLake replay verification now expose the
   redacted profile id/provider/secret-ref proof for QueryGraph acceptance;
   `qglake-verify-replay` also prints that upsert proof in management replay
-  output and structured replay JSON for operators and automation;
+  output and structured replay JSON for operators and automation, and the local
+  handoff harness requires that structured proof before writing
+  `handoff-summary.json`;
   management routes now use the requested
   warehouse instead of the configured default, Iceberg REST routes now accept a
   warehouse prefix only after resolving a durable `WarehouseRecord`, and

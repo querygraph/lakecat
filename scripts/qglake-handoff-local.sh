@@ -92,6 +92,36 @@ process.stdout.write(JSON.stringify(value));
 ' "$file" "$field"
 }
 
+require_storage_profile_upsert_evidence() {
+  local file="$1"
+  node -e '
+const fs = require("fs");
+const [file] = process.argv.slice(1);
+const replay = JSON.parse(fs.readFileSync(file, "utf8"));
+const evidence = replay["replay-evidence"]?.management?.storageProfileUpsert;
+if (!evidence || typeof evidence !== "object") {
+  console.error("LakeCat replay evidence is missing management.storageProfileUpsert");
+  process.exit(1);
+}
+if (!evidence.profileId || !evidence.provider) {
+  console.error("LakeCat storage-profile upsert evidence is missing profileId/provider");
+  process.exit(1);
+}
+if (typeof evidence.secretRefPresent !== "boolean") {
+  console.error("LakeCat storage-profile upsert evidence is missing explicit secretRefPresent");
+  process.exit(1);
+}
+if (!Array.isArray(evidence.replayEventHashes) || evidence.replayEventHashes.length === 0) {
+  console.error("LakeCat storage-profile upsert evidence is missing replayEventHashes");
+  process.exit(1);
+}
+if (!Array.isArray(evidence.openLineageHashes) || evidence.openLineageHashes.length === 0) {
+  console.error("LakeCat storage-profile upsert evidence is missing openLineageHashes");
+  process.exit(1);
+}
+' "$file"
+}
+
 required_summary_field() {
   local label="$1"
   local source_file="$2"
@@ -163,6 +193,7 @@ write_summary() {
   required_summary_field "querygraph-import-hash" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_querygraph_import_hash"
   required_summary_field "standards" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_standards"
   required_summary_field "replay-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_replay_evidence"
+  require_storage_profile_upsert_evidence "$LAKECAT_REPLAY_OUTPUT"
   required_summary_field "table-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_tables"
   required_summary_field "view-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_views"
   required_summary_field "bundle-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_bundle_hash"

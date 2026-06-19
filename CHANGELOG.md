@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a dedicated `GOAL.md` book-workflow section requiring substantial
+  workflow examples as LakeCat behavior lands.
+- Made the local QGLake handoff harness require redacted storage-profile upsert
+  replay evidence before writing `handoff-summary.json`.
 - Printed redacted storage-profile upsert proof in QGLake management replay
   output and structured replay JSON.
 - Added compact redacted storage-profile upsert evidence to lineage-drain

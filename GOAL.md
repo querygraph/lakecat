@@ -189,6 +189,27 @@ tests in that sibling repo as well and report each repo separately.
   credential vending decisions, QueryGraph bootstrap/import, OpenLineage replay,
   and agentic QGLake flows.
 
+## Book Workflow
+
+The LakeCat book is part of the active engineering workflow. Keep it small only
+when the implementation is small; as LakeCat gains behavior, grow the book with
+substantial, concrete examples that show how the catalog participates in real
+workflows from standard clients through agentic systems.
+
+Book updates should accompany any logical unit that changes public behavior,
+operator workflows, QueryGraph handoff behavior, architecture boundaries,
+governance semantics, or the way users prove compatibility. Prefer examples
+that are runnable or close to runnable, including PySpark/Spark catalog use,
+Iceberg REST compatibility, governed Sail-planned reads, credential-vending
+decisions, QueryGraph bootstrap/import, Croissant/CDIF/OSI/ODRL/OpenLineage
+projection, and agentic QGLake replay.
+
+The book should explain how LakeCat remains a thin catalog while Sail, Grust,
+TypeSec, and QueryGraph do their respective jobs. Do not let the book drift
+into marketing-only prose; use it as the durable user-facing record of the
+workflows that the code, scripts, fixtures, and acceptance checks actually
+support.
+
 ## Build Direction
 
 Continue moving toward:
