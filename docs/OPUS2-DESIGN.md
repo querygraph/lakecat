@@ -257,14 +257,15 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   accept validated `x-lakecat-idempotency-key` values and replay through the
   store idempotency record before Sail validation or metadata-object writes,
   so exact retries are side-effect-free and can still replay after the table has
-  advanced; table commit records now carry a durable `response_hash` beside the
+  advanced; table commit records now carry `format_version`, `snapshot_id`, and
+  `policy_hash` summary evidence plus a durable `response_hash` beside the
   request hash so pointer-log, audit/outbox, graph, and lineage replay can prove
-  the exact stored commit response; reused keys with different request hashes
-  now return conflict; failed pointer commits now clean up newly written local
-  metadata objects when they do not become the table's metadata pointer;
-  metadata object writes and cleanup now route through
-  `object_store::parse_url_opts`, preserving local `file://` behavior while
-  moving the writer toward configured object-store backends.*
+  both the Iceberg/governance summary and the exact stored commit response;
+  reused keys with different request hashes now return conflict; failed pointer
+  commits now clean up newly written local metadata objects when they do not
+  become the table's metadata pointer; metadata object writes and cleanup now
+  route through `object_store::parse_url_opts`, preserving local `file://`
+  behavior while moving the writer toward configured object-store backends.*
 - **P4 — Semantic catalog graph (F6).** Emit the bounded typed taxonomy
   (Namespace/Table/Column/Snapshot/Policy/Principal/ScanPlan/Commit) through the
   outbox into Grust; keep file-granularity as metadata-as-data. Then OpenLineage

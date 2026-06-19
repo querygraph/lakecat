@@ -6,6 +6,26 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Summarize commit metadata in pointer logs`. `TableCommitRecord` now carries
+  compact `format_version`, `snapshot_id`, and `policy_hash` evidence alongside
+  request/response hashes. Memory/Turso commit paths populate the fields from
+  committed metadata and authorization receipts, Turso coverage checks the
+  durable commit record/outbox payload, and graph/lineage replay fixtures prove
+  those fields survive projection.
+- Local verification for the commit summary slice was green:
+  `cargo fmt -p lakecat-store -p lakecat-service`;
+  `cargo test -p lakecat-store turso_store_round_trips_namespaces_tables_and_idempotent_commits --features turso-local`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-store -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Hash commit responses in pointer logs`. `TableCommitRecord` now carries a
   durable `response_hash` over the committed table response alongside the
   request hash. Memory/Turso commit paths populate it, Turso replay coverage

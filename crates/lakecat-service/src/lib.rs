@@ -5554,6 +5554,9 @@ mod tests {
                             "new_metadata_location": "file:///tmp/events/metadata/00001.json",
                             "sequence_number": 7,
                             "principal": principal,
+                            "format_version": 3,
+                            "snapshot_id": 42,
+                            "policy_hash": "sha256:policy",
                             "request_hash": "sha256:request",
                             "response_hash": "sha256:response",
                             "idempotency_key_sha256": "sha256:idempotency",
@@ -5922,6 +5925,18 @@ mod tests {
             graph_events[14].properties["commit"]["response_hash"],
             serde_json::json!("sha256:response")
         );
+        assert_eq!(
+            graph_events[14].properties["commit"]["format_version"],
+            serde_json::json!(3)
+        );
+        assert_eq!(
+            graph_events[14].properties["commit"]["snapshot_id"],
+            serde_json::json!(42)
+        );
+        assert_eq!(
+            graph_events[14].properties["commit"]["policy_hash"],
+            serde_json::json!("sha256:policy")
+        );
         assert_eq!(graph_events[15].label, GraphNodeLabel::Principal);
         assert_eq!(
             graph_events[15].event_id.as_deref(),
@@ -5997,6 +6012,18 @@ mod tests {
         assert_eq!(
             lineage_events[4].payload["commit"]["response_hash"],
             serde_json::json!("sha256:response")
+        );
+        assert_eq!(
+            lineage_events[4].payload["commit"]["format_version"],
+            serde_json::json!(3)
+        );
+        assert_eq!(
+            lineage_events[4].payload["commit"]["snapshot_id"],
+            serde_json::json!(42)
+        );
+        assert_eq!(
+            lineage_events[4].payload["commit"]["policy_hash"],
+            serde_json::json!("sha256:policy")
         );
         assert_eq!(
             lineage_events[5].event_type,

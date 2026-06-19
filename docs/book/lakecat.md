@@ -315,6 +315,12 @@ pair matters: the request hash proves which commit body won or replayed, while
 the response hash proves which metadata pointer and table body LakeCat returned
 to clients and later projected through graph and lineage replay.
 
+The same commit record includes compact summary evidence: Iceberg format
+version, current snapshot id, and the policy hash from the authorization
+receipt when one exists. QueryGraph can inspect those fields from the
+pointer-log/outbox stream without parsing full table metadata for every
+catalog audit question.
+
 ## The Durable Spine
 
 LakeCat's durable local spine uses the Rust `turso` crate behind the

@@ -289,8 +289,9 @@ binary uses it when built with `turso-local` and `LAKECAT_TURSO_PATH` is set.
 Table commits now write metadata objects through the Rust `object_store` URL
 dispatch seam when commit plans carry new metadata, advance table pointers
 through compare-and-swap, persist idempotency/audit/outbox records with both the
-normalized request hash and stored response hash, and expose a service-level
-drain that projects committed events to graph and lineage sinks.
+normalized request hash and stored response hash plus compact format-version,
+snapshot-id, and policy-hash summary evidence, and expose a service-level drain
+that projects committed events to graph and lineage sinks.
 The local `file://` path remains the verified default, while configured remote
 stores can plug into the same writer boundary. A typed storage-profile model now
 drives conservative credential responses: embedded `file://` tables can return

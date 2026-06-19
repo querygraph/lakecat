@@ -299,6 +299,12 @@ pub struct TableCommitRecord {
     pub new_metadata_location: Option<String>,
     pub sequence_number: u64,
     pub principal: Principal,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format_version: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_hash: Option<String>,
     pub request_hash: String,
     pub response_hash: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -313,6 +319,28 @@ fn table_response_hash(table: &TableRecord) -> LakeCatResult<String> {
         ))
     })?;
     content_hash_json(&value)
+}
+
+fn table_commit_format_version(table: &TableRecord) -> Option<i32> {
+    table
+        .metadata
+        .get("format-version")
+        .and_then(Value::as_i64)
+        .and_then(|value| i32::try_from(value).ok())
+}
+
+fn table_commit_snapshot_id(table: &TableRecord) -> Option<i64> {
+    table
+        .metadata
+        .get("current-snapshot-id")
+        .and_then(Value::as_i64)
+}
+
+fn table_commit_policy_hash(authorization_receipt: Option<&Value>) -> Option<String> {
+    authorization_receipt
+        .and_then(|receipt| receipt.get("policy_hash"))
+        .and_then(Value::as_str)
+        .map(ToString::to_string)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1246,6 +1274,9 @@ impl CatalogStore for MemoryCatalogStore {
             new_metadata_location,
             sequence_number,
             principal: commit.principal.clone(),
+            format_version: table_commit_format_version(&table),
+            snapshot_id: table_commit_snapshot_id(&table),
+            policy_hash: table_commit_policy_hash(commit.authorization_receipt.as_ref()),
             request_hash,
             response_hash: table_response_hash(&table)?,
             idempotency_key_sha256,
@@ -2788,6 +2819,9 @@ pub mod turso_store {
                 new_metadata_location: table.metadata_location.clone(),
                 sequence_number: table.version,
                 principal: commit.principal.clone(),
+                format_version: crate::table_commit_format_version(&table),
+                snapshot_id: crate::table_commit_snapshot_id(&table),
+                policy_hash: crate::table_commit_policy_hash(commit.authorization_receipt.as_ref()),
                 request_hash,
                 response_hash: crate::table_response_hash(&table)?,
                 idempotency_key_sha256,
@@ -4598,6 +4632,9 @@ pub mod turso_store {
                 commit_records[0].response_hash,
                 crate::table_response_hash(&replayed_probe).unwrap()
             );
+            assert_eq!(commit_records[0].format_version, Some(3));
+            assert_eq!(commit_records[0].snapshot_id, None);
+            assert_eq!(commit_records[0].policy_hash, None);
             let replay_mismatch = store
                 .replay_table_commit(&ident, "commit-1", "sha256:different-request")
                 .await
@@ -4641,6 +4678,10 @@ pub mod turso_store {
             assert_eq!(
                 pending[0].payload["commit"]["response_hash"],
                 serde_json::json!(commit_records[0].response_hash)
+            );
+            assert_eq!(
+                pending[0].payload["commit"]["format_version"],
+                serde_json::json!(3)
             );
             assert!(!pending[0].payload.to_string().contains("commit-1"));
             assert_eq!(

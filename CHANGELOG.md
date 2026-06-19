@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `format_version`, `snapshot_id`, and `policy_hash` to durable table
+  commit records so pointer-log, audit/outbox, graph, and lineage replay carry
+  compact Iceberg and governance summary evidence for each committed pointer.
 - Added a durable `response_hash` to table commit records so pointer-log,
   audit/outbox, graph, and lineage replay can prove the exact stored commit
   response alongside the request hash used for idempotency.
