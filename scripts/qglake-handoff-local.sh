@@ -22,6 +22,7 @@ SUMMARY="$RUN_DIR/handoff-summary.json"
 LAKECAT_REPLAY_OUTPUT="$RUN_DIR/lakecat-replay.txt"
 QUERYGRAPH_VERIFY_OUTPUT="$RUN_DIR/querygraph-verify.json"
 QUERYGRAPH_IMPORT_OUTPUT="$RUN_DIR/querygraph-import.json"
+LAKECAT_HANDOFF_VERIFY_OUTPUT="$RUN_DIR/lakecat-handoff-verify.json"
 TURSO_PATH="$RUN_DIR/lakecat.turso"
 SERVICE_LOG="$RUN_DIR/lakecat-service.log"
 LOCATION="file://$RUN_DIR/events"
@@ -716,6 +717,7 @@ write_summary() {
       "sha256": "sha256:$import_plan_sha"
     },
     "lakecatReplayOutput": "$(json_string "$LAKECAT_REPLAY_OUTPUT")",
+    "lakecatHandoffVerifyOutput": "$(json_string "$LAKECAT_HANDOFF_VERIFY_OUTPUT")",
     "querygraphVerifyOutput": "$(json_string "$QUERYGRAPH_VERIFY_OUTPUT")",
     "querygraphImportOutput": "$(json_string "$QUERYGRAPH_IMPORT_OUTPUT")",
     "serviceLog": "$(json_string "$SERVICE_LOG")"
@@ -731,7 +733,7 @@ fi
 
 mkdir -p "$RUN_DIR"
 rm -f "$BUNDLE" "$DRAIN" "$IMPORT_PLAN" "$SUMMARY" \
-  "$LAKECAT_REPLAY_OUTPUT" "$QUERYGRAPH_VERIFY_OUTPUT" "$QUERYGRAPH_IMPORT_OUTPUT" \
+  "$LAKECAT_REPLAY_OUTPUT" "$LAKECAT_HANDOFF_VERIFY_OUTPUT" "$QUERYGRAPH_VERIFY_OUTPUT" "$QUERYGRAPH_IMPORT_OUTPUT" \
   "$TURSO_PATH" "$SERVICE_LOG"
 
 echo "Starting LakeCat at $CATALOG_URL"
@@ -779,6 +781,12 @@ cargo run --locked --manifest-path "$QUERYGRAPH_RUST_DIR/Cargo.toml" -- lakecat-
   | tee "$QUERYGRAPH_IMPORT_OUTPUT"
 
 write_summary
+
+echo "Verifying LakeCat handoff summary"
+cargo run -p lakecat-cli -- qglake-verify-handoff \
+  --summary "$SUMMARY" \
+  --json \
+  | tee "$LAKECAT_HANDOFF_VERIFY_OUTPUT"
 
 echo "QGLake handoff verified"
 echo "  bundle:      $BUNDLE"

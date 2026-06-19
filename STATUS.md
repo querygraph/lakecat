@@ -6,6 +6,35 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify QGLake handoff summaries with LakeCat CLI`.
+  `lakecat-cli qglake-verify-handoff --summary ... [--json]` validates the
+  `lakecat.qglake.handoff-summary.v1` schema and compact proof boundary,
+  including QueryGraph verify/import agreement, LakeCat replay agreement,
+  request identity, QueryGraph bootstrap, governed scan, table commit-history,
+  view receipt-chain, storage-profile, and credential-vending proof objects.
+  `scripts/qglake-handoff-local.sh` now runs that verifier after writing
+  `handoff-summary.json` and captures
+  `target/qglake-handoff/lakecat-handoff-verify.json` as an accepted artifact.
+- Local verification for the handoff-summary verifier slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `cargo test -p lakecat-cli parses_qglake_verify_handoff_command`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `scripts/qglake-handoff-local.sh`. The live handoff generated one table and
+  one view, drained 26 outbox events, verified LakeCat replay, ran QueryGraph
+  `lakecat-verify` and `lakecat-import`, then ran
+  `lakecat-cli qglake-verify-handoff --json` over the written summary and
+  emitted `lakecat.qglake.handoff-verification.v1` with matching table/view
+  counts, standards, request identity proof, and QueryGraph bootstrap proof;
+  direct CLI check:
+  `cargo run -p lakecat-cli -- qglake-verify-handoff --summary target/qglake-handoff/handoff-summary.json --json`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test -p lakecat-cli`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Lift QueryGraph bootstrap proof into handoff summary`.
   `lakecat-cli qglake-verify-replay --json` now emits structured
   `replay-evidence.queryGraphBootstrap`, and

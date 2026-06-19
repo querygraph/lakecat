@@ -1208,8 +1208,9 @@ hashes, namespace chain hashes, verified-chain counts, and replay/OpenLineage
 hashes. The credential proof shows the restricted agent was blocked onto
 Sail-planned reads while the trusted human path used the audited raw-credential
 exception. The summary also records artifact paths, raw file hashes, captured
-LakeCat replay output, captured QueryGraph verification output, captured
-QueryGraph import output, and service log path.
+LakeCat replay output, captured LakeCat handoff-summary verification output,
+captured QueryGraph verification output, captured QueryGraph import output, and
+service log path.
 That makes the handoff repeatable from the LakeCat repo while keeping
 QueryGraph responsible for graph validation and import semantics.
 The handoff script refuses to write the summary unless LakeCat replay JSON
@@ -1320,6 +1321,23 @@ Those lines are intentionally small enough for QueryGraph handoff scripts and
 operator logs, but they still come from the same typed lineage-drain summaries
 that the verifier requires before accepting replay.
 
+After the full local handoff writes `handoff-summary.json`, LakeCat can also
+verify the compact summary itself:
+
+```sh
+cargo run -p lakecat-cli -- qglake-verify-handoff \
+  --summary target/qglake-handoff/handoff-summary.json \
+  --json
+```
+
+That command validates the `lakecat.qglake.handoff-summary.v1` schema,
+QueryGraph verify/import agreement, LakeCat replay agreement, and the compact
+proof objects for request identity, QueryGraph bootstrap, governed scan,
+pointer history, view receipt chains, storage-profile upsert, and credential
+vending. The local handoff harness runs it automatically and writes the
+captured verifier output to
+`target/qglake-handoff/lakecat-handoff-verify.json`.
+
 The end-to-end result is a chain:
 
 ```text
@@ -1374,6 +1392,9 @@ then asks QueryGraph to verify and import it:
 
 ```sh
 scripts/qglake-handoff-local.sh
+cargo run -p lakecat-cli -- qglake-verify-handoff \
+  --summary target/qglake-handoff/handoff-summary.json \
+  --json
 cat target/qglake-handoff/handoff-summary.json
 ```
 
@@ -1382,10 +1403,12 @@ verifies governed scan planning, verifies fetch-scan-task reapplication,
 exercises delete manifest handling, probes credential-vend behavior for agents
 and trusted humans, verifies compact table commit-history evidence, exports
 QueryGraph bootstrap artifacts, drains the outbox, and proves the resulting
-bundle through QueryGraph's Rust verifier/importer. It is small, but it is not
-decorative. It is the acceptance story for a catalog that participates in the
-user workflow from notebook to agent. The summary file gives automation a
-single stable place to find the accepted table/view counts, semantic hashes,
+bundle through QueryGraph's Rust verifier/importer. It then asks LakeCat to
+verify its own compact handoff summary, making the summary a first-class
+acceptance artifact rather than an unchecked convenience file. It is small, but
+it is not decorative. It is the acceptance story for a catalog that participates
+in the user workflow from notebook to agent. The summary file gives automation
+a single stable place to find the accepted table/view counts, semantic hashes,
 bundle, lineage drain, import plan, captured verifier outputs, and raw artifact
 hashes without scraping terminal text.
 
@@ -1406,6 +1429,9 @@ cargo run -p lakecat-cli -- qglake-verify-replay \
   --drain target/qglake/lineage-drain.json \
   --principal did:example:agent
 scripts/qglake-handoff-local.sh
+cargo run -p lakecat-cli -- qglake-verify-handoff \
+  --summary target/qglake-handoff/handoff-summary.json \
+  --json
 cargo run -p lakecat-cli -- bootstrap-export \
   --output lakecat-bootstrap.json
 ```

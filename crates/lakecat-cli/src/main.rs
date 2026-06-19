@@ -56,6 +56,7 @@ async fn run() -> lakecat_core::LakeCatResult<()> {
             principal,
             json,
         } => qglake_verify_replay(bundle, drain, principal, json),
+        Command::QglakeVerifyHandoff { summary, json } => qglake_verify_handoff(summary, json),
         Command::PolicyList {
             catalog,
             warehouse,
@@ -342,6 +343,315 @@ fn qglake_verify_replay(
         println!("{line}");
     }
     Ok(())
+}
+
+fn qglake_verify_handoff(
+    summary_path: PathBuf,
+    json_output: bool,
+) -> lakecat_core::LakeCatResult<()> {
+    let summary = read_json_file(&summary_path)?;
+    let verification = verify_qglake_handoff_summary_value(&summary)?;
+    if json_output {
+        print_json(&verification)?;
+        return Ok(());
+    }
+    let verification = verification.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::Internal("handoff verification must be an object".to_string())
+    })?;
+    println!("verified qglake handoff summary");
+    println!(
+        "bundle {}",
+        required_str(
+            required_object(
+                verification,
+                "queryGraphBootstrapProof",
+                "handoff verification"
+            )?,
+            "bundleHash",
+            "handoff verification queryGraphBootstrapProof"
+        )?
+    );
+    println!(
+        "querygraph import {}",
+        required_str(
+            required_object(
+                verification,
+                "queryGraphBootstrapProof",
+                "handoff verification"
+            )?,
+            "queryGraphImportHash",
+            "handoff verification queryGraphBootstrapProof"
+        )?
+    );
+    println!(
+        "tables {}",
+        required_u64(verification, "tableCount", "handoff verification")?
+    );
+    println!(
+        "views {}",
+        required_u64(verification, "viewCount", "handoff verification")?
+    );
+    Ok(())
+}
+
+fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCatResult<Value> {
+    let summary = summary.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "handoff summary root must be an object".to_string(),
+        )
+    })?;
+    require_string_eq(
+        summary,
+        "schemaVersion",
+        "lakecat.qglake.handoff-summary.v1",
+        "handoff summary",
+    )?;
+    require_string_eq(summary, "status", "verified", "handoff summary")?;
+    let principal = required_str(summary, "principal", "handoff summary")?;
+    let querygraph = required_object(summary, "querygraphVerification", "handoff summary")?;
+    let import = required_object(summary, "querygraphImportVerification", "handoff summary")?;
+    if required_bool(import, "matchesVerify", "querygraphImportVerification")? != true {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "handoff summary querygraphImportVerification.matchesVerify must be true".to_string(),
+        ));
+    }
+    let lakecat = required_object(summary, "lakecatReplayVerification", "handoff summary")?;
+    require_string_eq(
+        lakecat,
+        "schemaVersion",
+        "lakecat.qglake.replay-verification.v1",
+        "lakecatReplayVerification",
+    )?;
+    require_string_eq(lakecat, "status", "verified", "lakecatReplayVerification")?;
+    if required_bool(lakecat, "matchesQueryGraph", "lakecatReplayVerification")? != true {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "handoff summary lakecatReplayVerification.matchesQueryGraph must be true".to_string(),
+        ));
+    }
+    let request_identity =
+        required_object(lakecat, "requestIdentityProof", "lakecatReplayVerification")?;
+    require_string_match(
+        request_identity,
+        "principalSubject",
+        principal,
+        "requestIdentityProof",
+    )?;
+    require_string_eq(
+        request_identity,
+        "principalKind",
+        "agent",
+        "requestIdentityProof",
+    )?;
+    require_non_empty_str(
+        request_identity,
+        "requestIdentitySource",
+        "requestIdentityProof",
+    )?;
+    require_non_empty_str(
+        request_identity,
+        "requestIdentityState",
+        "requestIdentityProof",
+    )?;
+    require_hash_str(
+        request_identity,
+        "authorizationReceiptHash",
+        "requestIdentityProof",
+    )?;
+
+    let bootstrap = required_object(
+        lakecat,
+        "queryGraphBootstrapProof",
+        "lakecatReplayVerification",
+    )?;
+    require_string_match(
+        bootstrap,
+        "bundleHash",
+        required_str(querygraph, "bundleHash", "querygraphVerification")?,
+        "queryGraphBootstrapProof",
+    )?;
+    require_string_match(
+        bootstrap,
+        "graphHash",
+        required_str(querygraph, "graphHash", "querygraphVerification")?,
+        "queryGraphBootstrapProof",
+    )?;
+    require_string_match(
+        bootstrap,
+        "openLineageHash",
+        required_str(querygraph, "openLineageHash", "querygraphVerification")?,
+        "queryGraphBootstrapProof",
+    )?;
+    require_string_match(
+        bootstrap,
+        "queryGraphImportHash",
+        required_str(querygraph, "querygraphImportHash", "querygraphVerification")?,
+        "queryGraphBootstrapProof",
+    )?;
+    require_u64_match(
+        bootstrap,
+        "tableArtifactCount",
+        required_u64(querygraph, "tableCount", "querygraphVerification")?,
+        "queryGraphBootstrapProof",
+    )?;
+    require_u64_match(
+        bootstrap,
+        "viewArtifactCount",
+        required_u64(querygraph, "viewCount", "querygraphVerification")?,
+        "queryGraphBootstrapProof",
+    )?;
+    require_positive_u64(bootstrap, "policyBindingCount", "queryGraphBootstrapProof")?;
+    require_value_match(
+        bootstrap,
+        "standards",
+        required_value(querygraph, "standards", "querygraphVerification")?,
+        "queryGraphBootstrapProof",
+    )?;
+    require_string_match(
+        bootstrap,
+        "principalSubject",
+        principal,
+        "queryGraphBootstrapProof",
+    )?;
+    require_string_eq(
+        bootstrap,
+        "principalKind",
+        "agent",
+        "queryGraphBootstrapProof",
+    )?;
+    require_hash_str(
+        bootstrap,
+        "authorizationReceiptHash",
+        "queryGraphBootstrapProof",
+    )?;
+    require_hash_str(bootstrap, "agentDelegationHash", "queryGraphBootstrapProof")?;
+    require_hash_str(
+        bootstrap,
+        "agentSummarySignatureHash",
+        "queryGraphBootstrapProof",
+    )?;
+    if required_u64(querygraph, "viewCount", "querygraphVerification")? > 0 {
+        require_hash_array(
+            bootstrap,
+            "viewVersionReceiptHashes",
+            "queryGraphBootstrapProof",
+        )?;
+    } else {
+        required_array(
+            bootstrap,
+            "viewVersionReceiptHashes",
+            "queryGraphBootstrapProof",
+        )?;
+    }
+    require_hash_array(bootstrap, "replayEventHashes", "queryGraphBootstrapProof")?;
+    require_hash_array(bootstrap, "openLineageHashes", "queryGraphBootstrapProof")?;
+
+    let governed_scan = required_object(lakecat, "governedScanProof", "lakecatReplayVerification")?;
+    require_positive_u64(governed_scan, "planTaskCount", "governedScanProof")?;
+    require_positive_u64(governed_scan, "fileTaskCount", "governedScanProof")?;
+    require_hash_array(
+        governed_scan,
+        "plannedReplayEventHashes",
+        "governedScanProof",
+    )?;
+    require_hash_array(
+        governed_scan,
+        "fetchedReplayEventHashes",
+        "governedScanProof",
+    )?;
+
+    let commit_history = required_object(
+        lakecat,
+        "tableCommitHistoryProof",
+        "lakecatReplayVerification",
+    )?;
+    require_positive_u64(commit_history, "commitCount", "tableCommitHistoryProof")?;
+    required_array(commit_history, "sequenceNumbers", "tableCommitHistoryProof")?;
+    require_hash_array(commit_history, "commitHashes", "tableCommitHistoryProof")?;
+
+    let storage_profile = required_object(
+        lakecat,
+        "storageProfileUpsertProof",
+        "lakecatReplayVerification",
+    )?;
+    require_non_empty_str(storage_profile, "profileId", "storageProfileUpsertProof")?;
+    require_non_empty_str(storage_profile, "provider", "storageProfileUpsertProof")?;
+    required_bool(
+        storage_profile,
+        "secretRefPresent",
+        "storageProfileUpsertProof",
+    )?;
+    require_hash_array(
+        storage_profile,
+        "replayEventHashes",
+        "storageProfileUpsertProof",
+    )?;
+    require_hash_array(
+        storage_profile,
+        "openLineageHashes",
+        "storageProfileUpsertProof",
+    )?;
+
+    let credentials = required_object(
+        lakecat,
+        "credentialVendingProof",
+        "lakecatReplayVerification",
+    )?;
+    let restricted = required_object(credentials, "restricted", "credentialVendingProof")?;
+    require_u64_match(
+        restricted,
+        "credentialCount",
+        0,
+        "credentialVendingProof.restricted",
+    )?;
+    require_string_eq(
+        restricted,
+        "blockReason",
+        QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
+        "credentialVendingProof.restricted",
+    )?;
+    let trusted = required_object(credentials, "trustedHuman", "credentialVendingProof")?;
+    require_positive_u64(
+        trusted,
+        "credentialCount",
+        "credentialVendingProof.trustedHuman",
+    )?;
+    if required_bool(
+        trusted,
+        "rawCredentialExceptionAllowed",
+        "credentialVendingProof.trustedHuman",
+    )? != true
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "handoff summary trusted-human proof must allow the audited raw credential exception"
+                .to_string(),
+        ));
+    }
+
+    let views = required_object(
+        lakecat,
+        "viewReceiptChainProof",
+        "lakecatReplayVerification",
+    )?;
+    require_u64_match(
+        views,
+        "viewCount",
+        required_u64(querygraph, "viewCount", "querygraphVerification")?,
+        "viewReceiptChainProof",
+    )?;
+    required_array(views, "views", "viewReceiptChainProof")?;
+    required_array(views, "tombstoneReceipts", "viewReceiptChainProof")?;
+    required_array(views, "receiptChains", "viewReceiptChainProof")?;
+
+    Ok(json!({
+        "schemaVersion": "lakecat.qglake.handoff-verification.v1",
+        "status": "verified",
+        "principal": principal,
+        "tableCount": required_u64(querygraph, "tableCount", "querygraphVerification")?,
+        "viewCount": required_u64(querygraph, "viewCount", "querygraphVerification")?,
+        "standards": required_value(querygraph, "standards", "querygraphVerification")?,
+        "queryGraphBootstrapProof": bootstrap,
+        "requestIdentityProof": request_identity,
+    }))
 }
 
 fn qglake_management_replay_line(drain: &LineageDrainResponse) -> Option<String> {
@@ -3651,6 +3961,10 @@ enum Command {
         principal: Option<String>,
         json: bool,
     },
+    QglakeVerifyHandoff {
+        summary: PathBuf,
+        json: bool,
+    },
     PolicyList {
         catalog: String,
         warehouse: String,
@@ -3706,6 +4020,7 @@ impl Command {
             "config" => parse_config(args),
             "lineage-drain" => parse_lineage_drain(args),
             "qglake-verify-replay" => parse_qglake_verify_replay(args),
+            "qglake-verify-handoff" => parse_qglake_verify_handoff(args),
             "policy-list" => parse_policy_list(args),
             "policy-upsert" => parse_policy_upsert(args),
             "storage-profile-list" => parse_storage_profile_list(args),
@@ -3800,6 +4115,29 @@ fn parse_qglake_verify_replay(
             )
         })?,
         principal,
+        json,
+    })
+}
+
+fn parse_qglake_verify_handoff(
+    args: impl Iterator<Item = String>,
+) -> lakecat_core::LakeCatResult<Command> {
+    let mut summary = None;
+    let mut json = false;
+    let mut args = args.peekable();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--summary" => summary = Some(PathBuf::from(next_arg(&mut args, "--summary")?)),
+            "--json" => json = true,
+            _ => return Err(usage_error()),
+        }
+    }
+    Ok(Command::QglakeVerifyHandoff {
+        summary: summary.ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(
+                "missing required --summary for qglake-verify-handoff".to_string(),
+            )
+        })?,
         json,
     })
 }
@@ -4047,6 +4385,196 @@ fn read_typed_json_file<T: DeserializeOwned>(
     })
 }
 
+fn required_value<'a>(
+    value: &'a serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<&'a Value> {
+    value.get(field).ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} is missing required field {field}"
+        ))
+    })
+}
+
+fn required_object<'a>(
+    value: &'a serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<&'a serde_json::Map<String, Value>> {
+    required_value(value, field, label)?
+        .as_object()
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label}.{field} must be an object"
+            ))
+        })
+}
+
+fn required_array<'a>(
+    value: &'a serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<&'a Vec<Value>> {
+    value.get(field).and_then(Value::as_array).ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(format!("{label}.{field} must be an array"))
+    })
+}
+
+fn required_str<'a>(
+    value: &'a serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<&'a str> {
+    required_value(value, field, label)?
+        .as_str()
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!("{label}.{field} must be a string"))
+        })
+}
+
+fn required_bool(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<bool> {
+    value.get(field).and_then(Value::as_bool).ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(format!("{label}.{field} must be a boolean"))
+    })
+}
+
+fn required_u64(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<u64> {
+    value.get(field).and_then(Value::as_u64).ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must be a non-negative integer"
+        ))
+    })
+}
+
+fn require_positive_u64(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<u64> {
+    let number = required_u64(value, field, label)?;
+    if number == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must be positive"
+        )));
+    }
+    Ok(number)
+}
+
+fn require_non_empty_str<'a>(
+    value: &'a serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<&'a str> {
+    let string = required_str(value, field, label)?;
+    if string.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must not be empty"
+        )));
+    }
+    Ok(string)
+}
+
+fn require_hash_str<'a>(
+    value: &'a serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<&'a str> {
+    let string = require_non_empty_str(value, field, label)?;
+    if !string.starts_with("sha256:") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must be a sha256 hash"
+        )));
+    }
+    Ok(string)
+}
+
+fn require_hash_array(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let array = required_array(value, field, label)?;
+    if array.is_empty()
+        || array.iter().any(|item| {
+            !item
+                .as_str()
+                .is_some_and(|string| string.starts_with("sha256:"))
+        })
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must contain sha256 hashes"
+        )));
+    }
+    Ok(())
+}
+
+fn require_string_eq(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    expected: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    require_string_match(value, field, expected, label)
+}
+
+fn require_string_match(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    expected: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let actual = required_str(value, field, label)?;
+    if actual != expected {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} mismatch: expected={expected} actual={actual}"
+        )));
+    }
+    Ok(())
+}
+
+fn require_u64_match(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    expected: u64,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let actual = required_u64(value, field, label)?;
+    if actual != expected {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} mismatch: expected={expected} actual={actual}"
+        )));
+    }
+    Ok(())
+}
+
+fn require_value_match(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    expected: &Value,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let actual = value.get(field).ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} is missing required field {field}"
+        ))
+    })?;
+    if actual != expected {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} mismatch"
+        )));
+    }
+    Ok(())
+}
+
 fn next_arg(
     args: &mut impl Iterator<Item = String>,
     flag: &str,
@@ -4062,6 +4590,7 @@ fn usage_error() -> lakecat_core::LakeCatError {
         "bootstrap-export",
         "lineage-drain",
         "qglake-verify-replay",
+        "qglake-verify-handoff",
         "storage-profile-list",
         "storage-profile-upsert",
         "policy-list",
@@ -4079,6 +4608,152 @@ mod tests {
     use super::*;
 
     const QGLAKE_TEST_LOCATION: &str = "file:///tmp/lakecat-qglake/events";
+
+    fn qglake_handoff_summary_json() -> Value {
+        json!({
+            "schemaVersion": "lakecat.qglake.handoff-summary.v1",
+            "status": "verified",
+            "principal": "did:example:agent",
+            "querygraphVerification": {
+                "tableCount": 1,
+                "viewCount": 1,
+                "bundleHash": "sha256:bundle",
+                "graphHash": "sha256:graph",
+                "openLineageHash": "sha256:openlineage",
+                "querygraphImportHash": "sha256:querygraph-import",
+                "standards": [
+                    "Iceberg REST",
+                    "Croissant",
+                    "CDIF",
+                    "OSI handoff",
+                    "ODRL",
+                    "Grust catalog graph",
+                    "OpenLineage"
+                ]
+            },
+            "querygraphImportVerification": {
+                "matchesVerify": true
+            },
+            "lakecatReplayVerification": {
+                "schemaVersion": "lakecat.qglake.replay-verification.v1",
+                "status": "verified",
+                "matchesQueryGraph": true,
+                "requestIdentityProof": {
+                    "principalSubject": "did:example:agent",
+                    "principalKind": "agent",
+                    "requestIdentitySource": "x-lakecat-agent-did",
+                    "requestIdentityState": "unverified",
+                    "authorizationReceiptHash": "sha256:identity",
+                    "typedidEnvelopeHash": null,
+                    "typedidProofHash": null
+                },
+                "queryGraphBootstrapProof": {
+                    "bundleHash": "sha256:bundle",
+                    "graphHash": "sha256:graph",
+                    "openLineageHash": "sha256:openlineage",
+                    "queryGraphImportHash": "sha256:querygraph-import",
+                    "tableArtifactCount": 1,
+                    "viewArtifactCount": 1,
+                    "policyBindingCount": 1,
+                    "standards": [
+                        "Iceberg REST",
+                        "Croissant",
+                        "CDIF",
+                        "OSI handoff",
+                        "ODRL",
+                        "Grust catalog graph",
+                        "OpenLineage"
+                    ],
+                    "principalSubject": "did:example:agent",
+                    "principalKind": "agent",
+                    "requestIdentitySource": "x-lakecat-agent-did",
+                    "requestIdentityState": "unverified",
+                    "authorizationReceiptHash": "sha256:bootstrap-auth",
+                    "agentDelegationHash": "sha256:delegation",
+                    "agentSummarySignatureHash": "sha256:summary",
+                    "typedidEnvelopeHash": null,
+                    "typedidProofHash": null,
+                    "viewVersionReceiptHashes": ["sha256:view-receipt"],
+                    "replayEventHashes": ["sha256:bootstrap-replay"],
+                    "openLineageHashes": ["sha256:bootstrap-openlineage"]
+                },
+                "governedScanProof": {
+                    "planTaskCount": 1,
+                    "fileTaskCount": 1,
+                    "deleteFileCount": 1,
+                    "childPlanTaskCount": 2,
+                    "plannedReplayEventHashes": ["sha256:scan-plan-replay"],
+                    "fetchedReplayEventHashes": ["sha256:scan-fetch-replay"],
+                    "plannedOpenLineageHashes": ["sha256:scan-plan-openlineage"],
+                    "fetchedOpenLineageHashes": ["sha256:scan-fetch-openlineage"]
+                },
+                "tableCommitHistoryProof": {
+                    "commitCount": 1,
+                    "sequenceNumbers": [1],
+                    "commitHashes": ["sha256:commit"],
+                    "replayEventHashes": ["sha256:commit-replay"],
+                    "openLineageHashes": ["sha256:commit-openlineage"]
+                },
+                "viewReceiptChainProof": {
+                    "viewCount": 1,
+                    "views": [{
+                        "stableId": "lakecat:view:local:default:active_customers_view",
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "active_customers_view",
+                        "viewVersion": 1,
+                        "acceptedViewVersion": 1,
+                        "acceptedReceiptHash": "sha256:view-receipt",
+                        "replayEventHashes": ["sha256:view-replay"],
+                        "openLineageHashes": ["sha256:view-openlineage"]
+                    }],
+                    "tombstoneReceipts": [{
+                        "stableId": "lakecat:view:local:default:active_customers_view",
+                        "receiptHashes": ["sha256:tombstone"],
+                        "replayEventHashes": ["sha256:tombstone-replay"],
+                        "openLineageHashes": ["sha256:tombstone-openlineage"]
+                    }],
+                    "receiptChains": [{
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "verifiedChainCount": 1,
+                        "receiptHashes": ["sha256:chain-receipt"],
+                        "chainHashes": ["sha256:chain"],
+                        "replayEventHashes": ["sha256:chain-replay"],
+                        "openLineageHashes": ["sha256:chain-openlineage"]
+                    }]
+                },
+                "storageProfileUpsertProof": {
+                    "profileId": "events-local",
+                    "provider": "file",
+                    "secretRefPresent": false,
+                    "secretRefProvider": null,
+                    "replayEventHashes": ["sha256:storage-replay"],
+                    "openLineageHashes": ["sha256:storage-openlineage"]
+                },
+                "credentialVendingProof": {
+                    "restricted": {
+                        "principalSubject": "did:example:agent",
+                        "principalKind": "agent",
+                        "credentialCount": 0,
+                        "blockReason": QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
+                        "replayEventHashes": ["sha256:restricted-replay"],
+                        "openLineageHashes": ["sha256:restricted-openlineage"]
+                    },
+                    "trustedHuman": {
+                        "principalSubject": "human:qglake-operator",
+                        "principalKind": "human",
+                        "credentialCount": 1,
+                        "rawCredentialExceptionAllowed": true,
+                        "rawCredentialExceptionReason": QGLAKE_HUMAN_RAW_CREDENTIAL_EXCEPTION_REASON,
+                        "replayEventHashes": ["sha256:human-replay"],
+                        "openLineageHashes": ["sha256:human-openlineage"]
+                    }
+                },
+                "replayEvidence": {}
+            }
+        })
+    }
 
     #[test]
     fn parses_config_command_defaults() {
@@ -4167,6 +4842,58 @@ mod tests {
             }
             _ => panic!("expected qglake-verify-replay command"),
         }
+    }
+
+    #[test]
+    fn parses_qglake_verify_handoff_command() {
+        let command = Command::parse([
+            "qglake-verify-handoff".to_string(),
+            "--summary".to_string(),
+            "target/qglake-handoff/handoff-summary.json".to_string(),
+            "--json".to_string(),
+        ])
+        .unwrap();
+        match command {
+            Command::QglakeVerifyHandoff { summary, json } => {
+                assert_eq!(
+                    summary,
+                    PathBuf::from("target/qglake-handoff/handoff-summary.json")
+                );
+                assert!(json);
+            }
+            _ => panic!("expected qglake-verify-handoff command"),
+        }
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_accepts_compact_proofs() {
+        let summary = qglake_handoff_summary_json();
+        let verification =
+            verify_qglake_handoff_summary_value(&summary).expect("handoff summary should verify");
+
+        assert_eq!(
+            verification["schemaVersion"],
+            json!("lakecat.qglake.handoff-verification.v1")
+        );
+        assert_eq!(verification["status"], json!("verified"));
+        assert_eq!(verification["principal"], json!("did:example:agent"));
+        assert_eq!(verification["tableCount"], json!(1));
+        assert_eq!(verification["viewCount"], json!(1));
+        assert_eq!(
+            verification["queryGraphBootstrapProof"]["bundleHash"],
+            json!("sha256:bundle")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_bootstrap_hash_mismatch() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["bundleHash"] =
+            json!("sha256:other");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject mismatched bootstrap hash");
+        assert!(err.to_string().contains("bundleHash mismatch"));
     }
 
     #[test]

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `lakecat-cli qglake-verify-handoff --summary ... [--json]` to validate
+  the compact QGLake handoff summary schema and proof objects, and made the
+  local handoff harness run it after writing `handoff-summary.json`.
 - Added compact QueryGraph bootstrap replay evidence to `lakecat-cli
   qglake-verify-replay --json` and lifted it into
   `lakecatReplayVerification.queryGraphBootstrapProof` in
