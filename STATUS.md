@@ -6,6 +6,36 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cross-check captured request/bootstrap replay proofs`.
+  `lakecat-cli qglake-verify-handoff` now compares compact
+  `requestIdentityProof` and `queryGraphBootstrapProof` values with the
+  captured LakeCat replay JSON at `replay-evidence.requestIdentity` and
+  `replay-evidence.queryGraphBootstrap`. A handoff is rejected if the replay
+  artifact and compact summary disagree on principal identity, request-identity
+  source/state, authorization receipt hash, TypeDID envelope/proof hash slots,
+  QueryGraph bootstrap/import hashes, graph/OpenLineage hashes, artifact
+  counts, policy count, standards, agent delegation hash, agent summary
+  signature hash, view receipt hashes, replay event hashes, or OpenLineage
+  replay hashes. The verifier output now echoes those accepted captured proofs
+  under `capturedOutputSemantics.lakecatReplay.requestIdentityProof` and
+  `capturedOutputSemantics.lakecatReplay.queryGraphBootstrapProof`.
+- Local verification for this captured request/bootstrap replay proof slice is
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh`. The live handoff generated one table and
+  one view, drained 26 outbox events, verified LakeCat replay, ran QueryGraph
+  `lakecat-verify` and `lakecat-import`, then ran
+  `lakecat-cli qglake-verify-handoff --json` and emitted
+  `capturedOutputSemantics.lakecatReplay.requestIdentityProof` plus
+  `queryGraphBootstrapProof`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Cross-check captured credential replay proof`.
   `lakecat-cli qglake-verify-handoff` now compares the compact
   `lakecatReplayVerification.credentialVendingProof` with the captured LakeCat

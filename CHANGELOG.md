@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-verify-handoff` compare compact request-identity and
+  QueryGraph bootstrap proofs against the captured LakeCat replay JSON, so
+  principal, authorization, delegation, summary-signature, and bootstrap hash
+  evidence cannot drift between replay and handoff summary.
 - Made `lakecat-cli qglake-verify-handoff` compare compact
   `credentialVendingProof` branches against the captured LakeCat replay JSON,
   and updated the local handoff harness to include storage-profile issuance

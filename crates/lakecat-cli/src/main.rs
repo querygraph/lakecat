@@ -535,6 +535,9 @@ fn verify_qglake_handoff_captured_output_semantics(
         querygraph,
         "captured QueryGraph import output",
     )?;
+    let request_identity = Value::Object(lakecat_replay_request_identity(lakecat_replay)?.clone());
+    let querygraph_bootstrap =
+        Value::Object(lakecat_replay_querygraph_bootstrap(lakecat_replay)?.clone());
     let storage_profile_upsert =
         Value::Object(lakecat_replay_storage_profile_upsert(lakecat_replay)?.clone());
     let credential_vending = Value::Object(lakecat_replay_credentials(lakecat_replay)?.clone());
@@ -550,6 +553,8 @@ fn verify_qglake_handoff_captured_output_semantics(
             "openLineageHash": required_str(lakecat_replay, "open-lineage-hash", "captured LakeCat replay output")?,
             "queryGraphImportHash": required_str(lakecat_replay, "querygraph-import-hash", "captured LakeCat replay output")?,
             "standards": required_value(lakecat_replay, "standards", "captured LakeCat replay output")?,
+            "requestIdentityProof": request_identity,
+            "queryGraphBootstrapProof": querygraph_bootstrap,
             "storageProfileUpsertProof": storage_profile_upsert,
             "credentialVendingProof": credential_vending,
         },
@@ -609,8 +614,119 @@ fn verify_lakecat_replay_capture_matches_summary(
         querygraph,
         "captured LakeCat replay output",
     )?;
+    verify_lakecat_replay_request_identity_matches_summary(capture, lakecat)?;
+    verify_lakecat_replay_querygraph_bootstrap_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_storage_profile_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_credentials_match_summary(capture, lakecat)
+}
+
+fn verify_lakecat_replay_request_identity_matches_summary(
+    capture: &serde_json::Map<String, Value>,
+    lakecat: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let captured_request_identity = lakecat_replay_request_identity(capture)?;
+    let summary_request_identity =
+        required_object(lakecat, "requestIdentityProof", "lakecatReplayVerification")?;
+
+    for field in [
+        "principalSubject",
+        "principalKind",
+        "requestIdentitySource",
+        "requestIdentityState",
+        "authorizationReceiptHash",
+    ] {
+        require_string_match(
+            captured_request_identity,
+            field,
+            required_str(summary_request_identity, field, "requestIdentityProof")?,
+            "captured LakeCat replay output.replay-evidence.requestIdentity",
+        )?;
+    }
+
+    for field in ["typedidEnvelopeHash", "typedidProofHash"] {
+        require_value_match(
+            captured_request_identity,
+            field,
+            required_value(summary_request_identity, field, "requestIdentityProof")?,
+            "captured LakeCat replay output.replay-evidence.requestIdentity",
+        )?;
+    }
+
+    Ok(())
+}
+
+fn lakecat_replay_request_identity(
+    capture: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<&serde_json::Map<String, Value>> {
+    required_object(
+        lakecat_replay_evidence(capture)?,
+        "requestIdentity",
+        "captured LakeCat replay output.replay-evidence",
+    )
+}
+
+fn verify_lakecat_replay_querygraph_bootstrap_matches_summary(
+    capture: &serde_json::Map<String, Value>,
+    lakecat: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let captured_bootstrap = lakecat_replay_querygraph_bootstrap(capture)?;
+    let summary_bootstrap = required_object(
+        lakecat,
+        "queryGraphBootstrapProof",
+        "lakecatReplayVerification",
+    )?;
+
+    for field in [
+        "bundleHash",
+        "graphHash",
+        "openLineageHash",
+        "queryGraphImportHash",
+        "principalSubject",
+        "principalKind",
+        "requestIdentitySource",
+        "requestIdentityState",
+        "authorizationReceiptHash",
+        "agentDelegationHash",
+        "agentSummarySignatureHash",
+    ] {
+        require_string_match(
+            captured_bootstrap,
+            field,
+            required_str(summary_bootstrap, field, "queryGraphBootstrapProof")?,
+            "captured LakeCat replay output.replay-evidence.queryGraphBootstrap",
+        )?;
+    }
+
+    for field in [
+        "tableArtifactCount",
+        "viewArtifactCount",
+        "policyBindingCount",
+        "standards",
+        "typedidEnvelopeHash",
+        "typedidProofHash",
+        "viewVersionReceiptHashes",
+        "replayEventHashes",
+        "openLineageHashes",
+    ] {
+        require_value_match(
+            captured_bootstrap,
+            field,
+            required_value(summary_bootstrap, field, "queryGraphBootstrapProof")?,
+            "captured LakeCat replay output.replay-evidence.queryGraphBootstrap",
+        )?;
+    }
+
+    Ok(())
+}
+
+fn lakecat_replay_querygraph_bootstrap(
+    capture: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<&serde_json::Map<String, Value>> {
+    required_object(
+        lakecat_replay_evidence(capture)?,
+        "queryGraphBootstrap",
+        "captured LakeCat replay output.replay-evidence",
+    )
 }
 
 fn verify_lakecat_replay_storage_profile_matches_summary(
@@ -5240,6 +5356,45 @@ mod tests {
                 "OpenLineage"
             ],
             "replay-evidence": {
+                "requestIdentity": {
+                    "principalSubject": "did:example:agent",
+                    "principalKind": "agent",
+                    "requestIdentitySource": "x-lakecat-agent-did",
+                    "requestIdentityState": "unverified",
+                    "authorizationReceiptHash": "sha256:identity",
+                    "typedidEnvelopeHash": null,
+                    "typedidProofHash": null
+                },
+                "queryGraphBootstrap": {
+                    "bundleHash": "sha256:bundle",
+                    "graphHash": "sha256:graph",
+                    "openLineageHash": "sha256:openlineage",
+                    "queryGraphImportHash": "sha256:querygraph-import",
+                    "tableArtifactCount": 1,
+                    "viewArtifactCount": 1,
+                    "policyBindingCount": 1,
+                    "standards": [
+                        "Iceberg REST",
+                        "Croissant",
+                        "CDIF",
+                        "OSI handoff",
+                        "ODRL",
+                        "Grust catalog graph",
+                        "OpenLineage"
+                    ],
+                    "principalSubject": "did:example:agent",
+                    "principalKind": "agent",
+                    "requestIdentitySource": "x-lakecat-agent-did",
+                    "requestIdentityState": "unverified",
+                    "authorizationReceiptHash": "sha256:bootstrap-auth",
+                    "agentDelegationHash": "sha256:delegation",
+                    "agentSummarySignatureHash": "sha256:summary",
+                    "typedidEnvelopeHash": null,
+                    "typedidProofHash": null,
+                    "viewVersionReceiptHashes": ["sha256:view-receipt"],
+                    "replayEventHashes": ["sha256:bootstrap-replay"],
+                    "openLineageHashes": ["sha256:bootstrap-openlineage"]
+                },
                 "management": {
                     "storageProfileUpsert": {
                         "profileId": "events-local",
@@ -5572,6 +5727,14 @@ mod tests {
             json!("sha256:storage-location-prefix")
         );
         assert_eq!(
+            semantics["lakecatReplay"]["requestIdentityProof"]["principalSubject"],
+            json!("did:example:agent")
+        );
+        assert_eq!(
+            semantics["lakecatReplay"]["queryGraphBootstrapProof"]["agentDelegationHash"],
+            json!("sha256:delegation")
+        );
+        assert_eq!(
             semantics["lakecatReplay"]["credentialVendingProof"]["restricted"]["blockReason"],
             json!(QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON)
         );
@@ -5668,6 +5831,54 @@ mod tests {
         assert!(
             err.to_string().contains(
                 "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert.locationPrefixHash mismatch"
+            )
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_request_identity_drift() {
+        let temp = qglake_temp_dir("handoff-captured-request-identity-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["requestIdentity"]["authorizationReceiptHash"] =
+            json!("sha256:other-identity");
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay request-identity proof drift should be rejected");
+        assert!(
+            err.to_string().contains(
+                "captured LakeCat replay output.replay-evidence.requestIdentity.authorizationReceiptHash mismatch"
+            )
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_querygraph_bootstrap_drift() {
+        let temp = qglake_temp_dir("handoff-captured-querygraph-bootstrap-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["queryGraphBootstrap"]["agentDelegationHash"] =
+            json!("sha256:other-delegation");
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay QueryGraph bootstrap proof drift should be rejected");
+        assert!(
+            err.to_string().contains(
+                "captured LakeCat replay output.replay-evidence.queryGraphBootstrap.agentDelegationHash mismatch"
             )
         );
     }

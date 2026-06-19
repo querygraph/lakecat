@@ -306,9 +306,13 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   replay hashes, and OpenLineage hashes, and the captured
   `replay-evidence.credentials` branches must match the compact
   `credentialVendingProof` for the restricted agent denial and trusted-human
-  audited raw-credential exception; the local handoff harness now includes the
-  storage-profile issuance mode and location-prefix hash when generating the
-  summary so the live script and stricter verifier remain in lockstep.*
+  audited raw-credential exception; captured `replay-evidence.requestIdentity`
+  and `replay-evidence.queryGraphBootstrap` must also match their compact
+  handoff proofs for principal, authorization, TypeDID slots, delegation,
+  summary-signature, bootstrap hashes, artifact counts, standards, and replay
+  hashes; the local handoff harness now includes the storage-profile issuance
+  mode and location-prefix hash when generating the summary so the live script
+  and stricter verifier remain in lockstep.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond
