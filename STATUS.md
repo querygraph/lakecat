@@ -6,6 +6,22 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Test QGLake replay JSON contract`. `lakecat-cli qglake-verify-replay
+  --json` now builds its schema-versioned output through a testable helper, and
+  the existing matching replay fixture asserts the replay JSON schema version
+  plus structured scan, management, credential, and table-commit replay
+  evidence fields.
+- Local verification for the QGLake replay JSON contract test slice was green:
+  `cargo fmt -p lakecat-cli`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `cargo test -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Version QGLake handoff contracts`. `lakecat-cli qglake-verify-replay
   --json` now emits `schema-version:
   lakecat.qglake.replay-verification.v1`, and

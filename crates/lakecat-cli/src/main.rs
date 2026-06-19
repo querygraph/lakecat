@@ -314,24 +314,14 @@ fn qglake_verify_replay(
     let table_commit_history_replay = qglake_table_commit_history_replay_line(&drain);
     let replay_evidence = qglake_replay_evidence_json(&drain, principal.as_deref());
     if json_output {
-        print_json(&json!({
-            "schema-version": "lakecat.qglake.replay-verification.v1",
-            "status": "verified",
-            "bundle-hash": verification.bundle_hash,
-            "graph-hash": verification.graph_hash,
-            "open-lineage-hash": verification.open_lineage_hash,
-            "querygraph-import-hash": verification.querygraph_import_hash,
-            "table-count": verification.table_count,
-            "view-count": verification.view_count,
-            "verified-tables": verification.verified_tables,
-            "verified-views": verification.verified_views,
-            "standards": verification.standards,
-            "scan-replay": scan_replay,
-            "management-replay": management_replay,
-            "credential-replay": credential_replay,
-            "table-commit-history-replay": table_commit_history_replay,
-            "replay-evidence": replay_evidence,
-        }))?;
+        print_json(&qglake_replay_verification_json(
+            &verification,
+            scan_replay,
+            management_replay,
+            credential_replay,
+            table_commit_history_replay,
+            replay_evidence,
+        ))?;
         return Ok(());
     }
     println!("verified qglake replay evidence");
@@ -371,6 +361,34 @@ fn qglake_management_replay_line(drain: &LineageDrainResponse) -> Option<String>
             .storage_profile_count
             .unwrap_or_default()
     ))
+}
+
+fn qglake_replay_verification_json(
+    verification: &QueryGraphBootstrapVerification,
+    scan_replay: Option<String>,
+    management_replay: Option<String>,
+    credential_replay: Option<String>,
+    table_commit_history_replay: Option<String>,
+    replay_evidence: Value,
+) -> Value {
+    json!({
+        "schema-version": "lakecat.qglake.replay-verification.v1",
+        "status": "verified",
+        "bundle-hash": verification.bundle_hash,
+        "graph-hash": verification.graph_hash,
+        "open-lineage-hash": verification.open_lineage_hash,
+        "querygraph-import-hash": verification.querygraph_import_hash,
+        "table-count": verification.table_count,
+        "view-count": verification.view_count,
+        "verified-tables": verification.verified_tables,
+        "verified-views": verification.verified_views,
+        "standards": verification.standards,
+        "scan-replay": scan_replay,
+        "management-replay": management_replay,
+        "credential-replay": credential_replay,
+        "table-commit-history-replay": table_commit_history_replay,
+        "replay-evidence": replay_evidence,
+    })
 }
 
 fn qglake_replay_evidence_json(drain: &LineageDrainResponse, principal: Option<&str>) -> Value {
@@ -4592,6 +4610,38 @@ mod tests {
         assert_eq!(
             replay_verification.querygraph_import_hash,
             verification.querygraph_import_hash
+        );
+        let replay_json = qglake_replay_verification_json(
+            &replay_verification,
+            qglake_scan_replay_line(&drain),
+            qglake_management_replay_line(&drain),
+            qglake_credential_replay_line(&drain, Some("did:example:agent")),
+            qglake_table_commit_history_replay_line(&drain),
+            qglake_replay_evidence_json(&drain, Some("did:example:agent")),
+        );
+        assert_eq!(
+            replay_json["schema-version"],
+            json!("lakecat.qglake.replay-verification.v1")
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["scan"]["planTaskCount"],
+            json!(1)
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["management"]["policyBindingCount"],
+            json!(1)
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["credentials"]["restricted"]["blockReason"],
+            json!(QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON)
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["credentials"]["trustedHuman"]["rawCredentialExceptionAllowed"],
+            json!(true)
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["tableCommitHistory"]["sequenceNumbers"],
+            json!([1])
         );
     }
 

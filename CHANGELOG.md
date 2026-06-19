@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Refactored QGLake replay verification JSON behind a testable helper and
+  added coverage for the schema version plus structured replay evidence fields.
 - Added explicit schema-version fields for QGLake replay verification JSON and
   the local handoff summary, and made the handoff harness require the replay
   schema before accepting artifacts.
