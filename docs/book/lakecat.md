@@ -1488,8 +1488,11 @@ before parsing the full replay tree. It compares captured LakeCat replay
 `replay-evidence.management` list counts with compact
 `lakecatReplayVerification.managementProof`, requiring positive server,
 project, warehouse, and storage-profile counts and a policy-binding count that
-matches the QueryGraph bootstrap proof. It also compares the captured LakeCat
-replay
+matches the QueryGraph bootstrap proof. Those management-list counts are
+receipt-backed: the compact proof and captured replay must also agree on replay
+and OpenLineage hash arrays for `server.listed`, `project.listed`,
+`warehouse.listed`, `policy-binding.listed`, and `storage-profile.listed`.
+It also compares the captured LakeCat replay
 `replay-evidence.management.storageProfileUpsert` object with the compact
 `lakecatReplayVerification.storageProfileUpsertProof`, including the
 profile id, provider, issuance mode, location-prefix hash, secret-reference
@@ -1600,8 +1603,11 @@ and warehouses replay as OpenLineage receipts too. They intentionally do not
 create list-specific graph nodes in LakeCat; Grust owns the reusable hierarchy
 and traversal model. The drain response lifts their counts and management scope
 into compact fields, so QueryGraph can verify the control-plane read evidence
-without opening the raw lineage payload. The QGLake acceptance workflow now
-establishes its server/project/warehouse tenant spine, performs governed
+without opening the raw lineage payload. It also carries replay and OpenLineage
+hash arrays for those management-list reads, so a compact handoff cannot prove
+only that the right number of management records existed while losing the
+receipt evidence for the reads. The QGLake acceptance workflow now establishes
+its server/project/warehouse tenant spine, performs governed
 server, project, warehouse, policy-list, storage-profile-list, scan-planning,
 scan-task-fetch, and table commit-history reads before bootstrap, and rejects a
 drain that does not replay matching `server.listed`, `project.listed`,

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required compact QGLake `managementProof` and captured replay agreement to
+  carry replay and OpenLineage hash arrays for server, project, warehouse,
+  policy-binding, and storage-profile list evidence.
 - Locked the OPUS consolidation state by recording that the root tree has no
   active `OPUS*.md` files, the four historical OPUS reviews live only under
   `docs/completed/`, and `DESIGN.md` is the implementation-ready synthesis.

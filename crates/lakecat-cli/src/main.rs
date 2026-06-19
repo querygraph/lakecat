@@ -1516,6 +1516,16 @@ fn verify_lakecat_replay_management_matches_summary(
         "warehouseCount",
         "policyBindingCount",
         "storageProfileCount",
+        "serverReplayEventHashes",
+        "serverOpenLineageHashes",
+        "projectReplayEventHashes",
+        "projectOpenLineageHashes",
+        "warehouseReplayEventHashes",
+        "warehouseOpenLineageHashes",
+        "policyReplayEventHashes",
+        "policyOpenLineageHashes",
+        "storageProfileReplayEventHashes",
+        "storageProfileOpenLineageHashes",
     ] {
         require_value_match(
             captured_management,
@@ -2385,6 +2395,20 @@ fn require_management_evidence(
         expected_policy_binding_count,
         "managementProof",
     )?;
+    for field in [
+        "serverReplayEventHashes",
+        "serverOpenLineageHashes",
+        "projectReplayEventHashes",
+        "projectOpenLineageHashes",
+        "warehouseReplayEventHashes",
+        "warehouseOpenLineageHashes",
+        "policyReplayEventHashes",
+        "policyOpenLineageHashes",
+        "storageProfileReplayEventHashes",
+        "storageProfileOpenLineageHashes",
+    ] {
+        require_hash_array(management, field, "managementProof")?;
+    }
     Ok(())
 }
 
@@ -3049,13 +3073,28 @@ fn qglake_scan_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Valu
 }
 
 fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Value> {
+    let server = qglake_drain_event(drain, "server.listed")?;
+    let project = qglake_drain_event(drain, "project.listed")?;
+    let warehouse = qglake_drain_event(drain, "warehouse.listed")?;
+    let policy = qglake_drain_event(drain, "policy-binding.listed")?;
+    let storage_profile = qglake_drain_event(drain, "storage-profile.listed")?;
     let storage_profile_upsert = qglake_drain_event(drain, "storage-profile.upserted")?;
     Some(json!({
-        "serverCount": qglake_drain_event(drain, "server.listed")?.server_count.unwrap_or_default(),
-        "projectCount": qglake_drain_event(drain, "project.listed")?.project_count.unwrap_or_default(),
-        "warehouseCount": qglake_drain_event(drain, "warehouse.listed")?.warehouse_count.unwrap_or_default(),
-        "policyBindingCount": qglake_drain_event(drain, "policy-binding.listed")?.policy_binding_count,
-        "storageProfileCount": qglake_drain_event(drain, "storage-profile.listed")?.storage_profile_count.unwrap_or_default(),
+        "serverCount": server.server_count.unwrap_or_default(),
+        "projectCount": project.project_count.unwrap_or_default(),
+        "warehouseCount": warehouse.warehouse_count.unwrap_or_default(),
+        "policyBindingCount": policy.policy_binding_count,
+        "storageProfileCount": storage_profile.storage_profile_count.unwrap_or_default(),
+        "serverReplayEventHashes": &server.replay_event_hashes,
+        "serverOpenLineageHashes": &server.replay_open_lineage_hashes,
+        "projectReplayEventHashes": &project.replay_event_hashes,
+        "projectOpenLineageHashes": &project.replay_open_lineage_hashes,
+        "warehouseReplayEventHashes": &warehouse.replay_event_hashes,
+        "warehouseOpenLineageHashes": &warehouse.replay_open_lineage_hashes,
+        "policyReplayEventHashes": &policy.replay_event_hashes,
+        "policyOpenLineageHashes": &policy.replay_open_lineage_hashes,
+        "storageProfileReplayEventHashes": &storage_profile.replay_event_hashes,
+        "storageProfileOpenLineageHashes": &storage_profile.replay_open_lineage_hashes,
         "storageProfileUpsert": {
             "profileId": storage_profile_upsert.storage_profile_id.as_deref(),
             "provider": storage_profile_upsert.storage_profile_provider.as_deref(),
@@ -7334,8 +7373,23 @@ mod tests {
 
     const QGLAKE_TEST_LOCATION: &str = "file:///tmp/lakecat-qglake/events";
 
+    fn qglake_add_management_receipt_hashes(management: &mut Value) {
+        management["serverReplayEventHashes"] = json!(["sha256:server-list-replay-event"]);
+        management["serverOpenLineageHashes"] = json!(["sha256:server-list-openlineage"]);
+        management["projectReplayEventHashes"] = json!(["sha256:project-list-replay-event"]);
+        management["projectOpenLineageHashes"] = json!(["sha256:project-list-openlineage"]);
+        management["warehouseReplayEventHashes"] = json!(["sha256:warehouse-list-replay-event"]);
+        management["warehouseOpenLineageHashes"] = json!(["sha256:warehouse-list-openlineage"]);
+        management["policyReplayEventHashes"] = json!(["sha256:policy-list-replay-event"]);
+        management["policyOpenLineageHashes"] = json!(["sha256:policy-list-openlineage"]);
+        management["storageProfileReplayEventHashes"] =
+            json!(["sha256:storage-profile-list-replay-event"]);
+        management["storageProfileOpenLineageHashes"] =
+            json!(["sha256:storage-profile-list-openlineage"]);
+    }
+
     fn qglake_handoff_summary_json() -> Value {
-        json!({
+        let mut summary = json!({
             "schemaVersion": "lakecat.qglake.handoff-summary.v1",
             "status": "verified",
             "catalogUrl": "http://127.0.0.1:18181",
@@ -7574,7 +7628,11 @@ mod tests {
                 },
                 "replayEvidence": {}
             }
-        })
+        });
+        qglake_add_management_receipt_hashes(
+            &mut summary["lakecatReplayVerification"]["managementProof"],
+        );
+        summary
     }
 
     fn qglake_handoff_summary_json_with_artifacts(dir: &Path) -> Value {
@@ -7586,7 +7644,7 @@ mod tests {
         let querygraph_import = dir.join("querygraph-import.json");
         let lakecat_handoff_verify = dir.join("lakecat-handoff-verify.json");
         let service_log = dir.join("lakecat-service.log");
-        let lakecat_replay_json = json!({
+        let mut lakecat_replay_json = json!({
             "schema-version": "lakecat.qglake.replay-verification.v1",
             "status": "verified",
             "table-count": 1,
@@ -7785,6 +7843,9 @@ mod tests {
                 }
             }
         });
+        qglake_add_management_receipt_hashes(
+            &mut lakecat_replay_json["replay-evidence"]["management"],
+        );
         let querygraph_capture_json = json!({
             "warehouse": "local",
             "table-count": 1,
@@ -8449,6 +8510,20 @@ mod tests {
 
         assert!(err.to_string().contains("managementProof"));
         assert!(err.to_string().contains("policyBindingCount mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_management_receipt_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["storageProfileReplayEventHashes"] =
+            json!([]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing management receipt hashes");
+
+        assert!(err.to_string().contains("managementProof"));
+        assert!(err.to_string().contains("storageProfileReplayEventHashes"));
+        assert!(err.to_string().contains("sha256"));
     }
 
     #[test]

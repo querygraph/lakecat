@@ -5,6 +5,21 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Prove management receipt hashes`.
+  QGLake compact `managementProof` and captured LakeCat replay agreement now
+  require replay and OpenLineage hash arrays for server, project, warehouse,
+  policy-binding, and storage-profile list evidence, so management counts
+  cannot stand alone without receipt-backed replay proof.
+- Local verification for this management receipt-hash slice is green:
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_management_receipt_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_accept_matching_files -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Lock OPUS consolidation`.
   The active OPUS material is consolidated into `DESIGN.md`, the root tree has
