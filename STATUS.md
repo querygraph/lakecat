@@ -6,6 +6,14 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Prove credential-root graph anchors in QGLake handoff`.
+  Compact `credentialVendingProof` branches now carry a redacted
+  `storageProfile` object with profile id, provider, issuance mode,
+  secret-ref presence/provider, and credential replay graph-event count. The
+  standalone handoff verifier rejects summaries that omit that proof, and
+  saved lineage-drain artifact verification now rejects credential replay that
+  lacks the corresponding credential-root graph projection.
+- Latest completed implementation slice:
   `Project credential-root access to graph`.
   Current `credentials.vend-attempted` audit/outbox payloads now include a
   redacted `storage-profile` anchor, and durable replay emits a

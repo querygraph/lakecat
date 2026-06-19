@@ -1560,22 +1560,27 @@ regenerates the LakeCat replay evidence that proves request identity,
 QueryGraph bootstrap replay, governed scan replay, pointer history, view
 receipt chains, storage-profile replay, and credential-vending decisions. It
 then compares that regenerated replay evidence to the compact
-`lakecatReplayVerification` proof. It also recomputes the captured LakeCat
-replay and QueryGraph verify/import output hashes, so terminal captures cannot
-drift from the compact summary. It compares the legacy string path aliases for
-the LakeCat replay, QueryGraph verify, and QueryGraph import captures with the
-hashed `capturedOutputs` paths they duplicate. It requires the service log path
-to exist as operational evidence, while treating `lakecatHandoffVerifyOutput`
-as a declared output path because the local harness writes that verifier
-capture after the verifier accepts the summary. Then it parses those captured
-JSON files and checks that the replay schema/status, table/view counts,
-semantic hashes, standards, request-identity proof, QueryGraph bootstrap proof,
-governed scan proof, storage-profile upsert proof, and credential-vending proof
-inside the captures still match the summary. It also rejects malformed TypeDID
-hash slots in the request-identity and QueryGraph bootstrap proofs before a
-consumer has to interpret those slots. The local handoff harness runs it
-automatically and writes the captured verifier output to
-`target/qglake-handoff/lakecat-handoff-verify.json`.
+`lakecatReplayVerification` proof. Credential-vending proof is not just a count:
+each restricted-agent and trusted-human branch carries the redacted
+`storageProfile` graph anchor, including profile id, provider, issuance mode,
+secret-reference presence, and the graph event count emitted by replay. A saved
+handoff is rejected if the archived lineage drain proves lineage receipt hashes
+but omits that credential-root graph projection. It also recomputes the
+captured LakeCat replay and QueryGraph verify/import output hashes, so terminal
+captures cannot drift from the compact summary. It compares the legacy string
+path aliases for the LakeCat replay, QueryGraph verify, and QueryGraph import
+captures with the hashed `capturedOutputs` paths they duplicate. It requires
+the service log path to exist as operational evidence, while treating
+`lakecatHandoffVerifyOutput` as a declared output path because the local harness
+writes that verifier capture after the verifier accepts the summary. Then it
+parses those captured JSON files and checks that the replay schema/status,
+table/view counts, semantic hashes, standards, request-identity proof,
+QueryGraph bootstrap proof, governed scan proof, storage-profile upsert proof,
+and credential-vending proof inside the captures still match the summary. It
+also rejects malformed TypeDID hash slots in the request-identity and
+QueryGraph bootstrap proofs before a consumer has to interpret those slots. The
+local handoff harness runs it automatically and writes the captured verifier
+output to `target/qglake-handoff/lakecat-handoff-verify.json`.
 
 The end-to-end result is a chain:
 

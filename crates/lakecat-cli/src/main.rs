@@ -1533,6 +1533,12 @@ fn verify_lakecat_replay_credentials_match_summary(
                 "captured LakeCat replay output.replay-evidence.credentials",
             )?;
         }
+        require_value_match(
+            captured,
+            "storageProfile",
+            required_value(summary, "storageProfile", "credentialVendingProof")?,
+            "captured LakeCat replay output.replay-evidence.credentials",
+        )?;
     }
 
     let captured_restricted = required_object(
@@ -2316,6 +2322,7 @@ fn require_credential_vending_evidence(
         "openLineageHashes",
         "credentialVendingProof.restricted",
     )?;
+    require_credential_storage_profile_evidence(restricted, "credentialVendingProof.restricted")?;
 
     let trusted = required_object(credentials, "trustedHuman", "credentialVendingProof")?;
     require_non_empty_str(
@@ -2361,7 +2368,31 @@ fn require_credential_vending_evidence(
         "openLineageHashes",
         "credentialVendingProof.trustedHuman",
     )?;
+    require_credential_storage_profile_evidence(trusted, "credentialVendingProof.trustedHuman")?;
 
+    Ok(())
+}
+
+fn require_credential_storage_profile_evidence(
+    credential: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let storage_profile = required_object(credential, "storageProfile", label)?;
+    let storage_label = format!("{label}.storageProfile");
+    require_non_empty_str(storage_profile, "profileId", storage_label.as_str())?;
+    require_non_empty_str(storage_profile, "provider", storage_label.as_str())?;
+    require_non_empty_str(storage_profile, "issuanceMode", storage_label.as_str())?;
+    if required_bool(storage_profile, "secretRefPresent", storage_label.as_str())? {
+        require_non_empty_str(storage_profile, "secretRefProvider", storage_label.as_str())?;
+    } else if !matches!(
+        required_value(storage_profile, "secretRefProvider", storage_label.as_str())?,
+        Value::Null
+    ) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{storage_label}.secretRefProvider must be null when secretRefPresent is false"
+        )));
+    }
+    require_positive_u64(storage_profile, "graphEvents", storage_label.as_str())?;
     Ok(())
 }
 
@@ -2748,6 +2779,7 @@ fn qglake_credential_replay_evidence_json(
             "principalKind": restricted.principal_kind.as_deref(),
             "credentialCount": restricted.credential_count.unwrap_or_default(),
             "blockReason": restricted.credential_block_reason.as_deref(),
+            "storageProfile": qglake_credential_storage_profile_evidence_json(restricted),
             "replayEventHashes": &restricted.replay_event_hashes,
             "openLineageHashes": &restricted.replay_open_lineage_hashes,
         },
@@ -2757,10 +2789,22 @@ fn qglake_credential_replay_evidence_json(
             "credentialCount": human.credential_count.unwrap_or_default(),
             "rawCredentialExceptionAllowed": human.raw_credential_exception_allowed.unwrap_or_default(),
             "rawCredentialExceptionReason": human.raw_credential_exception_reason.as_deref(),
+            "storageProfile": qglake_credential_storage_profile_evidence_json(human),
             "replayEventHashes": &human.replay_event_hashes,
             "openLineageHashes": &human.replay_open_lineage_hashes,
         }
     }))
+}
+
+fn qglake_credential_storage_profile_evidence_json(event: &LineageDrainEventSummary) -> Value {
+    json!({
+        "profileId": event.storage_profile_id.as_deref(),
+        "provider": event.storage_profile_provider.as_deref(),
+        "issuanceMode": event.storage_profile_issuance_mode.as_deref(),
+        "secretRefPresent": event.storage_profile_secret_ref_present.unwrap_or_default(),
+        "secretRefProvider": event.storage_profile_secret_ref_provider.as_deref(),
+        "graphEvents": event.graph_events,
+    })
 }
 
 fn qglake_table_commit_history_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Value> {
@@ -5363,6 +5407,12 @@ fn verify_qglake_credential_lineage_projection(
             "qglake lineage drain {label} credential replay emitted no lineage projection"
         )));
     }
+    if event.graph_events == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} credential replay emitted no credential-root graph projection"
+        )));
+    }
+    verify_qglake_credential_storage_profile_projection(event, label)?;
     if event.replay_event_hashes.is_empty()
         || event.replay_event_hashes.iter().any(String::is_empty)
         || event.replay_open_lineage_hashes.is_empty()
@@ -5373,6 +5423,38 @@ fn verify_qglake_credential_lineage_projection(
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain {label} credential replay is missing sink receipt hashes"
+        )));
+    }
+    Ok(())
+}
+
+fn verify_qglake_credential_storage_profile_projection(
+    event: &LineageDrainEventSummary,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    if event
+        .storage_profile_id
+        .as_deref()
+        .map_or(true, str::is_empty)
+        || event
+            .storage_profile_provider
+            .as_deref()
+            .map_or(true, str::is_empty)
+        || event
+            .storage_profile_issuance_mode
+            .as_deref()
+            .map_or(true, str::is_empty)
+        || event.storage_profile_secret_ref_present.is_none()
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} credential replay is missing redacted storage-profile graph evidence"
+        )));
+    }
+    if event.storage_profile_secret_ref_present == Some(false)
+        && event.storage_profile_secret_ref_provider.is_some()
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} credential replay carried a secret-ref provider without secret-ref presence"
         )));
     }
     Ok(())
@@ -6875,6 +6957,14 @@ mod tests {
                         "principalKind": "agent",
                         "credentialCount": 0,
                         "blockReason": QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
+                        "storageProfile": {
+                            "profileId": "events-local",
+                            "provider": "file",
+                            "issuanceMode": "local-file-no-secret",
+                            "secretRefPresent": false,
+                            "secretRefProvider": null,
+                            "graphEvents": 2
+                        },
                         "replayEventHashes": ["sha256:restricted-replay"],
                         "openLineageHashes": ["sha256:restricted-openlineage"]
                     },
@@ -6884,6 +6974,14 @@ mod tests {
                         "credentialCount": 1,
                         "rawCredentialExceptionAllowed": true,
                         "rawCredentialExceptionReason": QGLAKE_HUMAN_RAW_CREDENTIAL_EXCEPTION_REASON,
+                        "storageProfile": {
+                            "profileId": "events-local",
+                            "provider": "file",
+                            "issuanceMode": "local-file-no-secret",
+                            "secretRefPresent": false,
+                            "secretRefProvider": null,
+                            "graphEvents": 2
+                        },
                         "replayEventHashes": ["sha256:human-replay"],
                         "openLineageHashes": ["sha256:human-openlineage"]
                     }
@@ -7045,6 +7143,14 @@ mod tests {
                         "principalKind": "agent",
                         "credentialCount": 0,
                         "blockReason": QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
+                        "storageProfile": {
+                            "profileId": "events-local",
+                            "provider": "file",
+                            "issuanceMode": "local-file-no-secret",
+                            "secretRefPresent": false,
+                            "secretRefProvider": null,
+                            "graphEvents": 2
+                        },
                         "replayEventHashes": ["sha256:restricted-replay"],
                         "openLineageHashes": ["sha256:restricted-openlineage"]
                     },
@@ -7054,6 +7160,14 @@ mod tests {
                         "credentialCount": 1,
                         "rawCredentialExceptionAllowed": true,
                         "rawCredentialExceptionReason": QGLAKE_HUMAN_RAW_CREDENTIAL_EXCEPTION_REASON,
+                        "storageProfile": {
+                            "profileId": "events-local",
+                            "provider": "file",
+                            "issuanceMode": "local-file-no-secret",
+                            "secretRefPresent": false,
+                            "secretRefProvider": null,
+                            "graphEvents": 2
+                        },
                         "replayEventHashes": ["sha256:human-replay"],
                         "openLineageHashes": ["sha256:human-openlineage"]
                     }
@@ -7297,7 +7411,7 @@ mod tests {
                 "table.commits-listed".to_string(),
                 "querygraph.bootstrap".to_string(),
             ],
-            graph_events: 4,
+            graph_events: 8,
             lineage_events: 13,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
@@ -7931,6 +8045,22 @@ mod tests {
 
         assert!(err.to_string().contains("credentialVendingProof"));
         assert!(err.to_string().contains("replayEventHashes"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_credential_storage_profile_graph_evidence() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]
+            .as_object_mut()
+            .unwrap()
+            .remove("storageProfile");
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject credential proof without storage-profile graph evidence",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("storageProfile"));
     }
 
     #[test]
@@ -13721,7 +13851,7 @@ mod tests {
             typedid_proof_hash: None,
             agent_delegation_hash: Some("sha256:delegation".to_string()),
             agent_summary_signature_hash: Some("sha256:summary".to_string()),
-            graph_events: 0,
+            graph_events: 2,
             lineage_events: 1,
             bundle_hash: None,
             graph_hash: None,
@@ -13742,11 +13872,11 @@ mod tests {
             project_count: None,
             server_count: None,
             storage_profile_count: None,
-            storage_profile_id: None,
-            storage_profile_provider: None,
-            storage_profile_issuance_mode: None,
+            storage_profile_id: Some("events-local".to_string()),
+            storage_profile_provider: Some("file".to_string()),
+            storage_profile_issuance_mode: Some("local-file-no-secret".to_string()),
             storage_profile_location_prefix_hash: None,
-            storage_profile_secret_ref_present: None,
+            storage_profile_secret_ref_present: Some(false),
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
             table_commit_count: None,
@@ -13786,7 +13916,7 @@ mod tests {
             typedid_proof_hash: None,
             agent_delegation_hash: None,
             agent_summary_signature_hash: None,
-            graph_events: 0,
+            graph_events: 2,
             lineage_events: 1,
             bundle_hash: None,
             graph_hash: None,
@@ -13807,11 +13937,11 @@ mod tests {
             project_count: None,
             server_count: None,
             storage_profile_count: None,
-            storage_profile_id: None,
-            storage_profile_provider: None,
-            storage_profile_issuance_mode: None,
+            storage_profile_id: Some("events-local".to_string()),
+            storage_profile_provider: Some("file".to_string()),
+            storage_profile_issuance_mode: Some("local-file-no-secret".to_string()),
             storage_profile_location_prefix_hash: None,
-            storage_profile_secret_ref_present: None,
+            storage_profile_secret_ref_present: Some(false),
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
             table_commit_count: None,

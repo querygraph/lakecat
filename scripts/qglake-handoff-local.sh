@@ -359,6 +359,36 @@ function requireHashArray(value, label) {
     process.exit(1);
   }
 }
+function requireStorageProfile(value, label) {
+  if (!value || typeof value !== "object") {
+    console.error(`LakeCat credential replay evidence is missing ${label}.storageProfile`);
+    process.exit(1);
+  }
+  if (!value.profileId || !value.provider || !value.issuanceMode) {
+    console.error(`LakeCat credential replay evidence is missing ${label} storage-profile identity`);
+    process.exit(1);
+  }
+  if (typeof value.secretRefPresent !== "boolean") {
+    console.error(`LakeCat credential replay evidence is missing ${label} storage-profile secret-ref presence`);
+    process.exit(1);
+  }
+  if (!Number.isInteger(value.graphEvents) || value.graphEvents <= 0) {
+    console.error(`LakeCat credential replay evidence is missing ${label} credential-root graph projection`);
+    process.exit(1);
+  }
+  if (value.secretRefPresent === false && value.secretRefProvider !== null && value.secretRefProvider !== undefined) {
+    console.error(`LakeCat credential replay evidence carried ${label} secret-ref provider without secret-ref presence`);
+    process.exit(1);
+  }
+  return {
+    profileId: value.profileId,
+    provider: value.provider,
+    issuanceMode: value.issuanceMode,
+    secretRefPresent: value.secretRefPresent,
+    secretRefProvider: value.secretRefProvider ?? null,
+    graphEvents: value.graphEvents,
+  };
+}
 if (!restricted || typeof restricted !== "object") {
   console.error("LakeCat replay evidence is missing credentials.restricted");
   process.exit(1);
@@ -373,6 +403,7 @@ if (restricted.credentialCount !== 0 || restricted.blockReason !== "fine-grained
 }
 requireHashArray(restricted.replayEventHashes, "restricted replayEventHashes");
 requireHashArray(restricted.openLineageHashes, "restricted openLineageHashes");
+const restrictedStorageProfile = requireStorageProfile(restricted.storageProfile, "restricted");
 if (!trustedHuman || typeof trustedHuman !== "object") {
   console.error("LakeCat replay evidence is missing credentials.trustedHuman");
   process.exit(1);
@@ -391,12 +422,14 @@ if (trustedHuman.rawCredentialExceptionReason !== "trusted human principal may u
 }
 requireHashArray(trustedHuman.replayEventHashes, "trusted-human replayEventHashes");
 requireHashArray(trustedHuman.openLineageHashes, "trusted-human openLineageHashes");
+const trustedHumanStorageProfile = requireStorageProfile(trustedHuman.storageProfile, "trusted-human");
 process.stdout.write(JSON.stringify({
   restricted: {
     principalSubject: restricted.principalSubject,
     principalKind: restricted.principalKind,
     credentialCount: restricted.credentialCount,
     blockReason: restricted.blockReason,
+    storageProfile: restrictedStorageProfile,
     replayEventHashes: restricted.replayEventHashes,
     openLineageHashes: restricted.openLineageHashes,
   },
@@ -406,6 +439,7 @@ process.stdout.write(JSON.stringify({
     credentialCount: trustedHuman.credentialCount,
     rawCredentialExceptionAllowed: trustedHuman.rawCredentialExceptionAllowed,
     rawCredentialExceptionReason: trustedHuman.rawCredentialExceptionReason,
+    storageProfile: trustedHumanStorageProfile,
     replayEventHashes: trustedHuman.replayEventHashes,
     openLineageHashes: trustedHuman.openLineageHashes,
   },

@@ -496,7 +496,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   credential-vend attempts now carry a redacted storage-profile anchor in their
   audit/outbox payloads, and replay emits catalog-facing `StorageProfile` graph
   events for those attempts so QueryGraph can see credential-root access without
-  LakeCat exposing secret refs or credential material;
+  LakeCat exposing secret refs or credential material; compact QGLake
+  `credentialVendingProof` branches now also carry the matching redacted
+  storage-profile graph evidence, and saved lineage-drain verification rejects
+  credential replay that lacks the credential-root graph projection;
   management routes now use the requested
   warehouse instead of the configured default, Iceberg REST routes now accept a
   warehouse prefix only after resolving a durable `WarehouseRecord`, and

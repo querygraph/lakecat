@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required compact QGLake `credentialVendingProof` branches to include the
+  redacted credential storage-profile graph evidence, and made saved
+  lineage-drain verification reject credential replay that lacks that
+  credential-root graph projection.
 - Projected `credentials.vend-attempted` replay into redacted
   catalog-facing `StorageProfile` graph events, so QueryGraph can see
   credential-root access attempts without exposing secret references or
