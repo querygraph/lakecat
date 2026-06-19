@@ -983,18 +983,27 @@ curl -s -X PUT \
 
 If another writer has already advanced the view, LakeCat returns a conflict
 before it replaces the current view or appends a receipt. Omitting the field
-keeps the compatibility behavior: the store assigns the next version. LakeCat
-also writes a compact view-version receipt in the durable store. The receipt
-records the stable view id, assigned version, previous version, previous
-receipt hash, content hash, principal, operation, and timestamp. That makes the
-compact receipt list a hash chain: version 2 points at the version 1 receipt
-hash, and a later tombstone points at the last upsert receipt hash. Fuller
-version-log semantics remain a Sail-aligned implementation target. When a view
-is dropped, LakeCat appends a compact tombstone receipt instead of inventing a
-new view version: the receipt keeps `view-version` at the last durable version,
-sets `operation` to `drop`, links to the previous receipt, and preserves the
-last content hash so QueryGraph or an operator can prove which catalog view
-state was removed.
+keeps the compatibility behavior: the store assigns the next version. The same
+guard can protect deletion:
+
+```sh
+curl -s -X DELETE \
+  'http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/views/events_view?expected-view-version=2'
+```
+
+If the current view is no longer version 2, LakeCat returns a conflict before
+it removes the view or appends a tombstone receipt. LakeCat also writes a
+compact view-version receipt in the durable store. The receipt records the
+stable view id, assigned version, previous version, previous receipt hash,
+content hash, principal, operation, and timestamp. That makes the compact
+receipt list a hash chain: version 2 points at the version 1 receipt hash, and
+a later tombstone points at the last upsert receipt hash. Fuller version-log
+semantics remain a Sail-aligned implementation target. When a view is dropped,
+LakeCat appends a compact tombstone receipt instead of inventing a new view
+version: the receipt keeps `view-version` at the last durable version, sets
+`operation` to `drop`, links to the previous receipt, and preserves the last
+content hash so QueryGraph or an operator can prove which catalog view state
+was removed.
 
 ```json
 {

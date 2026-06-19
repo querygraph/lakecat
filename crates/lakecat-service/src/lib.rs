@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -59,6 +59,7 @@ use lakecat_store::{
 };
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStore, ObjectStoreExt, PutMode, PutPayload};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use url::Url;
 
@@ -72,6 +73,13 @@ pub struct LakeCatState {
     pub typedid_verifier: Arc<dyn TypeDidVerifier>,
     pub graph: Arc<dyn CatalogGraphSink>,
     pub lineage: Arc<dyn LineageSink>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct ViewMutationQuery {
+    #[serde(default)]
+    expected_view_version: Option<u64>,
 }
 
 #[async_trait]
@@ -2510,6 +2518,7 @@ async fn drop_view(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
     Path((warehouse, namespace, view)): Path<(String, String, String)>,
+    Query(query): Query<ViewMutationQuery>,
 ) -> Result<StatusCode, LakeCatHttpError> {
     let warehouse = management_warehouse(&state, warehouse)?;
     let namespace = namespace.parse::<Namespace>()?;
@@ -2517,11 +2526,12 @@ async fn drop_view(
     let capability = authorize_view_drop(&state, request_identity(&headers)?).await?;
     let record = state
         .store
-        .drop_view(
+        .drop_view_if_version(
             &warehouse,
             &namespace,
             &view_name,
             capability.receipt().principal.clone(),
+            query.expected_view_version,
         )
         .await?;
     record_view_drop_audit(&state, &warehouse, &namespace, &record, &capability, None).await?;
@@ -2575,6 +2585,7 @@ async fn catalog_drop_view(
     State(state): State<LakeCatState>,
     headers: HeaderMap,
     Path((warehouse, namespace, view)): Path<(String, String, String)>,
+    Query(query): Query<ViewMutationQuery>,
 ) -> Result<StatusCode, LakeCatHttpError> {
     let warehouse = management_warehouse(&state, warehouse)?;
     let namespace = namespace.parse::<Namespace>()?;
@@ -2582,11 +2593,12 @@ async fn catalog_drop_view(
     let capability = authorize_view_drop(&state, request_identity(&headers)?).await?;
     let record = state
         .store
-        .drop_view(
+        .drop_view_if_version(
             &warehouse,
             &namespace,
             &view_name,
             capability.receipt().principal.clone(),
+            query.expected_view_version,
         )
         .await?;
     record_view_drop_audit(
@@ -10432,7 +10444,7 @@ mod tests {
 
         let catalog_drop = Request::builder()
             .method(Method::DELETE)
-            .uri("/catalog/v1/local/namespaces/default/views/catalog_customers")
+            .uri("/catalog/v1/local/namespaces/default/views/catalog_customers?expected-view-version=1")
             .header("x-lakecat-principal", "operator@example.com")
             .body(Body::empty())
             .unwrap();
@@ -10448,9 +10460,34 @@ mod tests {
         let response = app.clone().oneshot(dropped_catalog_load).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
+        let stale_management_drop = Request::builder()
+            .method(Method::DELETE)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/active_customers?expected-view-version=1")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(stale_management_drop).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        let receipts_before_drop = Request::builder()
+            .method(Method::GET)
+            .uri(
+                "/management/v1/warehouses/local/namespaces/default/views/active_customers/version-receipts",
+            )
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(receipts_before_drop).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["receipts"].as_array().unwrap().len(), 2);
+
         let management_drop = Request::builder()
             .method(Method::DELETE)
-            .uri("/management/v1/warehouses/local/namespaces/default/views/active_customers")
+            .uri("/management/v1/warehouses/local/namespaces/default/views/active_customers?expected-view-version=2")
             .header("x-lakecat-principal", "operator@example.com")
             .body(Body::empty())
             .unwrap();

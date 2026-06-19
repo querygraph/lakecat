@@ -214,6 +214,22 @@ pub trait CatalogStore: Send + Sync + 'static {
         view: &TableName,
         _principal: Principal,
     ) -> LakeCatResult<ViewRecord> {
+        self.drop_view_if_version(warehouse, namespace, view, _principal, None)
+            .await
+    }
+    async fn drop_view_if_version(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+        view: &TableName,
+        _principal: Principal,
+        expected_view_version: Option<u64>,
+    ) -> LakeCatResult<ViewRecord> {
+        if let Some(expected) = expected_view_version {
+            validate_expected_view_version(expected)?;
+            let current = self.load_view(warehouse, namespace, view).await?;
+            require_expected_view_version(Some(&current), expected)?;
+        }
         let record = self.load_view(warehouse, namespace, view).await?;
         Ok(record)
     }
@@ -1672,14 +1688,36 @@ impl CatalogStore for MemoryCatalogStore {
         view: &TableName,
         principal: Principal,
     ) -> LakeCatResult<ViewRecord> {
+        self.drop_view_if_version(warehouse, namespace, view, principal, None)
+            .await
+    }
+
+    async fn drop_view_if_version(
+        &self,
+        warehouse: &WarehouseName,
+        namespace: &Namespace,
+        view: &TableName,
+        principal: Principal,
+        expected_view_version: Option<u64>,
+    ) -> LakeCatResult<ViewRecord> {
+        if let Some(expected) = expected_view_version {
+            validate_expected_view_version(expected)?;
+        }
         let mut state = self.state.write().await;
-        let record = state
+        let view_key = view_key_parts(warehouse, namespace, view);
+        let current = state
             .views
-            .remove(&view_key_parts(warehouse, namespace, view))
+            .get(&view_key)
             .ok_or_else(|| LakeCatError::NotFound {
                 object: "view",
                 name: view.as_str().to_string(),
             })?;
+        if let Some(expected) = expected_view_version {
+            require_expected_view_version(Some(current), expected)?;
+        }
+        let record = state.views.remove(&view_key).ok_or_else(|| {
+            LakeCatError::Internal("view disappeared during guarded drop".to_string())
+        })?;
         let previous_receipt_hash = latest_view_receipt_hash(
             state
                 .view_version_receipts
@@ -2465,13 +2503,40 @@ mod memory_tests {
             store.list_views(&warehouse, &namespace).await.unwrap(),
             vec![updated.clone()]
         );
+        let err = store
+            .drop_view_if_version(
+                &warehouse,
+                &namespace,
+                &TableName::new("active_customers").unwrap(),
+                Principal::anonymous(),
+                Some(1),
+            )
+            .await
+            .expect_err("stale expected view version must not drop the view");
+        assert!(matches!(
+            err,
+            LakeCatError::Conflict(message) if message.contains("expected version 1")
+        ));
         assert_eq!(
             store
-                .drop_view(
+                .list_view_version_receipts(
                     &warehouse,
                     &namespace,
                     &TableName::new("active_customers").unwrap(),
-                    Principal::anonymous()
+                )
+                .await
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            store
+                .drop_view_if_version(
+                    &warehouse,
+                    &namespace,
+                    &TableName::new("active_customers").unwrap(),
+                    Principal::anonymous(),
+                    Some(2)
                 )
                 .await
                 .unwrap(),
@@ -3740,6 +3805,21 @@ pub mod turso_store {
             view: &TableName,
             principal: Principal,
         ) -> LakeCatResult<ViewRecord> {
+            self.drop_view_if_version(warehouse, namespace, view, principal, None)
+                .await
+        }
+
+        async fn drop_view_if_version(
+            &self,
+            warehouse: &WarehouseName,
+            namespace: &Namespace,
+            view: &TableName,
+            principal: Principal,
+            expected_view_version: Option<u64>,
+        ) -> LakeCatResult<ViewRecord> {
+            if let Some(expected) = expected_view_version {
+                validate_expected_view_version(expected)?;
+            }
             let mut conn = self.connect()?;
             let view_key = view_key_parts(warehouse, namespace, view);
             let tx = conn.transaction().await.map_err(turso_error)?;
@@ -3761,6 +3841,9 @@ pub mod turso_store {
                     object: "view",
                     name: view.as_str().to_string(),
                 })?;
+            if let Some(expected) = expected_view_version {
+                require_expected_view_version(Some(&record), expected)?;
+            }
             let previous_receipt_hash =
                 latest_turso_view_receipt_hash(&tx, view_key.as_str()).await?;
             let receipt = ViewVersionReceipt::drop(&record, previous_receipt_hash, principal)?;
@@ -4632,13 +4715,40 @@ pub mod turso_store {
                 store.list_views(&warehouse, &namespace).await.unwrap(),
                 vec![updated.clone()]
             );
+            let err = store
+                .drop_view_if_version(
+                    &warehouse,
+                    &namespace,
+                    &TableName::new("active_customers").unwrap(),
+                    Principal::anonymous(),
+                    Some(1),
+                )
+                .await
+                .expect_err("stale expected view version must not drop the view");
+            assert!(matches!(
+                err,
+                LakeCatError::Conflict(message) if message.contains("expected version 1")
+            ));
             assert_eq!(
                 store
-                    .drop_view(
+                    .list_view_version_receipts(
                         &warehouse,
                         &namespace,
                         &TableName::new("active_customers").unwrap(),
-                        Principal::anonymous()
+                    )
+                    .await
+                    .unwrap()
+                    .len(),
+                2
+            );
+            assert_eq!(
+                store
+                    .drop_view_if_version(
+                        &warehouse,
+                        &namespace,
+                        &TableName::new("active_customers").unwrap(),
+                        Principal::anonymous(),
+                        Some(2)
                     )
                     .await
                     .unwrap(),

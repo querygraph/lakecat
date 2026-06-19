@@ -6,16 +6,17 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
-  `Guard view upserts with expected versions`.
-  Management and catalog REST view upserts now accept optional
+  `Guard view mutations with expected versions`.
+  Management and catalog REST view upserts and drops now accept optional
   `expected-view-version`. When present, LakeCat checks the current durable
-  view version atomically in the `CatalogStore` upsert path before replacing
-  the view or appending a receipt. Stale replacements return conflict and leave
-  the current view plus receipt chain unchanged. The check is implemented for
-  both the embedded memory store and the Turso-backed local store, preserving
-  compatibility for callers that omit the field while giving QueryGraph agents
-  and operators a catalog-owned guard for view commit semantics.
-- Local verification for this guarded view-upsert slice is green:
+  view version atomically in the `CatalogStore` mutation path before replacing
+  the view, deleting it, or appending a receipt. Stale replacements and stale
+  tombstones return conflict and leave the current view plus receipt chain
+  unchanged. The check is implemented for both the embedded memory store and
+  the Turso-backed local store, preserving compatibility for callers that omit
+  the field while giving QueryGraph agents and operators a catalog-owned guard
+  for view commit semantics.
+- Local verification for this guarded view-mutation slice is green:
   `cargo fmt -p lakecat-api -p lakecat-store -p lakecat-service -p lakecat-cli -- --check`;
   `cargo test -p lakecat-store memory_store_persists_view_records`;
   `cargo test -p lakecat-store --features turso-local turso_store_persists_view_records`;
@@ -27,7 +28,8 @@ Updated: 2026-06-19
   `docs/book/build.sh`;
   `scripts/check-local-dependency-contract.sh`;
   `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
-  `cargo test --workspace --all-features`.
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Cross-check remaining captured replay proofs`.
   `lakecat-cli qglake-verify-handoff` now compares compact
