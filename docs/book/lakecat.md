@@ -1195,7 +1195,16 @@ QGLake fixture: the bundle manifest must verify, the QueryGraph import
 compatibility contract must match, and the lineage drain must carry matching
 bootstrap hashes, credential-denial receipts, management-list evidence, and
 table commit-history receipt evidence, plus view receipt evidence when views
-are present.
+are present. On success, the command prints the accepted bundle and QueryGraph
+import hashes, table/view counts, and a compact line such as:
+
+```text
+table commit history commits=1 sequences=1 hashes=sha256:...
+```
+
+That line is intentionally small enough for QueryGraph handoff scripts and
+operator logs, but it still comes from the same typed lineage-drain summary that
+the verifier requires before accepting replay.
 
 The end-to-end result is a chain:
 

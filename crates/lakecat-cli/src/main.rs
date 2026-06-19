@@ -306,7 +306,31 @@ fn qglake_verify_replay(
     println!("querygraph import {}", verification.querygraph_import_hash);
     println!("tables {}", verification.table_count);
     println!("views {}", verification.view_count);
+    if let Some(line) = qglake_table_commit_history_replay_line(&drain) {
+        println!("{line}");
+    }
     Ok(())
+}
+
+fn qglake_table_commit_history_replay_line(drain: &LineageDrainResponse) -> Option<String> {
+    let commit_history = drain
+        .events
+        .iter()
+        .find(|event| event.event_type == "table.commits-listed")?;
+    Some(format!(
+        "table commit history commits={} sequences={} hashes={}",
+        commit_history.table_commit_count.unwrap_or_default(),
+        join_u64s(&commit_history.table_commit_sequence_numbers),
+        commit_history.table_commit_hashes.join(",")
+    ))
+}
+
+fn join_u64s(values: &[u64]) -> String {
+    values
+        .iter()
+        .map(u64::to_string)
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 async fn drain_lineage_outbox(
@@ -5293,6 +5317,27 @@ mod tests {
         )
         .expect_err("trusted human local credentials should not expose secrets");
         assert!(err.to_string().contains("secret material"));
+    }
+
+    #[test]
+    fn qglake_commit_history_replay_line_summarizes_verified_evidence() {
+        let line = qglake_table_commit_history_replay_line(&LineageDrainResponse {
+            delivered: 1,
+            event_types: vec!["table.commits-listed".to_string()],
+            graph_events: 0,
+            lineage_events: 1,
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            events: vec![qglake_table_commit_history_lineage_summary()],
+        })
+        .expect("commit-history replay line should be present");
+
+        assert_eq!(
+            line,
+            "table commit history commits=1 sequences=1 hashes=sha256:table-commit"
+        );
     }
 
     #[test]

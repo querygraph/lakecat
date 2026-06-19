@@ -269,7 +269,8 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   verifies the compact pointer-log evidence including Iceberg format-version
   and snapshot summary fields, and rejects lineage drains that do not replay
   `table.commits-listed` receipt hashes plus compact commit count, sequence, and
-  commit-hash summary fields;
+  commit-hash summary fields; saved replay verification now prints that compact
+  commit-history summary for QueryGraph/operator handoff;
   reused keys with different request hashes now return conflict; failed pointer
   commits now clean up newly written local metadata objects when they do not
   become the table's metadata pointer; metadata object writes and cleanup now

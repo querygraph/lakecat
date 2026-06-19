@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-verify-replay` print the verified table
+  commit-history replay summary, including compact commit count, sequence
+  numbers, and commit hashes for QueryGraph/operator handoff.
 - Pinned the latest LakeCat `AGENTS.md` operating contract into `GOAL.md` with
   explicit repo-boundary, compatibility, implementation-priority, verification,
   Turso, graph-placement, and commit-discipline sections.

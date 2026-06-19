@@ -5,6 +5,25 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Print QGLake commit replay summary`. `lakecat-cli qglake-verify-replay` now
+  prints the verified `table.commits-listed` replay summary after accepting a
+  saved bootstrap bundle and lineage drain, including compact commit count,
+  sequence numbers, and commit hashes for QueryGraph/operator handoff.
+- Local verification for the QGLake replay-output slice was green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_commit_history_replay_line_summarizes_verified_evidence`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo fmt -p lakecat-sail -p lakecat-store -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
 - Latest completed documentation slice:
   `Pin AGENTS guidance in GOAL`. `GOAL.md` now carries the current
   `/Users/alexy/src/lakecat/AGENTS.md` contract as durable goal guidance with
