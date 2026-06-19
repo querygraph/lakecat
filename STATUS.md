@@ -5,6 +5,16 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Complete OPUS consolidation audit`.
+  The full OPUS1/OPUS2 review and design corpus is mapped into `DESIGN.md` and
+  the completed-review archive now records the expected audit shape for
+  `docs/completed/OPUS*.md`.
+- Local verification for this OPUS consolidation audit is green:
+  `git ls-files 'OPUS*.md'`;
+  `git ls-files 'docs/completed/OPUS*.md'`;
+  `rg --files docs/completed -g 'OPUS*.md'`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Require scan purpose before replay proof`.
   QGLake bootstrap policy projection, scan-plan verification, and

@@ -68,6 +68,26 @@ edits such as fixing links, adding an archive banner, or correcting broken
 provenance. New LakeCat design and implementation guidance belongs here or in
 the adjacent canonical docs.
 
+### Consolidation Completion
+
+The full OPUS corpus is consolidated:
+
+- `OPUS1.md` review findings are represented by `Finding Status`, `OPUS Closure
+  Map`, `Priority Plan`, and the review gate below.
+- `OPUS1-DESIGN.md` architecture guidance is represented by `Thesis`,
+  `Ownership`, `Compatibility Rules`, `Critical Path: The Restriction`, and
+  `OPUS Decisions Kept Permanent`.
+- `OPUS2.md` updated code-review findings are represented by `Current State`,
+  `Finding Status`, and `OPUS Closure Map`.
+- `OPUS2-DESIGN.md` working-plan guidance is represented by `Review Log And
+  Working Plan`, `Critical Path: The Restriction`, `Priority Plan`, and
+  `Review Gate`.
+
+Do not create new OPUS-numbered design files. New reviews should either update
+this living design, update the specific canonical doc in the map above, or add a
+small dated note under `docs/completed/` only after its durable decisions have
+already been merged into the live docs.
+
 ## Review Log And Working Plan
 
 This section consolidates the OPUS review history into the active

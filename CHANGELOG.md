@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Completed the OPUS document consolidation audit by recording the full
+  OPUS1/OPUS2 corpus-to-canonical-doc mapping in `DESIGN.md` and tightening the
+  completed-review archive rules under `docs/completed/`.
 - Required QGLake bootstrap policy projection, scan planning, and
   `fetchScanTasks` verification to preserve the read-restriction purpose before
   compact replay or handoff proof can be accepted.

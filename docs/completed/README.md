@@ -14,6 +14,11 @@ architecture, or agent guidance documents.
 - `OPUS2.md`
 - `OPUS2-DESIGN.md`
 
+The active tree should not contain root-level or live OPUS design files. The
+expected audit result is that `rg --files -g 'OPUS*.md' -g '!docs/completed/**'`
+returns no files, while `rg --files docs/completed -g 'OPUS*.md'` returns only
+the four archived files above.
+
 ## Consolidation Ledger
 
 | Archived file | Durable material now lives in |
@@ -27,6 +32,8 @@ architecture, or agent guidance documents.
 
 - Treat the files in this directory as completed review artifacts.
 - Do not append new working-plan entries to OPUS files.
+- Do not create new OPUS-numbered active design files. Merge durable findings
+  into `../../DESIGN.md` or the specific canonical doc first.
 - When an archived detail becomes active again, move the durable guidance into
   `../../DESIGN.md` or the adjacent canonical doc first, then implement from
   there.
