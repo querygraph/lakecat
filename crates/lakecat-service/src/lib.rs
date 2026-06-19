@@ -1924,7 +1924,7 @@ async fn load_credentials_in_warehouse(
         &storage_profile,
         storage_credentials.len(),
         capability.receipt(),
-    );
+    )?;
     if let Some(reason) = credential_block_reason {
         audit_payload["lakecat:credential-block-reason"] = json!(reason);
     }
@@ -1948,7 +1948,7 @@ fn credentials_vend_audit_payload(
     storage_profile: &StorageProfile,
     credential_count: usize,
     receipt: &AuthorizationReceipt,
-) -> Value {
+) -> LakeCatResult<Value> {
     let mut audit_payload = json!({
         "event-type": "credentials.vend-attempted",
         "table": ident.clone(),
@@ -1961,6 +1961,9 @@ fn credentials_vend_audit_payload(
             "provider": storage_profile.provider.as_str(),
             "issuance-mode": storage_profile.issuance_mode.as_str(),
             "secret-ref-present": storage_profile.secret_ref.is_some(),
+            "location-prefix-hash": content_hash_json(&json!({
+                "location-prefix": storage_profile.location_prefix
+            }))?,
         },
         "secret-ref-present": storage_profile.secret_ref.is_some(),
         "credential-count": credential_count,
@@ -1972,7 +1975,7 @@ fn credentials_vend_audit_payload(
     if let Some(exception) = receipt.context.get("lakecat:raw-credential-exception") {
         audit_payload["lakecat:raw-credential-exception"] = exception.clone();
     }
-    audit_payload
+    Ok(audit_payload)
 }
 
 fn table_scan_planned_audit_payload(
@@ -12697,7 +12700,8 @@ mod tests {
             checked_at: chrono::Utc::now(),
         };
 
-        let payload = credentials_vend_audit_payload(&ident, &table, &profile, 1, &receipt);
+        let payload =
+            credentials_vend_audit_payload(&ident, &table, &profile, 1, &receipt).unwrap();
         assert_eq!(
             payload["lakecat:raw-credential-exception"]["allowed"],
             serde_json::json!(false)
@@ -12721,6 +12725,16 @@ mod tests {
         assert_eq!(
             payload["authorization-receipt"]["context"]["read-restriction"],
             payload["read-restriction"]
+        );
+        assert_eq!(
+            payload["storage-profile"]["location-prefix-hash"],
+            serde_json::json!(
+                content_hash_json(&json!({"location-prefix": "file:///tmp/events"})).unwrap()
+            )
+        );
+        assert!(
+            payload["storage-profile"].get("location-prefix").is_none(),
+            "credential-vend audit payload must not expose raw storage-profile location prefixes"
         );
     }
 

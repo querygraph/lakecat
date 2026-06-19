@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound credential-vend replay evidence to a redacted storage scope by adding
+  `location-prefix-hash` to credential storage-profile proof and requiring it
+  in QGLake compact handoff verification.
 - Redacted storage-profile outbox graph and lineage projections so replayed
   payloads carry `location-prefix-hash` instead of raw storage roots while
   preserving management API access to the configured prefix.

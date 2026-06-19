@@ -1483,6 +1483,9 @@ the captured `replay-evidence.credentials` restricted-agent and trusted-human
 branches with the compact `credentialVendingProof`, so a saved handoff cannot
 claim that agents were blocked onto Sail-planned reads or that humans used an
 audited exception unless the captured LakeCat replay proves the same decision.
+Each credential branch carries the same redacted storage-scope anchor as the
+storage-profile upsert proof: `locationPrefixHash` binds the credential-vend
+attempt to the configured storage root without replaying the raw prefix.
 The compact handoff verifier also validates that credential proof directly:
 the restricted branch must name the accepted agent principal, carry the
 Sail-planned-read block reason, prove zero credentials, carry the

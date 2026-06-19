@@ -2432,6 +2432,11 @@ fn require_credential_storage_profile_evidence(
     require_non_empty_str(storage_profile, "profileId", storage_label.as_str())?;
     require_non_empty_str(storage_profile, "provider", storage_label.as_str())?;
     require_non_empty_str(storage_profile, "issuanceMode", storage_label.as_str())?;
+    require_hash_str(
+        storage_profile,
+        "locationPrefixHash",
+        storage_label.as_str(),
+    )?;
     if required_bool(storage_profile, "secretRefPresent", storage_label.as_str())? {
         require_non_empty_str(storage_profile, "secretRefProvider", storage_label.as_str())?;
     } else if !matches!(
@@ -2898,6 +2903,7 @@ fn qglake_credential_storage_profile_evidence_json(event: &LineageDrainEventSumm
         "profileId": event.storage_profile_id.as_deref(),
         "provider": event.storage_profile_provider.as_deref(),
         "issuanceMode": event.storage_profile_issuance_mode.as_deref(),
+        "locationPrefixHash": event.storage_profile_location_prefix_hash.as_deref(),
         "secretRefPresent": event.storage_profile_secret_ref_present.unwrap_or_default(),
         "secretRefProvider": event.storage_profile_secret_ref_provider.as_deref(),
         "graphEvents": event.graph_events,
@@ -7138,6 +7144,7 @@ mod tests {
                             "profileId": "events-local",
                             "provider": "file",
                             "issuanceMode": "local-file-no-secret",
+                            "locationPrefixHash": "sha256:storage-location-prefix",
                             "secretRefPresent": false,
                             "secretRefProvider": null,
                             "graphEvents": 2
@@ -7156,6 +7163,7 @@ mod tests {
                             "profileId": "events-local",
                             "provider": "file",
                             "issuanceMode": "local-file-no-secret",
+                            "locationPrefixHash": "sha256:storage-location-prefix",
                             "secretRefPresent": false,
                             "secretRefProvider": null,
                             "graphEvents": 2
@@ -7329,6 +7337,7 @@ mod tests {
                             "profileId": "events-local",
                             "provider": "file",
                             "issuanceMode": "local-file-no-secret",
+                            "locationPrefixHash": "sha256:storage-location-prefix",
                             "secretRefPresent": false,
                             "secretRefProvider": null,
                             "graphEvents": 2
@@ -7347,6 +7356,7 @@ mod tests {
                             "profileId": "events-local",
                             "provider": "file",
                             "issuanceMode": "local-file-no-secret",
+                            "locationPrefixHash": "sha256:storage-location-prefix",
                             "secretRefPresent": false,
                             "secretRefProvider": null,
                             "graphEvents": 2
@@ -8278,6 +8288,23 @@ mod tests {
 
         assert!(err.to_string().contains("credentialVendingProof"));
         assert!(err.to_string().contains("storageProfile"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_credential_location_prefix_hash() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]
+            ["storageProfile"]
+            .as_object_mut()
+            .unwrap()
+            .remove("locationPrefixHash");
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject credential proof without storage-scope hash evidence",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("locationPrefixHash"));
     }
 
     #[test]

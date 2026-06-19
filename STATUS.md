@@ -6,6 +6,22 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind credential-vend replay to storage scope`.
+  Credential-vend audit/outbox payloads now include
+  `storage-profile.location-prefix-hash`, and QGLake compact handoff
+  verification rejects credential proofs whose storage-profile evidence omits
+  that hash.
+- Local verification for this credential-vend storage-scope proof slice is
+  green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service credentials_vend_audit_payload_surfaces_policy_context -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_credential_location_prefix_hash -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact storage-profile replay location prefixes`.
   Storage-profile outbox projection now removes raw `location-prefix` values
   before graph and lineage emission and replaces them with
