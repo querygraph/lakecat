@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-verify-handoff` compare the compact
+  `storageProfileUpsertProof` against the captured LakeCat replay JSON, so a
+  handoff is rejected when credential-root evidence drifts between the replay
+  artifact and the summary.
 - Mirrored the current `AGENTS.md` CLI formatting verification gate in the
   pinned `GOAL.md` guidance.
 - Added a redacted storage-profile location-prefix hash to lineage-drain

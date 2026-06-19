@@ -6,6 +6,27 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cross-check captured storage-profile replay proof`.
+  `lakecat-cli qglake-verify-handoff` now compares the compact
+  `lakecatReplayVerification.storageProfileUpsertProof` with the captured
+  LakeCat replay JSON at
+  `replay-evidence.management.storageProfileUpsert`. A handoff is rejected if
+  the replay artifact and compact summary disagree on profile id, provider,
+  issuance mode, location-prefix hash, secret-reference presence/provider,
+  replay event hashes, or OpenLineage hashes. The verifier output also echoes
+  the accepted captured storage-profile proof under
+  `capturedOutputSemantics.lakecatReplay.storageProfileUpsertProof`, giving
+  QueryGraph and operators a compact local proof that the credential-root
+  evidence was not rewritten between replay and handoff summary.
+- Local verification for this captured replay proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Hash storage-profile credential roots in QGLake replay`.
   Lineage-drain event summaries now carry
   `storage-profile-location-prefix-hash` for storage-profile upserts, computed

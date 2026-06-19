@@ -299,7 +299,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   now also parses those captured JSON outputs and rejects a handoff whose saved
   LakeCat replay or QueryGraph verify/import captures no longer agree with the
   compact summary on replay schema/status, table/view counts, bundle, graph,
-  OpenLineage, QueryGraph import hashes, or standards.*
+  OpenLineage, QueryGraph import hashes, or standards; the captured LakeCat
+  replay `replay-evidence.management.storageProfileUpsert` object must now
+  also match the compact `storageProfileUpsertProof` fields for profile id,
+  provider, issuance mode, location-prefix hash, secret-reference evidence,
+  replay hashes, and OpenLineage hashes.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond

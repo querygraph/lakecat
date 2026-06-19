@@ -535,6 +535,8 @@ fn verify_qglake_handoff_captured_output_semantics(
         querygraph,
         "captured QueryGraph import output",
     )?;
+    let storage_profile_upsert =
+        Value::Object(lakecat_replay_storage_profile_upsert(lakecat_replay)?.clone());
 
     Ok(json!({
         "lakecatReplay": {
@@ -547,6 +549,7 @@ fn verify_qglake_handoff_captured_output_semantics(
             "openLineageHash": required_str(lakecat_replay, "open-lineage-hash", "captured LakeCat replay output")?,
             "queryGraphImportHash": required_str(lakecat_replay, "querygraph-import-hash", "captured LakeCat replay output")?,
             "standards": required_value(lakecat_replay, "standards", "captured LakeCat replay output")?,
+            "storageProfileUpsertProof": storage_profile_upsert,
         },
         "querygraphVerify": querygraph_capture_semantics_json(querygraph_verify, "captured QueryGraph verify output")?,
         "querygraphImport": querygraph_capture_semantics_json(querygraph_import, "captured QueryGraph import output")?,
@@ -603,6 +606,66 @@ fn verify_lakecat_replay_capture_matches_summary(
         capture,
         querygraph,
         "captured LakeCat replay output",
+    )?;
+    verify_lakecat_replay_storage_profile_matches_summary(capture, lakecat)
+}
+
+fn verify_lakecat_replay_storage_profile_matches_summary(
+    capture: &serde_json::Map<String, Value>,
+    lakecat: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let captured_storage_profile = lakecat_replay_storage_profile_upsert(capture)?;
+    let summary_storage_profile = required_object(
+        lakecat,
+        "storageProfileUpsertProof",
+        "lakecatReplayVerification",
+    )?;
+
+    for field in [
+        "profileId",
+        "provider",
+        "issuanceMode",
+        "locationPrefixHash",
+    ] {
+        require_string_match(
+            captured_storage_profile,
+            field,
+            required_str(summary_storage_profile, field, "storageProfileUpsertProof")?,
+            "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert",
+        )?;
+    }
+
+    for field in [
+        "secretRefPresent",
+        "secretRefProvider",
+        "replayEventHashes",
+        "openLineageHashes",
+    ] {
+        require_value_match(
+            captured_storage_profile,
+            field,
+            required_value(summary_storage_profile, field, "storageProfileUpsertProof")?,
+            "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert",
+        )?;
+    }
+
+    Ok(())
+}
+
+fn lakecat_replay_storage_profile_upsert(
+    capture: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<&serde_json::Map<String, Value>> {
+    let replay_evidence =
+        required_object(capture, "replay-evidence", "captured LakeCat replay output")?;
+    let management = required_object(
+        replay_evidence,
+        "management",
+        "captured LakeCat replay output.replay-evidence",
+    )?;
+    required_object(
+        management,
+        "storageProfileUpsert",
+        "captured LakeCat replay output.replay-evidence.management",
     )
 }
 
@@ -5083,7 +5146,21 @@ mod tests {
                 "ODRL",
                 "Grust catalog graph",
                 "OpenLineage"
-            ]
+            ],
+            "replay-evidence": {
+                "management": {
+                    "storageProfileUpsert": {
+                        "profileId": "events-local",
+                        "provider": "file",
+                        "issuanceMode": "local-file-no-secret",
+                        "locationPrefixHash": "sha256:storage-location-prefix",
+                        "secretRefPresent": false,
+                        "secretRefProvider": null,
+                        "replayEventHashes": ["sha256:storage-replay"],
+                        "openLineageHashes": ["sha256:storage-openlineage"]
+                    }
+                }
+            }
         });
         let querygraph_capture_json = json!({
             "warehouse": "local",
@@ -5379,6 +5456,10 @@ mod tests {
             semantics["querygraphImport"]["queryGraphImportHash"],
             json!("sha256:querygraph-import")
         );
+        assert_eq!(
+            semantics["lakecatReplay"]["storageProfileUpsertProof"]["locationPrefixHash"],
+            json!("sha256:storage-location-prefix")
+        );
     }
 
     #[test]
@@ -5449,6 +5530,30 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("captured QueryGraph verify output.bundle-hash mismatch")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_storage_profile_drift() {
+        let temp = qglake_temp_dir("handoff-captured-storage-profile-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["management"]["storageProfileUpsert"]["locationPrefixHash"] =
+            json!("sha256:other-storage-location-prefix");
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay storage-profile proof drift should be rejected");
+        assert!(
+            err.to_string().contains(
+                "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert.locationPrefixHash mismatch"
+            )
         );
     }
 
