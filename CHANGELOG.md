@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a governed table commit-history management read that exposes compact
+  pointer-log evidence and records replayable lineage/outbox proof for
+  QueryGraph and operators.
 - Added a service regression proving exact REST commit retries replay before
   metadata-object writes by preserving the committed object unchanged on
   idempotent replay.

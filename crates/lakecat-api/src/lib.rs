@@ -64,6 +64,8 @@ impl Default for CatalogConfigResponse {
                 "PUT /management/v1/warehouses/{warehouse}".to_string(),
                 "POST /management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/restore"
                     .to_string(),
+                "GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/commits"
+                    .to_string(),
                 "GET /management/v1/warehouses/{warehouse}/storage-profiles".to_string(),
                 "PUT /management/v1/warehouses/{warehouse}/storage-profiles/{profile}".to_string(),
                 "GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/views"
@@ -523,6 +525,33 @@ pub struct CommitTableRequest {
 pub struct CommitTableResponse {
     pub metadata_location: Option<String>,
     pub metadata: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct TableCommitRecordResponse {
+    pub warehouse: String,
+    pub namespace: Vec<String>,
+    pub table: String,
+    pub previous_metadata_location: Option<String>,
+    pub new_metadata_location: Option<String>,
+    pub sequence_number: u64,
+    pub format_version: Option<i32>,
+    pub snapshot_id: Option<i64>,
+    pub policy_hash: Option<String>,
+    pub request_hash: String,
+    pub response_hash: String,
+    pub idempotency_key_sha256: Option<String>,
+    pub commit_hash: String,
+    pub principal_subject: String,
+    pub principal_kind: String,
+    pub committed_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ListTableCommitRecordsResponse {
+    pub commits: Vec<TableCommitRecordResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

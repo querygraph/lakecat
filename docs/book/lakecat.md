@@ -324,6 +324,22 @@ receipt when one exists. QueryGraph can inspect those fields from the
 pointer-log/outbox stream without parsing full table metadata for every
 catalog audit question.
 
+Operators and QueryGraph can read that pointer-log evidence through a governed
+management endpoint:
+
+```sh
+curl -s \
+  -H 'x-lakecat-principal: operator@example.com' \
+  http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/tables/events/commits
+```
+
+The response contains compact commit records: sequence number, previous and new
+metadata locations, request hash, response hash, idempotency-key hash, Iceberg
+format version, current snapshot id, policy hash, principal, and a commit hash.
+The read itself enters the durable outbox as `table.commits-listed` and drains
+as lineage evidence, so audit tools can prove who inspected pointer history
+without requiring direct access to the Turso catalog database.
+
 ## The Durable Spine
 
 LakeCat's durable local spine uses the Rust `turso` crate behind the

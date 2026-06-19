@@ -265,6 +265,13 @@ metadata-object writes. The stored response is returned from the durable replay
 record, so a retry cannot rewrite the committed metadata object or create a
 second pointer-log entry.
 
+Operators and QueryGraph can inspect the committed pointer history through the
+governed management endpoint
+`GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/commits`.
+The response exposes compact hashes and summary fields from the pointer log, and
+the read itself is recorded as a lineage/outbox event rather than as new graph
+topology.
+
 The compare-and-swap record should include:
 
 ```text
@@ -299,6 +306,9 @@ snapshot-id, and policy-hash summary evidence, and expose a service-level drain
 that projects committed events to graph and lineage sinks.
 Exact idempotency replays are verified to return before object-store writes, so
 the committed metadata object remains untouched on retry.
+Commit-history reads are now exposed through the governed management API and
+replay as lineage evidence, giving QueryGraph an audit surface over pointer
+history without requiring backend-specific database access.
 The local `file://` path remains the verified default, while configured remote
 stores can plug into the same writer boundary. A typed storage-profile model now
 drives conservative credential responses: embedded `file://` tables can return

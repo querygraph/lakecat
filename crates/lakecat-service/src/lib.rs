@@ -12,14 +12,14 @@ use lakecat_api::{
     CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest,
     FetchScanTasksResponse, LineageDrainEventSummary, LineageDrainResponse, ListNamespacesResponse,
     ListPolicyBindingsResponse, ListProjectsResponse, ListServersResponse,
-    ListStorageProfilesResponse, ListViewVersionReceiptChainsResponse,
-    ListViewVersionReceiptsResponse, ListViewsResponse, ListWarehousesResponse,
-    LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
-    PlanTableScanResponse, PolicyBindingResponse, ProjectResponse, ServerResponse,
-    StorageCredential, StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest,
-    UpsertProjectRequest, UpsertServerRequest, UpsertStorageProfileRequest, UpsertViewRequest,
-    UpsertWarehouseRequest, ViewColumnResponse, ViewResponse, ViewVersionReceiptChainResponse,
-    ViewVersionReceiptResponse, WarehouseResponse,
+    ListStorageProfilesResponse, ListTableCommitRecordsResponse,
+    ListViewVersionReceiptChainsResponse, ListViewVersionReceiptsResponse, ListViewsResponse,
+    ListWarehousesResponse, LoadCredentialsResponse, LoadTableResponse, NamespaceResponse,
+    PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse, ProjectResponse,
+    ServerResponse, StorageCredential, StorageProfileResponse, TableCommitRecordResponse,
+    TableIdentifier, UpsertPolicyBindingRequest, UpsertProjectRequest, UpsertServerRequest,
+    UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest, ViewColumnResponse,
+    ViewResponse, ViewVersionReceiptChainResponse, ViewVersionReceiptResponse, WarehouseResponse,
 };
 use lakecat_core::{
     LakeCatError, LakeCatResult, Namespace, Principal, PrincipalKind, TableIdent, TableName,
@@ -53,9 +53,9 @@ use lakecat_security::{
 };
 use lakecat_store::{
     CatalogAuditEvent, CatalogStore, CredentialIssuanceMode, OutboxEvent, PolicyBinding,
-    ProjectRecord, ServerRecord, StorageProfile, StorageProvider, TableCommit, TableRecord,
-    ViewColumnRecord, ViewRecord, ViewVersionOperation, ViewVersionReceipt, WarehouseRecord,
-    table_ident,
+    ProjectRecord, ServerRecord, StorageProfile, StorageProvider, TableCommit, TableCommitRecord,
+    TableRecord, ViewColumnRecord, ViewRecord, ViewVersionOperation, ViewVersionReceipt,
+    WarehouseRecord, table_ident,
 };
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStore, ObjectStoreExt, PutPayload};
@@ -849,6 +849,10 @@ pub fn app(state: LakeCatState) -> Router {
             "/management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/restore",
             post(restore_table),
         )
+        .route(
+            "/management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/commits",
+            get(list_table_commits),
+        )
         .route("/management/v1/projects", get(list_projects))
         .route(
             "/management/v1/projects/{project}",
@@ -1623,6 +1627,51 @@ async fn restore_table(
         )
         .await?;
     Ok(Json(load_table_response(restored)))
+}
+
+async fn list_table_commits(
+    State(state): State<LakeCatState>,
+    headers: HeaderMap,
+    Path((warehouse, namespace, table)): Path<(String, String, String)>,
+) -> Result<Json<ListTableCommitRecordsResponse>, LakeCatHttpError> {
+    let warehouse = management_warehouse(&state, warehouse)?;
+    let ident = table_ident(warehouse.as_str(), namespace, table)?;
+    let capability =
+        authorize_table_load(&state, request_identity(&headers)?, ident.clone()).await?;
+    state.store.load_table(capability.table()).await?;
+    let records = state
+        .store
+        .table_commit_records(capability.table(), 0, None)
+        .await?;
+    let commits = records
+        .iter()
+        .map(table_commit_record_response)
+        .collect::<LakeCatResult<Vec<_>>>()?;
+    state
+        .store
+        .record_audit_event(CatalogAuditEvent::new(
+            "table.commits-listed",
+            Some(capability.table().clone()),
+            capability.receipt().principal.clone(),
+            json!({
+                "event-type": "table.commits-listed",
+                "warehouse": capability.table().warehouse.as_str(),
+                "namespace": capability.table().namespace.parts(),
+                "table": capability.table().name.as_str(),
+                "commit-count": commits.len(),
+                "commit-hashes": commits
+                    .iter()
+                    .map(|commit| commit.commit_hash.clone())
+                    .collect::<Vec<_>>(),
+                "sequence-numbers": commits
+                    .iter()
+                    .map(|commit| commit.sequence_number)
+                    .collect::<Vec<_>>(),
+                "authorization-receipt": capability.receipt(),
+            }),
+        )?)
+        .await?;
+    Ok(Json(ListTableCommitRecordsResponse { commits }))
 }
 
 async fn load_credentials(
@@ -3385,6 +3434,17 @@ async fn project_outbox_event(
             ))
             .await?;
         receipt.record_lineage(lineage_receipt);
+    } else if event.event_type == "table.commits-listed" {
+        let lineage_receipt = state
+            .lineage
+            .emit(LineageEvent::new(
+                LineageEventType::TableCommitRecordsListed,
+                principal,
+                None,
+                event_payload,
+            ))
+            .await?;
+        receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "view.version-receipt-chains-listed" {
         let lineage_receipt = state
             .lineage
@@ -3962,6 +4022,31 @@ fn load_table_response(table: TableRecord) -> LoadTableResponse {
         metadata: table.metadata,
         config: vec![],
     }
+}
+
+fn table_commit_record_response(
+    record: &TableCommitRecord,
+) -> LakeCatResult<TableCommitRecordResponse> {
+    Ok(TableCommitRecordResponse {
+        warehouse: record.table.warehouse.as_str().to_string(),
+        namespace: record.table.namespace.parts().to_vec(),
+        table: record.table.name.as_str().to_string(),
+        previous_metadata_location: record.previous_metadata_location.clone(),
+        new_metadata_location: record.new_metadata_location.clone(),
+        sequence_number: record.sequence_number,
+        format_version: record.format_version,
+        snapshot_id: record.snapshot_id,
+        policy_hash: record.policy_hash.clone(),
+        request_hash: record.request_hash.clone(),
+        response_hash: record.response_hash.clone(),
+        idempotency_key_sha256: record.idempotency_key_sha256.clone(),
+        commit_hash: content_hash_json(&serde_json::to_value(record).map_err(|err| {
+            LakeCatError::Internal(format!("failed to serialize table commit record: {err}"))
+        })?)?,
+        principal_subject: record.principal.subject.clone(),
+        principal_kind: principal_kind_name(&record.principal.kind).to_string(),
+        committed_at: record.committed_at.to_rfc3339(),
+    })
 }
 
 fn public_storage_credentials_for_profile(profile: &StorageProfile) -> Vec<StorageCredential> {
@@ -7844,6 +7929,129 @@ mod tests {
             Some(content_hash_bytes("commit:events:0001".as_bytes()).as_str())
         );
         assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
+    }
+
+    #[tokio::test]
+    async fn management_table_commits_lists_pointer_log_evidence() {
+        let store = MemoryCatalogStore::new();
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            store.clone(),
+        ));
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"table-uuid":"11111111-1111-1111-1111-111111111111","location":"file:///tmp/events","last-sequence-number":7,"last-updated-ms":1710000000000,"last-column-id":1,"schemas":[{"type":"struct","schema-id":1,"fields":[{"id":1,"name":"id","type":"string","required":true}]}],"current-schema-id":1,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"current-snapshot-id":42,"snapshots":[{"snapshot-id":42,"sequence-number":7,"timestamp-ms":1710000000000,"summary":{"operation":"append"},"schema-id":1}],"snapshot-log":[{"timestamp-ms":1710000000000,"snapshot-id":42}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let commit = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/commit")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .header("x-lakecat-idempotency-key", "commit:events:history")
+            .body(Body::from(
+                r#"{"requirements":[],"updates":[],"metadata-location":"file:///tmp/events/metadata/00001.json","metadata":{"format-version":3,"table-uuid":"11111111-1111-1111-1111-111111111111","location":"file:///tmp/events","last-sequence-number":8,"last-updated-ms":1710000000100,"last-column-id":1,"schemas":[{"type":"struct","schema-id":1,"fields":[{"id":1,"name":"id","type":"string","required":true}]}],"current-schema-id":1,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"current-snapshot-id":43,"snapshots":[{"snapshot-id":43,"sequence-number":8,"timestamp-ms":1710000000100,"summary":{"operation":"append"},"schema-id":1}],"snapshot-log":[{"timestamp-ms":1710000000100,"snapshot-id":43}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(commit).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let list = Request::builder()
+            .method(Method::GET)
+            .uri("/management/v1/warehouses/local/namespaces/default/tables/events/commits")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(list).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let commits = body["commits"].as_array().unwrap();
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0]["warehouse"], serde_json::json!("local"));
+        assert_eq!(commits[0]["namespace"], serde_json::json!(["default"]));
+        assert_eq!(commits[0]["table"], serde_json::json!("events"));
+        assert_eq!(commits[0]["sequence-number"], serde_json::json!(1));
+        assert_eq!(commits[0]["format-version"], serde_json::json!(3));
+        assert_eq!(commits[0]["snapshot-id"], serde_json::json!(43));
+        assert!(
+            commits[0]["request-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert!(
+            commits[0]["response-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert!(
+            commits[0]["commit-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert_eq!(
+            commits[0]["idempotency-key-sha256"],
+            serde_json::json!(content_hash_bytes("commit:events:history".as_bytes()))
+        );
+        assert_eq!(
+            commits[0]["principal-subject"],
+            serde_json::json!("operator@example.com")
+        );
+
+        let pending = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        let commit_read = pending
+            .iter()
+            .find(|event| event.event_type == "table.commits-listed")
+            .expect("commit history read should enter the durable outbox");
+        let commit_read_payload = &commit_read.payload["payload"];
+        assert_eq!(commit_read_payload["commit-count"], serde_json::json!(1));
+        assert_eq!(
+            commit_read_payload["commit-hashes"][0],
+            commits[0]["commit-hash"]
+        );
+        assert_eq!(
+            commit_read_payload["sequence-numbers"],
+            serde_json::json!([1])
+        );
+
+        let drain = Request::builder()
+            .method(Method::POST)
+            .uri("/management/v1/lineage/drain")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(drain).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(
+            body["event-types"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|event_type| event_type == "table.commits-listed")
+        );
+        let commit_read_summary = body["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|event| event["event-type"] == "table.commits-listed")
+            .expect("drain should summarize the commit history read");
+        assert_eq!(commit_read_summary["lineage-events"], serde_json::json!(1));
     }
 
     #[tokio::test]

@@ -6,6 +6,27 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Expose table commit history evidence`. LakeCat now serves a governed
+  management read at
+  `GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/commits`
+  that returns compact pointer-log records with request/response hashes,
+  idempotency-key hash, format version, snapshot id, policy hash, principal, and
+  commit hash. The read records a `table.commits-listed` audit/outbox event and
+  drains as LakeCat OpenLineage evidence without adding graph semantics in
+  LakeCat.
+- Local verification for the table commit-history slice was green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-lineage`;
+  `cargo test -p lakecat-service management_table_commits_lists_pointer_log_evidence`;
+  `cargo test -p lakecat-lineage`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-store -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Prove idempotent commits skip metadata rewrites`. The service now has a
   regression that commits a metadata object with an idempotency key, mutates the
   object on disk, retries the exact REST commit, and proves LakeCat returns the
