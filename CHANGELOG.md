@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserved the original store/CAS commit error when uncommitted metadata-object
+  cleanup also fails, appending cleanup context without changing the commit
+  error class.
 - Rejected metadata-write commit plans that require writing table metadata but
   do not carry a concrete new metadata location, preventing catalog-pointer
   commits from succeeding without a corresponding metadata object.

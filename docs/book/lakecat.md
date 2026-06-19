@@ -309,6 +309,11 @@ Sail owns reusable Iceberg validation and metadata preparation.
    up the uncommitted metadata object when it can do so safely.
 13. Outbox draining projects the committed event to graph and lineage sinks.
 
+The cleanup path is deliberately secondary to the commit result. If metadata
+cleanup fails after the store rejects a commit, LakeCat preserves the original
+store or compare-and-swap error class and appends cleanup context. A stale
+pointer conflict should still look like a conflict to an Iceberg client.
+
 Idempotency is part of correctness. Reusing the same key for the same commit can
 return the stored response even after the table has advanced beyond the
 original commit requirements. Reusing the same key for a different body must

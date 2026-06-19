@@ -2730,7 +2730,12 @@ async fn commit_table_in_warehouse(
     {
         Ok(table) => table,
         Err(err) => {
-            cleanup_planned_metadata(metadata_write, current_metadata_location.as_deref()).await?;
+            let err = cleanup_planned_metadata_after_commit_error(
+                metadata_write,
+                current_metadata_location.as_deref(),
+                err,
+            )
+            .await;
             return Err(err.into());
         }
     };
@@ -2821,6 +2826,42 @@ async fn cleanup_planned_metadata(
         ))
     })?;
     Ok(())
+}
+
+async fn cleanup_planned_metadata_after_commit_error(
+    write: Option<PlannedMetadataWrite>,
+    previous_metadata_location: Option<&str>,
+    commit_error: LakeCatError,
+) -> LakeCatError {
+    match cleanup_planned_metadata(write, previous_metadata_location).await {
+        Ok(()) => commit_error,
+        Err(cleanup_error) => commit_error_with_cleanup_failure(commit_error, cleanup_error),
+    }
+}
+
+fn commit_error_with_cleanup_failure(
+    commit_error: LakeCatError,
+    cleanup_error: LakeCatError,
+) -> LakeCatError {
+    let cleanup_context = format!("metadata cleanup also failed: {cleanup_error}");
+    match commit_error {
+        LakeCatError::InvalidArgument(message) => {
+            LakeCatError::InvalidArgument(format!("{message}; {cleanup_context}"))
+        }
+        LakeCatError::NotFound { object, name } => LakeCatError::NotFound {
+            object,
+            name: format!("{name}; {cleanup_context}"),
+        },
+        LakeCatError::Conflict(message) => {
+            LakeCatError::Conflict(format!("{message}; {cleanup_context}"))
+        }
+        LakeCatError::NotSupported(message) => {
+            LakeCatError::NotSupported(format!("{message}; {cleanup_context}"))
+        }
+        LakeCatError::Internal(message) => {
+            LakeCatError::Internal(format!("{message}; {cleanup_context}"))
+        }
+    }
 }
 
 async fn plan_table_scan(
@@ -8420,6 +8461,21 @@ mod tests {
             err.to_string()
                 .contains("metadata object commit requires a new metadata location")
         );
+    }
+
+    #[test]
+    fn metadata_cleanup_failure_preserves_commit_conflict() {
+        let err = commit_error_with_cleanup_failure(
+            LakeCatError::Conflict("metadata pointer changed".to_string()),
+            LakeCatError::Internal("failed to clean up object".to_string()),
+        );
+
+        let LakeCatError::Conflict(message) = err else {
+            panic!("expected cleanup failure to preserve commit conflict");
+        };
+        assert!(message.contains("metadata pointer changed"));
+        assert!(message.contains("metadata cleanup also failed"));
+        assert!(message.contains("failed to clean up object"));
     }
 
     #[cfg(feature = "sail-local")]

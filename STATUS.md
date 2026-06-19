@@ -6,6 +6,23 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Preserve commit errors during cleanup`. Failed table commits still attempt
+  to clean up newly written metadata objects, but cleanup failures now preserve
+  the original store/CAS error class and append cleanup context instead of
+  masking a commit conflict as a cleanup/internal failure.
+- Local verification for the cleanup error-preservation slice was green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service metadata_cleanup_failure_preserves_commit_conflict`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --all-features stale_commit_cleans_up_uncommitted_metadata_file`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require metadata write locations`. Metadata-write commit plans now fail
   closed when Sail or a future engine seam reports that a metadata object write
   is required but does not provide a concrete new metadata location, preventing
