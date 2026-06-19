@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Consolidated the archived OPUS review/design corpus into `DESIGN.md` with a
+  source ledger and reaffirmed `docs/completed/` as provenance-only archive
+  storage.
 - Required QGLake lineage-drain table commit-history replay to preserve
   SHA-256-shaped commit hashes before pointer-history proof can feed compact
   handoff verification.

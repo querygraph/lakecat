@@ -106,6 +106,21 @@ Current archive inventory:
 | `docs/completed/OPUS2.md` | Historical second review after the durable catalog spine landed. |
 | `docs/completed/OPUS2-DESIGN.md` | Historical restriction-first working plan and priority reset. |
 
+### Consolidated Source Ledger
+
+The durable OPUS sections have been absorbed into the active docs as follows.
+This ledger is the routing table for future reconciliation, so routine work
+should not reopen archived OPUS files just to find the current plan.
+
+| Archived source | Durable material absorbed | Canonical home |
+| --- | --- | --- |
+| `OPUS1.md` verification notes and findings | The original scaffold risk list: default-feature gates, authentication, durable pointer state, CAS, real store, Sail delegation, graph emission, side effects, plan tokens, and v4 bridge posture. | `Review Log And Working Plan`, `Finding Status`, `OPUS Closure Map`, `Priority Plan`, `Review Gate` |
+| `OPUS1.md` proposed architecture and milestones | Thin catalog boundary, Sail-heavy engine plan, TypeSec capability model, Grust semantic index, lineage/attestation, QueryGraph acceptance, and upstream-to-Sail work. | `Purpose`, `Ownership`, `Compatibility Rules`, `OPUS Decisions Kept Permanent`, `Priority Plan`; see also `ARCHITECTURE.md` |
+| `OPUS1-DESIGN.md` design assessment | Iceberg compatibility floor, derived semantic/control plane, REST server-side planning, row lineage, metadata-as-data, credential-vending tension, Tier-1 Sail provider sketch, and anti-patterns. | `Thesis`, `Critical Path: The Restriction`, `Compatibility Rules`, `OPUS Decisions Kept Permanent`, `Review Gate` |
+| `OPUS1-DESIGN.md` working plan | The early dev-manager review gate, verification discipline, Turso pivot endorsement, QueryGraph OSI cleanup, Grust/TypeSec reconciliation, and priority ordering. | `Review Log And Working Plan`, `Current Dev-Manager View`, `Priority Plan`, `Review Gate`, `STATUS.md` |
+| `OPUS2.md` second review | Current catalog-spine assessment after Turso/CAS/auth/outbox/Sail-provider work, OPUS1 closure state, and successor findings F1-F10. | `OPUS2 Review Baseline`, `Current State`, `Finding Status`, `OPUS Closure Map` |
+| `OPUS2-DESIGN.md` restriction-first plan | The restriction as the binding governed-read object, ODRL-to-restriction path, Sail-planned enforcement, QueryGraph/QGLake acceptance, repo division of labor, and anti-pattern updates. | `Critical Path: The Restriction`, `Current Dev-Manager View`, `Priority Plan`, `OPUS Decisions Kept Permanent` |
+
 ### Consolidated OPUS Digest
 
 The durable OPUS guidance now collapses to these operating rules:

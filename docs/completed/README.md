@@ -7,6 +7,11 @@ here for audit and provenance only; do not use them as live instructions unless
 you first reconcile the relevant point back into the root design, status, goal,
 architecture, or agent guidance documents.
 
+Consolidation was audited on 2026-06-19. The durable OPUS findings, design
+decisions, and working-plan entries are represented in `../../DESIGN.md`,
+especially its consolidation note, source ledger, review log, closure map, and
+priority plan. This directory is intentionally an archive, not a backlog.
+
 ## Archived OPUS Files
 
 - `OPUS1.md`

@@ -5,6 +5,16 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Consolidate archived OPUS docs`.
+  The active root contains no live `OPUS*.md` files; the four historical OPUS
+  files remain archived under `docs/completed/`, and their durable findings,
+  design decisions, and working-plan guidance are routed through `DESIGN.md`.
+- Local verification for this OPUS consolidation slice is green:
+  `git ls-files 'OPUS*.md'`;
+  `git ls-files 'docs/completed/OPUS*.md'`;
+  `rg --files docs/completed -g 'OPUS*.md'`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Reject malformed commit history hashes`.
   QGLake lineage-drain table commit-history replay now rejects malformed table
