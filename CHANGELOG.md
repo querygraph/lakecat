@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Required compact QGLake governed scan proof to reject extra
+  `fetchedRequiredFilters` beyond the mandatory row predicate.
 - Required compact QGLake governed scan proof to reject drift between planned
   and fetched `max-credential-ttl-seconds` values.
 - Required compact QGLake handoff summaries to include the full QGLake

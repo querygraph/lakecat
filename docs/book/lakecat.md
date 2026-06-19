@@ -1534,9 +1534,11 @@ scan-task fetch both replayed with sink receipt hashes. The compact scan proof
 must preserve the server-derived read restriction as a full restriction, not
 only as columns and filters: allowed columns, row predicate, purpose,
 policy-hash evidence, and `max-credential-ttl-seconds` must be present, and
-the planned and fetched restrictions must agree. For catalog state, it refuses
-to omit proof that the table commit-history read replayed with sequence-number
-and commit-hash evidence. For views, it refuses to omit proof that accepted
+the planned and fetched restrictions must agree. The fetched required filters
+must also be exactly the mandatory row predicate evidence, not a prefix with
+extra unverified filters appended. For catalog state, it refuses to omit proof
+that the table commit-history read replayed with sequence-number and
+commit-hash evidence. For views, it refuses to omit proof that accepted
 view versions line up with their receipt hashes and that the namespace-level
 tombstone and receipt-chain reads replayed with chain hashes and verified-chain
 counts.

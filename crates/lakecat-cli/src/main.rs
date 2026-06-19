@@ -2039,15 +2039,17 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     )?;
     let fetched_required_filters =
         required_array(governed_scan, "fetchedRequiredFilters", "governedScanProof")?;
-    if fetched_required_filters.first()
-        != Some(required_value(
+    let expected_fetched_filters = vec![
+        required_value(
             fetched_restriction,
             "row-predicate",
             "governedScanProof.fetchedReadRestriction",
-        )?)
-    {
+        )?
+        .clone(),
+    ];
+    if fetched_required_filters.as_slice() != expected_fetched_filters.as_slice() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "governedScanProof fetchedRequiredFilters did not preserve fetched row predicate: {}",
+            "governedScanProof fetchedRequiredFilters did not exactly preserve fetched row predicate: {}",
             Value::Array(fetched_required_filters.clone())
         )));
     }
@@ -8490,6 +8492,25 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("fetchedRequiredProjection"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_fetch_filter_evidence() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["fetchedRequiredFilters"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({
+                "type": "eq",
+                "term": "tenant_id",
+                "value": "other"
+            }));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra fetched filter evidence");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("fetchedRequiredFilters"));
     }
 
     #[test]
