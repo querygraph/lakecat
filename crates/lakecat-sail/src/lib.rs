@@ -5084,6 +5084,135 @@ pub mod sail_integration {
         }
 
         #[tokio::test]
+        async fn fetches_v4_extension_manifest_list_plan_task_without_typed_metadata() {
+            let engine = SailRestModelCatalogEngine;
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let metadata_location = "file:///tmp/events/metadata/v4.json".to_string();
+            let filter = json!({
+                "type": "eq",
+                "term": "id",
+                "value": "evt-1"
+            });
+            let plan = engine
+                .plan_scan(ScanPlanningRequest {
+                    table: table.clone(),
+                    principal: Principal::anonymous(),
+                    metadata_location: Some(metadata_location.clone()),
+                    table_metadata: sample_metadata(4),
+                    projection: vec!["id".to_string()],
+                    filters: vec![filter.clone()],
+                    limit: None,
+                    snapshot_id: None,
+                    start_snapshot_id: None,
+                    end_snapshot_id: None,
+                })
+                .await
+                .expect("v4 extension scan should produce a signed plan task");
+            let plan_task = plan.scan_tasks[0]["plan-task"]
+                .as_str()
+                .expect("v4 plan should carry a plan-task token")
+                .to_string();
+
+            let fetched = engine
+                .fetch_scan_tasks(FetchScanTasksRequest {
+                    table,
+                    principal: Principal::anonymous(),
+                    metadata_location: Some(metadata_location),
+                    table_metadata: sample_metadata(4),
+                    plan_task,
+                    required_projection: vec!["id".to_string()],
+                    required_filters: vec![filter],
+                })
+                .await
+                .expect("v4 extension fetch should validate the JSON bridge task");
+
+            assert_eq!(fetched.planned_by, "sail-rest-models");
+            assert_eq!(fetched.snapshot_id, Some(42));
+            assert_eq!(fetched.file_scan_tasks.len(), 0);
+            assert_eq!(fetched.delete_files.len(), 0);
+            assert_eq!(fetched.plan_tasks.len(), 1);
+            assert_eq!(
+                fetched.plan_tasks[0].pointer("/task-type"),
+                Some(&json!("manifest-list"))
+            );
+            let residual = fetched
+                .residual_filter
+                .expect("fetch should explain the v4 JSON bridge");
+            assert_eq!(
+                residual.pointer("/lakecat:sail-target"),
+                Some(&json!("sail_iceberg::io::load_manifest_list"))
+            );
+            assert_eq!(
+                residual.pointer("/task-kind"),
+                Some(&json!("manifest-list"))
+            );
+            assert_eq!(
+                residual.pointer("/manifest-path"),
+                Some(&json!("file:///tmp/events/metadata/snap-42.avro"))
+            );
+            assert_eq!(
+                residual.pointer("/sail-metadata/v4-extension-mode"),
+                Some(&json!(true))
+            );
+            assert_eq!(residual.pointer("/projection"), Some(&json!(["id"])));
+            assert_eq!(residual.pointer("/filters/0/type"), Some(&json!("eq")));
+        }
+
+        #[tokio::test]
+        async fn rejects_v4_extension_plan_task_for_drifted_manifest_list() {
+            let engine = SailRestModelCatalogEngine;
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let plan = engine
+                .plan_scan(ScanPlanningRequest {
+                    table: table.clone(),
+                    principal: Principal::anonymous(),
+                    metadata_location: Some("file:///tmp/events/metadata/v4.json".to_string()),
+                    table_metadata: sample_metadata(4),
+                    projection: vec!["id".to_string()],
+                    filters: Vec::new(),
+                    limit: None,
+                    snapshot_id: None,
+                    start_snapshot_id: None,
+                    end_snapshot_id: None,
+                })
+                .await
+                .expect("v4 extension scan should produce a signed plan task");
+
+            let err = engine
+                .fetch_scan_tasks(FetchScanTasksRequest {
+                    table,
+                    principal: Principal::anonymous(),
+                    metadata_location: Some("file:///tmp/events/metadata/v4.json".to_string()),
+                    table_metadata: sample_metadata_with_locations(
+                        4,
+                        "file:///tmp/events".to_string(),
+                        "file:///tmp/events/metadata/snap-99.avro".to_string(),
+                    ),
+                    plan_task: plan.scan_tasks[0]["plan-task"]
+                        .as_str()
+                        .expect("v4 plan should carry a plan-task token")
+                        .to_string(),
+                    required_projection: vec!["id".to_string()],
+                    required_filters: Vec::new(),
+                })
+                .await
+                .expect_err("v4 bridge fetch should reject a drifted manifest list");
+
+            assert!(
+                err.to_string()
+                    .contains("plan task does not match Iceberg v4 extension metadata")
+            );
+        }
+
+        #[tokio::test]
         async fn validates_projected_columns_against_sail_schema() {
             let engine = SailRestModelCatalogEngine;
             let table = TableIdent::new(

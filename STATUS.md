@@ -6,6 +6,25 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify v4 extension plan tokens`. `lakecat-sail` now proves that a signed
+  format-version 4 JSON-bridge manifest-list plan token can be revalidated
+  during `fetchScanTasks` with required projection/filter context, while
+  drifted manifest-list metadata is rejected without claiming typed v4 Sail
+  support.
+- Local verification for the v4 extension plan-token slice was green:
+  `cargo fmt -p lakecat-sail`;
+  `cargo test -p lakecat-sail --all-features v4`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-sail --all-features`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Add local dependency contract audit`. The new
   `scripts/check-local-dependency-contract.sh` script checks the versioned local
   Grust/TypeSec pins, the Sail local path bridge, the CI Sail patch bridge, and

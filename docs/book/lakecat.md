@@ -433,9 +433,11 @@ typed v4 model. Instead, `lakecat-sail` extracts the stable JSON envelope
 fields that remain useful across versions: table UUID, location, schema id,
 snapshot id, sequence number, manifest-list path, default spec, and field
 names. It can plan a governed manifest-list scan task from that envelope and
-validate stable commit requirements such as table UUID, current schema id, main
-snapshot id, last assigned field id, and default spec id. Pruning and typed
-metadata-tree semantics wait for Sail-owned v4 support.
+validate the signed plan task again during `fetchScanTasks` so a stateless fetch
+cannot drift to a different manifest list or widen the governed projection and
+filters. It also validates stable commit requirements such as table UUID,
+current schema id, main snapshot id, last assigned field id, and default spec
+id. Pruning and typed metadata-tree semantics wait for Sail-owned v4 support.
 
 ## OSI, OpenLineage, And Responsible Semantic Handoff
 

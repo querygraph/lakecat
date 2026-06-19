@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added focused `lakecat-sail` v4 fetch-token fixtures proving that the JSON
+  bridge accepts signed manifest-list plan tasks during `fetchScanTasks` while
+  rejecting drifted manifest-list metadata without claiming typed v4 support.
 - Added a local dependency-contract audit script and wired it into manual CI so
   the Grust/TypeSec versioned path pins, Sail path/patch bridge, and
   manual-only workflow state fail fast when they drift.

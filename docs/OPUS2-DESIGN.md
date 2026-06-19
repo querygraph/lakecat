@@ -145,7 +145,7 @@ build is reproducible off this machine.
 | F6 | Catalog graph is event breadcrumbs | MEDIUM | STARTED — bounded taxonomy replays through Grust |
 | F7 | Tenancy hierarchy durable but not fully routed | LOW | STARTED — Server/Project/Warehouse/View records and registered warehouse-prefixed routing |
 | F8 | Production secret backends unexercised | LOW | STARTED — all accepted production secret-ref schemes are TypeSec-gated before fail-closed resolver errors |
-| F9 | v4 JSON passthrough | LOW | OPEN by design; stronger bridge fixtures now cover JSON summary inspection, manifest-list planning, and stable commit requirements |
+| F9 | v4 JSON passthrough | LOW | OPEN by design; stronger bridge fixtures now cover JSON summary inspection, manifest-list planning, stateless fetch-token validation, and stable commit requirements |
 | F10 | Sibling deps local-only; CI manual | LOW (process) | OPEN; executable dependency-contract audit now guards local/manual runs |
 
 ---
