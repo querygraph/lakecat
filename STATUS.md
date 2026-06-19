@@ -6,6 +6,23 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Guard current metadata pointer writes`. REST table commits now reject
+  metadata-object writes whose target equals the table's current metadata
+  pointer before writing through object storage, preventing the current metadata
+  object from being overwritten before CAS/store validation.
+- Local verification for the current metadata pointer guard slice was green:
+  `cargo test -p lakecat-service commit_rejects_metadata_object_overwrite_of_current_pointer`;
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service commit_can_advance_metadata_location_extension`;
+  `cargo test -p lakecat-service idempotent_commit_replay_does_not_rewrite_metadata_object`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`.
+- Latest completed implementation slice:
   `Test QGLake replay JSON contract`. `lakecat-cli qglake-verify-replay
   --json` now builds its schema-versioned output through a testable helper, and
   the existing matching replay fixture asserts the replay JSON schema version

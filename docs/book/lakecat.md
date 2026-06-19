@@ -297,12 +297,15 @@ Sail owns reusable Iceberg validation and metadata preparation.
    that response before Sail validation or metadata-object writes.
 5. LakeCat loads the current metadata pointer from the store.
 6. LakeCat delegates Iceberg update validation and metadata assembly to Sail.
-7. LakeCat writes the new metadata object through the warehouse storage profile.
-8. LakeCat advances the table pointer with compare-and-swap.
-9. LakeCat persists idempotency, audit, pointer-log, and outbox records.
-10. If the store rejects the commit after a local metadata write, LakeCat cleans
+7. LakeCat rejects metadata-object writes that target the table's current
+   metadata pointer, so the current metadata file cannot be overwritten before
+   the store commit has won.
+8. LakeCat writes the new metadata object through the warehouse storage profile.
+9. LakeCat advances the table pointer with compare-and-swap.
+10. LakeCat persists idempotency, audit, pointer-log, and outbox records.
+11. If the store rejects the commit after a local metadata write, LakeCat cleans
    up the uncommitted metadata object when it can do so safely.
-11. Outbox draining projects the committed event to graph and lineage sinks.
+12. Outbox draining projects the committed event to graph and lineage sinks.
 
 Idempotency is part of correctness. Reusing the same key for the same commit can
 return the stored response even after the table has advanced beyond the
@@ -312,6 +315,9 @@ evidence, not raw secrets or raw idempotency keys.
 The service regression for this path proves the replay happens before
 metadata-object writes: an exact retry returns the stored response without
 touching the already committed metadata object.
+Another regression sends a commit whose requested metadata location is the
+table's current pointer and verifies that LakeCat returns a bad request without
+touching the existing metadata file.
 
 Commit records also carry a response hash over the stored table response. That
 pair matters: the request hash proves which commit body won or replayed, while

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected metadata-object commits that would write new metadata to the
+  table's current metadata pointer, preventing current metadata files from
+  being overwritten before CAS/store validation.
 - Made `GOAL.md` explicitly import the user-supplied
   `/Users/alexy/src/lakecat/AGENTS.md` instructions as permanent goal
   constraints rather than temporary chat context.

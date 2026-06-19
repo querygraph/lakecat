@@ -2702,6 +2702,7 @@ async fn commit_table_in_warehouse(
             updates: request.updates,
         })
         .await?;
+    validate_planned_metadata_location(&commit_plan, current_metadata_location.as_deref())?;
     let metadata_write = write_planned_metadata(&commit_plan).await?;
     let table = match state
         .store
@@ -2780,6 +2781,24 @@ async fn write_planned_metadata(
     Ok(Some(PlannedMetadataWrite {
         location: location.to_string(),
     }))
+}
+
+fn validate_planned_metadata_location(
+    commit_plan: &lakecat_sail::CommitPlan,
+    current_metadata_location: Option<&str>,
+) -> Result<(), LakeCatError> {
+    if !commit_plan.metadata_write_required {
+        return Ok(());
+    }
+    let Some(new_metadata_location) = commit_plan.new_metadata_location.as_deref() else {
+        return Ok(());
+    };
+    if current_metadata_location == Some(new_metadata_location) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "metadata object commit must not overwrite the current metadata location '{new_metadata_location}'"
+        )));
+    }
+    Ok(())
 }
 
 async fn cleanup_planned_metadata(
@@ -8258,6 +8277,126 @@ mod tests {
         let records = store.table_commit_records(&ident, 0, None).await.unwrap();
         assert_eq!(records.len(), 1);
         assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn commit_rejects_metadata_object_overwrite_of_current_pointer() {
+        let app = test_app();
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lakecat-current-metadata-guard-{unique}"));
+        let table_dir = root.join("events");
+        let metadata_dir = table_dir.join("metadata");
+        std::fs::create_dir_all(&metadata_dir).unwrap();
+        let table_location = url::Url::from_directory_path(&table_dir)
+            .expect("table dir URL")
+            .to_string();
+        let initial_metadata_path = metadata_dir.join("00000.json");
+        let initial_metadata_location = url::Url::from_file_path(&initial_metadata_path)
+            .unwrap()
+            .to_string();
+        let base_metadata = serde_json::json!({
+            "format-version": 3,
+            "table-uuid": "11111111-1111-1111-1111-111111111111",
+            "location": table_location,
+            "last-sequence-number": 7,
+            "last-updated-ms": 1710000000000_i64,
+            "last-column-id": 1,
+            "schemas": [{
+                "type": "struct",
+                "schema-id": 1,
+                "fields": [{
+                    "id": 1,
+                    "name": "id",
+                    "type": "string",
+                    "required": true
+                }]
+            }],
+            "current-schema-id": 1,
+            "partition-specs": [{"spec-id": 0, "fields": []}],
+            "default-spec-id": 0,
+            "current-snapshot-id": 42,
+            "snapshots": [{
+                "snapshot-id": 42,
+                "sequence-number": 7,
+                "timestamp-ms": 1710000000000_i64,
+                "summary": {"operation": "append"},
+                "schema-id": 1
+            }],
+            "snapshot-log": [{"timestamp-ms": 1710000000000_i64, "snapshot-id": 42}]
+        });
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "name": "events",
+                    "location": table_location,
+                    "metadata-location": initial_metadata_location,
+                    "metadata": base_metadata,
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let sentinel = "{\n  \"sentinel\": \"current metadata must not be overwritten\"\n}\n";
+        std::fs::write(&initial_metadata_path, sentinel).unwrap();
+        let overwrite_metadata = serde_json::json!({
+            "format-version": 3,
+            "table-uuid": "11111111-1111-1111-1111-111111111111",
+            "location": table_location,
+            "last-sequence-number": 8,
+            "last-updated-ms": 1710000000100_i64,
+            "last-column-id": 1,
+            "schemas": [{
+                "type": "struct",
+                "schema-id": 1,
+                "fields": [{
+                    "id": 1,
+                    "name": "id",
+                    "type": "string",
+                    "required": true
+                }]
+            }],
+            "current-schema-id": 1,
+            "partition-specs": [{"spec-id": 0, "fields": []}],
+            "default-spec-id": 0,
+            "current-snapshot-id": 43,
+            "snapshots": [{
+                "snapshot-id": 43,
+                "sequence-number": 8,
+                "timestamp-ms": 1710000000100_i64,
+                "summary": {"operation": "append"},
+                "schema-id": 1
+            }],
+            "snapshot-log": [{"timestamp-ms": 1710000000100_i64, "snapshot-id": 43}]
+        });
+        let commit = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/commit")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "requirements": [],
+                    "updates": [],
+                    "metadata-location": initial_metadata_location,
+                    "metadata": overwrite_metadata,
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(commit).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            std::fs::read_to_string(&initial_metadata_path).unwrap(),
+            sentinel
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 
