@@ -6,6 +6,19 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Expose management replay storage-scope hash`.
+  QGLake management replay verification now requires storage-profile upsert
+  replay to carry a SHA-256 `location-prefix-hash`, and the operator-readable
+  management replay line prints the same credential-root storage-scope anchor
+  as the structured replay and handoff proof.
+- Local verification for this management replay storage-scope slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_management_replay_line_summarizes_verified_evidence -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --nocapture`;
+  `cargo test -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require credential replay storage-scope hash`.
   QGLake lineage-drain credential replay verification now rejects restricted or
   trusted-human credential events whose redacted storage-profile evidence lacks

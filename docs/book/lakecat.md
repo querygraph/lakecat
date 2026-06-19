@@ -1510,7 +1510,10 @@ hashes, and the accepted summary repeats that evidence as
 `lakecatReplayVerification.storageProfileUpsertProof`. QueryGraph gets proof
 that the credential root was configured, including the provider, issuance mode,
 and a hash of the configured location prefix, without receiving the underlying
-secret-store URI or full storage prefix in the compact proof. The script also
+secret-store URI or full storage prefix in the compact proof. The
+operator-readable management replay line now prints the same storage-scope hash,
+so a captured transcript cannot describe the credential root only by provider
+while omitting its redacted storage scope. The script also
 refuses to write a summary unless LakeCat
 replay proves both sides of credential vending: untrusted agents get no raw
 credentials, trusted humans receive only the audited standard exception, and

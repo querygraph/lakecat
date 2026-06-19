@@ -2708,8 +2708,9 @@ fn require_view_receipt_chain_evidence(
 
 fn qglake_management_replay_line(drain: &LineageDrainResponse) -> Option<String> {
     let storage_profile_upsert = qglake_drain_event(drain, "storage-profile.upserted")?;
+    let credential_root = qglake_storage_profile_upsert_line(storage_profile_upsert)?;
     Some(format!(
-        "management replay servers={} projects={} warehouses={} policies={} storage_profiles={} storage_profile_upserts={} credential_roots={}",
+        "management replay servers={} projects={} warehouses={} policies={} storage_profiles={} storage_profile_upserts={} credential_root={}",
         qglake_drain_event(drain, "server.listed")?
             .server_count
             .unwrap_or_default(),
@@ -2724,10 +2725,27 @@ fn qglake_management_replay_line(drain: &LineageDrainResponse) -> Option<String>
             .storage_profile_count
             .unwrap_or_default(),
         usize::from(storage_profile_upsert.storage_profile_id.is_some()),
-        storage_profile_upsert
-            .storage_profile_provider
-            .as_deref()
-            .unwrap_or("unknown")
+        credential_root
+    ))
+}
+
+fn qglake_storage_profile_upsert_line(event: &LineageDrainEventSummary) -> Option<String> {
+    let profile_id = event.storage_profile_id.as_deref()?.trim();
+    let provider = event.storage_profile_provider.as_deref()?.trim();
+    let issuance_mode = event.storage_profile_issuance_mode.as_deref()?.trim();
+    let location_prefix_hash = event
+        .storage_profile_location_prefix_hash
+        .as_deref()?
+        .trim();
+    if profile_id.is_empty()
+        || provider.is_empty()
+        || issuance_mode.is_empty()
+        || !is_sha256_hash(location_prefix_hash)
+    {
+        return None;
+    }
+    Some(format!(
+        "{profile_id}:{provider}:{issuance_mode}:location_prefix_hash={location_prefix_hash}"
     ))
 }
 
@@ -5815,8 +5833,7 @@ fn verify_qglake_storage_profile_upsert_replay(
         || event
             .storage_profile_location_prefix_hash
             .as_deref()
-            .unwrap_or_default()
-            .is_empty()
+            .map_or(true, |hash| !is_sha256_hash(hash))
         || event.storage_profile_secret_ref_present.is_none()
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
@@ -11184,7 +11201,41 @@ mod tests {
 
         assert_eq!(
             line,
-            "management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_roots=file"
+            "management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix"
+        );
+
+        let mut upsert_without_location_hash = qglake_storage_profile_upsert_lineage_summary();
+        upsert_without_location_hash.storage_profile_location_prefix_hash = None;
+        assert!(
+            qglake_management_replay_line(&LineageDrainResponse {
+                delivered: 5,
+                event_types: vec![
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                ],
+                graph_events: 0,
+                lineage_events: 5,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    upsert_without_location_hash,
+                ],
+            })
+            .is_none(),
+            "management replay line should require storage-profile location hash"
         );
     }
 
@@ -13024,6 +13075,49 @@ mod tests {
         .expect_err("QGLake lineage drain should reject empty storage profile list replay");
         assert!(err.to_string().contains(
             "qglake lineage drain storage profile list replay did not expose any storage profiles"
+        ));
+
+        let mut malformed_storage_profile_upsert = qglake_storage_profile_upsert_lineage_summary();
+        malformed_storage_profile_upsert.storage_profile_location_prefix_hash =
+            Some("not-a-hash".to_string());
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 7,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "storage-profile.upserted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 7,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    malformed_storage_profile_upsert,
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject malformed storage-profile upsert hash");
+        assert!(err.to_string().contains(
+            "qglake lineage drain storage profile upsert replay did not expose redacted credential-root evidence"
         ));
 
         let err = verify_qglake_lineage_drain(

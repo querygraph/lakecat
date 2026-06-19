@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened QGLake management replay output so storage-profile upsert replay
+  must carry a SHA-256 `location-prefix-hash` and the operator-readable
+  management replay line prints the same redacted credential-root storage-scope
+  anchor as the structured proof.
 - Tightened QGLake credential replay verification so lineage-drain credential
   evidence must carry a redacted storage-scope hash before compact handoff
   summary generation, and surfaced that hash in the operator-readable credential
