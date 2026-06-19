@@ -10230,6 +10230,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn management_storage_profile_rejects_public_secret_values() {
+        let app = test_app();
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/storage-profiles/public-secret")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "location-prefix": "s3://lakecat-demo/events",
+                    "provider": "s3",
+                    "issuance-mode": "short-lived-secret-ref",
+                    "secret-ref": "typesec://lakecat/local/s3-events",
+                    "public-config": {
+                        "lakecat.endpoint": "https://storage.example.invalid?token=raw-secret"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
     async fn remote_storage_profile_accepts_secret_ref_without_vending_raw_secrets() {
         let app = test_app();
         let upsert = Request::builder()

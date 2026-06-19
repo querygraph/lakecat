@@ -1915,7 +1915,7 @@ fn validate_project_id(project_id: &str) -> LakeCatResult<()> {
 }
 
 fn validate_public_config(config: &BTreeMap<String, String>) -> LakeCatResult<()> {
-    for key in config.keys() {
+    for (key, value) in config {
         let normalized = key.to_ascii_lowercase();
         if normalized.contains("secret")
             || normalized.contains("token")
@@ -1926,8 +1926,35 @@ fn validate_public_config(config: &BTreeMap<String, String>) -> LakeCatResult<()
                 "storage profile public config key may expose secret material: {key}"
             )));
         }
+        if embeds_raw_secret_material(value) {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "storage profile public config value for key '{key}' may expose secret material"
+            )));
+        }
     }
     Ok(())
+}
+
+fn embeds_raw_secret_material(value: &str) -> bool {
+    let normalized = value.to_ascii_lowercase();
+    let embedded_secret_patterns = [
+        "password=",
+        "secret=",
+        "token=",
+        "credential=",
+        "api_key=",
+        "apikey=",
+        "access_key=",
+        "private_key=",
+        "pass=",
+        "auth=",
+        "aws_access_key_id=",
+        "aws_secret_access_key=",
+        "aws_session_token=",
+    ];
+    embedded_secret_patterns
+        .iter()
+        .any(|pattern| normalized.contains(pattern))
 }
 
 fn validate_secret_ref(secret_ref: &str) -> LakeCatResult<()> {
@@ -1949,23 +1976,7 @@ fn validate_secret_ref(secret_ref: &str) -> LakeCatResult<()> {
             "storage profile secret reference must use an external secret-store URI: {secret_ref}"
         )));
     }
-    let normalized = trimmed.to_ascii_lowercase();
-    let embedded_secret_patterns = [
-        "password=",
-        "secret=",
-        "token=",
-        "credential=",
-        "api_key=",
-        "apikey=",
-        "access_key=",
-        "private_key=",
-        "pass=",
-        "auth=",
-    ];
-    if embedded_secret_patterns
-        .iter()
-        .any(|pattern| normalized.contains(pattern))
-    {
+    if embeds_raw_secret_material(trimmed) {
         return Err(LakeCatError::InvalidArgument(
             "storage profile secret reference must not embed raw secret material".to_string(),
         ));
@@ -5325,6 +5336,30 @@ pub mod turso_store {
                 local_secret_ref
                     .to_string()
                     .contains("short-lived-secret-ref issuance mode requires s3, gcs, or azure")
+            );
+        }
+
+        #[test]
+        fn storage_profiles_reject_public_config_secret_values() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            let err = StorageProfile::new(
+                "secret-public-config",
+                warehouse,
+                "s3://lakecat-demo/events",
+                StorageProvider::S3,
+                CredentialIssuanceMode::ShortLivedSecretRef,
+                Some("typesec://lakecat/local/s3-events".to_string()),
+                BTreeMap::from([(
+                    "lakecat.endpoint".to_string(),
+                    "https://storage.example.invalid?token=raw-secret".to_string(),
+                )]),
+            )
+            .unwrap_err();
+
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            assert!(
+                err.to_string()
+                    .contains("public config value for key 'lakecat.endpoint'")
             );
         }
 

@@ -6,6 +6,29 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject secret-looking storage profile public config`. Storage profiles now
+  reject `public-config` values that appear to embed raw tokens, passwords,
+  access keys, or credential query parameters at the durable model boundary and
+  through the management API. Public config remains available for non-secret
+  routing hints such as region, endpoint labels, and operational purpose; raw
+  credential material belongs behind `secret-ref` and the TypeSec-authorized
+  resolver path.
+- Local verification for the storage-profile public-config validation slice is
+  green:
+  `cargo fmt -p lakecat-store -p lakecat-service`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_reject_public_config_secret_values`;
+  `cargo test -p lakecat-service management_storage_profile_rejects_public_secret_values`;
+  `cargo test -p lakecat-service remote_storage_profile_accepts_secret_ref_without_vending_raw_secrets`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-store -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Validate storage profile issuance modes`. Storage profiles now reject unsafe
   issuance/provider combinations at the durable model boundary and through the
   management API: `local-file-no-secret` is limited to file storage, and

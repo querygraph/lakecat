@@ -357,8 +357,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   while leaving reusable graph hierarchy work to Grust; storage-profile writes
   now emit lineage/OpenLineage receipts for credential-root changes from durable
   outbox replay, and stores reject storage profiles whose declared provider
-  conflicts with the URI scheme of the location prefix or whose issuance mode
-  conflicts with the provider class; management routes now use the requested
+  conflicts with the URI scheme of the location prefix, whose issuance mode
+  conflicts with the provider class, or whose public config appears to carry
+  raw secret material; management routes now use the requested
   warehouse instead of the configured default, Iceberg REST routes now accept a
   warehouse prefix only after resolving a durable `WarehouseRecord`, and
   project-scoped management routes can list/upsert warehouses under their

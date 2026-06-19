@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Rejected storage-profile `public-config` values that appear to embed raw
+  secret material, and documented public config as non-secret routing metadata.
 - Pinned the supplied `/Users/alexy/src/lakecat/AGENTS.md` operating guidance
   directly into `GOAL.md` as durable goal execution guidance.
 - Rejected unsafe storage-profile issuance/provider combinations, including

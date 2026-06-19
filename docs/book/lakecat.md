@@ -763,6 +763,11 @@ pointing at an S3 prefix.
 It also rejects unsafe issuance-mode combinations: `local-file-no-secret` is
 for file storage only, while `short-lived-secret-ref` is for configured remote
 providers such as S3, GCS, and Azure.
+The `public-config` map is only for non-secret routing hints such as region,
+endpoint labels, and operational purpose. LakeCat rejects secret-looking
+public keys and values, so raw tokens, passwords, access keys, and credential
+query parameters must move behind `secret-ref` and the TypeSec-authorized
+resolver path.
 
 ```sh
 curl -s -X PUT \
