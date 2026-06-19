@@ -566,6 +566,23 @@ that only uses memory stores should not accidentally depend on a sibling repo.
 A test that claims to validate TypeSec should enable `typesec-local` and call
 TypeSec.
 
+The local dependency contract is executable because LakeCat still depends on
+active sibling work. Grust and TypeSec are versioned local path dependencies:
+LakeCat resolves them from `../grust` and `../typesec` while also pinning the
+published crate versions it expects. Sail is different today: LakeCat uses
+local Sail paths plus a checked-in patch bridge for helper APIs that are not
+yet published. Before pushing a slice that touches integration features, run:
+
+```sh
+scripts/check-local-dependency-contract.sh
+```
+
+The script checks the manual-only CI trigger, the Grust/TypeSec versioned path
+pins, the local Sail path bridge, and the Sail patch files manual CI applies.
+It is not a substitute for upstreaming the Sail helper APIs or re-enabling
+automatic CI; it is a guard that makes drift visible while LakeCat still lives
+across these sibling repositories.
+
 ## Standard Compatibility And Extensions
 
 LakeCat must be boring where standards require boring behavior. Standard

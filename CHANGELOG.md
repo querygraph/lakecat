@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a local dependency-contract audit script and wired it into manual CI so
+  the Grust/TypeSec versioned path pins, Sail path/patch bridge, and
+  manual-only workflow state fail fast when they drift.
 - Added focused `lakecat-sail` v4 extension fixtures for JSON-summary
   inspection, manifest-list scan planning, and stable commit-requirement
   validation while keeping typed v4 metadata explicitly pending on Sail.

@@ -6,6 +6,21 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Add local dependency contract audit`. The new
+  `scripts/check-local-dependency-contract.sh` script checks the versioned local
+  Grust/TypeSec pins, the Sail local path bridge, the CI Sail patch bridge, and
+  the manual-only CI trigger. Manual CI now runs the same audit after checking
+  out Sail, Grust, and TypeSec.
+- Local verification for the dependency contract audit slice was green:
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Add v4 extension bridge fixtures`. `lakecat-sail` now has focused tests that
   prove JSON-summary inspection, manifest-list scan planning, and stable
   commit-requirement validation for format-version 4 metadata without claiming

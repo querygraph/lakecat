@@ -146,7 +146,7 @@ build is reproducible off this machine.
 | F7 | Tenancy hierarchy durable but not fully routed | LOW | STARTED — Server/Project/Warehouse/View records and registered warehouse-prefixed routing |
 | F8 | Production secret backends unexercised | LOW | STARTED — all accepted production secret-ref schemes are TypeSec-gated before fail-closed resolver errors |
 | F9 | v4 JSON passthrough | LOW | OPEN by design; stronger bridge fixtures now cover JSON summary inspection, manifest-list planning, and stable commit requirements |
-| F10 | Sibling deps local-only; CI manual | LOW (process) | OPEN |
+| F10 | Sibling deps local-only; CI manual | LOW (process) | OPEN; executable dependency-contract audit now guards local/manual runs |
 
 ---
 
@@ -365,6 +365,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   now has focused format-version 4 fixtures for JSON summary extraction,
   manifest-list scan planning, and stable commit-requirement validation, but
   pruning and typed metadata-tree semantics remain Sail-owned follow-up work.
+  A local dependency-contract audit now checks the versioned Grust/TypeSec path
+  pins, the Sail path/patch bridge, and the manual-only CI trigger so F10 drift
+  is executable even before automatic CI is re-enabled.
 
 ---
 

@@ -72,6 +72,10 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Audit local dependency contract
+        working-directory: lakecat
+        run: scripts/check-local-dependency-contract.sh
+
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
