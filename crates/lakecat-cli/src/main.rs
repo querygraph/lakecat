@@ -312,7 +312,7 @@ fn qglake_verify_replay(
     let management_replay = qglake_management_replay_line(&drain);
     let credential_replay = qglake_credential_replay_line(&drain, principal.as_deref());
     let table_commit_history_replay = qglake_table_commit_history_replay_line(&drain);
-    let replay_evidence = qglake_replay_evidence_json(&drain, principal.as_deref());
+    let replay_evidence = qglake_replay_evidence_json(&drain, principal.as_deref(), &verification);
     if json_output {
         print_json(&qglake_replay_verification_json(
             &verification,
@@ -397,12 +397,17 @@ fn qglake_replay_verification_json(
     })
 }
 
-fn qglake_replay_evidence_json(drain: &LineageDrainResponse, principal: Option<&str>) -> Value {
+fn qglake_replay_evidence_json(
+    drain: &LineageDrainResponse,
+    principal: Option<&str>,
+    verification: &QueryGraphBootstrapVerification,
+) -> Value {
     json!({
         "scan": qglake_scan_replay_evidence_json(drain),
         "management": qglake_management_replay_evidence_json(drain),
         "credentials": qglake_credential_replay_evidence_json(drain, principal),
         "tableCommitHistory": qglake_table_commit_history_replay_evidence_json(drain),
+        "views": qglake_view_replay_evidence_json(drain, verification),
     })
 }
 
@@ -481,6 +486,86 @@ fn qglake_table_commit_history_replay_evidence_json(drain: &LineageDrainResponse
         "commitHashes": &commit_history.table_commit_hashes,
         "replayEventHashes": &commit_history.replay_event_hashes,
         "openLineageHashes": &commit_history.replay_open_lineage_hashes,
+    }))
+}
+
+fn qglake_view_replay_evidence_json(
+    drain: &LineageDrainResponse,
+    verification: &QueryGraphBootstrapVerification,
+) -> Option<Value> {
+    if verification.verified_views.is_empty() {
+        return Some(json!({
+            "viewCount": 0,
+            "views": [],
+            "tombstoneReceipts": [],
+            "receiptChains": []
+        }));
+    }
+
+    let views = verification
+        .verified_views
+        .iter()
+        .map(|view_stable_id| {
+            let view_replay = drain.events.iter().find(|event| {
+                matches!(
+                    event.event_type.as_str(),
+                    "view.upserted" | "view.loaded" | "view.dropped"
+                ) && event.view_stable_id.as_deref() == Some(view_stable_id.as_str())
+            })?;
+            Some(json!({
+                "stableId": view_stable_id,
+                "warehouse": view_replay.view_warehouse.as_deref(),
+                "namespace": &view_replay.view_namespace,
+                "name": view_replay.view_name.as_deref(),
+                "viewVersion": view_replay.view_version,
+                "acceptedViewVersion": verification.verified_view_versions.get(view_stable_id),
+                "acceptedReceiptHash": verification.verified_view_receipt_hashes.get(view_stable_id),
+                "eventType": view_replay.event_type,
+                "replayEventHashes": &view_replay.replay_event_hashes,
+                "openLineageHashes": &view_replay.replay_open_lineage_hashes,
+            }))
+        })
+        .collect::<Option<Vec<_>>>()?;
+
+    let tombstone_receipts = drain
+        .events
+        .iter()
+        .filter(|event| event.event_type == "view.version-receipts-listed")
+        .map(|event| {
+            json!({
+                "stableId": event.view_stable_id.as_deref(),
+                "warehouse": event.view_warehouse.as_deref(),
+                "namespace": &event.view_namespace,
+                "name": event.view_name.as_deref(),
+                "receiptHashes": &event.view_version_receipt_hashes,
+                "replayEventHashes": &event.replay_event_hashes,
+                "openLineageHashes": &event.replay_open_lineage_hashes,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let receipt_chains = drain
+        .events
+        .iter()
+        .filter(|event| event.event_type == "view.version-receipt-chains-listed")
+        .map(|event| {
+            json!({
+                "warehouse": event.view_warehouse.as_deref(),
+                "namespace": &event.view_namespace,
+                "receiptHashes": &event.view_version_receipt_hashes,
+                "chainHashes": &event.view_version_receipt_chain_hashes,
+                "verifiedChainCount": event.view_version_receipt_chain_verified_count,
+                "replayEventHashes": &event.replay_event_hashes,
+                "openLineageHashes": &event.replay_open_lineage_hashes,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    Some(json!({
+        "viewCount": verification.view_count,
+        "views": views,
+        "tombstoneReceipts": tombstone_receipts,
+        "receiptChains": receipt_chains,
     }))
 }
 
@@ -4667,7 +4752,7 @@ mod tests {
             qglake_management_replay_line(&drain),
             qglake_credential_replay_line(&drain, Some("did:example:agent")),
             qglake_table_commit_history_replay_line(&drain),
-            qglake_replay_evidence_json(&drain, Some("did:example:agent")),
+            qglake_replay_evidence_json(&drain, Some("did:example:agent"), &replay_verification),
         );
         assert_eq!(
             replay_json["schema-version"],
@@ -4700,6 +4785,86 @@ mod tests {
         assert_eq!(
             replay_json["replay-evidence"]["tableCommitHistory"]["sequenceNumbers"],
             json!([1])
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["views"]["viewCount"],
+            json!(0)
+        );
+
+        let view_verification = qglake_view_lineage_verification();
+        let mut bootstrap_with_view = qglake_bootstrap_lineage_summary();
+        bootstrap_with_view.view_artifact_count = 1;
+        bootstrap_with_view.view_version_receipt_hashes =
+            vec!["sha256:view-version-receipt".to_string()];
+        let view_drain = LineageDrainResponse {
+            delivered: 15,
+            event_types: vec![
+                "table.scan-planned".to_string(),
+                "table.scan-tasks-fetched".to_string(),
+                "credentials.vend-attempted".to_string(),
+                "credentials.vend-attempted".to_string(),
+                "view.upserted".to_string(),
+                "view.dropped".to_string(),
+                "view.version-receipts-listed".to_string(),
+                "view.version-receipt-chains-listed".to_string(),
+                "policy-binding.listed".to_string(),
+                "storage-profile.listed".to_string(),
+                "server.listed".to_string(),
+                "project.listed".to_string(),
+                "warehouse.listed".to_string(),
+                "table.commits-listed".to_string(),
+                "querygraph.bootstrap".to_string(),
+            ],
+            graph_events: 4,
+            lineage_events: 16,
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            events: vec![
+                bootstrap_with_view,
+                qglake_restricted_credential_summary(),
+                qglake_human_credential_summary(),
+                qglake_view_lineage_summary(),
+                qglake_view_drop_lineage_summary(),
+                qglake_view_tombstone_receipt_lineage_summary(),
+                qglake_view_receipt_chain_lineage_summary(),
+                qglake_policy_list_lineage_summary(),
+                qglake_storage_profile_list_lineage_summary(),
+                qglake_storage_profile_upsert_lineage_summary(),
+                qglake_server_list_lineage_summary(),
+                qglake_project_list_lineage_summary(),
+                qglake_warehouse_list_lineage_summary(),
+                qglake_table_commit_history_lineage_summary(),
+                qglake_scan_planned_lineage_summary(),
+                qglake_scan_tasks_fetched_lineage_summary(),
+            ],
+        };
+        let view_replay_json =
+            qglake_replay_evidence_json(&view_drain, Some("did:example:agent"), &view_verification);
+        assert_eq!(
+            view_replay_json["views"]["views"][0]["stableId"],
+            json!("lakecat:view:local:default:active_customers")
+        );
+        assert_eq!(
+            view_replay_json["views"]["views"][0]["acceptedViewVersion"],
+            json!(1)
+        );
+        assert_eq!(
+            view_replay_json["views"]["views"][0]["acceptedReceiptHash"],
+            json!("sha256:view-version-receipt")
+        );
+        assert_eq!(
+            view_replay_json["views"]["tombstoneReceipts"][0]["receiptHashes"],
+            json!(["sha256:view-drop-receipt"])
+        );
+        assert_eq!(
+            view_replay_json["views"]["receiptChains"][0]["chainHashes"],
+            json!(["sha256:view-receipt-chain"])
+        );
+        assert_eq!(
+            view_replay_json["views"]["receiptChains"][0]["verifiedChainCount"],
+            json!(1)
         );
     }
 

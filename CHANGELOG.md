@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a compact `viewReceiptChainProof` object to QGLake
+  `handoff-summary.json`, proving accepted view versions, tombstone receipts,
+  namespace receipt-chain hashes, and replay/OpenLineage hashes.
 - Added the current LakeCat `AGENTS.md` guidance snapshot to `GOAL.md`,
   including repo boundaries, compatibility rules, Turso direction, verification
   gates, and commit discipline.

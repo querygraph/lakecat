@@ -1182,16 +1182,20 @@ counts, and semantic bundle/graph/OpenLineage/import hashes plus standards
 accepted only after LakeCat replay, `lakecat-verify`, and `lakecat-import`
 agree. It also records structured scan, management, credential, and
 table-commit replay evidence, plus compact `governedScanProof`,
-`tableCommitHistoryProof`, `storageProfileUpsertProof`, and
-`credentialVendingProof` objects that lift the governed scan counts,
-pointer-log read proof, redacted credential-root proof, and credential-vending
-decision out of the full replay tree. The scan proof shows LakeCat planned and
-fetched scan tasks through the governed path, including file, delete-file, and
-child plan-task counts with replay and OpenLineage hashes. The commit-history
-proof shows the catalog pointer log was read back with commit count, sequence
-numbers, commit hashes, and replay/OpenLineage hashes. The credential proof
-shows the restricted agent was blocked onto Sail-planned reads while the trusted
-human path used the audited raw-credential exception. The summary also records
+`tableCommitHistoryProof`, `viewReceiptChainProof`,
+`storageProfileUpsertProof`, and `credentialVendingProof` objects that lift the
+governed scan counts, pointer-log read proof, view version and receipt-chain
+proof, redacted credential-root proof, and credential-vending decision out of
+the full replay tree. The scan proof shows LakeCat planned and fetched scan
+tasks through the governed path, including file, delete-file, and child
+plan-task counts with replay and OpenLineage hashes. The commit-history proof
+shows the catalog pointer log was read back with commit count, sequence
+numbers, commit hashes, and replay/OpenLineage hashes. The view receipt-chain
+proof shows QueryGraph's accepted view versions together with accepted receipt
+hashes, tombstone receipt hashes, namespace chain hashes, verified-chain
+counts, and replay/OpenLineage hashes. The credential proof shows the
+restricted agent was blocked onto Sail-planned reads while the trusted human
+path used the audited raw-credential exception. The summary also records
 artifact paths, raw file hashes, captured LakeCat replay output, captured
 QueryGraph verification output, captured QueryGraph import output, and service
 log path.
@@ -1208,7 +1212,10 @@ credentials, and trusted humans receive only the audited standard exception.
 For reads, the summary similarly refuses to omit proof that scan planning and
 scan-task fetch both replayed with sink receipt hashes. For catalog state, it
 refuses to omit proof that the table commit-history read replayed with
-sequence-number and commit-hash evidence.
+sequence-number and commit-hash evidence. For views, it refuses to omit proof
+that accepted view versions line up with their receipt hashes and that the
+namespace-level tombstone and receipt-chain reads replayed with chain hashes
+and verified-chain counts.
 
 This gives the semantic layer a responsible starting point. LakeCat says:
 

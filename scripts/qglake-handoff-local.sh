@@ -302,6 +302,104 @@ process.stdout.write(JSON.stringify({
 ' "$file"
 }
 
+view_receipt_chain_evidence_json() {
+  local file="$1"
+  node -e '
+const fs = require("fs");
+const [file] = process.argv.slice(1);
+const replay = JSON.parse(fs.readFileSync(file, "utf8"));
+const evidence = replay["replay-evidence"]?.views;
+if (!evidence || typeof evidence !== "object") {
+  console.error("LakeCat replay evidence is missing views");
+  process.exit(1);
+}
+function requireHashArray(value, label) {
+  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    console.error(`LakeCat view replay evidence is missing ${label}`);
+    process.exit(1);
+  }
+}
+if (!Number.isInteger(evidence.viewCount) || evidence.viewCount < 0) {
+  console.error("LakeCat view replay evidence is missing viewCount");
+  process.exit(1);
+}
+if (evidence.viewCount === 0) {
+  process.stdout.write(JSON.stringify({
+    viewCount: 0,
+    views: [],
+    tombstoneReceipts: [],
+    receiptChains: [],
+  }));
+  process.exit(0);
+}
+if (!Array.isArray(evidence.views) || evidence.views.length !== evidence.viewCount) {
+  console.error("LakeCat view replay evidence does not match viewCount");
+  process.exit(1);
+}
+for (const [index, view] of evidence.views.entries()) {
+  if (!view || typeof view !== "object" || !view.stableId || !view.warehouse || !view.name) {
+    console.error(`LakeCat view replay evidence ${index} is missing compact identity`);
+    process.exit(1);
+  }
+  if (!Array.isArray(view.namespace) || view.namespace.length === 0) {
+    console.error(`LakeCat view replay evidence ${index} is missing namespace`);
+    process.exit(1);
+  }
+  if (!Number.isInteger(view.viewVersion) || view.viewVersion <= 0 || view.acceptedViewVersion !== view.viewVersion) {
+    console.error(`LakeCat view replay evidence ${index} does not prove the accepted view version`);
+    process.exit(1);
+  }
+  if (!view.acceptedReceiptHash) {
+    console.error(`LakeCat view replay evidence ${index} is missing acceptedReceiptHash`);
+    process.exit(1);
+  }
+  requireHashArray(view.replayEventHashes, `view ${index} replayEventHashes`);
+  requireHashArray(view.openLineageHashes, `view ${index} openLineageHashes`);
+}
+if (!Array.isArray(evidence.tombstoneReceipts) || evidence.tombstoneReceipts.length === 0) {
+  console.error("LakeCat view replay evidence is missing tombstoneReceipts");
+  process.exit(1);
+}
+for (const [index, receipt] of evidence.tombstoneReceipts.entries()) {
+  if (!receipt || typeof receipt !== "object" || !receipt.stableId) {
+    console.error(`LakeCat view tombstone receipt evidence ${index} is missing stableId`);
+    process.exit(1);
+  }
+  requireHashArray(receipt.receiptHashes, `tombstone ${index} receiptHashes`);
+  requireHashArray(receipt.replayEventHashes, `tombstone ${index} replayEventHashes`);
+  requireHashArray(receipt.openLineageHashes, `tombstone ${index} openLineageHashes`);
+}
+if (!Array.isArray(evidence.receiptChains) || evidence.receiptChains.length === 0) {
+  console.error("LakeCat view replay evidence is missing receiptChains");
+  process.exit(1);
+}
+for (const [index, chain] of evidence.receiptChains.entries()) {
+  if (!chain || typeof chain !== "object" || !chain.warehouse) {
+    console.error(`LakeCat view receipt-chain evidence ${index} is missing warehouse`);
+    process.exit(1);
+  }
+  if (!Array.isArray(chain.namespace) || chain.namespace.length === 0) {
+    console.error(`LakeCat view receipt-chain evidence ${index} is missing namespace`);
+    process.exit(1);
+  }
+  if (!Number.isInteger(chain.verifiedChainCount) || chain.verifiedChainCount <= 0) {
+    console.error(`LakeCat view receipt-chain evidence ${index} is missing verifiedChainCount`);
+    process.exit(1);
+  }
+  requireHashArray(chain.receiptHashes, `chain ${index} receiptHashes`);
+  requireHashArray(chain.chainHashes, `chain ${index} chainHashes`);
+  requireHashArray(chain.replayEventHashes, `chain ${index} replayEventHashes`);
+  requireHashArray(chain.openLineageHashes, `chain ${index} openLineageHashes`);
+}
+process.stdout.write(JSON.stringify({
+  viewCount: evidence.viewCount,
+  views: evidence.views,
+  tombstoneReceipts: evidence.tombstoneReceipts,
+  receiptChains: evidence.receiptChains,
+}));
+' "$file"
+}
+
 required_summary_field() {
   local label="$1"
   local source_file="$2"
@@ -327,7 +425,7 @@ write_summary() {
   local verified_tables verified_views bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   local verified_standards
   local lakecat_schema lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards lakecat_replay_evidence
-  local lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence lakecat_table_commit_history_evidence
+  local lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence lakecat_table_commit_history_evidence lakecat_view_receipt_chain_evidence
   local imported_tables imported_views imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
   local imported_standards
   bundle_sha="$(sha256_file "$BUNDLE")"
@@ -347,6 +445,7 @@ write_summary() {
   lakecat_credential_vending_evidence="$(credential_vending_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_governed_scan_evidence="$(governed_scan_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_table_commit_history_evidence="$(table_commit_history_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
+  lakecat_view_receipt_chain_evidence="$(view_receipt_chain_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   verified_tables="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "table-count")"
   verified_views="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "view-count")"
   bundle_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "bundle-hash")"
@@ -382,6 +481,7 @@ write_summary() {
   required_summary_field "credential-vending-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_credential_vending_evidence"
   required_summary_field "governed-scan-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_governed_scan_evidence"
   required_summary_field "table-commit-history-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_table_commit_history_evidence"
+  required_summary_field "view-receipt-chain-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_view_receipt_chain_evidence"
   required_summary_field "table-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_tables"
   required_summary_field "view-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_views"
   required_summary_field "bundle-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_bundle_hash"
@@ -432,6 +532,7 @@ write_summary() {
     "matchesQueryGraph": true,
     "governedScanProof": $lakecat_governed_scan_evidence,
     "tableCommitHistoryProof": $lakecat_table_commit_history_evidence,
+    "viewReceiptChainProof": $lakecat_view_receipt_chain_evidence,
     "storageProfileUpsertProof": $lakecat_storage_profile_upsert_evidence,
     "credentialVendingProof": $lakecat_credential_vending_evidence,
     "replayEvidence": $lakecat_replay_evidence
