@@ -6,6 +6,29 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Lift governed scan proof into handoff summary`.
+  `scripts/qglake-handoff-local.sh` now writes
+  `lakecatReplayVerification.governedScanProof` in `handoff-summary.json`,
+  proving governed scan planning and scan-task fetch replay with plan, file,
+  delete-file, and child plan-task counts plus replay/OpenLineage hashes.
+- Local verification for the compact handoff governed-scan proof slice is
+  green:
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh` with local socket binding allowed. The live
+  handoff generated one table and one view, drained 26 outbox events, verified
+  LakeCat replay through `qglake-verify-replay`, ran QueryGraph
+  `lakecat-verify` and `lakecat-import`, and wrote
+  `lakecatReplayVerification.governedScanProof` to
+  `target/qglake-handoff/handoff-summary.json`;
+  direct Node summary check for
+  `lakecatReplayVerification.governedScanProof`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-cli qglake_scan_replay_line_summarizes_verified_evidence`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-cli`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Lift credential vending proof into handoff summary`.
   `scripts/qglake-handoff-local.sh` now writes
   `lakecatReplayVerification.credentialVendingProof` in

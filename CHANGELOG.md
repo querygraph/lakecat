@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a compact `governedScanProof` object to QGLake `handoff-summary.json`,
+  proving scan planning and scan-task fetch replay with file/delete task counts
+  plus replay/OpenLineage hashes.
 - Added a compact `credentialVendingProof` object to QGLake
   `handoff-summary.json`, proving restricted agents were blocked onto
   Sail-planned reads while trusted humans used the audited raw-credential

@@ -203,6 +203,56 @@ process.stdout.write(JSON.stringify({
 ' "$file"
 }
 
+governed_scan_evidence_json() {
+  local file="$1"
+  node -e '
+const fs = require("fs");
+const [file] = process.argv.slice(1);
+const replay = JSON.parse(fs.readFileSync(file, "utf8"));
+const evidence = replay["replay-evidence"]?.scan;
+if (!evidence || typeof evidence !== "object") {
+  console.error("LakeCat replay evidence is missing scan");
+  process.exit(1);
+}
+function requirePositiveInteger(value, label) {
+  if (!Number.isInteger(value) || value <= 0) {
+    console.error(`LakeCat scan replay evidence is missing positive ${label}`);
+    process.exit(1);
+  }
+}
+function requireNonNegativeInteger(value, label) {
+  if (!Number.isInteger(value) || value < 0) {
+    console.error(`LakeCat scan replay evidence is missing non-negative ${label}`);
+    process.exit(1);
+  }
+}
+function requireHashArray(value, label) {
+  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    console.error(`LakeCat scan replay evidence is missing ${label}`);
+    process.exit(1);
+  }
+}
+requirePositiveInteger(evidence.planTaskCount, "planTaskCount");
+requirePositiveInteger(evidence.fileTaskCount, "fileTaskCount");
+requirePositiveInteger(evidence.childPlanTaskCount, "childPlanTaskCount");
+requireNonNegativeInteger(evidence.deleteFileCount, "deleteFileCount");
+requireHashArray(evidence.plannedReplayEventHashes, "plannedReplayEventHashes");
+requireHashArray(evidence.fetchedReplayEventHashes, "fetchedReplayEventHashes");
+requireHashArray(evidence.plannedOpenLineageHashes, "plannedOpenLineageHashes");
+requireHashArray(evidence.fetchedOpenLineageHashes, "fetchedOpenLineageHashes");
+process.stdout.write(JSON.stringify({
+  planTaskCount: evidence.planTaskCount,
+  fileTaskCount: evidence.fileTaskCount,
+  deleteFileCount: evidence.deleteFileCount,
+  childPlanTaskCount: evidence.childPlanTaskCount,
+  plannedReplayEventHashes: evidence.plannedReplayEventHashes,
+  fetchedReplayEventHashes: evidence.fetchedReplayEventHashes,
+  plannedOpenLineageHashes: evidence.plannedOpenLineageHashes,
+  fetchedOpenLineageHashes: evidence.fetchedOpenLineageHashes,
+}));
+' "$file"
+}
+
 required_summary_field() {
   local label="$1"
   local source_file="$2"
@@ -228,7 +278,7 @@ write_summary() {
   local verified_tables verified_views bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   local verified_standards
   local lakecat_schema lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards lakecat_replay_evidence
-  local lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence
+  local lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence
   local imported_tables imported_views imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
   local imported_standards
   bundle_sha="$(sha256_file "$BUNDLE")"
@@ -246,6 +296,7 @@ write_summary() {
   lakecat_replay_evidence="$(json_value_field "$LAKECAT_REPLAY_OUTPUT" "replay-evidence")"
   lakecat_storage_profile_upsert_evidence="$(storage_profile_upsert_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_credential_vending_evidence="$(credential_vending_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
+  lakecat_governed_scan_evidence="$(governed_scan_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   verified_tables="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "table-count")"
   verified_views="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "view-count")"
   bundle_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "bundle-hash")"
@@ -279,6 +330,7 @@ write_summary() {
   required_summary_field "replay-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_replay_evidence"
   required_summary_field "storage-profile-upsert-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_storage_profile_upsert_evidence"
   required_summary_field "credential-vending-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_credential_vending_evidence"
+  required_summary_field "governed-scan-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_governed_scan_evidence"
   required_summary_field "table-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_tables"
   required_summary_field "view-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_views"
   required_summary_field "bundle-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_bundle_hash"
@@ -327,6 +379,7 @@ write_summary() {
     "schemaVersion": "$(json_string "$lakecat_schema")",
     "status": "$(json_string "$lakecat_status")",
     "matchesQueryGraph": true,
+    "governedScanProof": $lakecat_governed_scan_evidence,
     "storageProfileUpsertProof": $lakecat_storage_profile_upsert_evidence,
     "credentialVendingProof": $lakecat_credential_vending_evidence,
     "replayEvidence": $lakecat_replay_evidence
