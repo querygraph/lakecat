@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-verify-handoff` verify the legacy handoff artifact
+  path aliases against the hashed `capturedOutputs` paths, while requiring the
+  service log path to exist and keeping the self-referential verifier-output
+  path as a declared output.
 - Made `lakecat-cli qglake-verify-handoff` parse and verify the saved
   lineage-drain artifact, regenerating LakeCat replay evidence from the
   archived drain JSON and rejecting handoffs whose saved outbox/lineage replay

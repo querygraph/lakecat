@@ -472,11 +472,13 @@ fn verify_qglake_handoff_artifact_files(
         verify_qglake_handoff_artifact_file(artifacts, "querygraphImportPlan", base_dir)?;
     let captured_outputs =
         verify_qglake_handoff_captured_outputs(artifacts, "capturedOutputs", base_dir)?;
+    let path_aliases = verify_qglake_handoff_artifact_path_aliases(artifacts, base_dir)?;
     Ok(json!({
         "bundle": bundle,
         "lineageDrain": lineage_drain,
         "querygraphImportPlan": querygraph_import_plan,
         "capturedOutputs": captured_outputs,
+        "pathAliases": path_aliases,
     }))
 }
 
@@ -493,20 +495,97 @@ fn verify_qglake_handoff_captured_outputs(
     }))
 }
 
+fn verify_qglake_handoff_artifact_path_aliases(
+    artifacts: &serde_json::Map<String, Value>,
+    base_dir: &Path,
+) -> lakecat_core::LakeCatResult<Value> {
+    let outputs = required_object(artifacts, "capturedOutputs", "handoff summary artifacts")?;
+    let lakecat_replay = verify_qglake_handoff_path_alias(
+        artifacts,
+        outputs,
+        "lakecatReplayOutput",
+        "lakecatReplay",
+        base_dir,
+    )?;
+    let querygraph_verify = verify_qglake_handoff_path_alias(
+        artifacts,
+        outputs,
+        "querygraphVerifyOutput",
+        "querygraphVerify",
+        base_dir,
+    )?;
+    let querygraph_import = verify_qglake_handoff_path_alias(
+        artifacts,
+        outputs,
+        "querygraphImportOutput",
+        "querygraphImport",
+        base_dir,
+    )?;
+    let handoff_verify_output =
+        required_resolved_artifact_path(artifacts, "lakecatHandoffVerifyOutput", base_dir)?;
+    let service_log = required_resolved_artifact_path(artifacts, "serviceLog", base_dir)?;
+    if !service_log.exists() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff artifact serviceLog does not exist at {}",
+            service_log.display()
+        )));
+    }
+    Ok(json!({
+        "lakecatReplayOutput": lakecat_replay.display().to_string(),
+        "querygraphVerifyOutput": querygraph_verify.display().to_string(),
+        "querygraphImportOutput": querygraph_import.display().to_string(),
+        "lakecatHandoffVerifyOutput": handoff_verify_output.display().to_string(),
+        "serviceLog": service_log.display().to_string(),
+    }))
+}
+
+fn verify_qglake_handoff_path_alias(
+    artifacts: &serde_json::Map<String, Value>,
+    outputs: &serde_json::Map<String, Value>,
+    alias_field: &str,
+    captured_field: &str,
+    base_dir: &Path,
+) -> lakecat_core::LakeCatResult<PathBuf> {
+    let alias_path = required_resolved_artifact_path(artifacts, alias_field, base_dir)?;
+    let captured = required_object(outputs, captured_field, "handoff captured outputs")?;
+    let captured_path = required_resolved_artifact_path(captured, "path", base_dir)?;
+    if alias_path != captured_path {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff artifact path alias {alias_field} does not match capturedOutputs.{captured_field}.path: alias={} captured={}",
+            alias_path.display(),
+            captured_path.display()
+        )));
+    }
+    Ok(alias_path)
+}
+
+fn required_resolved_artifact_path(
+    object: &serde_json::Map<String, Value>,
+    field: &str,
+    base_dir: &Path,
+) -> lakecat_core::LakeCatResult<PathBuf> {
+    let path = required_str(object, field, "handoff summary artifacts")?;
+    if path.trim().is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff artifact path {field} must be non-empty"
+        )));
+    }
+    let path = PathBuf::from(path);
+    Ok(if path.is_absolute() {
+        path
+    } else {
+        base_dir.join(path)
+    })
+}
+
 fn verify_qglake_handoff_artifact_file(
     artifacts: &serde_json::Map<String, Value>,
     field: &str,
     base_dir: &Path,
 ) -> lakecat_core::LakeCatResult<Value> {
     let artifact = required_object(artifacts, field, "handoff summary artifacts")?;
-    let path = required_str(artifact, "path", field)?;
     let expected_sha256 = require_hash_str(artifact, "sha256", field)?;
-    let path = PathBuf::from(path);
-    let resolved_path = if path.is_absolute() {
-        path
-    } else {
-        base_dir.join(path)
-    };
+    let resolved_path = required_resolved_artifact_path(artifact, "path", base_dir)?;
     let bytes = fs::read(&resolved_path).map_err(|err| {
         lakecat_core::LakeCatError::InvalidArgument(format!(
             "failed to read handoff artifact {} at {}: {err}",
@@ -6821,6 +6900,8 @@ mod tests {
         let lakecat_replay = dir.join("lakecat-replay.txt");
         let querygraph_verify = dir.join("querygraph-verify.json");
         let querygraph_import = dir.join("querygraph-import.json");
+        let lakecat_handoff_verify = dir.join("lakecat-handoff-verify.json");
+        let service_log = dir.join("lakecat-service.log");
         let lakecat_replay_json = json!({
             "schema-version": "lakecat.qglake.replay-verification.v1",
             "status": "verified",
@@ -7015,6 +7096,7 @@ mod tests {
         fs::write(&lakecat_replay, &lakecat_replay_bytes).expect("write LakeCat replay");
         fs::write(&querygraph_verify, &querygraph_verify_bytes).expect("write QueryGraph verify");
         fs::write(&querygraph_import, &querygraph_import_bytes).expect("write QueryGraph import");
+        fs::write(&service_log, b"service log").expect("write service log");
 
         let mut summary = qglake_handoff_summary_json();
         summary["artifacts"] = json!({
@@ -7030,6 +7112,10 @@ mod tests {
                 "path": import_plan,
                 "sha256": content_hash_bytes(b"import-plan")
             },
+            "lakecatReplayOutput": lakecat_replay,
+            "lakecatHandoffVerifyOutput": lakecat_handoff_verify,
+            "querygraphVerifyOutput": querygraph_verify,
+            "querygraphImportOutput": querygraph_import,
             "capturedOutputs": {
                 "lakecatReplay": {
                     "path": lakecat_replay,
@@ -7043,7 +7129,8 @@ mod tests {
                     "path": querygraph_import,
                     "sha256": content_hash_bytes(&querygraph_import_bytes)
                 }
-            }
+            },
+            "serviceLog": service_log
         });
         summary
     }
@@ -8033,6 +8120,37 @@ mod tests {
         assert_eq!(
             verification["capturedOutputs"]["querygraphVerify"]["sha256"],
             summary["artifacts"]["capturedOutputs"]["querygraphVerify"]["sha256"]
+        );
+        assert_eq!(
+            verification["pathAliases"]["querygraphVerifyOutput"],
+            summary["artifacts"]["querygraphVerifyOutput"]
+        );
+        assert_eq!(
+            verification["pathAliases"]["serviceLog"],
+            summary["artifacts"]["serviceLog"]
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_drifted_path_alias() {
+        let temp = qglake_temp_dir("handoff-artifacts-alias-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        summary["artifacts"]["querygraphVerifyOutput"] =
+            json!(temp.join("other-querygraph-verify.json"));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject alias drift");
+
+        assert!(err.to_string().contains("querygraphVerifyOutput"));
+        assert!(
+            err.to_string()
+                .contains("capturedOutputs.querygraphVerify.path")
         );
     }
 

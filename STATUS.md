@@ -6,6 +6,18 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify QGLake handoff artifact path aliases`.
+  `lakecat-cli qglake-verify-handoff` now compares the legacy
+  `lakecatReplayOutput`, `querygraphVerifyOutput`, and
+  `querygraphImportOutput` string aliases with the hashed
+  `artifacts.capturedOutputs` entries they duplicate. The verifier also
+  requires the operational `serviceLog` path to exist while treating
+  `lakecatHandoffVerifyOutput` as a declared output path, since the local
+  harness writes the verifier capture after the verifier has accepted the
+  summary. This closes the remaining summary-shape gap where automation could
+  preserve correct captured-output hashes while a stale alias pointed a reader
+  at a different file.
+- Latest completed implementation slice:
   `Verify saved QGLake lineage-drain artifact semantics`.
   `lakecat-cli qglake-verify-handoff` now parses the saved
   `lineage-drain.json` artifact, reruns the typed QGLake lineage-drain

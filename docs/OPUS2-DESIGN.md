@@ -299,13 +299,19 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   QueryGraph import-plan artifact, and saved lineage-drain artifact, binding
   them to the accepted tenant graph, table/view ids, semantic hashes,
   standards, graph node/edge evidence, and regenerated outbox/lineage replay
-  proof recorded in the compact summary; the summary now also records captured-output hashes for the
-  LakeCat replay JSON and QueryGraph verify/import JSON captures, and the
-  handoff verifier rejects drift in those captured outputs too; the verifier
-  now also parses those captured JSON outputs and rejects a handoff whose saved
-  LakeCat replay or QueryGraph verify/import captures no longer agree with the
-  compact summary on replay schema/status, table/view counts, bundle, graph,
-  OpenLineage, QueryGraph import hashes, or standards; compact handoff summaries
+  proof recorded in the compact summary; the summary now also records
+  captured-output hashes for the LakeCat replay JSON and QueryGraph
+  verify/import JSON captures, and the handoff verifier rejects drift in those
+  captured outputs too; the verifier now also compares the legacy
+  `lakecatReplayOutput`, `querygraphVerifyOutput`, and
+  `querygraphImportOutput` path aliases against the hashed `capturedOutputs`
+  paths, requires the service log path to exist, and keeps
+  `lakecatHandoffVerifyOutput` as a declared output path because the harness
+  writes that capture after verification succeeds; the verifier now also parses
+  those captured JSON outputs and rejects a handoff whose saved LakeCat replay
+  or QueryGraph verify/import captures no longer agree with the compact summary
+  on replay schema/status, table/view counts, bundle, graph, OpenLineage,
+  QueryGraph import hashes, or standards; compact handoff summaries
   now require non-empty catalog URL, warehouse, namespace, and table scope, and
   captured QueryGraph verify/import outputs must carry the same warehouse so the
   verified artifact set cannot be rebound to the wrong catalog tenant; the
