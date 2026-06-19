@@ -6,6 +6,27 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify view receipt-chain version transitions`.
+  Governed namespace view receipt-chain verification now fails closed unless a
+  chain proves both ordered `previous-receipt-hash` links and catalog
+  view-version semantics. The first receipt must be a version-1 upsert, each
+  later upsert must advance exactly one version from the previous receipt, and
+  drop tombstones must preserve the accepted durable view version while linking
+  to the previous receipt. This keeps QueryGraph/QGLake from accepting a
+  cryptographically linked receipt list that lies about view progression.
+- Local verification for this view receipt-chain transition slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service view_receipt_chain_verifier_requires_version_transitions`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`;
+  `cargo test --workspace`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Use published Grust and TypeSec crates`.
   A temporary registry-only Cargo probe under `/private/tmp` proved that
   `grust-graph` 0.9.0, `grust-cypher` 0.9.0, and `typesec` 0.8.0 resolve from

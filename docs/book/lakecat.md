@@ -1074,6 +1074,14 @@ LakeCat also validates the ordered `previous-receipt-hash` links before marking
 a namespace chain as `chain-verified`, so QueryGraph can reject a replay that
 contains hashes but not a coherent chain.
 
+The verifier is fail-closed on version progression too. The first receipt must
+be a version-1 upsert with no previous version or receipt hash. Later upserts
+must point at the previous receipt hash and advance exactly one durable view
+version. Drop tombstones must point at the previous receipt hash, cite the
+previous view version, and keep `view-version` equal to the accepted version
+that was deleted. That lets QueryGraph reject a chain that is cryptographically
+linked but lies about how the catalog view advanced.
+
 QueryGraph and operators can also read the compact receipt chain directly from
 the governed management surface:
 

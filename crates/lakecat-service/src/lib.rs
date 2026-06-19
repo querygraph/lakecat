@@ -4496,18 +4496,35 @@ fn view_version_receipt_chains(
 }
 
 fn view_version_receipt_chain_verified(receipts: &[ViewVersionReceiptResponse]) -> bool {
-    receipts
-        .iter()
-        .enumerate()
-        .all(|(index, receipt)| match index {
-            0 => receipt.previous_receipt_hash.is_none(),
-            _ => {
-                receipt.previous_receipt_hash.as_deref()
-                    == receipts
-                        .get(index - 1)
-                        .map(|previous| previous.receipt_hash.as_str())
+    if receipts.is_empty() {
+        return false;
+    }
+
+    receipts.iter().enumerate().all(|(index, receipt)| {
+        if receipt.view_version == 0 {
+            return false;
+        }
+        let Some(previous) = index.checked_sub(1).and_then(|index| receipts.get(index)) else {
+            return receipt.operation == "upsert"
+                && receipt.view_version == 1
+                && receipt.previous_view_version.is_none()
+                && receipt.previous_receipt_hash.is_none();
+        };
+        if receipt.previous_receipt_hash.as_deref() != Some(previous.receipt_hash.as_str()) {
+            return false;
+        }
+        match receipt.operation.as_str() {
+            "upsert" => {
+                receipt.previous_view_version == Some(previous.view_version)
+                    && receipt.view_version == previous.view_version.saturating_add(1)
             }
-        })
+            "drop" => {
+                receipt.previous_view_version == Some(previous.view_version)
+                    && receipt.view_version == previous.view_version
+            }
+            _ => false,
+        }
+    })
 }
 
 fn principal_kind_name(kind: &PrincipalKind) -> &'static str {
@@ -5132,6 +5149,62 @@ mod tests {
             }
             Ok(public_storage_credentials_for_profile(&request.profile))
         }
+    }
+
+    fn test_view_receipt(
+        view_version: u64,
+        previous_view_version: Option<u64>,
+        previous_receipt_hash: Option<&str>,
+        operation: &str,
+        receipt_hash: &str,
+    ) -> ViewVersionReceiptResponse {
+        ViewVersionReceiptResponse {
+            stable_id: "lakecat:view:local:default:events_view".to_string(),
+            warehouse: "local".to_string(),
+            namespace: vec!["default".to_string()],
+            name: "events_view".to_string(),
+            view_version,
+            previous_view_version,
+            previous_receipt_hash: previous_receipt_hash.map(str::to_string),
+            operation: operation.to_string(),
+            view_hash: format!("sha256:view-{view_version}-{operation}"),
+            receipt_hash: receipt_hash.to_string(),
+            principal_subject: "operator@example.com".to_string(),
+            principal_kind: "human".to_string(),
+            recorded_at: "2026-06-19T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn view_receipt_chain_verifier_requires_version_transitions() {
+        let receipts = vec![
+            test_view_receipt(1, None, None, "upsert", "sha256:r1"),
+            test_view_receipt(2, Some(1), Some("sha256:r1"), "upsert", "sha256:r2"),
+            test_view_receipt(2, Some(2), Some("sha256:r2"), "drop", "sha256:r3"),
+        ];
+        assert!(view_version_receipt_chain_verified(&receipts));
+
+        let skipped_version = vec![
+            test_view_receipt(1, None, None, "upsert", "sha256:r1"),
+            test_view_receipt(3, Some(1), Some("sha256:r1"), "upsert", "sha256:r3"),
+        ];
+        assert!(!view_version_receipt_chain_verified(&skipped_version));
+
+        let tombstone_advanced_version = vec![
+            test_view_receipt(1, None, None, "upsert", "sha256:r1"),
+            test_view_receipt(2, Some(1), Some("sha256:r1"), "drop", "sha256:r2"),
+        ];
+        assert!(!view_version_receipt_chain_verified(
+            &tombstone_advanced_version
+        ));
+
+        let wrong_previous_version = vec![
+            test_view_receipt(1, None, None, "upsert", "sha256:r1"),
+            test_view_receipt(2, Some(2), Some("sha256:r1"), "upsert", "sha256:r2"),
+        ];
+        assert!(!view_version_receipt_chain_verified(
+            &wrong_previous_version
+        ));
     }
 
     #[cfg(feature = "typesec-local")]

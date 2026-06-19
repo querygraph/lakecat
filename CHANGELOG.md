@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Strengthened governed namespace view receipt-chain verification so
+  `chain-verified` now requires ordered view-version transitions as well as
+  hash links: the first receipt must be a version-1 upsert, later upserts must
+  advance exactly one version, and drop tombstones must preserve the accepted
+  version while linking to the previous receipt.
 - Incorporated the current user-supplied
   `AGENTS.md instructions for /Users/alexy/src/lakecat` block into `GOAL.md`
   as standing goal guidance, including sibling-repo placement, QueryGraph

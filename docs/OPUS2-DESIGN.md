@@ -494,8 +494,12 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   view-version receipts now carry `previous-receipt-hash` links so upsert and
   drop receipts form a compact hash chain over the catalog-facing version
   history, and namespace receipt-chain reads expose deterministic `chain-hash`
-  proofs plus `chain-verified` link validation that lineage-drain summaries
-  replay for QGLake/QueryGraph acceptance;
+  proofs plus `chain-verified` validation that now checks ordered view-version
+  transitions as well as hash links: the first receipt must be a version-1
+  upsert, later upserts must advance exactly one version, and tombstone drops
+  must preserve the accepted durable version while linking to the previous
+  receipt; lineage-drain summaries replay that verified-chain evidence for
+  QGLake/QueryGraph acceptance;
   QueryGraph bootstrap now exports those stored views with manifest-covered OSI
   hashes, typed view columns, durable view versions, compact view receipt
   evidence in the import compatibility contract, view-aware graph edges, and
