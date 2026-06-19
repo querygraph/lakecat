@@ -1125,6 +1125,22 @@ node, not emit duplicate vertex ids. That validation belongs on the
 QueryGraph/Grust side, while LakeCat is responsible for producing a clean
 catalog-facing graph projection.
 
+For the full local handoff, LakeCat carries a script that runs both sides
+without writing generated artifacts into the QueryGraph checkout:
+
+```sh
+scripts/qglake-handoff-local.sh
+```
+
+The script starts LakeCat on `127.0.0.1:18181`, uses a Turso-backed local store
+under `target/qglake-handoff/`, generates the paired QGLake bootstrap bundle
+and lineage-drain response, runs `qglake-verify-replay`, then runs
+QueryGraph's `lakecat-verify` and `lakecat-import` against the same bundle. The
+resulting import plan is written to
+`target/qglake-handoff/querygraph-import-plan.json`, making the handoff
+repeatable from the LakeCat repo while keeping QueryGraph responsible for graph
+validation and import semantics.
+
 This gives the semantic layer a responsible starting point. LakeCat says:
 
 ```text
@@ -1262,13 +1278,21 @@ cargo run -p lakecat-cli -- qglake-verify-replay \
   --principal did:example:agent
 ```
 
+The one-command handoff wraps the same evidence in a live local service run and
+then asks QueryGraph to verify and import it:
+
+```sh
+scripts/qglake-handoff-local.sh
+```
+
 That fixture creates the sample table shape, installs a restricted policy,
 verifies governed scan planning, verifies fetch-scan-task reapplication,
 exercises delete manifest handling, probes credential-vend behavior for agents
 and trusted humans, verifies compact table commit-history evidence, exports
-QueryGraph bootstrap artifacts, and drains the outbox. It is small, but it is
-not decorative. It is the acceptance story for a catalog that participates in
-the user workflow from notebook to agent.
+QueryGraph bootstrap artifacts, drains the outbox, and proves the resulting
+bundle through QueryGraph's Rust verifier/importer. It is small, but it is not
+decorative. It is the acceptance story for a catalog that participates in the
+user workflow from notebook to agent.
 
 ## Operating The Book's Example System
 
@@ -1286,6 +1310,7 @@ cargo run -p lakecat-cli -- qglake-verify-replay \
   --bundle target/qglake/lakecat-bootstrap.json \
   --drain target/qglake/lineage-drain.json \
   --principal did:example:agent
+scripts/qglake-handoff-local.sh
 cargo run -p lakecat-cli -- bootstrap-export \
   --output lakecat-bootstrap.json
 ```

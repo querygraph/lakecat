@@ -257,7 +257,12 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   domain, and QGLake acceptance refuses bundles that drop that import evidence;
   `querygraph.bootstrap` audit/outbox replay now also carries that import hash
   into lineage-drain summaries and the OpenLineage bootstrap facet so acceptance
-  proves the durable replay stream matches the same QueryGraph import contract.*
+  proves the durable replay stream matches the same QueryGraph import contract;
+  `scripts/qglake-handoff-local.sh` now turns the saved-artifact workflow into a
+  local acceptance harness by starting LakeCat, generating paired bootstrap and
+  drain artifacts, verifying replay with LakeCat, and running QueryGraph's
+  `lakecat-verify` and `lakecat-import` over the same bundle without mutating
+  the QueryGraph checkout.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond
@@ -406,6 +411,8 @@ restriction is now parsed from ODRL, carried into governed scan/credential
 receipts, re-applied through plan-task fetch, and used to steer agents onto the
 governed Sail-planned path while trusted humans keep audited standard credential
 vending with OpenLineage replay evidence. The remaining distance to the GOAL is
-short and specific — push more read execution upstream into Sail, keep QGLake's
-acceptance fixture on real manifest-backed metadata, and continue tightening the
-byte-compatible proof for standard Iceberg clients.
+short and specific — keep the local QGLake handoff harness in the regular
+verification loop when handoff behavior changes, push more read execution
+upstream into Sail, keep QGLake's acceptance fixture on real manifest-backed
+metadata, and continue tightening the byte-compatible proof for standard
+Iceberg clients.

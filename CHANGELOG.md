@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added `scripts/qglake-handoff-local.sh`, a local-first handoff harness that
+  starts LakeCat, generates paired QGLake bootstrap/drain artifacts, verifies
+  saved replay with LakeCat, and runs QueryGraph's `lakecat-verify` and
+  `lakecat-import` over the same bundle without writing into the QueryGraph
+  checkout.
 - Added compact scan/fetch task counts to lineage-drain event summaries and
   made QGLake saved replay require `table.scan-planned` plus
   `table.scan-tasks-fetched` evidence, including delete-file counts for

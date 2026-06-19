@@ -6,6 +6,25 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Prove local QGLake handoff`. Added `scripts/qglake-handoff-local.sh`, which
+  starts a local LakeCat service, generates paired QGLake bootstrap and
+  lineage-drain artifacts, verifies saved replay with LakeCat, and runs
+  QueryGraph's `lakecat-verify` and `lakecat-import` over the same bundle while
+  keeping generated artifacts under LakeCat's `target/qglake-handoff/`.
+- Local verification for the local handoff slice was green:
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh` with local socket binding allowed. The
+  live handoff generated one table and one view, drained 26 outbox events,
+  printed compact scan/management/credential/commit replay evidence, verified
+  bundle `sha256:1b6e2f869effaf660944eeea6fdc129a27f03a0a9f8a97357f3e4a1f8e7103b7`,
+  and wrote QueryGraph import plan
+  `target/qglake-handoff/querygraph-import-plan.json`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli`.
+- Latest completed implementation slice:
   `Verify QGLake scan replay counts`. `LineageDrainEventSummary` now carries
   compact scan-plan, file-scan, delete-file, and child-plan task counts from
   scan/fetch outbox payloads. `lakecat-cli qglake-verify-replay` prints a
@@ -2685,13 +2704,12 @@ Updated: 2026-06-19
 
 ## Next Recommended Slice
 
-Continue the local-first handoff track by proving the saved-artifact workflow
-against a real live LakeCat run and QueryGraph-side verifier/importer: generate
-paired `qglake-fixture --drain-output` artifacts, run
-`qglake-verify-replay`, then run QueryGraph's `lakecat-verify` and
-`lakecat-import` over the same bootstrap bundle. Keep this at the
-handoff/acceptance boundary. If the next step starts to become reusable typed
-view-history or Iceberg view-history semantics, push that model into Sail first
-and consume it through LakeCat's existing seams. Keep CI manual-only until
-local gates are green and the temporary Sail patch bridge can be replaced by an
-upstream branch or published Sail helper crate.
+Keep `scripts/qglake-handoff-local.sh` in the local verification loop whenever
+QGLake handoff behavior changes, then continue tightening the handoff boundary:
+the next useful slice is to make the script's output easier for operators and
+QueryGraph automation to consume without adding new non-standard Iceberg access
+paths. If the next step starts to become reusable typed view-history or Iceberg
+view-history semantics, push that model into Sail first and consume it through
+LakeCat's existing seams. Keep CI manual-only until local gates are green and
+the temporary Sail patch bridge can be replaced by an upstream branch or
+published Sail helper crate.
