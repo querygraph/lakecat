@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Consolidated `GOAL.md` so the current `AGENTS.md` guidance is pinned once as
+  durable goal direction instead of repeated imported snapshots.
 - Added `capturedOutputs` hashes to QGLake `handoff-summary.json` for the
   LakeCat replay, QueryGraph verify, and QueryGraph import captures, and made
   `qglake-verify-handoff` reject tampered captured output files.
