@@ -6,6 +6,30 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Replay guarded view version evidence`.
+  View upsert/drop audit payloads now preserve accepted
+  `expected-view-version` guards, lineage-drain event summaries expose
+  `expected-view-version` alongside the accepted durable `view-version`, and
+  QGLake view replay JSON lifts the value as `expectedViewVersion`. The service
+  drain test now distinguishes guarded view mutations from ordinary view loads,
+  and the QGLake replay fixture models an optimistic replacement guarded by
+  version 1 that produces accepted view version 2. QueryGraph handoffs can now
+  prove not only which durable view version was replayed, but which optimistic
+  catalog version LakeCat checked before accepting the replacement or
+  tombstone.
+- Local verification for this guarded view replay-evidence slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service outbox_drain_projects_view_events_to_graph_and_lineage`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `docs/book/build.sh`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Guard view mutations with expected versions`.
   Management and catalog REST view upserts and drops now accept optional
   `expected-view-version`. When present, LakeCat checks the current durable

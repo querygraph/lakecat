@@ -1041,6 +1041,7 @@ fn lineage_drain_event_summary(
     let view_version = view
         .and_then(|view| view.get("view-version"))
         .and_then(Value::as_u64);
+    let expected_view_version = payload.get("expected-view-version").and_then(Value::as_u64);
     let view_stable_id = match (
         view_warehouse.as_deref(),
         view_namespace.as_slice(),
@@ -1217,6 +1218,7 @@ fn lineage_drain_event_summary(
         view_name,
         view_stable_id,
         view_version,
+        expected_view_version,
         policy_binding_count: payload
             .get("policy-binding-count")
             .or_else(|| payload.get("policy-count"))
@@ -2507,6 +2509,7 @@ async fn upsert_view(
                 "warehouse": warehouse.as_str(),
                 "namespace": namespace.parts(),
                 "view": view_response(&record),
+                "expected-view-version": request.expected_view_version,
                 "authorization-receipt": capability.receipt(),
             }),
         )?)
@@ -2534,7 +2537,16 @@ async fn drop_view(
             query.expected_view_version,
         )
         .await?;
-    record_view_drop_audit(&state, &warehouse, &namespace, &record, &capability, None).await?;
+    record_view_drop_audit(
+        &state,
+        &warehouse,
+        &namespace,
+        &record,
+        &capability,
+        None,
+        query.expected_view_version,
+    )
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -2574,6 +2586,7 @@ async fn catalog_upsert_view(
                 "warehouse": warehouse.as_str(),
                 "namespace": namespace.parts(),
                 "view": view_response(&record),
+                "expected-view-version": request.expected_view_version,
                 "authorization-receipt": capability.receipt(),
             }),
         )?)
@@ -2608,6 +2621,7 @@ async fn catalog_drop_view(
         &record,
         &capability,
         Some("iceberg-rest"),
+        query.expected_view_version,
     )
     .await?;
     Ok(StatusCode::NO_CONTENT)
@@ -2620,12 +2634,14 @@ async fn record_view_drop_audit(
     record: &ViewRecord,
     capability: &ViewDropCapability,
     interface: Option<&str>,
+    expected_view_version: Option<u64>,
 ) -> Result<(), LakeCatHttpError> {
     let mut payload = json!({
         "event-type": "view.dropped",
         "warehouse": warehouse.as_str(),
         "namespace": namespace.parts(),
         "view": view_response(record),
+        "expected-view-version": expected_view_version,
         "authorization-receipt": capability.receipt(),
     });
     if let Some(interface) = interface {
@@ -7209,6 +7225,8 @@ mod tests {
                 "checked_at": chrono::Utc::now(),
             }
         });
+        let mut guarded_view_payload = view_payload.clone();
+        guarded_view_payload["expected-view-version"] = json!(1);
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![
                 OutboxEvent {
@@ -7242,7 +7260,7 @@ mod tests {
                     payload: json!({
                         "audit-event-id": "audit-view-upsert",
                         "event-type": "view.upserted",
-                        "payload": view_payload,
+                        "payload": guarded_view_payload.clone(),
                     }),
                     created_at: chrono::Utc::now(),
                     delivered_at: None,
@@ -7266,7 +7284,7 @@ mod tests {
                     payload: json!({
                         "audit-event-id": "audit-view-drop",
                         "event-type": "view.dropped",
-                        "payload": view_payload,
+                        "payload": guarded_view_payload.clone(),
                     }),
                     created_at: chrono::Utc::now(),
                     delivered_at: None,
@@ -7376,6 +7394,9 @@ mod tests {
         assert_eq!(drain.events[1].view_namespace, vec!["default"]);
         assert_eq!(drain.events[1].view_name.as_deref(), Some("events_view"));
         assert_eq!(drain.events[1].view_version, Some(1));
+        assert_eq!(drain.events[1].expected_view_version, Some(1));
+        assert_eq!(drain.events[2].expected_view_version, None);
+        assert_eq!(drain.events[3].expected_view_version, Some(1));
         assert_eq!(
             drain.events[4].view_stable_id.as_deref(),
             Some("lakecat:view:local:default:events_view")

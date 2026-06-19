@@ -474,6 +474,8 @@ pub struct LineageDrainEventSummary {
     pub view_stable_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view_version: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_view_version: Option<u64>,
     #[serde(default)]
     pub policy_binding_count: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]

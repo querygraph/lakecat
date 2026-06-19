@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Carried guarded view `expected-view-version` evidence through view mutation
+  audit/outbox payloads, lineage-drain summaries, and QGLake view replay JSON
+  so QueryGraph handoffs can prove optimistic view guards were replayed.
 - Pinned the active-thread `AGENTS.md` guidance in `GOAL.md` as standing goal
   input and made the book workflow an explicit part of LakeCat's normal
   development loop.

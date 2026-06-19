@@ -992,18 +992,23 @@ curl -s -X DELETE \
 ```
 
 If the current view is no longer version 2, LakeCat returns a conflict before
-it removes the view or appends a tombstone receipt. LakeCat also writes a
-compact view-version receipt in the durable store. The receipt records the
-stable view id, assigned version, previous version, previous receipt hash,
-content hash, principal, operation, and timestamp. That makes the compact
-receipt list a hash chain: version 2 points at the version 1 receipt hash, and
-a later tombstone points at the last upsert receipt hash. Fuller version-log
-semantics remain a Sail-aligned implementation target. When a view is dropped,
-LakeCat appends a compact tombstone receipt instead of inventing a new view
-version: the receipt keeps `view-version` at the last durable version, sets
-`operation` to `drop`, links to the previous receipt, and preserves the last
-content hash so QueryGraph or an operator can prove which catalog view state
-was removed.
+it removes the view or appends a tombstone receipt. Accepted guarded mutations
+also carry their `expected-view-version` into the audit/outbox payload. During
+lineage drain, LakeCat turns that into compact replay evidence, so QueryGraph
+can distinguish "the replacement happened at version 2" from "the replacement
+was guarded by version 1 and then produced version 2."
+
+LakeCat also writes a compact view-version receipt in the durable store. The
+receipt records the stable view id, assigned version, previous version,
+previous receipt hash, content hash, principal, operation, and timestamp. That
+makes the compact receipt list a hash chain: version 2 points at the version 1
+receipt hash, and a later tombstone points at the last upsert receipt hash.
+Fuller version-log semantics remain a Sail-aligned implementation target. When
+a view is dropped, LakeCat appends a compact tombstone receipt instead of
+inventing a new view version: the receipt keeps `view-version` at the last
+durable version, sets `operation` to `drop`, links to the previous receipt, and
+preserves the last content hash so QueryGraph or an operator can prove which
+catalog view state was removed.
 
 ```json
 {
@@ -1012,7 +1017,8 @@ was removed.
   "view-namespace": ["default"],
   "view-name": "events_view",
   "view-stable-id": "lakecat:view:local:default:events_view",
-  "view-version": 1,
+  "view-version": 2,
+  "expected-view-version": 1,
   "graph-events": 2,
   "lineage-events": 1,
   "replay-event-hashes": ["sha256:..."],
@@ -1029,7 +1035,9 @@ QGLake acceptance compares both that `view-stable-id` and `view-version` with
 the accepted QueryGraph bootstrap view artifacts. That closes a small but
 important gap: the bootstrap bundle may say a view was exported, and the drain
 evidence can now prove the corresponding view catalog event was replayed at the
-same durable catalog version with graph and lineage receipts.
+same durable catalog version with graph and lineage receipts. When the event
+was guarded, QGLake replay JSON also includes `expectedViewVersion`, preserving
+the optimistic version that LakeCat checked before accepting the mutation.
 
 When QueryGraph bootstrap is replayed through the outbox, LakeCat includes only
 compact receipt hashes:
@@ -1238,12 +1246,14 @@ replay and OpenLineage hashes. The
 commit-history proof shows the catalog
 pointer log was read back with commit count, sequence numbers, commit hashes,
 and replay/OpenLineage hashes. The view receipt-chain proof shows QueryGraph's
-accepted view versions together with accepted receipt hashes, tombstone receipt
-hashes, namespace chain hashes, verified-chain counts, and replay/OpenLineage
-hashes. The credential proof shows the restricted agent was blocked onto
-Sail-planned reads while the trusted human path used the audited raw-credential
-exception. The summary also records artifact paths, raw file hashes, captured
-LakeCat replay output, captured LakeCat handoff-summary verification output,
+accepted view versions together with accepted receipt hashes, accepted
+`expectedViewVersion` guard evidence when a mutation was guarded, tombstone
+receipt hashes, namespace chain hashes, verified-chain counts, and
+replay/OpenLineage hashes. The credential proof shows the restricted agent was
+blocked onto Sail-planned reads while the trusted human path used the audited
+raw-credential exception. The summary also records artifact paths, raw file
+hashes, captured LakeCat replay output, captured LakeCat handoff-summary
+verification output,
 captured QueryGraph verification output, captured QueryGraph import output,
 captured-output hashes for the LakeCat replay and QueryGraph verify/import
 JSON files, and service log path. The handoff verifier does not stop at byte
@@ -1264,9 +1274,9 @@ the captured `replay-evidence.tableCommitHistory` object with
 hashes, replay hashes, and OpenLineage hashes that prove the pointer-log commit
 history was not rewritten between replay and summary. It compares the captured
 `replay-evidence.views` object with `viewReceiptChainProof`, including accepted
-view receipts, tombstone receipts, namespace receipt-chain hashes, and their
-replay/OpenLineage hashes, so durable view history stays tied to the saved
-LakeCat replay artifact. It also compares
+view receipts, expected-version guard evidence, tombstone receipts, namespace
+receipt-chain hashes, and their replay/OpenLineage hashes, so durable view
+history stays tied to the saved LakeCat replay artifact. It also compares
 the captured LakeCat
 replay `replay-evidence.management.storageProfileUpsert` object with the
 compact `lakecatReplayVerification.storageProfileUpsertProof`, including the

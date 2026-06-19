@@ -1554,6 +1554,7 @@ fn qglake_view_replay_evidence_json(
                 "acceptedViewVersion": verification.verified_view_versions.get(view_stable_id),
                 "acceptedReceiptHash": verification.verified_view_receipt_hashes.get(view_stable_id),
                 "eventType": view_replay.event_type,
+                "expectedViewVersion": view_replay.expected_view_version,
                 "replayEventHashes": &view_replay.replay_event_hashes,
                 "openLineageHashes": &view_replay.replay_open_lineage_hashes,
             }))
@@ -5399,6 +5400,7 @@ mod tests {
                         "acceptedViewVersion": 1,
                         "acceptedReceiptHash": "sha256:view-receipt",
                         "eventType": "view.upserted",
+                        "expectedViewVersion": null,
                         "replayEventHashes": ["sha256:view-replay"],
                         "openLineageHashes": ["sha256:view-openlineage"]
                     }],
@@ -5545,6 +5547,7 @@ mod tests {
                         "acceptedViewVersion": 1,
                         "acceptedReceiptHash": "sha256:view-receipt",
                         "eventType": "view.upserted",
+                        "expectedViewVersion": null,
                         "replayEventHashes": ["sha256:view-replay"],
                         "openLineageHashes": ["sha256:view-openlineage"]
                     }],
@@ -6926,6 +6929,10 @@ mod tests {
         );
         assert_eq!(
             view_replay_json["views"]["views"][0]["acceptedViewVersion"],
+            json!(2)
+        );
+        assert_eq!(
+            view_replay_json["views"]["views"][0]["expectedViewVersion"],
             json!(1)
         );
         assert_eq!(
@@ -8281,6 +8288,7 @@ mod tests {
                     view_name: None,
                     view_stable_id: None,
                     view_version: None,
+                    expected_view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -8361,6 +8369,7 @@ mod tests {
                     view_name: None,
                     view_stable_id: None,
                     view_version: None,
+                    expected_view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -8441,6 +8450,7 @@ mod tests {
                     view_name: None,
                     view_stable_id: None,
                     view_version: None,
+                    expected_view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -8520,6 +8530,7 @@ mod tests {
                     view_name: None,
                     view_stable_id: None,
                     view_version: None,
+                    expected_view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -8599,6 +8610,7 @@ mod tests {
                     view_name: None,
                     view_stable_id: None,
                     view_version: None,
+                    expected_view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -8678,6 +8690,7 @@ mod tests {
                     view_name: None,
                     view_stable_id: None,
                     view_version: None,
+                    expected_view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -8757,6 +8770,7 @@ mod tests {
                     view_name: None,
                     view_stable_id: None,
                     view_version: None,
+                    expected_view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -8836,6 +8850,7 @@ mod tests {
                     view_name: None,
                     view_stable_id: None,
                     view_version: None,
+                    expected_view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -8916,6 +8931,7 @@ mod tests {
                     view_name: None,
                     view_stable_id: None,
                     view_version: None,
+                    expected_view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -8995,6 +9011,7 @@ mod tests {
                     view_name: None,
                     view_stable_id: None,
                     view_version: None,
+                    expected_view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -9074,6 +9091,7 @@ mod tests {
                     view_name: None,
                     view_stable_id: None,
                     view_version: None,
+                    expected_view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -9153,6 +9171,7 @@ mod tests {
                     view_name: None,
                     view_stable_id: None,
                     view_version: None,
+                    expected_view_version: None,
                     policy_binding_count: 0,
                     project_count: None,
                     server_count: None,
@@ -9232,6 +9251,7 @@ mod tests {
                     view_name: None,
                     view_stable_id: None,
                     view_version: None,
+                    expected_view_version: None,
                     policy_binding_count: 1,
                     project_count: None,
                     server_count: None,
@@ -9541,7 +9561,7 @@ mod tests {
         ));
 
         let mut mismatched_view_replay = qglake_view_lineage_summary();
-        mismatched_view_replay.view_version = Some(2);
+        mismatched_view_replay.view_version = Some(3);
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 9,
@@ -9586,7 +9606,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should reject mismatched view replay version");
         assert!(err.to_string().contains(
-            "qglake lineage drain view replay for lakecat:view:local:default:active_customers did not preserve accepted view version 1"
+            "qglake lineage drain view replay for lakecat:view:local:default:active_customers did not preserve accepted view version 2"
         ));
 
         let err = verify_qglake_lineage_drain(
@@ -10206,7 +10226,7 @@ mod tests {
         verification.verified_views =
             vec!["lakecat:view:local:default:active_customers".to_string()];
         verification.verified_view_versions =
-            BTreeMap::from([("lakecat:view:local:default:active_customers".to_string(), 1)]);
+            BTreeMap::from([("lakecat:view:local:default:active_customers".to_string(), 2)]);
         verification.verified_view_receipt_hashes = BTreeMap::from([(
             "lakecat:view:local:default:active_customers".to_string(),
             "sha256:view-version-receipt".to_string(),
@@ -10293,6 +10313,7 @@ mod tests {
             view_name: None,
             view_stable_id: None,
             view_version: None,
+            expected_view_version: None,
             policy_binding_count: 1,
             project_count: None,
             server_count: None,
@@ -10372,7 +10393,8 @@ mod tests {
             view_namespace: vec!["default".to_string()],
             view_name: Some("active_customers".to_string()),
             view_stable_id: Some("lakecat:view:local:default:active_customers".to_string()),
-            view_version: Some(1),
+            view_version: Some(2),
+            expected_view_version: Some(1),
             policy_binding_count: 0,
             project_count: None,
             server_count: None,
@@ -10407,6 +10429,7 @@ mod tests {
         let mut summary = qglake_view_lineage_summary();
         summary.event_id = "evt-view-drop".to_string();
         summary.event_type = "view.dropped".to_string();
+        summary.expected_view_version = Some(2);
         summary.replay_event_hashes = vec!["sha256:view-drop-replay-event".to_string()];
         summary.replay_open_lineage_hashes =
             vec!["sha256:view-drop-replay-openlineage".to_string()];
@@ -10419,6 +10442,7 @@ mod tests {
         summary.event_type = "view.version-receipts-listed".to_string();
         summary.graph_events = 0;
         summary.lineage_events = 1;
+        summary.expected_view_version = None;
         summary.view_version_receipt_hashes = vec!["sha256:view-drop-receipt".to_string()];
         summary.replay_event_hashes = vec!["sha256:view-receipts-replay-event".to_string()];
         summary.replay_open_lineage_hashes =
@@ -10437,6 +10461,7 @@ mod tests {
         summary.view_namespace = vec!["default".to_string()];
         summary.view_name = None;
         summary.view_version = None;
+        summary.expected_view_version = None;
         summary.view_version_receipt_hashes = vec!["sha256:view-drop-receipt".to_string()];
         summary.view_version_receipt_chain_hashes = vec!["sha256:view-receipt-chain".to_string()];
         summary.view_version_receipt_chain_verified_count = 1;
@@ -10475,6 +10500,7 @@ mod tests {
             view_name: None,
             view_stable_id: None,
             view_version: None,
+            expected_view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: None,
@@ -10534,6 +10560,7 @@ mod tests {
             view_name: None,
             view_stable_id: None,
             view_version: None,
+            expected_view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: None,
@@ -10593,6 +10620,7 @@ mod tests {
             view_name: None,
             view_stable_id: None,
             view_version: None,
+            expected_view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: None,
@@ -10652,6 +10680,7 @@ mod tests {
             view_name: None,
             view_stable_id: None,
             view_version: None,
+            expected_view_version: None,
             policy_binding_count: 1,
             project_count: None,
             server_count: None,
@@ -10713,6 +10742,7 @@ mod tests {
             view_name: None,
             view_stable_id: None,
             view_version: None,
+            expected_view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: None,
@@ -10774,6 +10804,7 @@ mod tests {
             view_name: None,
             view_stable_id: None,
             view_version: None,
+            expected_view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: None,
@@ -10837,6 +10868,7 @@ mod tests {
             view_name: None,
             view_stable_id: None,
             view_version: None,
+            expected_view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: Some(1),
@@ -10896,6 +10928,7 @@ mod tests {
             view_name: None,
             view_stable_id: None,
             view_version: None,
+            expected_view_version: None,
             policy_binding_count: 0,
             project_count: Some(1),
             server_count: None,
@@ -10955,6 +10988,7 @@ mod tests {
             view_name: None,
             view_stable_id: None,
             view_version: None,
+            expected_view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: None,
@@ -11014,6 +11048,7 @@ mod tests {
             view_name: None,
             view_stable_id: None,
             view_version: None,
+            expected_view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: None,
@@ -11077,6 +11112,7 @@ mod tests {
             view_name: None,
             view_stable_id: None,
             view_version: None,
+            expected_view_version: None,
             policy_binding_count: 0,
             project_count: None,
             server_count: None,
