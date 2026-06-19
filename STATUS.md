@@ -6,6 +6,19 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require scan purpose before replay proof`.
+  QGLake bootstrap policy projection, scan-plan verification, and
+  `fetchScanTasks` verification now reject missing or drifted
+  read-restriction purpose before compact replay/handoff evidence is accepted.
+- Local verification for this plan/fetch purpose slice is green:
+  `cargo test -p lakecat-cli qglake_bootstrap_projection_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_scan_plan_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_fetch_scan_tasks_verifier -- --nocapture`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Surface scan replay purpose`.
   The operator-readable QGLake scan replay line now prints planned and fetched
   read-restriction purpose values, so captured replay text preserves the same

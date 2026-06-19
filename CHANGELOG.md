@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake bootstrap policy projection, scan planning, and
+  `fetchScanTasks` verification to preserve the read-restriction purpose before
+  compact replay or handoff proof can be accepted.
 - Surfaced QGLake scan restriction purpose in the operator-readable scan replay
   line so captured terminal evidence shows the same planned and fetched purpose
   required by compact handoff proof.

@@ -4217,6 +4217,12 @@ fn verify_qglake_bootstrap_projection(
             restriction["row-predicate"].clone()
         )));
     }
+    if restriction["purpose"] != json!("qglake-agent-demo") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap policy purpose was not exported as expected: {}",
+            restriction["purpose"].clone()
+        )));
+    }
     if projection.odrl["lakecat:policy-bindings"][0]["policy-id"] != expected_policy {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "QGLake bootstrap ODRL table projection did not embed {expected_policy}"
@@ -4827,35 +4833,11 @@ fn verify_qglake_scan_plan(plan: &PlanTableScanResponse) -> lakecat_core::LakeCa
                 .unwrap_or(Value::Null)
         )));
     }
-    if extension["read-restriction"]["row-predicate"]
-        != json!({
-            "type": "not-eq",
-            "term": "severity",
-            "value": "debug"
-        })
-    {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "qglake governed scan row predicate was not enforced as expected: {}",
-            extension["read-restriction"]["row-predicate"].clone()
-        )));
-    }
-    let expected_policy_hash = qglake_policy_hash(plan.table.name.as_str())?;
-    let policy_hashes = extension["read-restriction"]["policy-hashes"]
-        .as_array()
-        .ok_or_else(|| {
-            lakecat_core::LakeCatError::InvalidArgument(
-                "qglake governed scan read restriction did not include policy hashes".to_string(),
-            )
-        })?;
-    if !policy_hashes
-        .iter()
-        .any(|hash| hash.as_str() == Some(expected_policy_hash.as_str()))
-    {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "qglake governed scan did not bind to expected ODRL policy hash {expected_policy_hash}: {}",
-            extension["read-restriction"]["policy-hashes"].clone()
-        )));
-    }
+    verify_qglake_plan_or_fetch_read_restriction(
+        &extension["read-restriction"],
+        plan.table.name.as_str(),
+        "qglake governed scan",
+    )?;
     Ok(())
 }
 
@@ -5067,26 +5049,11 @@ fn verify_qglake_fetch_restriction(
                     .to_string(),
             )
         })?;
-    if extension["read-restriction"]["allowed-columns"]
-        != json!(["event_id", "occurred_at", "severity"])
-    {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "qglake governed fetchScanTasks allowed columns were not re-applied as expected: {}",
-            extension["read-restriction"]["allowed-columns"].clone()
-        )));
-    }
-    if extension["read-restriction"]["row-predicate"]
-        != json!({
-            "type": "not-eq",
-            "term": "severity",
-            "value": "debug"
-        })
-    {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "qglake governed fetchScanTasks row predicate was not re-applied as expected: {}",
-            extension["read-restriction"]["row-predicate"].clone()
-        )));
-    }
+    verify_qglake_plan_or_fetch_read_restriction(
+        &extension["read-restriction"],
+        fetched.table.name.as_str(),
+        "qglake governed fetchScanTasks",
+    )?;
     if extension["required-projection"] != json!(["event_id", "occurred_at", "severity"]) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake governed fetchScanTasks required projection did not prove re-applied narrowing: {}",
@@ -5107,22 +5074,51 @@ fn verify_qglake_fetch_restriction(
             extension["required-filters"].clone()
         )));
     }
-    let expected_policy_hash = qglake_policy_hash(fetched.table.name.as_str())?;
-    let policy_hashes = extension["read-restriction"]["policy-hashes"]
-        .as_array()
-        .ok_or_else(|| {
-            lakecat_core::LakeCatError::InvalidArgument(
-                "qglake governed fetchScanTasks read restriction did not include policy hashes"
-                    .to_string(),
-            )
-        })?;
+    Ok(())
+}
+
+fn verify_qglake_plan_or_fetch_read_restriction(
+    restriction: &Value,
+    table: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    if restriction["allowed-columns"] != json!(["event_id", "occurred_at", "severity"]) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} allowed columns were not narrowed as expected: {}",
+            restriction["allowed-columns"].clone()
+        )));
+    }
+    if restriction["row-predicate"]
+        != json!({
+            "type": "not-eq",
+            "term": "severity",
+            "value": "debug"
+        })
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} row predicate was not enforced as expected: {}",
+            restriction["row-predicate"].clone()
+        )));
+    }
+    if restriction["purpose"] != json!("qglake-agent-demo") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} purpose was not preserved as expected: {}",
+            restriction["purpose"].clone()
+        )));
+    }
+    let expected_policy_hash = qglake_policy_hash(table)?;
+    let policy_hashes = restriction["policy-hashes"].as_array().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} read restriction did not include policy hashes"
+        ))
+    })?;
     if !policy_hashes
         .iter()
         .any(|hash| hash.as_str() == Some(expected_policy_hash.as_str()))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "qglake governed fetchScanTasks did not bind to expected ODRL policy hash {expected_policy_hash}: {}",
-            extension["read-restriction"]["policy-hashes"].clone()
+            "{label} did not bind to expected ODRL policy hash {expected_policy_hash}: {}",
+            restriction["policy-hashes"].clone()
         )));
     }
     Ok(())
@@ -9694,6 +9690,22 @@ mod tests {
     }
 
     #[test]
+    fn qglake_bootstrap_projection_verifier_requires_policy_purpose() {
+        let mut policy = qglake_odrl_policy("events");
+        policy["lakecat:read-restriction"]
+            .as_object_mut()
+            .unwrap()
+            .remove("purpose");
+        let projection = qglake_querygraph_projection(policy);
+
+        let err =
+            verify_qglake_bootstrap_projection(&projection, &["default".to_string()], "events")
+                .expect_err("QGLake bootstrap projection should require policy purpose");
+
+        assert!(err.to_string().contains("policy purpose"));
+    }
+
+    #[test]
     fn qglake_bootstrap_verifier_requires_openlineage_output() {
         let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
         let bundle = qglake_querygraph_bundle(vec![projection], Vec::new());
@@ -10309,6 +10321,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     }
                 }
@@ -10349,6 +10362,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     }
                 }
@@ -10391,6 +10405,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     }
                 }
@@ -10433,6 +10448,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     }
                 }
@@ -10473,7 +10489,8 @@ mod tests {
                             "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
-                        }
+                        },
+                        "purpose": "qglake-agent-demo"
                     }
                 }
             })),
@@ -10485,6 +10502,48 @@ mod tests {
             err.to_string()
                 .contains("read restriction did not include policy hashes")
         );
+    }
+
+    #[test]
+    fn qglake_scan_plan_verifier_requires_read_restriction_purpose() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let plan = PlanTableScanResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            status: "completed".to_string(),
+            snapshot_id: None,
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest-list".to_string()],
+            lakecat_plan_tasks: qglake_manifest_plan_tasks(),
+            file_scan_tasks: Vec::new(),
+            delete_files: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:scan-request": {
+                    "requested-projection": [
+                        "event_id",
+                        "occurred_at",
+                        "severity",
+                        "raw_payload"
+                    ],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not-eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_plan(&plan)
+            .expect_err("QGLake governed scan should require read restriction purpose");
+        assert!(err.to_string().contains("purpose"));
     }
 
     fn qglake_manifest_plan_tasks() -> Vec<Value> {
@@ -10547,6 +10606,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10591,6 +10651,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10632,6 +10693,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10675,6 +10737,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10719,6 +10782,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10762,6 +10826,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10803,6 +10868,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10860,6 +10926,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10904,6 +10971,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10952,6 +11020,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10997,6 +11066,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -11038,6 +11108,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -11079,6 +11150,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -11124,6 +11196,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -11174,6 +11247,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -11217,7 +11291,8 @@ mod tests {
                             "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
-                        }
+                        },
+                        "purpose": "qglake-agent-demo"
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
@@ -11235,6 +11310,47 @@ mod tests {
             err.to_string()
                 .contains("read restriction did not include policy hashes")
         );
+    }
+
+    #[test]
+    fn qglake_fetch_scan_tasks_verifier_requires_read_restriction_purpose() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            plan_task: "lakecat:sail-json-hmac:test".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![qglake_file_scan_task_with_delete_ref()],
+            delete_files: qglake_delete_files(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not-eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake governed fetch should require read restriction purpose");
+        assert!(err.to_string().contains("purpose"));
     }
 
     #[test]
@@ -11261,6 +11377,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-filters": [{
