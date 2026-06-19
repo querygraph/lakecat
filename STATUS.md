@@ -6,6 +6,14 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Carry policy TTL caps into credential issuance`.
+  `CredentialIssuanceRequest` now includes the effective
+  `max-credential-ttl-seconds` value derived from the read restriction, and the
+  service annotates every returned storage credential with
+  `lakecat.max-credential-ttl-seconds` when a policy cap exists. This makes the
+  trusted-human raw credential exception and secret-ref issuer boundary carry a
+  concrete TTL cap, not only a receipt-side note.
+- Latest completed implementation slice:
   `Fail closed on unsupported ODRL restriction operators`.
   `lakecat-security` now rejects enforceable ODRL constraint forms for allowed
   columns, row predicates, purpose, and credential TTL when the constraint uses

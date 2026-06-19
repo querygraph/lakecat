@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Carried policy-derived `max-credential-ttl-seconds` into the credential
+  issuance contract and returned credential config, so audited raw credential
+  exceptions and secret-ref issuers receive a concrete TTL cap instead of only
+  recording the cap in the authorization receipt.
 - Hardened ODRL restriction parsing so enforceable constraint forms for allowed
   columns, row predicates, purpose, and credential TTL fail closed when they use
   missing or unsupported operators, preventing deny-shaped constraints from

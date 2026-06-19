@@ -126,6 +126,7 @@ pub struct CredentialIssuanceRequest {
     pub table: TableRecord,
     pub profile: StorageProfile,
     pub authorization_receipt: AuthorizationReceipt,
+    pub max_credential_ttl_seconds: Option<u64>,
 }
 
 #[derive(Debug, Default)]
@@ -144,7 +145,10 @@ impl CredentialIssuer for ConservativeCredentialIssuer {
         request: CredentialIssuanceRequest,
     ) -> Result<Vec<StorageCredential>, LakeCatError> {
         if request.profile.can_return_public_credential() {
-            return Ok(public_storage_credentials_for_profile(&request.profile));
+            return Ok(apply_credential_ttl_cap(
+                public_storage_credentials_for_profile(&request.profile),
+                request.max_credential_ttl_seconds,
+            ));
         }
         Ok(Vec::new())
     }
@@ -209,8 +213,9 @@ pub mod typesec_credential_issuer {
             request: CredentialIssuanceRequest,
         ) -> LakeCatResult<Vec<StorageCredential>> {
             if request.profile.can_return_public_credential() {
-                return Ok(crate::public_storage_credentials_for_profile(
-                    &request.profile,
+                return Ok(crate::apply_credential_ttl_cap(
+                    crate::public_storage_credentials_for_profile(&request.profile),
+                    request.max_credential_ttl_seconds,
                 ));
             }
             if request.profile.issuance_mode != CredentialIssuanceMode::ShortLivedSecretRef {
@@ -226,7 +231,10 @@ pub mod typesec_credential_issuer {
             let resource = ResourceId::from(secret_ref.to_string());
             let decision = self.engine.check(&subject, "credentials.issue", &resource);
             match decision {
-                PolicyResult::Allow => self.resolver.resolve(&request).await,
+                PolicyResult::Allow => Ok(crate::apply_credential_ttl_cap(
+                    self.resolver.resolve(&request).await?,
+                    request.max_credential_ttl_seconds,
+                )),
                 PolicyResult::Deny(reason) => Err(LakeCatError::Conflict(format!(
                     "TypeSec denied credential issuance: {reason}"
                 ))),
@@ -1839,6 +1847,7 @@ async fn load_credentials_in_warehouse(
     let table = state.store.load_table(capability.table()).await?;
     let storage_profile = state.store.storage_profile_for_table(&table).await?;
     let read_restriction = capability.read_restriction()?;
+    let max_credential_ttl_seconds = read_restriction.max_credential_ttl_seconds;
     let raw_exception = capability
         .receipt()
         .context
@@ -1858,14 +1867,18 @@ async fn load_credentials_in_warehouse(
     let storage_credentials = if credential_block_reason.is_some() {
         Vec::new()
     } else {
-        state
-            .credential_issuer
-            .issue(CredentialIssuanceRequest {
-                table: table.clone(),
-                profile: storage_profile.clone(),
-                authorization_receipt: capability.receipt().clone(),
-            })
-            .await?
+        apply_credential_ttl_cap(
+            state
+                .credential_issuer
+                .issue(CredentialIssuanceRequest {
+                    table: table.clone(),
+                    profile: storage_profile.clone(),
+                    authorization_receipt: capability.receipt().clone(),
+                    max_credential_ttl_seconds,
+                })
+                .await?,
+            max_credential_ttl_seconds,
+        )
     };
     let ident = capability.table().clone();
     let mut audit_payload = credentials_vend_audit_payload(
@@ -4544,6 +4557,36 @@ fn public_storage_credentials_for_profile(profile: &StorageProfile) -> Vec<Stora
         prefix: profile.location_prefix.clone(),
         config,
     }]
+}
+
+fn apply_credential_ttl_cap(
+    mut credentials: Vec<StorageCredential>,
+    max_credential_ttl_seconds: Option<u64>,
+) -> Vec<StorageCredential> {
+    let Some(max_credential_ttl_seconds) = max_credential_ttl_seconds else {
+        return credentials;
+    };
+    let value = max_credential_ttl_seconds.to_string();
+    for credential in &mut credentials {
+        if let Some(entry) = credential
+            .config
+            .iter_mut()
+            .find(|entry| entry.key == "lakecat.max-credential-ttl-seconds")
+        {
+            let effective = entry
+                .value
+                .parse::<u64>()
+                .map(|existing| existing.min(max_credential_ttl_seconds))
+                .unwrap_or(max_credential_ttl_seconds);
+            entry.value = effective.to_string();
+        } else {
+            credential.config.push(ConfigEntry::new(
+                "lakecat.max-credential-ttl-seconds",
+                value.clone(),
+            ));
+        }
+    }
+    credentials
 }
 
 fn storage_profile_event_payload(profile: &StorageProfile) -> Value {
@@ -11605,6 +11648,7 @@ mod tests {
                 context: serde_json::json!({}),
                 checked_at: chrono::Utc::now(),
             },
+            max_credential_ttl_seconds: None,
         };
 
         for (secret_ref, provider_label) in [
@@ -11705,6 +11749,7 @@ mod tests {
                 context: serde_json::json!({}),
                 checked_at: chrono::Utc::now(),
             },
+            max_credential_ttl_seconds: None,
         };
 
         for (provider, provider_label, secret_ref) in [
@@ -11813,6 +11858,7 @@ mod tests {
                 context: serde_json::json!({}),
                 checked_at: chrono::Utc::now(),
             },
+            max_credential_ttl_seconds: None,
         };
         let vault_client = Arc::new(MockVaultSecretClient::default());
         *vault_client.response.lock().await = Some(serde_json::json!({
@@ -12342,6 +12388,14 @@ mod tests {
             response.0.storage_credentials[0].prefix,
             "file:///tmp/events"
         );
+        assert!(
+            response.0.storage_credentials[0]
+                .config
+                .iter()
+                .any(|entry| {
+                    entry.key == "lakecat.max-credential-ttl-seconds" && entry.value == "300"
+                })
+        );
 
         let requests = issuer.requests.lock().await;
         assert_eq!(requests.len(), 1);
@@ -12349,6 +12403,7 @@ mod tests {
             requests[0].authorization_receipt.principal.kind,
             PrincipalKind::Human
         );
+        assert_eq!(requests[0].max_credential_ttl_seconds, Some(300));
         drop(requests);
 
         let outbox = store
@@ -12452,6 +12507,22 @@ mod tests {
         assert_eq!(
             payload["authorization-receipt"]["context"]["read-restriction"],
             payload["read-restriction"]
+        );
+    }
+
+    #[test]
+    fn credential_ttl_cap_preserves_stricter_issuer_ttl() {
+        let credentials = apply_credential_ttl_cap(
+            vec![StorageCredential {
+                prefix: "s3://lakecat-demo/events".to_string(),
+                config: vec![ConfigEntry::new("lakecat.max-credential-ttl-seconds", "60")],
+            }],
+            Some(300),
+        );
+
+        assert_eq!(
+            credentials[0].config[0].value, "60",
+            "issuer TTLs stricter than policy maximum must not be widened"
         );
     }
 

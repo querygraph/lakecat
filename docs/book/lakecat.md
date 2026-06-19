@@ -479,7 +479,11 @@ Credential vending follows the same rule. Raw credential vending is an audited
 exception. Governed Sail-planned reads are the default path for agents and
 untrusted principals. When credentials must be issued, TypeSec checks the
 `credentials.issue` capability for the exact secret reference and LakeCat
-returns only scoped, short-lived credential configuration.
+returns only scoped, short-lived credential configuration. If policy carries a
+`max-credential-ttl-seconds` restriction, LakeCat passes that cap to the
+credential issuer and annotates each returned credential with
+`lakecat.max-credential-ttl-seconds`, so the exception path has an auditable
+duration bound.
 
 ## Rust-First Engines And The V3 To V4 Path
 
