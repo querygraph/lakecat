@@ -930,7 +930,11 @@ Sail receives:   event_id, severity
 The catalog does not trust the client to remember that. The restriction is
 re-applied when scan tasks are fetched, and the audit payload records the
 policy hash, narrowed columns, row predicate, storage location, metadata
-location, and principal.
+location, and principal. The fetch response also carries LakeCat extension
+evidence for the exact `required-projection` and `required-filters` derived
+from the authorized capability. That makes a stateless `fetchScanTasks` replay
+prove the restriction was re-applied, not merely that the original policy
+object was echoed.
 
 ### A Notebook Requests Credentials
 
@@ -1400,11 +1404,12 @@ the paired envelope hash. That keeps the compact handoff self-describing
 without moving TypeDID trust semantics out of TypeSec. It compares captured
 `replay-evidence.scan` with `governedScanProof`, including the plan task, file
 task, delete file, and child plan task counts plus the planned and fetched
-read-restriction objects. The verifier rejects a summary if the fetched
-restriction drifts from the planned restriction, so the compact handoff proves
-the narrowed allowed columns, row predicate, and policy hashes alongside the
-planned/fetched replay and OpenLineage hashes that prove the Sail-planned read
-path. The compact Rust verifier requires both the planned and fetched
+read-restriction objects and the fetch-side required projection/filter evidence.
+The verifier rejects a summary if the fetched restriction drifts from the
+planned restriction, so the compact handoff proves the narrowed allowed
+columns, row predicate, and policy hashes alongside the planned/fetched replay
+and OpenLineage hashes that prove the Sail-planned read path. The compact Rust
+verifier requires both the planned and fetched
 OpenLineage hashes directly, so automation can reject incomplete scan lineage
 without falling back to the shell harness. It also compares the captured
 `replay-evidence.tableCommitHistory` object with

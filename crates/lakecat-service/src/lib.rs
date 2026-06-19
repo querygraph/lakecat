@@ -1329,6 +1329,22 @@ fn lineage_drain_event_summary(
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok()),
         read_restriction: payload.get("read-restriction").cloned(),
+        required_projection: payload
+            .get("required-projection")
+            .and_then(Value::as_array)
+            .map(|columns| {
+                columns
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
+        required_filters: payload
+            .get("required-filters")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default(),
         management_scope_project_id: payload
             .get("project-id")
             .and_then(Value::as_str)
@@ -1956,6 +1972,7 @@ fn table_scan_planned_audit_payload(
     });
     if let Some(restriction) = receipt.context.get("read-restriction") {
         audit_payload["read-restriction"] = restriction.clone();
+        append_read_restriction_requirements(&mut audit_payload, restriction);
     }
     audit_payload
 }
@@ -1981,8 +1998,18 @@ fn table_scan_tasks_fetched_audit_payload(
     });
     if let Some(restriction) = receipt.context.get("read-restriction") {
         audit_payload["read-restriction"] = restriction.clone();
+        append_read_restriction_requirements(&mut audit_payload, restriction);
     }
     audit_payload
+}
+
+fn append_read_restriction_requirements(audit_payload: &mut Value, restriction: &Value) {
+    if let Ok(restriction) = serde_json::from_value::<ReadRestriction>(restriction.clone()) {
+        if let Ok(required_projection) = restriction.effective_projection(&[]) {
+            audit_payload["required-projection"] = json!(required_projection);
+            audit_payload["required-filters"] = json!(restriction.mandatory_filters());
+        }
+    }
 }
 
 fn table_metadata_graph_summary(metadata: &Value) -> Value {
@@ -3273,7 +3300,7 @@ async fn fetch_scan_tasks_in_warehouse(
         lakecat_plan_tasks: fetched.plan_tasks,
         residual_filter: merge_fetch_scan_tasks_extensions(
             fetched.residual_filter,
-            fetch_scan_tasks_extensions(capability.receipt())?,
+            fetch_scan_tasks_extensions(&capability)?,
         ),
     }))
 }
@@ -3340,14 +3367,15 @@ fn merge_scan_request_extensions(
 }
 
 fn fetch_scan_tasks_extensions(
-    receipt: &AuthorizationReceipt,
+    capability: &TableScanCapability,
 ) -> Result<serde_json::Value, LakeCatHttpError> {
+    let restriction = capability.read_restriction()?;
+    let required_projection = restriction.effective_projection(&[])?;
+    let required_filters = restriction.mandatory_filters();
     Ok(json!({
-        "read-restriction": receipt
-            .context
-            .get("read-restriction")
-            .cloned()
-            .unwrap_or_else(|| json!(ReadRestriction::unrestricted())),
+        "read-restriction": restriction,
+        "required-projection": required_projection,
+        "required-filters": required_filters,
     }))
 }
 
@@ -6315,6 +6343,12 @@ mod tests {
                                 },
                                 "policy-hashes": ["sha256:policy"]
                             },
+                            "required-projection": ["event_id"],
+                            "required-filters": [{
+                                "type": "not-eq",
+                                "term": "severity",
+                                "value": "debug"
+                            }],
                             "storage-location": "file:///tmp/events",
                             "metadata-location": "file:///tmp/events/metadata/00000.json",
                             "file-scan-task-count": 1,
@@ -6582,6 +6616,18 @@ mod tests {
                 "term": "severity",
                 "value": "debug"
             })
+        );
+        assert_eq!(
+            scan_fetch_summary.required_projection,
+            vec!["event_id".to_string()]
+        );
+        assert_eq!(
+            scan_fetch_summary.required_filters,
+            vec![serde_json::json!({
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            })]
         );
         let bootstrap_summary = drain
             .events
@@ -12694,6 +12740,18 @@ mod tests {
             payload["authorization-receipt"]["context"]["read-restriction"],
             payload["read-restriction"]
         );
+        assert_eq!(
+            payload["required-projection"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            payload["required-filters"][0],
+            serde_json::json!({
+                "type": "eq",
+                "term": "event_id",
+                "value": "evt-1"
+            })
+        );
         assert_eq!(payload["file-scan-task-count"], serde_json::json!(1));
         assert_eq!(payload["delete-file-count"], serde_json::json!(1));
         assert_eq!(payload["child-plan-task-count"], serde_json::json!(1));
@@ -12843,6 +12901,22 @@ mod tests {
                 "term": "event_id",
                 "value": "evt-1"
             })
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:fetch-scan-tasks"]["required-projection"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:fetch-scan-tasks"]["required-filters"][0],
+            serde_json::json!({
+                "type": "eq",
+                "term": "event_id",
+                "value": "evt-1"
+            })
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:fetch-scan-tasks"]["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
         );
     }
 

@@ -2003,6 +2003,30 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         )?,
         "governedScanProof.plannedReadRestriction",
     )?;
+    require_value_match(
+        fetched_restriction,
+        "allowed-columns",
+        required_value(
+            governed_scan,
+            "fetchedRequiredProjection",
+            "governedScanProof",
+        )?,
+        "governedScanProof.fetchedReadRestriction",
+    )?;
+    let fetched_required_filters =
+        required_array(governed_scan, "fetchedRequiredFilters", "governedScanProof")?;
+    if fetched_required_filters.first()
+        != Some(required_value(
+            fetched_restriction,
+            "row-predicate",
+            "governedScanProof.fetchedReadRestriction",
+        )?)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "governedScanProof fetchedRequiredFilters did not preserve fetched row predicate: {}",
+            Value::Array(fetched_required_filters.clone())
+        )));
+    }
     require_hash_array(
         governed_scan,
         "plannedReplayEventHashes",
@@ -2794,6 +2818,8 @@ fn qglake_scan_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Valu
         "childPlanTaskCount": fetched.child_plan_task_count.unwrap_or_default(),
         "plannedReadRestriction": planned.read_restriction.as_ref(),
         "fetchedReadRestriction": fetched.read_restriction.as_ref(),
+        "fetchedRequiredProjection": &fetched.required_projection,
+        "fetchedRequiredFilters": &fetched.required_filters,
         "plannedReplayEventHashes": &planned.replay_event_hashes,
         "fetchedReplayEventHashes": &fetched.replay_event_hashes,
         "plannedOpenLineageHashes": &planned.replay_open_lineage_hashes,
@@ -7020,6 +7046,12 @@ mod tests {
                         "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
+                    "fetchedRequiredProjection": ["event_id", "occurred_at", "severity"],
+                    "fetchedRequiredFilters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }],
                     "plannedReplayEventHashes": ["sha256:scan-plan-replay"],
                     "fetchedReplayEventHashes": ["sha256:scan-fetch-replay"],
                     "plannedOpenLineageHashes": ["sha256:scan-plan-openlineage"],
@@ -8094,6 +8126,21 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("allowed-columns mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_fetch_requirement_evidence() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("fetchedRequiredProjection");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing fetch requirement evidence");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("fetchedRequiredProjection"));
     }
 
     #[test]
@@ -11216,6 +11263,8 @@ mod tests {
                     delete_file_count: None,
                     child_plan_task_count: None,
                     read_restriction: None,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -11298,6 +11347,8 @@ mod tests {
                     delete_file_count: None,
                     child_plan_task_count: None,
                     read_restriction: None,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -11380,6 +11431,8 @@ mod tests {
                     delete_file_count: None,
                     child_plan_task_count: None,
                     read_restriction: None,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -11461,6 +11514,8 @@ mod tests {
                     delete_file_count: None,
                     child_plan_task_count: None,
                     read_restriction: None,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -11542,6 +11597,8 @@ mod tests {
                     delete_file_count: None,
                     child_plan_task_count: None,
                     read_restriction: None,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -11623,6 +11680,8 @@ mod tests {
                     delete_file_count: None,
                     child_plan_task_count: None,
                     read_restriction: None,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -11704,6 +11763,8 @@ mod tests {
                     delete_file_count: None,
                     child_plan_task_count: None,
                     read_restriction: None,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -11785,6 +11846,8 @@ mod tests {
                     delete_file_count: None,
                     child_plan_task_count: None,
                     read_restriction: None,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -11867,6 +11930,8 @@ mod tests {
                     delete_file_count: None,
                     child_plan_task_count: None,
                     read_restriction: None,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -11948,6 +12013,8 @@ mod tests {
                     delete_file_count: None,
                     child_plan_task_count: None,
                     read_restriction: None,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -12029,6 +12096,8 @@ mod tests {
                     delete_file_count: None,
                     child_plan_task_count: None,
                     read_restriction: None,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: vec!["OpenLineage".to_string()],
@@ -12110,6 +12179,8 @@ mod tests {
                     delete_file_count: None,
                     child_plan_task_count: None,
                     read_restriction: None,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -12191,6 +12262,8 @@ mod tests {
                     delete_file_count: None,
                     child_plan_task_count: None,
                     read_restriction: None,
+                    required_projection: Vec::new(),
+                    required_filters: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -13356,6 +13429,8 @@ mod tests {
             delete_file_count: None,
             child_plan_task_count: None,
             read_restriction: None,
+            required_projection: Vec::new(),
+            required_filters: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: qglake_lineage_standards(),
@@ -13438,6 +13513,8 @@ mod tests {
             delete_file_count: None,
             child_plan_task_count: None,
             read_restriction: None,
+            required_projection: Vec::new(),
+            required_filters: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -13545,6 +13622,8 @@ mod tests {
             delete_file_count: None,
             child_plan_task_count: None,
             read_restriction: None,
+            required_projection: Vec::new(),
+            required_filters: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -13619,6 +13698,8 @@ mod tests {
             delete_file_count: None,
             child_plan_task_count: None,
             read_restriction: Some(qglake_read_restriction_summary()),
+            required_projection: Vec::new(),
+            required_filters: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -13680,6 +13761,16 @@ mod tests {
             delete_file_count: Some(1),
             child_plan_task_count: Some(1),
             read_restriction: Some(qglake_read_restriction_summary()),
+            required_projection: vec![
+                "event_id".to_string(),
+                "occurred_at".to_string(),
+                "severity".to_string(),
+            ],
+            required_filters: vec![json!({
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            })],
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -13741,6 +13832,8 @@ mod tests {
             delete_file_count: None,
             child_plan_task_count: None,
             read_restriction: None,
+            required_projection: Vec::new(),
+            required_filters: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -13804,6 +13897,8 @@ mod tests {
             delete_file_count: None,
             child_plan_task_count: None,
             read_restriction: None,
+            required_projection: Vec::new(),
+            required_filters: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -13869,6 +13964,8 @@ mod tests {
             delete_file_count: None,
             child_plan_task_count: None,
             read_restriction: None,
+            required_projection: Vec::new(),
+            required_filters: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -13932,6 +14029,8 @@ mod tests {
             delete_file_count: None,
             child_plan_task_count: None,
             read_restriction: None,
+            required_projection: Vec::new(),
+            required_filters: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -13993,6 +14092,8 @@ mod tests {
             delete_file_count: None,
             child_plan_task_count: None,
             read_restriction: None,
+            required_projection: Vec::new(),
+            required_filters: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -14054,6 +14155,8 @@ mod tests {
             delete_file_count: None,
             child_plan_task_count: None,
             read_restriction: None,
+            required_projection: Vec::new(),
+            required_filters: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -14115,6 +14218,8 @@ mod tests {
             delete_file_count: None,
             child_plan_task_count: None,
             read_restriction: Some(qglake_read_restriction_summary()),
+            required_projection: Vec::new(),
+            required_filters: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -14180,6 +14285,8 @@ mod tests {
             delete_file_count: None,
             child_plan_task_count: None,
             read_restriction: Some(qglake_read_restriction_summary()),
+            required_projection: Vec::new(),
+            required_filters: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),

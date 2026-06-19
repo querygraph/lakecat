@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added fetch-scan-task replay evidence for the exact required projection and
+  required filters LakeCat reapplies from the table scan capability, so a
+  stateless fetch response and compact QGLake handoff prove the narrowed read,
+  not just the policy input.
 - Redacted rejected-commit metadata cleanup failures so cleanup context reports
   a metadata-location hash instead of echoing the uncommitted object path.
 - Fixed archive-relative links inside the completed OPUS review documents so

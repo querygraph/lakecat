@@ -6,6 +6,25 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Expose fetch restriction requirements`.
+  `fetchScanTasks` responses now include LakeCat extension evidence for the
+  exact `required-projection` and `required-filters` derived from the authorized
+  table scan capability. This keeps stateless fetch replay tied to the
+  revalidated restriction, not only to the raw read-restriction policy object.
+  Lineage-drain summaries and compact QGLake replay proofs now carry and verify
+  the same fetch-side requirement evidence.
+- Local verification for this fetch restriction evidence slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-api`;
+  `cargo test -p lakecat-service --features sail-local scan_planning_applies_policy_column_restriction_before_sail -- --nocapture`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact metadata cleanup failure locations`.
   Rejected commit cleanup still appends cleanup context to the original store or
   compare-and-swap error, but true cleanup failures now identify the
