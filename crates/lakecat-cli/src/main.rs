@@ -418,10 +418,26 @@ fn verify_qglake_handoff_artifact_files(
     let lineage_drain = verify_qglake_handoff_artifact_file(artifacts, "lineageDrain", base_dir)?;
     let querygraph_import_plan =
         verify_qglake_handoff_artifact_file(artifacts, "querygraphImportPlan", base_dir)?;
+    let captured_outputs =
+        verify_qglake_handoff_captured_outputs(artifacts, "capturedOutputs", base_dir)?;
     Ok(json!({
         "bundle": bundle,
         "lineageDrain": lineage_drain,
         "querygraphImportPlan": querygraph_import_plan,
+        "capturedOutputs": captured_outputs,
+    }))
+}
+
+fn verify_qglake_handoff_captured_outputs(
+    artifacts: &serde_json::Map<String, Value>,
+    field: &str,
+    base_dir: &Path,
+) -> lakecat_core::LakeCatResult<Value> {
+    let outputs = required_object(artifacts, field, "handoff summary artifacts")?;
+    Ok(json!({
+        "lakecatReplay": verify_qglake_handoff_artifact_file(outputs, "lakecatReplay", base_dir)?,
+        "querygraphVerify": verify_qglake_handoff_artifact_file(outputs, "querygraphVerify", base_dir)?,
+        "querygraphImport": verify_qglake_handoff_artifact_file(outputs, "querygraphImport", base_dir)?,
     }))
 }
 
@@ -4823,9 +4839,15 @@ mod tests {
         let bundle = dir.join("lakecat-bootstrap.json");
         let drain = dir.join("lineage-drain.json");
         let import_plan = dir.join("querygraph-import-plan.json");
+        let lakecat_replay = dir.join("lakecat-replay.txt");
+        let querygraph_verify = dir.join("querygraph-verify.json");
+        let querygraph_import = dir.join("querygraph-import.json");
         fs::write(&bundle, b"bundle").expect("write bundle");
         fs::write(&drain, b"drain").expect("write drain");
         fs::write(&import_plan, b"import-plan").expect("write import plan");
+        fs::write(&lakecat_replay, b"lakecat-replay").expect("write LakeCat replay");
+        fs::write(&querygraph_verify, b"querygraph-verify").expect("write QueryGraph verify");
+        fs::write(&querygraph_import, b"querygraph-import").expect("write QueryGraph import");
 
         let mut summary = qglake_handoff_summary_json();
         summary["artifacts"] = json!({
@@ -4840,6 +4862,20 @@ mod tests {
             "querygraphImportPlan": {
                 "path": import_plan,
                 "sha256": content_hash_bytes(b"import-plan")
+            },
+            "capturedOutputs": {
+                "lakecatReplay": {
+                    "path": lakecat_replay,
+                    "sha256": content_hash_bytes(b"lakecat-replay")
+                },
+                "querygraphVerify": {
+                    "path": querygraph_verify,
+                    "sha256": content_hash_bytes(b"querygraph-verify")
+                },
+                "querygraphImport": {
+                    "path": querygraph_import,
+                    "sha256": content_hash_bytes(b"querygraph-import")
+                }
             }
         });
         summary
@@ -5014,6 +5050,10 @@ mod tests {
             verification["bundle"]["sha256"],
             json!(content_hash_bytes(b"bundle"))
         );
+        assert_eq!(
+            verification["capturedOutputs"]["lakecatReplay"]["sha256"],
+            json!(content_hash_bytes(b"lakecat-replay"))
+        );
     }
 
     #[test]
@@ -5029,6 +5069,24 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("handoff artifact bundle hash mismatch")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_captured_output_mismatch() {
+        let temp = qglake_temp_dir("handoff-captured-output-mismatch");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        fs::write(temp.join("querygraph-verify.json"), b"tampered")
+            .expect("tamper QueryGraph verify output");
+        summary["artifacts"]["capturedOutputs"]["querygraphVerify"]["sha256"] =
+            json!(content_hash_bytes(b"querygraph-verify"));
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("captured output hashes should reject tampered files");
+        assert!(
+            err.to_string()
+                .contains("handoff artifact querygraphVerify hash mismatch")
         );
     }
 

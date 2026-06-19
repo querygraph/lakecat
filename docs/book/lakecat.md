@@ -1209,8 +1209,9 @@ hashes. The credential proof shows the restricted agent was blocked onto
 Sail-planned reads while the trusted human path used the audited raw-credential
 exception. The summary also records artifact paths, raw file hashes, captured
 LakeCat replay output, captured LakeCat handoff-summary verification output,
-captured QueryGraph verification output, captured QueryGraph import output, and
-service log path.
+captured QueryGraph verification output, captured QueryGraph import output,
+captured-output hashes for the LakeCat replay and QueryGraph verify/import
+JSON files, and service log path.
 That makes the handoff repeatable from the LakeCat repo while keeping
 QueryGraph responsible for graph validation and import semantics.
 The handoff script refuses to write the summary unless LakeCat replay JSON
@@ -1336,8 +1337,10 @@ proof objects for request identity, QueryGraph bootstrap, governed scan,
 pointer history, view receipt chains, storage-profile upsert, and credential
 vending. It also recomputes the raw file hashes for the bundle, lineage-drain
 response, and QueryGraph import plan named in the summary, rejecting stale or
-tampered artifact files before automation consumes them. The local handoff
-harness runs it automatically and writes the captured verifier output to
+tampered artifact files before automation consumes them. It also recomputes the
+captured LakeCat replay and QueryGraph verify/import output hashes, so terminal
+captures cannot drift from the compact summary. The local handoff harness runs
+it automatically and writes the captured verifier output to
 `target/qglake-handoff/lakecat-handoff-verify.json`.
 
 The end-to-end result is a chain:

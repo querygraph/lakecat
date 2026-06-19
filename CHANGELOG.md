@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `capturedOutputs` hashes to QGLake `handoff-summary.json` for the
+  LakeCat replay, QueryGraph verify, and QueryGraph import captures, and made
+  `qglake-verify-handoff` reject tampered captured output files.
 - Made `lakecat-cli qglake-verify-handoff` verify the raw bundle,
   lineage-drain, and QueryGraph import-plan artifact file hashes recorded in
   `handoff-summary.json`, so stale or tampered handoff files fail acceptance.

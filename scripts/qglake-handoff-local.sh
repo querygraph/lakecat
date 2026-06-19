@@ -581,7 +581,7 @@ require_field_match() {
 }
 
 write_summary() {
-  local bundle_sha drain_sha import_plan_sha
+  local bundle_sha drain_sha import_plan_sha lakecat_replay_sha querygraph_verify_sha querygraph_import_sha
   local verified_tables verified_views bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   local verified_standards
   local lakecat_schema lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards lakecat_replay_evidence
@@ -591,6 +591,9 @@ write_summary() {
   bundle_sha="$(sha256_file "$BUNDLE")"
   drain_sha="$(sha256_file "$DRAIN")"
   import_plan_sha="$(sha256_file "$IMPORT_PLAN")"
+  lakecat_replay_sha="$(sha256_file "$LAKECAT_REPLAY_OUTPUT")"
+  querygraph_verify_sha="$(sha256_file "$QUERYGRAPH_VERIFY_OUTPUT")"
+  querygraph_import_sha="$(sha256_file "$QUERYGRAPH_IMPORT_OUTPUT")"
   lakecat_schema="$(json_field "$LAKECAT_REPLAY_OUTPUT" "schema-version")"
   lakecat_status="$(json_field "$LAKECAT_REPLAY_OUTPUT" "status")"
   lakecat_tables="$(json_field "$LAKECAT_REPLAY_OUTPUT" "table-count")"
@@ -720,6 +723,20 @@ write_summary() {
     "lakecatHandoffVerifyOutput": "$(json_string "$LAKECAT_HANDOFF_VERIFY_OUTPUT")",
     "querygraphVerifyOutput": "$(json_string "$QUERYGRAPH_VERIFY_OUTPUT")",
     "querygraphImportOutput": "$(json_string "$QUERYGRAPH_IMPORT_OUTPUT")",
+    "capturedOutputs": {
+      "lakecatReplay": {
+        "path": "$(json_string "$LAKECAT_REPLAY_OUTPUT")",
+        "sha256": "sha256:$lakecat_replay_sha"
+      },
+      "querygraphVerify": {
+        "path": "$(json_string "$QUERYGRAPH_VERIFY_OUTPUT")",
+        "sha256": "sha256:$querygraph_verify_sha"
+      },
+      "querygraphImport": {
+        "path": "$(json_string "$QUERYGRAPH_IMPORT_OUTPUT")",
+        "sha256": "sha256:$querygraph_import_sha"
+      }
+    },
     "serviceLog": "$(json_string "$SERVICE_LOG")"
   }
 }
