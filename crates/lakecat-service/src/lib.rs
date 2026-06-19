@@ -587,11 +587,11 @@ pub mod typesec_credential_issuer {
     }
 
     fn provider_not_configured(provider: SecretRefProvider, secret_ref: &str) -> LakeCatError {
-        let secret_ref_hash = content_hash_bytes(secret_ref.as_bytes());
         LakeCatError::InvalidArgument(format!(
             "credential secret resolver for {} is not configured; keep governed reads on Sail \
-             or configure a production secret-store backend; secret-ref-hash={secret_ref_hash}",
+             or configure a production secret-store backend; {}",
             provider.as_str(),
+            secret_ref_hash_context(secret_ref),
         ))
     }
 
@@ -600,18 +600,21 @@ pub mod typesec_credential_issuer {
             .map_err(|err| LakeCatError::InvalidArgument(format!("invalid Vault URI: {err}")))?;
         if url.scheme() != "vault" {
             return Err(LakeCatError::InvalidArgument(format!(
-                "Vault resolver requires vault:// secret refs, got {secret_ref}"
+                "Vault resolver requires vault:// secret refs; {}",
+                secret_ref_hash_context(secret_ref)
             )));
         }
         let Some(mount) = url.host_str() else {
             return Err(LakeCatError::InvalidArgument(format!(
-                "Vault secret ref must include a mount name: {secret_ref}"
+                "Vault secret ref must include a mount name; {}",
+                secret_ref_hash_context(secret_ref)
             )));
         };
         let path = url.path().trim_start_matches('/');
         if path.is_empty() {
             return Err(LakeCatError::InvalidArgument(format!(
-                "Vault secret ref must include a secret path: {secret_ref}"
+                "Vault secret ref must include a secret path; {}",
+                secret_ref_hash_context(secret_ref)
             )));
         }
         Ok(format!("v1/{mount}/{path}"))
@@ -652,7 +655,8 @@ pub mod typesec_credential_issuer {
         })?;
         if url.scheme() != "typesec" || url.host_str() != Some("env") {
             return Err(LakeCatError::InvalidArgument(format!(
-                "environment resolver requires secret refs like typesec://env/VARIABLE, got {secret_ref}"
+                "environment resolver requires secret refs like typesec://env/VARIABLE; {}",
+                secret_ref_hash_context(secret_ref)
             )));
         }
         let variable = url.path().trim_start_matches('/');
@@ -662,10 +666,18 @@ pub mod typesec_credential_issuer {
                 .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
         {
             return Err(LakeCatError::InvalidArgument(format!(
-                "environment credential variable must be non-empty and use A-Z, 0-9, or _: {variable}"
+                "environment credential variable must be non-empty and use A-Z, 0-9, or _; {}",
+                secret_ref_hash_context(secret_ref)
             )));
         }
         Ok(variable.to_string())
+    }
+
+    fn secret_ref_hash_context(secret_ref: &str) -> String {
+        format!(
+            "secret-ref-hash={}",
+            content_hash_bytes(secret_ref.as_bytes())
+        )
     }
 
     pub(crate) fn config_entries_from_secret_json(raw: &str) -> LakeCatResult<Vec<ConfigEntry>> {
@@ -12029,8 +12041,24 @@ mod tests {
             env_secret_variable("typesec://env/LAKECAT_S3_EVENTS").unwrap(),
             "LAKECAT_S3_EVENTS"
         );
-        assert!(env_secret_variable("typesec://env/lowercase").is_err());
-        assert!(env_secret_variable("typesec://vault/path").is_err());
+        for secret_ref in [
+            "typesec://env/lowercase",
+            "typesec://vault/path",
+            "vault://",
+            "typesec://env/",
+        ] {
+            let err = if secret_ref.starts_with("vault://") {
+                vault_secret_path(secret_ref).unwrap_err()
+            } else {
+                env_secret_variable(secret_ref).unwrap_err()
+            };
+            let message = err.to_string();
+            assert!(message.contains("secret-ref-hash=sha256:"));
+            assert!(
+                !message.contains(secret_ref),
+                "resolver validation errors must not expose raw secret refs"
+            );
+        }
         assert_eq!(
             secret_ref_provider("typesec://env/LAKECAT_S3_EVENTS").unwrap(),
             SecretRefProvider::TypeSecEnv

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted Vault and TypeSec environment secret-ref resolver validation errors
+  so malformed credential roots report `secret-ref-hash=sha256:...` evidence
+  instead of echoing the raw secret URI.
 - Redacted production secret-ref resolver not-configured errors so operators get
   the provider label and `secret-ref-hash=sha256:...` evidence without exposing
   the raw Vault/AWS/GCP/Azure secret URI.

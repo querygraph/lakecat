@@ -6,6 +6,20 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact resolver validation secret refs`.
+  Vault and TypeSec environment secret-ref resolver validation errors now use
+  `secret-ref-hash=sha256:...` evidence for wrong-scheme, missing-mount,
+  missing-path, and invalid environment-variable cases instead of echoing the
+  raw credential-root URI.
+- Local verification for this resolver validation redaction slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features typesec-local environment_secret_resolver_parses_supported_secret_shapes -- --nocapture`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_gates_production_secret_refs_before_dispatch -- --nocapture`;
+  `cargo test -p lakecat-service --features typesec-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact production secret-ref resolver errors`.
   Production secret-ref resolver not-configured errors now name the missing
   provider backend and include `secret-ref-hash=sha256:...` evidence instead of
