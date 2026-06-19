@@ -1388,11 +1388,12 @@ request-identity, scan, management,
 credential, table-commit, and view replay evidence, plus compact
 `requestIdentityProof`, `queryGraphBootstrapProof`, `governedScanProof`,
 `tableCommitHistoryProof`, `viewReceiptChainProof`,
-`storageProfileUpsertProof`, and `credentialVendingProof` objects that lift
-the replay principal proof, QueryGraph bootstrap/import proof, governed scan
-counts, pointer-log read proof, view version and receipt-chain proof, redacted
-credential-root proof, and credential-vending decision out of the full replay
-tree. The identity proof shows the principal subject and kind used for the
+`managementProof`, `storageProfileUpsertProof`, and `credentialVendingProof`
+objects that lift the replay principal proof, QueryGraph bootstrap/import
+proof, governed scan counts, pointer-log read proof, view version and
+receipt-chain proof, management-list counts, redacted credential-root proof,
+and credential-vending decision out of the full replay tree. The identity proof
+shows the principal subject and kind used for the
 replay, the request-identity source and state, the authorization receipt hash,
 and sanitized TypeDID envelope/proof hashes when a TypeDID envelope is present.
 The local QGLake fixture currently records the agent-header source with null
@@ -1483,8 +1484,12 @@ proof must include tombstone receipt evidence whose `expectedViewVersion`
 preserves the accepted view version. A consumer can reject a handoff whose view
 history claim lacks identity, accepted-version, count-aligned hash-chain
 evidence, active-chain coverage or tombstone guard evidence, or replay evidence
-before parsing the full replay tree. It also compares the
-captured LakeCat replay
+before parsing the full replay tree. It compares captured LakeCat replay
+`replay-evidence.management` list counts with compact
+`lakecatReplayVerification.managementProof`, requiring positive server,
+project, warehouse, and storage-profile counts and a policy-binding count that
+matches the QueryGraph bootstrap proof. It also compares the captured LakeCat
+replay
 `replay-evidence.management.storageProfileUpsert` object with the compact
 `lakecatReplayVerification.storageProfileUpsertProof`, including the
 profile id, provider, issuance mode, location-prefix hash, secret-reference

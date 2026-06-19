@@ -669,6 +669,7 @@ fn verify_qglake_handoff_captured_output_semantics(
     let table_commit_history =
         Value::Object(lakecat_replay_table_commit_history(lakecat_replay)?.clone());
     let view_receipt_chain = Value::Object(lakecat_replay_views(lakecat_replay)?.clone());
+    let management = Value::Object(lakecat_replay_management(lakecat_replay)?.clone());
     let storage_profile_upsert =
         Value::Object(lakecat_replay_storage_profile_upsert(lakecat_replay)?.clone());
     let credential_vending = Value::Object(lakecat_replay_credentials(lakecat_replay)?.clone());
@@ -689,6 +690,7 @@ fn verify_qglake_handoff_captured_output_semantics(
             "governedScanProof": governed_scan,
             "tableCommitHistoryProof": table_commit_history,
             "viewReceiptChainProof": view_receipt_chain,
+            "managementProof": management,
             "storageProfileUpsertProof": storage_profile_upsert,
             "credentialVendingProof": credential_vending,
         },
@@ -1228,6 +1230,7 @@ fn verify_lakecat_replay_capture_matches_summary(
     verify_lakecat_replay_scan_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_table_commit_history_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_views_match_summary(capture, lakecat)?;
+    verify_lakecat_replay_management_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_storage_profile_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_credentials_match_summary(capture, lakecat)
 }
@@ -1499,14 +1502,46 @@ fn verify_lakecat_replay_storage_profile_matches_summary(
     Ok(())
 }
 
-fn lakecat_replay_storage_profile_upsert(
+fn verify_lakecat_replay_management_matches_summary(
+    capture: &serde_json::Map<String, Value>,
+    lakecat: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let captured_management = lakecat_replay_management(capture)?;
+    let summary_management =
+        required_object(lakecat, "managementProof", "lakecatReplayVerification")?;
+
+    for field in [
+        "serverCount",
+        "projectCount",
+        "warehouseCount",
+        "policyBindingCount",
+        "storageProfileCount",
+    ] {
+        require_value_match(
+            captured_management,
+            field,
+            required_value(summary_management, field, "managementProof")?,
+            "captured LakeCat replay output.replay-evidence.management",
+        )?;
+    }
+
+    Ok(())
+}
+
+fn lakecat_replay_management(
     capture: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<&serde_json::Map<String, Value>> {
-    let management = required_object(
+    required_object(
         lakecat_replay_evidence(capture)?,
         "management",
         "captured LakeCat replay output.replay-evidence",
-    )?;
+    )
+}
+
+fn lakecat_replay_storage_profile_upsert(
+    capture: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<&serde_json::Map<String, Value>> {
+    let management = lakecat_replay_management(capture)?;
     required_object(
         management,
         "storageProfileUpsert",
@@ -2098,6 +2133,12 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     )?;
     require_table_commit_history_evidence(commit_history)?;
 
+    let management = required_object(lakecat, "managementProof", "lakecatReplayVerification")?;
+    require_management_evidence(
+        management,
+        required_u64(bootstrap, "policyBindingCount", "queryGraphBootstrapProof")?,
+    )?;
+
     let storage_profile = required_object(
         lakecat,
         "storageProfileUpsertProof",
@@ -2327,6 +2368,23 @@ fn require_typedid_hash_pair(
             "{label}.typedidProofHash requires typedidEnvelopeHash"
         )));
     }
+    Ok(())
+}
+
+fn require_management_evidence(
+    management: &serde_json::Map<String, Value>,
+    expected_policy_binding_count: u64,
+) -> lakecat_core::LakeCatResult<()> {
+    require_positive_u64(management, "serverCount", "managementProof")?;
+    require_positive_u64(management, "projectCount", "managementProof")?;
+    require_positive_u64(management, "warehouseCount", "managementProof")?;
+    require_positive_u64(management, "storageProfileCount", "managementProof")?;
+    require_u64_match(
+        management,
+        "policyBindingCount",
+        expected_policy_binding_count,
+        "managementProof",
+    )?;
     Ok(())
 }
 
@@ -7421,6 +7479,13 @@ mod tests {
                     "replayEventHashes": ["sha256:commit-replay"],
                     "openLineageHashes": ["sha256:commit-openlineage"]
                 },
+                "managementProof": {
+                    "serverCount": 1,
+                    "projectCount": 1,
+                    "warehouseCount": 1,
+                    "policyBindingCount": 1,
+                    "storageProfileCount": 1
+                },
                 "viewReceiptChainProof": {
                     "viewCount": 1,
                     "views": [{
@@ -7625,6 +7690,24 @@ mod tests {
                     "replayEventHashes": ["sha256:commit-replay"],
                     "openLineageHashes": ["sha256:commit-openlineage"]
                 },
+                "management": {
+                    "serverCount": 1,
+                    "projectCount": 1,
+                    "warehouseCount": 1,
+                    "policyBindingCount": 1,
+                    "storageProfileCount": 1,
+                    "storageProfileUpsert": {
+                        "profileId": "events-local",
+                        "provider": "file",
+                        "issuanceMode": "local-file-no-secret",
+                        "locationPrefixHash": "sha256:storage-location-prefix",
+                        "secretRefPresent": false,
+                        "secretRefProvider": null,
+                        "graphEvents": 1,
+                        "replayEventHashes": ["sha256:storage-replay"],
+                        "openLineageHashes": ["sha256:storage-openlineage"]
+                    }
+                },
                 "views": {
                     "viewCount": 1,
                     "views": [{
@@ -7658,19 +7741,6 @@ mod tests {
                         "replayEventHashes": ["sha256:chain-replay"],
                         "openLineageHashes": ["sha256:chain-openlineage"]
                     }]
-                },
-                "management": {
-                    "storageProfileUpsert": {
-                        "profileId": "events-local",
-                        "provider": "file",
-                        "issuanceMode": "local-file-no-secret",
-                        "locationPrefixHash": "sha256:storage-location-prefix",
-                        "secretRefPresent": false,
-                        "secretRefProvider": null,
-                        "graphEvents": 1,
-                        "replayEventHashes": ["sha256:storage-replay"],
-                        "openLineageHashes": ["sha256:storage-openlineage"]
-                    }
                 },
                 "credentials": {
                     "restricted": {
@@ -8017,6 +8087,7 @@ mod tests {
             "governedScanProof": replay["replay-evidence"]["scan"],
             "tableCommitHistoryProof": replay["replay-evidence"]["tableCommitHistory"],
             "viewReceiptChainProof": replay["replay-evidence"]["views"],
+            "managementProof": replay["replay-evidence"]["management"],
             "storageProfileUpsertProof": replay["replay-evidence"]["management"]["storageProfileUpsert"],
             "credentialVendingProof": replay["replay-evidence"]["credentials"],
             "replayEvidence": replay["replay-evidence"],
@@ -8366,6 +8437,18 @@ mod tests {
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject mismatched bootstrap hash");
         assert!(err.to_string().contains("bundleHash mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_management_policy_count_match() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["policyBindingCount"] = json!(2);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject management policy-count drift");
+
+        assert!(err.to_string().contains("managementProof"));
+        assert!(err.to_string().contains("policyBindingCount mismatch"));
     }
 
     #[test]
@@ -9211,6 +9294,10 @@ mod tests {
         );
         assert_eq!(
             semantics["lakecatReplay"]["governedScanProof"]["planTaskCount"],
+            json!(1)
+        );
+        assert_eq!(
+            semantics["lakecatReplay"]["managementProof"]["policyBindingCount"],
             json!(1)
         );
         assert_eq!(

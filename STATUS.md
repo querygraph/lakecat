@@ -6,6 +6,21 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Prove management replay counts`.
+  QGLake compact `managementProof` now carries server, project, warehouse,
+  policy-binding, and storage-profile replay counts, requires the management
+  policy count to match bootstrap policy evidence, and rejects captured LakeCat
+  replay drift for those counts before accepting a handoff summary.
+- Local verification for this management replay-count slice is green:
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_management_policy_count_match -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_accept_matching_files -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Prove accepted-view graph replay`.
   QGLake compact `viewReceiptChainProof.views[]` and captured LakeCat replay
   semantics now require positive `graphEvents` evidence for accepted view

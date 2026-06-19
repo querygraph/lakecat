@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added compact QGLake `managementProof` verification for server, project,
+  warehouse, policy-binding, and storage-profile replay counts, with captured
+  replay drift checks.
 - Required QGLake accepted-view replay and compact handoff proof to carry
   positive graph event evidence alongside view receipt-chain and OpenLineage
   proof.
