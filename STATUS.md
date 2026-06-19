@@ -6,6 +6,18 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify fetch restriction requirements live`.
+  The live QGLake `fetchScanTasks` verifier now requires the
+  `lakecat:fetch-scan-tasks` extension to carry `required-projection` and
+  `required-filters` evidence matching the governed allowed columns and
+  mandatory row predicate.
+- Local verification for this live fetch verifier slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_fetch_scan_tasks_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Expose fetch restriction requirements`.
   `fetchScanTasks` responses now include LakeCat extension evidence for the
   exact `required-projection` and `required-filters` derived from the authorized

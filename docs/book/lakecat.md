@@ -934,7 +934,9 @@ location, and principal. The fetch response also carries LakeCat extension
 evidence for the exact `required-projection` and `required-filters` derived
 from the authorized capability. That makes a stateless `fetchScanTasks` replay
 prove the restriction was re-applied, not merely that the original policy
-object was echoed.
+object was echoed. The QGLake fixture verifier checks those fields directly
+when it fetches scan tasks, so a local acceptance run fails if the response
+drops either the narrowed projection or the mandatory row predicate proof.
 
 ### A Notebook Requests Credentials
 

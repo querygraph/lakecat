@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened the live QGLake `fetchScanTasks` verifier to require the
+  `required-projection` and `required-filters` evidence emitted by LakeCat's
+  fetch response extension.
 - Added fetch-scan-task replay evidence for the exact required projection and
   required filters LakeCat reapplies from the table scan capability, so a
   stateless fetch response and compact QGLake handoff prove the narrowed read,

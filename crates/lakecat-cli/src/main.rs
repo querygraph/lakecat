@@ -4983,6 +4983,26 @@ fn verify_qglake_fetch_restriction(
             extension["read-restriction"]["row-predicate"].clone()
         )));
     }
+    if extension["required-projection"] != json!(["event_id", "occurred_at", "severity"]) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake governed fetchScanTasks required projection did not prove re-applied narrowing: {}",
+            extension["required-projection"].clone()
+        )));
+    }
+    if extension["required-filters"]
+        .as_array()
+        .and_then(|filters| filters.first())
+        != Some(&json!({
+            "type": "not-eq",
+            "term": "severity",
+            "value": "debug"
+        }))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake governed fetchScanTasks required filters did not prove re-applied row predicate: {}",
+            extension["required-filters"].clone()
+        )));
+    }
     let expected_policy_hash = qglake_policy_hash(fetched.table.name.as_str())?;
     let policy_hashes = extension["read-restriction"]["policy-hashes"]
         .as_array()
@@ -10241,7 +10261,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10279,7 +10305,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10314,7 +10346,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10351,7 +10389,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10389,7 +10433,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10426,7 +10476,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10461,7 +10517,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10512,7 +10574,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10550,7 +10618,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10592,7 +10666,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10631,7 +10711,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10666,7 +10752,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10701,7 +10793,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10740,7 +10838,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10784,7 +10888,13 @@ mod tests {
                             "value": "debug"
                         },
                         "policy-hashes": [expected_policy_hash]
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10821,7 +10931,13 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         }
-                    }
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
                 }
             })),
         };
@@ -10832,6 +10948,46 @@ mod tests {
             err.to_string()
                 .contains("read restriction did not include policy hashes")
         );
+    }
+
+    #[test]
+    fn qglake_fetch_scan_tasks_verifier_rejects_missing_required_projection() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            plan_task: "lakecat:sail-json-hmac:test".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![qglake_file_scan_task_with_delete_ref()],
+            delete_files: qglake_delete_files(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not-eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "policy-hashes": [expected_policy_hash]
+                    },
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake governed fetch should require required projection evidence");
+        assert!(err.to_string().contains("required projection"));
     }
 
     #[test]
