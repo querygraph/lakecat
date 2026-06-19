@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made the embedded in-memory catalog store emit the same `table.commit`
+  audit/outbox evidence as the Turso commit path, including redacted
+  idempotency-key hash and authorization receipt, while keeping idempotent
+  replay side-effect free.
 - Added the policy-derived credential TTL cap to the compact QGLake scan replay
   operator line, so terminal captures now show the TTL preserved by both
   scan-planning and scan-task-fetch read restrictions.

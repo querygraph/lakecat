@@ -6,6 +6,14 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Emit embedded commit outbox events`.
+  `MemoryCatalogStore::commit_table` now records the same catalog-facing
+  `table.commit` audit/outbox evidence as the Turso-backed commit path,
+  including the commit record, authorization receipt, response hash, and
+  redacted idempotency-key hash. Idempotent replay still returns before writing
+  new side effects, so embedded tests and in-memory deployments exercise the
+  same transactional outbox contract as the durable local spine.
+- Latest completed implementation slice:
   `Show governed scan TTL caps in replay text`.
   `lakecat-cli qglake-verify-replay` now includes the policy-derived
   `max-credential-ttl-seconds` cap in the compact scan replay line for both

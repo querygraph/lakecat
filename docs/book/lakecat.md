@@ -334,6 +334,13 @@ object.
 The same guard fails closed if a future Sail plan asks LakeCat to write metadata
 but does not provide a new object location.
 
+The embedded in-memory store follows the same commit evidence contract as the
+Turso path. A successful commit emits one `table.commit` audit/outbox event
+with the compact commit record, authorization receipt, response hash, and
+redacted idempotency-key hash. An idempotent replay returns the stored response
+without adding a second outbox event, so tests and local embedded deployments
+exercise the same outbox invariant as the durable spine.
+
 Commit records also carry a response hash over the stored table response. That
 pair matters: the request hash proves which commit body won or replayed, while
 the response hash proves which metadata pointer and table body LakeCat returned

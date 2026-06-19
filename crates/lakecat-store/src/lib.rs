@@ -1345,6 +1345,30 @@ impl CatalogStore for MemoryCatalogStore {
             committed_at,
         };
         let replay_request_hash = record.request_hash.clone();
+        let audit_payload = serde_json::json!({
+            "event-type": "table.commit",
+            "table": ident.clone(),
+            "commit": &record,
+            "authorization-receipt": commit.authorization_receipt,
+        });
+        let audit_event_id = content_hash_json(&audit_payload)?;
+        let outbox_payload = serde_json::json!({
+            "audit-event-id": audit_event_id,
+            "event-type": "table.commit",
+            "table": ident.clone(),
+            "commit": &record,
+            "authorization-receipt": audit_payload["authorization-receipt"].clone(),
+        });
+        let outbox_event = outbox_event_from_payload(&outbox_payload, committed_at)?;
+        state.audit_events.push(CatalogAuditEvent {
+            event_type: "table.commit".to_string(),
+            table: Some(ident.clone()),
+            principal: commit.principal.clone(),
+            request_hash: Some(record.request_hash.clone()),
+            payload: audit_payload,
+            created_at: committed_at,
+        });
+        state.outbox_events.push(outbox_event);
         state.commits.push(record);
 
         if let Some(idempotency_key) = commit.idempotency_key {
@@ -2662,6 +2686,74 @@ mod memory_tests {
                 .is_empty()
         );
         assert_eq!(store.mark_outbox_delivered(&event_ids).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn memory_store_commit_records_table_commit_outbox_event() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let ident = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("events").unwrap(),
+        );
+        store
+            .create_namespace(&warehouse, namespace.clone())
+            .await
+            .unwrap();
+        store
+            .create_table(TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            ))
+            .await
+            .unwrap();
+
+        let commit = TableCommit {
+            requirements: vec![],
+            updates: vec![serde_json::json!({"action": "noop"})],
+            expected_previous_metadata_location: Some(
+                "file:///tmp/events/metadata/00000.json".to_string(),
+            ),
+            new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+            new_metadata: None,
+            idempotency_key: Some("commit-1".to_string()),
+            idempotency_request_hash: None,
+            principal: Principal::anonymous(),
+            authorization_receipt: Some(serde_json::json!({
+                "engine": "typesec",
+                "allowed": true,
+                "action": "table.commit"
+            })),
+        };
+        let committed = store.commit_table(&ident, commit.clone()).await.unwrap();
+        assert_eq!(committed.version, 1);
+        let replayed = store.commit_table(&ident, commit).await.unwrap();
+        assert_eq!(replayed.version, 1);
+
+        let pending = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].event_type, "table.commit");
+        assert_eq!(
+            pending[0].payload["commit"]["new_metadata_location"],
+            serde_json::json!("file:///tmp/events/metadata/00001.json")
+        );
+        assert_eq!(
+            pending[0].payload["commit"]["idempotency_key_sha256"],
+            serde_json::json!(content_hash_bytes("commit-1".as_bytes()))
+        );
+        assert_eq!(
+            pending[0].payload["authorization-receipt"]["engine"],
+            serde_json::json!("typesec")
+        );
+        assert!(!pending[0].payload.to_string().contains("commit-1"));
     }
 }
 

@@ -9039,10 +9039,18 @@ mod tests {
             serde_json::json!([commits[0]["commit-hash"].clone()])
         );
         let graph_events = graph.events.lock().await;
+        assert!(
+            graph_events.iter().any(|event| {
+                event.label == GraphNodeLabel::Commit && event.action == GraphAction::Committed
+            }),
+            "drain should also project the original table.commit event"
+        );
         let commit_graph_event = graph_events
             .iter()
-            .find(|event| event.label == GraphNodeLabel::Commit)
-            .expect("commit history read should project a Commit graph event");
+            .find(|event| {
+                event.label == GraphNodeLabel::Commit && event.action == GraphAction::Loaded
+            })
+            .expect("commit history read should project a loaded Commit graph event");
         assert_eq!(commit_graph_event.action, GraphAction::Loaded);
         assert_eq!(
             commit_graph_event.subject,
