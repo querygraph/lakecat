@@ -356,6 +356,8 @@ fn qglake_verify_handoff(
         verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)?;
     let bundle_artifact_semantics =
         verify_qglake_handoff_bundle_artifact_semantics(&summary_path, &summary)?;
+    let querygraph_import_plan_semantics =
+        verify_qglake_handoff_querygraph_import_plan_semantics(&summary_path, &summary)?;
     verification
         .as_object_mut()
         .ok_or_else(|| {
@@ -385,6 +387,17 @@ fn qglake_verify_handoff(
         .insert(
             "bundleArtifactSemantics".to_string(),
             bundle_artifact_semantics,
+        );
+    verification
+        .as_object_mut()
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::Internal(
+                "handoff verification must be an object".to_string(),
+            )
+        })?
+        .insert(
+            "querygraphImportPlanSemantics".to_string(),
+            querygraph_import_plan_semantics,
         );
     if json_output {
         print_json(&verification)?;
@@ -716,6 +729,214 @@ fn verify_qglake_handoff_bundle_artifact_semantics(
         "queryGraphImportHash": verification.querygraph_import_hash,
         "standards": verification.standards,
     }))
+}
+
+fn verify_qglake_handoff_querygraph_import_plan_semantics(
+    summary_path: &Path,
+    summary: &Value,
+) -> lakecat_core::LakeCatResult<Value> {
+    let summary = summary.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "handoff summary root must be an object".to_string(),
+        )
+    })?;
+    let warehouse = required_str(summary, "warehouse", "handoff summary")?;
+    let import = required_object(summary, "querygraphImportVerification", "handoff summary")?;
+    let lakecat = required_object(summary, "lakecatReplayVerification", "handoff summary")?;
+    let artifacts = required_object(summary, "artifacts", "handoff summary")?;
+    let base_dir = summary_path.parent().unwrap_or_else(|| Path::new(""));
+    let plan_value =
+        read_qglake_handoff_artifact_json(artifacts, "querygraphImportPlan", base_dir)?;
+    let plan = plan_value.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "handoff QueryGraph import plan artifact must be a JSON object".to_string(),
+        )
+    })?;
+    let verification = required_object(
+        plan,
+        "verification",
+        "handoff QueryGraph import plan artifact",
+    )?;
+    let table_scope = HandoffTableScope::from_summary(summary, warehouse)?;
+    let view_scope = HandoffViewScope::from_lakecat(lakecat)?;
+
+    verify_querygraph_import_plan_verification_matches_summary(
+        verification,
+        import,
+        &table_scope,
+        &view_scope,
+    )?;
+    verify_querygraph_import_plan_artifact_lists(plan, verification)?;
+
+    Ok(json!({
+        "warehouse": required_str(verification, "warehouse", "handoff QueryGraph import plan artifact.verification")?,
+        "tableCount": required_u64(verification, "table-count", "handoff QueryGraph import plan artifact.verification")?,
+        "viewCount": required_u64(verification, "view-count", "handoff QueryGraph import plan artifact.verification")?,
+        "verifiedTables": required_value(verification, "verified-tables", "handoff QueryGraph import plan artifact.verification")?,
+        "verifiedViews": required_value(verification, "verified-views", "handoff QueryGraph import plan artifact.verification")?,
+        "bundleHash": required_str(verification, "bundle-hash", "handoff QueryGraph import plan artifact.verification")?,
+        "graphHash": required_str(verification, "graph-hash", "handoff QueryGraph import plan artifact.verification")?,
+        "openLineageHash": required_str(verification, "open-lineage-hash", "handoff QueryGraph import plan artifact.verification")?,
+        "queryGraphImportHash": required_str(verification, "querygraph-import-hash", "handoff QueryGraph import plan artifact.verification")?,
+        "standards": required_value(verification, "standards", "handoff QueryGraph import plan artifact.verification")?,
+        "graphNodes": required_u64(plan, "graph-nodes", "handoff QueryGraph import plan artifact")?,
+        "graphEdges": required_u64(plan, "graph-edges", "handoff QueryGraph import plan artifact")?,
+    }))
+}
+
+fn verify_querygraph_import_plan_verification_matches_summary(
+    verification: &serde_json::Map<String, Value>,
+    import: &serde_json::Map<String, Value>,
+    table_scope: &HandoffTableScope,
+    view_scope: &HandoffViewScope,
+) -> lakecat_core::LakeCatResult<()> {
+    let label = "handoff QueryGraph import plan artifact.verification";
+    require_string_match(
+        verification,
+        "warehouse",
+        table_scope.warehouse.as_str(),
+        label,
+    )?;
+    require_verified_table_scope(verification, table_scope, label)?;
+    require_verified_view_scope(verification, view_scope, label)?;
+    require_u64_match(
+        verification,
+        "table-count",
+        required_u64(import, "tableCount", "querygraphImportVerification")?,
+        label,
+    )?;
+    require_u64_match(
+        verification,
+        "view-count",
+        required_u64(import, "viewCount", "querygraphImportVerification")?,
+        label,
+    )?;
+    require_string_match(
+        verification,
+        "bundle-hash",
+        required_str(import, "bundleHash", "querygraphImportVerification")?,
+        label,
+    )?;
+    require_string_match(
+        verification,
+        "graph-hash",
+        required_str(import, "graphHash", "querygraphImportVerification")?,
+        label,
+    )?;
+    require_string_match(
+        verification,
+        "open-lineage-hash",
+        required_str(import, "openLineageHash", "querygraphImportVerification")?,
+        label,
+    )?;
+    require_string_match(
+        verification,
+        "querygraph-import-hash",
+        required_str(
+            import,
+            "querygraphImportHash",
+            "querygraphImportVerification",
+        )?,
+        label,
+    )?;
+    require_value_match(
+        verification,
+        "verified-tables",
+        required_value(import, "verifiedTables", "querygraphImportVerification")?,
+        label,
+    )?;
+    require_value_match(
+        verification,
+        "verified-views",
+        required_value(import, "verifiedViews", "querygraphImportVerification")?,
+        label,
+    )?;
+    require_value_match(
+        verification,
+        "standards",
+        required_value(import, "standards", "querygraphImportVerification")?,
+        label,
+    )
+}
+
+fn verify_querygraph_import_plan_artifact_lists(
+    plan: &serde_json::Map<String, Value>,
+    verification: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let label = "handoff QueryGraph import plan artifact";
+    let table_count = required_u64(
+        verification,
+        "table-count",
+        "handoff QueryGraph import plan artifact.verification",
+    )?;
+    let view_count = required_u64(
+        verification,
+        "view-count",
+        "handoff QueryGraph import plan artifact.verification",
+    )?;
+    let tables = required_array(plan, "tables", label)?;
+    let views = required_array(plan, "views", label)?;
+    if tables.len() as u64 != table_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.tables count mismatch: expected={table_count} actual={}",
+            tables.len()
+        )));
+    }
+    if views.len() as u64 != view_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.views count mismatch: expected={view_count} actual={}",
+            views.len()
+        )));
+    }
+    require_import_plan_list_covers_verified_ids(
+        tables,
+        required_array(
+            verification,
+            "verified-tables",
+            "handoff QueryGraph import plan artifact.verification",
+        )?,
+        "tables",
+    )?;
+    require_import_plan_list_covers_verified_ids(
+        views,
+        required_array(
+            verification,
+            "verified-views",
+            "handoff QueryGraph import plan artifact.verification",
+        )?,
+        "views",
+    )?;
+    require_positive_u64(plan, "graph-nodes", label)?;
+    require_positive_u64(plan, "graph-edges", label)?;
+    Ok(())
+}
+
+fn require_import_plan_list_covers_verified_ids(
+    records: &[Value],
+    verified_ids: &[Value],
+    field: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let label = "handoff QueryGraph import plan artifact";
+    for (index, verified_id) in verified_ids.iter().enumerate() {
+        let verified_id = verified_id.as_str().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label}.verification.verified-{field}[{index}] must be a string"
+            ))
+        })?;
+        let found = records.iter().any(|record| {
+            record
+                .as_object()
+                .and_then(|record| record.get("stable-id"))
+                .and_then(Value::as_str)
+                == Some(verified_id)
+        });
+        if !found {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label}.{field} must include stable-id {verified_id}"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn read_qglake_handoff_artifact_json(
@@ -6724,6 +6945,60 @@ mod tests {
             json!(verification.standards);
     }
 
+    fn qglake_write_handoff_import_plan_artifact(dir: &Path, summary: &mut Value) -> Value {
+        let import = summary["querygraphImportVerification"].clone();
+        let tables = import["verifiedTables"]
+            .as_array()
+            .expect("verified tables array")
+            .iter()
+            .map(|stable_id| {
+                json!({
+                    "stable-id": stable_id,
+                    "croissant-name": "events",
+                    "cdif-title": "events",
+                    "osi-model": "events",
+                    "odrl-policy": "events#odrl"
+                })
+            })
+            .collect::<Vec<_>>();
+        let views = import["verifiedViews"]
+            .as_array()
+            .expect("verified views array")
+            .iter()
+            .map(|stable_id| {
+                json!({
+                    "stable-id": stable_id,
+                    "name": "active_customers_view",
+                    "view-version": 1,
+                    "dialect": "ansi",
+                    "osi-model": "active_customers_view"
+                })
+            })
+            .collect::<Vec<_>>();
+        let plan = json!({
+            "verification": {
+                "warehouse": summary["warehouse"],
+                "table-count": import["tableCount"],
+                "view-count": import["viewCount"],
+                "verified-tables": import["verifiedTables"],
+                "verified-views": import["verifiedViews"],
+                "bundle-hash": import["bundleHash"],
+                "graph-hash": import["graphHash"],
+                "open-lineage-hash": import["openLineageHash"],
+                "querygraph-import-hash": import["querygraphImportHash"],
+                "standards": import["standards"]
+            },
+            "graph-nodes": 6,
+            "graph-edges": 5,
+            "tables": tables,
+            "views": views
+        });
+        let bytes = serde_json::to_vec_pretty(&plan).expect("import plan JSON");
+        fs::write(dir.join("querygraph-import-plan.json"), &bytes).expect("write import plan");
+        summary["artifacts"]["querygraphImportPlan"]["sha256"] = json!(content_hash_bytes(&bytes));
+        plan
+    }
+
     fn qglake_resync_bundle_hashes(bundle: &mut QueryGraphBootstrap) {
         let graph_hash = content_hash_json(&serde_json::to_value(&bundle.graph).unwrap()).unwrap();
         bundle.manifest.graph_hash = graph_hash.clone();
@@ -7572,6 +7847,49 @@ mod tests {
             .expect_err("bundle artifact semantics should reject detached tenant graph");
 
         assert!(err.to_string().contains("Catalog to a Server"));
+    }
+
+    #[test]
+    fn qglake_handoff_querygraph_import_plan_semantics_accept_matching_plan() {
+        let temp = qglake_temp_dir("handoff-import-plan-semantics-ok");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        qglake_write_handoff_import_plan_artifact(&temp, &mut summary);
+
+        let semantics =
+            verify_qglake_handoff_querygraph_import_plan_semantics(&summary_path, &summary)
+                .expect("QueryGraph import plan artifact semantics should verify");
+
+        assert_eq!(
+            semantics["verifiedTables"],
+            json!(["lakecat:table:local:default:events"])
+        );
+        assert_eq!(
+            semantics["verifiedViews"],
+            json!(["lakecat:view:local:default:active_customers_view"])
+        );
+        assert_eq!(semantics["graphNodes"], json!(6));
+    }
+
+    #[test]
+    fn qglake_handoff_querygraph_import_plan_semantics_rejects_table_drift() {
+        let temp = qglake_temp_dir("handoff-import-plan-semantics-table-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut plan = qglake_write_handoff_import_plan_artifact(&temp, &mut summary);
+        plan["tables"][0]["stable-id"] = json!("lakecat:table:local:default:other_events");
+        let bytes = serde_json::to_vec_pretty(&plan).expect("drifted import plan JSON");
+        fs::write(temp.join("querygraph-import-plan.json"), &bytes)
+            .expect("write drifted import plan");
+        summary["artifacts"]["querygraphImportPlan"]["sha256"] = json!(content_hash_bytes(&bytes));
+
+        let err = verify_qglake_handoff_querygraph_import_plan_semantics(&summary_path, &summary)
+            .expect_err("QueryGraph import plan artifact semantics should reject table drift");
+
+        assert!(
+            err.to_string()
+                .contains("tables must include stable-id lakecat:table:local:default:events")
+        );
     }
 
     #[test]

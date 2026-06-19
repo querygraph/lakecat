@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-verify-handoff` parse and verify the saved
+  QueryGraph import-plan artifact, binding archived import plans to the compact
+  QueryGraph import proof, accepted table/view ids, semantic hashes, standards,
+  and graph node/edge evidence.
 - Made `lakecat-cli qglake-verify-handoff` parse and re-verify the saved
   QueryGraph bootstrap bundle artifact, binding archived handoffs to the same
   tenant graph proof, hashes, counts, standards, and verified table/view ids as

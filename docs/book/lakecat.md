@@ -1543,16 +1543,20 @@ proof objects for request identity, QueryGraph bootstrap, governed scan,
 pointer history, view receipt chains, storage-profile upsert, and credential
 vending. It also recomputes the raw file hashes for the bundle, lineage-drain
 response, and QueryGraph import plan named in the summary, rejecting stale or
-tampered artifact files before automation consumes them. It also recomputes the
-captured LakeCat replay and QueryGraph verify/import output hashes, so terminal
-captures cannot drift from the compact summary. Then it parses those captured
-JSON files and checks that the replay schema/status, table/view counts, semantic
-hashes, standards, request-identity proof, QueryGraph bootstrap proof,
-governed scan proof, storage-profile upsert proof, and credential-vending proof
-inside the captures still match the summary. It also rejects malformed TypeDID
-hash slots in the request-identity and QueryGraph bootstrap proofs before a
-consumer has to interpret those slots. The local handoff harness runs it
-automatically and writes the captured verifier output to
+tampered artifact files before automation consumes them. It parses the saved
+bootstrap bundle and reruns the tenant graph and semantic hash verifier. It
+also parses the saved QueryGraph import plan and requires its embedded
+verification, table/view stable ids, semantic hashes, standards, and graph
+node/edge evidence to match the compact QueryGraph import proof. It also
+recomputes the captured LakeCat replay and QueryGraph verify/import output
+hashes, so terminal captures cannot drift from the compact summary. Then it
+parses those captured JSON files and checks that the replay schema/status,
+table/view counts, semantic hashes, standards, request-identity proof,
+QueryGraph bootstrap proof, governed scan proof, storage-profile upsert proof,
+and credential-vending proof inside the captures still match the summary. It
+also rejects malformed TypeDID hash slots in the request-identity and
+QueryGraph bootstrap proofs before a consumer has to interpret those slots. The
+local handoff harness runs it automatically and writes the captured verifier output to
 `target/qglake-handoff/lakecat-handoff-verify.json`.
 
 The end-to-end result is a chain:

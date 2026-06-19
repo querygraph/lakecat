@@ -6,6 +6,15 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify saved QueryGraph import plan artifact semantics`.
+  `lakecat-cli qglake-verify-handoff` now parses the saved
+  `querygraph-import-plan.json` artifact and compares its embedded QueryGraph
+  import verification, accepted table/view ids, hashes, standards, and graph
+  node/edge evidence with the compact `querygraphImportVerification` proof.
+  This closes the archived-import gap where the compact summary and captured
+  stdout could agree while the saved import plan file dropped or rebound an
+  accepted table/view id.
+- Latest completed implementation slice:
   `Verify saved QGLake bundle artifact semantics`.
   `lakecat-cli qglake-verify-handoff` now parses the saved
   `lakecat-bootstrap.json` artifact and reruns the QGLake bootstrap verifier
