@@ -2688,6 +2688,7 @@ async fn commit_table_in_warehouse(
         }));
     }
     let current = state.store.load_table(capability.table()).await?;
+    let storage_profile = state.store.storage_profile_for_table(&current).await?;
     let current_metadata_location = current.metadata_location.clone();
     let commit_plan = state
         .sail
@@ -2702,7 +2703,11 @@ async fn commit_table_in_warehouse(
             updates: request.updates,
         })
         .await?;
-    validate_planned_metadata_location(&commit_plan, current_metadata_location.as_deref())?;
+    validate_planned_metadata_location(
+        &commit_plan,
+        current_metadata_location.as_deref(),
+        &storage_profile,
+    )?;
     let metadata_write = write_planned_metadata(&commit_plan).await?;
     let table = match state
         .store
@@ -2791,6 +2796,7 @@ async fn write_planned_metadata(
 fn validate_planned_metadata_location(
     commit_plan: &lakecat_sail::CommitPlan,
     current_metadata_location: Option<&str>,
+    storage_profile: &StorageProfile,
 ) -> Result<(), LakeCatError> {
     if !commit_plan.metadata_write_required {
         return Ok(());
@@ -2805,7 +2811,29 @@ fn validate_planned_metadata_location(
             "metadata object commit must not overwrite the current metadata location '{new_metadata_location}'"
         )));
     }
+    if !location_is_within_prefix(
+        new_metadata_location,
+        storage_profile.location_prefix.as_str(),
+    ) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "metadata object location '{new_metadata_location}' is outside storage profile '{}' prefix '{}'",
+            storage_profile.profile_id, storage_profile.location_prefix
+        )));
+    }
     Ok(())
+}
+
+fn location_is_within_prefix(location: &str, prefix: &str) -> bool {
+    if location == prefix {
+        return true;
+    }
+    if prefix.ends_with('/') {
+        location.starts_with(prefix)
+    } else {
+        location
+            .strip_prefix(prefix)
+            .is_some_and(|suffix| suffix.starts_with('/'))
+    }
 }
 
 async fn cleanup_planned_metadata(
@@ -8443,8 +8471,134 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
+    #[tokio::test]
+    async fn commit_rejects_metadata_object_outside_storage_profile_prefix() {
+        let app = test_app();
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lakecat-metadata-prefix-guard-{unique}"));
+        let table_dir = root.join("events");
+        let metadata_dir = table_dir.join("metadata");
+        let outside_dir = root.join("outside");
+        std::fs::create_dir_all(&metadata_dir).unwrap();
+        let table_location = url::Url::from_directory_path(&table_dir)
+            .expect("table dir URL")
+            .to_string();
+        let initial_metadata_location = url::Url::from_file_path(metadata_dir.join("00000.json"))
+            .unwrap()
+            .to_string();
+        let outside_metadata_path = outside_dir.join("00001.json");
+        let outside_metadata_location = url::Url::from_file_path(&outside_metadata_path)
+            .unwrap()
+            .to_string();
+        let base_metadata = serde_json::json!({
+            "format-version": 3,
+            "table-uuid": "11111111-1111-1111-1111-111111111111",
+            "location": table_location,
+            "last-sequence-number": 7,
+            "last-updated-ms": 1710000000000_i64,
+            "last-column-id": 1,
+            "schemas": [{
+                "type": "struct",
+                "schema-id": 1,
+                "fields": [{
+                    "id": 1,
+                    "name": "id",
+                    "type": "string",
+                    "required": true
+                }]
+            }],
+            "current-schema-id": 1,
+            "partition-specs": [{"spec-id": 0, "fields": []}],
+            "default-spec-id": 0,
+            "current-snapshot-id": 42,
+            "snapshots": [{
+                "snapshot-id": 42,
+                "sequence-number": 7,
+                "timestamp-ms": 1710000000000_i64,
+                "summary": {"operation": "append"},
+                "schema-id": 1
+            }],
+            "snapshot-log": [{"timestamp-ms": 1710000000000_i64, "snapshot-id": 42}]
+        });
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "name": "events",
+                    "location": table_location,
+                    "metadata-location": initial_metadata_location,
+                    "metadata": base_metadata,
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let commit = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/commit")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "requirements": [],
+                    "updates": [],
+                    "metadata-location": outside_metadata_location,
+                    "metadata": {
+                        "format-version": 3,
+                        "table-uuid": "11111111-1111-1111-1111-111111111111",
+                        "location": table_location,
+                        "last-sequence-number": 8,
+                        "last-updated-ms": 1710000000100_i64,
+                        "last-column-id": 1,
+                        "schemas": [{
+                            "type": "struct",
+                            "schema-id": 1,
+                            "fields": [{
+                                "id": 1,
+                                "name": "id",
+                                "type": "string",
+                                "required": true
+                            }]
+                        }],
+                        "current-schema-id": 1,
+                        "partition-specs": [{"spec-id": 0, "fields": []}],
+                        "default-spec-id": 0,
+                        "current-snapshot-id": 43,
+                        "snapshots": [{
+                            "snapshot-id": 43,
+                            "sequence-number": 8,
+                            "timestamp-ms": 1710000000100_i64,
+                            "summary": {"operation": "append"},
+                            "schema-id": 1
+                        }],
+                        "snapshot-log": [{"timestamp-ms": 1710000000100_i64, "snapshot-id": 43}]
+                    },
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(commit).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert!(!outside_metadata_path.exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
     #[test]
     fn metadata_write_plan_requires_metadata_location() {
+        let table = TableRecord::new(
+            table_ident("local", "default", "events").unwrap(),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        );
+        let storage_profile = StorageProfile::inferred_for_table(&table);
         let plan = lakecat_sail::CommitPlan {
             prepared_by: "test".to_string(),
             requirements: Vec::new(),
@@ -8455,7 +8609,7 @@ mod tests {
             metadata_patch: serde_json::json!({}),
         };
 
-        let err = validate_planned_metadata_location(&plan, None).unwrap_err();
+        let err = validate_planned_metadata_location(&plan, None, &storage_profile).unwrap_err();
         assert!(matches!(err, LakeCatError::InvalidArgument(_)));
         assert!(
             err.to_string()

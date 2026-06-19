@@ -302,12 +302,15 @@ Sail owns reusable Iceberg validation and metadata preparation.
    the store commit has won.
 8. LakeCat rejects metadata-write plans that do not carry a concrete new
    metadata location.
-9. LakeCat writes the new metadata object through the warehouse storage profile.
-10. LakeCat advances the table pointer with compare-and-swap.
-11. LakeCat persists idempotency, audit, pointer-log, and outbox records.
-12. If the store rejects the commit after a local metadata write, LakeCat cleans
+9. LakeCat rejects metadata-object locations outside the table's matched
+   storage profile prefix.
+10. LakeCat writes the new metadata object through the warehouse storage
+    profile.
+11. LakeCat advances the table pointer with compare-and-swap.
+12. LakeCat persists idempotency, audit, pointer-log, and outbox records.
+13. If the store rejects the commit after a local metadata write, LakeCat cleans
    up the uncommitted metadata object when it can do so safely.
-13. Outbox draining projects the committed event to graph and lineage sinks.
+14. Outbox draining projects the committed event to graph and lineage sinks.
 
 The cleanup path is deliberately secondary to the commit result. If metadata
 cleanup fails after the store rejects a commit, LakeCat preserves the original

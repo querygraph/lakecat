@@ -6,6 +6,26 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind metadata writes to storage profiles`. REST metadata-object commits now
+  reject new metadata locations outside the table's matched storage profile
+  prefix before touching object storage, keeping the metadata writer within the
+  catalog's storage-profile boundary while preserving normal in-profile Iceberg
+  commits.
+- Local verification for the metadata storage-profile boundary slice was green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service commit_rejects_metadata_object_outside_storage_profile_prefix`;
+  `cargo test -p lakecat-service metadata_write_plan_requires_metadata_location`;
+  `cargo test -p lakecat-service commit_can_advance_metadata_location_extension`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Preserve commit errors during cleanup`. Failed table commits still attempt
   to clean up newly written metadata objects, but cleanup failures now preserve
   the original store/CAS error class and append cleanup context instead of

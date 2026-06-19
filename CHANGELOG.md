@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound metadata-object commit locations to the table's matched storage profile
+  prefix, rejecting out-of-profile metadata writes before object storage is
+  touched.
 - Preserved the original store/CAS commit error when uncommitted metadata-object
   cleanup also fails, appending cleanup context without changing the commit
   error class.
