@@ -394,8 +394,8 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   raw secret material; storage-profile upsert replay redacts full secret-store
   URIs to presence/provider evidence before lineage/OpenLineage projection, and
   lineage-drain summaries plus QGLake replay verification now expose the
-  redacted profile id/provider/issuance-mode/secret-ref proof for QueryGraph
-  acceptance;
+  redacted profile id/provider/issuance-mode/location-prefix-hash/secret-ref
+  proof for QueryGraph acceptance;
   `qglake-verify-replay` also prints that upsert proof in management replay
   output and structured replay JSON for operators and automation, and the local
   handoff harness requires that structured proof before writing

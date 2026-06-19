@@ -487,6 +487,8 @@ pub struct LineageDrainEventSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_profile_issuance_mode: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_profile_location_prefix_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_profile_secret_ref_present: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_profile_secret_ref_provider: Option<String>,

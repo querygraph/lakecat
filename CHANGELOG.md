@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a redacted storage-profile location-prefix hash to lineage-drain
+  summaries, QGLake replay evidence, and handoff-summary verification so
+  credential-root proofs bind to the configured storage scope without exposing
+  full location prefixes in the compact proof.
 - Added storage-profile issuance mode to lineage-drain summaries, QGLake replay
   evidence, and handoff-summary verification so credential-root proofs preserve
   the configured vending mode without exposing secret material.

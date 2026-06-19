@@ -6,6 +6,27 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Hash storage-profile credential roots in QGLake replay`.
+  Lineage-drain event summaries now carry
+  `storage-profile-location-prefix-hash` for storage-profile upserts, computed
+  over the configured `location-prefix` without placing the raw prefix in the
+  compact proof. QGLake replay JSON lifts that value into
+  `replay-evidence.management.storageProfileUpsert.locationPrefixHash`, and
+  `lakecat-cli qglake-verify-handoff` now rejects handoff summaries whose
+  `storageProfileUpsertProof` omits `locationPrefixHash`. This binds the
+  credential-root proof to its storage scope while preserving the redacted
+  operator/QueryGraph handoff shape.
+- Local verification for this credential-root hash slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service outbox_drain_projects_storage_profile_upserts_to_lineage`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_storage_profile_location_prefix_hash`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Prove storage-profile issuance mode in QGLake replay`.
   Lineage-drain event summaries now carry redacted
   `storage-profile-issuance-mode` evidence for storage-profile upserts. QGLake

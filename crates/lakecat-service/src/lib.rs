@@ -1121,6 +1121,12 @@ fn lineage_drain_event_summary(
     let storage_profile_secret_ref = storage_profile
         .and_then(|profile| profile.get("secret-ref"))
         .and_then(Value::as_str);
+    let storage_profile_location_prefix_hash = storage_profile
+        .and_then(|profile| profile.get("location-prefix"))
+        .and_then(Value::as_str)
+        .and_then(|location_prefix| {
+            content_hash_json(&json!({"location-prefix": location_prefix})).ok()
+        });
     let authorization_receipt = payload
         .get("authorization-receipt")
         .or_else(|| payload.pointer("/payload/authorization-receipt"));
@@ -1233,6 +1239,7 @@ fn lineage_drain_event_summary(
             .and_then(|profile| profile.get("issuance-mode"))
             .and_then(Value::as_str)
             .map(str::to_string),
+        storage_profile_location_prefix_hash,
         storage_profile_secret_ref_present: storage_profile
             .and_then(|profile| profile.get("secret-ref-present"))
             .and_then(Value::as_bool)
@@ -7068,6 +7075,16 @@ mod tests {
         assert_eq!(
             drain.events[0].storage_profile_issuance_mode.as_deref(),
             Some("secret-ref")
+        );
+        assert_eq!(
+            drain.events[0]
+                .storage_profile_location_prefix_hash
+                .as_deref(),
+            Some(
+                content_hash_json(&json!({"location-prefix": "s3://lakecat/events"}))
+                    .unwrap()
+                    .as_str()
+            )
         );
         assert_eq!(
             drain.events[0].storage_profile_secret_ref_present,
