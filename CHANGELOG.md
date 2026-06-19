@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted metadata-object commit validation and write errors so current-pointer
+  overwrite, existing-object overwrite, and storage-profile-prefix failures
+  report metadata/prefix hashes instead of raw object paths.
 - Redacted storage-profile secret-reference validation errors for unsupported
   credential-root schemes so catalog persistence rejects bad roots with
   `secret-ref-hash=sha256:...` evidence instead of echoing the submitted URI.

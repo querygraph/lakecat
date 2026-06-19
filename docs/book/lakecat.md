@@ -322,7 +322,11 @@ failures use the same redaction discipline: the cleanup context identifies the
 uncommitted metadata object by `metadata-location-hash=sha256:...`, not by the
 raw object path. If cleanup discovers the uncommitted object is already absent,
 LakeCat treats that as successful cleanup rather than turning a resolved orphan
-into an internal error.
+into an internal error. The same audit-safe shape applies before the write:
+current-pointer overwrite, existing-object overwrite, unsupported object-store
+configuration, and storage-profile-prefix failures report metadata-location
+hashes, and prefix mismatches also report a storage-profile-prefix hash rather
+than raw object paths.
 
 Idempotency is part of correctness. Reusing the same key for the same commit can
 return the stored response even after the table has advanced beyond the

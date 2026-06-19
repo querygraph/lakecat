@@ -6,6 +6,23 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact metadata object write errors`.
+  Metadata-object commit validation and create-only write failures now report
+  `metadata-location-hash=sha256:...` evidence, plus a
+  `storage-profile-prefix-hash=sha256:...` for prefix mismatches, instead of
+  echoing raw metadata object locations or storage roots in operator-facing
+  errors.
+- Local verification for this metadata object write error redaction slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service commit_rejects_metadata_object_overwrite_of_current_pointer -- --nocapture`;
+  `cargo test -p lakecat-service commit_rejects_metadata_object_overwrite_of_existing_target -- --nocapture`;
+  `cargo test -p lakecat-service commit_rejects_metadata_object_outside_storage_profile_prefix -- --nocapture`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact storage-profile secret-ref validation`.
   Storage-profile secret-reference validation now rejects unsupported
   credential-root schemes with `secret-ref-hash=sha256:...` evidence instead of

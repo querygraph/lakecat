@@ -2942,11 +2942,15 @@ fn metadata_object_store(
     location: &str,
 ) -> Result<(Box<dyn ObjectStore>, ObjectPath), LakeCatError> {
     let url = Url::parse(location).map_err(|err| {
-        LakeCatError::InvalidArgument(format!("invalid metadata location '{location}': {err}"))
+        LakeCatError::InvalidArgument(format!(
+            "invalid metadata location {}; {err}",
+            metadata_location_hash_context(location)
+        ))
     })?;
     object_store::parse_url_opts(&url, std::env::vars()).map_err(|err| {
         LakeCatError::InvalidArgument(format!(
-            "metadata object location '{location}' is not supported or is not configured: {err}"
+            "metadata object location {} is not supported or is not configured: {err}",
+            metadata_location_hash_context(location)
         ))
     })
 }
@@ -2972,10 +2976,12 @@ async fn write_planned_metadata(
         .await
         .map_err(|err| match err {
             object_store::Error::AlreadyExists { .. } => LakeCatError::Conflict(format!(
-                "metadata object '{location}' already exists; refusing to overwrite existing metadata"
+                "metadata object {} already exists; refusing to overwrite existing metadata",
+                metadata_location_hash_context(location)
             )),
             err => LakeCatError::Internal(format!(
-                "failed to write metadata object '{location}': {err}"
+                "failed to write metadata object {}: {err}",
+                metadata_location_hash_context(location)
             )),
         })?;
     Ok(Some(PlannedMetadataWrite {
@@ -2998,7 +3004,8 @@ fn validate_planned_metadata_location(
     };
     if current_metadata_location == Some(new_metadata_location) {
         return Err(LakeCatError::InvalidArgument(format!(
-            "metadata object commit must not overwrite the current metadata location '{new_metadata_location}'"
+            "metadata object commit must not overwrite the current metadata location; {}",
+            metadata_location_hash_context(new_metadata_location)
         )));
     }
     if !location_is_within_prefix(
@@ -3006,8 +3013,10 @@ fn validate_planned_metadata_location(
         storage_profile.location_prefix.as_str(),
     ) {
         return Err(LakeCatError::InvalidArgument(format!(
-            "metadata object location '{new_metadata_location}' is outside storage profile '{}' prefix '{}'",
-            storage_profile.profile_id, storage_profile.location_prefix
+            "metadata object location {} is outside storage profile '{}' prefix; storage-profile-prefix-hash={}",
+            metadata_location_hash_context(new_metadata_location),
+            storage_profile.profile_id,
+            content_hash_bytes(storage_profile.location_prefix.as_bytes())
         )));
     }
     Ok(())
@@ -3044,10 +3053,17 @@ async fn cleanup_planned_metadata(
 }
 
 fn metadata_cleanup_error(metadata_location: &str, err: impl std::fmt::Display) -> LakeCatError {
-    let metadata_location_hash = content_hash_bytes(metadata_location.as_bytes());
     LakeCatError::Internal(format!(
-        "failed to clean up uncommitted metadata object metadata-location-hash={metadata_location_hash}: {err}"
+        "failed to clean up uncommitted metadata object {}: {err}",
+        metadata_location_hash_context(metadata_location)
     ))
+}
+
+fn metadata_location_hash_context(metadata_location: &str) -> String {
+    format!(
+        "metadata-location-hash={}",
+        content_hash_bytes(metadata_location.as_bytes())
+    )
 }
 
 async fn cleanup_planned_metadata_after_commit_error(
@@ -9393,6 +9409,14 @@ mod tests {
             .unwrap();
         let response = app.oneshot(commit).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = payload["error"]["message"].as_str().unwrap();
+        assert!(message.contains("metadata-location-hash=sha256:"));
+        assert!(!message.contains(&initial_metadata_location));
+        assert!(!message.contains("00000.json"));
         assert_eq!(
             std::fs::read_to_string(&initial_metadata_path).unwrap(),
             sentinel
@@ -9525,6 +9549,10 @@ mod tests {
                 .unwrap()
                 .contains("refusing to overwrite existing metadata")
         );
+        let message = payload["error"]["message"].as_str().unwrap();
+        assert!(message.contains("metadata-location-hash=sha256:"));
+        assert!(!message.contains(&target_metadata_location));
+        assert!(!message.contains("00001.json"));
         assert_eq!(
             std::fs::read_to_string(&target_metadata_path).unwrap(),
             sentinel
@@ -9646,6 +9674,15 @@ mod tests {
             .unwrap();
         let response = app.oneshot(commit).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = payload["error"]["message"].as_str().unwrap();
+        assert!(message.contains("metadata-location-hash=sha256:"));
+        assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+        assert!(!message.contains(&outside_metadata_location));
+        assert!(!message.contains(&table_location));
         assert!(!outside_metadata_path.exists());
         let _ = std::fs::remove_dir_all(root);
     }
