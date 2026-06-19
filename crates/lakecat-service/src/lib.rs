@@ -3710,6 +3710,16 @@ async fn project_outbox_event(
             .await?;
         receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "table.commits-listed" {
+        if let Some(table) = table.clone() {
+            project_table_commit_history_graph_events(
+                state,
+                event,
+                &table,
+                &event_payload,
+                &mut receipt,
+            )
+            .await?;
+        }
         let lineage_receipt = state
             .lineage
             .emit(LineageEvent::new(
@@ -3921,6 +3931,40 @@ async fn project_outbox_event(
         receipt.record_lineage(lineage_receipt);
     }
     Ok(receipt)
+}
+
+async fn project_table_commit_history_graph_events(
+    state: &LakeCatState,
+    event: &OutboxEvent,
+    table: &TableIdent,
+    event_payload: &Value,
+    receipt: &mut OutboxProjectionReceipt,
+) -> Result<(), LakeCatError> {
+    for (sequence_number, commit_hash) in outbox_commit_history_entries(event)? {
+        state
+            .graph
+            .emit(
+                GraphEvent::commit(
+                    GraphAction::Loaded,
+                    table,
+                    sequence_number,
+                    json!({
+                        "event-type": event.event_type,
+                        "table": table,
+                        "sequence-number": sequence_number,
+                        "commit-hash": commit_hash,
+                        "commit-history-read": event_payload,
+                    }),
+                )
+                .with_event_id(format!(
+                    "{}:commit-history:{sequence_number}",
+                    event.event_id
+                )),
+            )
+            .await?;
+        receipt.graph_events += 1;
+    }
+    Ok(())
 }
 
 async fn project_table_metadata_graph_events(
@@ -4288,6 +4332,43 @@ fn outbox_commit_sequence_number(event: &OutboxEvent) -> Result<u64, LakeCatErro
                 event.event_id
             ))
         })
+}
+
+fn outbox_commit_history_entries(
+    event: &OutboxEvent,
+) -> Result<Vec<(u64, Option<String>)>, LakeCatError> {
+    let payload = event.payload.get("payload").unwrap_or(&event.payload);
+    let sequence_numbers = payload
+        .get("sequence-numbers")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            LakeCatError::Internal(format!(
+                "outbox event {} commit history payload is missing sequence numbers",
+                event.event_id
+            ))
+        })?;
+    let commit_hashes = payload
+        .get("commit-hashes")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    sequence_numbers
+        .iter()
+        .enumerate()
+        .map(|(index, sequence_number)| {
+            let sequence_number = sequence_number.as_u64().ok_or_else(|| {
+                LakeCatError::Internal(format!(
+                    "outbox event {} commit history payload has a non-numeric sequence number",
+                    event.event_id
+                ))
+            })?;
+            let commit_hash = commit_hashes
+                .get(index)
+                .and_then(Value::as_str)
+                .map(ToString::to_string);
+            Ok((sequence_number, commit_hash))
+        })
+        .collect()
 }
 
 fn outbox_principal(event: &OutboxEvent) -> Result<Principal, LakeCatError> {
@@ -8515,10 +8596,17 @@ mod tests {
     #[tokio::test]
     async fn management_table_commits_lists_pointer_log_evidence() {
         let store = MemoryCatalogStore::new();
-        let app = app(LakeCatState::new(
-            WarehouseName::new("local").unwrap(),
-            store.clone(),
-        ));
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let app = app(
+            LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage,
+                ),
+        );
         let unique = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -8721,6 +8809,7 @@ mod tests {
             .iter()
             .find(|event| event["event-type"] == "table.commits-listed")
             .expect("drain should summarize the commit history read");
+        assert_eq!(commit_read_summary["graph-events"], serde_json::json!(2));
         assert_eq!(commit_read_summary["lineage-events"], serde_json::json!(1));
         assert_eq!(
             commit_read_summary["table-commit-count"],
@@ -8733,6 +8822,24 @@ mod tests {
         assert_eq!(
             commit_read_summary["table-commit-hashes"],
             serde_json::json!([commits[0]["commit-hash"].clone()])
+        );
+        let graph_events = graph.events.lock().await;
+        let commit_graph_event = graph_events
+            .iter()
+            .find(|event| event.label == GraphNodeLabel::Commit)
+            .expect("commit history read should project a Commit graph event");
+        assert_eq!(commit_graph_event.action, GraphAction::Loaded);
+        assert_eq!(
+            commit_graph_event.subject,
+            "lakecat:commit:lakecat:table:local:default:events:1"
+        );
+        assert_eq!(
+            commit_graph_event.event_id.as_deref(),
+            Some(format!("{}:commit-history:1", commit_read.event_id).as_str())
+        );
+        assert_eq!(
+            commit_graph_event.properties["commit-hash"],
+            commits[0]["commit-hash"]
         );
         let _ = std::fs::remove_dir_all(root);
     }

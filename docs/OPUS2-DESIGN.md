@@ -425,7 +425,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   and authorization payload; `table.scan-planned` and `table.scan-tasks-fetched`
   replay now emit stable catalog-facing `ScanPlan` graph events with governed
   read restrictions; `table.commit` replay now emits stable catalog-facing
-  `Commit` graph events keyed by table and committed sequence; `table.restored`
+  `Commit` graph events keyed by table and committed sequence, and
+  `table.commits-listed` replay now emits `Commit` graph events for each listed
+  sequence with matching commit-hash evidence from the governed pointer-log
+  read; `table.restored`
   replay now emits a catalog-facing Table graph event plus the existing
   OpenLineage restore receipt while leaving restore-specific graph taxonomy to
   Grust; non-anonymous resolved principals now replay as stable catalog-facing

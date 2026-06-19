@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Projected `table.commits-listed` replay into catalog-facing `Commit` graph
+  events keyed by table and sequence number, so QueryGraph can see governed
+  pointer-log inspection through Grust without LakeCat adding graph query
+  behavior.
 - Made `lakecat-cli qglake-verify-handoff` verify the legacy handoff artifact
   path aliases against the hashed `capturedOutputs` paths, while requiring the
   service log path to exist and keeping the self-referential verifier-output

@@ -6,6 +6,14 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Project commit-history reads to graph`.
+  Durable `table.commits-listed` replay now emits catalog-facing `Commit`
+  graph events for each listed commit sequence, keyed by the table stable id
+  and committed sequence number. The projection carries the matching
+  commit-hash evidence from the pointer-log read payload, so QueryGraph can see
+  governed commit-history inspection through Grust while LakeCat remains at the
+  thin event-boundary layer.
+- Latest completed implementation slice:
   `Verify QGLake handoff artifact path aliases`.
   `lakecat-cli qglake-verify-handoff` now compares the legacy
   `lakecatReplayOutput`, `querygraphVerifyOutput`, and

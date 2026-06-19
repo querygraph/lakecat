@@ -358,9 +358,11 @@ The response contains compact commit records: sequence number, previous and new
 metadata locations, request hash, response hash, idempotency-key hash, Iceberg
 format version, current snapshot id, policy hash, principal, and a commit hash.
 The read itself enters the durable outbox as `table.commits-listed` and drains
-as lineage evidence, so audit tools can prove who inspected pointer history
-without requiring direct access to the Turso catalog database. QGLake acceptance
-now exercises this path directly: the fixture issues an idempotent no-op commit
+as lineage evidence plus catalog-facing `Commit` graph anchors keyed by table
+and sequence number. That gives audit tools and QueryGraph a Grust-visible
+pointer-log inspection trail without requiring direct access to the Turso
+catalog database or making LakeCat a graph query engine. QGLake acceptance now
+exercises this path directly: the fixture issues an idempotent no-op commit
 probe, reads the compact commit-history endpoint, verifies that the record
 preserves the table's Iceberg format-version and current snapshot summary, and
 then requires the lineage drain to replay `table.commits-listed` receipt hashes
@@ -1496,7 +1498,9 @@ hashes, and OpenLineage hashes. The handoff verifier rejects compact scan
 proofs without those OpenLineage hashes and compact commit-history proofs whose
 counts, sequences, or hash arrays do not align, so QueryGraph can verify the
 governed Sail-planned read and pointer-history inspection without parsing the
-full lineage payload.
+full lineage payload. The same replay now emits catalog-facing `Commit` graph
+events for the listed sequences, leaving traversal and query semantics to
+Grust.
 
 For handoff testing, LakeCat can verify a saved bootstrap bundle and a saved
 drain response together:
