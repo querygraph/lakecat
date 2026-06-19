@@ -833,7 +833,9 @@ query parameters must move behind `secret-ref` and the TypeSec-authorized
 resolver path. The `secret-ref` field itself must remain a clean external
 secret-store locator: LakeCat rejects query strings, URI fragments, and
 userinfo before persisting a storage profile, so token-like material cannot hide
-inside a decorated secret URI.
+inside a decorated secret URI. Unsupported credential-root schemes are rejected
+with `secret-ref-hash=sha256:...` evidence instead of echoing the submitted
+secret reference.
 
 ```sh
 curl -s -X PUT \

@@ -6,6 +6,19 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact storage-profile secret-ref validation`.
+  Storage-profile secret-reference validation now rejects unsupported
+  credential-root schemes with `secret-ref-hash=sha256:...` evidence instead of
+  echoing the submitted URI from the durable catalog validation path.
+- Local verification for this storage-profile secret-ref validation redaction
+  slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_redact_invalid_secret_ref_uris -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_reject_decorated_secret_ref_uris -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact resolver validation secret refs`.
   Vault and TypeSec environment secret-ref resolver validation errors now use
   `secret-ref-hash=sha256:...` evidence for wrong-scheme, missing-mount,

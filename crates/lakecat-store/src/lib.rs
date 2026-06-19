@@ -2128,7 +2128,8 @@ fn validate_secret_ref(secret_ref: &str) -> LakeCatResult<()> {
         "typesec" | "vault" | "aws-sm" | "gcp-sm" | "azure-kv"
     ) {
         return Err(LakeCatError::InvalidArgument(format!(
-            "storage profile secret reference must use an external secret-store URI: {secret_ref}"
+            "storage profile secret reference must use an external secret-store URI; {}",
+            secret_ref_hash_context(trimmed)
         )));
     }
     if parsed.query().is_some() || parsed.fragment().is_some() || !parsed.username().is_empty() {
@@ -2149,6 +2150,13 @@ fn validate_secret_ref(secret_ref: &str) -> LakeCatResult<()> {
         ));
     }
     Ok(())
+}
+
+fn secret_ref_hash_context(secret_ref: &str) -> String {
+    format!(
+        "secret-ref-hash={}",
+        content_hash_bytes(secret_ref.as_bytes())
+    )
 }
 
 fn validate_policy_id(policy_id: &str) -> LakeCatResult<()> {
@@ -5737,6 +5745,34 @@ pub mod turso_store {
                 assert!(
                     err.to_string().contains(expected),
                     "expected {secret_ref} to reject {expected}, got {err}"
+                );
+            }
+        }
+
+        #[test]
+        fn storage_profiles_redact_invalid_secret_ref_uris() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            for secret_ref in [
+                "file:///tmp/raw-secret",
+                "postgres://user:secret@example.test/credentials",
+            ] {
+                let err = StorageProfile::new(
+                    "invalid-secret-ref",
+                    warehouse.clone(),
+                    "s3://lakecat-demo/events",
+                    StorageProvider::S3,
+                    CredentialIssuanceMode::ShortLivedSecretRef,
+                    Some(secret_ref.to_string()),
+                    BTreeMap::new(),
+                )
+                .unwrap_err();
+
+                let message = err.to_string();
+                assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+                assert!(message.contains("secret-ref-hash=sha256:"));
+                assert!(
+                    !message.contains(secret_ref),
+                    "storage profile validation errors must not expose raw secret refs"
                 );
             }
         }

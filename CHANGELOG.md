@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted storage-profile secret-reference validation errors for unsupported
+  credential-root schemes so catalog persistence rejects bad roots with
+  `secret-ref-hash=sha256:...` evidence instead of echoing the submitted URI.
 - Redacted Vault and TypeSec environment secret-ref resolver validation errors
   so malformed credential roots report `secret-ref-hash=sha256:...` evidence
   instead of echoing the raw secret URI.
