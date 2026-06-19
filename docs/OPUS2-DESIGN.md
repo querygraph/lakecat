@@ -278,12 +278,13 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   `governedScanProof`, `tableCommitHistoryProof`,
   `storageProfileUpsertProof`, `credentialVendingProof`, and
   `viewReceiptChainProof` objects so QueryGraph/operators can verify the
-  replay principal, request-identity state, authorization receipt hash,
-  Sail-planned read path, pointer-log read, credential-root boundary,
-  agent-versus-human credential decision, accepted view versions, tombstone
-  receipts, and namespace receipt-chain hashes without parsing the full replay
-  evidence tree, with explicit schema versions for replay verification JSON and
-  the handoff summary.*
+  replay principal, request-identity source/state, authorization receipt hash,
+  sanitized TypeDID envelope/proof hashes when present, Sail-planned read path,
+  pointer-log read, credential-root boundary, agent-versus-human credential
+  decision, accepted view versions, tombstone receipts, and namespace
+  receipt-chain hashes without parsing the full replay evidence tree, with
+  explicit schema versions for replay verification JSON and the handoff
+  summary.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond

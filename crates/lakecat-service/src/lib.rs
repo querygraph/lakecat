@@ -960,6 +960,9 @@ pub async fn drain_outbox_once(
         principal_kind: None,
         authorization_receipt_hash: None,
         request_identity_state: None,
+        request_identity_source: None,
+        typedid_envelope_hash: None,
+        typedid_proof_hash: None,
         events: summaries,
     })
 }
@@ -983,6 +986,24 @@ fn attach_lineage_drain_authorization(
         .context
         .get("request-identity")
         .and_then(|identity| identity.get("attestation-state"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    response.request_identity_source = receipt
+        .context
+        .get("request-identity")
+        .and_then(|identity| identity.get("source"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    response.typedid_envelope_hash = receipt
+        .context
+        .get("request-identity")
+        .and_then(|identity| identity.get("typedid-envelope-sha256"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    response.typedid_proof_hash = receipt
+        .context
+        .get("request-identity")
+        .and_then(|identity| identity.get("typedid-proof-sha256"))
         .and_then(Value::as_str)
         .map(str::to_string);
     Ok(())
@@ -1100,7 +1121,9 @@ fn lineage_drain_event_summary(
     let storage_profile_secret_ref = storage_profile
         .and_then(|profile| profile.get("secret-ref"))
         .and_then(Value::as_str);
-    let authorization_receipt = payload.get("authorization-receipt");
+    let authorization_receipt = payload
+        .get("authorization-receipt")
+        .or_else(|| payload.pointer("/payload/authorization-receipt"));
     let request_identity = authorization_receipt
         .and_then(|receipt| receipt.get("request-identity"))
         .or_else(|| {
@@ -1124,6 +1147,18 @@ fn lineage_drain_event_summary(
             .and_then(|receipt| content_hash_json(receipt).ok()),
         request_identity_state: request_identity
             .and_then(|identity| identity.get("attestation-state"))
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        request_identity_source: request_identity
+            .and_then(|identity| identity.get("source"))
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        typedid_envelope_hash: request_identity
+            .and_then(|identity| identity.get("typedid-envelope-sha256"))
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        typedid_proof_hash: request_identity
+            .and_then(|identity| identity.get("typedid-proof-sha256"))
             .and_then(Value::as_str)
             .map(str::to_string),
         agent_delegation_hash: request_identity
@@ -5911,6 +5946,9 @@ mod tests {
                                 "checked_at": chrono::Utc::now(),
                                 "request-identity": {
                                     "attestation-state": "verified",
+                                    "source": "x-lakecat-typedid-envelope",
+                                    "typedid-envelope-sha256": "sha256:typedid-envelope",
+                                    "typedid-proof-sha256": "sha256:typedid-proof",
                                     "agent-delegation-sha256": "sha256:delegation",
                                     "agent-summary-signature-sha256": "sha256:summary",
                                     "typedid": "did:example:agent"
@@ -7525,6 +7563,9 @@ mod tests {
                             "context": {
                                 "request-identity": {
                                     "attestation-state": "verified",
+                                    "source": "x-lakecat-typedid-envelope",
+                                    "typedid-envelope-sha256": "sha256:typedid-envelope",
+                                    "typedid-proof-sha256": "sha256:typedid-proof",
                                     "agent-delegation-sha256": "sha256:delegation",
                                     "agent-summary-signature-sha256": "sha256:summary",
                                     "typedid": "did:example:agent"
@@ -7616,6 +7657,10 @@ mod tests {
             serde_json::json!("unverified")
         );
         assert_eq!(
+            payload["request-identity-source"],
+            serde_json::json!("x-lakecat-agent-did")
+        );
+        assert_eq!(
             payload["events"][0]["event-id"],
             serde_json::json!("evt-bootstrap")
         );
@@ -7639,6 +7684,18 @@ mod tests {
         assert_eq!(
             payload["events"][0]["request-identity-state"],
             serde_json::json!("verified")
+        );
+        assert_eq!(
+            payload["events"][0]["request-identity-source"],
+            serde_json::json!("x-lakecat-typedid-envelope")
+        );
+        assert_eq!(
+            payload["events"][0]["typedid-envelope-hash"],
+            serde_json::json!("sha256:typedid-envelope")
+        );
+        assert_eq!(
+            payload["events"][0]["typedid-proof-hash"],
+            serde_json::json!("sha256:typedid-proof")
         );
         assert!(
             payload["events"][0]["agent-delegation-hash"]

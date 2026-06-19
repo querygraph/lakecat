@@ -6,6 +6,33 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Expose request identity source in handoff proof`.
+  Lineage drain responses and event summaries now carry sanitized
+  request-identity source plus optional TypeDID envelope/proof hashes. The
+  QGLake replay JSON and handoff summary lift those fields into
+  `lakecatReplayVerification.requestIdentityProof`, so QueryGraph/operators can
+  distinguish the current agent-header fixture path from future
+  TypeDID-envelope runs without seeing raw proof material.
+- Local verification for the request-identity source proof slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `scripts/qglake-handoff-local.sh`. The live handoff generated one table and
+  one view, drained 26 outbox events, verified LakeCat replay through
+  `qglake-verify-replay`, ran QueryGraph `lakecat-verify` and
+  `lakecat-import`, and wrote
+  `lakecatReplayVerification.requestIdentityProof` with
+  `requestIdentitySource: x-lakecat-agent-did`, `requestIdentityState:
+  unverified`, and null TypeDID hash slots for the local fixture;
+  direct Node summary check for the request identity proof source/hash fields;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test -p lakecat-cli`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Lift request identity proof into handoff summary`.
   `lakecat-cli qglake-verify-replay --json` now emits structured
   `replay-evidence.requestIdentity`, and `scripts/qglake-handoff-local.sh` now

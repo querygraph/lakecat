@@ -407,6 +407,12 @@ pub struct LineageDrainResponse {
     pub authorization_receipt_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_identity_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_identity_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub typedid_envelope_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub typedid_proof_hash: Option<String>,
     #[serde(default)]
     pub events: Vec<LineageDrainEventSummary>,
 }
@@ -424,6 +430,12 @@ pub struct LineageDrainEventSummary {
     pub authorization_receipt_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_identity_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_identity_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub typedid_envelope_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub typedid_proof_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_delegation_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

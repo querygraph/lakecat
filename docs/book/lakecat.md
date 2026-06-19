@@ -1188,10 +1188,14 @@ credential, table-commit, and view replay evidence, plus compact
 scan counts, pointer-log read proof, view version and receipt-chain proof,
 redacted credential-root proof, and credential-vending decision out of the full
 replay tree. The identity proof shows the principal subject and kind used for
-the replay, the request-identity state, and the authorization receipt hash. The
-scan proof shows LakeCat planned and fetched scan tasks through the
-governed path, including file, delete-file, and child plan-task counts with
-replay and OpenLineage hashes. The commit-history proof shows the catalog
+the replay, the request-identity source and state, the authorization receipt
+hash, and sanitized TypeDID envelope/proof hashes when a TypeDID envelope is
+present. The local QGLake fixture currently records the agent-header source
+with null TypeDID hash slots; a future TypeDID-envelope run can fill those
+slots without changing the handoff schema. The scan proof shows LakeCat planned
+and fetched scan tasks through the governed path, including file, delete-file,
+and child plan-task counts with replay and OpenLineage hashes. The
+commit-history proof shows the catalog
 pointer log was read back with commit count, sequence numbers, commit hashes,
 and replay/OpenLineage hashes. The view receipt-chain proof shows QueryGraph's
 accepted view versions together with accepted receipt hashes, tombstone receipt
@@ -1205,8 +1209,9 @@ That makes the handoff repeatable from the LakeCat repo while keeping
 QueryGraph responsible for graph validation and import semantics.
 The handoff script refuses to write the summary unless LakeCat replay JSON
 contains request-identity evidence for the expected agent principal, an
-explicit identity state, and an authorization receipt hash. It also refuses to
-write the summary unless LakeCat replay JSON
+explicit identity source/state, an authorization receipt hash, and explicit
+TypeDID envelope/proof hash slots. It also refuses to write the summary unless
+LakeCat replay JSON
 contains redacted `storageProfileUpsert` evidence with replay and OpenLineage
 hashes, and the accepted summary repeats that evidence as
 `lakecatReplayVerification.storageProfileUpsertProof`. QueryGraph gets proof

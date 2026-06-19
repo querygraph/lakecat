@@ -112,6 +112,10 @@ if (evidence.principalKind !== "agent") {
   console.error("LakeCat request identity evidence does not prove an agent principal");
   process.exit(1);
 }
+if (typeof evidence.requestIdentitySource !== "string" || evidence.requestIdentitySource.length === 0) {
+  console.error("LakeCat request identity evidence is missing requestIdentitySource");
+  process.exit(1);
+}
 if (typeof evidence.requestIdentityState !== "string" || evidence.requestIdentityState.length === 0) {
   console.error("LakeCat request identity evidence is missing requestIdentityState");
   process.exit(1);
@@ -123,8 +127,11 @@ if (typeof evidence.authorizationReceiptHash !== "string" || evidence.authorizat
 process.stdout.write(JSON.stringify({
   principalSubject: evidence.principalSubject,
   principalKind: evidence.principalKind,
+  requestIdentitySource: evidence.requestIdentitySource,
   requestIdentityState: evidence.requestIdentityState,
   authorizationReceiptHash: evidence.authorizationReceiptHash,
+  typedidEnvelopeHash: evidence.typedidEnvelopeHash ?? null,
+  typedidProofHash: evidence.typedidProofHash ?? null,
 }));
 ' "$file" "$expected_principal"
 }
