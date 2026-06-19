@@ -270,7 +270,11 @@ governed management endpoint
 `GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/commits`.
 The response exposes compact hashes and summary fields from the pointer log, and
 the read itself is recorded as a lineage/outbox event rather than as new graph
-topology.
+topology. The QGLake acceptance fixture now performs an idempotent no-op commit
+probe, reads that endpoint, verifies the compact pointer-log evidence, and then
+requires lineage-drain replay to include `table.commits-listed` receipt hashes.
+That makes commit-history inspection part of the QueryGraph handoff contract
+without adding commit graph mechanics to LakeCat.
 
 The compare-and-swap record should include:
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made QGLake acceptance perform an idempotent table commit-history probe and
+  require lineage-drain replay to include `table.commits-listed` receipt
+  evidence, binding the pointer-log management read into the end-to-end
+  QueryGraph handoff.
 - Added a governed table commit-history management read that exposes compact
   pointer-log evidence and records replayable lineage/outbox proof for
   QueryGraph and operators.

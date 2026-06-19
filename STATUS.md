@@ -6,6 +6,27 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake replay to commit history`. The QGLake fixture now performs an
+  idempotent no-op table commit-history probe, reads the governed compact
+  pointer-log endpoint, verifies sequence/request/response/idempotency/principal
+  evidence, and rejects lineage drains that do not replay
+  `table.commits-listed` receipt hashes. Saved replay artifact verification now
+  uses the same acceptance contract, so QueryGraph handoff evidence includes
+  commit-history inspection without adding graph mechanics to LakeCat.
+- Local verification for the QGLake commit-history replay slice was green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-store -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Expose table commit history evidence`. LakeCat now serves a governed
   management read at
   `GET /management/v1/warehouses/{warehouse}/namespaces/{namespace}/tables/{table}/commits`

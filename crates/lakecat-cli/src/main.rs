@@ -6,16 +6,16 @@ use std::{
 };
 
 use lakecat_api::{
-    CatalogConfigResponse, CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest,
-    FetchScanTasksResponse, LineageDrainEventSummary, LineageDrainResponse, ListNamespacesResponse,
-    ListPolicyBindingsResponse, ListProjectsResponse, ListServersResponse,
-    ListStorageProfilesResponse, ListViewVersionReceiptChainsResponse,
-    ListViewVersionReceiptsResponse, ListWarehousesResponse, LoadCredentialsResponse,
-    LoadTableResponse, NamespaceResponse, PlanTableScanRequest, PlanTableScanResponse,
-    PolicyBindingResponse, ProjectResponse, ServerResponse, StorageProfileResponse,
-    TableIdentifier, UpsertPolicyBindingRequest, UpsertProjectRequest, UpsertServerRequest,
-    UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest, ViewResponse,
-    WarehouseResponse,
+    CatalogConfigResponse, CommitTableRequest, CommitTableResponse, CreateNamespaceRequest,
+    CreateTableRequest, FetchScanTasksRequest, FetchScanTasksResponse, LineageDrainEventSummary,
+    LineageDrainResponse, ListNamespacesResponse, ListPolicyBindingsResponse, ListProjectsResponse,
+    ListServersResponse, ListStorageProfilesResponse, ListTableCommitRecordsResponse,
+    ListViewVersionReceiptChainsResponse, ListViewVersionReceiptsResponse, ListWarehousesResponse,
+    LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
+    PlanTableScanResponse, PolicyBindingResponse, ProjectResponse, ServerResponse,
+    StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest, UpsertProjectRequest,
+    UpsertServerRequest, UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest,
+    ViewResponse, WarehouseResponse,
 };
 use lakecat_core::content_hash_json;
 use lakecat_querygraph::{QueryGraphBootstrap, QueryGraphBootstrapVerification};
@@ -419,6 +419,28 @@ async fn post_json_with_identity<B: Serialize, T: DeserializeOwned>(
     decode_json_response(response, label).await
 }
 
+async fn post_json_with_identity_and_idempotency<B: Serialize, T: DeserializeOwned>(
+    catalog: &str,
+    path: &str,
+    principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
+    idempotency_key: &str,
+    label: &str,
+    body: &B,
+) -> lakecat_core::LakeCatResult<T> {
+    let endpoint = format!("{}{}", catalog.trim_end_matches('/'), path);
+    let client = reqwest::Client::new();
+    let mut request = client
+        .post(endpoint)
+        .header("x-lakecat-idempotency-key", idempotency_key)
+        .json(body);
+    request = identity_mode.apply(request, principal);
+    let response = request.send().await.map_err(|err| {
+        lakecat_core::LakeCatError::Internal(format!("failed to request {label}: {err}"))
+    })?;
+    decode_json_response(response, label).await
+}
+
 async fn post_json_or_conflict_with_identity<B: Serialize, T: DeserializeOwned>(
     catalog: &str,
     path: &str,
@@ -613,6 +635,16 @@ async fn qglake_fixture(
         &table,
         &location,
         &metadata_location,
+        principal,
+        identity_mode,
+    )
+    .await?;
+    verify_qglake_table_commit_history(
+        &catalog,
+        &warehouse,
+        &namespace_path,
+        &namespace,
+        &table,
         principal,
         identity_mode,
     )
@@ -1626,6 +1658,64 @@ async fn verify_qglake_storage_profile_list(
     Ok(())
 }
 
+async fn verify_qglake_table_commit_history(
+    catalog: &str,
+    warehouse: &str,
+    namespace_path: &str,
+    namespace: &[String],
+    table: &str,
+    principal: Option<&str>,
+    identity_mode: RequestIdentityMode,
+) -> lakecat_core::LakeCatResult<()> {
+    let _: CommitTableResponse = post_json_with_identity_and_idempotency(
+        catalog,
+        &format!("/catalog/v1/namespaces/{namespace_path}/tables/{table}/commit"),
+        principal,
+        identity_mode,
+        &format!("qglake:{warehouse}:{namespace_path}:{table}:commit-history"),
+        "qglake table commit-history probe commit",
+        &CommitTableRequest {
+            requirements: Vec::new(),
+            updates: Vec::new(),
+            metadata_location: None,
+            metadata: None,
+        },
+    )
+    .await?;
+    let response = get_json_with_identity::<ListTableCommitRecordsResponse>(
+        catalog,
+        &format!("/management/v1/warehouses/{warehouse}/namespaces/{namespace_path}/tables/{table}/commits"),
+        principal,
+        identity_mode,
+        "qglake table commit history",
+    )
+    .await?;
+    let Some(record) = response.commits.iter().find(|record| {
+        record.warehouse == warehouse
+            && record.namespace.as_slice() == namespace
+            && record.table == table
+    }) else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake table commit history did not expose a pointer-log record for {warehouse}.{namespace_path}.{table}"
+        )));
+    };
+    if record.sequence_number == 0
+        || record.request_hash.is_empty()
+        || record.response_hash.is_empty()
+        || record.commit_hash.is_empty()
+        || record
+            .idempotency_key_sha256
+            .as_deref()
+            .map_or(true, str::is_empty)
+        || record.principal_subject.is_empty()
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake table commit history for {warehouse}.{namespace_path}.{table} is missing compact pointer-log evidence"
+        )));
+    }
+    Ok(())
+}
+
 async fn verify_qglake_governed_scan(
     catalog: &str,
     namespace_path: &str,
@@ -2281,6 +2371,7 @@ fn verify_qglake_lineage_drain(
     verify_qglake_view_replay(drain, verification)?;
     verify_qglake_credential_replay(drain, principal)?;
     verify_qglake_management_list_replay(drain, expected_policy_binding_count)?;
+    verify_qglake_table_commit_history_replay(drain)?;
     Ok(())
 }
 
@@ -2566,6 +2657,43 @@ fn verify_qglake_management_list_replay(
     if warehouse_list.warehouse_count.unwrap_or_default() == 0 {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain warehouse list replay did not expose any warehouses".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn verify_qglake_table_commit_history_replay(
+    drain: &LineageDrainResponse,
+) -> lakecat_core::LakeCatResult<()> {
+    let Some(commit_history) = drain
+        .events
+        .iter()
+        .find(|event| event.event_type == "table.commits-listed")
+    else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain did not replay table commit history evidence".to_string(),
+        ));
+    };
+    if commit_history.lineage_events == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain table commit history replay emitted no lineage projection"
+                .to_string(),
+        ));
+    }
+    if commit_history.replay_event_hashes.is_empty()
+        || commit_history
+            .replay_event_hashes
+            .iter()
+            .any(String::is_empty)
+        || commit_history.replay_open_lineage_hashes.is_empty()
+        || commit_history
+            .replay_open_lineage_hashes
+            .iter()
+            .any(String::is_empty)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain table commit history replay is missing receipt hashes"
+                .to_string(),
         ));
     }
     Ok(())
@@ -4108,7 +4236,7 @@ mod tests {
         let verification = bundle.verify_manifest().unwrap();
         let policy_binding_count = qglake_policy_binding_count(&bundle);
         let drain = LineageDrainResponse {
-            delivered: 8,
+            delivered: 9,
             event_types: vec![
                 "table.scan-planned".to_string(),
                 "credentials.vend-attempted".to_string(),
@@ -4118,10 +4246,11 @@ mod tests {
                 "server.listed".to_string(),
                 "project.listed".to_string(),
                 "warehouse.listed".to_string(),
+                "table.commits-listed".to_string(),
                 "querygraph.bootstrap".to_string(),
             ],
             graph_events: 1,
-            lineage_events: 9,
+            lineage_events: 10,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
@@ -4135,6 +4264,7 @@ mod tests {
                 qglake_server_list_lineage_summary(),
                 qglake_project_list_lineage_summary(),
                 qglake_warehouse_list_lineage_summary(),
+                qglake_table_commit_history_lineage_summary(),
             ],
         };
 
@@ -6571,7 +6701,7 @@ mod tests {
             "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing namespace receipt-chain evidence"
         ));
 
-        verify_qglake_lineage_drain(
+        let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 12,
                 event_types: vec![
@@ -6587,10 +6717,11 @@ mod tests {
                     "server.listed".to_string(),
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
+                    "table.commits-listed".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
                 graph_events: 4,
-                lineage_events: 13,
+                lineage_events: 14,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
@@ -6614,11 +6745,62 @@ mod tests {
             Some("did:example:agent"),
             1,
         )
+        .expect_err("QGLake lineage drain should require table commit history replay");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain did not replay table commit history evidence")
+        );
+
+        verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 13,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "view.version-receipt-chains-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "table.commits-listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 14,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    qglake_view_receipt_chain_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                    qglake_table_commit_history_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
         .expect("QGLake lineage drain should accept dropped view evidence with namespace receipt-chain evidence");
 
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 9,
+                delivered: 10,
                 event_types: vec![
                     "table.scan-planned".to_string(),
                     "credentials.vend-attempted".to_string(),
@@ -6629,10 +6811,11 @@ mod tests {
                     "server.listed".to_string(),
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
+                    "table.commits-listed".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
                 graph_events: 3,
-                lineage_events: 10,
+                lineage_events: 11,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
@@ -6647,6 +6830,7 @@ mod tests {
                     qglake_server_list_lineage_summary(),
                     qglake_project_list_lineage_summary(),
                     qglake_warehouse_list_lineage_summary(),
+                    qglake_table_commit_history_lineage_summary(),
                 ],
             },
             &view_verification,
@@ -6657,7 +6841,7 @@ mod tests {
 
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 8,
+                delivered: 9,
                 event_types: vec![
                     "table.scan-planned".to_string(),
                     "credentials.vend-attempted".to_string(),
@@ -6667,10 +6851,11 @@ mod tests {
                     "server.listed".to_string(),
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
+                    "table.commits-listed".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
                 graph_events: 1,
-                lineage_events: 9,
+                lineage_events: 10,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
@@ -6684,6 +6869,7 @@ mod tests {
                     qglake_server_list_lineage_summary(),
                     qglake_project_list_lineage_summary(),
                     qglake_warehouse_list_lineage_summary(),
+                    qglake_table_commit_history_lineage_summary(),
                 ],
             },
             &verification,
@@ -6880,6 +7066,49 @@ mod tests {
         summary.replay_open_lineage_hashes =
             vec!["sha256:view-receipt-chains-replay-openlineage".to_string()];
         summary
+    }
+
+    fn qglake_table_commit_history_lineage_summary() -> LineageDrainEventSummary {
+        LineageDrainEventSummary {
+            event_id: "evt-table-commits".to_string(),
+            event_type: "table.commits-listed".to_string(),
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:table-commits-authorization".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            agent_delegation_hash: Some("sha256:delegation".to_string()),
+            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            graph_events: 0,
+            lineage_events: 1,
+            bundle_hash: None,
+            graph_hash: None,
+            open_lineage_hash: None,
+            querygraph_import_hash: None,
+            table_artifact_count: 0,
+            view_artifact_count: 0,
+            view_version_receipt_hashes: Vec::new(),
+            view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
+            view_warehouse: None,
+            view_namespace: Vec::new(),
+            view_name: None,
+            view_stable_id: None,
+            view_version: None,
+            policy_binding_count: 0,
+            project_count: None,
+            server_count: None,
+            storage_profile_count: None,
+            warehouse_count: None,
+            management_scope_project_id: None,
+            management_scope_warehouse: Some("local".to_string()),
+            standards: Vec::new(),
+            credential_count: None,
+            credential_block_reason: None,
+            raw_credential_exception_allowed: None,
+            raw_credential_exception_reason: None,
+            replay_event_hashes: vec!["sha256:table-commits-replay-event".to_string()],
+            replay_open_lineage_hashes: vec!["sha256:table-commits-openlineage".to_string()],
+        }
     }
 
     fn qglake_policy_list_lineage_summary() -> LineageDrainEventSummary {

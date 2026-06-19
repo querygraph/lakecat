@@ -338,7 +338,11 @@ metadata locations, request hash, response hash, idempotency-key hash, Iceberg
 format version, current snapshot id, policy hash, principal, and a commit hash.
 The read itself enters the durable outbox as `table.commits-listed` and drains
 as lineage evidence, so audit tools can prove who inspected pointer history
-without requiring direct access to the Turso catalog database.
+without requiring direct access to the Turso catalog database. QGLake acceptance
+now exercises this path directly: the fixture issues an idempotent no-op commit
+probe, reads the compact commit-history endpoint, and then requires the lineage
+drain to replay `table.commits-listed` receipt hashes before the QueryGraph
+handoff is accepted.
 
 ## The Durable Spine
 
@@ -1166,10 +1170,11 @@ and traversal model. The drain response lifts their counts and management scope
 into compact fields, so QueryGraph can verify the control-plane read evidence
 without opening the raw lineage payload. The QGLake acceptance workflow now
 establishes its server/project/warehouse tenant spine, performs governed
-server, project, warehouse, policy-list, and storage-profile-list reads before
-bootstrap, and rejects a drain that does not replay matching `server.listed`,
-`project.listed`, `warehouse.listed`, `policy-binding.listed`, and
-`storage-profile.listed` evidence.
+server, project, warehouse, policy-list, storage-profile-list, and table
+commit-history reads before bootstrap, and rejects a drain that does not replay
+matching `server.listed`, `project.listed`, `warehouse.listed`,
+`policy-binding.listed`, `storage-profile.listed`, and `table.commits-listed`
+evidence.
 
 For handoff testing, LakeCat can verify a saved bootstrap bundle and a saved
 drain response together:
@@ -1185,7 +1190,8 @@ That offline check replays the same boundary assertions used by the live
 QGLake fixture: the bundle manifest must verify, the QueryGraph import
 compatibility contract must match, and the lineage drain must carry matching
 bootstrap hashes, credential-denial receipts, management-list evidence, and
-view receipt evidence when views are present.
+table commit-history receipt evidence, plus view receipt evidence when views
+are present.
 
 The end-to-end result is a chain:
 
@@ -1239,9 +1245,10 @@ cargo run -p lakecat-cli -- qglake-verify-replay \
 That fixture creates the sample table shape, installs a restricted policy,
 verifies governed scan planning, verifies fetch-scan-task reapplication,
 exercises delete manifest handling, probes credential-vend behavior for agents
-and trusted humans, exports QueryGraph bootstrap artifacts, and drains the
-outbox. It is small, but it is not decorative. It is the acceptance story for a
-catalog that participates in the user workflow from notebook to agent.
+and trusted humans, verifies compact table commit-history evidence, exports
+QueryGraph bootstrap artifacts, and drains the outbox. It is small, but it is
+not decorative. It is the acceptance story for a catalog that participates in
+the user workflow from notebook to agent.
 
 ## Operating The Book's Example System
 
