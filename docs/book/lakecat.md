@@ -757,6 +757,9 @@ Storage profiles bind a warehouse to physical storage roots and credential
 issuance policy. A local profile can return scoped local file configuration. A
 remote profile should usually reference a secret store and require TypeSec to
 authorize issuance before any resolver sees the secret reference.
+LakeCat rejects profiles whose declared provider conflicts with the URI scheme
+of the location prefix, so a credential root cannot claim to be local while
+pointing at an S3 prefix.
 
 ```sh
 curl -s -X PUT \
@@ -764,10 +767,10 @@ curl -s -X PUT \
   -H 'content-type: application/json' \
   -d '{
     "location-prefix": "file:///tmp/lakecat/qglake/events",
-    "provider": "local",
-    "issuance-mode": "standard",
-    "properties": {
-      "purpose": "developer-loop"
+    "provider": "file",
+    "issuance-mode": "local-file-no-secret",
+    "public-config": {
+      "lakecat.purpose": "developer-loop"
     }
   }'
 
@@ -777,13 +780,11 @@ curl -s -X PUT \
   -d '{
     "location-prefix": "s3://lakecat/events",
     "provider": "s3",
-    "issuance-mode": "secret-ref",
+    "issuance-mode": "short-lived-secret-ref",
     "secret-ref": "vault://kv/lakecat/events",
     "public-config": {
-      "region": "us-west-2"
-    },
-    "properties": {
-      "purpose": "production-events"
+      "lakecat.region": "us-west-2",
+      "lakecat.purpose": "production-events"
     }
   }'
 ```

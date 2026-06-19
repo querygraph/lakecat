@@ -356,13 +356,15 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   events and `server.upserted` now emits LakeCat lineage/OpenLineage receipts
   while leaving reusable graph hierarchy work to Grust; storage-profile writes
   now emit lineage/OpenLineage receipts for credential-root changes from durable
-  outbox replay; management routes now use the requested warehouse instead of
-  the configured default, Iceberg REST routes now accept a warehouse prefix only
-  after resolving a durable `WarehouseRecord`, and project-scoped management
-  routes can list/upsert warehouses under their durable project while keeping
-  the unprefixed default-warehouse compatibility path; credential-vend attempts
-  with fine-grained restrictions now fail closed into governed Sail-planned
-  reads before any secret resolver is called; all accepted production secret-ref
+  outbox replay, and stores reject storage profiles whose declared provider
+  conflicts with the URI scheme of the location prefix; management routes now
+  use the requested warehouse instead of the configured default, Iceberg REST
+  routes now accept a warehouse prefix only after resolving a durable
+  `WarehouseRecord`, and project-scoped management routes can list/upsert
+  warehouses under their durable project while keeping the unprefixed
+  default-warehouse compatibility path; credential-vend attempts with
+  fine-grained restrictions now fail closed into governed Sail-planned reads
+  before any secret resolver is called; all accepted production secret-ref
   schemes are now exercised through TypeSec authorization before failing closed
   when no resolver backend is configured; governed view list/upsert/drop
   management endpoints now persist and delete durable `ViewRecord` values in

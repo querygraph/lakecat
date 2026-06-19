@@ -768,6 +768,7 @@ impl StorageProfile {
                 "storage profile location prefix must not be empty".to_string(),
             ));
         }
+        validate_location_prefix_provider(&location_prefix, provider)?;
         if let Some(secret_ref) = secret_ref.as_deref() {
             validate_secret_ref(secret_ref)?;
         }
@@ -791,6 +792,7 @@ impl StorageProfile {
     }
 
     pub fn validate(&self) -> LakeCatResult<()> {
+        validate_location_prefix_provider(&self.location_prefix, self.provider)?;
         if let Some(secret_ref) = self.secret_ref.as_deref() {
             validate_secret_ref(secret_ref)?;
         }
@@ -1840,6 +1842,28 @@ fn validate_profile_id(profile_id: &str) -> LakeCatResult<()> {
     {
         return Err(LakeCatError::InvalidArgument(format!(
             "storage profile id contains unsupported characters: {profile_id}"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_location_prefix_provider(
+    location_prefix: &str,
+    provider: StorageProvider,
+) -> LakeCatResult<()> {
+    let detected = StorageProvider::from_location(location_prefix);
+    if detected != StorageProvider::Unknown && detected != provider {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "storage profile provider '{}' does not match location prefix '{}' provider '{}'",
+            provider.as_str(),
+            location_prefix,
+            detected.as_str()
+        )));
+    }
+    if detected == StorageProvider::Unknown && provider != StorageProvider::Unknown {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "storage profile location prefix '{location_prefix}' is not supported by provider '{}'",
+            provider.as_str()
         )));
     }
     Ok(())
@@ -5218,6 +5242,24 @@ pub mod turso_store {
                 BTreeMap::new(),
             );
             assert!(embedded_secret.is_err());
+        }
+
+        #[test]
+        fn storage_profiles_reject_provider_location_mismatch() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            let err = StorageProfile::new(
+                "wrong-provider",
+                warehouse,
+                "s3://lakecat-demo/events",
+                StorageProvider::File,
+                CredentialIssuanceMode::LocalFileNoSecret,
+                None,
+                BTreeMap::new(),
+            )
+            .unwrap_err();
+
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            assert!(err.to_string().contains("does not match location prefix"));
         }
 
         #[tokio::test]

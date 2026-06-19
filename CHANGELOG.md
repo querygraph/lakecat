@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected storage profiles whose declared provider does not match the location
+  prefix provider, and refreshed the book's storage-profile examples to use the
+  current management API vocabulary.
 - Bound metadata-object commit locations to the table's matched storage profile
   prefix, rejecting out-of-profile metadata writes before object storage is
   touched.
