@@ -266,8 +266,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   a governed management read now exposes compact table commit records and
   records `table.commits-listed` outbox/OpenLineage evidence for QueryGraph and
   operators; QGLake acceptance now performs an idempotent commit-history probe,
-  verifies the compact pointer-log evidence, and rejects lineage drains that do
-  not replay `table.commits-listed` receipt hashes;
+  verifies the compact pointer-log evidence including Iceberg format-version
+  and snapshot summary fields, and rejects lineage drains that do not replay
+  `table.commits-listed` receipt hashes;
   reused keys with different request hashes now return conflict; failed pointer
   commits now clean up newly written local metadata objects when they do not
   become the table's metadata pointer; metadata object writes and cleanup now

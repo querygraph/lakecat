@@ -340,9 +340,10 @@ The read itself enters the durable outbox as `table.commits-listed` and drains
 as lineage evidence, so audit tools can prove who inspected pointer history
 without requiring direct access to the Turso catalog database. QGLake acceptance
 now exercises this path directly: the fixture issues an idempotent no-op commit
-probe, reads the compact commit-history endpoint, and then requires the lineage
-drain to replay `table.commits-listed` receipt hashes before the QueryGraph
-handoff is accepted.
+probe, reads the compact commit-history endpoint, verifies that the record
+preserves the table's Iceberg format-version and current snapshot summary, and
+then requires the lineage drain to replay `table.commits-listed` receipt hashes
+before the QueryGraph handoff is accepted.
 
 ## The Durable Spine
 

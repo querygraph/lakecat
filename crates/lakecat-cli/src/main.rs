@@ -1699,6 +1699,15 @@ async fn verify_qglake_table_commit_history(
             "qglake table commit history did not expose a pointer-log record for {warehouse}.{namespace_path}.{table}"
         )));
     };
+    verify_qglake_table_commit_record_evidence(record, warehouse, namespace_path, table)
+}
+
+fn verify_qglake_table_commit_record_evidence(
+    record: &lakecat_api::TableCommitRecordResponse,
+    warehouse: &str,
+    namespace_path: &str,
+    table: &str,
+) -> lakecat_core::LakeCatResult<()> {
     if record.sequence_number == 0
         || record.request_hash.is_empty()
         || record.response_hash.is_empty()
@@ -1711,6 +1720,11 @@ async fn verify_qglake_table_commit_history(
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake table commit history for {warehouse}.{namespace_path}.{table} is missing compact pointer-log evidence"
+        )));
+    }
+    if record.format_version != Some(3) || record.snapshot_id.is_none() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake table commit history for {warehouse}.{namespace_path}.{table} is missing Iceberg format/snapshot summary evidence"
         )));
     }
     Ok(())
@@ -4276,6 +4290,27 @@ mod tests {
             replay_verification.querygraph_import_hash,
             verification.querygraph_import_hash
         );
+    }
+
+    #[test]
+    fn qglake_commit_history_verifier_requires_iceberg_summary() {
+        let record = qglake_table_commit_record_summary();
+        verify_qglake_table_commit_record_evidence(&record, "local", "default", "events")
+            .expect("QGLake commit history should accept compact Iceberg summary evidence");
+
+        let mut missing_summary = record;
+        missing_summary.format_version = None;
+        missing_summary.snapshot_id = None;
+        let err = verify_qglake_table_commit_record_evidence(
+            &missing_summary,
+            "local",
+            "default",
+            "events",
+        )
+        .expect_err("QGLake commit history should require format/snapshot summary evidence");
+        assert!(err.to_string().contains(
+            "qglake table commit history for local.default.events is missing Iceberg format/snapshot summary evidence"
+        ));
     }
 
     #[test]
@@ -6915,6 +6950,31 @@ mod tests {
                 "Grust catalog graph".to_string(),
                 "OpenLineage".to_string(),
             ],
+        }
+    }
+
+    fn qglake_table_commit_record_summary() -> lakecat_api::TableCommitRecordResponse {
+        lakecat_api::TableCommitRecordResponse {
+            warehouse: "local".to_string(),
+            namespace: vec!["default".to_string()],
+            table: "events".to_string(),
+            previous_metadata_location: Some(
+                "file:///tmp/lakecat-qglake/events/metadata/00000.json".to_string(),
+            ),
+            new_metadata_location: Some(
+                "file:///tmp/lakecat-qglake/events/metadata/00000.json".to_string(),
+            ),
+            sequence_number: 1,
+            format_version: Some(3),
+            snapshot_id: Some(42),
+            policy_hash: None,
+            request_hash: "sha256:request".to_string(),
+            response_hash: "sha256:response".to_string(),
+            idempotency_key_sha256: Some("sha256:idempotency".to_string()),
+            commit_hash: "sha256:commit".to_string(),
+            principal_subject: "did:example:agent".to_string(),
+            principal_kind: "agent".to_string(),
+            committed_at: "2026-06-19T00:00:00Z".to_string(),
         }
     }
 

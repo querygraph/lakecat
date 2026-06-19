@@ -6,6 +6,27 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require QGLake commit summary evidence`. QGLake commit-history acceptance now
+  factors compact pointer-log record checks through a shared verifier and
+  requires the record to preserve the fixture table's Iceberg format-version and
+  current snapshot summary, not just generic hashes and principal/idempotency
+  evidence. The new CLI regression rejects commit-history evidence that omits
+  the format/snapshot summary before QueryGraph handoff is accepted.
+- Local verification for the QGLake commit-summary acceptance slice was green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_commit_history_verifier_requires_iceberg_summary`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-store -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Bind QGLake replay to commit history`. The QGLake fixture now performs an
   idempotent no-op table commit-history probe, reads the governed compact
   pointer-log endpoint, verifies sequence/request/response/idempotency/principal

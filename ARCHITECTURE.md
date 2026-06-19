@@ -274,7 +274,10 @@ topology. The QGLake acceptance fixture now performs an idempotent no-op commit
 probe, reads that endpoint, verifies the compact pointer-log evidence, and then
 requires lineage-drain replay to include `table.commits-listed` receipt hashes.
 That makes commit-history inspection part of the QueryGraph handoff contract
-without adding commit graph mechanics to LakeCat.
+without adding commit graph mechanics to LakeCat. The compact record must also
+preserve the QGLake table's Iceberg format-version and current snapshot summary,
+so the handoff proves the pointer-log read is anchored to the table metadata
+state QueryGraph is about to import.
 
 The compare-and-swap record should include:
 
