@@ -1308,10 +1308,11 @@ impl CatalogStore for MemoryCatalogStore {
                 })?;
             let previous_metadata_location = table.metadata_location.clone();
             if previous_metadata_location != commit.expected_previous_metadata_location {
-                return Err(LakeCatError::Conflict(format!(
-                    "metadata pointer changed for {}",
-                    ident.stable_id()
-                )));
+                return Err(metadata_pointer_conflict(
+                    ident,
+                    commit.expected_previous_metadata_location.as_deref(),
+                    previous_metadata_location.as_deref(),
+                ));
             }
             table.metadata_location = commit.new_metadata_location.clone();
             if let Some(new_metadata) = commit.new_metadata {
@@ -1878,6 +1879,25 @@ fn table_key(ident: &TableIdent) -> String {
         "{}\u{1f}{}\u{1f}{}",
         ident.warehouse, ident.namespace, ident.name
     )
+}
+
+fn metadata_pointer_conflict(
+    ident: &TableIdent,
+    expected_metadata_location: Option<&str>,
+    actual_metadata_location: Option<&str>,
+) -> LakeCatError {
+    let expected_hash = optional_location_hash(expected_metadata_location);
+    let actual_hash = optional_location_hash(actual_metadata_location);
+    LakeCatError::Conflict(format!(
+        "metadata pointer changed for {}; expected-metadata-location-hash={expected_hash}; actual-metadata-location-hash={actual_hash}",
+        ident.stable_id()
+    ))
+}
+
+fn optional_location_hash(location: Option<&str>) -> String {
+    location
+        .map(|location| content_hash_bytes(location.as_bytes()))
+        .unwrap_or_else(|| "null".to_string())
 }
 
 fn view_key(view: &ViewRecord) -> String {
@@ -2755,6 +2775,49 @@ mod memory_tests {
         );
         assert!(!pending[0].payload.to_string().contains("commit-1"));
     }
+
+    #[tokio::test]
+    async fn memory_store_stale_pointer_conflict_uses_location_hashes() {
+        let store = MemoryCatalogStore::new();
+        let ident = table_ident("local", "default", "events").unwrap();
+        store
+            .create_table(TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            ))
+            .await
+            .unwrap();
+
+        let err = store
+            .commit_table(
+                &ident,
+                TableCommit {
+                    requirements: vec![],
+                    updates: vec![serde_json::json!({"action": "noop"})],
+                    expected_previous_metadata_location: Some(
+                        "file:///tmp/events/metadata/stale.json".to_string(),
+                    ),
+                    new_metadata_location: Some(
+                        "file:///tmp/events/metadata/00001.json".to_string(),
+                    ),
+                    new_metadata: None,
+                    idempotency_key: None,
+                    idempotency_request_hash: None,
+                    principal: Principal::anonymous(),
+                    authorization_receipt: None,
+                },
+            )
+            .await
+            .expect_err("stale metadata pointer must conflict");
+        let message = err.to_string();
+        assert!(message.contains("expected-metadata-location-hash=sha256:"));
+        assert!(message.contains("actual-metadata-location-hash=sha256:"));
+        assert!(!message.contains("stale.json"));
+        assert!(!message.contains("00000.json"));
+    }
 }
 
 #[cfg(feature = "turso-local")]
@@ -2774,10 +2837,11 @@ pub mod turso_store {
     use crate::{
         CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, ProjectRecord, ServerRecord,
         SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord, ViewRecord,
-        ViewVersionReceipt, WarehouseRecord, namespace_not_empty, namespace_not_found,
-        policy_binding_key, policy_bindings_for_table, require_expected_view_version,
-        storage_profile_key, storage_profile_match, table_key, validate_expected_view_version,
-        validate_project_id, view_key, view_key_parts, view_receipt_hash,
+        ViewVersionReceipt, WarehouseRecord, metadata_pointer_conflict, namespace_not_empty,
+        namespace_not_found, policy_binding_key, policy_bindings_for_table,
+        require_expected_view_version, storage_profile_key, storage_profile_match, table_key,
+        validate_expected_view_version, validate_project_id, view_key, view_key_parts,
+        view_receipt_hash,
     };
 
     #[derive(Debug, Clone)]
@@ -3099,10 +3163,11 @@ pub mod turso_store {
                 .as_ref()
                 .map(|key| content_hash_bytes(key.as_bytes()));
             if previous_metadata_location != commit.expected_previous_metadata_location {
-                return Err(LakeCatError::Conflict(format!(
-                    "metadata pointer changed for {}",
-                    ident.stable_id()
-                )));
+                return Err(metadata_pointer_conflict(
+                    ident,
+                    commit.expected_previous_metadata_location.as_deref(),
+                    previous_metadata_location.as_deref(),
+                ));
             }
             table.metadata_location = commit.new_metadata_location.clone();
             if let Some(new_metadata) = commit.new_metadata {
@@ -3135,10 +3200,11 @@ pub mod turso_store {
                 .await
                 .map_err(turso_error)?;
             if updated_rows == 0 {
-                return Err(LakeCatError::Conflict(format!(
-                    "metadata pointer changed for {}",
-                    ident.stable_id()
-                )));
+                return Err(metadata_pointer_conflict(
+                    ident,
+                    commit.expected_previous_metadata_location.as_deref(),
+                    previous_metadata_location.as_deref(),
+                ));
             }
 
             let record = TableCommitRecord {
@@ -5149,7 +5215,13 @@ pub mod turso_store {
                 .await
                 .expect_err("stale metadata pointer must conflict");
 
-            assert!(matches!(err, LakeCatError::Conflict(_)));
+            let LakeCatError::Conflict(message) = err else {
+                panic!("stale metadata pointer must return conflict");
+            };
+            assert!(message.contains("expected-metadata-location-hash=sha256:"));
+            assert!(message.contains("actual-metadata-location-hash=sha256:"));
+            assert!(!message.contains("stale.json"));
+            assert!(!message.contains("00000.json"));
             assert_eq!(store.load_table(&ident).await.unwrap().version, 0);
             assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 0);
             assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
@@ -5533,9 +5605,19 @@ pub mod turso_store {
                 .iter()
                 .filter(|result| matches!(result, Err(LakeCatError::Conflict(_))))
                 .count();
+            let conflict_message = results
+                .iter()
+                .find_map(|result| match result {
+                    Err(LakeCatError::Conflict(message)) => Some(message.as_str()),
+                    _ => None,
+                })
+                .expect("one concurrent commit should conflict");
 
             assert_eq!(success_count, 1);
             assert_eq!(conflict_count, 1);
+            assert!(conflict_message.contains("expected-metadata-location-hash=sha256:"));
+            assert!(conflict_message.contains("actual-metadata-location-hash=sha256:"));
+            assert!(!conflict_message.contains("00000.json"));
             assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
             assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 1);
             assert_eq!(store.count_rows("audit_events").await.unwrap(), 1);

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added audit-safe expected/actual metadata-location hashes to stale pointer
+  conflict errors in both memory and Turso stores, without echoing raw metadata
+  object locations.
 - Made metadata-object cleanup idempotent when a rejected commit's uncommitted
   object is already absent, while preserving the original commit error plus
   cleanup context for real cleanup failures.

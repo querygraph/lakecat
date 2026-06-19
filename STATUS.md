@@ -6,6 +6,13 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Hash stale pointer conflict evidence`.
+  Memory and Turso table commits now include SHA-256 hashes of the expected and
+  actual metadata locations when a compare-and-swap check finds a stale table
+  pointer. The conflict remains an Iceberg-visible conflict, but the message
+  now gives operators reproducible evidence without echoing raw metadata object
+  locations.
+- Latest completed implementation slice:
   `Treat missing metadata cleanup targets as clean`.
   Rejected commits still attempt to delete uncommitted metadata objects after a
   store conflict, but cleanup now treats `NotFound` from the object store as
