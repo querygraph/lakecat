@@ -375,11 +375,14 @@ and warehouses now replay into LakeCat OpenLineage receipts, giving QueryGraph
 durable control-plane read evidence without adding list-specific graph nodes in
 LakeCat. The lineage-drain response exposes compact list counts and management
 scope fields so QueryGraph can validate those reads without parsing raw lineage
-payloads. QGLake acceptance now establishes a server/project/warehouse tenant
-spine, exercises the governed server, project, warehouse, policy, and storage
-profile list paths, and rejects drains that do not preserve matching
+payloads. Table commit-history reads similarly replay compact commit counts,
+sequence numbers, and commit hashes for `table.commits-listed` evidence.
+QGLake acceptance now establishes a server/project/warehouse tenant spine,
+exercises the governed server, project, warehouse, policy, storage-profile, and
+table commit-history paths, and rejects drains that do not preserve matching
 `server.listed`, `project.listed`, `warehouse.listed`,
-`policy-binding.listed`, and `storage-profile.listed` evidence.
+`policy-binding.listed`, `storage-profile.listed`, and `table.commits-listed`
+evidence.
 
 Required tables:
 

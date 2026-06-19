@@ -471,6 +471,12 @@ pub struct LineageDrainEventSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub warehouse_count: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub table_commit_count: Option<usize>,
+    #[serde(default)]
+    pub table_commit_sequence_numbers: Vec<u64>,
+    #[serde(default)]
+    pub table_commit_hashes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub management_scope_project_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub management_scope_warehouse: Option<String>,

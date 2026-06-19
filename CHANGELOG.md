@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added compact table commit-history count, sequence-number, and commit-hash
+  fields to lineage-drain event summaries, and made QGLake reject
+  `table.commits-listed` replay that omits that typed summary evidence.
 - Tightened QGLake commit-history acceptance to require Iceberg format-version
   and snapshot summary evidence in the compact pointer-log record, with a
   focused CLI regression for missing summary fields.

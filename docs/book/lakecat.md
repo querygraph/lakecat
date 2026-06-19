@@ -343,6 +343,7 @@ now exercises this path directly: the fixture issues an idempotent no-op commit
 probe, reads the compact commit-history endpoint, verifies that the record
 preserves the table's Iceberg format-version and current snapshot summary, and
 then requires the lineage drain to replay `table.commits-listed` receipt hashes
+plus compact commit count, sequence-number, and commit-hash summary fields
 before the QueryGraph handoff is accepted.
 
 ## The Durable Spine
@@ -1175,7 +1176,9 @@ server, project, warehouse, policy-list, storage-profile-list, and table
 commit-history reads before bootstrap, and rejects a drain that does not replay
 matching `server.listed`, `project.listed`, `warehouse.listed`,
 `policy-binding.listed`, `storage-profile.listed`, and `table.commits-listed`
-evidence.
+evidence. For commit-history replay, the typed drain summary carries the commit
+count, committed sequence numbers, and commit hashes, so QueryGraph can verify
+the pointer-history inspection without parsing the full lineage payload.
 
 For handoff testing, LakeCat can verify a saved bootstrap bundle and a saved
 drain response together:

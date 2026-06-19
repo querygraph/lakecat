@@ -1186,6 +1186,26 @@ fn lineage_drain_event_summary(
             .get("warehouse-count")
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok()),
+        table_commit_count: payload
+            .get("commit-count")
+            .and_then(Value::as_u64)
+            .and_then(|count| usize::try_from(count).ok()),
+        table_commit_sequence_numbers: payload
+            .get("sequence-numbers")
+            .and_then(Value::as_array)
+            .map(|numbers| numbers.iter().filter_map(Value::as_u64).collect())
+            .unwrap_or_default(),
+        table_commit_hashes: payload
+            .get("commit-hashes")
+            .and_then(Value::as_array)
+            .map(|hashes| {
+                hashes
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
         management_scope_project_id: payload
             .get("project-id")
             .and_then(Value::as_str)
@@ -8052,6 +8072,18 @@ mod tests {
             .find(|event| event["event-type"] == "table.commits-listed")
             .expect("drain should summarize the commit history read");
         assert_eq!(commit_read_summary["lineage-events"], serde_json::json!(1));
+        assert_eq!(
+            commit_read_summary["table-commit-count"],
+            serde_json::json!(1)
+        );
+        assert_eq!(
+            commit_read_summary["table-commit-sequence-numbers"],
+            serde_json::json!([1])
+        );
+        assert_eq!(
+            commit_read_summary["table-commit-hashes"],
+            serde_json::json!([commits[0]["commit-hash"].clone()])
+        );
     }
 
     #[tokio::test]

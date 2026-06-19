@@ -2710,6 +2710,19 @@ fn verify_qglake_table_commit_history_replay(
                 .to_string(),
         ));
     }
+    if commit_history.table_commit_count.unwrap_or_default() == 0
+        || commit_history.table_commit_sequence_numbers.is_empty()
+        || commit_history.table_commit_hashes.is_empty()
+        || commit_history
+            .table_commit_hashes
+            .iter()
+            .any(String::is_empty)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain table commit history replay is missing compact commit summary evidence"
+                .to_string(),
+        ));
+    }
     Ok(())
 }
 
@@ -5481,6 +5494,9 @@ mod tests {
                     server_count: None,
                     storage_profile_count: None,
                     warehouse_count: None,
+                    table_commit_count: None,
+                    table_commit_sequence_numbers: Vec::new(),
+                    table_commit_hashes: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -5542,6 +5558,9 @@ mod tests {
                     server_count: None,
                     storage_profile_count: None,
                     warehouse_count: None,
+                    table_commit_count: None,
+                    table_commit_sequence_numbers: Vec::new(),
+                    table_commit_hashes: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -5603,6 +5622,9 @@ mod tests {
                     server_count: None,
                     storage_profile_count: None,
                     warehouse_count: None,
+                    table_commit_count: None,
+                    table_commit_sequence_numbers: Vec::new(),
+                    table_commit_hashes: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -5663,6 +5685,9 @@ mod tests {
                     server_count: None,
                     storage_profile_count: None,
                     warehouse_count: None,
+                    table_commit_count: None,
+                    table_commit_sequence_numbers: Vec::new(),
+                    table_commit_hashes: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -5723,6 +5748,9 @@ mod tests {
                     server_count: None,
                     storage_profile_count: None,
                     warehouse_count: None,
+                    table_commit_count: None,
+                    table_commit_sequence_numbers: Vec::new(),
+                    table_commit_hashes: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -5783,6 +5811,9 @@ mod tests {
                     server_count: None,
                     storage_profile_count: None,
                     warehouse_count: None,
+                    table_commit_count: None,
+                    table_commit_sequence_numbers: Vec::new(),
+                    table_commit_hashes: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -5843,6 +5874,9 @@ mod tests {
                     server_count: None,
                     storage_profile_count: None,
                     warehouse_count: None,
+                    table_commit_count: None,
+                    table_commit_sequence_numbers: Vec::new(),
+                    table_commit_hashes: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -5903,6 +5937,9 @@ mod tests {
                     server_count: None,
                     storage_profile_count: None,
                     warehouse_count: None,
+                    table_commit_count: None,
+                    table_commit_sequence_numbers: Vec::new(),
+                    table_commit_hashes: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -5964,6 +6001,9 @@ mod tests {
                     server_count: None,
                     storage_profile_count: None,
                     warehouse_count: None,
+                    table_commit_count: None,
+                    table_commit_sequence_numbers: Vec::new(),
+                    table_commit_hashes: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -6024,6 +6064,9 @@ mod tests {
                     server_count: None,
                     storage_profile_count: None,
                     warehouse_count: None,
+                    table_commit_count: None,
+                    table_commit_sequence_numbers: Vec::new(),
+                    table_commit_hashes: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -6084,6 +6127,9 @@ mod tests {
                     server_count: None,
                     storage_profile_count: None,
                     warehouse_count: None,
+                    table_commit_count: None,
+                    table_commit_sequence_numbers: Vec::new(),
+                    table_commit_hashes: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: vec!["OpenLineage".to_string()],
@@ -6144,6 +6190,9 @@ mod tests {
                     server_count: None,
                     storage_profile_count: None,
                     warehouse_count: None,
+                    table_commit_count: None,
+                    table_commit_sequence_numbers: Vec::new(),
+                    table_commit_hashes: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -6204,6 +6253,9 @@ mod tests {
                     server_count: None,
                     storage_profile_count: None,
                     warehouse_count: None,
+                    table_commit_count: None,
+                    table_commit_sequence_numbers: Vec::new(),
+                    table_commit_hashes: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -6786,6 +6838,62 @@ mod tests {
                 .contains("qglake lineage drain did not replay table commit history evidence")
         );
 
+        let mut commit_history_without_summary = qglake_table_commit_history_lineage_summary();
+        commit_history_without_summary.table_commit_count = None;
+        commit_history_without_summary
+            .table_commit_sequence_numbers
+            .clear();
+        commit_history_without_summary.table_commit_hashes.clear();
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 13,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "view.version-receipt-chains-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "table.commits-listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 14,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    qglake_view_receipt_chain_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                    commit_history_without_summary,
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require compact table commit history summary");
+        assert!(err.to_string().contains(
+            "qglake lineage drain table commit history replay is missing compact commit summary evidence"
+        ));
+
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 13,
@@ -7009,6 +7117,9 @@ mod tests {
             server_count: None,
             storage_profile_count: None,
             warehouse_count: None,
+            table_commit_count: None,
+            table_commit_sequence_numbers: Vec::new(),
+            table_commit_hashes: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: qglake_lineage_standards(),
@@ -7073,6 +7184,9 @@ mod tests {
             server_count: None,
             storage_profile_count: None,
             warehouse_count: None,
+            table_commit_count: None,
+            table_commit_sequence_numbers: Vec::new(),
+            table_commit_hashes: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -7159,6 +7273,9 @@ mod tests {
             server_count: None,
             storage_profile_count: None,
             warehouse_count: None,
+            table_commit_count: Some(1),
+            table_commit_sequence_numbers: vec![1],
+            table_commit_hashes: vec!["sha256:table-commit".to_string()],
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -7202,6 +7319,9 @@ mod tests {
             server_count: None,
             storage_profile_count: None,
             warehouse_count: None,
+            table_commit_count: None,
+            table_commit_sequence_numbers: Vec::new(),
+            table_commit_hashes: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -7247,6 +7367,9 @@ mod tests {
             server_count: None,
             storage_profile_count: Some(1),
             warehouse_count: None,
+            table_commit_count: None,
+            table_commit_sequence_numbers: Vec::new(),
+            table_commit_hashes: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -7290,6 +7413,9 @@ mod tests {
             server_count: Some(1),
             storage_profile_count: None,
             warehouse_count: None,
+            table_commit_count: None,
+            table_commit_sequence_numbers: Vec::new(),
+            table_commit_hashes: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -7333,6 +7459,9 @@ mod tests {
             server_count: None,
             storage_profile_count: None,
             warehouse_count: None,
+            table_commit_count: None,
+            table_commit_sequence_numbers: Vec::new(),
+            table_commit_hashes: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -7376,6 +7505,9 @@ mod tests {
             server_count: None,
             storage_profile_count: None,
             warehouse_count: Some(1),
+            table_commit_count: None,
+            table_commit_sequence_numbers: Vec::new(),
+            table_commit_hashes: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -7419,6 +7551,9 @@ mod tests {
             server_count: None,
             storage_profile_count: None,
             warehouse_count: None,
+            table_commit_count: None,
+            table_commit_sequence_numbers: Vec::new(),
+            table_commit_hashes: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -7468,6 +7603,9 @@ mod tests {
             server_count: None,
             storage_profile_count: None,
             warehouse_count: None,
+            table_commit_count: None,
+            table_commit_sequence_numbers: Vec::new(),
+            table_commit_hashes: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
