@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -17,7 +17,7 @@ use lakecat_api::{
     UpsertServerRequest, UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest,
     ViewResponse, WarehouseResponse,
 };
-use lakecat_core::content_hash_json;
+use lakecat_core::{content_hash_bytes, content_hash_json};
 use lakecat_querygraph::{QueryGraphBootstrap, QueryGraphBootstrapVerification};
 use sail_iceberg::spec::{
     DataContentType, DataFile, DataFileFormat, FormatVersion, ManifestContentType, ManifestFile,
@@ -350,7 +350,16 @@ fn qglake_verify_handoff(
     json_output: bool,
 ) -> lakecat_core::LakeCatResult<()> {
     let summary = read_json_file(&summary_path)?;
-    let verification = verify_qglake_handoff_summary_value(&summary)?;
+    let mut verification = verify_qglake_handoff_summary_value(&summary)?;
+    let artifact_files = verify_qglake_handoff_artifact_files(&summary_path, &summary)?;
+    verification
+        .as_object_mut()
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::Internal(
+                "handoff verification must be an object".to_string(),
+            )
+        })?
+        .insert("artifactFiles".to_string(), artifact_files);
     if json_output {
         print_json(&verification)?;
         return Ok(());
@@ -392,6 +401,61 @@ fn qglake_verify_handoff(
         required_u64(verification, "viewCount", "handoff verification")?
     );
     Ok(())
+}
+
+fn verify_qglake_handoff_artifact_files(
+    summary_path: &Path,
+    summary: &Value,
+) -> lakecat_core::LakeCatResult<Value> {
+    let summary = summary.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "handoff summary root must be an object".to_string(),
+        )
+    })?;
+    let artifacts = required_object(summary, "artifacts", "handoff summary")?;
+    let base_dir = summary_path.parent().unwrap_or_else(|| Path::new(""));
+    let bundle = verify_qglake_handoff_artifact_file(artifacts, "bundle", base_dir)?;
+    let lineage_drain = verify_qglake_handoff_artifact_file(artifacts, "lineageDrain", base_dir)?;
+    let querygraph_import_plan =
+        verify_qglake_handoff_artifact_file(artifacts, "querygraphImportPlan", base_dir)?;
+    Ok(json!({
+        "bundle": bundle,
+        "lineageDrain": lineage_drain,
+        "querygraphImportPlan": querygraph_import_plan,
+    }))
+}
+
+fn verify_qglake_handoff_artifact_file(
+    artifacts: &serde_json::Map<String, Value>,
+    field: &str,
+    base_dir: &Path,
+) -> lakecat_core::LakeCatResult<Value> {
+    let artifact = required_object(artifacts, field, "handoff summary artifacts")?;
+    let path = required_str(artifact, "path", field)?;
+    let expected_sha256 = require_hash_str(artifact, "sha256", field)?;
+    let path = PathBuf::from(path);
+    let resolved_path = if path.is_absolute() {
+        path
+    } else {
+        base_dir.join(path)
+    };
+    let bytes = fs::read(&resolved_path).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "failed to read handoff artifact {} at {}: {err}",
+            field,
+            resolved_path.display()
+        ))
+    })?;
+    let actual_sha256 = content_hash_bytes(&bytes);
+    if actual_sha256 != expected_sha256 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff artifact {field} hash mismatch: expected={expected_sha256} actual={actual_sha256}"
+        )));
+    }
+    Ok(json!({
+        "path": resolved_path.display().to_string(),
+        "sha256": actual_sha256,
+    }))
 }
 
 fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCatResult<Value> {
@@ -4755,6 +4819,43 @@ mod tests {
         })
     }
 
+    fn qglake_handoff_summary_json_with_artifacts(dir: &Path) -> Value {
+        let bundle = dir.join("lakecat-bootstrap.json");
+        let drain = dir.join("lineage-drain.json");
+        let import_plan = dir.join("querygraph-import-plan.json");
+        fs::write(&bundle, b"bundle").expect("write bundle");
+        fs::write(&drain, b"drain").expect("write drain");
+        fs::write(&import_plan, b"import-plan").expect("write import plan");
+
+        let mut summary = qglake_handoff_summary_json();
+        summary["artifacts"] = json!({
+            "bundle": {
+                "path": bundle,
+                "sha256": content_hash_bytes(b"bundle")
+            },
+            "lineageDrain": {
+                "path": drain,
+                "sha256": content_hash_bytes(b"drain")
+            },
+            "querygraphImportPlan": {
+                "path": import_plan,
+                "sha256": content_hash_bytes(b"import-plan")
+            }
+        });
+        summary
+    }
+
+    fn qglake_temp_dir(label: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("lakecat-{label}-{}-{nanos}", std::process::id()));
+        fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
     #[test]
     fn parses_config_command_defaults() {
         let command = Command::parse(["config".to_string()]).unwrap();
@@ -4894,6 +4995,41 @@ mod tests {
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject mismatched bootstrap hash");
         assert!(err.to_string().contains("bundleHash mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_accepts_matching_files() {
+        let temp = qglake_temp_dir("handoff-artifacts-ok");
+        let summary_path = temp.join("handoff-summary.json");
+        let summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let verification = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect("artifact hashes should verify");
+        assert_eq!(
+            verification["bundle"]["sha256"],
+            json!(content_hash_bytes(b"bundle"))
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_hash_mismatch() {
+        let temp = qglake_temp_dir("handoff-artifacts-mismatch");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        fs::write(temp.join("lakecat-bootstrap.json"), b"tampered").expect("tamper bundle");
+        summary["artifacts"]["bundle"]["sha256"] = json!(content_hash_bytes(b"bundle"));
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact hashes should reject tampered files");
+        assert!(
+            err.to_string()
+                .contains("handoff artifact bundle hash mismatch")
+        );
     }
 
     #[test]

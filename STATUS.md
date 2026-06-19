@@ -6,6 +6,34 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify QGLake handoff artifact file hashes`.
+  `lakecat-cli qglake-verify-handoff --summary ... [--json]` now validates the
+  raw `artifacts.bundle`, `artifacts.lineageDrain`, and
+  `artifacts.querygraphImportPlan` file hashes recorded in
+  `handoff-summary.json`, in addition to validating the compact proof objects.
+  The verifier output now includes an `artifactFiles` object with the accepted
+  paths and computed SHA-256 hashes, so stale or tampered handoff artifacts
+  fail locally before QueryGraph automation consumes the summary.
+- Local verification for the handoff artifact-hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `scripts/qglake-handoff-local.sh`. The live handoff generated one table and
+  one view, drained 26 outbox events, verified LakeCat replay, ran QueryGraph
+  `lakecat-verify` and `lakecat-import`, then ran
+  `lakecat-cli qglake-verify-handoff --json` and emitted matching
+  `artifactFiles` hashes for the bundle, lineage-drain response, and
+  QueryGraph import plan;
+  direct CLI check:
+  `cargo run -p lakecat-cli -- qglake-verify-handoff --summary target/qglake-handoff/handoff-summary.json --json`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test -p lakecat-cli`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Verify QGLake handoff summaries with LakeCat CLI`.
   `lakecat-cli qglake-verify-handoff --summary ... [--json]` validates the
   `lakecat.qglake.handoff-summary.v1` schema and compact proof boundary,

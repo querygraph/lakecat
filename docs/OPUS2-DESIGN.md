@@ -290,7 +290,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   the compact handoff summary schema and proof objects directly, and the local
   handoff harness runs that verifier after writing `handoff-summary.json` so
   operators and QueryGraph automation can consume a LakeCat-verified summary
-  without ad hoc JSON checks.*
+  without ad hoc JSON checks; the same verifier now recomputes the recorded
+  raw bundle, lineage-drain, and QueryGraph import-plan file hashes so the
+  accepted compact summary cannot silently drift away from the artifact files
+  it names.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond

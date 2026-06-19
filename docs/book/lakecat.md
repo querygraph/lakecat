@@ -1334,8 +1334,10 @@ That command validates the `lakecat.qglake.handoff-summary.v1` schema,
 QueryGraph verify/import agreement, LakeCat replay agreement, and the compact
 proof objects for request identity, QueryGraph bootstrap, governed scan,
 pointer history, view receipt chains, storage-profile upsert, and credential
-vending. The local handoff harness runs it automatically and writes the
-captured verifier output to
+vending. It also recomputes the raw file hashes for the bundle, lineage-drain
+response, and QueryGraph import plan named in the summary, rejecting stale or
+tampered artifact files before automation consumes them. The local handoff
+harness runs it automatically and writes the captured verifier output to
 `target/qglake-handoff/lakecat-handoff-verify.json`.
 
 The end-to-end result is a chain:
@@ -1404,8 +1406,9 @@ exercises delete manifest handling, probes credential-vend behavior for agents
 and trusted humans, verifies compact table commit-history evidence, exports
 QueryGraph bootstrap artifacts, drains the outbox, and proves the resulting
 bundle through QueryGraph's Rust verifier/importer. It then asks LakeCat to
-verify its own compact handoff summary, making the summary a first-class
-acceptance artifact rather than an unchecked convenience file. It is small, but
+verify its own compact handoff summary and recompute the raw artifact file
+hashes, making the summary a first-class acceptance artifact rather than an
+unchecked convenience file. It is small, but
 it is not decorative. It is the acceptance story for a catalog that participates
 in the user workflow from notebook to agent. The summary file gives automation
 a single stable place to find the accepted table/view counts, semantic hashes,

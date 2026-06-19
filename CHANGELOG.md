@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-verify-handoff` verify the raw bundle,
+  lineage-drain, and QueryGraph import-plan artifact file hashes recorded in
+  `handoff-summary.json`, so stale or tampered handoff files fail acceptance.
 - Added `lakecat-cli qglake-verify-handoff --summary ... [--json]` to validate
   the compact QGLake handoff summary schema and proof objects, and made the
   local handoff harness run it after writing `handoff-summary.json`.
