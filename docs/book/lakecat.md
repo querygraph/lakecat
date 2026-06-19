@@ -435,9 +435,12 @@ writes table-adjacent `Column`, `Snapshot`, and `Commit` events plus
 `StorageProfile` catalog events through Grust, then matches catalog-event
 labels through Grust Cypher. Storage profile replay uses redacted evidence such
 as `secret-ref-present` and the secret-reference provider, never the full
-secret-store URI. That proves QueryGraph can discover the semantic anchors
-LakeCat emits while the richer node/edge materialization remains reusable
-Grust work.
+secret-store URI. Credential-vend attempts replay through that same thin
+boundary as `StorageProfile` graph events keyed by the redacted credential-root
+anchor, so QueryGraph can see a principal attempted credential-root access
+without seeing a secret reference or raw credential material. That proves
+QueryGraph can discover the semantic anchors LakeCat emits while the richer
+node/edge materialization remains reusable Grust work.
 
 ## TypeSec For Security
 

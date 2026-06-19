@@ -1886,6 +1886,13 @@ fn credentials_vend_audit_payload(
         "authorization-receipt": receipt,
         "storage-location": table.location,
         "storage-profile-id": storage_profile.profile_id,
+        "storage-profile": {
+            "profile-id": storage_profile.profile_id,
+            "warehouse": storage_profile.warehouse.as_str(),
+            "provider": storage_profile.provider.as_str(),
+            "issuance-mode": storage_profile.issuance_mode.as_str(),
+            "secret-ref-present": storage_profile.secret_ref.is_some(),
+        },
         "secret-ref-present": storage_profile.secret_ref.is_some(),
         "credential-count": credential_count,
         "mode": storage_profile.issuance_mode.as_str(),
@@ -3908,6 +3915,24 @@ async fn project_outbox_event(
             receipt.record_lineage(lineage_receipt);
         }
     } else if event.event_type == "credentials.vend-attempted" {
+        if let Some((warehouse, profile_id)) =
+            outbox_optional_storage_profile(event, &state.warehouse)?
+        {
+            let credential_payload = redact_storage_profile_event_payload(event_payload.clone());
+            state
+                .graph
+                .emit(
+                    GraphEvent::storage_profile(
+                        GraphAction::Loaded,
+                        warehouse,
+                        profile_id,
+                        credential_payload,
+                    )
+                    .with_event_id(format!("{}:storage-profile", event.event_id)),
+                )
+                .await?;
+            receipt.graph_events += 1;
+        }
         let lineage_receipt = state
             .lineage
             .emit(LineageEvent::new(
@@ -4230,6 +4255,36 @@ fn outbox_storage_profile(
             ))
         })?;
     Ok((warehouse, profile_id))
+}
+
+fn outbox_optional_storage_profile(
+    event: &OutboxEvent,
+    default_warehouse: &WarehouseName,
+) -> Result<Option<(WarehouseName, String)>, LakeCatError> {
+    let payload = event.payload.get("payload").unwrap_or(&event.payload);
+    let Some(profile_id) = payload
+        .get("storage-profile")
+        .and_then(|storage_profile| storage_profile.get("profile-id"))
+        .or_else(|| payload.get("storage-profile-id"))
+        .and_then(Value::as_str)
+        .filter(|profile_id| !profile_id.is_empty())
+    else {
+        return Ok(None);
+    };
+    let warehouse = payload
+        .get("storage-profile")
+        .and_then(|storage_profile| storage_profile.get("warehouse"))
+        .or_else(|| payload.get("warehouse"))
+        .or_else(|| {
+            payload
+                .get("table")
+                .and_then(|table| table.get("warehouse"))
+        })
+        .and_then(Value::as_str)
+        .map(WarehouseName::new)
+        .transpose()?
+        .unwrap_or_else(|| default_warehouse.clone());
+    Ok(Some((warehouse, profile_id.to_string())))
 }
 
 fn outbox_view(
@@ -6208,6 +6263,14 @@ mod tests {
                                 }
                             },
                             "credential-count": 0,
+                            "storage-profile-id": "events-local",
+                            "storage-profile": {
+                                "profile-id": "events-local",
+                                "warehouse": "local",
+                                "provider": "file",
+                                "issuance-mode": "local-file-no-secret",
+                                "secret-ref-present": false
+                            },
                             "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
                             "lakecat:raw-credential-exception": {
                                 "requested": true,
@@ -6322,7 +6385,7 @@ mod tests {
                 "namespace.dropped".to_string()
             ]
         );
-        assert_eq!(drain.graph_events, 19);
+        assert_eq!(drain.graph_events, 20);
         assert_eq!(drain.lineage_events, 8);
         let credential_summary = drain
             .events
@@ -6334,7 +6397,7 @@ mod tests {
             Some("agent:writer")
         );
         assert_eq!(credential_summary.principal_kind.as_deref(), Some("agent"));
-        assert_eq!(credential_summary.graph_events, 1);
+        assert_eq!(credential_summary.graph_events, 2);
         assert_eq!(credential_summary.lineage_events, 1);
         assert_eq!(credential_summary.credential_count, Some(0));
         assert_eq!(
@@ -6359,6 +6422,25 @@ mod tests {
             credential_summary.replay_open_lineage_hashes,
             vec!["recorded-openlineage".to_string()]
         );
+        let graph_events = graph.events.lock().await;
+        let credential_profile_event = graph_events
+            .iter()
+            .find(|event| event.event_id.as_deref() == Some("evt-credentials:storage-profile"))
+            .expect("credential replay should project storage profile graph anchor");
+        assert_eq!(
+            credential_profile_event.label,
+            GraphNodeLabel::StorageProfile
+        );
+        assert_eq!(credential_profile_event.action, GraphAction::Loaded);
+        assert_eq!(
+            credential_profile_event.subject,
+            "lakecat:warehouse:local:storage-profile:events-local"
+        );
+        assert_eq!(
+            credential_profile_event.properties["storage-profile"]["secret-ref-present"],
+            serde_json::json!(false)
+        );
+        drop(graph_events);
         let scan_fetch_summary = drain
             .events
             .iter()
@@ -6447,7 +6529,7 @@ mod tests {
         );
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 19);
+        assert_eq!(graph_events.len(), 20);
         assert_eq!(graph_events[0].label, GraphNodeLabel::Principal);
         assert_eq!(graph_events[0].subject, "lakecat:principal:agent:writer");
         assert_eq!(
@@ -6570,30 +6652,46 @@ mod tests {
             graph_events[14].properties["commit"]["policy_hash"],
             serde_json::json!("sha256:policy")
         );
-        assert_eq!(graph_events[15].label, GraphNodeLabel::Principal);
-        assert_eq!(
-            graph_events[15].event_id.as_deref(),
-            Some("evt-credentials:principal")
+        assert!(
+            graph_events
+                .iter()
+                .any(|event| event.label == GraphNodeLabel::Principal
+                    && event.event_id.as_deref() == Some("evt-credentials:principal"))
         );
-        assert_eq!(graph_events[16].label, GraphNodeLabel::Principal);
+        let credential_profile_event = graph_events
+            .iter()
+            .find(|event| event.event_id.as_deref() == Some("evt-credentials:storage-profile"))
+            .expect("credential replay should project storage profile graph anchor");
         assert_eq!(
-            graph_events[16].event_id.as_deref(),
-            Some("evt-3:principal")
+            credential_profile_event.label,
+            GraphNodeLabel::StorageProfile
         );
-        assert_eq!(graph_events[17].label, GraphNodeLabel::Principal);
+        assert_eq!(credential_profile_event.action, GraphAction::Loaded);
         assert_eq!(
-            graph_events[17].event_id.as_deref(),
-            Some("evt-namespace-drop:principal")
+            credential_profile_event.subject,
+            "lakecat:warehouse:local:storage-profile:events-local"
         );
-        assert_eq!(graph_events[18].label, GraphNodeLabel::Namespace);
-        assert_eq!(graph_events[18].action, GraphAction::Deleted);
+        assert!(
+            graph_events
+                .iter()
+                .any(|event| event.label == GraphNodeLabel::Principal
+                    && event.event_id.as_deref() == Some("evt-3:principal"))
+        );
+        assert!(
+            graph_events
+                .iter()
+                .any(|event| event.label == GraphNodeLabel::Principal
+                    && event.event_id.as_deref() == Some("evt-namespace-drop:principal"))
+        );
+        let namespace_drop_event = graph_events
+            .iter()
+            .find(|event| event.event_id.as_deref() == Some("evt-namespace-drop"))
+            .expect("namespace drop should project a graph event");
+        assert_eq!(namespace_drop_event.label, GraphNodeLabel::Namespace);
+        assert_eq!(namespace_drop_event.action, GraphAction::Deleted);
         assert_eq!(
-            graph_events[18].subject,
+            namespace_drop_event.subject,
             "lakecat:warehouse:local:namespace:archived"
-        );
-        assert_eq!(
-            graph_events[18].event_id.as_deref(),
-            Some("evt-namespace-drop")
         );
         let policy_summary = drain
             .events
@@ -11976,6 +12074,14 @@ mod tests {
             serde_json::json!(0)
         );
         assert_eq!(
+            event.payload["payload"]["storage-profile"]["profile-id"],
+            serde_json::json!("local:file")
+        );
+        assert_eq!(
+            event.payload["payload"]["storage-profile"]["secret-ref-present"],
+            serde_json::json!(false)
+        );
+        assert_eq!(
             event.payload["payload"]["lakecat:credential-block-reason"],
             serde_json::json!("fine-grained read restriction requires Sail-planned reads")
         );
@@ -12082,6 +12188,14 @@ mod tests {
         assert_eq!(
             event.payload["payload"]["credential-count"],
             serde_json::json!(1)
+        );
+        assert_eq!(
+            event.payload["payload"]["storage-profile"]["profile-id"],
+            serde_json::json!("local:file")
+        );
+        assert_eq!(
+            event.payload["payload"]["storage-profile"]["secret-ref-present"],
+            serde_json::json!(false)
         );
         assert!(
             event.payload["payload"]

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Projected `credentials.vend-attempted` replay into redacted
+  catalog-facing `StorageProfile` graph events, so QueryGraph can see
+  credential-root access attempts without exposing secret references or
+  credential material.
 - Projected `table.commits-listed` replay into catalog-facing `Commit` graph
   events keyed by table and sequence number, so QueryGraph can see governed
   pointer-log inspection through Grust without LakeCat adding graph query

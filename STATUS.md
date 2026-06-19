@@ -6,6 +6,15 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Project credential-root access to graph`.
+  Current `credentials.vend-attempted` audit/outbox payloads now include a
+  redacted `storage-profile` anchor, and durable replay emits a
+  catalog-facing `StorageProfile` graph event for each credential-vend attempt
+  when that anchor is present. The graph projection carries profile id,
+  warehouse, provider, issuance mode, and secret-ref presence only, so
+  QueryGraph can see credential-root access without LakeCat exposing secret
+  references, raw credentials, or graph query behavior.
+- Latest completed implementation slice:
   `Project commit-history reads to graph`.
   Durable `table.commits-listed` replay now emits catalog-facing `Commit`
   graph events for each listed commit sequence, keyed by the table stable id
