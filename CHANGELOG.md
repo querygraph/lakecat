@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Clarified `GOAL.md` so the current 2026-06-19 `AGENTS.md` instruction block
+  is explicitly mirrored as durable goal guidance.
 - Made REST metadata-object commits use create-only object-store writes, so an
   existing non-current metadata file is treated as a conflict instead of being
   overwritten.

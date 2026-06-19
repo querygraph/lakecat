@@ -42,8 +42,9 @@ update the docs as part of the logical unit.
 ## Pinned Agent Guidance
 
 The current `AGENTS.md` instructions for `/Users/alexy/src/lakecat` are part of
-this goal. Treat them as durable project constraints, not session-local advice.
-When future work changes repo boundaries, compatibility rules, implementation
+this goal. The 2026-06-19 instruction block supplied in the active thread is
+mirrored here as durable project constraints, not session-local advice. When
+future work changes repo boundaries, compatibility rules, implementation
 priorities, verification gates, or commit discipline, update both `AGENTS.md`
 and this goal in the same logical unit.
 

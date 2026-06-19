@@ -5,6 +5,14 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Pin current AGENTS guidance in GOAL`.
+  `GOAL.md` now explicitly says the 2026-06-19 `AGENTS.md` instruction block
+  supplied in the active thread is mirrored there as durable project guidance,
+  covering repo boundaries, compatibility rules, implementation priorities,
+  verification, and commit discipline.
+- Local verification for this documentation slice is limited to
+  `git diff --check`.
 - Latest completed implementation slice:
   `Reject metadata object overwrite targets`.
   REST metadata-object commits now write through `object_store` with
