@@ -75,5 +75,6 @@ writing all generated artifacts under `target/qglake-handoff/`. It also writes
 `target/qglake-handoff/handoff-summary.json`, which records the verified
 LakeCat replay status, QueryGraph table/view counts, semantic hashes, and
 standards after LakeCat replay, `lakecat-verify`, and `lakecat-import` agree,
-artifact paths, raw file hashes, captured LakeCat replay output, QueryGraph
-verify output, QueryGraph import output, and service log path for automation.
+structured scan/management/credential/commit replay evidence, artifact paths,
+raw file hashes, captured LakeCat replay output, QueryGraph verify output,
+QueryGraph import output, and service log path for automation.

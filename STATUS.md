@@ -6,6 +6,30 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Structure QGLake replay evidence`. `lakecat-cli qglake-verify-replay --json`
+  now emits structured scan, management, credential, and table-commit replay
+  evidence in addition to the human-readable replay lines. The local handoff
+  summary embeds that replay evidence under
+  `lakecatReplayVerification.replayEvidence`, so automation can read compact
+  proof counts and replay/OpenLineage hashes without parsing terminal text.
+- Local verification for the structured replay evidence slice was green:
+  `cargo fmt -p lakecat-cli`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli`;
+  `scripts/qglake-handoff-local.sh` with local socket binding allowed;
+  `node -e` JSON parse/assertion check for
+  `target/qglake-handoff/handoff-summary.json`. The live handoff generated one
+  table and one view, drained 26 outbox events, verified LakeCat replay through
+  JSON output, ran QueryGraph `lakecat-verify` and `lakecat-import`, and wrote
+  structured scan task counts, management counts, credential replay proof, and
+  table commit history proof into the summary;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cross-check handoff standards and semantic hashes`. `lakecat-cli
   qglake-verify-replay --json` now exposes graph hash, OpenLineage hash, and
   standards from the verified QueryGraph bootstrap bundle. The local handoff

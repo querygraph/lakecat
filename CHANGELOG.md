@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added structured scan, management, credential, and table-commit replay
+  evidence to `lakecat-cli qglake-verify-replay --json` and embedded that
+  object in the local handoff summary.
 - Extended QGLake replay JSON and the local handoff summary to cross-check
   graph/OpenLineage hashes and the standards list across LakeCat replay,
   QueryGraph verify, and QueryGraph import.

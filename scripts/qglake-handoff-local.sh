@@ -116,7 +116,7 @@ write_summary() {
   local bundle_sha drain_sha import_plan_sha
   local verified_tables verified_views bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   local verified_standards
-  local lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards
+  local lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards lakecat_replay_evidence
   local imported_tables imported_views imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
   local imported_standards
   bundle_sha="$(sha256_file "$BUNDLE")"
@@ -130,6 +130,7 @@ write_summary() {
   lakecat_open_lineage_hash="$(json_field "$LAKECAT_REPLAY_OUTPUT" "open-lineage-hash")"
   lakecat_querygraph_import_hash="$(json_field "$LAKECAT_REPLAY_OUTPUT" "querygraph-import-hash")"
   lakecat_standards="$(json_value_field "$LAKECAT_REPLAY_OUTPUT" "standards")"
+  lakecat_replay_evidence="$(json_value_field "$LAKECAT_REPLAY_OUTPUT" "replay-evidence")"
   verified_tables="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "table-count")"
   verified_views="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "view-count")"
   bundle_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "bundle-hash")"
@@ -159,6 +160,7 @@ write_summary() {
   required_summary_field "open-lineage-hash" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_open_lineage_hash"
   required_summary_field "querygraph-import-hash" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_querygraph_import_hash"
   required_summary_field "standards" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_standards"
+  required_summary_field "replay-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_replay_evidence"
   required_summary_field "table-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_tables"
   required_summary_field "view-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_views"
   required_summary_field "bundle-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_bundle_hash"
@@ -203,7 +205,8 @@ write_summary() {
   },
   "lakecatReplayVerification": {
     "status": "$(json_string "$lakecat_status")",
-    "matchesQueryGraph": true
+    "matchesQueryGraph": true,
+    "replayEvidence": $lakecat_replay_evidence
   },
   "artifacts": {
     "bundle": {

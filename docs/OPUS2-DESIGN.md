@@ -269,7 +269,8 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   bundle/graph/OpenLineage/import hashes plus standards beside raw artifact
   file hashes, and the harness fails closed unless LakeCat replay, QueryGraph
   verify, and QueryGraph import agree on those semantic counts, hashes, and
-  standards.*
+  standards; LakeCat replay JSON and the summary now also carry structured
+  scan, management, credential, and table-commit replay evidence for automation.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond

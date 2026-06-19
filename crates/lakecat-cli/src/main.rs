@@ -312,6 +312,7 @@ fn qglake_verify_replay(
     let management_replay = qglake_management_replay_line(&drain);
     let credential_replay = qglake_credential_replay_line(&drain, principal.as_deref());
     let table_commit_history_replay = qglake_table_commit_history_replay_line(&drain);
+    let replay_evidence = qglake_replay_evidence_json(&drain, principal.as_deref());
     if json_output {
         print_json(&json!({
             "status": "verified",
@@ -328,6 +329,7 @@ fn qglake_verify_replay(
             "management-replay": management_replay,
             "credential-replay": credential_replay,
             "table-commit-history-replay": table_commit_history_replay,
+            "replay-evidence": replay_evidence,
         }))?;
         return Ok(());
     }
@@ -368,6 +370,84 @@ fn qglake_management_replay_line(drain: &LineageDrainResponse) -> Option<String>
             .storage_profile_count
             .unwrap_or_default()
     ))
+}
+
+fn qglake_replay_evidence_json(drain: &LineageDrainResponse, principal: Option<&str>) -> Value {
+    json!({
+        "scan": qglake_scan_replay_evidence_json(drain),
+        "management": qglake_management_replay_evidence_json(drain),
+        "credentials": qglake_credential_replay_evidence_json(drain, principal),
+        "tableCommitHistory": qglake_table_commit_history_replay_evidence_json(drain),
+    })
+}
+
+fn qglake_scan_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Value> {
+    let planned = qglake_drain_event(drain, "table.scan-planned")?;
+    let fetched = qglake_drain_event(drain, "table.scan-tasks-fetched")?;
+    Some(json!({
+        "planTaskCount": planned.scan_task_count.unwrap_or_default(),
+        "fileTaskCount": fetched.file_scan_task_count.unwrap_or_default(),
+        "deleteFileCount": fetched.delete_file_count.unwrap_or_default(),
+        "childPlanTaskCount": fetched.child_plan_task_count.unwrap_or_default(),
+        "plannedReplayEventHashes": &planned.replay_event_hashes,
+        "fetchedReplayEventHashes": &fetched.replay_event_hashes,
+        "plannedOpenLineageHashes": &planned.replay_open_lineage_hashes,
+        "fetchedOpenLineageHashes": &fetched.replay_open_lineage_hashes,
+    }))
+}
+
+fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Value> {
+    Some(json!({
+        "serverCount": qglake_drain_event(drain, "server.listed")?.server_count.unwrap_or_default(),
+        "projectCount": qglake_drain_event(drain, "project.listed")?.project_count.unwrap_or_default(),
+        "warehouseCount": qglake_drain_event(drain, "warehouse.listed")?.warehouse_count.unwrap_or_default(),
+        "policyBindingCount": qglake_drain_event(drain, "policy-binding.listed")?.policy_binding_count,
+        "storageProfileCount": qglake_drain_event(drain, "storage-profile.listed")?.storage_profile_count.unwrap_or_default(),
+    }))
+}
+
+fn qglake_credential_replay_evidence_json(
+    drain: &LineageDrainResponse,
+    principal: Option<&str>,
+) -> Option<Value> {
+    let restricted_subject = principal.unwrap_or("anonymous");
+    let restricted_kind = if principal.is_some() {
+        "agent"
+    } else {
+        "anonymous"
+    };
+    let restricted = qglake_credential_event(drain, restricted_subject, restricted_kind)?;
+    let human = qglake_credential_event(drain, "human:qglake-operator", "human")?;
+    Some(json!({
+        "restricted": {
+            "principalSubject": restricted.principal_subject.as_deref(),
+            "principalKind": restricted.principal_kind.as_deref(),
+            "credentialCount": restricted.credential_count.unwrap_or_default(),
+            "blockReason": restricted.credential_block_reason.as_deref(),
+            "replayEventHashes": &restricted.replay_event_hashes,
+            "openLineageHashes": &restricted.replay_open_lineage_hashes,
+        },
+        "trustedHuman": {
+            "principalSubject": human.principal_subject.as_deref(),
+            "principalKind": human.principal_kind.as_deref(),
+            "credentialCount": human.credential_count.unwrap_or_default(),
+            "rawCredentialExceptionAllowed": human.raw_credential_exception_allowed.unwrap_or_default(),
+            "rawCredentialExceptionReason": human.raw_credential_exception_reason.as_deref(),
+            "replayEventHashes": &human.replay_event_hashes,
+            "openLineageHashes": &human.replay_open_lineage_hashes,
+        }
+    }))
+}
+
+fn qglake_table_commit_history_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Value> {
+    let commit_history = qglake_drain_event(drain, "table.commits-listed")?;
+    Some(json!({
+        "commitCount": commit_history.table_commit_count.unwrap_or_default(),
+        "sequenceNumbers": &commit_history.table_commit_sequence_numbers,
+        "commitHashes": &commit_history.table_commit_hashes,
+        "replayEventHashes": &commit_history.replay_event_hashes,
+        "openLineageHashes": &commit_history.replay_open_lineage_hashes,
+    }))
 }
 
 fn qglake_credential_replay_line(
