@@ -1355,6 +1355,8 @@ fn verify_lakecat_replay_scan_matches_summary(
         "childPlanTaskCount",
         "plannedReadRestriction",
         "fetchedReadRestriction",
+        "fetchedRequiredProjection",
+        "fetchedRequiredFilters",
         "plannedReplayEventHashes",
         "fetchedReplayEventHashes",
         "plannedOpenLineageHashes",
@@ -7526,6 +7528,12 @@ mod tests {
                         "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
+                    "fetchedRequiredProjection": ["event_id", "occurred_at", "severity"],
+                    "fetchedRequiredFilters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }],
                     "plannedReplayEventHashes": ["sha256:scan-plan-replay"],
                     "fetchedReplayEventHashes": ["sha256:scan-fetch-replay"],
                     "plannedOpenLineageHashes": ["sha256:scan-plan-openlineage"],
@@ -9387,6 +9395,53 @@ mod tests {
             .expect_err("captured replay governed scan proof drift should be rejected");
         assert!(err.to_string().contains(
             "captured LakeCat replay output.replay-evidence.scan.planTaskCount mismatch"
+        ));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_scan_projection_drift() {
+        let temp = qglake_temp_dir("handoff-captured-scan-projection-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["scan"]["fetchedRequiredProjection"] =
+            json!(["event_id", "occurred_at", "severity", "raw_payload"]);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay scan projection proof drift should be rejected");
+        assert!(err.to_string().contains(
+            "captured LakeCat replay output.replay-evidence.scan.fetchedRequiredProjection mismatch"
+        ));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_scan_filter_drift() {
+        let temp = qglake_temp_dir("handoff-captured-scan-filter-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["scan"]["fetchedRequiredFilters"] = json!([{
+            "type": "not-eq",
+            "term": "severity",
+            "value": "trace"
+        }]);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay scan filter proof drift should be rejected");
+        assert!(err.to_string().contains(
+            "captured LakeCat replay output.replay-evidence.scan.fetchedRequiredFilters mismatch"
         ));
     }
 

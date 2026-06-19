@@ -6,6 +6,19 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cross-check captured scan fetch requirements`.
+  Captured QGLake LakeCat replay output now must match compact
+  `governedScanProof` evidence for `fetchedRequiredProjection` and
+  `fetchedRequiredFilters`, preventing a handoff summary from proving governed
+  fetch narrowing while the terminal replay artifact records different
+  projection/filter requirements.
+- Local verification for this captured scan fetch-requirements slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require QGLake scan work counts`.
   Compact QGLake governed scan proof now rejects missing or zero
   `deleteFileCount` and `childPlanTaskCount` values, keeping delete-file and

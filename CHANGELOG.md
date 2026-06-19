@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound captured QGLake scan replay semantics to the compact
+  `fetchedRequiredProjection` and `fetchedRequiredFilters` evidence so terminal
+  replay output cannot drift from governed fetch proof.
 - Required compact QGLake governed scan proof to carry positive delete-file and
   child-plan-task counts alongside plan-task and file-task counts.
 - Required compact QGLake governed scan proof to reject extra
