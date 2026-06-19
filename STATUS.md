@@ -6,6 +6,30 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Lift storage profile proof into handoff summary`.
+  `scripts/qglake-handoff-local.sh` now writes
+  `lakecatReplayVerification.storageProfileUpsertProof` as a compact
+  `profileId`/`provider`/`secretRefPresent`/hash proof object in
+  `handoff-summary.json`, while still failing closed if the source LakeCat
+  replay JSON lacks the full redacted storage-profile upsert evidence.
+- Local verification for the compact handoff storage-profile proof slice is
+  green:
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh` with local socket binding allowed. The live
+  handoff generated one table and one view, drained 26 outbox events, verified
+  LakeCat replay through `qglake-verify-replay`, ran QueryGraph
+  `lakecat-verify` and `lakecat-import`, and wrote
+  `lakecatReplayVerification.storageProfileUpsertProof` to
+  `target/qglake-handoff/handoff-summary.json`;
+  direct Node summary check for
+  `lakecatReplayVerification.storageProfileUpsertProof`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `cargo test -p lakecat-cli`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Require storage profile proof in handoff`. `scripts/qglake-handoff-local.sh`
   now fails closed before writing `handoff-summary.json` unless LakeCat replay
   JSON includes `replay-evidence.management.storageProfileUpsert` with profile

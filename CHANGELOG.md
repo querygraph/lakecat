@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a compact `storageProfileUpsertProof` object to QGLake
+  `handoff-summary.json`, so operators and QueryGraph can verify the
+  credential-root proof without parsing the full replay evidence tree.
 - Added a dedicated `GOAL.md` book-workflow section requiring substantial
   workflow examples as LakeCat behavior lands.
 - Made the local QGLake handoff harness require redacted storage-profile upsert

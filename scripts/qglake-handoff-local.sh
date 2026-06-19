@@ -92,7 +92,7 @@ process.stdout.write(JSON.stringify(value));
 ' "$file" "$field"
 }
 
-require_storage_profile_upsert_evidence() {
+storage_profile_upsert_evidence_json() {
   local file="$1"
   node -e '
 const fs = require("fs");
@@ -119,6 +119,14 @@ if (!Array.isArray(evidence.openLineageHashes) || evidence.openLineageHashes.len
   console.error("LakeCat storage-profile upsert evidence is missing openLineageHashes");
   process.exit(1);
 }
+process.stdout.write(JSON.stringify({
+  profileId: evidence.profileId,
+  provider: evidence.provider,
+  secretRefPresent: evidence.secretRefPresent,
+  secretRefProvider: evidence.secretRefProvider ?? null,
+  replayEventHashes: evidence.replayEventHashes,
+  openLineageHashes: evidence.openLineageHashes,
+}));
 ' "$file"
 }
 
@@ -147,6 +155,7 @@ write_summary() {
   local verified_tables verified_views bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   local verified_standards
   local lakecat_schema lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards lakecat_replay_evidence
+  local lakecat_storage_profile_upsert_evidence
   local imported_tables imported_views imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
   local imported_standards
   bundle_sha="$(sha256_file "$BUNDLE")"
@@ -162,6 +171,7 @@ write_summary() {
   lakecat_querygraph_import_hash="$(json_field "$LAKECAT_REPLAY_OUTPUT" "querygraph-import-hash")"
   lakecat_standards="$(json_value_field "$LAKECAT_REPLAY_OUTPUT" "standards")"
   lakecat_replay_evidence="$(json_value_field "$LAKECAT_REPLAY_OUTPUT" "replay-evidence")"
+  lakecat_storage_profile_upsert_evidence="$(storage_profile_upsert_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   verified_tables="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "table-count")"
   verified_views="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "view-count")"
   bundle_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "bundle-hash")"
@@ -193,7 +203,7 @@ write_summary() {
   required_summary_field "querygraph-import-hash" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_querygraph_import_hash"
   required_summary_field "standards" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_standards"
   required_summary_field "replay-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_replay_evidence"
-  require_storage_profile_upsert_evidence "$LAKECAT_REPLAY_OUTPUT"
+  required_summary_field "storage-profile-upsert-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_storage_profile_upsert_evidence"
   required_summary_field "table-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_tables"
   required_summary_field "view-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_views"
   required_summary_field "bundle-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_bundle_hash"
@@ -242,6 +252,7 @@ write_summary() {
     "schemaVersion": "$(json_string "$lakecat_schema")",
     "status": "$(json_string "$lakecat_status")",
     "matchesQueryGraph": true,
+    "storageProfileUpsertProof": $lakecat_storage_profile_upsert_evidence,
     "replayEvidence": $lakecat_replay_evidence
   },
   "artifacts": {
