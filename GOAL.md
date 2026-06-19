@@ -51,6 +51,14 @@ compatibility rules, implementation priorities, verification gates, or commit
 discipline, update both `AGENTS.md` and this goal in the same logical unit so
 agents do not have to choose between two sources of durable guidance.
 
+The current AGENTS guidance supplied for `/Users/alexy/src/lakecat` is imported
+into this goal as permanent operating direction. Treat it as covering the
+catalog's thin boundary, Sail/Grust/TypeSec placement rules, QueryGraph
+integration target, Iceberg compatibility rules, Turso-first durable local
+store direction, explicit feature gates, transactional-outbox direction,
+CHANGELOG-before-commit discipline, local verification gates, and the rule that
+sibling-repo changes must be tested and reported separately.
+
 The current `/Users/alexy/src/lakecat/AGENTS.md` instructions are permanent
 goal constraints and must be read as the following contract.
 

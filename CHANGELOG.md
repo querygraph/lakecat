@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Clarified `GOAL.md` so the latest `/Users/alexy/src/lakecat/AGENTS.md`
+  guidance is imported as permanent operating direction for repo boundaries,
+  QueryGraph integration, Turso, feature gates, verification, and
+  CHANGELOG-before-commit discipline.
 - Tightened QGLake saved replay acceptance to require the trusted-human raw
   credential exception reason, and made `qglake-verify-replay` print compact
   restricted-agent and trusted-human credential replay evidence.
