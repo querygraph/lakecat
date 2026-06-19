@@ -2018,6 +2018,16 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "governedScanProof.plannedReadRestriction",
     )?;
     require_value_match(
+        planned_restriction,
+        "max-credential-ttl-seconds",
+        required_value(
+            fetched_restriction,
+            "max-credential-ttl-seconds",
+            "governedScanProof.fetchedReadRestriction",
+        )?,
+        "governedScanProof.plannedReadRestriction",
+    )?;
+    require_value_match(
         fetched_restriction,
         "allowed-columns",
         required_value(
@@ -8449,6 +8459,22 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("purpose mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_scan_restriction_ttl_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["fetchedReadRestriction"]["max-credential-ttl-seconds"] =
+            json!(60);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject drifted scan restriction TTL cap");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(
+            err.to_string()
+                .contains("max-credential-ttl-seconds mismatch")
+        );
     }
 
     #[test]

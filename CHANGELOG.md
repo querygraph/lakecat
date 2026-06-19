@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Required compact QGLake governed scan proof to reject drift between planned
+  and fetched `max-credential-ttl-seconds` values.
 - Required compact QGLake handoff summaries to include the full QGLake
   standards set instead of merely agreeing across QueryGraph verify/import and
   LakeCat bootstrap proof sections.
