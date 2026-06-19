@@ -1,5 +1,9 @@
 # LakeCat Review (OPUS2)
 
+> Archived completed review. The active LakeCat design record is
+> [`../../DESIGN.md`](../../DESIGN.md); use this file only for historical audit
+> and provenance.
+
 Second full review of `~/src/lakecat` (branch `master`, HEAD `293b71d`), against
 the new [`GOAL.md`](../../GOAL.md) and the integration targets `~/src/sail`,
 `~/src/grust`, `~/src/typesec`, and `~/src/querygraph`.

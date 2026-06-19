@@ -41,6 +41,33 @@ work should read this file, `AGENTS.md`, `ARCHITECTURE.md`, `GOAL.md`,
 `STATUS.md`, and the live code. If those disagree, prefer the live code and
 newest status/design entry, then reconcile the docs in the same logical unit.
 
+### Canonical Document Map
+
+Use this map instead of reopening OPUS files for routine work:
+
+| Need | Canonical home |
+| --- | --- |
+| LakeCat thesis, compatibility rules, OPUS finding closure, and priority plan | `DESIGN.md` |
+| Target architecture and repo placement rules | `ARCHITECTURE.md` |
+| Durable operating goal and source-of-truth order | `GOAL.md` |
+| Agent/commit/verification discipline | `AGENTS.md` |
+| Latest completed slices, local verification, blockers, and next work | `STATUS.md` |
+| User-facing change record before each commit | `CHANGELOG.md` |
+| Book-quality operator narrative and examples | `docs/book/lakecat.md` |
+| Historical review provenance only | `docs/completed/OPUS*.md` |
+
+### Archive Policy
+
+The OPUS files are frozen completed reviews, not living design plans. Do not
+append new review logs to them, and do not cite them as current authority in new
+work. If an archived OPUS detail becomes relevant again, first merge the durable
+part into the canonical document above, then implement from the canonical doc.
+
+The only acceptable changes to `docs/completed/OPUS*.md` are archive-maintenance
+edits such as fixing links, adding an archive banner, or correcting broken
+provenance. New LakeCat design and implementation guidance belongs here or in
+the adjacent canonical docs.
+
 ## Thesis
 
 Iceberg constrains one layer: how table state is stored and how standard

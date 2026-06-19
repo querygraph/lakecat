@@ -1,5 +1,9 @@
 # LakeCat Design Plan (OPUS2-DESIGN)
 
+> Archived completed review. The active LakeCat design record is
+> [`../../DESIGN.md`](../../DESIGN.md); use this file only for historical audit
+> and provenance.
+
 Design-level companion to [OPUS2.md](OPUS2.md), succeeding
 [OPUS1-DESIGN.md](OPUS1-DESIGN.md). OPUS1-DESIGN asked *"can we get innovative
 QueryGraph features while conforming to Iceberg and bringing Sail to the data?"*

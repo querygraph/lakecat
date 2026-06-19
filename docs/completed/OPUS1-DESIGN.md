@@ -1,5 +1,9 @@
 # LakeCat Design Assessment (OPUS1-DESIGN)
 
+> Archived completed review. The active LakeCat design record is
+> [`../../DESIGN.md`](../../DESIGN.md); use this file only for historical audit
+> and provenance.
+
 A design-level companion to [`OPUS1.md`](OPUS1.md). Where OPUS1 reviews *what
 Codex built*, this answers a sharper question:
 

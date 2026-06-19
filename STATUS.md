@@ -5,6 +5,16 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Finalize OPUS archive consolidation`.
+  `DESIGN.md` now carries the canonical document map and archive policy for the
+  completed OPUS reviews. `docs/completed/README.md` maps each archived OPUS file
+  to its current canonical home, and each OPUS file has an archive banner
+  pointing readers back to `DESIGN.md`.
+- Local verification for this OPUS archive consolidation slice is green:
+  `cargo fmt --all -- --check`;
+  `docs/book/build.sh`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Redact metadata object write errors`.
   Metadata-object commit validation and create-only write failures now report

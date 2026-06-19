@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Finalized OPUS archive consolidation by adding a canonical document map and
+  archive policy to `DESIGN.md`, expanding `docs/completed/README.md` with a
+  consolidation ledger, and marking each OPUS file as historical audit
+  provenance.
 - Redacted metadata-object commit validation and write errors so current-pointer
   overwrite, existing-object overwrite, and storage-profile-prefix failures
   report metadata/prefix hashes instead of raw object paths.
