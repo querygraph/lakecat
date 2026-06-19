@@ -865,6 +865,7 @@ impl StorageProfile {
                 "short-lived-secret-ref issuance mode requires a secret reference".to_string(),
             ));
         }
+        validate_public_config(&self.public_config)?;
         Ok(())
     }
 
@@ -4618,8 +4619,8 @@ pub mod turso_store {
         use lakecat_core::{Principal, TableName};
 
         use crate::{
-            CredentialIssuanceMode, PolicyBinding, ServerRecord, StorageProvider, ViewColumnRecord,
-            ViewRecord, ViewVersionOperation,
+            CredentialIssuanceMode, MemoryCatalogStore, PolicyBinding, ServerRecord,
+            StorageProvider, ViewColumnRecord, ViewRecord, ViewVersionOperation,
         };
 
         use super::*;
@@ -5854,6 +5855,70 @@ pub mod turso_store {
             assert!(
                 err.to_string()
                     .contains("public config value for key 'lakecat.endpoint'")
+            );
+        }
+
+        #[test]
+        fn storage_profile_validate_rejects_public_config_secret_values() {
+            let profile = StorageProfile {
+                profile_id: "secret-public-config".to_string(),
+                warehouse: WarehouseName::new("local").unwrap(),
+                location_prefix: "s3://lakecat-demo/events".to_string(),
+                provider: StorageProvider::S3,
+                issuance_mode: CredentialIssuanceMode::ShortLivedSecretRef,
+                secret_ref: Some("typesec://lakecat/local/s3-events".to_string()),
+                public_config: BTreeMap::from([(
+                    "lakecat.endpoint".to_string(),
+                    "https://storage.example.invalid?token=raw-secret".to_string(),
+                )]),
+            };
+
+            let err = profile.validate().unwrap_err();
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            assert!(
+                err.to_string()
+                    .contains("public config value for key 'lakecat.endpoint'")
+            );
+        }
+
+        #[tokio::test]
+        async fn storage_profile_upsert_rejects_deserialized_public_config_secrets() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            let profile = StorageProfile {
+                profile_id: "secret-public-config".to_string(),
+                warehouse: warehouse.clone(),
+                location_prefix: "s3://lakecat-demo/events".to_string(),
+                provider: StorageProvider::S3,
+                issuance_mode: CredentialIssuanceMode::ShortLivedSecretRef,
+                secret_ref: Some("typesec://lakecat/local/s3-events".to_string()),
+                public_config: BTreeMap::from([(
+                    "lakecat.endpoint".to_string(),
+                    "https://storage.example.invalid?token=raw-secret".to_string(),
+                )]),
+            };
+
+            let memory_err = MemoryCatalogStore::new()
+                .upsert_storage_profile(profile.clone())
+                .await
+                .unwrap_err();
+            assert!(matches!(memory_err, LakeCatError::InvalidArgument(_)));
+            assert!(
+                memory_err
+                    .to_string()
+                    .contains("public config value for key 'lakecat.endpoint'")
+            );
+
+            let turso = TursoCatalogStore::in_memory().await.unwrap();
+            let turso_err = turso.upsert_storage_profile(profile).await.unwrap_err();
+            assert!(matches!(turso_err, LakeCatError::InvalidArgument(_)));
+            assert!(
+                turso_err
+                    .to_string()
+                    .contains("public config value for key 'lakecat.endpoint'")
+            );
+            assert_eq!(
+                turso.list_storage_profiles(&warehouse).await.unwrap(),
+                vec![]
             );
         }
 

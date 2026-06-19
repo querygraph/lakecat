@@ -834,7 +834,10 @@ The `public-config` map is only for non-secret routing hints such as region,
 endpoint labels, and operational purpose. LakeCat rejects secret-looking
 public keys and values, so raw tokens, passwords, access keys, and credential
 query parameters must move behind `secret-ref` and the TypeSec-authorized
-resolver path. The `secret-ref` field itself must remain a clean external
+resolver path. That rule is enforced both when a profile is built from a
+management request and when a storage profile is revalidated before memory or
+Turso persistence, so deserialized control-plane records cannot bypass the
+public-config guard. The `secret-ref` field itself must remain a clean external
 secret-store locator: LakeCat rejects query strings, URI fragments, and
 userinfo before persisting a storage profile, so token-like material cannot hide
 inside a decorated secret URI. Unsupported credential-root schemes are rejected

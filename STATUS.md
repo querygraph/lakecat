@@ -5,6 +5,20 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Validate storage-profile public config on upsert`.
+  `StorageProfile::validate` now enforces the same public-config
+  secret-material checks as `StorageProfile::new`, so deserialized or manually
+  constructed profiles cannot bypass validation before memory or Turso
+  persistence.
+- Local verification for this storage-profile public-config validation slice is
+  green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local storage_profile_validate_rejects_public_config_secret_values -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local storage_profile_upsert_rejects_deserialized_public_config_secrets -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Finalize OPUS archive consolidation`.
   `DESIGN.md` now carries the canonical document map and archive policy for the

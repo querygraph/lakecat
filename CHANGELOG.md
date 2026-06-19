@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened storage-profile validation so deserialized or manually constructed
+  profiles cannot bypass public-config secret-material checks before memory or
+  Turso persistence.
 - Finalized OPUS archive consolidation by adding a canonical document map and
   archive policy to `DESIGN.md`, expanding `docs/completed/README.md` with a
   consolidation ledger, and marking each OPUS file as historical audit
