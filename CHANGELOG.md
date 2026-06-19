@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Cross-checked QGLake bootstrap embedded ODRL policy bindings against the
+  structured policy-binding projection so QueryGraph import evidence cannot
+  drift from LakeCat-verified restriction evidence.
 - Required QGLake bootstrap policy projection verification to preserve the
   policy-derived `max-credential-ttl-seconds` cap before bootstrap evidence can
   feed replay proof.

@@ -6,6 +6,17 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cross-check bootstrap embedded ODRL policy evidence`.
+  QGLake bootstrap projection verification now rejects embedded ODRL policy
+  bindings that drift from the structured policy-binding projection, preventing
+  QueryGraph import evidence from carrying a stale read-restriction copy.
+- Local verification for this bootstrap embedded-policy slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_bootstrap_projection_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require bootstrap TTL cap before replay proof`.
   QGLake bootstrap policy projection verification now rejects missing or drifted
   `max-credential-ttl-seconds` values before exported policy evidence can feed

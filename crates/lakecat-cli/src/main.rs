@@ -4229,9 +4229,24 @@ fn verify_qglake_bootstrap_projection(
             restriction["max-credential-ttl-seconds"].clone()
         )));
     }
-    if projection.odrl["lakecat:policy-bindings"][0]["policy-id"] != expected_policy {
+    let embedded_bindings = projection.odrl["lakecat:policy-bindings"]
+        .as_array()
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap ODRL table projection did not embed policy bindings for {expected_policy}"
+            ))
+        })?;
+    let embedded_binding = embedded_bindings
+        .iter()
+        .find(|embedded| embedded["policy-id"] == expected_policy)
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap ODRL table projection did not embed {expected_policy}"
+            ))
+        })?;
+    if embedded_binding["odrl"] != binding.odrl {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "QGLake bootstrap ODRL table projection did not embed {expected_policy}"
+            "QGLake bootstrap embedded ODRL policy binding {expected_policy} drifted from structured policy binding"
         )));
     }
     Ok(())
@@ -9731,6 +9746,19 @@ mod tests {
                 .expect_err("QGLake bootstrap projection should require policy TTL cap");
 
         assert!(err.to_string().contains("policy max credential TTL"));
+    }
+
+    #[test]
+    fn qglake_bootstrap_projection_verifier_rejects_embedded_odrl_drift() {
+        let mut projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        projection.odrl["lakecat:policy-bindings"][0]["odrl"]["lakecat:read-restriction"]["max-credential-ttl-seconds"] =
+            serde_json::json!(60);
+
+        let err =
+            verify_qglake_bootstrap_projection(&projection, &["default".to_string()], "events")
+                .expect_err("QGLake bootstrap projection should reject embedded ODRL drift");
+
+        assert!(err.to_string().contains("embedded ODRL policy binding"));
     }
 
     #[test]

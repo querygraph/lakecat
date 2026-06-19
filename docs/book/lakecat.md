@@ -962,7 +962,9 @@ drops either the narrowed projection or the mandatory row predicate proof. The
 same verifier now checks that the exported policy binding, scan planning
 extension, and fetch extension all preserve the server-derived purpose and
 policy-derived `max-credential-ttl-seconds` cap before compact replay proof can
-be accepted.
+be accepted. It also cross-checks the embedded ODRL policy projection against
+the structured binding so QueryGraph cannot import a stale copy while LakeCat
+verifies a different one.
 
 ### A Notebook Requests Credentials
 
