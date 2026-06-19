@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reaffirmed in `GOAL.md` that the current repo-local `AGENTS.md` guidance is
+  the canonical standing contract for LakeCat work and must stay synchronized
+  with the goal.
 - Made `lakecat-cli qglake-verify-handoff` compare compact governed scan proof
   fields against captured LakeCat replay JSON, so Sail-planned read task counts
   and replay/OpenLineage hashes cannot drift between replay and summary.

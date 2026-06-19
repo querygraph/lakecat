@@ -48,6 +48,12 @@ future work changes repo boundaries, compatibility rules, implementation
 priorities, verification gates, or commit discipline, update both `AGENTS.md`
 and this goal in the same logical unit.
 
+The canonical agent contract is the repo-local `AGENTS.md` block titled
+`LakeCat Agent Guidance`. Treat its repo-boundary, compatibility,
+implementation, verification, Turso, book-workflow, and commit/check-in rules
+as standing goal requirements. If `AGENTS.md` and this file drift, reconcile
+them before choosing the next implementation slice.
+
 LakeCat is the Rust Iceberg-compatible catalog foundation for QueryGraph. Keep
 the catalog boundary thin: identity, tenancy, Iceberg REST compatibility,
 metadata-pointer state, policy gates, and integration events belong here.
