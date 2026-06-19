@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a durable `response_hash` to table commit records so pointer-log,
+  audit/outbox, graph, and lineage replay can prove the exact stored commit
+  response alongside the request hash used for idempotency.
 - Added a pre-Sail commit idempotency replay probe on the `CatalogStore` seam so
   exact REST commit retries return the stored response before Sail validation or
   metadata-object writes, with direct Turso coverage and a stale-requirement

@@ -5555,6 +5555,7 @@ mod tests {
                             "sequence_number": 7,
                             "principal": principal,
                             "request_hash": "sha256:request",
+                            "response_hash": "sha256:response",
                             "idempotency_key_sha256": "sha256:idempotency",
                             "committed_at": chrono::Utc::now(),
                         },
@@ -5917,6 +5918,10 @@ mod tests {
             graph_events[14].properties["commit"]["idempotency_key_sha256"],
             serde_json::json!("sha256:idempotency")
         );
+        assert_eq!(
+            graph_events[14].properties["commit"]["response_hash"],
+            serde_json::json!("sha256:response")
+        );
         assert_eq!(graph_events[15].label, GraphNodeLabel::Principal);
         assert_eq!(
             graph_events[15].event_id.as_deref(),
@@ -5988,6 +5993,10 @@ mod tests {
         assert_eq!(
             lineage_events[4].payload["commit"]["new_metadata_location"],
             serde_json::json!("file:///tmp/events/metadata/00001.json")
+        );
+        assert_eq!(
+            lineage_events[4].payload["commit"]["response_hash"],
+            serde_json::json!("sha256:response")
         );
         assert_eq!(
             lineage_events[5].event_type,

@@ -300,9 +300,19 @@ pub struct TableCommitRecord {
     pub sequence_number: u64,
     pub principal: Principal,
     pub request_hash: String,
+    pub response_hash: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idempotency_key_sha256: Option<String>,
     pub committed_at: DateTime<Utc>,
+}
+
+fn table_response_hash(table: &TableRecord) -> LakeCatResult<String> {
+    let value = serde_json::to_value(table).map_err(|err| {
+        LakeCatError::Internal(format!(
+            "failed to encode table commit response hash: {err}"
+        ))
+    })?;
+    content_hash_json(&value)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1237,6 +1247,7 @@ impl CatalogStore for MemoryCatalogStore {
             sequence_number,
             principal: commit.principal.clone(),
             request_hash,
+            response_hash: table_response_hash(&table)?,
             idempotency_key_sha256,
             committed_at,
         };
@@ -2778,6 +2789,7 @@ pub mod turso_store {
                 sequence_number: table.version,
                 principal: commit.principal.clone(),
                 request_hash,
+                response_hash: crate::table_response_hash(&table)?,
                 idempotency_key_sha256,
                 committed_at: table.updated_at,
             };
@@ -4582,6 +4594,10 @@ pub mod turso_store {
                 .unwrap()
                 .expect("idempotency replay should be available before commit planning");
             assert_eq!(replayed_probe.version, 1);
+            assert_eq!(
+                commit_records[0].response_hash,
+                crate::table_response_hash(&replayed_probe).unwrap()
+            );
             let replay_mismatch = store
                 .replay_table_commit(&ident, "commit-1", "sha256:different-request")
                 .await
@@ -4621,6 +4637,10 @@ pub mod turso_store {
             assert_eq!(
                 pending[0].payload["commit"]["idempotency_key_sha256"],
                 serde_json::json!(content_hash_bytes("commit-1".as_bytes()))
+            );
+            assert_eq!(
+                pending[0].payload["commit"]["response_hash"],
+                serde_json::json!(commit_records[0].response_hash)
             );
             assert!(!pending[0].payload.to_string().contains("commit-1"));
             assert_eq!(

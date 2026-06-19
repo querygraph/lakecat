@@ -310,6 +310,11 @@ original commit requirements. Reusing the same key for a different body must
 conflict. LakeCat persists a normalized request hash and stores only audit-safe
 evidence, not raw secrets or raw idempotency keys.
 
+Commit records also carry a response hash over the stored table response. That
+pair matters: the request hash proves which commit body won or replayed, while
+the response hash proves which metadata pointer and table body LakeCat returned
+to clients and later projected through graph and lineage replay.
+
 ## The Durable Spine
 
 LakeCat's durable local spine uses the Rust `turso` crate behind the
