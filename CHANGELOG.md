@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake table commit-history replay and compact handoff proof to
+  carry positive graph event evidence alongside commit, replay, and OpenLineage
+  hashes, and surfaced that evidence in the operator-readable replay line.
 - Added the final OPUS consolidation digest and archive audit commands to the
   canonical design/archive docs so future work no longer needs to reopen OPUS
   files for active guidance.

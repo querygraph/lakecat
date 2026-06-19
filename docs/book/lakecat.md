@@ -1406,7 +1406,8 @@ governed path, including file, delete-file, and child plan-task counts with
 replay and OpenLineage hashes. The
 commit-history proof shows the catalog
 pointer log was read back with commit count, sequence numbers, commit hashes,
-and replay/OpenLineage hashes. The view receipt-chain proof shows QueryGraph's
+positive graph event evidence, and replay/OpenLineage hashes. The view
+receipt-chain proof shows QueryGraph's
 accepted view versions together with accepted receipt hashes, accepted
 `expectedViewVersion` guard evidence when a mutation was guarded, tombstone
 receipt hashes, namespace chain hashes, verified-chain counts, and
@@ -1447,11 +1448,13 @@ OpenLineage hashes directly, so automation can reject incomplete scan lineage
 without falling back to the shell harness. It also compares the captured
 `replay-evidence.tableCommitHistory` object with
 `tableCommitHistoryProof`, including the commit count, sequence numbers, commit
-hashes, replay hashes, and OpenLineage hashes that prove the pointer-log commit
-history was not rewritten between replay and summary. The compact verifier also
-requires the commit count to match the sequence-number and commit-hash arrays,
-requires every sequence number to be positive and strictly increasing, and
-requires replay and OpenLineage receipt hashes. It compares the captured
+hashes, graph event count, replay hashes, and OpenLineage hashes that prove the
+pointer-log commit history was not rewritten between replay and summary and
+that the commit-history replay projected catalog graph evidence. The compact
+verifier also requires the commit count to match the sequence-number and
+commit-hash arrays, requires every sequence number to be positive and strictly
+increasing, and requires positive graph event evidence plus replay and
+OpenLineage receipt hashes. It compares the captured
 `replay-evidence.views` object with `viewReceiptChainProof`, including accepted
 view receipts, expected-version guard evidence, tombstone receipts, namespace
 receipt-chain hashes, and their replay/OpenLineage hashes, so durable view
@@ -1632,7 +1635,7 @@ control-plane lines such as:
 scan replay plan_tasks=1 planned_ttl=300 planned_purpose=qglake-agent-demo file_tasks=1 delete_files=1 child_plan_tasks=1 fetched_ttl=300 fetched_purpose=qglake-agent-demo
 management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none
 credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2
-table commit history commits=1 sequences=1 hashes=sha256:...
+table commit history commits=1 sequences=1 hashes=sha256:... graph_events=1
 ```
 
 Those lines are intentionally small enough for QueryGraph handoff scripts and

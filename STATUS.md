@@ -5,6 +5,25 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Prove table commit-history graph replay`.
+  QGLake compact `tableCommitHistoryProof`, captured LakeCat replay semantics,
+  and lineage-drain replay verification now require positive `graphEvents`
+  evidence for `table.commits-listed`, so commit-history acceptance cannot prove
+  only pointer-log and OpenLineage receipts while omitting the catalog graph
+  projection. The operator-readable table commit-history replay line also
+  prints the same graph event count.
+- Local verification for this table commit-history graph replay slice is green:
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_commit_history_graph_events -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_accept_matching_files -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --nocapture`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_commit_history_replay_line_summarizes_verified_evidence -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Finalize OPUS consolidation digest`.
   `DESIGN.md` now carries the active OPUS synthesis as a concise operating

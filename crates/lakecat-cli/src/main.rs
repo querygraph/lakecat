@@ -1398,6 +1398,7 @@ fn verify_lakecat_replay_table_commit_history_matches_summary(
         "commitCount",
         "sequenceNumbers",
         "commitHashes",
+        "graphEvents",
         "replayEventHashes",
         "openLineageHashes",
     ] {
@@ -2370,6 +2371,7 @@ fn require_table_commit_history_evidence(
         )));
     }
     require_hash_array(commit_history, "commitHashes", "tableCommitHistoryProof")?;
+    require_positive_u64(commit_history, "graphEvents", "tableCommitHistoryProof")?;
     require_hash_array(
         commit_history,
         "replayEventHashes",
@@ -3083,6 +3085,7 @@ fn qglake_table_commit_history_replay_evidence_json(drain: &LineageDrainResponse
         "commitCount": commit_history.table_commit_count.unwrap_or_default(),
         "sequenceNumbers": &commit_history.table_commit_sequence_numbers,
         "commitHashes": &commit_history.table_commit_hashes,
+        "graphEvents": commit_history.graph_events,
         "replayEventHashes": &commit_history.replay_event_hashes,
         "openLineageHashes": &commit_history.replay_open_lineage_hashes,
     }))
@@ -3255,10 +3258,11 @@ fn qglake_credential_storage_profile_line(event: &LineageDrainEventSummary) -> O
 fn qglake_table_commit_history_replay_line(drain: &LineageDrainResponse) -> Option<String> {
     let commit_history = qglake_drain_event(drain, "table.commits-listed")?;
     Some(format!(
-        "table commit history commits={} sequences={} hashes={}",
+        "table commit history commits={} sequences={} hashes={} graph_events={}",
         commit_history.table_commit_count.unwrap_or_default(),
         join_u64s(&commit_history.table_commit_sequence_numbers),
-        commit_history.table_commit_hashes.join(",")
+        commit_history.table_commit_hashes.join(","),
+        commit_history.graph_events
     ))
 }
 
@@ -6040,6 +6044,12 @@ fn verify_qglake_table_commit_history_replay(
                 .to_string(),
         ));
     }
+    if commit_history.graph_events == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain table commit history replay emitted no graph projection"
+                .to_string(),
+        ));
+    }
     if commit_history.replay_event_hashes.is_empty()
         || commit_history
             .replay_event_hashes
@@ -7405,6 +7415,7 @@ mod tests {
                     "commitCount": 1,
                     "sequenceNumbers": [1],
                     "commitHashes": ["sha256:commit"],
+                    "graphEvents": 1,
                     "replayEventHashes": ["sha256:commit-replay"],
                     "openLineageHashes": ["sha256:commit-openlineage"]
                 },
@@ -7607,6 +7618,7 @@ mod tests {
                     "commitCount": 1,
                     "sequenceNumbers": [1],
                     "commitHashes": ["sha256:commit"],
+                    "graphEvents": 1,
                     "replayEventHashes": ["sha256:commit-replay"],
                     "openLineageHashes": ["sha256:commit-openlineage"]
                 },
@@ -8716,6 +8728,19 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_requires_commit_history_graph_events() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["graphEvents"] = json!(0);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing commit-history graph projection");
+
+        assert!(err.to_string().contains("tableCommitHistoryProof"));
+        assert!(err.to_string().contains("graphEvents"));
+        assert!(err.to_string().contains("positive"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_restricted_credential_hashes() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["replayEventHashes"] =
@@ -9173,6 +9198,10 @@ mod tests {
         assert_eq!(
             semantics["lakecatReplay"]["tableCommitHistoryProof"]["commitHashes"],
             json!(["sha256:commit"])
+        );
+        assert_eq!(
+            semantics["lakecatReplay"]["tableCommitHistoryProof"]["graphEvents"],
+            json!(1)
         );
         assert_eq!(
             semantics["lakecatReplay"]["viewReceiptChainProof"]["views"][0]["acceptedReceiptHash"],
@@ -12033,7 +12062,7 @@ mod tests {
         let line = qglake_table_commit_history_replay_line(&LineageDrainResponse {
             delivered: 1,
             event_types: vec!["table.commits-listed".to_string()],
-            graph_events: 0,
+            graph_events: 1,
             lineage_events: 1,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
@@ -12048,7 +12077,7 @@ mod tests {
 
         assert_eq!(
             line,
-            "table commit history commits=1 sequences=1 hashes=sha256:table-commit"
+            "table commit history commits=1 sequences=1 hashes=sha256:table-commit graph_events=1"
         );
     }
 
@@ -14583,6 +14612,65 @@ mod tests {
             "qglake lineage drain table commit history replay is missing compact commit summary evidence"
         ));
 
+        let mut commit_history_without_graph = qglake_table_commit_history_lineage_summary();
+        commit_history_without_graph.graph_events = 0;
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 14,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "view.version-receipt-chains-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "table.commits-listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 13,
+                lineage_events: 15,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    qglake_view_receipt_chain_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_storage_profile_upsert_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                    commit_history_without_graph,
+                    qglake_scan_planned_lineage_summary(),
+                    qglake_scan_tasks_fetched_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require table commit graph projection");
+        assert!(err.to_string().contains(
+            "qglake lineage drain table commit history replay emitted no graph projection"
+        ));
+
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 14,
@@ -15063,7 +15151,7 @@ mod tests {
             typedid_proof_hash: None,
             agent_delegation_hash: Some("sha256:delegation".to_string()),
             agent_summary_signature_hash: Some("sha256:summary".to_string()),
-            graph_events: 0,
+            graph_events: 1,
             lineage_events: 1,
             bundle_hash: None,
             graph_hash: None,
