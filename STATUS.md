@@ -1,16 +1,77 @@
 # LakeCat Status
 
-Updated: 2026-06-18
+Updated: 2026-06-19
 
 ## Current State
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
-  `2db1d32 Verify QGLake replay artifacts offline`.
+  `3b4d8ed Prove QGLake handoff through QueryGraph`.
+- Paused after proving a regenerated Sail-backed QGLake handoff through both
+  LakeCat and QueryGraph. QGLake policy fixtures now use canonical Iceberg REST
+  `not-eq` filter spelling; lineage-drain summaries preserve TypeSec
+  request-identity evidence from the current
+  `authorization-receipt.context.request-identity` receipt shape; QueryGraph
+  bootstrap graph projection deduplicates shared namespace nodes when a table
+  and view live in the same namespace; and the LakeCat book/design docs now
+  show the QueryGraph verify/import workflow.
+- Live proof artifacts were regenerated with:
+  `LAKECAT_TURSO_PATH=target/qglake-proof-sail4/catalog.db
+  LAKECAT_BIND_ADDR=127.0.0.1:18286 cargo run -p lakecat-service --features
+  turso-local,sail-local`; `cargo run -p lakecat-cli -- qglake-fixture
+  --catalog http://127.0.0.1:18286 --output
+  target/qglake-proof-sail4/lakecat-bootstrap.json --drain-output
+  target/qglake-proof-sail4/lineage-drain.json --principal
+  did:example:agent`. The fixture wrote one table, drained 23 lineage/outbox
+  events, and produced bundle hash
+  `sha256:d779f54266cefc8b729b9e9a56b9dfcb695448c12b0cb44655fa7fd113056107`.
+- LakeCat offline replay verification passed:
+  `cargo run -p lakecat-cli -- qglake-verify-replay --bundle
+  target/qglake-proof-sail4/lakecat-bootstrap.json --drain
+  target/qglake-proof-sail4/lineage-drain.json --principal
+  did:example:agent`, proving QueryGraph import hash
+  `sha256:dbe7f5178d29bf59b47e746dd26ebff9c3358cfadac2c96eb5901d19dee535eb`,
+  one table, and one view.
+- QueryGraph Rust verification passed against the same bundle:
+  `cargo run -- lakecat-verify --bundle
+  /Users/alexy/src/lakecat/target/qglake-proof-sail4/lakecat-bootstrap.json`
+  and `cargo run -- lakecat-import --bundle
+  /Users/alexy/src/lakecat/target/qglake-proof-sail4/lakecat-bootstrap.json
+  --output .querygraph/lakecat/live-proof-import-plan.json`. QueryGraph
+  verified one table, one view, graph hash
+  `sha256:2eaab8b578455290226bc7fa314c79ea28c16c0e850ddbf32926a2d93ca16471`,
+  OpenLineage hash
+  `sha256:593a01b31d84c468c8eb60db9c864bc65ca625f4e0556c0b71efcac5f873d3cb`,
+  and the same QueryGraph import hash above. The generated import plan has 5
+  graph nodes, 4 graph edges, one table, and one view. The generated
+  `.querygraph/` artifact is ignored in the QueryGraph repo and was not staged.
+- Local verification for the QGLake handoff-through-QueryGraph slice was green:
+  `cargo fmt -p lakecat-querygraph -p lakecat-cli -p lakecat-service -- --check`;
+  `cargo test -p lakecat-querygraph`;
+  `cargo test -p lakecat-cli qglake_fixture_policy_installs_read_restriction`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox -- --nocapture`;
+  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`.
+- QueryGraph focused verification for the companion importer update was green:
+  `cargo fmt -- --check`; `cargo test lakecat -- --nocapture`;
+  `cargo run -- lakecat-verify --bundle
+  /Users/alexy/src/lakecat/target/qglake-proof-sail4/lakecat-bootstrap.json`;
+  `cargo run -- lakecat-import --bundle
+  /Users/alexy/src/lakecat/target/qglake-proof-sail4/lakecat-bootstrap.json
+  --output .querygraph/lakecat/live-proof-import-plan.json`;
+  `git diff --check -- Cargo.toml Cargo.lock src/lakecat.rs`.
 - Latest committed status slice:
-  `Record QGLake replay verifier status`.
+  `Record QGLake QueryGraph proof status`.
 - Latest committed goal-guidance/docs slice:
-  `e65145f Reconcile goal agent guidance`.
+  `c285958 Reconcile goal with agent guidance`.
+- Previous committed LakeCat implementation slice:
+  `2db1d32 Verify QGLake replay artifacts offline`.
 - Paused after adding offline QGLake handoff verification. `lakecat-cli
   qglake-fixture` now accepts `--drain-output` so a local fixture run can save
   the QueryGraph bootstrap bundle and the lineage-drain response as paired JSON
