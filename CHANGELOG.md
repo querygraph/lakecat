@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected metadata-write commit plans that require writing table metadata but
+  do not carry a concrete new metadata location, preventing catalog-pointer
+  commits from succeeding without a corresponding metadata object.
 - Rejected metadata-object commits that would write new metadata to the
   table's current metadata pointer, preventing current metadata files from
   being overwritten before CAS/store validation.

@@ -299,9 +299,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   become the table's metadata pointer; REST commits now reject metadata-object
   writes whose target equals the table's current metadata pointer before
   touching object storage, preventing current metadata files from being
-  overwritten before CAS/store validation; metadata object writes and cleanup
-  now route through `object_store::parse_url_opts`, preserving local `file://`
-  behavior while moving the writer toward configured object-store backends.*
+  overwritten before CAS/store validation; metadata-write plans now also fail
+  closed if they require a metadata object write but do not carry a concrete new
+  metadata location; metadata object writes and cleanup now route through
+  `object_store::parse_url_opts`, preserving local `file://` behavior while
+  moving the writer toward configured object-store backends.*
 - **P4 — Semantic catalog graph (F6).** Emit the bounded typed taxonomy
   (Namespace/Table/Column/Snapshot/Policy/Principal/ScanPlan/Commit) through the
   outbox into Grust; keep file-granularity as metadata-as-data. Then OpenLineage

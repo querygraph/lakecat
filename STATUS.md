@@ -6,6 +6,25 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require metadata write locations`. Metadata-write commit plans now fail
+  closed when Sail or a future engine seam reports that a metadata object write
+  is required but does not provide a concrete new metadata location, preventing
+  catalog-pointer commits from succeeding without a corresponding metadata
+  object.
+- Local verification for the metadata write-location guard slice was green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service metadata_write_plan_requires_metadata_location`;
+  `cargo test -p lakecat-service commit_rejects_metadata_object_overwrite_of_current_pointer`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Guard current metadata pointer writes`. REST table commits now reject
   metadata-object writes whose target equals the table's current metadata
   pointer before writing through object storage, preventing the current metadata

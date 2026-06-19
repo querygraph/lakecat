@@ -300,12 +300,14 @@ Sail owns reusable Iceberg validation and metadata preparation.
 7. LakeCat rejects metadata-object writes that target the table's current
    metadata pointer, so the current metadata file cannot be overwritten before
    the store commit has won.
-8. LakeCat writes the new metadata object through the warehouse storage profile.
-9. LakeCat advances the table pointer with compare-and-swap.
-10. LakeCat persists idempotency, audit, pointer-log, and outbox records.
-11. If the store rejects the commit after a local metadata write, LakeCat cleans
+8. LakeCat rejects metadata-write plans that do not carry a concrete new
+   metadata location.
+9. LakeCat writes the new metadata object through the warehouse storage profile.
+10. LakeCat advances the table pointer with compare-and-swap.
+11. LakeCat persists idempotency, audit, pointer-log, and outbox records.
+12. If the store rejects the commit after a local metadata write, LakeCat cleans
    up the uncommitted metadata object when it can do so safely.
-12. Outbox draining projects the committed event to graph and lineage sinks.
+13. Outbox draining projects the committed event to graph and lineage sinks.
 
 Idempotency is part of correctness. Reusing the same key for the same commit can
 return the stored response even after the table has advanced beyond the
@@ -318,6 +320,8 @@ touching the already committed metadata object.
 Another regression sends a commit whose requested metadata location is the
 table's current pointer and verifies that LakeCat returns a bad request without
 touching the existing metadata file.
+The same guard fails closed if a future Sail plan asks LakeCat to write metadata
+but does not provide a new object location.
 
 Commit records also carry a response hash over the stored table response. That
 pair matters: the request hash proves which commit body won or replayed, while

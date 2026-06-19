@@ -2791,7 +2791,9 @@ fn validate_planned_metadata_location(
         return Ok(());
     }
     let Some(new_metadata_location) = commit_plan.new_metadata_location.as_deref() else {
-        return Ok(());
+        return Err(LakeCatError::InvalidArgument(
+            "metadata object commit requires a new metadata location".to_string(),
+        ));
     };
     if current_metadata_location == Some(new_metadata_location) {
         return Err(LakeCatError::InvalidArgument(format!(
@@ -8398,6 +8400,26 @@ mod tests {
             sentinel
         );
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn metadata_write_plan_requires_metadata_location() {
+        let plan = lakecat_sail::CommitPlan {
+            prepared_by: "test".to_string(),
+            requirements: Vec::new(),
+            updates: Vec::new(),
+            new_metadata_location: None,
+            new_metadata: serde_json::json!({"format-version": 3}),
+            metadata_write_required: true,
+            metadata_patch: serde_json::json!({}),
+        };
+
+        let err = validate_planned_metadata_location(&plan, None).unwrap_err();
+        assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+        assert!(
+            err.to_string()
+                .contains("metadata object commit requires a new metadata location")
+        );
     }
 
     #[cfg(feature = "sail-local")]
