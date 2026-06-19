@@ -354,6 +354,8 @@ fn qglake_verify_handoff(
     let artifact_files = verify_qglake_handoff_artifact_files(&summary_path, &summary)?;
     let captured_output_semantics =
         verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)?;
+    let bundle_artifact_semantics =
+        verify_qglake_handoff_bundle_artifact_semantics(&summary_path, &summary)?;
     verification
         .as_object_mut()
         .ok_or_else(|| {
@@ -372,6 +374,17 @@ fn qglake_verify_handoff(
         .insert(
             "capturedOutputSemantics".to_string(),
             captured_output_semantics,
+        );
+    verification
+        .as_object_mut()
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::Internal(
+                "handoff verification must be an object".to_string(),
+            )
+        })?
+        .insert(
+            "bundleArtifactSemantics".to_string(),
+            bundle_artifact_semantics,
         );
     if json_output {
         print_json(&verification)?;
@@ -576,6 +589,132 @@ fn verify_qglake_handoff_captured_output_semantics(
         },
         "querygraphVerify": querygraph_capture_semantics_json(querygraph_verify, "captured QueryGraph verify output")?,
         "querygraphImport": querygraph_capture_semantics_json(querygraph_import, "captured QueryGraph import output")?,
+    }))
+}
+
+fn verify_qglake_handoff_bundle_artifact_semantics(
+    summary_path: &Path,
+    summary: &Value,
+) -> lakecat_core::LakeCatResult<Value> {
+    let summary = summary.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "handoff summary root must be an object".to_string(),
+        )
+    })?;
+    let warehouse = required_str(summary, "warehouse", "handoff summary")?;
+    let querygraph = required_object(summary, "querygraphVerification", "handoff summary")?;
+    let lakecat = required_object(summary, "lakecatReplayVerification", "handoff summary")?;
+    let bootstrap = required_object(
+        lakecat,
+        "queryGraphBootstrapProof",
+        "lakecatReplayVerification",
+    )?;
+    let artifacts = required_object(summary, "artifacts", "handoff summary")?;
+    let base_dir = summary_path.parent().unwrap_or_else(|| Path::new(""));
+    let bundle_value = read_qglake_handoff_artifact_json(artifacts, "bundle", base_dir)?;
+    let bundle: QueryGraphBootstrap = serde_json::from_value(bundle_value).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff bundle artifact is not a QueryGraph bootstrap bundle: {err}"
+        ))
+    })?;
+    let table_scope = HandoffTableScope::from_summary(summary, warehouse)?;
+    let namespace = table_scope
+        .namespace
+        .split('.')
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    verify_qglake_bootstrap_bundle(&bundle, &namespace, &table_scope.table)?;
+    let verification = bundle.verify_manifest()?;
+    require_string_match(
+        querygraph,
+        "bundleHash",
+        verification.bundle_hash.as_str(),
+        "querygraphVerification",
+    )?;
+    require_string_match(
+        querygraph,
+        "graphHash",
+        verification.graph_hash.as_str(),
+        "querygraphVerification",
+    )?;
+    require_string_match(
+        querygraph,
+        "openLineageHash",
+        verification.open_lineage_hash.as_str(),
+        "querygraphVerification",
+    )?;
+    require_string_match(
+        querygraph,
+        "querygraphImportHash",
+        verification.querygraph_import_hash.as_str(),
+        "querygraphVerification",
+    )?;
+    require_u64_match(
+        querygraph,
+        "tableCount",
+        verification.table_count as u64,
+        "querygraphVerification",
+    )?;
+    require_u64_match(
+        querygraph,
+        "viewCount",
+        verification.view_count as u64,
+        "querygraphVerification",
+    )?;
+    require_value_match(
+        querygraph,
+        "verifiedTables",
+        &json!(verification.verified_tables),
+        "querygraphVerification",
+    )?;
+    require_value_match(
+        querygraph,
+        "verifiedViews",
+        &json!(verification.verified_views),
+        "querygraphVerification",
+    )?;
+    require_value_match(
+        querygraph,
+        "standards",
+        &json!(verification.standards),
+        "querygraphVerification",
+    )?;
+
+    require_string_match(
+        bootstrap,
+        "bundleHash",
+        verification.bundle_hash.as_str(),
+        "queryGraphBootstrapProof",
+    )?;
+    require_string_match(
+        bootstrap,
+        "graphHash",
+        verification.graph_hash.as_str(),
+        "queryGraphBootstrapProof",
+    )?;
+    require_string_match(
+        bootstrap,
+        "openLineageHash",
+        verification.open_lineage_hash.as_str(),
+        "queryGraphBootstrapProof",
+    )?;
+    require_string_match(
+        bootstrap,
+        "queryGraphImportHash",
+        verification.querygraph_import_hash.as_str(),
+        "queryGraphBootstrapProof",
+    )?;
+    Ok(json!({
+        "warehouse": verification.warehouse,
+        "tableCount": verification.table_count,
+        "viewCount": verification.view_count,
+        "verifiedTables": verification.verified_tables,
+        "verifiedViews": verification.verified_views,
+        "bundleHash": verification.bundle_hash,
+        "graphHash": verification.graph_hash,
+        "openLineageHash": verification.open_lineage_hash,
+        "queryGraphImportHash": verification.querygraph_import_hash,
+        "standards": verification.standards,
     }))
 }
 
@@ -6527,6 +6666,94 @@ mod tests {
         summary
     }
 
+    fn qglake_handoff_summary_json_with_verified_bundle(
+        dir: &Path,
+    ) -> (Value, QueryGraphBootstrap) {
+        let mut summary = qglake_handoff_summary_json_with_artifacts(dir);
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "dataSource": {
+                    "uri": QGLAKE_TEST_LOCATION
+                },
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        qglake_write_handoff_bundle_artifact(dir, &mut summary, &bundle);
+        (summary, bundle)
+    }
+
+    fn qglake_write_handoff_bundle_artifact(
+        dir: &Path,
+        summary: &mut Value,
+        bundle: &QueryGraphBootstrap,
+    ) {
+        let verification = bundle.verify_manifest().expect("bundle should verify");
+        let bytes = serde_json::to_vec_pretty(bundle).expect("bundle JSON");
+        fs::write(dir.join("lakecat-bootstrap.json"), &bytes).expect("write bundle");
+        summary["artifacts"]["bundle"]["sha256"] = json!(content_hash_bytes(&bytes));
+        for section in ["querygraphVerification", "querygraphImportVerification"] {
+            summary[section]["tableCount"] = json!(verification.table_count);
+            summary[section]["viewCount"] = json!(verification.view_count);
+            summary[section]["verifiedTables"] = json!(verification.verified_tables);
+            summary[section]["verifiedViews"] = json!(verification.verified_views);
+            summary[section]["bundleHash"] = json!(verification.bundle_hash);
+            summary[section]["graphHash"] = json!(verification.graph_hash);
+            summary[section]["openLineageHash"] = json!(verification.open_lineage_hash);
+            summary[section]["querygraphImportHash"] = json!(verification.querygraph_import_hash);
+            summary[section]["standards"] = json!(verification.standards);
+        }
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["bundleHash"] =
+            json!(verification.bundle_hash);
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["graphHash"] =
+            json!(verification.graph_hash);
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["openLineageHash"] =
+            json!(verification.open_lineage_hash);
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["queryGraphImportHash"] =
+            json!(verification.querygraph_import_hash);
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["tableArtifactCount"] =
+            json!(verification.table_count);
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["viewArtifactCount"] =
+            json!(verification.view_count);
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["standards"] =
+            json!(verification.standards);
+    }
+
+    fn qglake_resync_bundle_hashes(bundle: &mut QueryGraphBootstrap) {
+        let graph_hash = content_hash_json(&serde_json::to_value(&bundle.graph).unwrap()).unwrap();
+        bundle.manifest.graph_hash = graph_hash.clone();
+        bundle.open_lineage["run"]["facets"]["queryGraph_semanticBundle"]["graphHash"] =
+            json!(graph_hash);
+        bundle.manifest.open_lineage_hash = content_hash_json(&bundle.open_lineage).unwrap();
+        if let Some(import) = bundle.manifest.querygraph_import.as_mut() {
+            import.graph_hash = bundle.manifest.graph_hash.clone();
+        }
+        let import_hash = qglake_querygraph_import_hash(
+            &bundle.warehouse,
+            &bundle.manifest,
+            &bundle.tables,
+            &bundle.graph,
+            &bundle.open_lineage,
+        );
+        if let Some(import) = bundle.manifest.querygraph_import.as_mut() {
+            import.table_only_bundle_hash = import_hash;
+        }
+        bundle.bundle_hash = content_hash_json(&serde_json::json!({
+            "warehouse": bundle.warehouse.as_str(),
+            "manifest": &bundle.manifest,
+            "tables": &bundle.tables,
+            "views": &bundle.views,
+            "graph": &bundle.graph,
+            "openLineage": &bundle.open_lineage,
+        }))
+        .unwrap();
+    }
+
     fn qglake_temp_dir(label: &str) -> PathBuf {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -7309,6 +7536,42 @@ mod tests {
             semantics["lakecatReplay"]["credentialVendingProof"]["restricted"]["blockReason"],
             json!(QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON)
         );
+    }
+
+    #[test]
+    fn qglake_handoff_bundle_artifact_semantics_accept_verified_bundle() {
+        let temp = qglake_temp_dir("handoff-bundle-semantics-ok");
+        let summary_path = temp.join("handoff-summary.json");
+        let (summary, bundle) = qglake_handoff_summary_json_with_verified_bundle(&temp);
+        let bundle_verification = bundle.verify_manifest().expect("bundle verifies");
+
+        let semantics = verify_qglake_handoff_bundle_artifact_semantics(&summary_path, &summary)
+            .expect("bundle artifact semantics should verify");
+
+        assert_eq!(
+            semantics["bundleHash"],
+            json!(bundle_verification.bundle_hash)
+        );
+        assert_eq!(
+            semantics["verifiedTables"],
+            json!(["lakecat:table:local:default:events"])
+        );
+        assert_eq!(semantics["viewCount"], json!(0));
+    }
+
+    #[test]
+    fn qglake_handoff_bundle_artifact_semantics_rejects_detached_tenant_graph() {
+        let temp = qglake_temp_dir("handoff-bundle-semantics-tenant-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let (mut summary, mut bundle) = qglake_handoff_summary_json_with_verified_bundle(&temp);
+        bundle.graph.edges.retain(|edge| edge.label != "HAS_SERVER");
+        qglake_resync_bundle_hashes(&mut bundle);
+        qglake_write_handoff_bundle_artifact(&temp, &mut summary, &bundle);
+
+        let err = verify_qglake_handoff_bundle_artifact_semantics(&summary_path, &summary)
+            .expect_err("bundle artifact semantics should reject detached tenant graph");
+
+        assert!(err.to_string().contains("Catalog to a Server"));
     }
 
     #[test]

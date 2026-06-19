@@ -1213,6 +1213,10 @@ rebound to a different durable tenant chain.
 The local QGLake verifier enforces that shape: an accepted bootstrap must prove
 `Catalog -> Server -> Project -> Warehouse -> Namespace -> Table`, not merely
 that a table node exists somewhere in the graph.
+The saved handoff verifier repeats that check against the archived
+`lakecat-bootstrap.json` artifact, so a later replay cannot pass with a compact
+summary whose bundle file has lost the tenant path or drifted from the summary
+hashes.
 
 ```sh
 curl -s \

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-verify-handoff` parse and re-verify the saved
+  QueryGraph bootstrap bundle artifact, binding archived handoffs to the same
+  tenant graph proof, hashes, counts, standards, and verified table/view ids as
+  the compact summary.
 - Tightened QGLake bootstrap verification so accepted bundles must prove the
   graph path from Catalog to Server, Project, Warehouse, Namespace, and the
   table, rejecting handoffs that detach a namespace from its tenant spine.

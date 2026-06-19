@@ -6,6 +6,15 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify saved QGLake bundle artifact semantics`.
+  `lakecat-cli qglake-verify-handoff` now parses the saved
+  `lakecat-bootstrap.json` artifact and reruns the QGLake bootstrap verifier
+  against it, then compares the artifact's hashes, counts, standards, and
+  verified table/view ids with the compact QueryGraph and LakeCat replay
+  summary. This closes the archived-handoff gap where a summary and captured
+  output could be self-consistent while the saved bundle file no longer proved
+  the tenant graph path.
+- Latest completed implementation slice:
   `Require QGLake bootstrap tenant graph proof`.
   `lakecat-cli qglake-fixture` / bootstrap verification now rejects accepted
   bundles whose catalog graph lacks the full Catalog > Server > Project >

@@ -432,7 +432,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   while preserving the older Catalog-to-Namespace edge for importer
   compatibility, and QGLake bootstrap verification now rejects bundles that do
   not prove the full Catalog > Server > Project > Warehouse > Namespace > Table
-  graph path; policy-binding, project, and warehouse upserts now also emit
+  graph path; saved QGLake handoff verification now also parses the archived
+  bootstrap bundle artifact and reruns that same bootstrap verifier before
+  accepting the compact summary; policy-binding, project, and warehouse upserts
+  now also emit
   LakeCat lineage/OpenLineage receipts from the same durable
   outbox replay; management list reads for
   policy bindings, projects, servers, storage profiles, and warehouses replay
