@@ -1227,7 +1227,11 @@ standards against the compact summary. It also compares the captured LakeCat
 replay `replay-evidence.management.storageProfileUpsert` object with the
 compact `lakecatReplayVerification.storageProfileUpsertProof`, including the
 profile id, provider, issuance mode, location-prefix hash, secret-reference
-presence/provider, replay hashes, and OpenLineage hashes.
+presence/provider, replay hashes, and OpenLineage hashes. It also compares
+the captured `replay-evidence.credentials` restricted-agent and trusted-human
+branches with the compact `credentialVendingProof`, so a saved handoff cannot
+claim that agents were blocked onto Sail-planned reads or that humans used an
+audited exception unless the captured LakeCat replay proves the same decision.
 That makes the handoff repeatable from the LakeCat repo while keeping
 QueryGraph responsible for graph validation and import semantics.
 The handoff script refuses to write the summary unless LakeCat replay JSON
@@ -1359,9 +1363,9 @@ tampered artifact files before automation consumes them. It also recomputes the
 captured LakeCat replay and QueryGraph verify/import output hashes, so terminal
 captures cannot drift from the compact summary. Then it parses those captured
 JSON files and checks that the replay schema/status, table/view counts, semantic
-hashes, standards, and storage-profile upsert proof inside the captures still
-match the summary. The local handoff harness runs it automatically and writes
-the captured verifier output to
+hashes, standards, storage-profile upsert proof, and credential-vending proof
+inside the captures still match the summary. The local handoff harness runs it
+automatically and writes the captured verifier output to
 `target/qglake-handoff/lakecat-handoff-verify.json`.
 
 The end-to-end result is a chain:

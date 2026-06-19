@@ -6,6 +6,35 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cross-check captured credential replay proof`.
+  `lakecat-cli qglake-verify-handoff` now compares the compact
+  `lakecatReplayVerification.credentialVendingProof` with the captured LakeCat
+  replay JSON at `replay-evidence.credentials`. A handoff is rejected if the
+  replay artifact and compact summary disagree on restricted-agent identity,
+  credential count, Sail-planned-read block reason, replay/OpenLineage hashes,
+  trusted-human identity, audited raw-credential exception allowance/reason, or
+  trusted-human replay/OpenLineage hashes. The verifier output also echoes the
+  accepted captured credential proof under
+  `capturedOutputSemantics.lakecatReplay.credentialVendingProof`. The local
+  handoff harness also now includes storage-profile `issuanceMode` and
+  `locationPrefixHash` when generating `handoff-summary.json`, keeping the live
+  script compatible with the stricter storage-profile verifier.
+- Local verification for this captured credential replay proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh`. The live handoff generated one table and
+  one view, drained 26 outbox events, verified LakeCat replay, ran QueryGraph
+  `lakecat-verify` and `lakecat-import`, then ran
+  `lakecat-cli qglake-verify-handoff --json` and emitted
+  `capturedOutputSemantics.lakecatReplay.credentialVendingProof` plus
+  `storageProfileUpsertProof` with `issuanceMode` and `locationPrefixHash`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Cross-check captured storage-profile replay proof`.
   `lakecat-cli qglake-verify-handoff` now compares the compact
   `lakecatReplayVerification.storageProfileUpsertProof` with the captured

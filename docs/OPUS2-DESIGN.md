@@ -303,7 +303,12 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   replay `replay-evidence.management.storageProfileUpsert` object must now
   also match the compact `storageProfileUpsertProof` fields for profile id,
   provider, issuance mode, location-prefix hash, secret-reference evidence,
-  replay hashes, and OpenLineage hashes.*
+  replay hashes, and OpenLineage hashes, and the captured
+  `replay-evidence.credentials` branches must match the compact
+  `credentialVendingProof` for the restricted agent denial and trusted-human
+  audited raw-credential exception; the local handoff harness now includes the
+  storage-profile issuance mode and location-prefix hash when generating the
+  summary so the live script and stricter verifier remain in lockstep.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond

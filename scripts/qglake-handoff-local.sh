@@ -267,6 +267,14 @@ if (!evidence.profileId || !evidence.provider) {
   console.error("LakeCat storage-profile upsert evidence is missing profileId/provider");
   process.exit(1);
 }
+if (!evidence.issuanceMode) {
+  console.error("LakeCat storage-profile upsert evidence is missing issuanceMode");
+  process.exit(1);
+}
+if (!evidence.locationPrefixHash) {
+  console.error("LakeCat storage-profile upsert evidence is missing locationPrefixHash");
+  process.exit(1);
+}
 if (typeof evidence.secretRefPresent !== "boolean") {
   console.error("LakeCat storage-profile upsert evidence is missing explicit secretRefPresent");
   process.exit(1);
@@ -282,6 +290,8 @@ if (!Array.isArray(evidence.openLineageHashes) || evidence.openLineageHashes.len
 process.stdout.write(JSON.stringify({
   profileId: evidence.profileId,
   provider: evidence.provider,
+  issuanceMode: evidence.issuanceMode,
+  locationPrefixHash: evidence.locationPrefixHash,
   secretRefPresent: evidence.secretRefPresent,
   secretRefProvider: evidence.secretRefProvider ?? null,
   replayEventHashes: evidence.replayEventHashes,

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-verify-handoff` compare compact
+  `credentialVendingProof` branches against the captured LakeCat replay JSON,
+  and updated the local handoff harness to include storage-profile issuance
+  mode and location-prefix hash in generated summaries.
 - Made `lakecat-cli qglake-verify-handoff` compare the compact
   `storageProfileUpsertProof` against the captured LakeCat replay JSON, so a
   handoff is rejected when credential-root evidence drifts between the replay
