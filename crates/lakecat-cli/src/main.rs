@@ -6253,19 +6253,18 @@ fn verify_qglake_management_list_receipts(
             "qglake lineage drain {label} replay is missing compact management scope"
         )));
     }
-    if event.replay_event_hashes.is_empty()
-        || event.replay_event_hashes.iter().any(String::is_empty)
-        || event.replay_open_lineage_hashes.is_empty()
-        || event
-            .replay_open_lineage_hashes
-            .iter()
-            .any(String::is_empty)
+    if !qglake_has_sha256_hashes(&event.replay_event_hashes)
+        || !qglake_has_sha256_hashes(&event.replay_open_lineage_hashes)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "qglake lineage drain {label} replay is missing receipt hashes"
+            "qglake lineage drain {label} replay is missing SHA-256 receipt hashes"
         )));
     }
     Ok(())
+}
+
+fn qglake_has_sha256_hashes(hashes: &[String]) -> bool {
+    !hashes.is_empty() && hashes.iter().all(|hash| is_sha256_hash(hash))
 }
 
 fn standards_set(standards: &[String]) -> BTreeSet<&str> {
@@ -15054,6 +15053,24 @@ mod tests {
             1,
         )
         .expect("QGLake lineage drain should accept delivered outbox events");
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_requires_management_receipt_hash_shape() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let policy_list = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "policy-binding.listed")
+            .expect("policy list replay fixture");
+        policy_list.replay_event_hashes = vec!["not-a-sha256-hash".to_string()];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject malformed management receipt hashes");
+
+        assert!(err.to_string().contains("policy list replay"));
+        assert!(err.to_string().contains("SHA-256 receipt hashes"));
     }
 
     fn qglake_view_lineage_verification() -> QueryGraphBootstrapVerification {

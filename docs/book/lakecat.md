@@ -1606,8 +1606,11 @@ into compact fields, so QueryGraph can verify the control-plane read evidence
 without opening the raw lineage payload. It also carries replay and OpenLineage
 hash arrays for those management-list reads, so a compact handoff cannot prove
 only that the right number of management records existed while losing the
-receipt evidence for the reads. The QGLake acceptance workflow now establishes
-its server/project/warehouse tenant spine, performs governed
+receipt evidence for the reads. The lineage-drain verifier rejects those source
+replay events when the receipt arrays are empty or not SHA-256-shaped, so the
+compact `managementProof` starts from verified replay evidence rather than
+normalizing malformed hashes later. The QGLake acceptance workflow now
+establishes its server/project/warehouse tenant spine, performs governed
 server, project, warehouse, policy-list, storage-profile-list, scan-planning,
 scan-task-fetch, and table commit-history reads before bootstrap, and rejects a
 drain that does not replay matching `server.listed`, `project.listed`,

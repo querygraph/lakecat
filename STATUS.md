@@ -6,6 +6,21 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject malformed management receipt hashes`.
+  QGLake lineage-drain replay now rejects malformed management-list and
+  storage-profile-upsert receipt hashes before compact handoff proof is built,
+  keeping source replay acceptance aligned with the stricter compact
+  `managementProof` hash arrays.
+- Local verification for this management receipt-shape slice is green:
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_management_receipt_hash_shape -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Prove management receipt hashes`.
   QGLake compact `managementProof` and captured LakeCat replay agreement now
   require replay and OpenLineage hash arrays for server, project, warehouse,

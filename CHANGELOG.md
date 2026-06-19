@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened QGLake lineage-drain management-list replay so server, project,
+  warehouse, policy-binding, storage-profile, and storage-profile-upsert
+  receipt arrays must contain SHA-256-shaped hashes before compact handoff
+  proof is accepted.
 - Required compact QGLake `managementProof` and captured replay agreement to
   carry replay and OpenLineage hash arrays for server, project, warehouse,
   policy-binding, and storage-profile list evidence.
