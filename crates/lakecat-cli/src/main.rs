@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -1322,6 +1322,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     required_array(views, "views", "viewReceiptChainProof")?;
     required_array(views, "tombstoneReceipts", "viewReceiptChainProof")?;
     required_array(views, "receiptChains", "viewReceiptChainProof")?;
+    require_view_tombstone_expected_versions(views)?;
 
     Ok(json!({
         "schemaVersion": "lakecat.qglake.handoff-verification.v1",
@@ -1333,6 +1334,59 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "queryGraphBootstrapProof": bootstrap,
         "requestIdentityProof": request_identity,
     }))
+}
+
+fn require_view_tombstone_expected_versions(
+    views: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let mut accepted_versions = HashMap::new();
+    for (index, view) in required_array(views, "views", "viewReceiptChainProof")?
+        .iter()
+        .enumerate()
+    {
+        let view = view.as_object().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.views[{index}] must be an object"
+            ))
+        })?;
+        accepted_versions.insert(
+            required_str(view, "stableId", "viewReceiptChainProof.views[]")?.to_string(),
+            required_u64(view, "acceptedViewVersion", "viewReceiptChainProof.views[]")?,
+        );
+    }
+
+    for (index, receipt) in required_array(views, "tombstoneReceipts", "viewReceiptChainProof")?
+        .iter()
+        .enumerate()
+    {
+        let receipt = receipt.as_object().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.tombstoneReceipts[{index}] must be an object"
+            ))
+        })?;
+        let stable_id = required_str(
+            receipt,
+            "stableId",
+            "viewReceiptChainProof.tombstoneReceipts[]",
+        )?;
+        let expected_view_version = required_u64(
+            receipt,
+            "expectedViewVersion",
+            "viewReceiptChainProof.tombstoneReceipts[]",
+        )?;
+        let accepted_view_version = accepted_versions.get(stable_id).ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.tombstoneReceipts[{index}] references unknown accepted view {stable_id}"
+            ))
+        })?;
+        if expected_view_version != *accepted_view_version {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.tombstoneReceipts[{index}].expectedViewVersion mismatch: expected={accepted_view_version} actual={expected_view_version}"
+            )));
+        }
+    }
+
+    Ok(())
 }
 
 fn qglake_management_replay_line(drain: &LineageDrainResponse) -> Option<String> {
@@ -5435,7 +5489,7 @@ mod tests {
                     }],
                     "tombstoneReceipts": [{
                         "stableId": "lakecat:view:local:default:active_customers_view",
-                        "expectedViewVersion": null,
+                        "expectedViewVersion": 1,
                         "receiptHashes": ["sha256:tombstone"],
                         "replayEventHashes": ["sha256:tombstone-replay"],
                         "openLineageHashes": ["sha256:tombstone-openlineage"]
@@ -5583,7 +5637,7 @@ mod tests {
                     }],
                     "tombstoneReceipts": [{
                         "stableId": "lakecat:view:local:default:active_customers_view",
-                        "expectedViewVersion": null,
+                        "expectedViewVersion": 1,
                         "receiptHashes": ["sha256:tombstone"],
                         "replayEventHashes": ["sha256:tombstone-replay"],
                         "openLineageHashes": ["sha256:tombstone-openlineage"]
@@ -5880,6 +5934,34 @@ mod tests {
 
         assert!(err.to_string().contains("storageProfileUpsertProof"));
         assert!(err.to_string().contains("locationPrefixHash"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_view_tombstone_expected_version() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["tombstoneReceipts"][0]["expectedViewVersion"] =
+            Value::Null;
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject unguarded view tombstones");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("expectedViewVersion"));
+        assert!(err.to_string().contains("non-negative integer"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_view_tombstone_version_mismatch() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["tombstoneReceipts"][0]["expectedViewVersion"] =
+            json!(99);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject stale view tombstone guards");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("expectedViewVersion mismatch"));
+        assert!(err.to_string().contains("expected=1 actual=99"));
     }
 
     #[test]

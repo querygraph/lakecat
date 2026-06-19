@@ -355,7 +355,10 @@ lineage-drain summaries and QGLake view replay evidence, so QueryGraph can prove
 which optimistic catalog version guarded a replacement or tombstone. The local
 QGLake handoff harness now requires tombstone replay to preserve the accepted
 expected view version before writing `viewReceiptChainProof`, binding governed
-view deletion to the captured LakeCat replay artifact. Full
+view deletion to the captured LakeCat replay artifact. The standalone
+`lakecat-cli qglake-verify-handoff` verifier enforces the same
+`expectedViewVersion` match against the accepted view version, so compact
+handoff summaries remain self-verifying outside the shell harness. Full
 Iceberg view history and commit semantics should still move toward Sail-backed
 models as they become available. QueryGraph bootstrap now exports those stored
 views with manifest-covered OSI handoff hashes, typed view columns, view

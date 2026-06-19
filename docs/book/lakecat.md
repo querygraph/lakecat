@@ -1282,7 +1282,9 @@ receipt-chain hashes, and their replay/OpenLineage hashes, so durable view
 history stays tied to the saved LakeCat replay artifact. It also compares the
 tombstone branch's `expectedViewVersion` with the accepted view version, so a
 handoff cannot claim a governed deletion unless the saved LakeCat replay proves
-that deletion used the catalog's optimistic version guard. It also compares the
+that deletion used the catalog's optimistic version guard; the standalone
+`qglake-verify-handoff` command enforces this match even when a summary is
+checked outside the local shell harness. It also compares the
 captured LakeCat replay
 `replay-evidence.management.storageProfileUpsert` object with the compact
 `lakecatReplayVerification.storageProfileUpsertProof`, including the

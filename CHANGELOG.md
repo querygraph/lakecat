@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-verify-handoff` independently reject compact
+  `viewReceiptChainProof` tombstone receipts whose `expectedViewVersion` is
+  missing or does not match the accepted view version.
 - Clarified `GOAL.md` that the latest pasted `AGENTS.md` block is the current
   standing operating contract for LakeCat work across resumes and context
   compaction.

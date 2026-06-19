@@ -317,7 +317,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   replay hashes, and OpenLineage hashes, and captured `replay-evidence.views`
   must match `viewReceiptChainProof` for accepted view receipts, tombstone
   receipts, namespace receipt-chain hashes, and their replay/OpenLineage
-  hashes; the local handoff harness now includes the
+  hashes; `lakecat-cli qglake-verify-handoff` also rejects compact tombstone
+  receipts whose `expectedViewVersion` is missing or does not match the
+  accepted view version for the same stable view id, keeping the guarded
+  deletion proof self-contained in the Rust verifier; the local handoff
+  harness now includes the
   storage-profile issuance mode and location-prefix hash when generating the
   summary so the live script and stricter verifier remain in lockstep.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
@@ -464,8 +468,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   protected an accepted replacement or tombstone; the live QGLake handoff
   fixture now drops its accepted transient view with `expected-view-version` and
   rejects compact `viewReceiptChainProof` summaries unless tombstone replay
-  preserves that accepted guard while fuller Sail-aligned view history remains
-  pending;
+  preserves that accepted guard, and the standalone Rust handoff verifier now
+  enforces the same `expectedViewVersion` match against the accepted view
+  version while fuller Sail-aligned view history remains pending;
   view-version receipts now carry `previous-receipt-hash` links so upsert and
   drop receipts form a compact hash chain over the catalog-facing version
   history, and namespace receipt-chain reads expose deterministic `chain-hash`

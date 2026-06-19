@@ -13,6 +13,25 @@ Updated: 2026-06-19
   QueryGraph integration, Turso preference, local verification, changelog, and
   commit/push discipline.
 - Latest completed implementation slice:
+  `Verify guarded tombstone handoff proof`.
+  `lakecat-cli qglake-verify-handoff` now independently rejects compact
+  `viewReceiptChainProof.tombstoneReceipts` entries whose
+  `expectedViewVersion` is missing or does not match the accepted durable view
+  version for the same stable view id. The standalone Rust verifier now
+  enforces the same governed deletion proof that the live local handoff harness
+  enforces before writing `handoff-summary.json`, so QueryGraph automation does
+  not have to rely on shell-only JSON checks.
+- Local verification for this guarded tombstone handoff-proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `docs/book/build.sh`;
+  `cargo test --workspace`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Require guarded QGLake view tombstones`.
   The live QGLake fixture now remembers the durable version assigned to its
   transient accepted view and passes that value as `expected-view-version` when
