@@ -391,11 +391,12 @@ catalog state decides which metadata file is current.
 
 ## Grust For Graph Concepts
 
-Catalog events naturally form a graph. A warehouse contains namespaces and
-storage profiles that define credential roots. A namespace contains tables. A
-table has columns, snapshots, manifests, files, policies, commits, scan plans,
-principals, and lineage runs. QueryGraph needs that graph, but LakeCat should
-not become a graph database.
+Catalog events naturally form a graph. A server contains projects. A project
+contains warehouses. A warehouse contains namespaces and storage profiles that
+define credential roots. A namespace contains tables. A table has columns,
+snapshots, manifests, files, policies, commits, scan plans, principals, and
+lineage runs. QueryGraph needs that graph, but LakeCat should not become a
+graph database.
 
 Grust owns the graph layer. It is the place for reusable graph taxonomy,
 projection builders, graph stores, traversal indexes, Cypher support, and typed
@@ -406,6 +407,8 @@ catalog-facing sink.
 In practice this means LakeCat can emit graph events for stable catalog facts:
 
 ```text
+Server CONTAINS Project
+Project CONTAINS Warehouse
 Warehouse CONTAINS Namespace
 Namespace CONTAINS Table
 Table HAS_COLUMN Column
@@ -426,12 +429,13 @@ The current local direction already proves the boundary: LakeCat's
 Cypher boundary test verifies catalog graph projection without making LakeCat
 own Cypher parsing, traversal, or graph execution. The current boundary test
 writes table-adjacent `Column`, `Snapshot`, and `Commit` events plus
-`Principal`, `ScanPlan`, and credential-root `StorageProfile` catalog events
-through Grust, then matches catalog-event labels through Grust Cypher. Storage
-profile replay uses redacted evidence such as `secret-ref-present` and the
-secret-reference provider, never the full secret-store URI. That proves
-QueryGraph can discover the semantic anchors LakeCat emits while the richer
-node/edge materialization remains reusable Grust work.
+`Principal`, `ScanPlan`, tenant-root `Server`, and credential-root
+`StorageProfile` catalog events through Grust, then matches catalog-event
+labels through Grust Cypher. Storage profile replay uses redacted evidence such
+as `secret-ref-present` and the secret-reference provider, never the full
+secret-store URI. That proves QueryGraph can discover the semantic anchors
+LakeCat emits while the richer node/edge materialization remains reusable
+Grust work.
 
 ## TypeSec For Security
 
@@ -775,10 +779,10 @@ curl -s -X PUT http://127.0.0.1:3000/management/v1/projects/resilience/warehouse
 
 These writes are not Iceberg table metadata. They are catalog control-plane
 state. LakeCat persists them durably, records authorization receipts, and writes
-outbox events. When the outbox drains, project and warehouse changes become
-catalog graph events; project, warehouse, server, and storage-profile changes
-also become OpenLineage receipts. QueryGraph can later learn the management
-shape without requiring every Iceberg client to understand it.
+outbox events. When the outbox drains, server, project, warehouse, and
+storage-profile changes become catalog graph events; the same management
+changes also become OpenLineage receipts. QueryGraph can later learn the
+management shape without requiring every Iceberg client to understand it.
 
 ### Storage Profiles And Credential Roots
 

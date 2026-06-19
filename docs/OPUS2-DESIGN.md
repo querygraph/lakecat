@@ -401,7 +401,7 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   `object_store` semantics so an existing non-current target returns conflict
   instead of being overwritten.*
 - **P4 — Semantic catalog graph (F6).** Emit the bounded typed taxonomy
-  (Namespace/Table/Column/Snapshot/Policy/StorageProfile/Principal/ScanPlan/Commit)
+  (Server/Project/Warehouse/Namespace/Table/Column/Snapshot/Policy/StorageProfile/Principal/ScanPlan/Commit)
   through the outbox into Grust; keep file-granularity as metadata-as-data. Then
   OpenLineage transport + TypeDID attestation on the same events. *Started:
   `catalog.config-read` replay now emits a warehouse-scoped graph event and
@@ -422,9 +422,12 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   `Principal` graph events; table metadata graph summaries now replay as stable
   catalog-facing `Column` and `Snapshot` graph events; storage-profile upserts
   now replay as stable catalog-facing `StorageProfile` graph events with the
-  same redacted secret-reference evidence used for OpenLineage; policy-binding,
-  project, and warehouse upserts now also emit LakeCat lineage/OpenLineage
-  receipts from the same durable outbox replay; management list reads for
+  same redacted secret-reference evidence used for OpenLineage; server upserts
+  now replay as stable catalog-facing `Server` graph events, completing the
+  thin tenant spine anchors beside Project and Warehouse while hierarchy
+  semantics remain Grust-owned; policy-binding, project, and warehouse upserts
+  now also emit LakeCat lineage/OpenLineage receipts from the same durable
+  outbox replay; management list reads for
   policy bindings, projects, servers, storage profiles, and warehouses replay
   into LakeCat OpenLineage receipts without adding list-specific graph nodes in
   LakeCat, and lineage-drain summaries expose compact list counts/scope for

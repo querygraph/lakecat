@@ -23,6 +23,19 @@ pub struct GraphEvent {
 }
 
 impl GraphEvent {
+    pub fn server(action: GraphAction, server_id: impl Into<String>, properties: Value) -> Self {
+        let server_id = server_id.into();
+        Self {
+            event_id: None,
+            subject: server_stable_id(&server_id),
+            label: GraphNodeLabel::Server,
+            action,
+            table: None,
+            properties,
+            emitted_at: Utc::now(),
+        }
+    }
+
     pub fn project(action: GraphAction, project_id: impl Into<String>, properties: Value) -> Self {
         let project_id = project_id.into();
         Self {
@@ -216,6 +229,10 @@ impl GraphEvent {
     }
 }
 
+pub fn server_stable_id(server_id: &str) -> String {
+    format!("lakecat:server:{server_id}")
+}
+
 pub fn project_stable_id(project_id: &str) -> String {
     format!("lakecat:project:{project_id}")
 }
@@ -278,6 +295,7 @@ pub fn principal_stable_id(principal: &Principal) -> String {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum GraphNodeLabel {
+    Server,
     Project,
     Warehouse,
     Namespace,
@@ -327,6 +345,19 @@ impl CatalogGraphSink for NoopCatalogGraphSink {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn server_event_uses_stable_catalog_subject() {
+        let event = GraphEvent::server(
+            GraphAction::Upserted,
+            "prod",
+            serde_json::json!({"kind": "test"}),
+        );
+
+        assert_eq!(event.label, GraphNodeLabel::Server);
+        assert_eq!(event.subject, "lakecat:server:prod");
+        assert!(event.table.is_none());
+    }
 
     #[test]
     fn project_event_uses_stable_catalog_subject() {
@@ -578,6 +609,7 @@ pub mod grust_integration {
 
     fn graph_label_name(label: &GraphNodeLabel) -> &'static str {
         match label {
+            GraphNodeLabel::Server => "Server",
             GraphNodeLabel::Project => "Project",
             GraphNodeLabel::Warehouse => "Warehouse",
             GraphNodeLabel::Namespace => "Namespace",
@@ -617,6 +649,30 @@ pub mod grust_integration {
             execute_cypher_mutation_returning_with_options_on_store,
         };
         use lakecat_core::{Namespace, TableIdent, TableName, WarehouseName};
+
+        #[test]
+        fn converts_server_event_to_valid_grust_graph_event() {
+            let event = GraphEvent::server(
+                GraphAction::Upserted,
+                "prod",
+                serde_json::json!({"server-id":"prod"}),
+            )
+            .with_event_id("lakecat:outbox:server-1");
+            let graph = graph_event_to_grust(&event);
+
+            assert_eq!(graph.nodes.len(), 1);
+            assert_eq!(graph.edges.len(), 0);
+            assert_eq!(graph.nodes[0].label.as_str(), "CatalogEvent");
+            assert_eq!(
+                graph.nodes[0].props.get("label"),
+                Some(&Value::String("Server".to_string()))
+            );
+            assert_eq!(
+                graph.nodes[0].props.get("subject"),
+                Some(&Value::String("lakecat:server:prod".to_string()))
+            );
+            GraphIndex::new(&graph).expect("server event graph should be valid");
+        }
 
         #[test]
         fn converts_table_event_to_valid_grust_graph() {

@@ -3737,7 +3737,15 @@ async fn project_outbox_event(
             .await?;
         receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "server.upserted" {
-        let _server_id = outbox_server(event)?;
+        let server_id = outbox_server(event)?;
+        state
+            .graph
+            .emit(
+                GraphEvent::server(GraphAction::Upserted, server_id, event_payload.clone())
+                    .with_event_id(event.event_id.clone()),
+            )
+            .await?;
+        receipt.graph_events += 1;
         let lineage_receipt = state
             .lineage
             .emit(LineageEvent::new(
@@ -7139,7 +7147,7 @@ mod tests {
         let drain = drain_outbox_once(&state, 10).await.unwrap();
         assert_eq!(drain.delivered, 1);
         assert_eq!(drain.event_types, vec!["server.upserted".to_string()]);
-        assert_eq!(drain.graph_events, 1);
+        assert_eq!(drain.graph_events, 2);
         assert_eq!(drain.lineage_events, 1);
         assert_eq!(
             store.delivered.lock().await.as_slice(),
@@ -7147,9 +7155,15 @@ mod tests {
         );
 
         let graph_events = graph.events.lock().await;
-        assert_eq!(graph_events.len(), 1);
+        assert_eq!(graph_events.len(), 2);
         assert_eq!(graph_events[0].label, GraphNodeLabel::Principal);
         assert_eq!(graph_events[0].subject, "lakecat:principal:agent:operator");
+        assert_eq!(graph_events[1].label, GraphNodeLabel::Server);
+        assert_eq!(graph_events[1].subject, "lakecat:server:prod");
+        assert_eq!(
+            graph_events[1].properties["server-record"]["server-id"],
+            serde_json::json!("prod")
+        );
         drop(graph_events);
 
         let lineage_events = lineage.events.lock().await;

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a catalog-facing `Server` graph anchor for `server.upserted` outbox
+  replay so the durable tenant root now reaches Grust through the same thin
+  catalog-event boundary as Project, Warehouse, StorageProfile, and the table
+  graph anchors.
 - Added a catalog-facing `StorageProfile` graph anchor for
   `storage-profile.upserted` outbox replay, using a stable warehouse-scoped
   subject and the same redacted secret-reference evidence as OpenLineage so

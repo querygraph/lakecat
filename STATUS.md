@@ -6,6 +6,13 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Project server upserts to graph`.
+  `lakecat-graph` now has a stable `Server` catalog subject, and durable
+  `server.upserted` replay emits that graph event beside the existing
+  OpenLineage receipt. This completes the thin catalog-facing tenant spine
+  anchors for Server, Project, and Warehouse while leaving hierarchy semantics,
+  traversal, and graph query behavior in Grust.
+- Latest completed implementation slice:
   `Project storage-profile upserts to graph`.
   `lakecat-graph` now has a warehouse-scoped `StorageProfile` catalog subject,
   and durable `storage-profile.upserted` replay emits that graph event beside
