@@ -2999,11 +2999,15 @@ async fn cleanup_planned_metadata(
     let (store, object_path) = metadata_object_store(&write.location)?;
     match store.delete(&object_path).await {
         Ok(()) | Err(object_store::Error::NotFound { .. }) => Ok(()),
-        Err(err) => Err(LakeCatError::Internal(format!(
-            "failed to clean up uncommitted metadata object '{}': {err}",
-            write.location
-        ))),
+        Err(err) => Err(metadata_cleanup_error(&write.location, err)),
     }
+}
+
+fn metadata_cleanup_error(metadata_location: &str, err: impl std::fmt::Display) -> LakeCatError {
+    let metadata_location_hash = content_hash_bytes(metadata_location.as_bytes());
+    LakeCatError::Internal(format!(
+        "failed to clean up uncommitted metadata object metadata-location-hash={metadata_location_hash}: {err}"
+    ))
 }
 
 async fn cleanup_planned_metadata_after_commit_error(
@@ -9610,6 +9614,19 @@ mod tests {
             err.to_string()
                 .contains("metadata object commit requires a new metadata location")
         );
+    }
+
+    #[test]
+    fn metadata_cleanup_error_redacts_metadata_location() {
+        let location = "file:///tmp/lakecat-secret/events/metadata/00001.json";
+        let err = metadata_cleanup_error(location, "permission denied");
+        let message = err.to_string();
+
+        assert!(matches!(err, LakeCatError::Internal(_)));
+        assert!(message.contains("metadata-location-hash=sha256:"));
+        assert!(message.contains("permission denied"));
+        assert!(!message.contains("lakecat-secret"));
+        assert!(!message.contains("00001.json"));
     }
 
     #[test]

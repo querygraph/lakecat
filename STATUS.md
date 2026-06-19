@@ -5,6 +5,20 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Redact metadata cleanup failure locations`.
+  Rejected commit cleanup still appends cleanup context to the original store or
+  compare-and-swap error, but true cleanup failures now identify the
+  uncommitted metadata object by SHA-256 metadata-location hash instead of
+  echoing its raw object path.
+- Local verification for this metadata cleanup redaction slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_cleanup_error_redacts_metadata_location -- --nocapture`;
+  `cargo test -p lakecat-service metadata_cleanup -- --nocapture`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/build.sh`;
+  `git diff --check`.
 - OPUS review/design notes are consolidated into `DESIGN.md` and archived under
   `docs/completed/`; archive-relative links now resolve from their completed
   location so the files remain useful as historical audit inputs.

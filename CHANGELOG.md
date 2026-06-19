@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Redacted rejected-commit metadata cleanup failures so cleanup context reports
+  a metadata-location hash instead of echoing the uncommitted object path.
 - Fixed archive-relative links inside the completed OPUS review documents so
   `docs/completed/` remains a usable historical audit trail after consolidation
   into `DESIGN.md`.

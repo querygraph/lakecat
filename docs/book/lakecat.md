@@ -317,10 +317,12 @@ cleanup fails after the store rejects a commit, LakeCat preserves the original
 store or compare-and-swap error class and appends cleanup context. A stale
 pointer conflict still looks like a conflict to an Iceberg client, but the
 message carries SHA-256 hashes of the expected and actual metadata locations so
-operators can diagnose the race without exposing raw object paths. If cleanup
-discovers the uncommitted object is already absent, LakeCat treats that as
-successful cleanup rather than turning a resolved orphan into an internal
-error.
+operators can diagnose the race without exposing raw object paths. True cleanup
+failures use the same redaction discipline: the cleanup context identifies the
+uncommitted metadata object by `metadata-location-hash=sha256:...`, not by the
+raw object path. If cleanup discovers the uncommitted object is already absent,
+LakeCat treats that as successful cleanup rather than turning a resolved orphan
+into an internal error.
 
 Idempotency is part of correctness. Reusing the same key for the same commit can
 return the stored response even after the table has advanced beyond the
