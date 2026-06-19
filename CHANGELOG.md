@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake bootstrap policy projection verification to preserve the
+  policy-derived `max-credential-ttl-seconds` cap before bootstrap evidence can
+  feed replay proof.
 - Tightened QGLake scan planning and `fetchScanTasks` verification so live
   plan/fetch read-restriction evidence must preserve the policy-derived
   `max-credential-ttl-seconds` cap before replay proof is accepted.

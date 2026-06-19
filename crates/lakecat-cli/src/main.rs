@@ -4223,6 +4223,12 @@ fn verify_qglake_bootstrap_projection(
             restriction["purpose"].clone()
         )));
     }
+    if restriction["max-credential-ttl-seconds"] != json!(300) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap policy max credential TTL was not exported as expected: {}",
+            restriction["max-credential-ttl-seconds"].clone()
+        )));
+    }
     if projection.odrl["lakecat:policy-bindings"][0]["policy-id"] != expected_policy {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "QGLake bootstrap ODRL table projection did not embed {expected_policy}"
@@ -9709,6 +9715,22 @@ mod tests {
                 .expect_err("QGLake bootstrap projection should require policy purpose");
 
         assert!(err.to_string().contains("policy purpose"));
+    }
+
+    #[test]
+    fn qglake_bootstrap_projection_verifier_requires_policy_ttl_cap() {
+        let mut policy = qglake_odrl_policy("events");
+        policy["lakecat:read-restriction"]
+            .as_object_mut()
+            .unwrap()
+            .remove("max-credential-ttl-seconds");
+        let projection = qglake_querygraph_projection(policy);
+
+        let err =
+            verify_qglake_bootstrap_projection(&projection, &["default".to_string()], "events")
+                .expect_err("QGLake bootstrap projection should require policy TTL cap");
+
+        assert!(err.to_string().contains("policy max credential TTL"));
     }
 
     #[test]

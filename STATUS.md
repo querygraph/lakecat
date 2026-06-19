@@ -6,6 +6,17 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require bootstrap TTL cap before replay proof`.
+  QGLake bootstrap policy projection verification now rejects missing or drifted
+  `max-credential-ttl-seconds` values before exported policy evidence can feed
+  replay proof.
+- Local verification for this bootstrap TTL-cap slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_bootstrap_projection_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require scan/fetch TTL cap before replay proof`.
   QGLake scan-plan and `fetchScanTasks` verification now reject missing or
   drifted `max-credential-ttl-seconds` values in live read-restriction evidence,
