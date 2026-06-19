@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Consolidated the durable OPUS review decisions into `DESIGN.md` with a
+  closure map for OPUS1/OPUS2 findings, and added an archive index under
+  `docs/completed/` so the OPUS files remain audit history rather than active
+  design instructions.
 - Tightened the live QGLake `fetchScanTasks` verifier to require the
   `required-projection` and `required-filters` evidence emitted by LakeCat's
   fetch response extension.

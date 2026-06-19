@@ -5,6 +5,12 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Consolidate OPUS design reviews`.
+  The active OPUS review decisions are now represented directly in `DESIGN.md`
+  through a closure map and permanent decision list. The original OPUS files are
+  archived under `docs/completed/` with a local archive index and should be used
+  only as historical audit inputs.
 - Latest completed implementation slice:
   `Verify fetch restriction requirements live`.
   The live QGLake `fetchScanTasks` verifier now requires the

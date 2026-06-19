@@ -35,10 +35,11 @@ The historical OPUS files remain available for audit:
 - `docs/completed/OPUS2.md`
 - `docs/completed/OPUS2-DESIGN.md`
 
-They should not be treated as active instructions. Current work should read
-this file, `AGENTS.md`, `ARCHITECTURE.md`, `GOAL.md`, `STATUS.md`, and the live
-code. If those disagree, prefer the live code and newest status/design entry,
-then reconcile the docs in the same logical unit.
+They should not be treated as active instructions. Their live decisions,
+findings, and priorities are merged here as the permanent design record. Current
+work should read this file, `AGENTS.md`, `ARCHITECTURE.md`, `GOAL.md`,
+`STATUS.md`, and the live code. If those disagree, prefer the live code and
+newest status/design entry, then reconcile the docs in the same logical unit.
 
 ## Thesis
 
@@ -171,6 +172,57 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
 | F8 production secret refs | Started | Explicit provider dispatch seams fail closed and receive policy TTL caps; QGLake credential replay now proves the same TTL cap; SDK-backed resolvers beyond configured backends remain pending. |
 | F9 v4 JSON passthrough | Open by design | Keep compatibility bridge until typed Sail v4 support is available. |
 | F10 sibling dependency drift | Open but guarded | Local dependency-contract audits check Grust/TypeSec, Sail, QueryGraph, and manual CI state. |
+
+## OPUS Closure Map
+
+The OPUS review files are archived, but their findings remain represented by
+the live status above and by the priorities below. Use this map when checking
+whether an old OPUS item still needs work.
+
+| OPUS item | Current design home | State |
+| --- | --- | --- |
+| OPUS1 F1 default-feature tests red | Review Gate and local verification | Closed locally; keep default-feature tests in the verification matrix. |
+| OPUS1 F2 no authentication / anonymous principal | Critical Path, P1, P5 | Started; typed principals, TypeSec decisions, capability receipts, and credential gates exist. Production TypeDID/key resolution remains a TypeSec/QueryGraph-facing hardening item. |
+| OPUS1 F3 no real commit / no metadata pointer CAS | P3 Commit Hardening | Started; Turso and memory stores have pointer CAS, idempotency, audit, pointer logs, outbox evidence, and cleanup hardening. Continue object-store/generalized retry work. |
+| OPUS1 F4 no durable local store | Current State, P3, P5 | Closed for the local spine through the Rust `turso` crate behind `CatalogStore`; keep the store contract portable. |
+| OPUS1 F5 real engines not activatable from binary | Ownership, P6 | Started; local feature gates wire TypeSec, Grust, Sail, and dependency-contract audits. Keep publish/path drift visible. |
+| OPUS1 F6 Sail used as a struct library | P1, P6 | Started; provider seams and Sail-owned helper APIs exist. More read execution, manifest work, pruning, and typed v4 support should continue moving upstream to Sail. |
+| OPUS1 F7 plan and implementation drift | Review Gate, STATUS.md, CHANGELOG.md | Guarded by this consolidated design, status updates, and local dependency-contract checks. |
+| OPUS1 F8 placeholder graph emission | P4 Semantic Catalog Graph | Started; LakeCat emits bounded catalog-domain events and Grust owns graph mechanics, taxonomy, stores, traversal, and Cypher. |
+| OPUS1 F9 fabricated default namespace | P5 Tenancy And Credentials | Started; durable namespace and warehouse-prefixed routing exist. Continue tightening view/history and full tenancy semantics. |
+| OPUS1 F10 side effects coupled to request path | P3, P4 | Started; audit/outbox and replayable lineage/graph evidence are core catalog state-change companions. Move remaining side effects toward transactional outbox paths. |
+| OPUS1 F11 unauthenticated plan-task tokens / path exposure | P1 QGLake Acceptance | Started; plan/fetch tokens are table-bound and revalidated with server-derived restrictions. Keep path and token evidence audit-safe. |
+| OPUS1 F12 v4 JSON passthrough | P6 Reproducibility And V4 | Open by design; JSON passthrough is a bridge until typed Sail v4 support lands. |
+| OPUS2 F1 governed read gates but does not narrow | P1 Restriction End To End | Started; restrictions now narrow plan/fetch evidence. Continue pushing reusable read execution into Sail. |
+| OPUS2 F2 ODRL transported but not interpreted | P1 Restriction End To End | Started; enforceable ODRL subsets feed restrictions and unsupported operators fail closed. Broader composition belongs in TypeSec and QueryGraph. |
+| OPUS2 F3 REST commit idempotency unreachable | P3 Commit Hardening | Started; REST idempotency keys replay through store records with mismatch guards. |
+| OPUS2 F4 orphan metadata after CAS failure | P3 Commit Hardening | Started; local cleanup and redacted cleanup evidence exist. Continue generalized object-store cleanup/retry work. |
+| OPUS2 F5 scans bypass in-process provider | P1, P6 | Started; REST `sail-local` plan/fetch routes use provider seams, but Sail should own more planner execution. |
+| OPUS2 F6 catalog graph is breadcrumbs | P4 Semantic Catalog Graph | Started; keep file-granularity out of graph and use Sail metadata-as-data for file enumeration. |
+| OPUS2 F7 tenancy hierarchy durable but not fully routed | P5 Tenancy And Credentials | Started; server/project/warehouse/view anchors and routing are active. Full Iceberg view semantics remain pending. |
+| OPUS2 F8 production secret stores unexercised | P5 Tenancy And Credentials | Started; configured production providers dispatch only after TypeSec authorization and preserve TTL caps. SDK-backed resolvers remain pending. |
+| OPUS2 F9 v4 JSON passthrough | P6 Reproducibility And V4 | Open by design. |
+| OPUS2 F10 sibling dependency drift / manual CI | P6 Reproducibility And V4 | Open but guarded; keep local verification and dependency-contract checks ahead of any cloud CI. |
+
+## OPUS Decisions Kept Permanent
+
+- LakeCat is a catalog and control plane, not a new table format. Standard
+  clients keep using Iceberg REST and pristine Iceberg metadata.
+- The governed path is the default for agents. Raw credential vending is an
+  audited, TypeSec-authorized exception for principals allowed to read directly.
+- The restriction is server-owned. Client projection and filters can only
+  narrow inside policy-derived columns, predicates, purpose, and credential TTL.
+- Sail owns reusable Iceberg and planning work: manifest IO, pruning, deletes,
+  metadata-as-data, scan planning, v4 typing, and table-maintenance helpers.
+- Grust owns reusable graph mechanics: schema/taxonomy, projection primitives,
+  graph stores, traversal, Cypher, and backend-specific algorithms.
+- TypeSec owns reusable governance semantics: capability composition, TypeDID,
+  secure agents, proofs, and authorization semantics.
+- QueryGraph is above LakeCat. It consumes LakeCat evidence, bootstrap bundles,
+  outbox replay, OpenLineage, Croissant/CDIF/OSI/ODRL projections, and QGLake
+  handoff proofs; LakeCat must not import QueryGraph.
+- Graph materialization should stay bounded. Stable semantic entities belong in
+  catalog graph events; file-scale facts stay in Iceberg/Sail metadata-as-data.
 
 ## Priority Plan
 
