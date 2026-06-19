@@ -670,6 +670,21 @@ require_field_match() {
   fi
 }
 
+require_verified_table_scope() {
+  local source_file="$1"
+  local expected_table="$2"
+  node -e '
+const fs = require("fs");
+const [file, expectedTable] = process.argv.slice(1);
+const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+const tables = parsed["verified-tables"];
+if (!Array.isArray(tables) || !tables.includes(expectedTable)) {
+  console.error(`Handoff summary mismatch for verified-tables: expected ${expectedTable}`);
+  process.exit(1);
+}
+' "$source_file" "$expected_table"
+}
+
 write_summary() {
   local bundle_sha drain_sha import_plan_sha lakecat_replay_sha querygraph_verify_sha querygraph_import_sha
   local verified_tables verified_views verified_warehouse bundle_hash graph_hash open_lineage_hash querygraph_import_hash
@@ -678,6 +693,7 @@ write_summary() {
   local lakecat_request_identity_evidence lakecat_querygraph_bootstrap_evidence lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence lakecat_table_commit_history_evidence lakecat_view_receipt_chain_evidence
   local imported_tables imported_views imported_warehouse imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
   local imported_standards
+  local expected_verified_table
   bundle_sha="$(sha256_file "$BUNDLE")"
   drain_sha="$(sha256_file "$DRAIN")"
   import_plan_sha="$(sha256_file "$IMPORT_PLAN")"
@@ -754,6 +770,9 @@ write_summary() {
   require_field_match "table-count" "$imported_tables" "$verified_tables"
   require_field_match "view-count" "$imported_views" "$verified_views"
   require_field_match "import warehouse" "$imported_warehouse" "$verified_warehouse"
+  expected_verified_table="lakecat:table:$WAREHOUSE:$NAMESPACE:$TABLE"
+  require_verified_table_scope "$QUERYGRAPH_VERIFY_OUTPUT" "$expected_verified_table"
+  require_verified_table_scope "$QUERYGRAPH_IMPORT_OUTPUT" "$expected_verified_table"
   require_field_match "bundle-hash" "$imported_bundle_hash" "$bundle_hash"
   require_field_match "graph-hash" "$imported_graph_hash" "$graph_hash"
   require_field_match "open-lineage-hash" "$imported_open_lineage_hash" "$open_lineage_hash"

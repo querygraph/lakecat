@@ -6,6 +6,28 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake handoff table scope`.
+  `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness now
+  require QueryGraph verify/import captures to list the stable table id derived
+  from the handoff summary's `warehouse`, `namespace`, and `table` fields in
+  `verified-tables`. This keeps a compact handoff from rebinding a verified
+  bundle to a different table inside the same catalog tenant.
+- Local verification for this QGLake handoff table-scope slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 outbox events, verified LakeCat replay, ran QueryGraph `lakecat-verify`
+  and `lakecat-import`, then verified `handoff-summary.json` with
+  QueryGraph verify/import `verified-tables` containing
+  `lakecat:table:local:default:events`);
+  `cargo test --workspace --all-features`;
+  `cargo test --workspace`.
+- Latest completed implementation slice:
   `Verify QGLake handoff catalog scope`.
   `lakecat-cli qglake-verify-handoff` now rejects compact handoff summaries
   that omit non-empty `catalogUrl`, `warehouse`, `namespace`, or `table`

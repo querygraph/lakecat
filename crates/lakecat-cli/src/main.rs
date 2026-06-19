@@ -529,13 +529,13 @@ fn verify_qglake_handoff_captured_output_semantics(
     verify_querygraph_capture_matches_summary(
         querygraph_verify,
         querygraph,
-        warehouse,
+        &HandoffTableScope::from_summary(summary, warehouse)?,
         "captured QueryGraph verify output",
     )?;
     verify_querygraph_capture_matches_summary(
         querygraph_import,
         querygraph,
-        warehouse,
+        &HandoffTableScope::from_summary(summary, warehouse)?,
         "captured QueryGraph import output",
     )?;
     let request_identity = Value::Object(lakecat_replay_request_identity(lakecat_replay)?.clone());
@@ -1005,10 +1005,11 @@ fn lakecat_replay_evidence(
 fn verify_querygraph_capture_matches_summary(
     capture: &serde_json::Map<String, Value>,
     querygraph: &serde_json::Map<String, Value>,
-    warehouse: &str,
+    scope: &HandoffTableScope,
     label: &str,
 ) -> lakecat_core::LakeCatResult<()> {
-    require_string_match(capture, "warehouse", warehouse, label)?;
+    require_string_match(capture, "warehouse", scope.warehouse.as_str(), label)?;
+    require_verified_table_scope(capture, scope, label)?;
     require_handoff_summary_fields_match_capture(capture, querygraph, label)
 }
 
@@ -1067,6 +1068,7 @@ fn querygraph_capture_semantics_json(
 ) -> lakecat_core::LakeCatResult<Value> {
     Ok(json!({
         "warehouse": required_str(capture, "warehouse", label)?,
+        "verifiedTables": required_value(capture, "verified-tables", label)?,
         "tableCount": required_u64(capture, "table-count", label)?,
         "viewCount": required_u64(capture, "view-count", label)?,
         "bundleHash": required_str(capture, "bundle-hash", label)?,
@@ -1075,6 +1077,50 @@ fn querygraph_capture_semantics_json(
         "queryGraphImportHash": required_str(capture, "querygraph-import-hash", label)?,
         "standards": required_value(capture, "standards", label)?,
     }))
+}
+
+struct HandoffTableScope {
+    warehouse: String,
+    namespace: String,
+    table: String,
+}
+
+impl HandoffTableScope {
+    fn from_summary(
+        summary: &serde_json::Map<String, Value>,
+        warehouse: &str,
+    ) -> lakecat_core::LakeCatResult<Self> {
+        Ok(Self {
+            warehouse: warehouse.to_string(),
+            namespace: require_non_empty_str(summary, "namespace", "handoff summary")?.to_string(),
+            table: require_non_empty_str(summary, "table", "handoff summary")?.to_string(),
+        })
+    }
+
+    fn stable_table_id(&self) -> String {
+        format!(
+            "lakecat:table:{}:{}:{}",
+            self.warehouse, self.namespace, self.table
+        )
+    }
+}
+
+fn require_verified_table_scope(
+    capture: &serde_json::Map<String, Value>,
+    scope: &HandoffTableScope,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let expected_table = scope.stable_table_id();
+    let tables = required_array(capture, "verified-tables", label)?;
+    if !tables
+        .iter()
+        .any(|table| table.as_str() == Some(expected_table.as_str()))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.verified-tables must include {expected_table}"
+        )));
+    }
+    Ok(())
 }
 
 fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCatResult<Value> {
@@ -6841,6 +6887,10 @@ mod tests {
             json!("sha256:bundle")
         );
         assert_eq!(
+            semantics["querygraphVerify"]["verifiedTables"],
+            json!(["lakecat:table:local:default:events"])
+        );
+        assert_eq!(
             semantics["querygraphImport"]["queryGraphImportHash"],
             json!("sha256:querygraph-import")
         );
@@ -6917,6 +6967,9 @@ mod tests {
             "warehouse": "local",
             "table-count": 1,
             "view-count": 1,
+            "verified-tables": [
+                "lakecat:table:local:default:events"
+            ],
             "bundle-hash": "sha256:other-bundle",
             "graph-hash": "sha256:graph",
             "open-lineage-hash": "sha256:openlineage",
@@ -6965,6 +7018,33 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("captured QueryGraph verify output.warehouse mismatch")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_querygraph_table_scope_drift() {
+        let temp = qglake_temp_dir("handoff-captured-table-scope-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("querygraph-verify.json")).expect("read QueryGraph verify");
+        drifted["verified-tables"] = json!(["lakecat:table:local:default:other"]);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("querygraph-verify.json"), &drifted_bytes)
+            .expect("write drifted QueryGraph verify output");
+        summary["artifacts"]["capturedOutputs"]["querygraphVerify"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured QueryGraph table-scope drift should be rejected");
+
+        assert!(
+            err.to_string()
+                .contains("captured QueryGraph verify output.verified-tables")
+        );
+        assert!(
+            err.to_string()
+                .contains("lakecat:table:local:default:events")
         );
     }
 

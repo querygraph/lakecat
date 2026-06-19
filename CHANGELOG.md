@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound compact QGLake handoff table scope to QueryGraph verification by making
+  `lakecat-cli qglake-verify-handoff` and the local handoff harness require the
+  declared `warehouse`/`namespace`/`table` to appear in QueryGraph
+  `verified-tables`.
 - Made compact QGLake handoff summaries require non-empty `catalogUrl`,
   `warehouse`, `namespace`, and `table` scope fields, and made
   `lakecat-cli qglake-verify-handoff` reject captured QueryGraph verify/import

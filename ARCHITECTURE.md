@@ -566,7 +566,10 @@ Compact QGLake handoff summaries must also carry the catalog URL plus
 warehouse, namespace, and table scope. The handoff verifier rejects missing
 scope and rejects captured QueryGraph verify/import output whose warehouse does
 not match that scope, so automation cannot accidentally attach a verified bundle
-to the wrong catalog tenant.
+to the wrong catalog tenant. The same compact verifier requires QueryGraph's
+captured `verified-tables` set to contain the stable LakeCat table id derived
+from that scope, binding the accepted artifact set to the declared
+warehouse/namespace/table.
 
 ## Lakekeeper Lessons To Adopt
 
