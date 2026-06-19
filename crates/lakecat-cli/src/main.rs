@@ -2067,7 +2067,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "credentialVendingProof",
         "lakecatReplayVerification",
     )?;
-    require_credential_vending_evidence(credentials, principal)?;
+    require_credential_vending_evidence(credentials, principal, storage_profile)?;
 
     let views = required_object(
         lakecat,
@@ -2326,6 +2326,7 @@ fn require_table_commit_history_evidence(
 fn require_credential_vending_evidence(
     credentials: &serde_json::Map<String, Value>,
     principal: &str,
+    storage_profile_upsert: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
     let restricted = required_object(credentials, "restricted", "credentialVendingProof")?;
     require_string_eq(
@@ -2368,6 +2369,11 @@ fn require_credential_vending_evidence(
         "credentialVendingProof.restricted",
     )?;
     require_credential_storage_profile_evidence(restricted, "credentialVendingProof.restricted")?;
+    require_credential_storage_profile_matches_upsert(
+        restricted,
+        storage_profile_upsert,
+        "credentialVendingProof.restricted",
+    )?;
 
     let trusted = required_object(credentials, "trustedHuman", "credentialVendingProof")?;
     require_non_empty_str(
@@ -2419,7 +2425,37 @@ fn require_credential_vending_evidence(
         "credentialVendingProof.trustedHuman",
     )?;
     require_credential_storage_profile_evidence(trusted, "credentialVendingProof.trustedHuman")?;
+    require_credential_storage_profile_matches_upsert(
+        trusted,
+        storage_profile_upsert,
+        "credentialVendingProof.trustedHuman",
+    )?;
 
+    Ok(())
+}
+
+fn require_credential_storage_profile_matches_upsert(
+    credential: &serde_json::Map<String, Value>,
+    storage_profile_upsert: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let storage_profile = required_object(credential, "storageProfile", label)?;
+    let storage_label = format!("{label}.storageProfile");
+    for field in [
+        "profileId",
+        "provider",
+        "issuanceMode",
+        "locationPrefixHash",
+        "secretRefPresent",
+        "secretRefProvider",
+    ] {
+        require_value_match(
+            storage_profile,
+            field,
+            required_value(storage_profile_upsert, field, "storageProfileUpsertProof")?,
+            storage_label.as_str(),
+        )?;
+    }
     Ok(())
 }
 
@@ -8367,6 +8403,34 @@ mod tests {
 
         assert!(err.to_string().contains("credentialVendingProof"));
         assert!(err.to_string().contains("locationPrefixHash"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_credential_storage_profile_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["storageProfile"]
+            ["profileId"] = json!("other-profile");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject credential storage-profile drift");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("profileId"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_credential_secret_ref_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefPresent"] =
+            json!(true);
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefProvider"] =
+            json!("vault");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject credential secret-ref state drift");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("secretRefPresent"));
     }
 
     #[test]

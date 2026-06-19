@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound QGLake credential-vending proof back to the storage-profile upsert proof
+  so compact handoff verification rejects credentials whose storage profile,
+  storage-scope hash, or secret-reference state drifts from the management
+  replay evidence.
 - Centralized QGLake verifier SHA-256 hash-shape checks so required hash
   fields, optional hash fields, and hash arrays all use the same shared
   predicate when validating compact handoff and replay evidence.

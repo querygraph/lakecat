@@ -6,6 +6,20 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind credential proof to storage-profile upsert`.
+  QGLake compact handoff verification now rejects credential-vending proof
+  whose credential storage-profile evidence drifts from the management
+  `storageProfileUpsertProof`, including profile identity, provider,
+  issuance-mode, location-prefix hash, and secret-reference state.
+- Local verification for this credential/storage-profile binding slice is
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_credential_storage_profile_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_credential_secret_ref_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Centralize QGLake hash-shape checks`.
   QGLake compact handoff and replay verification now validates required hash
   fields, optional hash fields, and hash arrays through the same shared
