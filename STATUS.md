@@ -5,6 +5,19 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Verify management replay secret-ref state`.
+  QGLake management replay verification now rejects storage-profile upsert
+  replay whose secret-reference presence/provider fields contradict each other,
+  and the operator-readable management replay line prints the redacted
+  `secret_ref` state beside the credential-root storage-scope hash.
+- Local verification for this management replay secret-ref slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_management_replay_line_summarizes_verified_evidence -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --nocapture`;
+  `cargo test -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Refresh QGLake replay transcript example`.
   The LakeCat book's saved QGLake replay transcript example now matches the

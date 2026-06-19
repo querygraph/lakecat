@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened QGLake management replay secret-reference evidence so
+  storage-profile upsert replay rejects contradictory secret-ref
+  presence/provider fields and the operator-readable management line prints the
+  redacted secret-reference state.
 - Updated the LakeCat book's saved QGLake replay transcript example so the
   management and credential replay lines show the same storage-scope hash fields
   required by the CLI verifiers.

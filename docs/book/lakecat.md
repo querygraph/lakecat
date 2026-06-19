@@ -1511,9 +1511,10 @@ hashes, and the accepted summary repeats that evidence as
 that the credential root was configured, including the provider, issuance mode,
 and a hash of the configured location prefix, without receiving the underlying
 secret-store URI or full storage prefix in the compact proof. The
-operator-readable management replay line now prints the same storage-scope hash,
-so a captured transcript cannot describe the credential root only by provider
-while omitting its redacted storage scope. The script also
+operator-readable management replay line now prints the same storage-scope hash
+and redacted secret-reference state, so a captured transcript cannot describe
+the credential root only by provider while omitting its redacted storage scope or
+secret-reference boundary. The script also
 refuses to write a summary unless LakeCat
 replay proves both sides of credential vending: untrusted agents get no raw
 credentials, trusted humans receive only the audited standard exception, and
@@ -1612,7 +1613,7 @@ control-plane lines such as:
 
 ```text
 scan replay plan_tasks=1 planned_ttl=300 file_tasks=1 delete_files=1 child_plan_tasks=1 fetched_ttl=300
-management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix
+management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none
 credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2
 table commit history commits=1 sequences=1 hashes=sha256:...
 ```
