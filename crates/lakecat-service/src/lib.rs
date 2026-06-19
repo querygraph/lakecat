@@ -161,7 +161,7 @@ pub mod typesec_credential_issuer {
 
     use async_trait::async_trait;
     use lakecat_api::{ConfigEntry, StorageCredential};
-    use lakecat_core::{LakeCatError, LakeCatResult};
+    use lakecat_core::{LakeCatError, LakeCatResult, content_hash_bytes};
     use lakecat_store::CredentialIssuanceMode;
     use serde_json::Value;
     use typesec::{PolicyEngine, PolicyResult, ResourceId, SubjectId};
@@ -587,10 +587,11 @@ pub mod typesec_credential_issuer {
     }
 
     fn provider_not_configured(provider: SecretRefProvider, secret_ref: &str) -> LakeCatError {
+        let secret_ref_hash = content_hash_bytes(secret_ref.as_bytes());
         LakeCatError::InvalidArgument(format!(
             "credential secret resolver for {} is not configured; keep governed reads on Sail \
-             or configure a production secret-store backend for {secret_ref}",
-            provider.as_str()
+             or configure a production secret-store backend; secret-ref-hash={secret_ref_hash}",
+            provider.as_str(),
         ))
     }
 
@@ -11787,6 +11788,11 @@ mod tests {
             assert!(err.to_string().contains(&format!(
                 "credential secret resolver for {provider_label} is not configured"
             )));
+            assert!(err.to_string().contains("secret-ref-hash=sha256:"));
+            assert!(
+                !err.to_string().contains(secret_ref),
+                "not-configured resolver errors must not expose the raw secret-ref URI"
+            );
 
             let denied = TypeSecCredentialIssuer::new(
                 Arc::new(AllowCredentialIssuePolicy {

@@ -6,6 +6,22 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact production secret-ref resolver errors`.
+  Production secret-ref resolver not-configured errors now name the missing
+  provider backend and include `secret-ref-hash=sha256:...` evidence instead of
+  echoing the raw Vault, AWS Secrets Manager, GCP Secret Manager, or Azure Key
+  Vault URI. TypeSec still authorizes the exact secret-ref resource before this
+  resolver boundary is reached.
+- Local verification for this production secret-ref error redaction slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_gates_production_secret_refs_before_dispatch -- --nocapture`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_dispatches_configured_production_secret_backends_after_authorization -- --nocapture`;
+  `cargo test -p lakecat-service --features typesec-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Prove production credential TTL caps`.
   Configured `aws-sm://`, `gcp-sm://`, and `azure-kv://` production secret-ref
   backends are now exercised with a policy-derived

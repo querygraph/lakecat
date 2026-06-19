@@ -879,7 +879,10 @@ operator-readable not-configured error, and denied TypeSec decisions do not call
 the backend at all. Configured provider backends receive the same
 policy-derived `max-credential-ttl-seconds` cap that LakeCat records in the
 read restriction, and returned credentials must preserve that cap in
-`lakecat.max-credential-ttl-seconds`.
+`lakecat.max-credential-ttl-seconds`. A not-configured resolver error reports
+the provider label and a `secret-ref-hash=sha256:...` value, not the raw secret
+URI, so the operator can correlate configuration without leaking the credential
+root.
 When storage-profile changes replay into lineage/OpenLineage evidence, LakeCat
 does not forward the full secret-store URI. The replay payload keeps
 `secret-ref-present` and `secret-ref-provider` so QueryGraph can verify that a

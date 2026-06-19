@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted production secret-ref resolver not-configured errors so operators get
+  the provider label and `secret-ref-hash=sha256:...` evidence without exposing
+  the raw Vault/AWS/GCP/Azure secret URI.
 - Proved configured production secret-ref credential backends receive
   policy-derived TTL caps by exercising AWS/GCP/Azure provider dispatch with a
   `max-credential-ttl-seconds` cap and requiring the returned credential config
