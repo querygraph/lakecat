@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added storage-profile issuance mode to lineage-drain summaries, QGLake replay
+  evidence, and handoff-summary verification so credential-root proofs preserve
+  the configured vending mode without exposing secret material.
 - Added a `grust-local` boundary test proving LakeCat `Column` and `Snapshot`
   catalog-event labels survive through the Grust adapter and can be matched
   through Grust Cypher without adding graph query behavior to LakeCat.

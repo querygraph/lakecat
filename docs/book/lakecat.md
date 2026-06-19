@@ -1234,8 +1234,9 @@ LakeCat replay JSON
 contains redacted `storageProfileUpsert` evidence with replay and OpenLineage
 hashes, and the accepted summary repeats that evidence as
 `lakecatReplayVerification.storageProfileUpsertProof`. QueryGraph gets proof
-that the credential root was configured without receiving the underlying
-secret-store URI. The script also refuses to write a summary unless LakeCat
+that the credential root was configured, including the provider and issuance
+mode, without receiving the underlying secret-store URI. The script also refuses
+to write a summary unless LakeCat
 replay proves both sides of credential vending: untrusted agents get no raw
 credentials, and trusted humans receive only the audited standard exception.
 For reads, the summary similarly refuses to omit proof that scan planning and

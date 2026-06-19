@@ -859,6 +859,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     )?;
     require_non_empty_str(storage_profile, "profileId", "storageProfileUpsertProof")?;
     require_non_empty_str(storage_profile, "provider", "storageProfileUpsertProof")?;
+    require_non_empty_str(storage_profile, "issuanceMode", "storageProfileUpsertProof")?;
     required_bool(
         storage_profile,
         "secretRefPresent",
@@ -1071,6 +1072,7 @@ fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Optio
         "storageProfileUpsert": {
             "profileId": storage_profile_upsert.storage_profile_id.as_deref(),
             "provider": storage_profile_upsert.storage_profile_provider.as_deref(),
+            "issuanceMode": storage_profile_upsert.storage_profile_issuance_mode.as_deref(),
             "secretRefPresent": storage_profile_upsert.storage_profile_secret_ref_present.unwrap_or_default(),
             "secretRefProvider": storage_profile_upsert.storage_profile_secret_ref_provider.as_deref(),
             "replayEventHashes": &storage_profile_upsert.replay_event_hashes,
@@ -3782,6 +3784,11 @@ fn verify_qglake_storage_profile_upsert_replay(
             .as_deref()
             .unwrap_or_default()
             .is_empty()
+        || event
+            .storage_profile_issuance_mode
+            .as_deref()
+            .unwrap_or_default()
+            .is_empty()
         || event.storage_profile_secret_ref_present.is_none()
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
@@ -5010,6 +5017,7 @@ mod tests {
                 "storageProfileUpsertProof": {
                     "profileId": "events-local",
                     "provider": "file",
+                    "issuanceMode": "local-file-no-secret",
                     "secretRefPresent": false,
                     "secretRefProvider": null,
                     "replayEventHashes": ["sha256:storage-replay"],
@@ -5284,6 +5292,21 @@ mod tests {
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject mismatched bootstrap hash");
         assert!(err.to_string().contains("bundleHash mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_storage_profile_issuance_mode() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("issuanceMode");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing issuance mode");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("issuanceMode"));
     }
 
     #[test]
@@ -6085,6 +6108,10 @@ mod tests {
         assert_eq!(
             replay_json["replay-evidence"]["management"]["storageProfileUpsert"]["provider"],
             json!("file")
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["management"]["storageProfileUpsert"]["issuanceMode"],
+            json!("local-file-no-secret")
         );
         assert_eq!(
             replay_json["replay-evidence"]["management"]["storageProfileUpsert"]["secretRefPresent"],
@@ -7528,6 +7555,7 @@ mod tests {
                     storage_profile_count: None,
                     storage_profile_id: None,
                     storage_profile_provider: None,
+                    storage_profile_issuance_mode: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
                     warehouse_count: None,
@@ -7606,6 +7634,7 @@ mod tests {
                     storage_profile_count: None,
                     storage_profile_id: None,
                     storage_profile_provider: None,
+                    storage_profile_issuance_mode: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
                     warehouse_count: None,
@@ -7684,6 +7713,7 @@ mod tests {
                     storage_profile_count: None,
                     storage_profile_id: None,
                     storage_profile_provider: None,
+                    storage_profile_issuance_mode: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
                     warehouse_count: None,
@@ -7761,6 +7791,7 @@ mod tests {
                     storage_profile_count: None,
                     storage_profile_id: None,
                     storage_profile_provider: None,
+                    storage_profile_issuance_mode: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
                     warehouse_count: None,
@@ -7838,6 +7869,7 @@ mod tests {
                     storage_profile_count: None,
                     storage_profile_id: None,
                     storage_profile_provider: None,
+                    storage_profile_issuance_mode: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
                     warehouse_count: None,
@@ -7915,6 +7947,7 @@ mod tests {
                     storage_profile_count: None,
                     storage_profile_id: None,
                     storage_profile_provider: None,
+                    storage_profile_issuance_mode: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
                     warehouse_count: None,
@@ -7992,6 +8025,7 @@ mod tests {
                     storage_profile_count: None,
                     storage_profile_id: None,
                     storage_profile_provider: None,
+                    storage_profile_issuance_mode: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
                     warehouse_count: None,
@@ -8069,6 +8103,7 @@ mod tests {
                     storage_profile_count: None,
                     storage_profile_id: None,
                     storage_profile_provider: None,
+                    storage_profile_issuance_mode: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
                     warehouse_count: None,
@@ -8147,6 +8182,7 @@ mod tests {
                     storage_profile_count: None,
                     storage_profile_id: None,
                     storage_profile_provider: None,
+                    storage_profile_issuance_mode: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
                     warehouse_count: None,
@@ -8224,6 +8260,7 @@ mod tests {
                     storage_profile_count: None,
                     storage_profile_id: None,
                     storage_profile_provider: None,
+                    storage_profile_issuance_mode: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
                     warehouse_count: None,
@@ -8301,6 +8338,7 @@ mod tests {
                     storage_profile_count: None,
                     storage_profile_id: None,
                     storage_profile_provider: None,
+                    storage_profile_issuance_mode: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
                     warehouse_count: None,
@@ -8378,6 +8416,7 @@ mod tests {
                     storage_profile_count: None,
                     storage_profile_id: None,
                     storage_profile_provider: None,
+                    storage_profile_issuance_mode: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
                     warehouse_count: None,
@@ -8455,6 +8494,7 @@ mod tests {
                     storage_profile_count: None,
                     storage_profile_id: None,
                     storage_profile_provider: None,
+                    storage_profile_issuance_mode: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
                     warehouse_count: None,
@@ -9514,6 +9554,7 @@ mod tests {
             storage_profile_count: None,
             storage_profile_id: None,
             storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
@@ -9592,6 +9633,7 @@ mod tests {
             storage_profile_count: None,
             storage_profile_id: None,
             storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
@@ -9692,6 +9734,7 @@ mod tests {
             storage_profile_count: None,
             storage_profile_id: None,
             storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
@@ -9749,6 +9792,7 @@ mod tests {
             storage_profile_count: None,
             storage_profile_id: None,
             storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
@@ -9806,6 +9850,7 @@ mod tests {
             storage_profile_count: None,
             storage_profile_id: None,
             storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
@@ -9863,6 +9908,7 @@ mod tests {
             storage_profile_count: None,
             storage_profile_id: None,
             storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
@@ -9922,6 +9968,7 @@ mod tests {
             storage_profile_count: Some(1),
             storage_profile_id: None,
             storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
@@ -9981,6 +10028,7 @@ mod tests {
             storage_profile_count: None,
             storage_profile_id: Some("events-local".to_string()),
             storage_profile_provider: Some("file".to_string()),
+            storage_profile_issuance_mode: Some("local-file-no-secret".to_string()),
             storage_profile_secret_ref_present: Some(false),
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
@@ -10040,6 +10088,7 @@ mod tests {
             storage_profile_count: None,
             storage_profile_id: None,
             storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
@@ -10097,6 +10146,7 @@ mod tests {
             storage_profile_count: None,
             storage_profile_id: None,
             storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
@@ -10154,6 +10204,7 @@ mod tests {
             storage_profile_count: None,
             storage_profile_id: None,
             storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
             warehouse_count: Some(1),
@@ -10211,6 +10262,7 @@ mod tests {
             storage_profile_count: None,
             storage_profile_id: None,
             storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
@@ -10272,6 +10324,7 @@ mod tests {
             storage_profile_count: None,
             storage_profile_id: None,
             storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,

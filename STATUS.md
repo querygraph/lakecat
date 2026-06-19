@@ -6,6 +6,27 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Prove storage-profile issuance mode in QGLake replay`.
+  Lineage-drain event summaries now carry redacted
+  `storage-profile-issuance-mode` evidence for storage-profile upserts. QGLake
+  replay JSON lifts that value into
+  `replay-evidence.management.storageProfileUpsert.issuanceMode`, and
+  `lakecat-cli qglake-verify-handoff` now rejects handoff summaries whose
+  `storageProfileUpsertProof` omits `issuanceMode`. This keeps credential-root
+  proofs useful for QueryGraph and operators without exposing raw secret-store
+  URIs or credentials.
+- Local verification for this credential-root proof slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service outbox_drain_projects_storage_profile_upserts_to_lineage`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_storage_profile_issuance_mode`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Verify Grust catalog-event taxonomy labels`.
   `lakecat-graph` now has a `grust-local` boundary test that writes LakeCat
   `Column`, `Snapshot`, `Commit`, `Principal`, and `ScanPlan` events through

@@ -1229,6 +1229,10 @@ fn lineage_drain_event_summary(
             .and_then(|profile| profile.get("provider"))
             .and_then(Value::as_str)
             .map(str::to_string),
+        storage_profile_issuance_mode: storage_profile
+            .and_then(|profile| profile.get("issuance-mode"))
+            .and_then(Value::as_str)
+            .map(str::to_string),
         storage_profile_secret_ref_present: storage_profile
             .and_then(|profile| profile.get("secret-ref-present"))
             .and_then(Value::as_bool)
@@ -7060,6 +7064,10 @@ mod tests {
         assert_eq!(
             drain.events[0].storage_profile_provider.as_deref(),
             Some("s3")
+        );
+        assert_eq!(
+            drain.events[0].storage_profile_issuance_mode.as_deref(),
+            Some("secret-ref")
         );
         assert_eq!(
             drain.events[0].storage_profile_secret_ref_present,
