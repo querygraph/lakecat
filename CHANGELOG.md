@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Consolidated the pinned `AGENTS.md` guidance in `GOAL.md` so future LakeCat
+  resumes treat the user-supplied repo boundary, QueryGraph integration, Turso,
+  book, verification, and commit rules as durable goal state.
 - Tightened compact `storageProfileUpsertProof` validation in
   `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness so
   `secretRefProvider` is required when `secretRefPresent` is true and must be
