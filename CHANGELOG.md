@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pinned the supplied `/Users/alexy/src/lakecat/AGENTS.md` operating guidance
+  directly into `GOAL.md` as durable goal execution guidance.
 - Rejected unsafe storage-profile issuance/provider combinations, including
   remote `local-file-no-secret` profiles and local `short-lived-secret-ref`
   profiles.

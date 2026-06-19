@@ -45,6 +45,39 @@ Treat the guidance in `AGENTS.md` as part of this goal, not as separate
 session-only advice. Keep this file and `AGENTS.md` aligned when the operating
 model changes.
 
+The current `/Users/alexy/src/lakecat/AGENTS.md` content is pinned into this
+goal as permanent execution guidance. In practical terms, every future LakeCat
+slice must preserve the following contract:
+
+- LakeCat remains the Rust Iceberg-compatible catalog foundation for
+  QueryGraph, with a thin catalog boundary around identity, tenancy, Iceberg
+  REST compatibility, metadata-pointer state, policy gates, and integration
+  events.
+- Reusable Iceberg format, manifest, scan-planning, pruning, delete handling,
+  metadata-as-data, and engine work moves to Sail.
+- Reusable graph schema, graph taxonomy, projection logic, graph stores,
+  traversal, Cypher, and graph query behavior moves to Grust.
+- Reusable governance, policy composition, capabilities, TypeDID envelopes,
+  secure agents, and authorization semantics moves to TypeSec.
+- QueryGraph remains the end-to-end integration target, including Croissant,
+  CDIF, OSI, ODRL, OpenLineage, QGLake, and governed agent workflows.
+- Iceberg compatibility stays strict: do not fork standard semantics, do not
+  require non-standard endpoints for normal table access, and keep Iceberg
+  metadata pristine.
+- Raw credential vending is a deliberate audited exception; governed
+  Sail-planned reads are the default path for agents and untrusted principals.
+- The existing trait seams (`CatalogStore`, `SailCatalogEngine`,
+  `GovernanceEngine`, `CatalogGraphSink`, `LineageSink`) are the preferred
+  extension points.
+- Feature gates must stay honest, with real integrations behind explicit gates
+  such as `sail-local`, `typesec-local`, `grust-local`, and `turso-local`.
+- The durable local catalog spine should use the Rust `turso` crate; do not
+  reintroduce SQLx/SQLite unless explicitly requested.
+- Graph and lineage side effects should move toward a transactional outbox so
+  catalog state changes are not lost or blocked by external sinks.
+- Each logical unit must update `CHANGELOG.md`, run relevant local gates before
+  push, and commit only the files belonging to that unit.
+
 The `/Users/alexy/src/lakecat/AGENTS.md` instructions are a pinned operating
 contract for this goal. When future work changes repo boundaries,
 compatibility rules, implementation priorities, verification gates, or commit
