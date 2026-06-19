@@ -221,7 +221,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   agents while still returning an audited standard credential response to a
   trusted human principal for the same table, and lineage-drain acceptance now
   verifies both credential-vend audit events survive outbox replay with lineage
-  sink receipt hashes; rerunning the fixture now accepts existing
+  sink receipt hashes plus the trusted-human raw credential exception reason;
+  saved replay verification prints compact credential replay evidence for the
+  blocked restricted-agent path and the audited trusted-human exception path;
+  rerunning the fixture now accepts existing
   namespace/table resources only after validating
   that they still match the expected QGLake fixture shape; the fixture now
   verifies the exported QueryGraph bootstrap contains the enforced QGLake policy

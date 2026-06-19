@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened QGLake saved replay acceptance to require the trusted-human raw
+  credential exception reason, and made `qglake-verify-replay` print compact
+  restricted-agent and trusted-human credential replay evidence.
 - Made `lakecat-cli qglake-verify-replay` print compact management replay
   counts for servers, projects, warehouses, policy bindings, and storage
   profiles after accepting a saved QGLake drain.

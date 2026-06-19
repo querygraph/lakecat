@@ -6,6 +6,26 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify QGLake credential replay reasons`. `lakecat-cli qglake-verify-replay`
+  now requires the trusted-human raw credential exception reason to survive
+  lineage replay, and prints compact restricted-agent and trusted-human
+  credential replay evidence after accepting a saved bootstrap bundle and drain.
+- Local verification for the QGLake credential replay slice was green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_credential_replay_line_summarizes_verified_evidence`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-cli`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo fmt -p lakecat-sail -p lakecat-store -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `git diff --check`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Print QGLake management replay summary`. `lakecat-cli qglake-verify-replay`
   now prints compact management replay counts for servers, projects,
   warehouses, policy bindings, and storage profiles after accepting a saved
