@@ -4996,6 +4996,94 @@ pub mod sail_integration {
         }
 
         #[tokio::test]
+        async fn inspects_v4_extension_metadata_without_typed_sail_claims() {
+            let summary = inspect_sail_table_metadata(&sample_metadata(4))
+                .expect("v4 extension metadata should inspect through JSON bridge");
+            assert_eq!(summary.format_version, 4);
+            assert!(summary.v4_extension_mode);
+            assert_eq!(
+                summary.table_uuid.as_deref(),
+                Some("11111111-1111-1111-1111-111111111111")
+            );
+            assert_eq!(summary.current_schema_id, Some(1));
+            assert_eq!(summary.current_snapshot_id, Some(42));
+            assert_eq!(summary.sequence_number, Some(7));
+            assert_eq!(summary.default_spec_id, Some(0));
+            assert_eq!(
+                summary.manifest_list.as_deref(),
+                Some("file:///tmp/events/metadata/snap-42.avro")
+            );
+            assert_eq!(
+                summary
+                    .fields
+                    .iter()
+                    .map(|field| field.name.as_str())
+                    .collect::<Vec<_>>(),
+                vec!["id"]
+            );
+        }
+
+        #[tokio::test]
+        async fn plans_v4_extension_manifest_list_without_pruning_claims() {
+            let engine = SailRestModelCatalogEngine;
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let plan = engine
+                .plan_scan(ScanPlanningRequest {
+                    table: table.clone(),
+                    principal: Principal::anonymous(),
+                    metadata_location: Some("file:///tmp/events/metadata/v4.json".to_string()),
+                    table_metadata: sample_metadata(4),
+                    projection: vec!["id".to_string()],
+                    filters: vec![json!({
+                        "type": "eq",
+                        "term": "id",
+                        "value": "evt-1"
+                    })],
+                    limit: None,
+                    snapshot_id: None,
+                    start_snapshot_id: None,
+                    end_snapshot_id: None,
+                })
+                .await
+                .expect("v4 extension scan should produce manifest-list task");
+            assert_eq!(plan.planned_by, "sail-rest-models");
+            assert_eq!(plan.snapshot_id, Some(42));
+            assert_eq!(plan.scan_tasks.len(), 1);
+            assert_eq!(
+                plan.scan_tasks[0].pointer("/task-type"),
+                Some(&json!("manifest-list"))
+            );
+            assert_eq!(
+                plan.scan_tasks[0].pointer("/manifest-list"),
+                Some(&json!("file:///tmp/events/metadata/snap-42.avro"))
+            );
+            let residual = plan
+                .residual_filter
+                .expect("v4 planning should explain bridge");
+            assert_eq!(
+                residual.pointer("/sail-metadata/v4-extension-mode"),
+                Some(&json!(true))
+            );
+            assert_eq!(
+                residual.pointer("/sail-metadata/fields/0/name"),
+                Some(&json!("id"))
+            );
+            assert_eq!(residual.pointer("/select"), Some(&json!(["id"])));
+            assert_eq!(
+                residual.pointer("/filters-accepted-by-sail/0/expression-type"),
+                Some(&json!("eq"))
+            );
+            assert_eq!(
+                residual.pointer("/filters-accepted-by-sail/0/references/0"),
+                Some(&json!("id"))
+            );
+        }
+
+        #[tokio::test]
         async fn validates_projected_columns_against_sail_schema() {
             let engine = SailRestModelCatalogEngine;
             let table = TableIdent::new(
@@ -5191,6 +5279,79 @@ pub mod sail_integration {
                 .await
                 .expect_err("stale schema requirement should fail");
             assert!(err.to_string().contains("expected current schema id 9"));
+        }
+
+        #[tokio::test]
+        async fn validates_v4_extension_commit_requirements_against_json_summary() {
+            let engine = SailRestModelCatalogEngine;
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let plan = engine
+                .prepare_commit(CommitPreparationRequest {
+                    table: table.clone(),
+                    principal: Principal::anonymous(),
+                    current_metadata_location: Some(
+                        "file:///tmp/events/metadata/v4.json".to_string(),
+                    ),
+                    new_metadata_location: None,
+                    current_metadata: sample_metadata(4),
+                    new_metadata: None,
+                    requirements: vec![
+                        json!({
+                            "type": "assert-table-uuid",
+                            "uuid": "11111111-1111-1111-1111-111111111111"
+                        }),
+                        json!({
+                            "type": "assert-current-schema-id",
+                            "current-schema-id": 1
+                        }),
+                        json!({
+                            "type": "assert-ref-snapshot-id",
+                            "ref": "main",
+                            "snapshot-id": 42
+                        }),
+                        json!({
+                            "type": "assert-last-assigned-field-id",
+                            "last-assigned-field-id": 1
+                        }),
+                        json!({
+                            "type": "assert-default-spec-id",
+                            "default-spec-id": 0
+                        }),
+                    ],
+                    updates: Vec::new(),
+                })
+                .await
+                .expect("v4 JSON bridge should validate stable commit requirements");
+            assert_eq!(
+                plan.metadata_patch["lakecat:validated-requirements"],
+                json!(5)
+            );
+
+            let err = engine
+                .prepare_commit(CommitPreparationRequest {
+                    table,
+                    principal: Principal::anonymous(),
+                    current_metadata_location: Some(
+                        "file:///tmp/events/metadata/v4.json".to_string(),
+                    ),
+                    new_metadata_location: None,
+                    current_metadata: sample_metadata(4),
+                    new_metadata: None,
+                    requirements: vec![json!({
+                        "type": "assert-ref-snapshot-id",
+                        "ref": "main",
+                        "snapshot-id": 99
+                    })],
+                    updates: Vec::new(),
+                })
+                .await
+                .expect_err("stale v4 snapshot requirement should fail");
+            assert!(err.to_string().contains("expected main snapshot id"));
+            assert!(err.to_string().contains("99"));
         }
 
         #[tokio::test]

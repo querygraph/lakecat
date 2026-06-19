@@ -6,6 +6,23 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Add v4 extension bridge fixtures`. `lakecat-sail` now has focused tests that
+  prove JSON-summary inspection, manifest-list scan planning, and stable
+  commit-requirement validation for format-version 4 metadata without claiming
+  typed v4 support.
+- Local verification for the v4 extension bridge fixture slice was green:
+  `cargo fmt -p lakecat-sail`;
+  `cargo test -p lakecat-sail --all-features v4 -- --nocapture`;
+  `cargo fmt -p lakecat-sail -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-sail --all-features v4`;
+  `cargo test -p lakecat-sail --all-features`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Verify view receipt chains`. Governed namespace view receipt-chain reads now
   expose `chain-verified`, lineage summaries carry a verified-chain count, and
   QGLake dropped-view acceptance requires the namespace chain to be both hashed

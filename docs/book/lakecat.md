@@ -427,6 +427,16 @@ metadata extension preservation, and future metadata-tree planning without
 forking Iceberg. The catalog can become more intelligent while the table remains
 portable. The standard path stays boring. The governed Sail path becomes richer.
 
+The current v4 bridge is intentionally narrow and tested as such. When LakeCat
+sees `format-version: 4`, it does not pretend that Sail already has a settled
+typed v4 model. Instead, `lakecat-sail` extracts the stable JSON envelope
+fields that remain useful across versions: table UUID, location, schema id,
+snapshot id, sequence number, manifest-list path, default spec, and field
+names. It can plan a governed manifest-list scan task from that envelope and
+validate stable commit requirements such as table UUID, current schema id, main
+snapshot id, last assigned field id, and default spec id. Pruning and typed
+metadata-tree semantics wait for Sail-owned v4 support.
+
 ## OSI, OpenLineage, And Responsible Semantic Handoff
 
 QueryGraph needs more than physical table access. It needs a semantic picture:

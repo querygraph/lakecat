@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added focused `lakecat-sail` v4 extension fixtures for JSON-summary
+  inspection, manifest-list scan planning, and stable commit-requirement
+  validation while keeping typed v4 metadata explicitly pending on Sail.
 - Added `chain-verified` validation to governed namespace view receipt chains,
   replayed the verified-chain count through lineage-drain summaries, and made
   QGLake dropped-view acceptance require a verified namespace chain proof.

@@ -145,7 +145,7 @@ build is reproducible off this machine.
 | F6 | Catalog graph is event breadcrumbs | MEDIUM | STARTED — bounded taxonomy replays through Grust |
 | F7 | Tenancy hierarchy durable but not fully routed | LOW | STARTED — Server/Project/Warehouse/View records and registered warehouse-prefixed routing |
 | F8 | Production secret backends unexercised | LOW | STARTED — all accepted production secret-ref schemes are TypeSec-gated before fail-closed resolver errors |
-| F9 | v4 JSON passthrough | LOW | OPEN by design |
+| F9 | v4 JSON passthrough | LOW | OPEN by design; stronger bridge fixtures now cover JSON summary inspection, manifest-list planning, and stable commit requirements |
 | F10 | Sibling deps local-only; CI manual | LOW (process) | OPEN |
 
 ---
@@ -361,7 +361,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   bundle. Full Iceberg view history and commit semantics remain pending.*
 - **P6 — Reproducibility (F10) + typed v4 (F9).** Land the Sail helper commits
   upstream (or pin a published Sail) and re-enable automatic CI; converge on
-  typed v4 metadata once `sail-iceberg` provides it.
+  typed v4 metadata once `sail-iceberg` provides it. The current LakeCat bridge
+  now has focused format-version 4 fixtures for JSON summary extraction,
+  manifest-list scan planning, and stable commit-requirement validation, but
+  pruning and typed metadata-tree semantics remain Sail-owned follow-up work.
 
 ---
 
