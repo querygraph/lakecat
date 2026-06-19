@@ -260,6 +260,11 @@ Commit handling should be optimistic, idempotent, and auditable:
 8. Record audit/outbox events with the committed transaction, then drain graph,
    lineage, and QueryGraph semantic projections from that durable outbox.
 
+Exact idempotent retries short-circuit before Sail validation and before
+metadata-object writes. The stored response is returned from the durable replay
+record, so a retry cannot rewrite the committed metadata object or create a
+second pointer-log entry.
+
 The compare-and-swap record should include:
 
 ```text
@@ -292,6 +297,8 @@ through compare-and-swap, persist idempotency/audit/outbox records with both the
 normalized request hash and stored response hash plus compact format-version,
 snapshot-id, and policy-hash summary evidence, and expose a service-level drain
 that projects committed events to graph and lineage sinks.
+Exact idempotency replays are verified to return before object-store writes, so
+the committed metadata object remains untouched on retry.
 The local `file://` path remains the verified default, while configured remote
 stores can plug into the same writer boundary. A typed storage-profile model now
 drives conservative credential responses: embedded `file://` tables can return

@@ -261,6 +261,8 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   `policy_hash` summary evidence plus a durable `response_hash` beside the
   request hash so pointer-log, audit/outbox, graph, and lineage replay can prove
   both the Iceberg/governance summary and the exact stored commit response;
+  service coverage now proves exact idempotent retries return before
+  metadata-object writes by preserving the committed object unchanged on replay;
   reused keys with different request hashes now return conflict; failed pointer
   commits now clean up newly written local metadata objects when they do not
   become the table's metadata pointer; metadata object writes and cleanup now

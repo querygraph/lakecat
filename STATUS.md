@@ -6,6 +6,24 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Prove idempotent commits skip metadata rewrites`. The service now has a
+  regression that commits a metadata object with an idempotency key, mutates the
+  object on disk, retries the exact REST commit, and proves LakeCat returns the
+  stored response without invoking Sail or rewriting the metadata object. This
+  keeps the P3 commit spine honest: idempotent replay is a pre-storage replay,
+  not merely a matching final response.
+- Local verification for the idempotent metadata-rewrite slice was green:
+  `cargo test -p lakecat-service idempotent_commit_replay_does_not_rewrite_metadata_object`;
+  `cargo fmt -p lakecat-service`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-store -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Summarize commit metadata in pointer logs`. `TableCommitRecord` now carries
   compact `format_version`, `snapshot_id`, and `policy_hash` evidence alongside
   request/response hashes. Memory/Turso commit paths populate the fields from

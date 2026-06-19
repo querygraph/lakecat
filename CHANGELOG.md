@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a service regression proving exact REST commit retries replay before
+  metadata-object writes by preserving the committed object unchanged on
+  idempotent replay.
 - Added `format_version`, `snapshot_id`, and `policy_hash` to durable table
   commit records so pointer-log, audit/outbox, graph, and lineage replay carry
   compact Iceberg and governance summary evidence for each committed pointer.

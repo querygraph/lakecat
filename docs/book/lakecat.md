@@ -309,6 +309,9 @@ return the stored response even after the table has advanced beyond the
 original commit requirements. Reusing the same key for a different body must
 conflict. LakeCat persists a normalized request hash and stores only audit-safe
 evidence, not raw secrets or raw idempotency keys.
+The service regression for this path proves the replay happens before
+metadata-object writes: an exact retry returns the stored response without
+touching the already committed metadata object.
 
 Commit records also carry a response hash over the stored table response. That
 pair matters: the request hash proves which commit body won or replayed, while
