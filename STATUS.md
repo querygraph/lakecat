@@ -5,6 +5,21 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Consolidate OPUS design docs`.
+  The OPUS review/design files are archived under `docs/completed/`, and the
+  active design thesis, division of labor, finding status, and priority plan now
+  live in root `DESIGN.md`. `AGENTS.md`, `GOAL.md`, and `ARCHITECTURE.md` point
+  future work at the consolidated design instead of treating archived OPUS files
+  as current instructions.
+- Latest completed implementation slice:
+  `Guard QueryGraph receipt-chain import compatibility`.
+  `scripts/check-local-dependency-contract.sh` now verifies the sibling
+  `/Users/alexy/src/querygraph/qg-rust` importer preserves
+  `receipt-chain-hash` on LakeCat view receipt evidence and rejects missing
+  receipt-chain evidence. This makes the QGLake handoff compatibility field an
+  executable local contract rather than relying only on the live handoff
+  harness to catch a stale QueryGraph consumer.
 - Latest completed implementation slice:
   `Bind QGLake accepted view chain hashes to chain evidence`.
   `lakecat-cli qglake-verify-handoff` now rejects compact

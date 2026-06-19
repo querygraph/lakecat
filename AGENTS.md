@@ -34,6 +34,9 @@ metadata-pointer state, policy gates, and integration events belong here.
 
 ## Implementation Priorities
 
+- Treat `DESIGN.md` as the living design and review-plan surface. The archived
+  `docs/completed/OPUS*.md` files are historical audit inputs, not active
+  instructions.
 - Use the existing trait seams (`CatalogStore`, `SailCatalogEngine`,
   `GovernanceEngine`, `CatalogGraphSink`, `LineageSink`) and keep defaults safe
   for embedded tests.
@@ -60,6 +63,8 @@ metadata-pointer state, policy gates, and integration events belong here.
   - `cargo test -p lakecat-service --features turso-local`
   - `cargo test -p lakecat-service --all-features`
   - `cargo test --workspace --all-features`
+  - `scripts/check-local-dependency-contract.sh` when dependency contracts,
+    sibling APIs, CI policy, or QueryGraph handoff/import evidence changes
   - `git diff --check`
 - When a change touches Sail, Grust, TypeSec, or QueryGraph, run the focused
   tests in that sibling repo as well and report each repo separately.

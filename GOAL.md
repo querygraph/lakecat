@@ -28,11 +28,11 @@ Before choosing or implementing a slice, read the current state from:
   verification expectations.
 - `STATUS.md` for the latest committed/pushed state, known blockers, and next
   recommended slice.
+- `DESIGN.md` for the consolidated OPUS findings, living design thesis,
+  current finding status, and priority plan.
 - `ARCHITECTURE.md` for the target architecture and placement rules.
-- `docs/OPUS1.md` for the review findings and milestone intent.
-- `docs/OPUS1-DESIGN.md` for the living review log and working plan.
-- `docs/OPUS2-DESIGN.md` for the current QueryGraph, outbox, lineage, book,
-  and acceptance-test work plan.
+- `docs/completed/OPUS*.md` only as historical audit inputs, not active
+  instructions.
 - The actual code, manifests, tests, and sibling repo APIs in the current
   checkout.
 

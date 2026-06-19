@@ -665,10 +665,13 @@ The script checks the manual-only CI trigger, crates.io resolution for the
 published Grust and TypeSec versions, the local Sail path bridge, the Sail patch
 files manual CI applies, and the concrete Sail helper API surface LakeCat uses:
 generated Iceberg REST models, typed metadata inputs, planning result helpers,
-fetchScanTasks result helpers, and table-status conversion. It is not a
-substitute for upstreaming the Sail helper APIs or re-enabling automatic CI; it
-is a guard that makes drift visible while LakeCat still depends on unpublished
-Sail helper work.
+fetchScanTasks result helpers, and table-status conversion. It also checks the
+local QueryGraph Rust importer for the LakeCat view receipt-chain contract:
+`receipt-chain-hash` must be preserved in view receipt evidence and missing
+receipt-chain evidence must fail closed. It is not a substitute for upstreaming
+the Sail helper APIs or re-enabling automatic CI; it is a guard that makes drift
+visible while LakeCat still depends on unpublished Sail helper work and a local
+QueryGraph acceptance target.
 
 As of the current local reconciliation, the Sail helper work is not an
 anonymous dirty tree. `/Users/alexy/src/sail` has scoped local commits on

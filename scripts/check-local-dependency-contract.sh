@@ -45,6 +45,7 @@ require_pattern 'sail-common-datafusion = \{ path = "../sail/crates/sail-common-
 for sibling in ../sail/crates/sail-catalog ../sail/crates/sail-common-datafusion; do
   require_dir "$sibling"
 done
+require_dir ../querygraph/qg-rust
 
 for patch in \
   ci/sail-patches/0001-Expose-Iceberg-table-status-conversion.patch \
@@ -84,6 +85,14 @@ require_pattern 'ci/sail-patches' .github/workflows/ci.yml \
   "manual CI must reference ci/sail-patches"
 require_pattern 'repository: lakehq/sail' .github/workflows/ci.yml \
   "manual CI must check out the Sail sibling repository"
+
+require_file ../querygraph/qg-rust/src/lakecat.rs
+require_pattern 'pub receipt_chain_hash: String' ../querygraph/qg-rust/src/lakecat.rs \
+  "local QueryGraph importer must preserve LakeCat view receipt-chain evidence"
+require_pattern 'record\.receipt_chain_hash\.is_empty' ../querygraph/qg-rust/src/lakecat.rs \
+  "local QueryGraph importer must reject missing LakeCat view receipt-chain evidence"
+require_pattern 'receipt-chain hash' ../querygraph/qg-rust/src/lakecat.rs \
+  "local QueryGraph importer must expose a clear receipt-chain validation error"
 
 cargo metadata --format-version 1 --no-deps > /tmp/lakecat-dependency-contract-metadata.json
 require_pattern '"name":"grust-graph".*"source":"registry\+https://github.com/rust-lang/crates.io-index".*"req":"\^0\.9\.0"' /tmp/lakecat-dependency-contract-metadata.json \

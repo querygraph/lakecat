@@ -592,10 +592,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   crates, with a registry-only probe proving `grust-cypher` 0.9.0 compatibility
   for the Grust catalog graph boundary. The dependency-contract audit now checks
   registry resolution for Grust/TypeSec, the remaining Sail path/patch bridge,
-  the concrete local Sail helper API surface, and the manual-only CI trigger so
-  F10 drift is executable even before automatic CI is re-enabled. The local Sail
-  source state is committed on `codex/graph`; only untracked artifact/book
-  directories remain outside those scoped source commits.
+  the concrete local Sail helper API surface, the sibling QueryGraph importer's
+  `receipt-chain-hash` view evidence compatibility, and the manual-only CI
+  trigger so F10 drift is executable even before automatic CI is re-enabled. The
+  local Sail source state is committed on `codex/graph`; only untracked
+  artifact/book directories remain outside those scoped source commits.
 
 ---
 

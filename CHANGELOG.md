@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Consolidated the active OPUS review/design guidance into root `DESIGN.md`,
+  archived the original OPUS files under `docs/completed/`, and rewired
+  `AGENTS.md`, `GOAL.md`, `ARCHITECTURE.md`, and `STATUS.md` so the OPUS files
+  are historical audit inputs rather than active instructions.
+- Extended the local dependency-contract audit to require the sibling
+  QueryGraph Rust importer to preserve and validate LakeCat
+  `receipt-chain-hash` view evidence, preventing stale QueryGraph consumers
+  from silently dropping accepted view chain proof.
 - Required compact QGLake view proofs to bind active accepted-view
   `acceptedReceiptChainHash` values to namespace `receiptChains[].chainHashes`
   evidence, while allowing tombstoned accepted views only when the tombstone

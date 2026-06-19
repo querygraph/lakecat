@@ -1,5 +1,9 @@
 # LakeCat Architecture
 
+For the living design thesis, OPUS review consolidation, finding status, and
+current priority plan, read `DESIGN.md`. This file focuses on the target
+architecture and placement rules.
+
 LakeCat is a Rust-native Iceberg REST catalog and QueryGraph foundation. Its
 job is to preserve Iceberg compatibility while moving as much planning,
 metadata pruning, commit preparation, and execution-adjacent work as possible
