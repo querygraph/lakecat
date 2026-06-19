@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound QGLake lineage-drain credential replay back to the storage-profile
+  upsert replay so source replay verification rejects credential events whose
+  profile identity, storage-scope hash, or secret-reference state is spliced
+  from a different storage profile.
 - Bound QGLake credential-vending proof back to the storage-profile upsert proof
   so compact handoff verification rejects credentials whose storage profile,
   storage-scope hash, or secret-reference state drifts from the management

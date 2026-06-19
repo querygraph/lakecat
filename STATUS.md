@@ -6,6 +6,18 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind credential replay to storage-profile upsert replay`.
+  QGLake lineage-drain replay verification now rejects restricted or trusted
+  credential events whose redacted storage-profile evidence differs from the
+  `storage-profile.upserted` replay event, including profile identity,
+  provider, issuance mode, location-prefix hash, and secret-reference state.
+- Local verification for this credential replay binding slice is green:
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain -- --nocapture`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind credential proof to storage-profile upsert`.
   QGLake compact handoff verification now rejects credential-vending proof
   whose credential storage-profile evidence drifts from the management
