@@ -403,12 +403,22 @@ fn qglake_replay_evidence_json(
     verification: &QueryGraphBootstrapVerification,
 ) -> Value {
     json!({
+        "requestIdentity": qglake_request_identity_replay_evidence_json(drain),
         "scan": qglake_scan_replay_evidence_json(drain),
         "management": qglake_management_replay_evidence_json(drain),
         "credentials": qglake_credential_replay_evidence_json(drain, principal),
         "tableCommitHistory": qglake_table_commit_history_replay_evidence_json(drain),
         "views": qglake_view_replay_evidence_json(drain, verification),
     })
+}
+
+fn qglake_request_identity_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Value> {
+    Some(json!({
+        "principalSubject": drain.principal_subject.as_deref()?,
+        "principalKind": drain.principal_kind.as_deref()?,
+        "authorizationReceiptHash": drain.authorization_receipt_hash.as_deref()?,
+        "requestIdentityState": drain.request_identity_state.as_deref()?,
+    }))
 }
 
 fn qglake_scan_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Value> {
@@ -4761,6 +4771,22 @@ mod tests {
         assert_eq!(
             replay_json["replay-evidence"]["scan"]["planTaskCount"],
             json!(1)
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["requestIdentity"]["principalSubject"],
+            json!("did:example:agent")
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["requestIdentity"]["principalKind"],
+            json!("agent")
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["requestIdentity"]["requestIdentityState"],
+            json!("verified")
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["requestIdentity"]["authorizationReceiptHash"],
+            json!("sha256:lineage-read")
         );
         assert_eq!(
             replay_json["replay-evidence"]["management"]["policyBindingCount"],

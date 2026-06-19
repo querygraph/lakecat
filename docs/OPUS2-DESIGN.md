@@ -270,13 +270,15 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   file hashes, and the harness fails closed unless LakeCat replay, QueryGraph
   verify, and QueryGraph import agree on those semantic counts, hashes, and
   standards; LakeCat replay JSON and the summary now also carry structured
-  scan, management, credential, table-commit, and view receipt-chain replay
-  evidence for automation, and the summary lifts governed scan proof, table
-  commit-history proof, redacted storage-profile upsert proof, governed
-  credential-vending proof, and view receipt-chain proof into compact
+  request-identity, scan, management, credential, table-commit, and view
+  receipt-chain replay evidence for automation, and the summary lifts request
+  identity proof, governed scan proof, table commit-history proof, redacted
+  storage-profile upsert proof, governed credential-vending proof, and view
+  receipt-chain proof into compact `requestIdentityProof`,
   `governedScanProof`, `tableCommitHistoryProof`,
   `storageProfileUpsertProof`, `credentialVendingProof`, and
   `viewReceiptChainProof` objects so QueryGraph/operators can verify the
+  replay principal, request-identity state, authorization receipt hash,
   Sail-planned read path, pointer-log read, credential-root boundary,
   agent-versus-human credential decision, accepted view versions, tombstone
   receipts, and namespace receipt-chain hashes without parsing the full replay

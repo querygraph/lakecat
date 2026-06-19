@@ -6,6 +6,36 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Lift request identity proof into handoff summary`.
+  `lakecat-cli qglake-verify-replay --json` now emits structured
+  `replay-evidence.requestIdentity`, and `scripts/qglake-handoff-local.sh` now
+  writes `lakecatReplayVerification.requestIdentityProof` in
+  `handoff-summary.json`, proving the accepted replay principal, principal
+  kind, explicit request-identity state, and authorization receipt hash before
+  QueryGraph import accepts the artifact set.
+- Local verification for the compact handoff request-identity proof slice is
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh`. The live handoff generated one table and
+  one view, drained 26 outbox events, verified LakeCat replay through
+  `qglake-verify-replay`, ran QueryGraph `lakecat-verify` and
+  `lakecat-import`, and wrote
+  `lakecatReplayVerification.requestIdentityProof` to
+  `target/qglake-handoff/handoff-summary.json`. The local fixture records
+  `requestIdentityState: unverified` for the agent-header path, so the proof
+  intentionally requires an explicit state and receipt hash rather than
+  overclaiming TypeDID verification;
+  direct Node summary check for
+  `lakecatReplayVerification.requestIdentityProof`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test -p lakecat-cli`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Lift view receipt-chain proof into handoff summary`.
   `lakecat-cli qglake-verify-replay --json` now emits structured
   `replay-evidence.views`, and `scripts/qglake-handoff-local.sh` now writes

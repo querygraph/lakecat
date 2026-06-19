@@ -92,6 +92,43 @@ process.stdout.write(JSON.stringify(value));
 ' "$file" "$field"
 }
 
+request_identity_evidence_json() {
+  local file="$1"
+  local expected_principal="$2"
+  node -e '
+const fs = require("fs");
+const [file, expectedPrincipal] = process.argv.slice(1);
+const replay = JSON.parse(fs.readFileSync(file, "utf8"));
+const evidence = replay["replay-evidence"]?.requestIdentity;
+if (!evidence || typeof evidence !== "object") {
+  console.error("LakeCat replay evidence is missing requestIdentity");
+  process.exit(1);
+}
+if (evidence.principalSubject !== expectedPrincipal) {
+  console.error(`LakeCat request identity principal mismatch: expected=${expectedPrincipal} actual=${evidence.principalSubject}`);
+  process.exit(1);
+}
+if (evidence.principalKind !== "agent") {
+  console.error("LakeCat request identity evidence does not prove an agent principal");
+  process.exit(1);
+}
+if (typeof evidence.requestIdentityState !== "string" || evidence.requestIdentityState.length === 0) {
+  console.error("LakeCat request identity evidence is missing requestIdentityState");
+  process.exit(1);
+}
+if (typeof evidence.authorizationReceiptHash !== "string" || evidence.authorizationReceiptHash.length === 0) {
+  console.error("LakeCat request identity evidence is missing authorizationReceiptHash");
+  process.exit(1);
+}
+process.stdout.write(JSON.stringify({
+  principalSubject: evidence.principalSubject,
+  principalKind: evidence.principalKind,
+  requestIdentityState: evidence.requestIdentityState,
+  authorizationReceiptHash: evidence.authorizationReceiptHash,
+}));
+' "$file" "$expected_principal"
+}
+
 storage_profile_upsert_evidence_json() {
   local file="$1"
   node -e '
@@ -425,7 +462,7 @@ write_summary() {
   local verified_tables verified_views bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   local verified_standards
   local lakecat_schema lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards lakecat_replay_evidence
-  local lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence lakecat_table_commit_history_evidence lakecat_view_receipt_chain_evidence
+  local lakecat_request_identity_evidence lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence lakecat_table_commit_history_evidence lakecat_view_receipt_chain_evidence
   local imported_tables imported_views imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
   local imported_standards
   bundle_sha="$(sha256_file "$BUNDLE")"
@@ -441,6 +478,7 @@ write_summary() {
   lakecat_querygraph_import_hash="$(json_field "$LAKECAT_REPLAY_OUTPUT" "querygraph-import-hash")"
   lakecat_standards="$(json_value_field "$LAKECAT_REPLAY_OUTPUT" "standards")"
   lakecat_replay_evidence="$(json_value_field "$LAKECAT_REPLAY_OUTPUT" "replay-evidence")"
+  lakecat_request_identity_evidence="$(request_identity_evidence_json "$LAKECAT_REPLAY_OUTPUT" "$PRINCIPAL")"
   lakecat_storage_profile_upsert_evidence="$(storage_profile_upsert_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_credential_vending_evidence="$(credential_vending_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_governed_scan_evidence="$(governed_scan_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
@@ -477,6 +515,7 @@ write_summary() {
   required_summary_field "querygraph-import-hash" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_querygraph_import_hash"
   required_summary_field "standards" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_standards"
   required_summary_field "replay-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_replay_evidence"
+  required_summary_field "request-identity-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_request_identity_evidence"
   required_summary_field "storage-profile-upsert-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_storage_profile_upsert_evidence"
   required_summary_field "credential-vending-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_credential_vending_evidence"
   required_summary_field "governed-scan-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_governed_scan_evidence"
@@ -530,6 +569,7 @@ write_summary() {
     "schemaVersion": "$(json_string "$lakecat_schema")",
     "status": "$(json_string "$lakecat_status")",
     "matchesQueryGraph": true,
+    "requestIdentityProof": $lakecat_request_identity_evidence,
     "governedScanProof": $lakecat_governed_scan_evidence,
     "tableCommitHistoryProof": $lakecat_table_commit_history_evidence,
     "viewReceiptChainProof": $lakecat_view_receipt_chain_evidence,

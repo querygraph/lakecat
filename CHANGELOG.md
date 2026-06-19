@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a compact `requestIdentityProof` object to QGLake
+  `handoff-summary.json`, proving the replay principal, principal kind,
+  request-identity state, and authorization receipt hash.
 - Added a compact `viewReceiptChainProof` object to QGLake
   `handoff-summary.json`, proving accepted view versions, tombstone receipts,
   namespace receipt-chain hashes, and replay/OpenLineage hashes.
