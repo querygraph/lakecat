@@ -1038,6 +1038,9 @@ evidence can now prove the corresponding view catalog event was replayed at the
 same durable catalog version with graph and lineage receipts. When the event
 was guarded, QGLake replay JSON also includes `expectedViewVersion`, preserving
 the optimistic version that LakeCat checked before accepting the mutation.
+The live QGLake fixture uses that path for deletion: after QueryGraph accepts
+the transient view in the bootstrap bundle, the fixture drops it with
+`expected-view-version` equal to the accepted durable view version.
 
 When QueryGraph bootstrap is replayed through the outbox, LakeCat includes only
 compact receipt hashes:
@@ -1276,10 +1279,13 @@ history was not rewritten between replay and summary. It compares the captured
 `replay-evidence.views` object with `viewReceiptChainProof`, including accepted
 view receipts, expected-version guard evidence, tombstone receipts, namespace
 receipt-chain hashes, and their replay/OpenLineage hashes, so durable view
-history stays tied to the saved LakeCat replay artifact. It also compares
-the captured LakeCat
-replay `replay-evidence.management.storageProfileUpsert` object with the
-compact `lakecatReplayVerification.storageProfileUpsertProof`, including the
+history stays tied to the saved LakeCat replay artifact. It also compares the
+tombstone branch's `expectedViewVersion` with the accepted view version, so a
+handoff cannot claim a governed deletion unless the saved LakeCat replay proves
+that deletion used the catalog's optimistic version guard. It also compares the
+captured LakeCat replay
+`replay-evidence.management.storageProfileUpsert` object with the compact
+`lakecatReplayVerification.storageProfileUpsertProof`, including the
 profile id, provider, issuance mode, location-prefix hash, secret-reference
 presence/provider, replay hashes, and OpenLineage hashes. It also compares
 the captured `replay-evidence.credentials` restricted-agent and trusted-human

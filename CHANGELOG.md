@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Made the live QGLake fixture drop its transient accepted view with
+  `expected-view-version`, lifted the guarded tombstone value into
+  `viewReceiptChainProof.tombstoneReceipts`, and made the local handoff harness
+  reject tombstone replay that does not prove the accepted expected view
+  version.
 - Carried guarded view `expected-view-version` evidence through view mutation
   audit/outbox payloads, lineage-drain summaries, and QGLake view replay JSON
   so QueryGraph handoffs can prove optimistic view guards were replayed.

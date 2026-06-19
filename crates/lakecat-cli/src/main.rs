@@ -1566,11 +1566,22 @@ fn qglake_view_replay_evidence_json(
         .iter()
         .filter(|event| event.event_type == "view.version-receipts-listed")
         .map(|event| {
+            let expected_view_version = event.view_stable_id.as_deref().and_then(|stable_id| {
+                drain
+                    .events
+                    .iter()
+                    .find(|candidate| {
+                        candidate.event_type == "view.dropped"
+                            && candidate.view_stable_id.as_deref() == Some(stable_id)
+                    })
+                    .and_then(|candidate| candidate.expected_view_version)
+            });
             json!({
                 "stableId": event.view_stable_id.as_deref(),
                 "warehouse": event.view_warehouse.as_deref(),
                 "namespace": &event.view_namespace,
                 "name": event.view_name.as_deref(),
+                "expectedViewVersion": expected_view_version,
                 "receiptHashes": &event.view_version_receipt_hashes,
                 "replayEventHashes": &event.replay_event_hashes,
                 "openLineageHashes": &event.replay_open_lineage_hashes,
@@ -2075,7 +2086,7 @@ async fn qglake_fixture(
         .await?;
     verify_qglake_trusted_human_credentials(&catalog, &namespace_path, &table, &location).await?;
     let view = "active_customers_view";
-    ensure_qglake_transient_view(
+    let view_version = ensure_qglake_transient_view(
         &catalog,
         &warehouse,
         &namespace_path,
@@ -2095,6 +2106,7 @@ async fn qglake_fixture(
         &warehouse,
         &namespace_path,
         view,
+        view_version,
         principal,
         identity_mode,
     )
@@ -2211,7 +2223,7 @@ async fn ensure_qglake_transient_view(
     table: &str,
     principal: Option<&str>,
     identity_mode: RequestIdentityMode,
-) -> lakecat_core::LakeCatResult<()> {
+) -> lakecat_core::LakeCatResult<u64> {
     let response = put_json_with_identity::<_, ViewResponse>(
         catalog,
         &format!("/management/v1/warehouses/{warehouse}/namespaces/{namespace_path}/views/{view}"),
@@ -2249,7 +2261,7 @@ async fn ensure_qglake_transient_view(
             response.view_version
         )));
     }
-    Ok(())
+    Ok(response.view_version)
 }
 
 async fn drop_qglake_transient_view(
@@ -2257,12 +2269,15 @@ async fn drop_qglake_transient_view(
     warehouse: &str,
     namespace_path: &str,
     view: &str,
+    expected_view_version: u64,
     principal: Option<&str>,
     identity_mode: RequestIdentityMode,
 ) -> lakecat_core::LakeCatResult<()> {
     delete_with_identity(
         catalog,
-        &format!("/management/v1/warehouses/{warehouse}/namespaces/{namespace_path}/views/{view}"),
+        &format!(
+            "/management/v1/warehouses/{warehouse}/namespaces/{namespace_path}/views/{view}?expected-view-version={expected_view_version}"
+        ),
         principal,
         identity_mode,
         "transient view drop",
@@ -3891,6 +3906,20 @@ fn verify_qglake_view_replay(
             event.event_type == "view.dropped"
                 && event.view_stable_id.as_deref() == Some(view_stable_id.as_str())
         }) {
+            let drop_replay = drain.events.iter().find(|event| {
+                event.event_type == "view.dropped"
+                    && event.view_stable_id.as_deref() == Some(view_stable_id.as_str())
+            });
+            if let (Some(drop_replay), Some(expected_version)) = (
+                drop_replay,
+                verification.verified_view_versions.get(view_stable_id),
+            ) {
+                if drop_replay.expected_view_version != Some(*expected_version) {
+                    return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                        "qglake lineage drain view drop replay for {view_stable_id} did not preserve expected view version {expected_version}"
+                    )));
+                }
+            }
             let Some(tombstone_receipts) = drain.events.iter().find(|event| {
                 event.event_type == "view.version-receipts-listed"
                     && event.view_stable_id.as_deref() == Some(view_stable_id.as_str())
@@ -5406,6 +5435,7 @@ mod tests {
                     }],
                     "tombstoneReceipts": [{
                         "stableId": "lakecat:view:local:default:active_customers_view",
+                        "expectedViewVersion": null,
                         "receiptHashes": ["sha256:tombstone"],
                         "replayEventHashes": ["sha256:tombstone-replay"],
                         "openLineageHashes": ["sha256:tombstone-openlineage"]
@@ -5553,6 +5583,7 @@ mod tests {
                     }],
                     "tombstoneReceipts": [{
                         "stableId": "lakecat:view:local:default:active_customers_view",
+                        "expectedViewVersion": null,
                         "receiptHashes": ["sha256:tombstone"],
                         "replayEventHashes": ["sha256:tombstone-replay"],
                         "openLineageHashes": ["sha256:tombstone-openlineage"]
@@ -6938,6 +6969,10 @@ mod tests {
         assert_eq!(
             view_replay_json["views"]["views"][0]["acceptedReceiptHash"],
             json!("sha256:view-version-receipt")
+        );
+        assert_eq!(
+            view_replay_json["views"]["tombstoneReceipts"][0]["expectedViewVersion"],
+            json!(2)
         );
         assert_eq!(
             view_replay_json["views"]["tombstoneReceipts"][0]["receiptHashes"],
@@ -9897,6 +9932,65 @@ mod tests {
         .expect_err("QGLake lineage drain should require namespace receipt-chain evidence for dropped accepted views");
         assert!(err.to_string().contains(
             "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing namespace receipt-chain evidence"
+        ));
+
+        let mut unguarded_drop_replay = qglake_view_drop_lineage_summary();
+        unguarded_drop_replay.expected_view_version = None;
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 16,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "view.version-receipt-chains-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "table.commits-listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 16,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    unguarded_drop_replay,
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    qglake_view_receipt_chain_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_storage_profile_upsert_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                    qglake_table_commit_history_lineage_summary(),
+                    qglake_scan_planned_lineage_summary(),
+                    qglake_scan_tasks_fetched_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require guarded drop replay for accepted views");
+        assert!(err.to_string().contains(
+            "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers did not preserve expected view version 2"
         ));
 
         let err = verify_qglake_lineage_drain(

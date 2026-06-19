@@ -352,7 +352,10 @@ Management and catalog REST upserts and drops can also carry
 tombstones before the current view or receipt chain changes. The accepted guard
 value is recorded in the mutation audit/outbox payload and replayed through
 lineage-drain summaries and QGLake view replay evidence, so QueryGraph can prove
-which optimistic catalog version guarded a replacement or tombstone. Full
+which optimistic catalog version guarded a replacement or tombstone. The local
+QGLake handoff harness now requires tombstone replay to preserve the accepted
+expected view version before writing `viewReceiptChainProof`, binding governed
+view deletion to the captured LakeCat replay artifact. Full
 Iceberg view history and commit semantics should still move toward Sail-backed
 models as they become available. QueryGraph bootstrap now exports those stored
 views with manifest-covered OSI handoff hashes, typed view columns, view

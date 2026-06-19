@@ -6,6 +6,36 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require guarded QGLake view tombstones`.
+  The live QGLake fixture now remembers the durable version assigned to its
+  transient accepted view and passes that value as `expected-view-version` when
+  dropping the view. QGLake lineage-drain acceptance rejects dropped accepted
+  views unless the `view.dropped` replay preserves the expected guard, and
+  replay JSON now lifts the guarded tombstone value into
+  `viewReceiptChainProof.tombstoneReceipts[*].expectedViewVersion`. The local
+  handoff harness validates that each tombstone receipt's expected version
+  matches the accepted view version before writing the compact summary, so the
+  saved LakeCat replay and handoff summary prove the accepted view was deleted
+  through LakeCat's optimistic catalog guard.
+- Local verification for this guarded QGLake tombstone slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh`. The live handoff generated one table and
+  one view, drained 26 outbox events, verified LakeCat replay, ran QueryGraph
+  `lakecat-verify` and `lakecat-import`, then ran
+  `lakecat-cli qglake-verify-handoff --json`; the resulting
+  `capturedOutputSemantics.lakecatReplay.viewReceiptChainProof.tombstoneReceipts[0].expectedViewVersion`
+  was `1`;
+  `docs/book/build.sh`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Replay guarded view version evidence`.
   View upsert/drop audit payloads now preserve accepted
   `expected-view-version` guards, lineage-drain event summaries expose

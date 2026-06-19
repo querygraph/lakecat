@@ -535,6 +535,15 @@ for (const [index, receipt] of evidence.tombstoneReceipts.entries()) {
     console.error(`LakeCat view tombstone receipt evidence ${index} is missing stableId`);
     process.exit(1);
   }
+  const acceptedView = evidence.views.find((view) => view.stableId === receipt.stableId);
+  if (!acceptedView) {
+    console.error(`LakeCat view tombstone receipt evidence ${index} does not match an accepted view`);
+    process.exit(1);
+  }
+  if (receipt.expectedViewVersion !== acceptedView.acceptedViewVersion) {
+    console.error(`LakeCat view tombstone receipt evidence ${index} does not prove the accepted expectedViewVersion`);
+    process.exit(1);
+  }
   requireHashArray(receipt.receiptHashes, `tombstone ${index} receiptHashes`);
   requireHashArray(receipt.replayEventHashes, `tombstone ${index} replayEventHashes`);
   requireHashArray(receipt.openLineageHashes, `tombstone ${index} openLineageHashes`);

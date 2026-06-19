@@ -461,8 +461,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   before changing the current view or appending a receipt, and those guard
   values now replay through mutation audit/outbox summaries and QGLake view
   replay JSON so QueryGraph agents can prove which optimistic catalog version
-  protected an accepted replacement or tombstone while fuller Sail-aligned view
-  history remains pending;
+  protected an accepted replacement or tombstone; the live QGLake handoff
+  fixture now drops its accepted transient view with `expected-view-version` and
+  rejects compact `viewReceiptChainProof` summaries unless tombstone replay
+  preserves that accepted guard while fuller Sail-aligned view history remains
+  pending;
   view-version receipts now carry `previous-receipt-hash` links so upsert and
   drop receipts form a compact hash chain over the catalog-facing version
   history, and namespace receipt-chain reads expose deterministic `chain-hash`
