@@ -295,7 +295,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   accepted compact summary cannot silently drift away from the artifact files
   it names; the summary now also records captured-output hashes for the
   LakeCat replay JSON and QueryGraph verify/import JSON captures, and the
-  handoff verifier rejects drift in those captured outputs too.*
+  handoff verifier rejects drift in those captured outputs too; the verifier
+  now also parses those captured JSON outputs and rejects a handoff whose saved
+  LakeCat replay or QueryGraph verify/import captures no longer agree with the
+  compact summary on replay schema/status, table/view counts, bundle, graph,
+  OpenLineage, QueryGraph import hashes, or standards.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond

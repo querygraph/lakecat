@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-verify-handoff` parse the captured LakeCat replay
+  and QueryGraph verify/import JSON outputs and reject summaries whose saved
+  captures no longer agree on schema/status, table/view counts, semantic
+  hashes, or standards.
 - Consolidated `GOAL.md` so the current `AGENTS.md` guidance is pinned once as
   durable goal direction instead of repeated imported snapshots.
 - Added `capturedOutputs` hashes to QGLake `handoff-summary.json` for the

@@ -352,6 +352,8 @@ fn qglake_verify_handoff(
     let summary = read_json_file(&summary_path)?;
     let mut verification = verify_qglake_handoff_summary_value(&summary)?;
     let artifact_files = verify_qglake_handoff_artifact_files(&summary_path, &summary)?;
+    let captured_output_semantics =
+        verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)?;
     verification
         .as_object_mut()
         .ok_or_else(|| {
@@ -360,6 +362,17 @@ fn qglake_verify_handoff(
             )
         })?
         .insert("artifactFiles".to_string(), artifact_files);
+    verification
+        .as_object_mut()
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::Internal(
+                "handoff verification must be an object".to_string(),
+            )
+        })?
+        .insert(
+            "capturedOutputSemantics".to_string(),
+            captured_output_semantics,
+        );
     if json_output {
         print_json(&verification)?;
         return Ok(());
@@ -471,6 +484,197 @@ fn verify_qglake_handoff_artifact_file(
     Ok(json!({
         "path": resolved_path.display().to_string(),
         "sha256": actual_sha256,
+    }))
+}
+
+fn verify_qglake_handoff_captured_output_semantics(
+    summary_path: &Path,
+    summary: &Value,
+) -> lakecat_core::LakeCatResult<Value> {
+    let summary = summary.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "handoff summary root must be an object".to_string(),
+        )
+    })?;
+    let querygraph = required_object(summary, "querygraphVerification", "handoff summary")?;
+    let lakecat = required_object(summary, "lakecatReplayVerification", "handoff summary")?;
+    let artifacts = required_object(summary, "artifacts", "handoff summary")?;
+    let outputs = required_object(artifacts, "capturedOutputs", "handoff summary artifacts")?;
+    let base_dir = summary_path.parent().unwrap_or_else(|| Path::new(""));
+
+    let lakecat_replay = read_qglake_handoff_artifact_json(outputs, "lakecatReplay", base_dir)?;
+    let querygraph_verify =
+        read_qglake_handoff_artifact_json(outputs, "querygraphVerify", base_dir)?;
+    let querygraph_import =
+        read_qglake_handoff_artifact_json(outputs, "querygraphImport", base_dir)?;
+
+    let lakecat_replay = lakecat_replay.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "captured LakeCat replay output must be a JSON object".to_string(),
+        )
+    })?;
+    let querygraph_verify = querygraph_verify.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "captured QueryGraph verify output must be a JSON object".to_string(),
+        )
+    })?;
+    let querygraph_import = querygraph_import.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "captured QueryGraph import output must be a JSON object".to_string(),
+        )
+    })?;
+
+    verify_lakecat_replay_capture_matches_summary(lakecat_replay, lakecat, querygraph)?;
+    verify_querygraph_capture_matches_summary(
+        querygraph_verify,
+        querygraph,
+        "captured QueryGraph verify output",
+    )?;
+    verify_querygraph_capture_matches_summary(
+        querygraph_import,
+        querygraph,
+        "captured QueryGraph import output",
+    )?;
+
+    Ok(json!({
+        "lakecatReplay": {
+            "schemaVersion": required_str(lakecat_replay, "schema-version", "captured LakeCat replay output")?,
+            "status": required_str(lakecat_replay, "status", "captured LakeCat replay output")?,
+            "tableCount": required_u64(lakecat_replay, "table-count", "captured LakeCat replay output")?,
+            "viewCount": required_u64(lakecat_replay, "view-count", "captured LakeCat replay output")?,
+            "bundleHash": required_str(lakecat_replay, "bundle-hash", "captured LakeCat replay output")?,
+            "graphHash": required_str(lakecat_replay, "graph-hash", "captured LakeCat replay output")?,
+            "openLineageHash": required_str(lakecat_replay, "open-lineage-hash", "captured LakeCat replay output")?,
+            "queryGraphImportHash": required_str(lakecat_replay, "querygraph-import-hash", "captured LakeCat replay output")?,
+            "standards": required_value(lakecat_replay, "standards", "captured LakeCat replay output")?,
+        },
+        "querygraphVerify": querygraph_capture_semantics_json(querygraph_verify, "captured QueryGraph verify output")?,
+        "querygraphImport": querygraph_capture_semantics_json(querygraph_import, "captured QueryGraph import output")?,
+    }))
+}
+
+fn read_qglake_handoff_artifact_json(
+    artifacts: &serde_json::Map<String, Value>,
+    field: &str,
+    base_dir: &Path,
+) -> lakecat_core::LakeCatResult<Value> {
+    let artifact = required_object(artifacts, field, "handoff summary artifacts")?;
+    let path = required_str(artifact, "path", field)?;
+    let path = PathBuf::from(path);
+    let resolved_path = if path.is_absolute() {
+        path
+    } else {
+        base_dir.join(path)
+    };
+    let bytes = fs::read(&resolved_path).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "failed to read captured handoff output {} at {}: {err}",
+            field,
+            resolved_path.display()
+        ))
+    })?;
+    serde_json::from_slice(&bytes).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "captured handoff output {} at {} is not JSON: {err}",
+            field,
+            resolved_path.display()
+        ))
+    })
+}
+
+fn verify_lakecat_replay_capture_matches_summary(
+    capture: &serde_json::Map<String, Value>,
+    lakecat: &serde_json::Map<String, Value>,
+    querygraph: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    require_string_match(
+        capture,
+        "schema-version",
+        required_str(lakecat, "schemaVersion", "lakecatReplayVerification")?,
+        "captured LakeCat replay output",
+    )?;
+    require_string_match(
+        capture,
+        "status",
+        required_str(lakecat, "status", "lakecatReplayVerification")?,
+        "captured LakeCat replay output",
+    )?;
+    require_handoff_summary_fields_match_capture(
+        capture,
+        querygraph,
+        "captured LakeCat replay output",
+    )
+}
+
+fn verify_querygraph_capture_matches_summary(
+    capture: &serde_json::Map<String, Value>,
+    querygraph: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    require_handoff_summary_fields_match_capture(capture, querygraph, label)
+}
+
+fn require_handoff_summary_fields_match_capture(
+    capture: &serde_json::Map<String, Value>,
+    querygraph: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    require_u64_match(
+        capture,
+        "table-count",
+        required_u64(querygraph, "tableCount", "querygraphVerification")?,
+        label,
+    )?;
+    require_u64_match(
+        capture,
+        "view-count",
+        required_u64(querygraph, "viewCount", "querygraphVerification")?,
+        label,
+    )?;
+    require_string_match(
+        capture,
+        "bundle-hash",
+        required_str(querygraph, "bundleHash", "querygraphVerification")?,
+        label,
+    )?;
+    require_string_match(
+        capture,
+        "graph-hash",
+        required_str(querygraph, "graphHash", "querygraphVerification")?,
+        label,
+    )?;
+    require_string_match(
+        capture,
+        "open-lineage-hash",
+        required_str(querygraph, "openLineageHash", "querygraphVerification")?,
+        label,
+    )?;
+    require_string_match(
+        capture,
+        "querygraph-import-hash",
+        required_str(querygraph, "querygraphImportHash", "querygraphVerification")?,
+        label,
+    )?;
+    require_value_match(
+        capture,
+        "standards",
+        required_value(querygraph, "standards", "querygraphVerification")?,
+        label,
+    )
+}
+
+fn querygraph_capture_semantics_json(
+    capture: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<Value> {
+    Ok(json!({
+        "tableCount": required_u64(capture, "table-count", label)?,
+        "viewCount": required_u64(capture, "view-count", label)?,
+        "bundleHash": required_str(capture, "bundle-hash", label)?,
+        "graphHash": required_str(capture, "graph-hash", label)?,
+        "openLineageHash": required_str(capture, "open-lineage-hash", label)?,
+        "queryGraphImportHash": required_str(capture, "querygraph-import-hash", label)?,
+        "standards": required_value(capture, "standards", label)?,
     }))
 }
 
@@ -4842,12 +5046,61 @@ mod tests {
         let lakecat_replay = dir.join("lakecat-replay.txt");
         let querygraph_verify = dir.join("querygraph-verify.json");
         let querygraph_import = dir.join("querygraph-import.json");
+        let lakecat_replay_json = json!({
+            "schema-version": "lakecat.qglake.replay-verification.v1",
+            "status": "verified",
+            "table-count": 1,
+            "view-count": 1,
+            "bundle-hash": "sha256:bundle",
+            "graph-hash": "sha256:graph",
+            "open-lineage-hash": "sha256:openlineage",
+            "querygraph-import-hash": "sha256:querygraph-import",
+            "standards": [
+                "Iceberg REST",
+                "Croissant",
+                "CDIF",
+                "OSI handoff",
+                "ODRL",
+                "Grust catalog graph",
+                "OpenLineage"
+            ]
+        });
+        let querygraph_capture_json = json!({
+            "warehouse": "local",
+            "table-count": 1,
+            "view-count": 1,
+            "verified-tables": [
+                "lakecat:table:local:default:events"
+            ],
+            "verified-views": [
+                "lakecat:view:local:default:active_customers_view"
+            ],
+            "bundle-hash": "sha256:bundle",
+            "graph-hash": "sha256:graph",
+            "open-lineage-hash": "sha256:openlineage",
+            "querygraph-import-hash": "sha256:querygraph-import",
+            "standards": [
+                "Iceberg REST",
+                "Croissant",
+                "CDIF",
+                "OSI handoff",
+                "ODRL",
+                "Grust catalog graph",
+                "OpenLineage"
+            ]
+        });
+        let lakecat_replay_bytes =
+            serde_json::to_vec_pretty(&lakecat_replay_json).expect("LakeCat replay JSON bytes");
+        let querygraph_verify_bytes =
+            serde_json::to_vec_pretty(&querygraph_capture_json).expect("verify JSON bytes");
+        let querygraph_import_bytes =
+            serde_json::to_vec_pretty(&querygraph_capture_json).expect("import JSON bytes");
         fs::write(&bundle, b"bundle").expect("write bundle");
         fs::write(&drain, b"drain").expect("write drain");
         fs::write(&import_plan, b"import-plan").expect("write import plan");
-        fs::write(&lakecat_replay, b"lakecat-replay").expect("write LakeCat replay");
-        fs::write(&querygraph_verify, b"querygraph-verify").expect("write QueryGraph verify");
-        fs::write(&querygraph_import, b"querygraph-import").expect("write QueryGraph import");
+        fs::write(&lakecat_replay, &lakecat_replay_bytes).expect("write LakeCat replay");
+        fs::write(&querygraph_verify, &querygraph_verify_bytes).expect("write QueryGraph verify");
+        fs::write(&querygraph_import, &querygraph_import_bytes).expect("write QueryGraph import");
 
         let mut summary = qglake_handoff_summary_json();
         summary["artifacts"] = json!({
@@ -4866,15 +5119,15 @@ mod tests {
             "capturedOutputs": {
                 "lakecatReplay": {
                     "path": lakecat_replay,
-                    "sha256": content_hash_bytes(b"lakecat-replay")
+                    "sha256": content_hash_bytes(&lakecat_replay_bytes)
                 },
                 "querygraphVerify": {
                     "path": querygraph_verify,
-                    "sha256": content_hash_bytes(b"querygraph-verify")
+                    "sha256": content_hash_bytes(&querygraph_verify_bytes)
                 },
                 "querygraphImport": {
                     "path": querygraph_import,
-                    "sha256": content_hash_bytes(b"querygraph-import")
+                    "sha256": content_hash_bytes(&querygraph_import_bytes)
                 }
             }
         });
@@ -5051,8 +5304,30 @@ mod tests {
             json!(content_hash_bytes(b"bundle"))
         );
         assert_eq!(
-            verification["capturedOutputs"]["lakecatReplay"]["sha256"],
-            json!(content_hash_bytes(b"lakecat-replay"))
+            verification["capturedOutputs"]["querygraphVerify"]["sha256"],
+            summary["artifacts"]["capturedOutputs"]["querygraphVerify"]["sha256"]
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_accept_matching_files() {
+        let temp = qglake_temp_dir("handoff-captured-semantics-ok");
+        let summary_path = temp.join("handoff-summary.json");
+        let summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let semantics = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect("captured output semantics should verify");
+
+        assert_eq!(
+            semantics["lakecatReplay"]["schemaVersion"],
+            json!("lakecat.qglake.replay-verification.v1")
+        );
+        assert_eq!(
+            semantics["querygraphVerify"]["bundleHash"],
+            json!("sha256:bundle")
+        );
+        assert_eq!(
+            semantics["querygraphImport"]["queryGraphImportHash"],
+            json!("sha256:querygraph-import")
         );
     }
 
@@ -5087,6 +5362,43 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("handoff artifact querygraphVerify hash mismatch")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_summary_drift() {
+        let temp = qglake_temp_dir("handoff-captured-semantics-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let drifted = json!({
+            "warehouse": "local",
+            "table-count": 1,
+            "view-count": 1,
+            "bundle-hash": "sha256:other-bundle",
+            "graph-hash": "sha256:graph",
+            "open-lineage-hash": "sha256:openlineage",
+            "querygraph-import-hash": "sha256:querygraph-import",
+            "standards": [
+                "Iceberg REST",
+                "Croissant",
+                "CDIF",
+                "OSI handoff",
+                "ODRL",
+                "Grust catalog graph",
+                "OpenLineage"
+            ]
+        });
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("querygraph-verify.json"), &drifted_bytes)
+            .expect("write drifted QueryGraph verify output");
+        summary["artifacts"]["capturedOutputs"]["querygraphVerify"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured output semantics should reject drift");
+        assert!(
+            err.to_string()
+                .contains("captured QueryGraph verify output.bundle-hash mismatch")
         );
     }
 
