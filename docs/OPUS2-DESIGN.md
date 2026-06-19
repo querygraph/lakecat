@@ -571,6 +571,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   that does not preserve the accepted view version or its compact durable
   receipt hash; `lakecat-cli qglake-verify-replay` now runs the same handoff
   proof against saved bootstrap and lineage-drain artifacts; the live
+  handoff harness and standalone verifier now also require active accepted
+  view receipt-chain hashes to be covered by namespace receipt-chain hashes,
+  while tombstoned accepted views must carry expected-version tombstone proof,
+  so compact summaries cannot pair unrelated per-view and namespace chain proof;
+  the live
   Sail-backed fixture now emits canonical Iceberg REST `not-eq` predicates,
   preserves TypeSec request-identity evidence from the current
   `authorization-receipt.context` shape, deduplicates shared namespace nodes in

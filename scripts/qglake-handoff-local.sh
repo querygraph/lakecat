@@ -620,6 +620,10 @@ for (const [index, view] of evidence.views.entries()) {
     console.error(`LakeCat view replay evidence ${index} is missing acceptedReceiptHash`);
     process.exit(1);
   }
+  if (!view.acceptedReceiptChainHash) {
+    console.error(`LakeCat view replay evidence ${index} is missing acceptedReceiptChainHash`);
+    process.exit(1);
+  }
   requireHashArray(view.replayEventHashes, `view ${index} replayEventHashes`);
   requireHashArray(view.openLineageHashes, `view ${index} openLineageHashes`);
 }
@@ -627,6 +631,7 @@ if (!Array.isArray(evidence.tombstoneReceipts) || evidence.tombstoneReceipts.len
   console.error("LakeCat view replay evidence is missing tombstoneReceipts");
   process.exit(1);
 }
+const tombstonedViews = new Set();
 for (const [index, receipt] of evidence.tombstoneReceipts.entries()) {
   if (!receipt || typeof receipt !== "object" || !receipt.stableId) {
     console.error(`LakeCat view tombstone receipt evidence ${index} is missing stableId`);
@@ -641,6 +646,7 @@ for (const [index, receipt] of evidence.tombstoneReceipts.entries()) {
     console.error(`LakeCat view tombstone receipt evidence ${index} does not prove the accepted expectedViewVersion`);
     process.exit(1);
   }
+  tombstonedViews.add(`${receipt.stableId}\0${receipt.expectedViewVersion}`);
   requireHashArray(receipt.receiptHashes, `tombstone ${index} receiptHashes`);
   requireHashArray(receipt.replayEventHashes, `tombstone ${index} replayEventHashes`);
   requireHashArray(receipt.openLineageHashes, `tombstone ${index} openLineageHashes`);
@@ -649,6 +655,7 @@ if (!Array.isArray(evidence.receiptChains) || evidence.receiptChains.length === 
   console.error("LakeCat view replay evidence is missing receiptChains");
   process.exit(1);
 }
+const verifiedChainHashes = new Set();
 for (const [index, chain] of evidence.receiptChains.entries()) {
   if (!chain || typeof chain !== "object" || !chain.warehouse) {
     console.error(`LakeCat view receipt-chain evidence ${index} is missing warehouse`);
@@ -672,8 +679,20 @@ for (const [index, chain] of evidence.receiptChains.entries()) {
     console.error(`LakeCat view receipt-chain evidence ${index} receiptHashes do not cover chainHashes`);
     process.exit(1);
   }
+  for (const chainHash of chain.chainHashes) {
+    verifiedChainHashes.add(chainHash);
+  }
   requireHashArray(chain.replayEventHashes, `chain ${index} replayEventHashes`);
   requireHashArray(chain.openLineageHashes, `chain ${index} openLineageHashes`);
+}
+for (const [index, view] of evidence.views.entries()) {
+  if (!verifiedChainHashes.has(view.acceptedReceiptChainHash)) {
+    if (tombstonedViews.has(`${view.stableId}\0${view.acceptedViewVersion}`)) {
+      continue;
+    }
+    console.error(`LakeCat view replay evidence ${index} acceptedReceiptChainHash is not covered by receiptChains.chainHashes`);
+    process.exit(1);
+  }
 }
 process.stdout.write(JSON.stringify({
   viewCount: evidence.viewCount,

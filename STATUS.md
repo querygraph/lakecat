@@ -6,6 +6,33 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake accepted view chain hashes to chain evidence`.
+  `lakecat-cli qglake-verify-handoff` now rejects compact
+  `viewReceiptChainProof` summaries whose active per-view
+  `acceptedReceiptChainHash` is not covered by the namespace-level
+  `receiptChains[].chainHashes` evidence. Tombstoned accepted views may carry
+  the accepted prefix-chain hash only when the tombstone proof preserves the
+  accepted view version. The local `scripts/qglake-handoff-local.sh` harness now
+  performs the same check before writing `handoff-summary.json`, so live
+  handoffs cannot carry unrelated valid-looking active view and namespace
+  receipt-chain hashes. The real QueryGraph consumer in
+  `/Users/alexy/src/querygraph/qg-rust` was also updated in scoped commit
+  `46bc615 Preserve LakeCat view receipt chain evidence` to preserve and
+  validate `receipt-chain-hash` in LakeCat import evidence, fixing the live
+  import-contract hash check.
+- Local verification for this QGLake view chain-hash coverage slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-cli`;
+  QueryGraph `/Users/alexy/src/querygraph/qg-rust`: `cargo fmt -- --check`;
+  QueryGraph `/Users/alexy/src/querygraph/qg-rust`: `cargo test --locked lakecat`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 outbox events, ran LakeCat replay, QueryGraph verify/import, and verified
+  the saved handoff summary with `graphEvents: 53`);
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind QueryGraph view imports to receipt-chain hashes`.
   QueryGraph bootstrap view receipt evidence now carries a per-view
   `receipt-chain-hash` beside the accepted version receipt hash. The service

@@ -1406,9 +1406,16 @@ verified-chain counts, receipt-chain
 warehouse/namespace identity, namespace chain hashes, and replay/OpenLineage
 hashes. The verifier also checks that each namespace receipt-chain summary's
 `verifiedChainCount` equals the number of chain hashes and that the receipt
-hashes cover those chains. A consumer can reject a handoff whose view history
-claim lacks identity, accepted-version, count-aligned hash-chain evidence, or
-replay evidence before parsing the full replay tree. It also compares the
+hashes cover those chains. For active accepted views, it additionally requires
+`acceptedReceiptChainHash` to appear in the namespace `chainHashes` evidence, so
+a compact summary cannot pair a valid-looking accepted view receipt with an
+unrelated namespace receipt-chain proof. For tombstoned accepted views, the
+accepted chain can be a prefix of the later tombstone chain, but the compact
+proof must include tombstone receipt evidence whose `expectedViewVersion`
+preserves the accepted view version. A consumer can reject a handoff whose view
+history claim lacks identity, accepted-version, count-aligned hash-chain
+evidence, active-chain coverage or tombstone guard evidence, or replay evidence
+before parsing the full replay tree. It also compares the
 captured LakeCat replay
 `replay-evidence.management.storageProfileUpsert` object with the compact
 `lakecatReplayVerification.storageProfileUpsertProof`, including the

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Required compact QGLake view proofs to bind active accepted-view
+  `acceptedReceiptChainHash` values to namespace `receiptChains[].chainHashes`
+  evidence, while allowing tombstoned accepted views only when the tombstone
+  proof preserves the accepted view version; the local handoff harness enforces
+  the same check before writing a summary.
 - Bound QueryGraph view import evidence to the durable view receipt chain by
   adding per-view `receipt-chain-hash` evidence to the import compatibility
   contract, bootstrap verification, QGLake replay proof, and handoff verifier.
