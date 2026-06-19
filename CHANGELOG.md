@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Centralized QGLake verifier SHA-256 hash-shape checks so required hash
+  fields, optional hash fields, and hash arrays all use the same shared
+  predicate when validating compact handoff and replay evidence.
 - Tightened QGLake management replay secret-reference evidence so
   storage-profile upsert replay rejects contradictory secret-ref
   presence/provider fields and the operator-readable management line prints the

@@ -6893,7 +6893,7 @@ fn require_optional_hash_value(
 ) -> lakecat_core::LakeCatResult<bool> {
     match required_value(value, field, label)? {
         Value::Null => Ok(false),
-        Value::String(string) if string.starts_with("sha256:") => Ok(true),
+        Value::String(string) if is_sha256_hash(string) => Ok(true),
         _ => Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "{label}.{field} must be null or a sha256 hash"
         ))),
@@ -6907,11 +6907,9 @@ fn require_hash_array(
 ) -> lakecat_core::LakeCatResult<()> {
     let array = required_array(value, field, label)?;
     if array.is_empty()
-        || array.iter().any(|item| {
-            !item
-                .as_str()
-                .is_some_and(|string| string.starts_with("sha256:"))
-        })
+        || array
+            .iter()
+            .any(|item| !item.as_str().is_some_and(is_sha256_hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "{label}.{field} must contain sha256 hashes"

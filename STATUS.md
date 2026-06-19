@@ -6,6 +6,18 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Centralize QGLake hash-shape checks`.
+  QGLake compact handoff and replay verification now validates required hash
+  fields, optional hash fields, and hash arrays through the same shared
+  `is_sha256_hash` predicate, keeping future proof fields aligned with the
+  existing verifier rule.
+- Local verification for this hash-shape verifier slice is green:
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --nocapture`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Verify management replay secret-ref state`.
   QGLake management replay verification now rejects storage-profile upsert
   replay whose secret-reference presence/provider fields contradict each other,
