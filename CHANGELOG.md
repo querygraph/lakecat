@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Required compact QGLake governed scan proof to carry positive delete-file and
+  child-plan-task counts alongside plan-task and file-task counts.
 - Required compact QGLake governed scan proof to reject extra
   `fetchedRequiredFilters` beyond the mandatory row predicate.
 - Required compact QGLake governed scan proof to reject drift between planned

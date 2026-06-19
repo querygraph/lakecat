@@ -6,6 +6,18 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require QGLake scan work counts`.
+  Compact QGLake governed scan proof now rejects missing or zero
+  `deleteFileCount` and `childPlanTaskCount` values, keeping delete-file and
+  child-plan-task evidence as load-bearing acceptance proof beside plan-task
+  and file-task counts.
+- Local verification for this scan work-count slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require exact fetched filter proof`.
   Compact QGLake governed scan proof now rejects `fetchedRequiredFilters`
   arrays that include extra filters beyond the mandatory row predicate evidence

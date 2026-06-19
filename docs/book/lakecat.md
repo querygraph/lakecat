@@ -1435,8 +1435,8 @@ also validates the TypeDID hash-slot shape directly: envelope and proof slots
 must be null or SHA-256 hashes, and a TypeDID proof hash cannot appear without
 the paired envelope hash. That keeps the compact handoff self-describing
 without moving TypeDID trust semantics out of TypeSec. It compares captured
-`replay-evidence.scan` with `governedScanProof`, including the plan task, file
-task, delete file, and child plan task counts plus the planned and fetched
+`replay-evidence.scan` with `governedScanProof`, requiring positive plan task,
+file task, delete file, and child plan task counts plus the planned and fetched
 read-restriction objects and the fetch-side required projection/filter evidence.
 The verifier rejects a summary if the fetched restriction drifts from the
 planned restriction, so the compact handoff proves the narrowed allowed

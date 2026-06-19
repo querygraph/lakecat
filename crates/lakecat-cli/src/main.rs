@@ -1965,6 +1965,8 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     let governed_scan = required_object(lakecat, "governedScanProof", "lakecatReplayVerification")?;
     require_positive_u64(governed_scan, "planTaskCount", "governedScanProof")?;
     require_positive_u64(governed_scan, "fileTaskCount", "governedScanProof")?;
+    require_positive_u64(governed_scan, "deleteFileCount", "governedScanProof")?;
+    require_positive_u64(governed_scan, "childPlanTaskCount", "governedScanProof")?;
     let planned_restriction =
         required_object(governed_scan, "plannedReadRestriction", "governedScanProof")?;
     let fetched_restriction =
@@ -8420,6 +8422,34 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("plannedReadRestriction"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_scan_delete_file_count() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("deleteFileCount");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing scan delete-file count");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("deleteFileCount"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_scan_child_plan_task_count() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["childPlanTaskCount"] = json!(0);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject empty scan child-plan-task proof");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("childPlanTaskCount"));
+        assert!(err.to_string().contains("positive"));
     }
 
     #[test]
