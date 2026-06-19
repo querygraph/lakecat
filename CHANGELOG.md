@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made the local QGLake handoff summary fail closed unless QueryGraph
+  `lakecat-verify` and `lakecat-import` agree on table/view counts and semantic
+  bundle/graph/OpenLineage/import hashes.
 - Embedded QueryGraph verification counts and semantic bundle/graph/OpenLineage
   import hashes directly in `handoff-summary.json`, while retaining raw file
   hashes for the generated artifacts.

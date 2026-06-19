@@ -1140,11 +1140,12 @@ resulting import plan is written to
 `target/qglake-handoff/querygraph-import-plan.json`. The same run also writes
 `target/qglake-handoff/handoff-summary.json`, a compact machine-readable record
 of the catalog URL, principal, table scope, QueryGraph-verified table/view
-counts, semantic bundle/graph/OpenLineage/import hashes, artifact paths, raw
-file hashes, captured LakeCat replay output, captured QueryGraph verification
-output, captured QueryGraph import output, and service log path. That makes the
-handoff repeatable from the LakeCat repo while keeping QueryGraph responsible
-for graph validation and import semantics.
+counts, semantic bundle/graph/OpenLineage/import hashes accepted only after
+`lakecat-verify` and `lakecat-import` agree, artifact paths, raw file hashes,
+captured LakeCat replay output, captured QueryGraph verification output,
+captured QueryGraph import output, and service log path. That makes the handoff
+repeatable from the LakeCat repo while keeping QueryGraph responsible for graph
+validation and import semantics.
 
 This gives the semantic layer a responsible starting point. LakeCat says:
 

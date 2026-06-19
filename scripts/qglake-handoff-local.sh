@@ -80,9 +80,20 @@ process.stdout.write(String(value));
 
 required_summary_field() {
   local label="$1"
-  local value="$2"
+  local source_file="$2"
+  local value="$3"
   if [[ -z "$value" ]]; then
-    echo "Missing $label in QueryGraph verification output $QUERYGRAPH_VERIFY_OUTPUT" >&2
+    echo "Missing $label in QueryGraph output $source_file" >&2
+    return 1
+  fi
+}
+
+require_field_match() {
+  local label="$1"
+  local value="$2"
+  local expected="$3"
+  if [[ "$value" != "$expected" ]]; then
+    echo "QueryGraph verify/import mismatch for $label: verify=$expected import=$value" >&2
     return 1
   fi
 }
@@ -90,6 +101,7 @@ required_summary_field() {
 write_summary() {
   local bundle_sha drain_sha import_plan_sha
   local verified_tables verified_views bundle_hash graph_hash open_lineage_hash querygraph_import_hash
+  local imported_tables imported_views imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
   bundle_sha="$(sha256_file "$BUNDLE")"
   drain_sha="$(sha256_file "$DRAIN")"
   import_plan_sha="$(sha256_file "$IMPORT_PLAN")"
@@ -99,12 +111,30 @@ write_summary() {
   graph_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "graph-hash")"
   open_lineage_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "open-lineage-hash")"
   querygraph_import_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "querygraph-import-hash")"
-  required_summary_field "table-count" "$verified_tables"
-  required_summary_field "view-count" "$verified_views"
-  required_summary_field "bundle-hash" "$bundle_hash"
-  required_summary_field "graph-hash" "$graph_hash"
-  required_summary_field "open-lineage-hash" "$open_lineage_hash"
-  required_summary_field "querygraph-import-hash" "$querygraph_import_hash"
+  imported_tables="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "table-count")"
+  imported_views="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "view-count")"
+  imported_bundle_hash="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "bundle-hash")"
+  imported_graph_hash="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "graph-hash")"
+  imported_open_lineage_hash="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "open-lineage-hash")"
+  imported_querygraph_import_hash="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "querygraph-import-hash")"
+  required_summary_field "table-count" "$QUERYGRAPH_VERIFY_OUTPUT" "$verified_tables"
+  required_summary_field "view-count" "$QUERYGRAPH_VERIFY_OUTPUT" "$verified_views"
+  required_summary_field "bundle-hash" "$QUERYGRAPH_VERIFY_OUTPUT" "$bundle_hash"
+  required_summary_field "graph-hash" "$QUERYGRAPH_VERIFY_OUTPUT" "$graph_hash"
+  required_summary_field "open-lineage-hash" "$QUERYGRAPH_VERIFY_OUTPUT" "$open_lineage_hash"
+  required_summary_field "querygraph-import-hash" "$QUERYGRAPH_VERIFY_OUTPUT" "$querygraph_import_hash"
+  required_summary_field "table-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_tables"
+  required_summary_field "view-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_views"
+  required_summary_field "bundle-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_bundle_hash"
+  required_summary_field "graph-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_graph_hash"
+  required_summary_field "open-lineage-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_open_lineage_hash"
+  required_summary_field "querygraph-import-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_querygraph_import_hash"
+  require_field_match "table-count" "$imported_tables" "$verified_tables"
+  require_field_match "view-count" "$imported_views" "$verified_views"
+  require_field_match "bundle-hash" "$imported_bundle_hash" "$bundle_hash"
+  require_field_match "graph-hash" "$imported_graph_hash" "$graph_hash"
+  require_field_match "open-lineage-hash" "$imported_open_lineage_hash" "$open_lineage_hash"
+  require_field_match "querygraph-import-hash" "$imported_querygraph_import_hash" "$querygraph_import_hash"
   cat >"$SUMMARY" <<JSON
 {
   "status": "verified",
@@ -120,6 +150,9 @@ write_summary() {
     "graphHash": "$(json_string "$graph_hash")",
     "openLineageHash": "$(json_string "$open_lineage_hash")",
     "querygraphImportHash": "$(json_string "$querygraph_import_hash")"
+  },
+  "querygraphImportVerification": {
+    "matchesVerify": true
   },
   "artifacts": {
     "bundle": {

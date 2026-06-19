@@ -6,6 +6,25 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cross-check QueryGraph handoff phases`. `scripts/qglake-handoff-local.sh`
+  now fails closed unless QueryGraph `lakecat-verify` and `lakecat-import`
+  agree on table/view counts and semantic bundle, graph, OpenLineage, and
+  QueryGraph import hashes before writing the verified handoff summary.
+- Local verification for the QueryGraph handoff phase cross-check was green:
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh` with local socket binding allowed;
+  `node -e` JSON parse/assertion check for
+  `target/qglake-handoff/handoff-summary.json`. The live handoff generated one
+  table and one view, drained 26 outbox events, verified LakeCat replay, ran
+  QueryGraph `lakecat-verify` and `lakecat-import`, and wrote
+  `querygraphImportVerification.matchesVerify=true` in the summary after the
+  semantic counts and hashes matched;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli`.
+- Latest completed implementation slice:
   `Embed QueryGraph handoff verification`. `scripts/qglake-handoff-local.sh`
   now parses QueryGraph's verifier JSON and embeds verified table/view counts
   plus semantic bundle, graph, OpenLineage, and QueryGraph import hashes in
