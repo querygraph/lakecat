@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Extended QGLake replay JSON and the local handoff summary to cross-check
+  graph/OpenLineage hashes and the standards list across LakeCat replay,
+  QueryGraph verify, and QueryGraph import.
 - Added JSON output to `lakecat-cli qglake-verify-replay` and made the local
   handoff summary cross-check LakeCat replay hashes against QueryGraph verify
   and import hashes before accepting the artifact set.

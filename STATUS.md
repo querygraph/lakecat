@@ -6,6 +6,31 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cross-check handoff standards and semantic hashes`. `lakecat-cli
+  qglake-verify-replay --json` now exposes graph hash, OpenLineage hash, and
+  standards from the verified QueryGraph bootstrap bundle. The local handoff
+  harness requires LakeCat replay, QueryGraph verify, and QueryGraph import to
+  agree on graph/OpenLineage hashes and the standards list before accepting the
+  handoff summary, and the summary now embeds the accepted standards list.
+- Local verification for the handoff standards/hash cross-check was green:
+  `cargo fmt -p lakecat-cli`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli`;
+  `scripts/qglake-handoff-local.sh` with local socket binding allowed;
+  `node -e` JSON parse/assertion check for
+  `target/qglake-handoff/handoff-summary.json`. The live handoff generated one
+  table and one view, drained 26 outbox events, verified LakeCat replay through
+  JSON output, ran QueryGraph `lakecat-verify` and `lakecat-import`, and wrote
+  `querygraphVerification.standards` with Iceberg REST, Croissant, CDIF, OSI
+  handoff, ODRL, Grust catalog graph, and OpenLineage after all three phases
+  agreed on the semantic hashes;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind handoff summary to LakeCat replay JSON`. `lakecat-cli
   qglake-verify-replay --json` now emits machine-readable replay verification,
   and `scripts/qglake-handoff-local.sh` requires LakeCat replay status, table

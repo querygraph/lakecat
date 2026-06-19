@@ -78,6 +78,20 @@ process.stdout.write(String(value));
 ' "$file" "$field"
 }
 
+json_value_field() {
+  local file="$1"
+  local field="$2"
+  node -e '
+const fs = require("fs");
+const [file, field] = process.argv.slice(1);
+const value = JSON.parse(fs.readFileSync(file, "utf8"))[field];
+if (value === undefined || value === null) {
+  process.exit(2);
+}
+process.stdout.write(JSON.stringify(value));
+' "$file" "$field"
+}
+
 required_summary_field() {
   local label="$1"
   local source_file="$2"
@@ -101,8 +115,10 @@ require_field_match() {
 write_summary() {
   local bundle_sha drain_sha import_plan_sha
   local verified_tables verified_views bundle_hash graph_hash open_lineage_hash querygraph_import_hash
-  local lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_querygraph_import_hash
+  local verified_standards
+  local lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards
   local imported_tables imported_views imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
+  local imported_standards
   bundle_sha="$(sha256_file "$BUNDLE")"
   drain_sha="$(sha256_file "$DRAIN")"
   import_plan_sha="$(sha256_file "$IMPORT_PLAN")"
@@ -110,47 +126,61 @@ write_summary() {
   lakecat_tables="$(json_field "$LAKECAT_REPLAY_OUTPUT" "table-count")"
   lakecat_views="$(json_field "$LAKECAT_REPLAY_OUTPUT" "view-count")"
   lakecat_bundle_hash="$(json_field "$LAKECAT_REPLAY_OUTPUT" "bundle-hash")"
+  lakecat_graph_hash="$(json_field "$LAKECAT_REPLAY_OUTPUT" "graph-hash")"
+  lakecat_open_lineage_hash="$(json_field "$LAKECAT_REPLAY_OUTPUT" "open-lineage-hash")"
   lakecat_querygraph_import_hash="$(json_field "$LAKECAT_REPLAY_OUTPUT" "querygraph-import-hash")"
+  lakecat_standards="$(json_value_field "$LAKECAT_REPLAY_OUTPUT" "standards")"
   verified_tables="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "table-count")"
   verified_views="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "view-count")"
   bundle_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "bundle-hash")"
   graph_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "graph-hash")"
   open_lineage_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "open-lineage-hash")"
   querygraph_import_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "querygraph-import-hash")"
+  verified_standards="$(json_value_field "$QUERYGRAPH_VERIFY_OUTPUT" "standards")"
   imported_tables="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "table-count")"
   imported_views="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "view-count")"
   imported_bundle_hash="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "bundle-hash")"
   imported_graph_hash="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "graph-hash")"
   imported_open_lineage_hash="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "open-lineage-hash")"
   imported_querygraph_import_hash="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "querygraph-import-hash")"
+  imported_standards="$(json_value_field "$QUERYGRAPH_IMPORT_OUTPUT" "standards")"
   required_summary_field "table-count" "$QUERYGRAPH_VERIFY_OUTPUT" "$verified_tables"
   required_summary_field "view-count" "$QUERYGRAPH_VERIFY_OUTPUT" "$verified_views"
   required_summary_field "bundle-hash" "$QUERYGRAPH_VERIFY_OUTPUT" "$bundle_hash"
   required_summary_field "graph-hash" "$QUERYGRAPH_VERIFY_OUTPUT" "$graph_hash"
   required_summary_field "open-lineage-hash" "$QUERYGRAPH_VERIFY_OUTPUT" "$open_lineage_hash"
   required_summary_field "querygraph-import-hash" "$QUERYGRAPH_VERIFY_OUTPUT" "$querygraph_import_hash"
+  required_summary_field "standards" "$QUERYGRAPH_VERIFY_OUTPUT" "$verified_standards"
   required_summary_field "status" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_status"
   required_summary_field "table-count" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_tables"
   required_summary_field "view-count" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_views"
   required_summary_field "bundle-hash" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_bundle_hash"
+  required_summary_field "graph-hash" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_graph_hash"
+  required_summary_field "open-lineage-hash" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_open_lineage_hash"
   required_summary_field "querygraph-import-hash" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_querygraph_import_hash"
+  required_summary_field "standards" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_standards"
   required_summary_field "table-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_tables"
   required_summary_field "view-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_views"
   required_summary_field "bundle-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_bundle_hash"
   required_summary_field "graph-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_graph_hash"
   required_summary_field "open-lineage-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_open_lineage_hash"
   required_summary_field "querygraph-import-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_querygraph_import_hash"
+  required_summary_field "standards" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_standards"
   require_field_match "table-count" "$imported_tables" "$verified_tables"
   require_field_match "view-count" "$imported_views" "$verified_views"
   require_field_match "bundle-hash" "$imported_bundle_hash" "$bundle_hash"
   require_field_match "graph-hash" "$imported_graph_hash" "$graph_hash"
   require_field_match "open-lineage-hash" "$imported_open_lineage_hash" "$open_lineage_hash"
   require_field_match "querygraph-import-hash" "$imported_querygraph_import_hash" "$querygraph_import_hash"
+  require_field_match "standards" "$imported_standards" "$verified_standards"
   require_field_match "LakeCat replay status" "$lakecat_status" "verified"
   require_field_match "LakeCat table-count" "$lakecat_tables" "$verified_tables"
   require_field_match "LakeCat view-count" "$lakecat_views" "$verified_views"
   require_field_match "LakeCat bundle-hash" "$lakecat_bundle_hash" "$bundle_hash"
+  require_field_match "LakeCat graph-hash" "$lakecat_graph_hash" "$graph_hash"
+  require_field_match "LakeCat open-lineage-hash" "$lakecat_open_lineage_hash" "$open_lineage_hash"
   require_field_match "LakeCat querygraph-import-hash" "$lakecat_querygraph_import_hash" "$querygraph_import_hash"
+  require_field_match "LakeCat standards" "$lakecat_standards" "$verified_standards"
   cat >"$SUMMARY" <<JSON
 {
   "status": "verified",
@@ -165,7 +195,8 @@ write_summary() {
     "bundleHash": "$(json_string "$bundle_hash")",
     "graphHash": "$(json_string "$graph_hash")",
     "openLineageHash": "$(json_string "$open_lineage_hash")",
-    "querygraphImportHash": "$(json_string "$querygraph_import_hash")"
+    "querygraphImportHash": "$(json_string "$querygraph_import_hash")",
+    "standards": $verified_standards
   },
   "querygraphImportVerification": {
     "matchesVerify": true
