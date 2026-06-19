@@ -303,7 +303,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   replay `replay-evidence.management.storageProfileUpsert` object must now
   also match the compact `storageProfileUpsertProof` fields for profile id,
   provider, issuance mode, location-prefix hash, secret-reference evidence,
-  replay hashes, and OpenLineage hashes, and the captured
+  replay hashes, and OpenLineage hashes; the compact storage-profile proof is
+  now self-validating in the Rust verifier, requiring a SHA-256
+  location-prefix hash and a redacted secret-reference provider whenever
+  `secretRefPresent` is true; the captured
   `replay-evidence.credentials` branches must match the compact
   `credentialVendingProof` for the restricted agent denial and trusted-human
   audited raw-credential exception; the compact credential proof is now also

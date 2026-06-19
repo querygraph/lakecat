@@ -5,6 +5,29 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation adjustment:
+  `Pin current AGENTS contract in GOAL`.
+  `GOAL.md` now explicitly treats the current user-supplied
+  `LakeCat Agent Guidance` from `AGENTS.md` as durable goal state across
+  resumes and context compaction, covering repo boundaries, compatibility,
+  implementation priorities, Turso usage, local verification, book updates,
+  changelog/commit discipline, and sibling-repo placement.
+- Latest completed implementation slice:
+  `Verify storage-profile handoff proof`.
+  `lakecat-cli qglake-verify-handoff` now independently validates compact
+  `storageProfileUpsertProof` credential-root evidence. The proof must carry
+  profile id, provider, issuance mode, a SHA-256 location-prefix hash, explicit
+  `secretRefPresent`, a non-empty redacted secret-reference provider whenever a
+  secret reference is present, and replay/OpenLineage hashes.
+- Local verification for this storage-profile handoff-proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Verify credential-vending handoff proof`.
   `lakecat-cli qglake-verify-handoff` now independently validates compact

@@ -1292,29 +1292,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "storageProfileUpsertProof",
         "lakecatReplayVerification",
     )?;
-    require_non_empty_str(storage_profile, "profileId", "storageProfileUpsertProof")?;
-    require_non_empty_str(storage_profile, "provider", "storageProfileUpsertProof")?;
-    require_non_empty_str(storage_profile, "issuanceMode", "storageProfileUpsertProof")?;
-    require_non_empty_str(
-        storage_profile,
-        "locationPrefixHash",
-        "storageProfileUpsertProof",
-    )?;
-    required_bool(
-        storage_profile,
-        "secretRefPresent",
-        "storageProfileUpsertProof",
-    )?;
-    require_hash_array(
-        storage_profile,
-        "replayEventHashes",
-        "storageProfileUpsertProof",
-    )?;
-    require_hash_array(
-        storage_profile,
-        "openLineageHashes",
-        "storageProfileUpsertProof",
-    )?;
+    require_storage_profile_upsert_evidence(storage_profile)?;
 
     let credentials = required_object(
         lakecat,
@@ -1350,6 +1328,41 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "queryGraphBootstrapProof": bootstrap,
         "requestIdentityProof": request_identity,
     }))
+}
+
+fn require_storage_profile_upsert_evidence(
+    storage_profile: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    require_non_empty_str(storage_profile, "profileId", "storageProfileUpsertProof")?;
+    require_non_empty_str(storage_profile, "provider", "storageProfileUpsertProof")?;
+    require_non_empty_str(storage_profile, "issuanceMode", "storageProfileUpsertProof")?;
+    require_hash_str(
+        storage_profile,
+        "locationPrefixHash",
+        "storageProfileUpsertProof",
+    )?;
+    if required_bool(
+        storage_profile,
+        "secretRefPresent",
+        "storageProfileUpsertProof",
+    )? {
+        require_non_empty_str(
+            storage_profile,
+            "secretRefProvider",
+            "storageProfileUpsertProof",
+        )?;
+    }
+    require_hash_array(
+        storage_profile,
+        "replayEventHashes",
+        "storageProfileUpsertProof",
+    )?;
+    require_hash_array(
+        storage_profile,
+        "openLineageHashes",
+        "storageProfileUpsertProof",
+    )?;
+    Ok(())
 }
 
 fn require_credential_vending_evidence(
@@ -6222,6 +6235,35 @@ mod tests {
 
         assert!(err.to_string().contains("storageProfileUpsertProof"));
         assert!(err.to_string().contains("locationPrefixHash"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_storage_profile_location_hash_shape() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["locationPrefixHash"] =
+            json!("not-a-sha256-hash");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject invalid location-prefix hash evidence");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("locationPrefixHash"));
+        assert!(err.to_string().contains("sha256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_secret_ref_provider_when_present() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefPresent"] =
+            json!(true);
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefProvider"] =
+            Value::Null;
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject secret-ref evidence without provider");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("secretRefProvider"));
     }
 
     #[test]

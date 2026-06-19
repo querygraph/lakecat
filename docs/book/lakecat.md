@@ -1302,7 +1302,10 @@ captured LakeCat replay
 `replay-evidence.management.storageProfileUpsert` object with the compact
 `lakecatReplayVerification.storageProfileUpsertProof`, including the
 profile id, provider, issuance mode, location-prefix hash, secret-reference
-presence/provider, replay hashes, and OpenLineage hashes. It also compares
+presence/provider, replay hashes, and OpenLineage hashes. The compact verifier
+also requires that location-prefix value to be a SHA-256 hash and requires a
+redacted secret-reference provider whenever the proof says a secret reference is
+present. It also compares
 the captured `replay-evidence.credentials` restricted-agent and trusted-human
 branches with the compact `credentialVendingProof`, so a saved handoff cannot
 claim that agents were blocked onto Sail-planned reads or that humans used an
