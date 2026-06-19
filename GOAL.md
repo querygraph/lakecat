@@ -41,18 +41,19 @@ update the docs as part of the logical unit.
 
 ## Pinned Agent Guidance
 
-The current repo-local `AGENTS.md` instructions for
-`/Users/alexy/src/lakecat` are part of this goal. The 2026-06-19
-user-supplied block titled `LakeCat Agent Guidance` is a pinned goal input, not
-session-local advice. It must continue to govern repo boundaries,
+The current repo-local `/Users/alexy/src/lakecat/AGENTS.md` instructions are
+part of this goal. The 2026-06-19 user-supplied block titled `LakeCat Agent
+Guidance` is a pinned goal input, not session-local advice. It must continue
+to govern repo boundaries,
 compatibility rules, implementation priorities, Turso usage, local
 verification, changelog/commit discipline, book updates, and sibling-repo
 placement until explicitly changed.
 
-Treat the `AGENTS.md` contract as durable goal state even after thread resumes
-or context compaction. If `AGENTS.md` and this file drift, reconcile them
-before choosing the next implementation slice. When future work changes any of
-these rules, update both `AGENTS.md` and this goal in the same logical unit.
+Treat the `/Users/alexy/src/lakecat/AGENTS.md` contract as durable goal state
+even after thread resumes or context compaction. If `AGENTS.md` and this file
+drift, reconcile them before choosing the next implementation slice. When
+future work changes any of these rules, update both `AGENTS.md` and this goal
+in the same logical unit.
 
 The active `AGENTS.md` contract for this goal is:
 

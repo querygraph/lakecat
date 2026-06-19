@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Clarified `GOAL.md` that `/Users/alexy/src/lakecat/AGENTS.md` is durable
+  goal state and must be reconciled with the goal across resumes and future
+  implementation slices.
 - Hardened storage-profile secret-reference validation so LakeCat rejects
   external secret-store URIs with query strings, fragments, or userinfo before
   persisting them in memory or Turso.
