@@ -5,6 +5,13 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Pin AGENTS guidance in GOAL`. `GOAL.md` now carries the current
+  `/Users/alexy/src/lakecat/AGENTS.md` contract as durable goal guidance with
+  explicit repo-boundary, compatibility, implementation-priority, verification,
+  Turso, graph-placement, and commit-discipline sections.
+- Local verification for the GOAL guidance slice was documentation-only:
+  `git diff --check`.
 - Latest completed implementation slice:
   `Summarize commit history in lineage drain`. `LineageDrainEventSummary` now
   carries compact `table-commit-count`, `table-commit-sequence-numbers`, and

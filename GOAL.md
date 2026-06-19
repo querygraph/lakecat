@@ -45,15 +45,16 @@ Treat the guidance in `AGENTS.md` as part of this goal, not as separate
 session-only advice. Keep this file and `AGENTS.md` aligned when the operating
 model changes.
 
-The `AGENTS.md` instructions for `/Users/alexy/src/lakecat` provided on
-2026-06-18 are a pinned operating contract for this goal. When future work
-changes repo boundaries, compatibility rules, implementation priorities,
-verification gates, or commit discipline, update both `AGENTS.md` and this
-goal in the same logical unit so agents do not have to choose between two
-sources of durable guidance.
+The `/Users/alexy/src/lakecat/AGENTS.md` instructions are a pinned operating
+contract for this goal. When future work changes repo boundaries,
+compatibility rules, implementation priorities, verification gates, or commit
+discipline, update both `AGENTS.md` and this goal in the same logical unit so
+agents do not have to choose between two sources of durable guidance.
 
 The current `/Users/alexy/src/lakecat/AGENTS.md` instructions are permanent
-goal constraints:
+goal constraints and must be read as the following contract.
+
+### Repo Boundaries
 
 - LakeCat is the Rust Iceberg-compatible catalog foundation for QueryGraph.
   Keep the catalog boundary thin: identity, tenancy, Iceberg REST
@@ -75,6 +76,9 @@ goal constraints:
   integration target. LakeCat changes should naturally support QueryGraph
   bootstrap, Croissant/CDIF/OSI/ODRL/OpenLineage projection, and the QGLake
   acceptance flow.
+
+### Compatibility Rules
+
 - Do not fork Iceberg semantics or make standard clients depend on
   non-standard endpoints for normal table access.
 - Keep Iceberg metadata pristine. Business semantics, policy, graph, lineage,
@@ -84,6 +88,9 @@ goal constraints:
   explicit compatibility bridge, not the long-term implementation.
 - Raw credential vending must be a deliberate, audited exception. Governed
   Sail-planned reads are the default path for agents and untrusted principals.
+
+### Implementation Priorities
+
 - Use the existing trait seams (`CatalogStore`, `SailCatalogEngine`,
   `GovernanceEngine`, `CatalogGraphSink`, `LineageSink`) and keep defaults safe
   for embedded tests.
@@ -102,11 +109,13 @@ goal constraints:
 - Check in after each logical unit of work. Before committing, add or update
   `CHANGELOG.md` with a concise description of that unit, then stage only the
   files that belong to the unit.
-- For LakeCat changes, prefer the local verification gates listed in
-  `AGENTS.md` and mirrored in this goal, including the CLI crate when CLI
-  behavior changes. When a change touches Sail, Grust, TypeSec, or QueryGraph,
-  run the focused tests in that sibling repo as well and report each repo
-  separately.
+
+### Verification
+
+For LakeCat changes, prefer the local verification gates listed in `AGENTS.md`
+and mirrored in this goal, including the CLI crate when CLI behavior changes.
+When a change touches Sail, Grust, TypeSec, or QueryGraph, run the focused
+tests in that sibling repo as well and report each repo separately.
 
 ## Repo Boundaries
 

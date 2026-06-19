@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned the latest LakeCat `AGENTS.md` operating contract into `GOAL.md` with
+  explicit repo-boundary, compatibility, implementation-priority, verification,
+  Turso, graph-placement, and commit-discipline sections.
 - Added compact table commit-history count, sequence-number, and commit-hash
   fields to lineage-drain event summaries, and made QGLake reject
   `table.commits-listed` replay that omits that typed summary evidence.
