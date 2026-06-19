@@ -6,6 +6,32 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cross-check captured governed scan proof`.
+  `lakecat-cli qglake-verify-handoff` now compares compact
+  `lakecatReplayVerification.governedScanProof` values with the captured
+  LakeCat replay JSON at `replay-evidence.scan`. A handoff is rejected if the
+  replay artifact and compact summary disagree on Sail plan task count, file
+  task count, delete-file count, child plan task count, planned/fetched replay
+  event hashes, or planned/fetched OpenLineage hashes. The verifier output now
+  echoes the accepted captured scan proof under
+  `capturedOutputSemantics.lakecatReplay.governedScanProof`, making the
+  governed Sail-planned read path a replay-checked acceptance proof rather than
+  only a summary claim.
+- Local verification for this captured governed scan proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh`. The live handoff generated one table and
+  one view, drained 26 outbox events, verified LakeCat replay, ran QueryGraph
+  `lakecat-verify` and `lakecat-import`, then ran
+  `lakecat-cli qglake-verify-handoff --json` and emitted
+  `capturedOutputSemantics.lakecatReplay.governedScanProof`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Cross-check captured request/bootstrap replay proofs`.
   `lakecat-cli qglake-verify-handoff` now compares compact
   `requestIdentityProof` and `queryGraphBootstrapProof` values with the

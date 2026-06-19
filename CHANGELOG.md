@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-verify-handoff` compare compact governed scan proof
+  fields against captured LakeCat replay JSON, so Sail-planned read task counts
+  and replay/OpenLineage hashes cannot drift between replay and summary.
 - Made `lakecat-cli qglake-verify-handoff` compare compact request-identity and
   QueryGraph bootstrap proofs against the captured LakeCat replay JSON, so
   principal, authorization, delegation, summary-signature, and bootstrap hash

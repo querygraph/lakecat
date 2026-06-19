@@ -1228,8 +1228,11 @@ standards against the compact summary. It compares the captured LakeCat
 objects with the compact request-identity and bootstrap proofs, including the
 principal, authorization hash, TypeDID hash slots, delegation and summary
 signature hashes, artifact counts, standards, replay hashes, and the accepted
-bundle, graph, OpenLineage, and QueryGraph import hashes. It also compares the
-captured LakeCat
+bundle, graph, OpenLineage, and QueryGraph import hashes. It compares captured
+`replay-evidence.scan` with `governedScanProof`, including the plan task, file
+task, delete file, and child plan task counts plus the planned/fetched replay
+and OpenLineage hashes that prove the Sail-planned read path. It also compares
+the captured LakeCat
 replay `replay-evidence.management.storageProfileUpsert` object with the
 compact `lakecatReplayVerification.storageProfileUpsertProof`, including the
 profile id, provider, issuance mode, location-prefix hash, secret-reference
@@ -1370,9 +1373,9 @@ captured LakeCat replay and QueryGraph verify/import output hashes, so terminal
 captures cannot drift from the compact summary. Then it parses those captured
 JSON files and checks that the replay schema/status, table/view counts, semantic
 hashes, standards, request-identity proof, QueryGraph bootstrap proof,
-storage-profile upsert proof, and credential-vending proof inside the captures
-still match the summary. The local handoff harness runs it automatically and
-writes the captured verifier output to
+governed scan proof, storage-profile upsert proof, and credential-vending proof
+inside the captures still match the summary. The local handoff harness runs it
+automatically and writes the captured verifier output to
 `target/qglake-handoff/lakecat-handoff-verify.json`.
 
 The end-to-end result is a chain:

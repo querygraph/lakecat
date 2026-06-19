@@ -538,6 +538,7 @@ fn verify_qglake_handoff_captured_output_semantics(
     let request_identity = Value::Object(lakecat_replay_request_identity(lakecat_replay)?.clone());
     let querygraph_bootstrap =
         Value::Object(lakecat_replay_querygraph_bootstrap(lakecat_replay)?.clone());
+    let governed_scan = Value::Object(lakecat_replay_scan(lakecat_replay)?.clone());
     let storage_profile_upsert =
         Value::Object(lakecat_replay_storage_profile_upsert(lakecat_replay)?.clone());
     let credential_vending = Value::Object(lakecat_replay_credentials(lakecat_replay)?.clone());
@@ -555,6 +556,7 @@ fn verify_qglake_handoff_captured_output_semantics(
             "standards": required_value(lakecat_replay, "standards", "captured LakeCat replay output")?,
             "requestIdentityProof": request_identity,
             "queryGraphBootstrapProof": querygraph_bootstrap,
+            "governedScanProof": governed_scan,
             "storageProfileUpsertProof": storage_profile_upsert,
             "credentialVendingProof": credential_vending,
         },
@@ -616,6 +618,7 @@ fn verify_lakecat_replay_capture_matches_summary(
     )?;
     verify_lakecat_replay_request_identity_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_querygraph_bootstrap_matches_summary(capture, lakecat)?;
+    verify_lakecat_replay_scan_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_storage_profile_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_credentials_match_summary(capture, lakecat)
 }
@@ -725,6 +728,44 @@ fn lakecat_replay_querygraph_bootstrap(
     required_object(
         lakecat_replay_evidence(capture)?,
         "queryGraphBootstrap",
+        "captured LakeCat replay output.replay-evidence",
+    )
+}
+
+fn verify_lakecat_replay_scan_matches_summary(
+    capture: &serde_json::Map<String, Value>,
+    lakecat: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let captured_scan = lakecat_replay_scan(capture)?;
+    let summary_scan = required_object(lakecat, "governedScanProof", "lakecatReplayVerification")?;
+
+    for field in [
+        "planTaskCount",
+        "fileTaskCount",
+        "deleteFileCount",
+        "childPlanTaskCount",
+        "plannedReplayEventHashes",
+        "fetchedReplayEventHashes",
+        "plannedOpenLineageHashes",
+        "fetchedOpenLineageHashes",
+    ] {
+        require_value_match(
+            captured_scan,
+            field,
+            required_value(summary_scan, field, "governedScanProof")?,
+            "captured LakeCat replay output.replay-evidence.scan",
+        )?;
+    }
+
+    Ok(())
+}
+
+fn lakecat_replay_scan(
+    capture: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<&serde_json::Map<String, Value>> {
+    required_object(
+        lakecat_replay_evidence(capture)?,
+        "scan",
         "captured LakeCat replay output.replay-evidence",
     )
 }
@@ -5395,6 +5436,16 @@ mod tests {
                     "replayEventHashes": ["sha256:bootstrap-replay"],
                     "openLineageHashes": ["sha256:bootstrap-openlineage"]
                 },
+                "scan": {
+                    "planTaskCount": 1,
+                    "fileTaskCount": 1,
+                    "deleteFileCount": 1,
+                    "childPlanTaskCount": 2,
+                    "plannedReplayEventHashes": ["sha256:scan-plan-replay"],
+                    "fetchedReplayEventHashes": ["sha256:scan-fetch-replay"],
+                    "plannedOpenLineageHashes": ["sha256:scan-plan-openlineage"],
+                    "fetchedOpenLineageHashes": ["sha256:scan-fetch-openlineage"]
+                },
                 "management": {
                     "storageProfileUpsert": {
                         "profileId": "events-local",
@@ -5735,6 +5786,10 @@ mod tests {
             json!("sha256:delegation")
         );
         assert_eq!(
+            semantics["lakecatReplay"]["governedScanProof"]["planTaskCount"],
+            json!(1)
+        );
+        assert_eq!(
             semantics["lakecatReplay"]["credentialVendingProof"]["restricted"]["blockReason"],
             json!(QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON)
         );
@@ -5833,6 +5888,27 @@ mod tests {
                 "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert.locationPrefixHash mismatch"
             )
         );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_governed_scan_drift() {
+        let temp = qglake_temp_dir("handoff-captured-scan-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["scan"]["planTaskCount"] = json!(2);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay governed scan proof drift should be rejected");
+        assert!(err.to_string().contains(
+            "captured LakeCat replay output.replay-evidence.scan.planTaskCount mismatch"
+        ));
     }
 
     #[test]
