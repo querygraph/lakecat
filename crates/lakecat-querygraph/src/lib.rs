@@ -52,7 +52,9 @@ impl QueryGraphBootstrap {
             .into_iter()
             .map(QueryGraphViewProjection::from_view)
             .collect::<Vec<_>>();
-        let graph = QueryGraphCatalogGraph::from_tables_and_views(&tables, &views);
+        let graph = QueryGraphCatalogGraph::from_tables_and_views_for_warehouse(
+            &warehouse, &tables, &views,
+        );
         let table_artifacts = tables
             .iter()
             .map(QueryGraphTableArtifactHashes::from_table)
@@ -746,6 +748,23 @@ impl QueryGraphCatalogGraph {
         tables: &[QueryGraphTableProjection],
         views: &[QueryGraphViewProjection],
     ) -> Self {
+        let warehouse = tables
+            .first()
+            .map(|table| table.ident.warehouse.clone())
+            .or_else(|| {
+                views
+                    .first()
+                    .and_then(|view| WarehouseName::new(view.warehouse.clone()).ok())
+            })
+            .unwrap_or_else(|| WarehouseName::new("default").expect("static warehouse name"));
+        Self::from_tables_and_views_for_warehouse(&warehouse, tables, views)
+    }
+
+    pub fn from_tables_and_views_for_warehouse(
+        warehouse: &WarehouseName,
+        tables: &[QueryGraphTableProjection],
+        views: &[QueryGraphViewProjection],
+    ) -> Self {
         let mut nodes = BTreeMap::new();
         let mut edges = BTreeSet::new();
         insert_node(
@@ -756,6 +775,7 @@ impl QueryGraphCatalogGraph {
                 properties: json!({ "name": "LakeCat" }),
             },
         );
+        insert_tenant_spine(&mut nodes, &mut edges, warehouse);
         for table in tables {
             let namespace_id = format!(
                 "lakecat:namespace:{}:{}",
@@ -801,6 +821,11 @@ impl QueryGraphCatalogGraph {
             );
             edges.insert(QueryGraphEdge {
                 from: "lakecat:catalog".to_string(),
+                to: namespace_id.clone(),
+                label: "HAS_NAMESPACE".to_string(),
+            });
+            edges.insert(QueryGraphEdge {
+                from: warehouse_graph_id(&table.ident.warehouse),
                 to: namespace_id.clone(),
                 label: "HAS_NAMESPACE".to_string(),
             });
@@ -851,6 +876,13 @@ impl QueryGraphCatalogGraph {
                 to: namespace_id.clone(),
                 label: "HAS_NAMESPACE".to_string(),
             });
+            if let Ok(view_warehouse) = WarehouseName::new(view.warehouse.clone()) {
+                edges.insert(QueryGraphEdge {
+                    from: warehouse_graph_id(&view_warehouse),
+                    to: namespace_id.clone(),
+                    label: "HAS_NAMESPACE".to_string(),
+                });
+            }
             edges.insert(QueryGraphEdge {
                 from: namespace_id,
                 to: view.stable_id.clone(),
@@ -862,6 +894,68 @@ impl QueryGraphCatalogGraph {
             edges: edges.into_iter().collect(),
         }
     }
+}
+
+fn insert_tenant_spine(
+    nodes: &mut BTreeMap<String, QueryGraphNode>,
+    edges: &mut BTreeSet<QueryGraphEdge>,
+    warehouse: &WarehouseName,
+) {
+    let server_id = "lakecat:server:default".to_string();
+    let project_id = "lakecat:project:default".to_string();
+    let warehouse_id = warehouse_graph_id(warehouse);
+    insert_node(
+        nodes,
+        QueryGraphNode {
+            id: server_id.clone(),
+            label: "Server".to_string(),
+            properties: json!({
+                "serverId": "default",
+                "source": "lakecat-querygraph-bootstrap"
+            }),
+        },
+    );
+    insert_node(
+        nodes,
+        QueryGraphNode {
+            id: project_id.clone(),
+            label: "Project".to_string(),
+            properties: json!({
+                "projectId": "default",
+                "source": "lakecat-querygraph-bootstrap"
+            }),
+        },
+    );
+    insert_node(
+        nodes,
+        QueryGraphNode {
+            id: warehouse_id.clone(),
+            label: "Warehouse".to_string(),
+            properties: json!({
+                "warehouse": warehouse.as_str(),
+                "source": "lakecat-querygraph-bootstrap"
+            }),
+        },
+    );
+    edges.insert(QueryGraphEdge {
+        from: "lakecat:catalog".to_string(),
+        to: server_id.clone(),
+        label: "HAS_SERVER".to_string(),
+    });
+    edges.insert(QueryGraphEdge {
+        from: server_id,
+        to: project_id.clone(),
+        label: "HAS_PROJECT".to_string(),
+    });
+    edges.insert(QueryGraphEdge {
+        from: project_id,
+        to: warehouse_id,
+        label: "HAS_WAREHOUSE".to_string(),
+    });
+}
+
+fn warehouse_graph_id(warehouse: &WarehouseName) -> String {
+    format!("lakecat:warehouse:{}", warehouse.as_str())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1435,6 +1529,47 @@ mod tests {
                 .iter()
                 .any(|edge| edge.label == "GOVERNED_BY")
         );
+        assert!(
+            bundle
+                .graph
+                .nodes
+                .iter()
+                .any(|node| node.id == "lakecat:server:default" && node.label == "Server")
+        );
+        assert!(
+            bundle
+                .graph
+                .nodes
+                .iter()
+                .any(|node| node.id == "lakecat:project:default" && node.label == "Project")
+        );
+        assert!(
+            bundle
+                .graph
+                .nodes
+                .iter()
+                .any(|node| node.id == "lakecat:warehouse:local" && node.label == "Warehouse")
+        );
+        assert!(bundle.graph.edges.iter().any(|edge| {
+            edge.from == "lakecat:catalog"
+                && edge.to == "lakecat:server:default"
+                && edge.label == "HAS_SERVER"
+        }));
+        assert!(bundle.graph.edges.iter().any(|edge| {
+            edge.from == "lakecat:server:default"
+                && edge.to == "lakecat:project:default"
+                && edge.label == "HAS_PROJECT"
+        }));
+        assert!(bundle.graph.edges.iter().any(|edge| {
+            edge.from == "lakecat:project:default"
+                && edge.to == "lakecat:warehouse:local"
+                && edge.label == "HAS_WAREHOUSE"
+        }));
+        assert!(bundle.graph.edges.iter().any(|edge| {
+            edge.from == "lakecat:warehouse:local"
+                && edge.to == "lakecat:namespace:local:default"
+                && edge.label == "HAS_NAMESPACE"
+        }));
         assert_eq!(
             bundle.tables[0].osi["schemaVersion"],
             "lakecat.querygraph.osi-handoff.v1"
@@ -1718,6 +1853,17 @@ mod tests {
                 .edges
                 .iter()
                 .filter(|edge| edge.from == "lakecat:catalog"
+                    && edge.to == namespace_id
+                    && edge.label == "HAS_NAMESPACE")
+                .count(),
+            1
+        );
+        assert_eq!(
+            bundle
+                .graph
+                .edges
+                .iter()
+                .filter(|edge| edge.from == "lakecat:warehouse:local"
                     && edge.to == namespace_id
                     && edge.label == "HAS_NAMESPACE")
                 .count(),

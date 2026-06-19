@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a manifest-hashed QueryGraph bootstrap tenant spine so exported catalog
+  graphs now carry deterministic Server, Project, and Warehouse anchors plus
+  Warehouse-to-Namespace edges before table/view import.
 - Added a catalog-facing `Server` graph anchor for `server.upserted` outbox
   replay so the durable tenant root now reaches Grust through the same thin
   catalog-event boundary as Project, Warehouse, StorageProfile, and the table

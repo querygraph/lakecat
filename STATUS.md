@@ -6,6 +6,13 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Add QueryGraph bootstrap tenant spine`.
+  QueryGraph bootstrap graphs now include deterministic Server, Project, and
+  Warehouse anchors plus Warehouse-to-Namespace edges inside the manifest-hashed
+  graph payload. The existing Catalog-to-Namespace edge remains for importer
+  compatibility, while richer tenant hierarchy semantics stay Grust-owned and
+  can later be replaced with actual management-record projection.
+- Latest completed implementation slice:
   `Project server upserts to graph`.
   `lakecat-graph` now has a stable `Server` catalog subject, and durable
   `server.upserted` replay emits that graph event beside the existing
