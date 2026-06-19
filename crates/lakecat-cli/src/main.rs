@@ -2840,7 +2840,7 @@ fn qglake_credential_replay_evidence_json(
             "principalKind": restricted.principal_kind.as_deref(),
             "credentialCount": restricted.credential_count.unwrap_or_default(),
             "blockReason": restricted.credential_block_reason.as_deref(),
-            "maxCredentialTtlSeconds": qglake_credential_max_ttl_seconds(restricted),
+            "maxCredentialTtlSeconds": qglake_event_max_credential_ttl_seconds(restricted),
             "storageProfile": qglake_credential_storage_profile_evidence_json(restricted),
             "replayEventHashes": &restricted.replay_event_hashes,
             "openLineageHashes": &restricted.replay_open_lineage_hashes,
@@ -2851,7 +2851,7 @@ fn qglake_credential_replay_evidence_json(
             "credentialCount": human.credential_count.unwrap_or_default(),
             "rawCredentialExceptionAllowed": human.raw_credential_exception_allowed.unwrap_or_default(),
             "rawCredentialExceptionReason": human.raw_credential_exception_reason.as_deref(),
-            "maxCredentialTtlSeconds": qglake_credential_max_ttl_seconds(human),
+            "maxCredentialTtlSeconds": qglake_event_max_credential_ttl_seconds(human),
             "storageProfile": qglake_credential_storage_profile_evidence_json(human),
             "replayEventHashes": &human.replay_event_hashes,
             "openLineageHashes": &human.replay_open_lineage_hashes,
@@ -2859,7 +2859,7 @@ fn qglake_credential_replay_evidence_json(
     }))
 }
 
-fn qglake_credential_max_ttl_seconds(event: &LineageDrainEventSummary) -> Option<u64> {
+fn qglake_event_max_credential_ttl_seconds(event: &LineageDrainEventSummary) -> Option<u64> {
     event
         .read_restriction
         .as_ref()
@@ -3005,8 +3005,8 @@ fn qglake_credential_replay_line(
     }
     let restricted_profile = qglake_credential_storage_profile_line(restricted)?;
     let human_profile = qglake_credential_storage_profile_line(human)?;
-    let restricted_ttl = qglake_credential_max_ttl_seconds(restricted)?;
-    let human_ttl = qglake_credential_max_ttl_seconds(human)?;
+    let restricted_ttl = qglake_event_max_credential_ttl_seconds(restricted)?;
+    let human_ttl = qglake_event_max_credential_ttl_seconds(human)?;
     Some(format!(
         "credential replay restricted=blocked:sail-planned-read-required restricted_count={} restricted_ttl={} restricted_profile={} human=allowed:trusted-human-audited-raw human_count={} human_ttl={} human_profile={}",
         restricted.credential_count.unwrap_or_default(),
@@ -3058,12 +3058,16 @@ fn qglake_table_commit_history_replay_line(drain: &LineageDrainResponse) -> Opti
 fn qglake_scan_replay_line(drain: &LineageDrainResponse) -> Option<String> {
     let planned = qglake_drain_event(drain, "table.scan-planned")?;
     let fetched = qglake_drain_event(drain, "table.scan-tasks-fetched")?;
+    let planned_ttl = qglake_event_max_credential_ttl_seconds(planned)?;
+    let fetched_ttl = qglake_event_max_credential_ttl_seconds(fetched)?;
     Some(format!(
-        "scan replay plan_tasks={} file_tasks={} delete_files={} child_plan_tasks={}",
+        "scan replay plan_tasks={} planned_ttl={} file_tasks={} delete_files={} child_plan_tasks={} fetched_ttl={}",
         planned.scan_task_count.unwrap_or_default(),
+        planned_ttl,
         fetched.file_scan_task_count.unwrap_or_default(),
         fetched.delete_file_count.unwrap_or_default(),
-        fetched.child_plan_task_count.unwrap_or_default()
+        fetched.child_plan_task_count.unwrap_or_default(),
+        fetched_ttl
     ))
 }
 
@@ -5524,7 +5528,7 @@ fn verify_qglake_credential_lineage_projection(
             "qglake lineage drain {label} credential replay emitted no credential-root graph projection"
         )));
     }
-    if qglake_credential_max_ttl_seconds(event).is_none() {
+    if qglake_event_max_credential_ttl_seconds(event).is_none() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain {label} credential replay is missing max credential TTL evidence"
         )));
@@ -10897,7 +10901,7 @@ mod tests {
 
         assert_eq!(
             line,
-            "scan replay plan_tasks=1 file_tasks=1 delete_files=1 child_plan_tasks=1"
+            "scan replay plan_tasks=1 planned_ttl=300 file_tasks=1 delete_files=1 child_plan_tasks=1 fetched_ttl=300"
         );
     }
 

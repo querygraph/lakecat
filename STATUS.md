@@ -6,6 +6,13 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Show governed scan TTL caps in replay text`.
+  `lakecat-cli qglake-verify-replay` now includes the policy-derived
+  `max-credential-ttl-seconds` cap in the compact scan replay line for both
+  scan planning and scan-task fetch evidence. This keeps operator-readable
+  terminal captures aligned with the structured QGLake proof that already
+  rejects missing or drifted read restrictions.
+- Latest completed implementation slice:
   `Bind QGLake credential proof to TTL caps`.
   QGLake replay evidence, compact handoff summaries, and saved lineage-drain
   verification now require the restricted-agent and trusted-human credential

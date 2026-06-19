@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added the policy-derived credential TTL cap to the compact QGLake scan replay
+  operator line, so terminal captures now show the TTL preserved by both
+  scan-planning and scan-task-fetch read restrictions.
 - Bound QGLake credential replay and handoff evidence to the policy-derived
   credential TTL cap, requiring both restricted-agent and trusted-human compact
   credential proofs to carry `maxCredentialTtlSeconds` and rejecting lineage
