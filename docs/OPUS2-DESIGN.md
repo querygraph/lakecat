@@ -360,7 +360,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   conflicts with the URI scheme of the location prefix, whose issuance mode
   conflicts with the provider class, or whose public config appears to carry
   raw secret material; storage-profile upsert replay redacts full secret-store
-  URIs to presence/provider evidence before lineage/OpenLineage projection;
+  URIs to presence/provider evidence before lineage/OpenLineage projection, and
+  lineage-drain summaries plus QGLake replay verification now expose the
+  redacted profile id/provider/secret-ref proof for QueryGraph acceptance;
   management routes now use the requested
   warehouse instead of the configured default, Iceberg REST routes now accept a
   warehouse prefix only after resolving a durable `WarehouseRecord`, and

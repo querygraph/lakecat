@@ -808,6 +808,10 @@ does not forward the full secret-store URI. The replay payload keeps
 `secret-ref-present` and `secret-ref-provider` so QueryGraph can verify that a
 production credential root exists without learning the Vault, cloud secret
 manager, or TypeSec environment path.
+The drain summary lifts the same proof into compact fields alongside the
+profile id and provider. QGLake replay verification requires that compact
+storage-profile upsert evidence, which means a saved handoff can prove the
+credential root was configured without handing the next system a secret path.
 
 ### A PySpark User Reads Iceberg
 

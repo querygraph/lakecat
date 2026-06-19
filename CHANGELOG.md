@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added compact redacted storage-profile upsert evidence to lineage-drain
+  summaries and QGLake replay verification.
 - Redacted storage-profile secret references from upsert audit/outbox replay
   payloads, preserving only presence and provider evidence for lineage.
 - Rejected storage-profile `public-config` values that appear to embed raw

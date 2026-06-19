@@ -1096,6 +1096,10 @@ fn lineage_drain_event_summary(
                 })
         })
         .unwrap_or_default();
+    let storage_profile = payload.get("storage-profile");
+    let storage_profile_secret_ref = storage_profile
+        .and_then(|profile| profile.get("secret-ref"))
+        .and_then(Value::as_str);
     let authorization_receipt = payload.get("authorization-receipt");
     let request_identity = authorization_receipt
         .and_then(|receipt| receipt.get("request-identity"))
@@ -1182,6 +1186,23 @@ fn lineage_drain_event_summary(
             .get("storage-profile-count")
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok()),
+        storage_profile_id: storage_profile
+            .and_then(|profile| profile.get("profile-id"))
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        storage_profile_provider: storage_profile
+            .and_then(|profile| profile.get("provider"))
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        storage_profile_secret_ref_present: storage_profile
+            .and_then(|profile| profile.get("secret-ref-present"))
+            .and_then(Value::as_bool)
+            .or_else(|| storage_profile_secret_ref.map(|_| true)),
+        storage_profile_secret_ref_provider: storage_profile
+            .and_then(|profile| profile.get("secret-ref-provider"))
+            .and_then(Value::as_str)
+            .or_else(|| storage_profile_secret_ref.and_then(secret_ref_provider_label))
+            .map(str::to_string),
         warehouse_count: payload
             .get("warehouse-count")
             .and_then(Value::as_u64)
@@ -6987,6 +7008,24 @@ mod tests {
         );
         assert_eq!(drain.graph_events, 1);
         assert_eq!(drain.lineage_events, 1);
+        assert_eq!(
+            drain.events[0].storage_profile_id.as_deref(),
+            Some("s3-events")
+        );
+        assert_eq!(
+            drain.events[0].storage_profile_provider.as_deref(),
+            Some("s3")
+        );
+        assert_eq!(
+            drain.events[0].storage_profile_secret_ref_present,
+            Some(true)
+        );
+        assert_eq!(
+            drain.events[0]
+                .storage_profile_secret_ref_provider
+                .as_deref(),
+            Some("vault")
+        );
         assert_eq!(
             store.delivered.lock().await.as_slice(),
             &["evt-storage-profile".to_string()]

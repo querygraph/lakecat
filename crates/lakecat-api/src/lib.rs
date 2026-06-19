@@ -469,6 +469,14 @@ pub struct LineageDrainEventSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_profile_count: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_profile_provider: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_profile_secret_ref_present: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_profile_secret_ref_provider: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub warehouse_count: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub table_commit_count: Option<usize>,

@@ -6,6 +6,28 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify storage profile upsert replay evidence`. Lineage-drain event
+  summaries now lift redacted storage-profile upsert evidence into compact
+  fields: profile id, provider, `secret-ref-present`, and
+  `secret-ref-provider`. QGLake replay verification now requires storage-profile
+  upsert replay to expose that credential-root proof, letting QueryGraph verify
+  the catalog credential boundary without seeing secret-store URIs.
+- Local verification for the storage-profile upsert replay evidence slice is
+  green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-service outbox_drain_projects_storage_profile_upserts_to_lineage`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `cargo test -p lakecat-cli qglake_management_replay_line_summarizes_verified_evidence`;
+  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Redact storage profile secret refs from replay`. Storage-profile management
   responses still return the full `secret-ref` to authorized operators, but
   `storage-profile.upserted` audit/outbox replay now carries only
