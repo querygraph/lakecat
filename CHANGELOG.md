@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `chain-verified` validation to governed namespace view receipt chains,
+  replayed the verified-chain count through lineage-drain summaries, and made
+  QGLake dropped-view acceptance require a verified namespace chain proof.
 - Added deterministic `chain-hash` proofs to governed namespace view receipt
   chains, replayed those chain hashes through lineage-drain summaries, and made
   QGLake dropped-view acceptance require compact namespace receipt-chain proof.

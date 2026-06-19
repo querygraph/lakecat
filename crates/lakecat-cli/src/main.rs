@@ -907,13 +907,14 @@ async fn verify_qglake_view_receipt_chains(
             "QGLake receipt-chain read did not expose transient view {view} as tombstoned"
         )));
     }
-    if chain.chain_hash.is_empty()
+    if !chain.chain_verified
+        || chain.chain_hash.is_empty()
         || chain.latest_view_version == 0
         || chain.receipt_count == 0
         || chain.receipts.is_empty()
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "QGLake receipt-chain read for transient view {view} is missing a chain hash or versioned receipts"
+            "QGLake receipt-chain read for transient view {view} is missing a verified chain hash or versioned receipts"
         )));
     }
     let has_drop_receipt = chain.receipts.iter().any(|receipt| {
@@ -2373,6 +2374,7 @@ fn verify_qglake_view_replay(
                         .view_version_receipt_chain_hashes
                         .iter()
                         .all(|hash| !hash.is_empty())
+                    && event.view_version_receipt_chain_verified_count > 0
                     && !event.view_version_receipt_hashes.is_empty()
                     && event
                         .view_version_receipt_hashes
@@ -5303,6 +5305,7 @@ mod tests {
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
+                    view_version_receipt_chain_verified_count: 0,
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -5363,6 +5366,7 @@ mod tests {
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
+                    view_version_receipt_chain_verified_count: 0,
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -5423,6 +5427,7 @@ mod tests {
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
+                    view_version_receipt_chain_verified_count: 0,
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -5482,6 +5487,7 @@ mod tests {
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
+                    view_version_receipt_chain_verified_count: 0,
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -5541,6 +5547,7 @@ mod tests {
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
+                    view_version_receipt_chain_verified_count: 0,
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -5600,6 +5607,7 @@ mod tests {
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
+                    view_version_receipt_chain_verified_count: 0,
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -5659,6 +5667,7 @@ mod tests {
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
+                    view_version_receipt_chain_verified_count: 0,
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -5718,6 +5727,7 @@ mod tests {
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
+                    view_version_receipt_chain_verified_count: 0,
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -5778,6 +5788,7 @@ mod tests {
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
+                    view_version_receipt_chain_verified_count: 0,
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -5837,6 +5848,7 @@ mod tests {
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
+                    view_version_receipt_chain_verified_count: 0,
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -5896,6 +5908,7 @@ mod tests {
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
+                    view_version_receipt_chain_verified_count: 0,
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -5955,6 +5968,7 @@ mod tests {
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
+                    view_version_receipt_chain_verified_count: 0,
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -6014,6 +6028,7 @@ mod tests {
                     view_artifact_count: 0,
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
+                    view_version_receipt_chain_verified_count: 0,
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -6737,6 +6752,7 @@ mod tests {
             view_artifact_count: 0,
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -6800,6 +6816,7 @@ mod tests {
             view_artifact_count: 0,
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
             view_warehouse: Some("local".to_string()),
             view_namespace: vec!["default".to_string()],
             view_name: Some("active_customers".to_string()),
@@ -6858,6 +6875,7 @@ mod tests {
         summary.view_version = None;
         summary.view_version_receipt_hashes = vec!["sha256:view-drop-receipt".to_string()];
         summary.view_version_receipt_chain_hashes = vec!["sha256:view-receipt-chain".to_string()];
+        summary.view_version_receipt_chain_verified_count = 1;
         summary.replay_event_hashes = vec!["sha256:view-receipt-chains-replay-event".to_string()];
         summary.replay_open_lineage_hashes =
             vec!["sha256:view-receipt-chains-replay-openlineage".to_string()];
@@ -6884,6 +6902,7 @@ mod tests {
             view_artifact_count: 0,
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -6928,6 +6947,7 @@ mod tests {
             view_artifact_count: 0,
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -6970,6 +6990,7 @@ mod tests {
             view_artifact_count: 0,
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -7012,6 +7033,7 @@ mod tests {
             view_artifact_count: 0,
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -7054,6 +7076,7 @@ mod tests {
             view_artifact_count: 0,
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -7096,6 +7119,7 @@ mod tests {
             view_artifact_count: 0,
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -7144,6 +7168,7 @@ mod tests {
             view_artifact_count: 0,
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,

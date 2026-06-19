@@ -1071,6 +1071,27 @@ fn lineage_drain_event_summary(
             })
         })
         .unwrap_or_default();
+    let view_version_receipt_chain_verified_count = payload
+        .get("chain-verified-count")
+        .and_then(Value::as_u64)
+        .and_then(|count| usize::try_from(count).ok())
+        .or_else(|| {
+            payload
+                .get("view-version-receipt-chains")
+                .and_then(Value::as_array)
+                .map(|chains| {
+                    chains
+                        .iter()
+                        .filter(|chain| {
+                            chain
+                                .get("chain-verified")
+                                .and_then(Value::as_bool)
+                                .unwrap_or(false)
+                        })
+                        .count()
+                })
+        })
+        .unwrap_or_default();
     let authorization_receipt = payload.get("authorization-receipt");
     let request_identity = authorization_receipt
         .and_then(|receipt| receipt.get("request-identity"))
@@ -1133,6 +1154,7 @@ fn lineage_drain_event_summary(
             .map_or(0, Vec::len),
         view_version_receipt_hashes,
         view_version_receipt_chain_hashes,
+        view_version_receipt_chain_verified_count,
         view_warehouse,
         view_namespace,
         view_name,
@@ -2231,6 +2253,7 @@ async fn list_view_version_receipt_chains(
                 "chain-count": chains.len(),
                 "receipt-count": chains.iter().map(|chain| chain.receipt_count).sum::<usize>(),
                 "tombstone-count": chains.iter().filter(|chain| chain.tombstoned).count(),
+                "chain-verified-count": chains.iter().filter(|chain| chain.chain_verified).count(),
                 "view-version-receipt-chains": chains,
                 "chain-hashes": chains
                     .iter()
@@ -4068,12 +4091,14 @@ fn view_version_receipt_chains(
                         .map(|receipt| receipt.receipt_hash.clone())
                         .collect::<Vec<_>>(),
                 }))?;
+                let chain_verified = view_version_receipt_chain_verified(&response_receipts);
                 Ok(ViewVersionReceiptChainResponse {
                     stable_id: latest.stable_id.clone(),
                     warehouse: latest.warehouse.as_str().to_string(),
                     namespace: latest.namespace.parts().to_vec(),
                     name: latest.name.as_str().to_string(),
                     chain_hash,
+                    chain_verified,
                     latest_view_version: latest.view_version,
                     latest_operation: view_version_operation(&latest.operation).to_string(),
                     tombstoned: latest.operation == ViewVersionOperation::Drop,
@@ -4083,6 +4108,21 @@ fn view_version_receipt_chains(
             }))
         })
         .collect()
+}
+
+fn view_version_receipt_chain_verified(receipts: &[ViewVersionReceiptResponse]) -> bool {
+    receipts
+        .iter()
+        .enumerate()
+        .all(|(index, receipt)| match index {
+            0 => receipt.previous_receipt_hash.is_none(),
+            _ => {
+                receipt.previous_receipt_hash.as_deref()
+                    == receipts
+                        .get(index - 1)
+                        .map(|previous| previous.receipt_hash.as_str())
+            }
+        })
 }
 
 fn principal_kind_name(kind: &PrincipalKind) -> &'static str {
@@ -6787,6 +6827,7 @@ mod tests {
                             "chain-count": 1,
                             "receipt-count": 2,
                             "tombstone-count": 1,
+                            "chain-verified-count": 1,
                             "chain-hashes": ["sha256:view-receipt-chain"],
                             "receipt-hashes": ["sha256:view-upsert-receipt", "sha256:view-drop-receipt"],
                             "drop-receipt-hashes": ["sha256:view-drop-receipt"],
@@ -6867,6 +6908,7 @@ mod tests {
             drain.events[5].view_version_receipt_chain_hashes,
             vec!["sha256:view-receipt-chain".to_string()]
         );
+        assert_eq!(drain.events[5].view_version_receipt_chain_verified_count, 1);
 
         let graph_events = graph.events.lock().await;
         assert_eq!(graph_events.len(), 10);
@@ -9002,6 +9044,7 @@ mod tests {
             .unwrap();
         assert_eq!(active_chain["tombstoned"], serde_json::json!(true));
         assert_eq!(active_chain["latest-operation"], serde_json::json!("drop"));
+        assert_eq!(active_chain["chain-verified"], serde_json::json!(true));
         assert!(
             active_chain["chain-hash"]
                 .as_str()
@@ -9015,6 +9058,7 @@ mod tests {
         assert_eq!(dropped_chain["latest-view-version"], serde_json::json!(2));
         assert_eq!(dropped_chain["latest-operation"], serde_json::json!("drop"));
         assert_eq!(dropped_chain["receipt-count"], serde_json::json!(3));
+        assert_eq!(dropped_chain["chain-verified"], serde_json::json!(true));
         assert!(
             dropped_chain["chain-hash"]
                 .as_str()

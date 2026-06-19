@@ -913,6 +913,9 @@ management endpoints by view name and namespace, and then requires
 lineage-drain replay to include `view.dropped`,
 `view.version-receipts-listed`, and `view.version-receipt-chains-listed`
 evidence with non-empty tombstone receipt hashes and namespace chain hashes.
+LakeCat also validates the ordered `previous-receipt-hash` links before marking
+a namespace chain as `chain-verified`, so QueryGraph can reject a replay that
+contains hashes but not a coherent chain.
 
 QueryGraph and operators can also read the compact receipt chain directly from
 the governed management surface:
@@ -968,6 +971,7 @@ curl -s \
     {
       "stable-id": "lakecat:view:local:default:events_view",
       "chain-hash": "sha256:...",
+      "chain-verified": true,
       "latest-view-version": 1,
       "latest-operation": "drop",
       "tombstoned": true,
@@ -985,10 +989,11 @@ LakeCat only proves that the governed read saw the tombstone receipt needed to
 explain why a previously accepted view is now deleted. The namespace response
 also carries a deterministic `chain-hash` over the chain identity and ordered
 receipt hashes, and lineage-drain summaries replay that value as
-`view-version-receipt-chain-hashes`. The QGLake fixture now fails if the
-namespace-level receipt-chain read or its chain hash is absent from
-lineage-drain replay, so QueryGraph acceptance can depend on compact chain
-evidence without scraping store internals.
+`view-version-receipt-chain-hashes` together with a verified-chain count. The
+QGLake fixture now fails if the namespace-level receipt-chain read, its chain
+hash, or its verified-chain evidence is absent from lineage-drain replay, so
+QueryGraph acceptance can depend on compact chain evidence without scraping
+store internals.
 
 ### QueryGraph Bootstrap
 
