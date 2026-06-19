@@ -657,6 +657,16 @@ substitute for upstreaming the Sail helper APIs or re-enabling automatic CI; it
 is a guard that makes drift visible while LakeCat still depends on unpublished
 Sail helper work.
 
+As of the current local reconciliation, the Sail helper work is not an
+anonymous dirty tree. `/Users/alexy/src/sail` has scoped local commits on
+`codex/graph` for exposing Iceberg REST models to LakeCat, preserving Iceberg
+manifest lower and upper bounds in Avro, and adding Sail's Cypher graph query
+extension. That Cypher extension is a Sail SQL/analyzer/planning surface; the
+catalog graph taxonomy, projection helpers, traversal, and stores remain Grust
+responsibilities. The only remaining Sail working-tree entries are untracked
+artifact/book directories, and pushing the Sail branch upstream is blocked by
+HTTPS GitHub authentication rather than by local test failures.
+
 ## Standard Compatibility And Extensions
 
 LakeCat must be boring where standards require boring behavior. Standard

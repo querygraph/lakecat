@@ -6,6 +6,24 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reconcile sibling Sail commit state`.
+  The local Sail checkout at `/Users/alexy/src/sail` is on `codex/graph` with
+  tracked source changes committed in scoped local commits:
+  `a6964906 Expose Iceberg REST models for LakeCat`,
+  `e5393c9f Preserve Iceberg manifest bounds in Avro`, and
+  `e4fb1d1b Add Sail Cypher graph query extension`. The graph-language work in
+  that last commit is Sail's SQL/Cypher extension surface; reusable catalog
+  graph taxonomy, projection, traversal, and stores remain Grust-owned. Sail has
+  no tracked or staged diffs after those commits. Its remaining dirty status is
+  untracked `.codex-artifacts/` and `book/`, which were left out of the scoped
+  commits.
+- Sail upstream push is still blocked by repository authentication, not by a
+  local build failure: `git push origin codex/graph` failed with
+  `could not read Username for 'https://github.com': Device not configured`.
+  LakeCat remains clean and pushed on `master`; continue to rely on the local
+  dependency-contract audit until Sail credentials or an upstream branch/publish
+  path is resolved.
+- Latest completed implementation slice:
   `Verify local Sail helper API surface`.
   `scripts/check-local-dependency-contract.sh` now checks the local Sail
   checkout for the helper exports LakeCat depends on: generated Iceberg REST

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Recorded the reconciled sibling Sail state after scoped local commits:
+  Iceberg REST model exposure, manifest-bound Avro preservation, and the Sail
+  Cypher graph query extension are committed on `/Users/alexy/src/sail`
+  `codex/graph`; only untracked Sail artifact/book directories remain, and
+  upstream push is still blocked by HTTPS GitHub authentication.
 - Strengthened the local dependency-contract audit so it now verifies the
   Sail helper API surface LakeCat depends on in the local Sail checkout, not
   only the presence of checked-in Sail patch files.

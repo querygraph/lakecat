@@ -106,7 +106,7 @@ The boundaries OPUS1-DESIGN drew held under 2.5× growth — keep them:
 | Concern | Owner | Status |
 | --- | --- | --- |
 | Graph schema, taxonomy, traversal, Cypher, stores | **Grust** | ✅ taxonomy + ingestion + Cypher boundary moved into Grust |
-| Iceberg models, status conversion, planning helpers, manifest IO | **Sail** | ✅ conversion + planning helpers exported; ⚠️ commits blocked from upstream push (OPUS2 F10) |
+| Iceberg models, status conversion, planning helpers, manifest IO | **Sail** | ✅ conversion + planning helpers exported; ✅ local scoped commits exist on Sail `codex/graph`; ⚠️ upstream push blocked by HTTPS auth (OPUS2 F10) |
 | TypeDID envelopes, attestation, agent trust mesh, signed summaries | **TypeSec / QueryGraph** | ✅ attestation API in TypeSec; verifier seam in LakeCat |
 | Identity, capability gate, pointer CAS, audit, outbox, **the restriction** | **LakeCat** | ✅ gate + enforced restriction proof |
 | Event → typed-graph mapping (catalog-domain) | **LakeCat (thin)** | ⚠️ still breadcrumbs (OPUS2 F6) |
@@ -114,9 +114,11 @@ The boundaries OPUS1-DESIGN drew held under 2.5× growth — keep them:
 
 Dependencies still point one way: **QueryGraph → LakeCat → Sail**. The one
 process risk is F10 — LakeCat depends on local, un-pushed Sail commits, so "push
-reusable work upstream, then depend on it" is only half-true today. Resolve by
-landing those Sail commits upstream (or pinning a published Sail) so the green
-build is reproducible off this machine.
+reusable work upstream, then depend on it" is only half-true today. The local
+Sail tree is now reconciled into scoped commits on `codex/graph`
+(`a6964906`, `e5393c9f`, `e4fb1d1b`), but upstream push is blocked by HTTPS
+GitHub authentication. Resolve by landing those Sail commits upstream (or
+pinning a published Sail) so the green build is reproducible off this machine.
 
 ---
 
@@ -543,7 +545,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   for the Grust catalog graph boundary. The dependency-contract audit now checks
   registry resolution for Grust/TypeSec, the remaining Sail path/patch bridge,
   the concrete local Sail helper API surface, and the manual-only CI trigger so
-  F10 drift is executable even before automatic CI is re-enabled.
+  F10 drift is executable even before automatic CI is re-enabled. The local Sail
+  source state is committed on `codex/graph`; only untracked artifact/book
+  directories remain outside those scoped source commits.
 
 ---
 
