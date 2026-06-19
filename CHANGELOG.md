@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made compact QGLake handoff import proofs self-contained by embedding
+  `querygraphImportVerification` table/view ids, counts, hashes, and standards
+  and requiring them to match `querygraphVerification` plus the captured
+  QueryGraph import output.
 - Made captured QueryGraph verify/import semantics compare their
   `verified-tables` and `verified-views` arrays exactly against compact
   `querygraphVerification.verifiedTables` and `verifiedViews`, rejecting

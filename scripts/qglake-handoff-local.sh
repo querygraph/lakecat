@@ -846,7 +846,16 @@ write_summary() {
     "standards": $verified_standards
   },
   "querygraphImportVerification": {
-    "matchesVerify": true
+    "matchesVerify": true,
+    "tableCount": $imported_tables,
+    "viewCount": $imported_views,
+    "verifiedTables": $imported_table_ids,
+    "verifiedViews": $imported_view_ids,
+    "bundleHash": "$(json_string "$imported_bundle_hash")",
+    "graphHash": "$(json_string "$imported_graph_hash")",
+    "openLineageHash": "$(json_string "$imported_open_lineage_hash")",
+    "querygraphImportHash": "$(json_string "$imported_querygraph_import_hash")",
+    "standards": $imported_standards
   },
   "lakecatReplayVerification": {
     "schemaVersion": "$(json_string "$lakecat_schema")",

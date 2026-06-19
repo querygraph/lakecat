@@ -308,7 +308,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   id derived from the summary's warehouse/namespace/table plus every accepted
   LakeCat view stable id from `viewReceiptChainProof.views`; captured
   QueryGraph verify/import outputs must match those compact arrays exactly in
-  `verified-tables` and `verified-views`; the
+  `verified-tables` and `verified-views`; compact
+  `querygraphImportVerification` now also embeds the import table/view ids,
+  counts, hashes, and standards and must match both `querygraphVerification`
+  and the captured QueryGraph import output; the
   captured LakeCat replay `replay-evidence.management.storageProfileUpsert`
   object must now
   also match the compact `storageProfileUpsertProof` fields for profile id,

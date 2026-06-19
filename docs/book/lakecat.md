@@ -1251,8 +1251,13 @@ table id derived from that scope, such as `lakecat:table:local:default:events`;
 such as `lakecat:view:local:default:active_customers_view`; and both arrays must
 match the QueryGraph table/view counts. Captured QueryGraph verify/import output
 must match those compact arrays exactly, which keeps a verified artifact set from
-being replayed against the wrong catalog tenant, table, or view. It also records
-structured request-identity, scan, management,
+being replayed against the wrong catalog tenant, table, or view. The
+`querygraphImportVerification` object is also a compact proof, not only a
+boolean: it repeats the QueryGraph import table/view ids, counts, bundle hash,
+graph hash, OpenLineage hash, QueryGraph import hash, and standards, and LakeCat
+rejects a summary unless those fields match both `querygraphVerification` and
+the captured `lakecat-import` output. It also records structured
+request-identity, scan, management,
 credential, table-commit, and view replay evidence, plus compact
 `requestIdentityProof`, `queryGraphBootstrapProof`, `governedScanProof`,
 `tableCommitHistoryProof`, `viewReceiptChainProof`,

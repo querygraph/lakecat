@@ -498,6 +498,7 @@ fn verify_qglake_handoff_captured_output_semantics(
     })?;
     let warehouse = required_str(summary, "warehouse", "handoff summary")?;
     let querygraph = required_object(summary, "querygraphVerification", "handoff summary")?;
+    let import = required_object(summary, "querygraphImportVerification", "handoff summary")?;
     let lakecat = required_object(summary, "lakecatReplayVerification", "handoff summary")?;
     let artifacts = required_object(summary, "artifacts", "handoff summary")?;
     let outputs = required_object(artifacts, "capturedOutputs", "handoff summary artifacts")?;
@@ -535,9 +536,10 @@ fn verify_qglake_handoff_captured_output_semantics(
         &view_scope,
         "captured QueryGraph verify output",
     )?;
+    require_querygraph_import_matches_verify(import, querygraph)?;
     verify_querygraph_capture_matches_summary(
         querygraph_import,
-        querygraph,
+        import,
         &table_scope,
         &view_scope,
         "captured QueryGraph import output",
@@ -1219,6 +1221,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
             "handoff summary querygraphImportVerification.matchesVerify must be true".to_string(),
         ));
     }
+    require_querygraph_import_matches_verify(import, querygraph)?;
     let lakecat = required_object(summary, "lakecatReplayVerification", "handoff summary")?;
     require_string_eq(
         lakecat,
@@ -1526,6 +1529,31 @@ fn require_querygraph_verified_scope(
                 "querygraphVerification.verifiedViews must include {expected_view}"
             )));
         }
+    }
+    Ok(())
+}
+
+fn require_querygraph_import_matches_verify(
+    import: &serde_json::Map<String, Value>,
+    querygraph: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    for field in [
+        "tableCount",
+        "viewCount",
+        "verifiedTables",
+        "verifiedViews",
+        "bundleHash",
+        "graphHash",
+        "openLineageHash",
+        "querygraphImportHash",
+        "standards",
+    ] {
+        require_value_match(
+            import,
+            field,
+            required_value(querygraph, field, "querygraphVerification")?,
+            "querygraphImportVerification",
+        )?;
     }
     Ok(())
 }
@@ -6022,7 +6050,28 @@ mod tests {
                 ]
             },
             "querygraphImportVerification": {
-                "matchesVerify": true
+                "matchesVerify": true,
+                "tableCount": 1,
+                "viewCount": 1,
+                "verifiedTables": [
+                    "lakecat:table:local:default:events"
+                ],
+                "verifiedViews": [
+                    "lakecat:view:local:default:active_customers_view"
+                ],
+                "bundleHash": "sha256:bundle",
+                "graphHash": "sha256:graph",
+                "openLineageHash": "sha256:openlineage",
+                "querygraphImportHash": "sha256:querygraph-import",
+                "standards": [
+                    "Iceberg REST",
+                    "Croissant",
+                    "CDIF",
+                    "OSI handoff",
+                    "ODRL",
+                    "Grust catalog graph",
+                    "OpenLineage"
+                ]
             },
             "lakecatReplayVerification": {
                 "schemaVersion": "lakecat.qglake.replay-verification.v1",
@@ -6584,6 +6633,8 @@ mod tests {
         let mut summary = qglake_handoff_summary_json();
         summary["querygraphVerification"]["verifiedTables"] =
             json!(["lakecat:table:local:default:other"]);
+        summary["querygraphImportVerification"]["verifiedTables"] =
+            json!(["lakecat:table:local:default:other"]);
 
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject table scope drift");
@@ -6603,6 +6654,10 @@ mod tests {
             "lakecat:table:local:default:events",
             "lakecat:table:local:default:other"
         ]);
+        summary["querygraphImportVerification"]["verifiedTables"] = json!([
+            "lakecat:table:local:default:events",
+            "lakecat:table:local:default:other"
+        ]);
 
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject verified table count drift");
@@ -6615,6 +6670,8 @@ mod tests {
     fn qglake_handoff_summary_verifier_requires_verified_view_scope() {
         let mut summary = qglake_handoff_summary_json();
         summary["querygraphVerification"]["verifiedViews"] =
+            json!(["lakecat:view:local:default:other_view"]);
+        summary["querygraphImportVerification"]["verifiedViews"] =
             json!(["lakecat:view:local:default:other_view"]);
 
         let err = verify_qglake_handoff_summary_value(&summary)
@@ -6635,12 +6692,42 @@ mod tests {
             "lakecat:view:local:default:active_customers_view",
             "lakecat:view:local:default:other_view"
         ]);
+        summary["querygraphImportVerification"]["verifiedViews"] = json!([
+            "lakecat:view:local:default:active_customers_view",
+            "lakecat:view:local:default:other_view"
+        ]);
 
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject verified view count drift");
 
         assert!(err.to_string().contains("querygraphVerification"));
         assert!(err.to_string().contains("verifiedViews length mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_import_verified_table_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["querygraphImportVerification"]["verifiedTables"] =
+            json!(["lakecat:table:local:default:events_other"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject import verified-table drift");
+
+        assert!(err.to_string().contains("querygraphImportVerification"));
+        assert!(err.to_string().contains("verifiedTables mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_import_hash_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["querygraphImportVerification"]["querygraphImportHash"] =
+            json!("sha256:other-querygraph-import");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject import hash drift");
+
+        assert!(err.to_string().contains("querygraphImportVerification"));
+        assert!(err.to_string().contains("querygraphImportHash mismatch"));
     }
 
     #[test]
@@ -6967,6 +7054,11 @@ mod tests {
             "lakecat:view:local:default:active_customers_view",
             "lakecat:view:local:default:other_view"
         ]);
+        summary["querygraphImportVerification"]["viewCount"] = json!(2);
+        summary["querygraphImportVerification"]["verifiedViews"] = json!([
+            "lakecat:view:local:default:active_customers_view",
+            "lakecat:view:local:default:other_view"
+        ]);
         summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["viewArtifactCount"] =
             json!(2);
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["viewCount"] = json!(2);
@@ -7175,6 +7267,21 @@ mod tests {
             err.to_string()
                 .contains("captured QueryGraph verify output.verified-views mismatch")
         );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_import_summary_drift() {
+        let temp = qglake_temp_dir("handoff-captured-import-summary-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        summary["querygraphImportVerification"]["verifiedTables"] =
+            json!(["lakecat:table:local:default:events_other"]);
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured output semantics should reject import summary drift");
+
+        assert!(err.to_string().contains("querygraphImportVerification"));
+        assert!(err.to_string().contains("verifiedTables mismatch"));
     }
 
     #[test]

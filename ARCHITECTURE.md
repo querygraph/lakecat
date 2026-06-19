@@ -574,7 +574,11 @@ warehouse/namespace/table, and that `verifiedViews` contains every stable view
 id in the replayed `viewReceiptChainProof.views` array. Captured QueryGraph
 verify/import outputs must match those compact arrays exactly, so the accepted
 artifact set cannot swap in a different table or view while preserving the
-summary hashes.
+summary hashes. The import half of the compact proof is self-contained too:
+`querygraphImportVerification` carries the same table/view counts, verified
+table/view ids, bundle/graph/OpenLineage/import hashes, and standards as
+`querygraphVerification`, and the verifier rejects a handoff unless those fields
+match both the verify proof and the captured QueryGraph import output.
 
 ## Lakekeeper Lessons To Adopt
 

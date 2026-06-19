@@ -6,6 +6,29 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Make QGLake import proof self-contained`.
+  `lakecat-cli qglake-verify-handoff` now requires compact
+  `querygraphImportVerification` to carry the same QueryGraph table/view ids,
+  counts, hashes, and standards as `querygraphVerification`. Captured
+  QueryGraph import output is checked against that import proof rather than a
+  bare boolean, so the summary, verify capture, and import capture all bind the
+  same accepted table/view scope and semantic hashes.
+- Local verification for this import-proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 outbox events, ran LakeCat replay, QueryGraph verify/import, and verified
+  self-contained compact `querygraphImportVerification` table/view ids and
+  hashes against captured import output);
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`;
+  `cargo test --workspace`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cross-check captured QueryGraph verified ids`.
   `lakecat-cli qglake-verify-handoff` now compares captured QueryGraph
   verify/import `verified-tables` and `verified-views` arrays exactly against
