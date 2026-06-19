@@ -371,7 +371,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   warehouse, policy-list, and storage-profile-list reads, and requires matching
   `server.listed`, `project.listed`, `warehouse.listed`,
   `policy-binding.listed`, and `storage-profile.listed` replay evidence; table
-  events continue through the Grust-owned event graph adapter.*
+  events continue through the Grust-owned event graph adapter; the `grust-local`
+  boundary test now writes Column/Snapshot/Commit/Principal/ScanPlan events
+  through that adapter and proves Grust Cypher can match the catalog-event
+  labels without LakeCat owning graph query behavior.*
 - **P5 — Tenancy (F7) + production credentials (F8).** Project/Warehouse as
   stored entities with management endpoints; real Vault/AWS/GCP/Azure resolvers
   behind the TypeSec gate. Needed for multi-tenant deployment, not for the demo.

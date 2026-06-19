@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a `grust-local` boundary test proving LakeCat `Column` and `Snapshot`
+  catalog-event labels survive through the Grust adapter and can be matched
+  through Grust Cypher without adding graph query behavior to LakeCat.
 - Clarified `GOAL.md` so the current 2026-06-19 `AGENTS.md` instruction block
   is explicitly mirrored as durable goal guidance.
 - Made REST metadata-object commits use create-only object-store writes, so an

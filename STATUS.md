@@ -5,6 +5,24 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Verify Grust catalog-event taxonomy labels`.
+  `lakecat-graph` now has a `grust-local` boundary test that writes LakeCat
+  `Column`, `Snapshot`, `Commit`, `Principal`, and `ScanPlan` events through
+  the Grust-owned catalog event adapter, then uses Grust Cypher to match the
+  `Column` and `Snapshot` catalog-event labels and mutate/query them from
+  `MemoryGraphStore`. This strengthens the QueryGraph graph boundary while
+  keeping graph mechanics, Cypher behavior, and richer typed taxonomy work in
+  Grust.
+- Local verification for this graph-boundary slice is green:
+  `cargo fmt -p lakecat-graph -- --check`;
+  `cargo test -p lakecat-graph --features grust-local grust_cypher_can_query_catalog_event_taxonomy_labels`;
+  `cargo test -p lakecat-graph --features grust-local`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
 - Latest completed documentation slice:
   `Pin current AGENTS guidance in GOAL`.
   `GOAL.md` now explicitly says the 2026-06-19 `AGENTS.md` instruction block

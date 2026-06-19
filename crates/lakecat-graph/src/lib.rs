@@ -854,5 +854,99 @@ pub mod grust_integration {
                 vec![vec![Value::String(table_id), Value::Bool(true)]]
             );
         }
+
+        #[tokio::test]
+        async fn grust_cypher_can_query_catalog_event_taxonomy_labels() {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let principal = lakecat_core::Principal::new(
+                "did:example:agent",
+                lakecat_core::PrincipalKind::Agent,
+            )
+            .unwrap();
+            let events = vec![
+                GraphEvent::column(
+                    GraphAction::Created,
+                    &table,
+                    "1",
+                    serde_json::json!({"field":{"id":1,"name":"event_id"}}),
+                )
+                .with_event_id("lakecat:outbox:evt-1:column:1"),
+                GraphEvent::snapshot(
+                    GraphAction::Created,
+                    &table,
+                    "42",
+                    serde_json::json!({"snapshot":{"snapshot-id":42}}),
+                )
+                .with_event_id("lakecat:outbox:evt-1:snapshot:42"),
+                GraphEvent::commit(
+                    GraphAction::Committed,
+                    &table,
+                    7,
+                    serde_json::json!({"sequence-number":7}),
+                )
+                .with_event_id("lakecat:outbox:evt-1:commit"),
+                GraphEvent::principal(
+                    GraphAction::Loaded,
+                    &principal,
+                    serde_json::json!({"principal-kind":"agent"}),
+                )
+                .with_event_id("lakecat:outbox:evt-1:principal"),
+                GraphEvent::scan_plan(
+                    GraphAction::PlannedScan,
+                    "evt-scan",
+                    serde_json::json!({"read-restriction":{"allowed-columns":["event_id"]}}),
+                )
+                .with_event_id("lakecat:outbox:evt-1:scan-plan"),
+            ];
+            let store = MemoryGraphStore::new();
+            for event in events {
+                let graph = graph_event_to_grust(&event);
+                store.put_graph(&graph).await.expect("catalog graph write");
+            }
+
+            let result = execute_cypher_mutation_returning_with_options_on_store(
+                &store,
+                "MATCH (e:CatalogEvent {label: 'Column'}) SET e.querygraph_seen = true RETURN e.subject AS subject, e.action AS action, e.querygraph_seen AS seen",
+                CypherMutationOptions::default(),
+            )
+            .await
+            .expect("Grust Cypher mutation over LakeCat column event");
+
+            assert_eq!(result.table.columns, vec!["subject", "action", "seen"]);
+            assert_eq!(
+                result.table.rows,
+                vec![vec![
+                    Value::String(
+                        "lakecat:column:lakecat:table:local:default:events:1".to_string(),
+                    ),
+                    Value::String("created".to_string()),
+                    Value::Bool(true),
+                ]]
+            );
+
+            let result = execute_cypher_mutation_returning_with_options_on_store(
+                &store,
+                "MATCH (e:CatalogEvent {label: 'Snapshot'}) SET e.querygraph_seen = true RETURN e.subject AS subject, e.action AS action, e.querygraph_seen AS seen",
+                CypherMutationOptions::default(),
+            )
+            .await
+            .expect("Grust Cypher query over LakeCat snapshot event");
+
+            assert_eq!(result.table.columns, vec!["subject", "action", "seen"]);
+            assert_eq!(
+                result.table.rows,
+                vec![vec![
+                    Value::String(
+                        "lakecat:snapshot:lakecat:table:local:default:events:42".to_string(),
+                    ),
+                    Value::String("created".to_string()),
+                    Value::Bool(true),
+                ]]
+            );
+        }
     }
 }

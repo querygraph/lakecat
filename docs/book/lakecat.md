@@ -422,7 +422,12 @@ not smuggle a second lakehouse engine into its event sink.
 The current local direction already proves the boundary: LakeCat's
 `grust-local` sink calls Grust-owned LakeCat projection helpers, and the Grust
 Cypher boundary test verifies catalog graph projection without making LakeCat
-own Cypher parsing, traversal, or graph execution.
+own Cypher parsing, traversal, or graph execution. The current boundary test
+writes table-adjacent `Column`, `Snapshot`, and `Commit` events plus
+`Principal` and `ScanPlan` catalog events through Grust, then matches the
+`Column` and `Snapshot` catalog-event labels through Grust Cypher. That proves
+QueryGraph can discover the semantic anchors LakeCat emits while the richer
+node/edge materialization remains reusable Grust work.
 
 ## TypeSec For Security
 
