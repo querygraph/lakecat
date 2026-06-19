@@ -6,6 +6,29 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Align view receipt-chain handoff counts`.
+  `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness now
+  reject compact `viewReceiptChainProof.receiptChains` evidence whose
+  `verifiedChainCount` does not match the number of namespace chain hashes, or
+  whose receipt hashes do not cover those verified chain hashes. This keeps
+  QueryGraph/operator handoffs from accepting a summary that claims more
+  verified chains than the replay evidence names.
+- Local verification for this view receipt-chain count-alignment slice is
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 outbox events, verified LakeCat replay, ran QueryGraph `lakecat-verify`
+  and `lakecat-import`, then verified `handoff-summary.json` with
+  `verifiedChainCount` matching its namespace chain hashes);
+  `cargo test --workspace --all-features`;
+  `cargo test --workspace`.
+- Latest completed implementation slice:
   `Verify view receipt-chain version transitions`.
   Governed namespace view receipt-chain verification now fails closed unless a
   chain proves both ordered `previous-receipt-hash` links and catalog

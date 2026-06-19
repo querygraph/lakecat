@@ -337,9 +337,10 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   match `viewCount`, whose accepted view identity/version proof is incomplete,
   or whose receipt-chain evidence lacks warehouse/namespace identity, accepted
   receipt hashes, tombstone receipt hashes, positive verified-chain counts,
-  namespace chain hashes, or replay/OpenLineage hashes, so the hash-chain
-  evidence is not only enforced by the shell harness; the local handoff harness
-  now includes the
+  namespace chain hashes, count alignment between `verifiedChainCount` and those
+  chain hashes, enough receipt hashes to cover the verified chains, or
+  replay/OpenLineage hashes, so the hash-chain evidence is not only enforced by
+  the shell harness; the local handoff harness now includes the
   storage-profile issuance mode and location-prefix hash when generating the
   summary so the live script and stricter verifier remain in lockstep.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the

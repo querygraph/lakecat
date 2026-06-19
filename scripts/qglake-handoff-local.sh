@@ -590,6 +590,14 @@ for (const [index, chain] of evidence.receiptChains.entries()) {
   }
   requireHashArray(chain.receiptHashes, `chain ${index} receiptHashes`);
   requireHashArray(chain.chainHashes, `chain ${index} chainHashes`);
+  if (chain.verifiedChainCount !== chain.chainHashes.length) {
+    console.error(`LakeCat view receipt-chain evidence ${index} verifiedChainCount does not match chainHashes`);
+    process.exit(1);
+  }
+  if (chain.receiptHashes.length < chain.chainHashes.length) {
+    console.error(`LakeCat view receipt-chain evidence ${index} receiptHashes do not cover chainHashes`);
+    process.exit(1);
+  }
   requireHashArray(chain.replayEventHashes, `chain ${index} replayEventHashes`);
   requireHashArray(chain.openLineageHashes, `chain ${index} openLineageHashes`);
 }

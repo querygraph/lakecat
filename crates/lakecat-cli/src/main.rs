@@ -1684,9 +1684,14 @@ fn require_view_receipt_chain_evidence(
                     .to_string(),
             ));
         }
-        require_positive_u64(
+        let verified_chain_count = require_positive_u64(
             chain,
             "verifiedChainCount",
+            "viewReceiptChainProof.receiptChains[]",
+        )?;
+        let receipt_hashes = required_array(
+            chain,
+            "receiptHashes",
             "viewReceiptChainProof.receiptChains[]",
         )?;
         require_hash_array(
@@ -1694,11 +1699,27 @@ fn require_view_receipt_chain_evidence(
             "receiptHashes",
             "viewReceiptChainProof.receiptChains[]",
         )?;
+        let chain_hashes = required_array(
+            chain,
+            "chainHashes",
+            "viewReceiptChainProof.receiptChains[]",
+        )?;
         require_hash_array(
             chain,
             "chainHashes",
             "viewReceiptChainProof.receiptChains[]",
         )?;
+        if chain_hashes.len() as u64 != verified_chain_count {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.receiptChains[{index}].verifiedChainCount mismatch: expected={} actual={verified_chain_count}",
+                chain_hashes.len()
+            )));
+        }
+        if receipt_hashes.len() < chain_hashes.len() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.receiptChains[{index}].receiptHashes must cover every verified chain hash"
+            )));
+        }
         require_hash_array(
             chain,
             "replayEventHashes",
@@ -6569,6 +6590,35 @@ mod tests {
         assert!(err.to_string().contains("viewReceiptChainProof"));
         assert!(err.to_string().contains("verifiedChainCount"));
         assert!(err.to_string().contains("positive"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_view_receipt_chain_count_mismatch() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["verifiedChainCount"] =
+            json!(2);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject mismatched chain counts");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("verifiedChainCount mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_view_receipt_hash_undercoverage() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chainHashes"] =
+            json!(["sha256:chain-a", "sha256:chain-b"]);
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["verifiedChainCount"] =
+            json!(2);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject receipt hashes that under-cover chains");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("receiptHashes"));
+        assert!(err.to_string().contains("cover"));
     }
 
     #[test]

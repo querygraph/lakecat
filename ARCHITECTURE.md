@@ -369,13 +369,16 @@ expected view version before writing `viewReceiptChainProof`, binding governed
 view deletion to the captured LakeCat replay artifact. The standalone
 `lakecat-cli qglake-verify-handoff` verifier enforces the same
 `expectedViewVersion` match against the accepted view version, so compact
-handoff summaries remain self-verifying outside the shell harness. Namespace
-receipt-chain verification now checks both ordered receipt hashes and ordered
-view-version transitions: the first receipt must be a version-1 upsert, later
-upserts must advance exactly one version, and tombstone drops must preserve the
-accepted durable version while linking to the previous receipt. Full Iceberg
-view history and commit semantics should still move toward Sail-backed models
-as they become available. QueryGraph bootstrap now exports those stored views
+handoff summaries remain self-verifying outside the shell harness. The compact
+handoff verifier also requires namespace receipt-chain `verifiedChainCount`
+values to match the chain hashes they summarize and requires receipt hashes to
+cover those chains. Namespace receipt-chain verification now checks both
+ordered receipt hashes and ordered view-version transitions: the first receipt
+must be a version-1 upsert, later upserts must advance exactly one version, and
+tombstone drops must preserve the accepted durable version while linking to the
+previous receipt. Full Iceberg view history and commit semantics should still
+move toward Sail-backed models as they become available. QueryGraph bootstrap
+now exports those stored views
 with manifest-covered OSI handoff hashes, typed view columns, view versions,
 view-aware graph edges, and OpenLineage view counts.
 Governed management endpoints now also upsert and list

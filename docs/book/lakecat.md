@@ -1314,10 +1314,11 @@ view list, carry stable warehouse/namespace/name identity, prove
 `viewVersion == acceptedViewVersion`, and carry accepted receipt hashes,
 tombstone receipt hashes, positive verified-chain counts, receipt-chain
 warehouse/namespace identity, namespace chain hashes, and replay/OpenLineage
-hashes. A consumer can reject a handoff whose view history claim lacks
-identity, accepted-version, or hash-chain evidence before parsing the full
-replay tree. It also
-compares the
+hashes. The verifier also checks that each namespace receipt-chain summary's
+`verifiedChainCount` equals the number of chain hashes and that the receipt
+hashes cover those chains. A consumer can reject a handoff whose view history
+claim lacks identity, accepted-version, count-aligned hash-chain evidence, or
+replay evidence before parsing the full replay tree. It also compares the
 captured LakeCat replay
 `replay-evidence.management.storageProfileUpsert` object with the compact
 `lakecatReplayVerification.storageProfileUpsertProof`, including the

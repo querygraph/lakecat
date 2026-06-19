@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened compact `viewReceiptChainProof` validation in
+  `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness so
+  namespace receipt-chain evidence must align `verifiedChainCount` with the
+  number of chain hashes and carry enough receipt hashes to cover them.
 - Strengthened governed namespace view receipt-chain verification so
   `chain-verified` now requires ordered view-version transitions as well as
   hash links: the first receipt must be a version-1 upsert, later upserts must
