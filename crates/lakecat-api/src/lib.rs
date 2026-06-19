@@ -324,6 +324,8 @@ pub struct ViewVersionReceiptResponse {
     pub name: String,
     pub view_version: u64,
     pub previous_view_version: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_receipt_hash: Option<String>,
     pub operation: String,
     pub view_hash: String,
     pub receipt_hash: String,

@@ -341,6 +341,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   can create, bootstrap, drop, receipt-check by view and namespace, and drain a
   transient view while rejecting dropped-view replay that lacks either per-view
   tombstone receipt evidence or namespace-level receipt-chain evidence;
+  view-version receipts now carry `previous-receipt-hash` links so upsert and
+  drop receipts form a compact hash chain over the catalog-facing version
+  history;
   QueryGraph bootstrap now exports those stored views with manifest-covered OSI
   hashes, typed view columns, durable view versions, compact view receipt
   evidence in the import compatibility contract, view-aware graph edges, and

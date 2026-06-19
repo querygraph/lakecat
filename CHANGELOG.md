@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Chained durable view-version receipts by adding `previous-receipt-hash` to
+  upsert and drop receipts in memory/Turso stores and exposing the link through
+  governed view receipt management responses.
 - Made QGLake policy fixtures use canonical Iceberg REST filter spelling
   (`not-eq`), taught lineage-drain summaries to read current TypeSec
   request-identity receipts under `authorization-receipt.context`, deduplicated

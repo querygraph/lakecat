@@ -3982,6 +3982,7 @@ fn view_version_receipt_response(
         name: receipt.name.as_str().to_string(),
         view_version: receipt.view_version,
         previous_view_version: receipt.previous_view_version,
+        previous_receipt_hash: receipt.previous_receipt_hash.clone(),
         operation: view_version_operation(&receipt.operation).to_string(),
         view_hash: receipt.view_hash.clone(),
         receipt_hash: content_hash_json(&serde_json::to_value(receipt).map_err(|err| {
@@ -8822,6 +8823,7 @@ mod tests {
         );
         assert_eq!(receipts[0]["view-version"], serde_json::json!(1));
         assert!(receipts[0]["previous-view-version"].is_null());
+        assert!(receipts[0].get("previous-receipt-hash").is_none());
         assert_eq!(receipts[0]["operation"], serde_json::json!("upsert"));
         assert!(
             receipts[0]["receipt-hash"]
@@ -8830,6 +8832,10 @@ mod tests {
         );
         assert_eq!(receipts[1]["view-version"], serde_json::json!(2));
         assert_eq!(receipts[1]["previous-view-version"], serde_json::json!(1));
+        assert_eq!(
+            receipts[1]["previous-receipt-hash"],
+            receipts[0]["receipt-hash"]
+        );
         assert_ne!(receipts[0]["view-hash"], receipts[1]["view-hash"]);
 
         let catalog_upsert = Request::builder()
@@ -8913,6 +8919,10 @@ mod tests {
         assert_eq!(receipts.len(), 3);
         assert_eq!(receipts[2]["view-version"], serde_json::json!(2));
         assert_eq!(receipts[2]["previous-view-version"], serde_json::json!(2));
+        assert_eq!(
+            receipts[2]["previous-receipt-hash"],
+            receipts[1]["receipt-hash"]
+        );
         assert_eq!(receipts[2]["operation"], serde_json::json!("drop"));
         assert_eq!(receipts[2]["view-hash"], receipts[1]["view-hash"]);
         assert!(

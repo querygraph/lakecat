@@ -572,6 +572,8 @@ pub struct ViewVersionReceipt {
     pub view_version: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous_view_version: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_receipt_hash: Option<String>,
     pub operation: ViewVersionOperation,
     pub view_hash: String,
     pub principal: Principal,
@@ -581,6 +583,7 @@ pub struct ViewVersionReceipt {
 impl ViewVersionReceipt {
     fn upsert(
         previous: Option<&ViewRecord>,
+        previous_receipt_hash: Option<String>,
         view: &ViewRecord,
         principal: Principal,
     ) -> LakeCatResult<Self> {
@@ -591,6 +594,7 @@ impl ViewVersionReceipt {
             name: view.name.clone(),
             view_version: view.view_version,
             previous_view_version: previous.map(|previous| previous.view_version),
+            previous_receipt_hash,
             operation: ViewVersionOperation::Upsert,
             view_hash: content_hash_json(&serde_json::to_value(view).map_err(|err| {
                 LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
@@ -600,7 +604,11 @@ impl ViewVersionReceipt {
         })
     }
 
-    fn drop(view: &ViewRecord, principal: Principal) -> LakeCatResult<Self> {
+    fn drop(
+        view: &ViewRecord,
+        previous_receipt_hash: Option<String>,
+        principal: Principal,
+    ) -> LakeCatResult<Self> {
         Ok(Self {
             stable_id: view_stable_id(view),
             warehouse: view.warehouse.clone(),
@@ -608,6 +616,7 @@ impl ViewVersionReceipt {
             name: view.name.clone(),
             view_version: view.view_version,
             previous_view_version: Some(view.view_version),
+            previous_receipt_hash,
             operation: ViewVersionOperation::Drop,
             view_hash: content_hash_json(&serde_json::to_value(view).map_err(|err| {
                 LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
@@ -615,6 +624,36 @@ impl ViewVersionReceipt {
             principal,
             recorded_at: Utc::now(),
         })
+    }
+}
+
+fn view_receipt_hash(receipt: &ViewVersionReceipt) -> LakeCatResult<String> {
+    content_hash_json(&serde_json::to_value(receipt).map_err(|err| {
+        LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
+    })?)
+}
+
+fn latest_view_receipt_hash<'a>(
+    receipts: impl Iterator<Item = &'a ViewVersionReceipt>,
+) -> LakeCatResult<Option<String>> {
+    receipts
+        .max_by(|left, right| {
+            left.view_version
+                .cmp(&right.view_version)
+                .then_with(|| left.recorded_at.cmp(&right.recorded_at))
+                .then_with(|| {
+                    view_version_operation_order(&left.operation)
+                        .cmp(&view_version_operation_order(&right.operation))
+                })
+        })
+        .map(view_receipt_hash)
+        .transpose()
+}
+
+fn view_version_operation_order(operation: &ViewVersionOperation) -> u8 {
+    match operation {
+        ViewVersionOperation::Upsert => 0,
+        ViewVersionOperation::Drop => 1,
     }
 }
 
@@ -1418,7 +1457,14 @@ impl CatalogStore for MemoryCatalogStore {
         let principal = view.created.principal.clone();
         let previous = state.views.get(&view_key);
         let view = view.with_next_version(previous)?;
-        let receipt = ViewVersionReceipt::upsert(previous, &view, principal)?;
+        let previous_receipt_hash = latest_view_receipt_hash(
+            state
+                .view_version_receipts
+                .iter()
+                .filter(|receipt| receipt.stable_id == view_stable_id(&view)),
+        )?;
+        let receipt =
+            ViewVersionReceipt::upsert(previous, previous_receipt_hash, &view, principal)?;
         state.views.insert(view_key, view.clone());
         state.view_version_receipts.push(receipt);
         Ok(view)
@@ -1489,7 +1535,13 @@ impl CatalogStore for MemoryCatalogStore {
                 object: "view",
                 name: view.as_str().to_string(),
             })?;
-        let receipt = ViewVersionReceipt::drop(&record, principal)?;
+        let previous_receipt_hash = latest_view_receipt_hash(
+            state
+                .view_version_receipts
+                .iter()
+                .filter(|receipt| receipt.stable_id == view_stable_id(&record)),
+        )?;
+        let receipt = ViewVersionReceipt::drop(&record, previous_receipt_hash, principal)?;
         state.view_version_receipts.push(receipt);
         Ok(record)
     }
@@ -2152,11 +2204,18 @@ mod memory_tests {
         );
         assert_eq!(receipts[0].view_version, 1);
         assert_eq!(receipts[0].previous_view_version, None);
+        assert_eq!(receipts[0].previous_receipt_hash, None);
         assert_eq!(receipts[0].operation, ViewVersionOperation::Upsert);
         assert!(!receipts[0].view_hash.is_empty());
+        let first_receipt_hash = view_receipt_hash(&receipts[0]).unwrap();
         assert_eq!(receipts[1].view_version, 2);
         assert_eq!(receipts[1].previous_view_version, Some(1));
+        assert_eq!(
+            receipts[1].previous_receipt_hash.as_deref(),
+            Some(first_receipt_hash.as_str())
+        );
         assert_ne!(receipts[0].view_hash, receipts[1].view_hash);
+        let second_receipt_hash = view_receipt_hash(&receipts[1]).unwrap();
 
         assert_eq!(
             store
@@ -2204,6 +2263,10 @@ mod memory_tests {
         assert_eq!(receipts[2].stable_id, receipts[1].stable_id);
         assert_eq!(receipts[2].view_version, 2);
         assert_eq!(receipts[2].previous_view_version, Some(2));
+        assert_eq!(
+            receipts[2].previous_receipt_hash.as_deref(),
+            Some(second_receipt_hash.as_str())
+        );
         assert_eq!(receipts[2].operation, ViewVersionOperation::Drop);
         assert_eq!(receipts[2].view_hash, receipts[1].view_hash);
         let namespace_receipts = store
@@ -2316,7 +2379,7 @@ pub mod turso_store {
         SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord, ViewRecord,
         ViewVersionReceipt, WarehouseRecord, namespace_not_empty, namespace_not_found,
         policy_binding_key, policy_bindings_for_table, storage_profile_key, storage_profile_match,
-        table_key, validate_project_id, view_key, view_key_parts,
+        table_key, validate_project_id, view_key, view_key_parts, view_receipt_hash,
     };
 
     #[derive(Debug, Clone)]
@@ -3284,11 +3347,15 @@ pub mod turso_store {
             )
             .await
             .map_err(turso_error)?;
-            let receipt = ViewVersionReceipt::upsert(previous.as_ref(), &view, principal)?;
-            let receipt_id =
-                content_hash_json(&serde_json::to_value(&receipt).map_err(|err| {
-                    LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
-                })?)?;
+            let previous_receipt_hash =
+                latest_turso_view_receipt_hash(&tx, view_key.as_str()).await?;
+            let receipt = ViewVersionReceipt::upsert(
+                previous.as_ref(),
+                previous_receipt_hash,
+                &view,
+                principal,
+            )?;
+            let receipt_id = view_receipt_hash(&receipt)?;
             let previous_view_version = receipt
                 .previous_view_version
                 .map(|version| checked_i64(version, "previous view version"))
@@ -3422,11 +3489,10 @@ pub mod turso_store {
                     object: "view",
                     name: view.as_str().to_string(),
                 })?;
-            let receipt = ViewVersionReceipt::drop(&record, principal)?;
-            let receipt_id =
-                content_hash_json(&serde_json::to_value(&receipt).map_err(|err| {
-                    LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
-                })?)?;
+            let previous_receipt_hash =
+                latest_turso_view_receipt_hash(&tx, view_key.as_str()).await?;
+            let receipt = ViewVersionReceipt::drop(&record, previous_receipt_hash, principal)?;
+            let receipt_id = view_receipt_hash(&receipt)?;
             let previous_view_version = receipt
                 .previous_view_version
                 .map(|version| checked_i64(version, "previous view version"))
@@ -3907,6 +3973,29 @@ pub mod turso_store {
         }
     }
 
+    async fn latest_turso_view_receipt_hash(
+        tx: &turso::transaction::Transaction<'_>,
+        view_key: &str,
+    ) -> LakeCatResult<Option<String>> {
+        tx.query(
+            "select receipt_json from view_version_receipts
+             where view_key = ?1
+             order by view_version desc, recorded_at desc, receipt_id desc
+             limit 1",
+            (view_key,),
+        )
+        .await
+        .map_err(turso_error)?
+        .next()
+        .await
+        .map_err(turso_error)?
+        .map(|row| {
+            let receipt = decode_json::<ViewVersionReceipt>(row_string(&row, 0)?)?;
+            view_receipt_hash(&receipt)
+        })
+        .transpose()
+    }
+
     async fn count_matching_rows(
         conn: &Connection,
         table: &str,
@@ -4214,11 +4303,18 @@ pub mod turso_store {
             );
             assert_eq!(receipts[0].view_version, 1);
             assert_eq!(receipts[0].previous_view_version, None);
+            assert_eq!(receipts[0].previous_receipt_hash, None);
             assert_eq!(receipts[0].operation, ViewVersionOperation::Upsert);
             assert!(!receipts[0].view_hash.is_empty());
+            let first_receipt_hash = view_receipt_hash(&receipts[0]).unwrap();
             assert_eq!(receipts[1].view_version, 2);
             assert_eq!(receipts[1].previous_view_version, Some(1));
+            assert_eq!(
+                receipts[1].previous_receipt_hash.as_deref(),
+                Some(first_receipt_hash.as_str())
+            );
             assert_ne!(receipts[0].view_hash, receipts[1].view_hash);
+            let second_receipt_hash = view_receipt_hash(&receipts[1]).unwrap();
 
             assert_eq!(
                 store
@@ -4266,6 +4362,10 @@ pub mod turso_store {
             assert_eq!(receipts[2].stable_id, receipts[1].stable_id);
             assert_eq!(receipts[2].view_version, 2);
             assert_eq!(receipts[2].previous_view_version, Some(2));
+            assert_eq!(
+                receipts[2].previous_receipt_hash.as_deref(),
+                Some(second_receipt_hash.as_str())
+            );
             assert_eq!(receipts[2].operation, ViewVersionOperation::Drop);
             assert_eq!(receipts[2].view_hash, receipts[1].view_hash);
             let namespace_receipts = store
