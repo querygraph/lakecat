@@ -42,11 +42,13 @@ update the docs as part of the logical unit.
 ## Pinned Agent Guidance
 
 The current `AGENTS.md` instructions for `/Users/alexy/src/lakecat` are part of
-this goal. The 2026-06-19 instruction block supplied in the active thread is
-mirrored here as durable project constraints, not session-local advice. When
-future work changes repo boundaries, compatibility rules, implementation
-priorities, verification gates, or commit discipline, update both `AGENTS.md`
-and this goal in the same logical unit.
+this goal. The 2026-06-19 instruction block supplied in the active thread under
+`# AGENTS.md instructions for /Users/alexy/src/lakecat` is a pinned goal input,
+not session-local advice. It must continue to govern repo boundaries,
+compatibility rules, implementation priorities, Turso usage, verification
+gates, commit discipline, and sibling-repo placement until explicitly changed.
+When future work changes any of those rules, update both `AGENTS.md` and this
+goal in the same logical unit.
 
 The canonical agent contract is the repo-local `AGENTS.md` block titled
 `LakeCat Agent Guidance`. Treat its repo-boundary, compatibility,
@@ -160,6 +162,12 @@ The LakeCat book is part of the active engineering workflow. Keep it small only
 when the implementation is small; as LakeCat gains behavior, grow the book with
 substantial, concrete examples that show how the catalog participates in real
 workflows from standard clients through agentic systems.
+
+The book is no longer a separate background task. Integrate it into LakeCat's
+normal development loop: every meaningful behavior, acceptance flow, or
+architecture change should be reflected in the book with examples that are
+substantial enough for a user to understand how the catalog is involved in the
+workflow.
 
 Book updates should accompany any logical unit that changes public behavior,
 operator workflows, QueryGraph handoff behavior, architecture boundaries,

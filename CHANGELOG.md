@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned the active-thread `AGENTS.md` guidance in `GOAL.md` as standing goal
+  input and made the book workflow an explicit part of LakeCat's normal
+  development loop.
 - Added optional `expected-view-version` guarded view upserts and drops for
   management and catalog REST view routes, with atomic memory/Turso store
   checks that reject stale view replacements or tombstones before appending a
