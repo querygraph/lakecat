@@ -6,6 +6,36 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cross-check remaining captured replay proofs`.
+  `lakecat-cli qglake-verify-handoff` now compares compact
+  `lakecatReplayVerification.tableCommitHistoryProof` and
+  `lakecatReplayVerification.viewReceiptChainProof` values with the captured
+  LakeCat replay JSON at `replay-evidence.tableCommitHistory` and
+  `replay-evidence.views`. A handoff is rejected if the saved replay artifact
+  and compact summary disagree on pointer-log commit count, sequence numbers,
+  commit hashes, table-commit replay/OpenLineage hashes, accepted view receipt
+  evidence, tombstone receipt evidence, namespace receipt-chain hashes, or
+  view replay/OpenLineage hashes. The verifier output now echoes both accepted
+  branches under `capturedOutputSemantics.lakecatReplay`, so the compact
+  table-commit and view-history proofs are checked against the same captured
+  replay artifact as scan, identity, bootstrap, storage-profile, and credential
+  evidence.
+- Local verification for this remaining captured replay proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh`. The live handoff generated one table and
+  one view, drained 26 outbox events, verified LakeCat replay, ran QueryGraph
+  `lakecat-verify` and `lakecat-import`, then ran
+  `lakecat-cli qglake-verify-handoff --json` and emitted
+  `capturedOutputSemantics.lakecatReplay.tableCommitHistoryProof` plus
+  `viewReceiptChainProof`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Cross-check captured governed scan proof`.
   `lakecat-cli qglake-verify-handoff` now compares compact
   `lakecatReplayVerification.governedScanProof` values with the captured

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-verify-handoff` compare the compact
+  `tableCommitHistoryProof` and `viewReceiptChainProof` values against the
+  captured LakeCat replay JSON, so commit-history and durable view-receipt
+  evidence cannot drift between replay artifact and handoff summary.
 - Reaffirmed in `GOAL.md` that the current repo-local `AGENTS.md` guidance is
   the canonical standing contract for LakeCat work and must stay synchronized
   with the goal.

@@ -539,6 +539,9 @@ fn verify_qglake_handoff_captured_output_semantics(
     let querygraph_bootstrap =
         Value::Object(lakecat_replay_querygraph_bootstrap(lakecat_replay)?.clone());
     let governed_scan = Value::Object(lakecat_replay_scan(lakecat_replay)?.clone());
+    let table_commit_history =
+        Value::Object(lakecat_replay_table_commit_history(lakecat_replay)?.clone());
+    let view_receipt_chain = Value::Object(lakecat_replay_views(lakecat_replay)?.clone());
     let storage_profile_upsert =
         Value::Object(lakecat_replay_storage_profile_upsert(lakecat_replay)?.clone());
     let credential_vending = Value::Object(lakecat_replay_credentials(lakecat_replay)?.clone());
@@ -557,6 +560,8 @@ fn verify_qglake_handoff_captured_output_semantics(
             "requestIdentityProof": request_identity,
             "queryGraphBootstrapProof": querygraph_bootstrap,
             "governedScanProof": governed_scan,
+            "tableCommitHistoryProof": table_commit_history,
+            "viewReceiptChainProof": view_receipt_chain,
             "storageProfileUpsertProof": storage_profile_upsert,
             "credentialVendingProof": credential_vending,
         },
@@ -619,6 +624,8 @@ fn verify_lakecat_replay_capture_matches_summary(
     verify_lakecat_replay_request_identity_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_querygraph_bootstrap_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_scan_matches_summary(capture, lakecat)?;
+    verify_lakecat_replay_table_commit_history_matches_summary(capture, lakecat)?;
+    verify_lakecat_replay_views_match_summary(capture, lakecat)?;
     verify_lakecat_replay_storage_profile_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_credentials_match_summary(capture, lakecat)
 }
@@ -766,6 +773,78 @@ fn lakecat_replay_scan(
     required_object(
         lakecat_replay_evidence(capture)?,
         "scan",
+        "captured LakeCat replay output.replay-evidence",
+    )
+}
+
+fn verify_lakecat_replay_table_commit_history_matches_summary(
+    capture: &serde_json::Map<String, Value>,
+    lakecat: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let captured_commit_history = lakecat_replay_table_commit_history(capture)?;
+    let summary_commit_history = required_object(
+        lakecat,
+        "tableCommitHistoryProof",
+        "lakecatReplayVerification",
+    )?;
+
+    for field in [
+        "commitCount",
+        "sequenceNumbers",
+        "commitHashes",
+        "replayEventHashes",
+        "openLineageHashes",
+    ] {
+        require_value_match(
+            captured_commit_history,
+            field,
+            required_value(summary_commit_history, field, "tableCommitHistoryProof")?,
+            "captured LakeCat replay output.replay-evidence.tableCommitHistory",
+        )?;
+    }
+
+    Ok(())
+}
+
+fn lakecat_replay_table_commit_history(
+    capture: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<&serde_json::Map<String, Value>> {
+    required_object(
+        lakecat_replay_evidence(capture)?,
+        "tableCommitHistory",
+        "captured LakeCat replay output.replay-evidence",
+    )
+}
+
+fn verify_lakecat_replay_views_match_summary(
+    capture: &serde_json::Map<String, Value>,
+    lakecat: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let captured_views = lakecat_replay_views(capture)?;
+    let summary_views = required_object(
+        lakecat,
+        "viewReceiptChainProof",
+        "lakecatReplayVerification",
+    )?;
+
+    for field in ["viewCount", "views", "tombstoneReceipts", "receiptChains"] {
+        require_value_match(
+            captured_views,
+            field,
+            required_value(summary_views, field, "viewReceiptChainProof")?,
+            "captured LakeCat replay output.replay-evidence.views",
+        )?;
+    }
+
+    Ok(())
+}
+
+fn lakecat_replay_views(
+    capture: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<&serde_json::Map<String, Value>> {
+    required_object(
+        lakecat_replay_evidence(capture)?,
+        "views",
         "captured LakeCat replay output.replay-evidence",
     )
 }
@@ -5318,6 +5397,7 @@ mod tests {
                         "viewVersion": 1,
                         "acceptedViewVersion": 1,
                         "acceptedReceiptHash": "sha256:view-receipt",
+                        "eventType": "view.upserted",
                         "replayEventHashes": ["sha256:view-replay"],
                         "openLineageHashes": ["sha256:view-openlineage"]
                     }],
@@ -5445,6 +5525,43 @@ mod tests {
                     "fetchedReplayEventHashes": ["sha256:scan-fetch-replay"],
                     "plannedOpenLineageHashes": ["sha256:scan-plan-openlineage"],
                     "fetchedOpenLineageHashes": ["sha256:scan-fetch-openlineage"]
+                },
+                "tableCommitHistory": {
+                    "commitCount": 1,
+                    "sequenceNumbers": [1],
+                    "commitHashes": ["sha256:commit"],
+                    "replayEventHashes": ["sha256:commit-replay"],
+                    "openLineageHashes": ["sha256:commit-openlineage"]
+                },
+                "views": {
+                    "viewCount": 1,
+                    "views": [{
+                        "stableId": "lakecat:view:local:default:active_customers_view",
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "active_customers_view",
+                        "viewVersion": 1,
+                        "acceptedViewVersion": 1,
+                        "acceptedReceiptHash": "sha256:view-receipt",
+                        "eventType": "view.upserted",
+                        "replayEventHashes": ["sha256:view-replay"],
+                        "openLineageHashes": ["sha256:view-openlineage"]
+                    }],
+                    "tombstoneReceipts": [{
+                        "stableId": "lakecat:view:local:default:active_customers_view",
+                        "receiptHashes": ["sha256:tombstone"],
+                        "replayEventHashes": ["sha256:tombstone-replay"],
+                        "openLineageHashes": ["sha256:tombstone-openlineage"]
+                    }],
+                    "receiptChains": [{
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "verifiedChainCount": 1,
+                        "receiptHashes": ["sha256:chain-receipt"],
+                        "chainHashes": ["sha256:chain"],
+                        "replayEventHashes": ["sha256:chain-replay"],
+                        "openLineageHashes": ["sha256:chain-openlineage"]
+                    }]
                 },
                 "management": {
                     "storageProfileUpsert": {
@@ -5790,6 +5907,14 @@ mod tests {
             json!(1)
         );
         assert_eq!(
+            semantics["lakecatReplay"]["tableCommitHistoryProof"]["commitHashes"],
+            json!(["sha256:commit"])
+        );
+        assert_eq!(
+            semantics["lakecatReplay"]["viewReceiptChainProof"]["views"][0]["acceptedReceiptHash"],
+            json!("sha256:view-receipt")
+        );
+        assert_eq!(
             semantics["lakecatReplay"]["credentialVendingProof"]["restricted"]["blockReason"],
             json!(QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON)
         );
@@ -5909,6 +6034,50 @@ mod tests {
         assert!(err.to_string().contains(
             "captured LakeCat replay output.replay-evidence.scan.planTaskCount mismatch"
         ));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_table_commit_history_drift() {
+        let temp = qglake_temp_dir("handoff-captured-table-commit-history-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["tableCommitHistory"]["commitCount"] = json!(2);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay commit-history proof drift should be rejected");
+        assert!(err.to_string().contains(
+            "captured LakeCat replay output.replay-evidence.tableCommitHistory.commitCount mismatch"
+        ));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_view_receipt_chain_drift() {
+        let temp = qglake_temp_dir("handoff-captured-view-receipt-chain-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["views"]["views"][0]["acceptedReceiptHash"] =
+            json!("sha256:other-view-receipt");
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay view receipt-chain proof drift should be rejected");
+        assert!(
+            err.to_string()
+                .contains("captured LakeCat replay output.replay-evidence.views.views mismatch")
+        );
     }
 
     #[test]

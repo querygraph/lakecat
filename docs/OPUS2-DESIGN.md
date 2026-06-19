@@ -312,7 +312,12 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   summary-signature, bootstrap hashes, artifact counts, standards, and replay
   hashes; captured `replay-evidence.scan` must match `governedScanProof` for
   plan/file/delete/child task counts plus planned/fetched replay and
-  OpenLineage hashes; the local handoff harness now includes the
+  OpenLineage hashes; captured `replay-evidence.tableCommitHistory` must match
+  `tableCommitHistoryProof` for commit count, sequence numbers, commit hashes,
+  replay hashes, and OpenLineage hashes, and captured `replay-evidence.views`
+  must match `viewReceiptChainProof` for accepted view receipts, tombstone
+  receipts, namespace receipt-chain hashes, and their replay/OpenLineage
+  hashes; the local handoff harness now includes the
   storage-profile issuance mode and location-prefix hash when generating the
   summary so the live script and stricter verifier remain in lockstep.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the

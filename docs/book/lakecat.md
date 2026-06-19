@@ -1232,6 +1232,14 @@ bundle, graph, OpenLineage, and QueryGraph import hashes. It compares captured
 `replay-evidence.scan` with `governedScanProof`, including the plan task, file
 task, delete file, and child plan task counts plus the planned/fetched replay
 and OpenLineage hashes that prove the Sail-planned read path. It also compares
+the captured `replay-evidence.tableCommitHistory` object with
+`tableCommitHistoryProof`, including the commit count, sequence numbers, commit
+hashes, replay hashes, and OpenLineage hashes that prove the pointer-log commit
+history was not rewritten between replay and summary. It compares the captured
+`replay-evidence.views` object with `viewReceiptChainProof`, including accepted
+view receipts, tombstone receipts, namespace receipt-chain hashes, and their
+replay/OpenLineage hashes, so durable view history stays tied to the saved
+LakeCat replay artifact. It also compares
 the captured LakeCat
 replay `replay-evidence.management.storageProfileUpsert` object with the
 compact `lakecatReplayVerification.storageProfileUpsertProof`, including the
