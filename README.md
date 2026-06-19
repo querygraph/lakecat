@@ -71,4 +71,7 @@ cargo run -p lakecat-cli -- bootstrap-export --output lakecat-bootstrap.json
 it starts LakeCat on `127.0.0.1:18181`, generates paired QGLake bootstrap and
 lineage-drain artifacts, verifies saved replay with LakeCat, then runs
 QueryGraph's `lakecat-verify` and `lakecat-import` over the same bundle while
-writing all generated artifacts under `target/qglake-handoff/`.
+writing all generated artifacts under `target/qglake-handoff/`. It also writes
+`target/qglake-handoff/handoff-summary.json`, which records the verified
+artifact paths, file hashes, captured LakeCat replay output, QueryGraph verify
+output, QueryGraph import output, and service log path for automation.

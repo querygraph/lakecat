@@ -1137,7 +1137,11 @@ under `target/qglake-handoff/`, generates the paired QGLake bootstrap bundle
 and lineage-drain response, runs `qglake-verify-replay`, then runs
 QueryGraph's `lakecat-verify` and `lakecat-import` against the same bundle. The
 resulting import plan is written to
-`target/qglake-handoff/querygraph-import-plan.json`, making the handoff
+`target/qglake-handoff/querygraph-import-plan.json`. The same run also writes
+`target/qglake-handoff/handoff-summary.json`, a compact machine-readable record
+of the catalog URL, principal, table scope, artifact paths, file hashes, captured
+LakeCat replay output, captured QueryGraph verification output, captured
+QueryGraph import output, and service log path. That makes the handoff
 repeatable from the LakeCat repo while keeping QueryGraph responsible for graph
 validation and import semantics.
 
@@ -1283,6 +1287,7 @@ then asks QueryGraph to verify and import it:
 
 ```sh
 scripts/qglake-handoff-local.sh
+cat target/qglake-handoff/handoff-summary.json
 ```
 
 That fixture creates the sample table shape, installs a restricted policy,
@@ -1292,7 +1297,9 @@ and trusted humans, verifies compact table commit-history evidence, exports
 QueryGraph bootstrap artifacts, drains the outbox, and proves the resulting
 bundle through QueryGraph's Rust verifier/importer. It is small, but it is not
 decorative. It is the acceptance story for a catalog that participates in the
-user workflow from notebook to agent.
+user workflow from notebook to agent. The summary file gives automation a
+single stable place to find the accepted bundle, lineage drain, import plan,
+captured verifier outputs, and hashes without scraping terminal text.
 
 ## Operating The Book's Example System
 

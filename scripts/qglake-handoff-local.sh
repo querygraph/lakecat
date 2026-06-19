@@ -18,6 +18,10 @@ export CARGO_TARGET_DIR
 BUNDLE="$RUN_DIR/lakecat-bootstrap.json"
 DRAIN="$RUN_DIR/lineage-drain.json"
 IMPORT_PLAN="$RUN_DIR/querygraph-import-plan.json"
+SUMMARY="$RUN_DIR/handoff-summary.json"
+LAKECAT_REPLAY_OUTPUT="$RUN_DIR/lakecat-replay.txt"
+QUERYGRAPH_VERIFY_OUTPUT="$RUN_DIR/querygraph-verify.json"
+QUERYGRAPH_IMPORT_OUTPUT="$RUN_DIR/querygraph-import.json"
 TURSO_PATH="$RUN_DIR/lakecat.turso"
 SERVICE_LOG="$RUN_DIR/lakecat-service.log"
 LOCATION="file://$RUN_DIR/events"
@@ -52,13 +56,58 @@ wait_for_lakecat() {
   return 1
 }
 
+sha256_file() {
+  shasum -a 256 "$1" | awk '{print $1}'
+}
+
+json_string() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+write_summary() {
+  local bundle_sha drain_sha import_plan_sha
+  bundle_sha="$(sha256_file "$BUNDLE")"
+  drain_sha="$(sha256_file "$DRAIN")"
+  import_plan_sha="$(sha256_file "$IMPORT_PLAN")"
+  cat >"$SUMMARY" <<JSON
+{
+  "status": "verified",
+  "catalogUrl": "$(json_string "$CATALOG_URL")",
+  "principal": "$(json_string "$PRINCIPAL")",
+  "warehouse": "$(json_string "$WAREHOUSE")",
+  "namespace": "$(json_string "$NAMESPACE")",
+  "table": "$(json_string "$TABLE")",
+  "artifacts": {
+    "bundle": {
+      "path": "$(json_string "$BUNDLE")",
+      "sha256": "sha256:$bundle_sha"
+    },
+    "lineageDrain": {
+      "path": "$(json_string "$DRAIN")",
+      "sha256": "sha256:$drain_sha"
+    },
+    "querygraphImportPlan": {
+      "path": "$(json_string "$IMPORT_PLAN")",
+      "sha256": "sha256:$import_plan_sha"
+    },
+    "lakecatReplayOutput": "$(json_string "$LAKECAT_REPLAY_OUTPUT")",
+    "querygraphVerifyOutput": "$(json_string "$QUERYGRAPH_VERIFY_OUTPUT")",
+    "querygraphImportOutput": "$(json_string "$QUERYGRAPH_IMPORT_OUTPUT")",
+    "serviceLog": "$(json_string "$SERVICE_LOG")"
+  }
+}
+JSON
+}
+
 if [[ ! -f "$QUERYGRAPH_RUST_DIR/Cargo.toml" ]]; then
   echo "QueryGraph Rust crate not found at $QUERYGRAPH_RUST_DIR" >&2
   exit 1
 fi
 
 mkdir -p "$RUN_DIR"
-rm -f "$BUNDLE" "$DRAIN" "$IMPORT_PLAN" "$TURSO_PATH" "$SERVICE_LOG"
+rm -f "$BUNDLE" "$DRAIN" "$IMPORT_PLAN" "$SUMMARY" \
+  "$LAKECAT_REPLAY_OUTPUT" "$QUERYGRAPH_VERIFY_OUTPUT" "$QUERYGRAPH_IMPORT_OUTPUT" \
+  "$TURSO_PATH" "$SERVICE_LOG"
 
 echo "Starting LakeCat at $CATALOG_URL"
 (
@@ -89,18 +138,24 @@ echo "Verifying saved LakeCat replay artifacts"
 cargo run -p lakecat-cli -- qglake-verify-replay \
   --bundle "$BUNDLE" \
   --drain "$DRAIN" \
-  --principal "$PRINCIPAL"
+  --principal "$PRINCIPAL" \
+  | tee "$LAKECAT_REPLAY_OUTPUT"
 
 echo "Verifying bundle with QueryGraph"
 cargo run --locked --manifest-path "$QUERYGRAPH_RUST_DIR/Cargo.toml" -- lakecat-verify \
-  --bundle "$BUNDLE"
+  --bundle "$BUNDLE" \
+  | tee "$QUERYGRAPH_VERIFY_OUTPUT"
 
 echo "Writing QueryGraph import plan"
 cargo run --locked --manifest-path "$QUERYGRAPH_RUST_DIR/Cargo.toml" -- lakecat-import \
   --bundle "$BUNDLE" \
-  --output "$IMPORT_PLAN"
+  --output "$IMPORT_PLAN" \
+  | tee "$QUERYGRAPH_IMPORT_OUTPUT"
+
+write_summary
 
 echo "QGLake handoff verified"
 echo "  bundle:      $BUNDLE"
 echo "  drain:       $DRAIN"
 echo "  import plan: $IMPORT_PLAN"
+echo "  summary:     $SUMMARY"

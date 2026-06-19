@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made `scripts/qglake-handoff-local.sh` write a machine-readable
+  `handoff-summary.json` plus captured LakeCat replay and QueryGraph
+  verify/import outputs for operator and automation handoff.
 - Added `scripts/qglake-handoff-local.sh`, a local-first handoff harness that
   starts LakeCat, generates paired QGLake bootstrap/drain artifacts, verifies
   saved replay with LakeCat, and runs QueryGraph's `lakecat-verify` and
