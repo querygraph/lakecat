@@ -1359,6 +1359,18 @@ fn require_storage_profile_upsert_evidence(
             "secretRefProvider",
             "storageProfileUpsertProof",
         )?;
+    } else if !matches!(
+        required_value(
+            storage_profile,
+            "secretRefProvider",
+            "storageProfileUpsertProof"
+        )?,
+        Value::Null
+    ) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "storageProfileUpsertProof.secretRefProvider must be null when secretRefPresent is false"
+                .to_string(),
+        ));
     }
     require_hash_array(
         storage_profile,
@@ -6347,6 +6359,22 @@ mod tests {
 
         assert!(err.to_string().contains("storageProfileUpsertProof"));
         assert!(err.to_string().contains("secretRefProvider"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_secret_ref_provider_when_absent() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefPresent"] =
+            json!(false);
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefProvider"] =
+            json!("vault");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject a provider when no secret ref is present");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("secretRefProvider"));
+        assert!(err.to_string().contains("null"));
     }
 
     #[test]

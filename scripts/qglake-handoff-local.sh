@@ -279,6 +279,14 @@ if (typeof evidence.secretRefPresent !== "boolean") {
   console.error("LakeCat storage-profile upsert evidence is missing explicit secretRefPresent");
   process.exit(1);
 }
+if (evidence.secretRefPresent && !evidence.secretRefProvider) {
+  console.error("LakeCat storage-profile upsert evidence is missing secretRefProvider");
+  process.exit(1);
+}
+if (!evidence.secretRefPresent && evidence.secretRefProvider != null) {
+  console.error("LakeCat storage-profile upsert evidence has secretRefProvider without secretRefPresent");
+  process.exit(1);
+}
 if (!Array.isArray(evidence.replayEventHashes) || evidence.replayEventHashes.length === 0) {
   console.error("LakeCat storage-profile upsert evidence is missing replayEventHashes");
   process.exit(1);

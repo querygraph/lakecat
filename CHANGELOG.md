@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened compact `storageProfileUpsertProof` validation in
+  `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness so
+  `secretRefProvider` is required when `secretRefPresent` is true and must be
+  null when `secretRefPresent` is false.
 - Tightened compact `viewReceiptChainProof` validation in
   `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness so
   namespace receipt-chain evidence must align `verifiedChainCount` with the

@@ -6,6 +6,28 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Align storage-profile secret-ref provider proof`.
+  `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness now
+  reject compact `storageProfileUpsertProof` summaries that carry a
+  `secretRefProvider` while `secretRefPresent` is false, while still requiring
+  a non-empty provider whenever `secretRefPresent` is true. This keeps the
+  redacted credential-root handoff proof from implying an external secret-store
+  dependency when the replay says no secret reference was configured.
+- Local verification for this storage-profile proof-alignment slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 outbox events, verified LakeCat replay, ran QueryGraph `lakecat-verify`
+  and `lakecat-import`, then verified `handoff-summary.json` with
+  `secretRefPresent: false` and `secretRefProvider: null`);
+  `cargo test --workspace --all-features`;
+  `cargo test --workspace`.
+- Latest completed implementation slice:
   `Align view receipt-chain handoff counts`.
   `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness now
   reject compact `viewReceiptChainProof.receiptChains` evidence whose

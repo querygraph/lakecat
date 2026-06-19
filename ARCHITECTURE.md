@@ -341,6 +341,8 @@ without storing raw secrets in catalog state. Production secret-ref URI schemes
 the same TypeSec authorization boundary. Storage profiles reject secret-ref
 query strings, fragments, and URI userinfo before persistence, keeping
 `secret-ref` as a clean external locator rather than a credential transport.
+Compact storage-profile handoff proofs also enforce that the redacted
+`secretRefProvider` appears only when `secretRefPresent` is true.
 `vault://` refs can resolve through a
 Vault HTTP backend when `LAKECAT_VAULT_ADDR` / `LAKECAT_VAULT_TOKEN` (or the
 standard `VAULT_ADDR` / `VAULT_TOKEN`) are configured; the remaining production

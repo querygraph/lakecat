@@ -306,7 +306,8 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   replay hashes, and OpenLineage hashes; the compact storage-profile proof is
   now self-validating in the Rust verifier, requiring a SHA-256
   location-prefix hash and a redacted secret-reference provider whenever
-  `secretRefPresent` is true; the captured
+  `secretRefPresent` is true while rejecting a provider when
+  `secretRefPresent` is false; the captured
   `replay-evidence.credentials` branches must match the compact
   `credentialVendingProof` for the restricted agent denial and trusted-human
   audited raw-credential exception; the compact credential proof is now also
