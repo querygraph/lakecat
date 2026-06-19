@@ -32,6 +32,12 @@ Updated: 2026-06-19
   26 outbox events, ran LakeCat replay, QueryGraph verify/import, and verified
   the saved handoff summary with `graphEvents: 53`);
   `git diff --check`.
+- QueryGraph book/diagram follow-through is checked in on
+  `/Users/alexy/src/querygraph/qg-rust` as
+  `e7b9fc6 Update QueryGraph book for LakeCat handoff`. That commit adds a
+  LakeCat catalog-boundary chapter, a LakeCat handoff diagram, refreshed
+  book/blog diagram materializations, and rebuilt QueryGraph EPUB/PDF/MOBI
+  artifacts using the new `querygraph (0.1.0-46bc615)` book marker.
 - Latest completed implementation slice:
   `Bind QueryGraph view imports to receipt-chain hashes`.
   QueryGraph bootstrap view receipt evidence now carries a per-view
