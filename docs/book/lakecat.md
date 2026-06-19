@@ -1250,8 +1250,8 @@ table id derived from that scope, such as `lakecat:table:local:default:events`;
 `verifiedViews` must include every accepted stable view id from LakeCat replay,
 such as `lakecat:view:local:default:active_customers_view`; and both arrays must
 match the QueryGraph table/view counts. Captured QueryGraph verify/import output
-must carry the same ids, which keeps a verified artifact set from being replayed
-against the wrong catalog tenant, table, or view. It also records
+must match those compact arrays exactly, which keeps a verified artifact set from
+being replayed against the wrong catalog tenant, table, or view. It also records
 structured request-identity, scan, management,
 credential, table-commit, and view replay evidence, plus compact
 `requestIdentityProof`, `queryGraphBootstrapProof`, `governedScanProof`,

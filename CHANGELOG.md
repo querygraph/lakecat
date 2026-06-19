@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made captured QueryGraph verify/import semantics compare their
+  `verified-tables` and `verified-views` arrays exactly against compact
+  `querygraphVerification.verifiedTables` and `verifiedViews`, rejecting
+  handoffs where the summary and saved captures name different id sets.
 - Made compact QGLake handoff summaries self-contained for QueryGraph scope by
   embedding `querygraphVerification.verifiedTables` and `verifiedViews`,
   validating their counts against `tableCount`/`viewCount`, and requiring them

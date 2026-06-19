@@ -6,6 +6,26 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cross-check captured QueryGraph verified ids`.
+  `lakecat-cli qglake-verify-handoff` now compares captured QueryGraph
+  verify/import `verified-tables` and `verified-views` arrays exactly against
+  compact `querygraphVerification.verifiedTables` and `verifiedViews`, in
+  addition to requiring the declared table/view scope. This prevents a compact
+  summary from embedding one accepted id set while the saved QueryGraph captures
+  name another.
+- Local verification for this captured verified-id cross-check slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 outbox events, ran LakeCat replay, QueryGraph verify/import, and verified
+  matching compact/captured `verifiedTables`/`verifiedViews`);
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`;
+  `cargo test --workspace`.
+- Latest completed implementation slice:
   `Make QGLake handoff verified ids self-contained`.
   Compact `handoff-summary.json` files now embed
   `querygraphVerification.verifiedTables` and `verifiedViews`, and

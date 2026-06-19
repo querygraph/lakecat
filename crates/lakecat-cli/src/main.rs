@@ -1016,7 +1016,8 @@ fn verify_querygraph_capture_matches_summary(
     require_string_match(capture, "warehouse", table_scope.warehouse.as_str(), label)?;
     require_verified_table_scope(capture, table_scope, label)?;
     require_verified_view_scope(capture, view_scope, label)?;
-    require_handoff_summary_fields_match_capture(capture, querygraph, label)
+    require_handoff_summary_fields_match_capture(capture, querygraph, label)?;
+    require_querygraph_verified_ids_match_capture(capture, querygraph, label)
 }
 
 fn require_handoff_summary_fields_match_capture(
@@ -1064,6 +1065,25 @@ fn require_handoff_summary_fields_match_capture(
         capture,
         "standards",
         required_value(querygraph, "standards", "querygraphVerification")?,
+        label,
+    )
+}
+
+fn require_querygraph_verified_ids_match_capture(
+    capture: &serde_json::Map<String, Value>,
+    querygraph: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    require_value_match(
+        capture,
+        "verified-tables",
+        required_value(querygraph, "verifiedTables", "querygraphVerification")?,
+        label,
+    )?;
+    require_value_match(
+        capture,
+        "verified-views",
+        required_value(querygraph, "verifiedViews", "querygraphVerification")?,
         label,
     )
 }
@@ -7120,6 +7140,40 @@ mod tests {
         assert_eq!(
             semantics["lakecatReplay"]["credentialVendingProof"]["restricted"]["blockReason"],
             json!(QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON)
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_summary_verified_table_drift() {
+        let temp = qglake_temp_dir("handoff-captured-summary-table-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        summary["querygraphVerification"]["verifiedTables"] =
+            json!(["lakecat:table:local:default:events_other"]);
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured output semantics should reject summary verified-table drift");
+
+        assert!(
+            err.to_string()
+                .contains("captured QueryGraph verify output.verified-tables mismatch")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_summary_verified_view_drift() {
+        let temp = qglake_temp_dir("handoff-captured-summary-view-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        summary["querygraphVerification"]["verifiedViews"] =
+            json!(["lakecat:view:local:default:active_customers_view_other"]);
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured output semantics should reject summary verified-view drift");
+
+        assert!(
+            err.to_string()
+                .contains("captured QueryGraph verify output.verified-views mismatch")
         );
     }
 

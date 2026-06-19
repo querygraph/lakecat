@@ -572,8 +572,9 @@ verifier checks that their lengths match the QueryGraph table/view counts, that
 `verifiedTables` contains the stable LakeCat table id derived from the declared
 warehouse/namespace/table, and that `verifiedViews` contains every stable view
 id in the replayed `viewReceiptChainProof.views` array. Captured QueryGraph
-verify/import outputs must carry the same ids, so the accepted artifact set
-cannot swap in a different table or view while preserving the summary hashes.
+verify/import outputs must match those compact arrays exactly, so the accepted
+artifact set cannot swap in a different table or view while preserving the
+summary hashes.
 
 ## Lakekeeper Lessons To Adopt
 
