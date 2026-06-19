@@ -5,6 +5,20 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Require credential replay storage-scope hash`.
+  QGLake lineage-drain credential replay verification now rejects restricted or
+  trusted-human credential events whose redacted storage-profile evidence lacks
+  a `location-prefix-hash`, and the operator-readable credential replay line now
+  prints that hash beside profile/provider/issuance-mode evidence.
+- Local verification for this credential replay storage-scope verifier slice is
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_credential_replay_line_summarizes_verified_evidence -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Consolidate OPUS review log`.
   `DESIGN.md` now carries the durable OPUS1/OPUS2 review history and

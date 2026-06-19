@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened QGLake credential replay verification so lineage-drain credential
+  evidence must carry a redacted storage-scope hash before compact handoff
+  summary generation, and surfaced that hash in the operator-readable credential
+  replay line.
 - Consolidated the OPUS review log and dev-manager working plan into
   `DESIGN.md`, making `docs/completed/OPUS*.md` provenance-only archive inputs
   and refreshing the completed-doc ledger to point at the canonical design

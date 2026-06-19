@@ -3054,8 +3054,16 @@ fn qglake_credential_storage_profile_line(event: &LineageDrainEventSummary) -> O
     let profile_id = event.storage_profile_id.as_deref()?.trim();
     let provider = event.storage_profile_provider.as_deref()?.trim();
     let issuance_mode = event.storage_profile_issuance_mode.as_deref()?.trim();
+    let location_prefix_hash = event
+        .storage_profile_location_prefix_hash
+        .as_deref()?
+        .trim();
     let graph_events = event.graph_events;
-    if profile_id.is_empty() || provider.is_empty() || issuance_mode.is_empty() || graph_events == 0
+    if profile_id.is_empty()
+        || provider.is_empty()
+        || issuance_mode.is_empty()
+        || !is_sha256_hash(location_prefix_hash)
+        || graph_events == 0
     {
         return None;
     }
@@ -3072,8 +3080,8 @@ fn qglake_credential_storage_profile_line(event: &LineageDrainEventSummary) -> O
         "none"
     };
     Some(format!(
-        "{}:{}:{}:secret_ref={}:graph_events={}",
-        profile_id, provider, issuance_mode, secret_ref, graph_events
+        "{}:{}:{}:location_prefix_hash={}:secret_ref={}:graph_events={}",
+        profile_id, provider, issuance_mode, location_prefix_hash, secret_ref, graph_events
     ))
 }
 
@@ -5617,6 +5625,10 @@ fn verify_qglake_credential_storage_profile_projection(
             .storage_profile_issuance_mode
             .as_deref()
             .map_or(true, str::is_empty)
+        || event
+            .storage_profile_location_prefix_hash
+            .as_deref()
+            .map_or(true, |hash| !is_sha256_hash(hash))
         || event.storage_profile_secret_ref_present.is_none()
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -6814,12 +6826,16 @@ fn require_hash_str<'a>(
     label: &str,
 ) -> lakecat_core::LakeCatResult<&'a str> {
     let string = require_non_empty_str(value, field, label)?;
-    if !string.starts_with("sha256:") {
+    if !is_sha256_hash(string) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "{label}.{field} must be a sha256 hash"
         )));
     }
     Ok(string)
+}
+
+fn is_sha256_hash(string: &str) -> bool {
+    string.starts_with("sha256:")
 }
 
 fn require_optional_hash_value(
@@ -11201,7 +11217,7 @@ mod tests {
 
         assert_eq!(
             line,
-            "credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:secret_ref=none:graph_events=2"
+            "credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2"
         );
     }
 
@@ -12684,6 +12700,42 @@ mod tests {
             err.to_string()
                 .contains("trusted human credential replay is missing max credential TTL evidence")
         );
+
+        let mut restricted_without_location_hash = qglake_restricted_credential_summary();
+        restricted_without_location_hash.storage_profile_location_prefix_hash = None;
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 4,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 4,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    restricted_without_location_hash,
+                    qglake_human_credential_summary(),
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject missing credential storage-scope hash");
+        assert!(err.to_string().contains(
+            "qglake lineage drain restricted credential replay is missing redacted storage-profile graph evidence"
+        ));
 
         let view_verification = qglake_view_lineage_verification();
         let mut bootstrap_with_view = qglake_bootstrap_lineage_summary();
@@ -14389,7 +14441,9 @@ mod tests {
             storage_profile_id: Some("events-local".to_string()),
             storage_profile_provider: Some("file".to_string()),
             storage_profile_issuance_mode: Some("local-file-no-secret".to_string()),
-            storage_profile_location_prefix_hash: None,
+            storage_profile_location_prefix_hash: Some(
+                "sha256:storage-location-prefix".to_string(),
+            ),
             storage_profile_secret_ref_present: Some(false),
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,
@@ -14456,7 +14510,9 @@ mod tests {
             storage_profile_id: Some("events-local".to_string()),
             storage_profile_provider: Some("file".to_string()),
             storage_profile_issuance_mode: Some("local-file-no-secret".to_string()),
-            storage_profile_location_prefix_hash: None,
+            storage_profile_location_prefix_hash: Some(
+                "sha256:storage-location-prefix".to_string(),
+            ),
             storage_profile_secret_ref_present: Some(false),
             storage_profile_secret_ref_provider: None,
             warehouse_count: None,

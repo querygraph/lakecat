@@ -1486,6 +1486,10 @@ audited exception unless the captured LakeCat replay proves the same decision.
 Each credential branch carries the same redacted storage-scope anchor as the
 storage-profile upsert proof: `locationPrefixHash` binds the credential-vend
 attempt to the configured storage root without replaying the raw prefix.
+LakeCat now checks that storage-scope hash at lineage-drain replay time, before
+the compact handoff summary is accepted, and the operator-readable credential
+replay line prints the same hash so captured terminal output cannot look
+complete while omitting the credential-root boundary.
 The compact handoff verifier also validates that credential proof directly:
 the restricted branch must name the accepted agent principal, carry the
 Sail-planned-read block reason, prove zero credentials, carry the
