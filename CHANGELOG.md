@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake lineage-drain bootstrap, tombstone, and namespace
+  receipt-chain replay to preserve SHA-256-shaped view receipt and receipt-chain
+  hashes before accepted-view proof can feed compact handoff verification.
 - Tightened QGLake lineage-drain replay so bootstrap, scan, credential, view,
   receipt-chain, and table commit-history receipt arrays must contain
   SHA-256-shaped hashes before compact handoff proof can consume them.

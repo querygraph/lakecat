@@ -1626,9 +1626,12 @@ counts, sequences, or hash arrays do not align, so QueryGraph can verify the
 governed Sail-planned read and pointer-history inspection without parsing the
 full lineage payload. Source replay validation now also requires the bootstrap,
 scan, credential, view, receipt-chain, and commit-history receipt arrays to be
-SHA-256-shaped before compact proof generation can consume them. The same
-replay now emits catalog-facing `Commit` graph events for the listed sequences,
-leaving traversal and query semantics to Grust.
+SHA-256-shaped before compact proof generation can consume them. The same shape
+check applies to accepted-view receipt evidence: bootstrap view-version receipt
+hashes, tombstone receipt hashes, and namespace receipt-chain hashes must be
+SHA-256-shaped before accepted-view proof feeds the compact handoff summary. The
+same replay now emits catalog-facing `Commit` graph events for the listed
+sequences, leaving traversal and query semantics to Grust.
 
 For handoff testing, LakeCat can verify a saved bootstrap bundle and a saved
 drain response together:

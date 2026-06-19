@@ -5576,13 +5576,10 @@ fn verify_qglake_lineage_drain(
     }
     if !verification.verified_views.is_empty()
         && (bootstrap.view_version_receipt_hashes.len() != verification.verified_views.len()
-            || bootstrap
-                .view_version_receipt_hashes
-                .iter()
-                .any(String::is_empty))
+            || !qglake_has_sha256_hashes(&bootstrap.view_version_receipt_hashes))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain replay evidence is missing view version receipt hashes"
+            "qglake lineage drain replay evidence is missing SHA-256 view version receipt hashes"
                 .to_string(),
         ));
     }
@@ -5750,14 +5747,10 @@ fn verify_qglake_view_replay(
             let Some(tombstone_receipts) = drain.events.iter().find(|event| {
                 event.event_type == "view.version-receipts-listed"
                     && event.view_stable_id.as_deref() == Some(view_stable_id.as_str())
-                    && !event.view_version_receipt_hashes.is_empty()
-                    && event
-                        .view_version_receipt_hashes
-                        .iter()
-                        .all(|hash| !hash.is_empty())
+                    && qglake_has_sha256_hashes(&event.view_version_receipt_hashes)
             }) else {
                 return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-                    "qglake lineage drain view drop replay for {view_stable_id} is missing tombstone receipt evidence"
+                    "qglake lineage drain view drop replay for {view_stable_id} is missing SHA-256 tombstone receipt evidence"
                 )));
             };
             if tombstone_receipts.lineage_events == 0 {
@@ -5767,20 +5760,12 @@ fn verify_qglake_view_replay(
             }
             let Some(receipt_chain_read) = drain.events.iter().find(|event| {
                 event.event_type == "view.version-receipt-chains-listed"
-                    && !event.view_version_receipt_chain_hashes.is_empty()
-                    && event
-                        .view_version_receipt_chain_hashes
-                        .iter()
-                        .all(|hash| !hash.is_empty())
+                    && qglake_has_sha256_hashes(&event.view_version_receipt_chain_hashes)
                     && event.view_version_receipt_chain_verified_count > 0
-                    && !event.view_version_receipt_hashes.is_empty()
-                    && event
-                        .view_version_receipt_hashes
-                        .iter()
-                        .all(|hash| !hash.is_empty())
+                    && qglake_has_sha256_hashes(&event.view_version_receipt_hashes)
             }) else {
                 return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-                    "qglake lineage drain view drop replay for {view_stable_id} is missing namespace receipt-chain evidence"
+                    "qglake lineage drain view drop replay for {view_stable_id} is missing SHA-256 namespace receipt-chain evidence"
                 )));
             };
             if receipt_chain_read.lineage_events == 0
@@ -14039,7 +14024,57 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should require view version receipt hashes");
         assert!(err.to_string().contains(
-            "qglake lineage drain replay evidence is missing view version receipt hashes"
+            "qglake lineage drain replay evidence is missing SHA-256 view version receipt hashes"
+        ));
+
+        let mut bootstrap_malformed_view_receipt = bootstrap_with_view.clone();
+        bootstrap_malformed_view_receipt.view_version_receipt_hashes =
+            vec!["not-a-sha256-hash".to_string()];
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 9,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 3,
+                lineage_events: 10,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    bootstrap_malformed_view_receipt,
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_storage_profile_upsert_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject malformed view version receipt hashes");
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay evidence is missing SHA-256 view version receipt hashes"
         ));
 
         let mut mismatched_view_replay = qglake_view_lineage_summary();
@@ -14521,7 +14556,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should require tombstone receipt evidence for dropped accepted views");
         assert!(err.to_string().contains(
-            "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing tombstone receipt evidence"
+            "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing SHA-256 tombstone receipt evidence"
         ));
 
         let err = verify_qglake_lineage_drain(
@@ -14572,7 +14607,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should require namespace receipt-chain evidence for dropped accepted views");
         assert!(err.to_string().contains(
-            "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing namespace receipt-chain evidence"
+            "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing SHA-256 namespace receipt-chain evidence"
         ));
 
         let mut unguarded_drop_replay = qglake_view_drop_lineage_summary();

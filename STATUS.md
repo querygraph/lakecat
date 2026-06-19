@@ -6,6 +6,20 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject malformed view receipt hashes`.
+  QGLake lineage-drain replay now rejects malformed bootstrap
+  view-version receipt hashes plus tombstone and namespace receipt-chain hashes
+  before accepted-view replay can feed compact handoff proof.
+- Local verification for this view receipt-shape slice is green:
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_view -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject malformed replay receipt hashes`.
   QGLake lineage-drain replay now rejects malformed receipt hashes for
   bootstrap, scan planning/fetch, credential replay, accepted views,
