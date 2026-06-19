@@ -5,6 +5,19 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Require scan/fetch TTL cap before replay proof`.
+  QGLake scan-plan and `fetchScanTasks` verification now reject missing or
+  drifted `max-credential-ttl-seconds` values in live read-restriction evidence,
+  keeping the lower-level plan/fetch verifier aligned with compact handoff
+  proof requirements.
+- Local verification for this plan/fetch TTL-cap slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_scan_plan_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_fetch_scan_tasks_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Complete OPUS consolidation audit`.
   The full OPUS1/OPUS2 review and design corpus is mapped into `DESIGN.md` and

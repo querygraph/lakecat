@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened QGLake scan planning and `fetchScanTasks` verification so live
+  plan/fetch read-restriction evidence must preserve the policy-derived
+  `max-credential-ttl-seconds` cap before replay proof is accepted.
 - Completed the OPUS document consolidation audit by recording the full
   OPUS1/OPUS2 corpus-to-canonical-doc mapping in `DESIGN.md` and tightening the
   completed-review archive rules under `docs/completed/`.

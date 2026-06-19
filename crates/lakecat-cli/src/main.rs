@@ -5106,6 +5106,12 @@ fn verify_qglake_plan_or_fetch_read_restriction(
             restriction["purpose"].clone()
         )));
     }
+    if restriction["max-credential-ttl-seconds"] != json!(300) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} max credential TTL was not preserved as expected: {}",
+            restriction["max-credential-ttl-seconds"].clone()
+        )));
+    }
     let expected_policy_hash = qglake_policy_hash(table)?;
     let policy_hashes = restriction["policy-hashes"].as_array().ok_or_else(|| {
         lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -10322,6 +10328,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     }
                 }
@@ -10363,6 +10370,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     }
                 }
@@ -10406,6 +10414,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     }
                 }
@@ -10449,6 +10458,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     }
                 }
@@ -10490,7 +10500,8 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
-                        "purpose": "qglake-agent-demo"
+                        "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300
                     }
                 }
             })),
@@ -10544,6 +10555,49 @@ mod tests {
         let err = verify_qglake_scan_plan(&plan)
             .expect_err("QGLake governed scan should require read restriction purpose");
         assert!(err.to_string().contains("purpose"));
+    }
+
+    #[test]
+    fn qglake_scan_plan_verifier_requires_read_restriction_ttl_cap() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let plan = PlanTableScanResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            status: "completed".to_string(),
+            snapshot_id: None,
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest-list".to_string()],
+            lakecat_plan_tasks: qglake_manifest_plan_tasks(),
+            file_scan_tasks: Vec::new(),
+            delete_files: Vec::new(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:scan-request": {
+                    "requested-projection": [
+                        "event_id",
+                        "occurred_at",
+                        "severity",
+                        "raw_payload"
+                    ],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not-eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "purpose": "qglake-agent-demo",
+                        "policy-hashes": [expected_policy_hash]
+                    }
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_plan(&plan)
+            .expect_err("QGLake governed scan should require read restriction TTL cap");
+        assert!(err.to_string().contains("max credential TTL"));
     }
 
     fn qglake_manifest_plan_tasks() -> Vec<Value> {
@@ -10607,6 +10661,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10652,6 +10707,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10694,6 +10750,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10738,6 +10795,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10783,6 +10841,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10827,6 +10886,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10869,6 +10929,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10927,6 +10988,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -10972,6 +11034,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -11021,6 +11084,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -11067,6 +11131,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -11109,6 +11174,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -11151,6 +11217,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -11197,6 +11264,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -11248,6 +11316,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
@@ -11292,7 +11361,8 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
-                        "purpose": "qglake-agent-demo"
+                        "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
@@ -11354,6 +11424,48 @@ mod tests {
     }
 
     #[test]
+    fn qglake_fetch_scan_tasks_verifier_requires_read_restriction_ttl_cap() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            plan_task: "lakecat:sail-json-hmac:test".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![qglake_file_scan_task_with_delete_ref()],
+            delete_files: qglake_delete_files(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not-eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "purpose": "qglake-agent-demo",
+                        "policy-hashes": [expected_policy_hash]
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake governed fetch should require read restriction TTL cap");
+        assert!(err.to_string().contains("max credential TTL"));
+    }
+
+    #[test]
     fn qglake_fetch_scan_tasks_verifier_rejects_missing_required_projection() {
         let expected_policy_hash = qglake_policy_hash("events").unwrap();
         let fetched = FetchScanTasksResponse {
@@ -11378,6 +11490,7 @@ mod tests {
                             "value": "debug"
                         },
                         "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-filters": [{

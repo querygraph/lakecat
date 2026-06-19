@@ -960,8 +960,9 @@ object was echoed. The QGLake fixture verifier checks those fields directly
 when it fetches scan tasks, so a local acceptance run fails if the response
 drops either the narrowed projection or the mandatory row predicate proof. The
 same verifier now checks that the exported policy binding, scan planning
-extension, and fetch extension all preserve the server-derived purpose before
-compact replay proof can be accepted.
+extension, and fetch extension all preserve the server-derived purpose and
+policy-derived `max-credential-ttl-seconds` cap before compact replay proof can
+be accepted.
 
 ### A Notebook Requests Credentials
 
