@@ -2197,7 +2197,7 @@ async fn upsert_storage_profile(
             json!({
                 "event-type": "storage-profile.upserted",
                 "warehouse": warehouse.as_str(),
-                "storage-profile": storage_profile_response(&storage_profile),
+                "storage-profile": storage_profile_event_payload(&storage_profile),
                 "authorization-receipt": capability.receipt(),
             }),
         )?)
@@ -3641,6 +3641,7 @@ async fn project_outbox_event(
         receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "storage-profile.upserted" {
         let _profile_id = outbox_storage_profile(event)?;
+        let event_payload = redact_storage_profile_event_payload(event_payload);
         let lineage_receipt = state
             .lineage
             .emit(LineageEvent::new(
@@ -4190,6 +4191,54 @@ fn public_storage_credentials_for_profile(profile: &StorageProfile) -> Vec<Stora
         prefix: profile.location_prefix.clone(),
         config,
     }]
+}
+
+fn storage_profile_event_payload(profile: &StorageProfile) -> Value {
+    let mut payload = json!({
+        "profile-id": profile.profile_id.clone(),
+        "warehouse": profile.warehouse.as_str(),
+        "location-prefix": profile.location_prefix.clone(),
+        "provider": profile.provider.as_str(),
+        "issuance-mode": profile.issuance_mode.as_str(),
+        "secret-ref-present": profile.secret_ref.is_some(),
+        "public-config": profile.public_config.clone(),
+    });
+    if let Some(provider) = profile
+        .secret_ref
+        .as_deref()
+        .and_then(secret_ref_provider_label)
+    {
+        payload["secret-ref-provider"] = json!(provider);
+    }
+    payload
+}
+
+fn redact_storage_profile_event_payload(mut payload: Value) -> Value {
+    let Some(profile) = payload
+        .get_mut("storage-profile")
+        .and_then(Value::as_object_mut)
+    else {
+        return payload;
+    };
+    let provider = profile
+        .get("secret-ref")
+        .and_then(Value::as_str)
+        .and_then(secret_ref_provider_label)
+        .map(str::to_string);
+    let secret_ref_present = profile.remove("secret-ref").is_some()
+        || profile
+            .get("secret-ref-present")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+    profile.insert("secret-ref-present".to_string(), json!(secret_ref_present));
+    if let Some(provider) = provider {
+        profile.insert("secret-ref-provider".to_string(), json!(provider));
+    }
+    payload
+}
+
+fn secret_ref_provider_label(secret_ref: &str) -> Option<&str> {
+    secret_ref.split_once("://").map(|(scheme, _)| scheme)
 }
 
 fn storage_profile_response(profile: &StorageProfile) -> StorageProfileResponse {
@@ -6967,6 +7016,39 @@ mod tests {
             lineage_events[0].payload["storage-profile"]["issuance-mode"],
             serde_json::json!("secret-ref")
         );
+        assert_eq!(
+            lineage_events[0].payload["storage-profile"]["secret-ref-present"],
+            serde_json::json!(true)
+        );
+        assert_eq!(
+            lineage_events[0].payload["storage-profile"]["secret-ref-provider"],
+            serde_json::json!("vault")
+        );
+        assert!(
+            lineage_events[0].payload["storage-profile"]
+                .get("secret-ref")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn storage_profile_event_payload_redacts_secret_ref() {
+        let profile = StorageProfile::new(
+            "s3-events",
+            WarehouseName::new("local").unwrap(),
+            "s3://lakecat/events",
+            StorageProvider::S3,
+            CredentialIssuanceMode::ShortLivedSecretRef,
+            Some("typesec://env/LAKECAT_S3_EVENTS".to_string()),
+            BTreeMap::from([("lakecat.region".to_string(), "us-west-2".to_string())]),
+        )
+        .unwrap();
+
+        let payload = storage_profile_event_payload(&profile);
+        assert_eq!(payload["profile-id"], serde_json::json!("s3-events"));
+        assert_eq!(payload["secret-ref-present"], serde_json::json!(true));
+        assert_eq!(payload["secret-ref-provider"], serde_json::json!("typesec"));
+        assert!(payload.get("secret-ref").is_none());
     }
 
     #[tokio::test]

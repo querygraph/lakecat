@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Redacted storage-profile secret references from upsert audit/outbox replay
+  payloads, preserving only presence and provider evidence for lineage.
 - Rejected storage-profile `public-config` values that appear to embed raw
   secret material, and documented public config as non-secret routing metadata.
 - Pinned the supplied `/Users/alexy/src/lakecat/AGENTS.md` operating guidance

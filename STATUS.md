@@ -6,6 +6,26 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact storage profile secret refs from replay`. Storage-profile management
+  responses still return the full `secret-ref` to authorized operators, but
+  `storage-profile.upserted` audit/outbox replay now carries only
+  `secret-ref-present` and `secret-ref-provider` into lineage/OpenLineage
+  evidence. The drain path also redacts legacy outbox payloads that still
+  contain a full secret-store URI.
+- Local verification for the storage-profile replay redaction slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service storage_profile_event_payload_redacts_secret_ref`;
+  `cargo test -p lakecat-service outbox_drain_projects_storage_profile_upserts_to_lineage`;
+  `cargo test -p lakecat-service remote_storage_profile_accepts_secret_ref_without_vending_raw_secrets`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Reject secret-looking storage profile public config`. Storage profiles now
   reject `public-config` values that appear to embed raw tokens, passwords,
   access keys, or credential query parameters at the durable model boundary and

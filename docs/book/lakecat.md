@@ -803,6 +803,11 @@ effective read restriction for the target table. Agents with fine-grained table
 restrictions are steered to governed Sail-planned reads instead of raw
 credentials. Trusted humans can receive audited standard credentials only when
 policy allows the exception.
+When storage-profile changes replay into lineage/OpenLineage evidence, LakeCat
+does not forward the full secret-store URI. The replay payload keeps
+`secret-ref-present` and `secret-ref-provider` so QueryGraph can verify that a
+production credential root exists without learning the Vault, cloud secret
+manager, or TypeSec environment path.
 
 ### A PySpark User Reads Iceberg
 
