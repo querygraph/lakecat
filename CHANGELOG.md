@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Required QGLake storage-profile upsert proof to carry and replay-check a
+  positive graph event count.
 - Required QGLake trusted-human credential proof to carry and replay-check a
   null `blockReason` beside the audited raw-credential exception.
 - Required QGLake restricted-agent credential proof to carry and replay-check

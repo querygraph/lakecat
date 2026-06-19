@@ -1483,6 +1483,7 @@ fn verify_lakecat_replay_storage_profile_matches_summary(
     for field in [
         "secretRefPresent",
         "secretRefProvider",
+        "graphEvents",
         "replayEventHashes",
         "openLineageHashes",
     ] {
@@ -2310,6 +2311,7 @@ fn require_storage_profile_upsert_evidence(
         "openLineageHashes",
         "storageProfileUpsertProof",
     )?;
+    require_positive_u64(storage_profile, "graphEvents", "storageProfileUpsertProof")?;
     Ok(())
 }
 
@@ -3000,6 +3002,7 @@ fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Optio
             "locationPrefixHash": storage_profile_upsert.storage_profile_location_prefix_hash.as_deref(),
             "secretRefPresent": storage_profile_upsert.storage_profile_secret_ref_present.unwrap_or_default(),
             "secretRefProvider": storage_profile_upsert.storage_profile_secret_ref_provider.as_deref(),
+            "graphEvents": storage_profile_upsert.graph_events,
             "replayEventHashes": &storage_profile_upsert.replay_event_hashes,
             "openLineageHashes": &storage_profile_upsert.replay_open_lineage_hashes,
         },
@@ -7445,6 +7448,7 @@ mod tests {
                     "locationPrefixHash": "sha256:storage-location-prefix",
                     "secretRefPresent": false,
                     "secretRefProvider": null,
+                    "graphEvents": 1,
                     "replayEventHashes": ["sha256:storage-replay"],
                     "openLineageHashes": ["sha256:storage-openlineage"]
                 },
@@ -7647,6 +7651,7 @@ mod tests {
                         "locationPrefixHash": "sha256:storage-location-prefix",
                         "secretRefPresent": false,
                         "secretRefProvider": null,
+                        "graphEvents": 1,
                         "replayEventHashes": ["sha256:storage-replay"],
                         "openLineageHashes": ["sha256:storage-openlineage"]
                     }
@@ -8446,6 +8451,31 @@ mod tests {
         assert!(err.to_string().contains("storageProfileUpsertProof"));
         assert!(err.to_string().contains("locationPrefixHash"));
         assert!(err.to_string().contains("sha256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_storage_profile_graph_events() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("graphEvents");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing storage-profile graph evidence");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("graphEvents"));
+
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["graphEvents"] = json!(0);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject empty storage-profile graph evidence");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("graphEvents"));
+        assert!(err.to_string().contains("positive"));
     }
 
     #[test]
@@ -9505,6 +9535,29 @@ mod tests {
         assert!(
             err.to_string().contains(
                 "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert.locationPrefixHash mismatch"
+            )
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_storage_profile_graph_drift() {
+        let temp = qglake_temp_dir("handoff-captured-storage-profile-graph-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["management"]["storageProfileUpsert"]["graphEvents"] = json!(2);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay storage-profile graph proof drift should be rejected");
+        assert!(
+            err.to_string().contains(
+                "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert.graphEvents mismatch"
             )
         );
     }

@@ -1670,7 +1670,9 @@ then compares that regenerated replay evidence to the compact
 each restricted-agent and trusted-human branch carries the redacted
 `storageProfile` graph anchor and `maxCredentialTtlSeconds`, including profile
 id, provider, issuance mode, secret-reference presence, and the graph event
-count emitted by replay. The verifier also rejects a handoff when the
+count emitted by replay. The storage-profile upsert proof also carries its own
+positive `graphEvents` count, and captured LakeCat replay must match it. The
+verifier also rejects a handoff when the
 credential branches do not bind back to the same storage-profile upsert proof:
 profile id, provider, issuance mode, location-prefix hash, and secret-reference
 state must all match the replayed management event. A saved handoff is rejected
