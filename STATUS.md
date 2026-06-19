@@ -6,6 +6,12 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Treat missing metadata cleanup targets as clean`.
+  Rejected commits still attempt to delete uncommitted metadata objects after a
+  store conflict, but cleanup now treats `NotFound` from the object store as
+  success because the orphan is already absent. Real cleanup failures still
+  preserve the original commit error class and append cleanup context.
+- Latest completed implementation slice:
   `Emit embedded commit outbox events`.
   `MemoryCatalogStore::commit_table` now records the same catalog-facing
   `table.commit` audit/outbox evidence as the Turso-backed commit path,

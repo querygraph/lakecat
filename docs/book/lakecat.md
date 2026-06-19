@@ -315,7 +315,10 @@ Sail owns reusable Iceberg validation and metadata preparation.
 The cleanup path is deliberately secondary to the commit result. If metadata
 cleanup fails after the store rejects a commit, LakeCat preserves the original
 store or compare-and-swap error class and appends cleanup context. A stale
-pointer conflict should still look like a conflict to an Iceberg client.
+pointer conflict should still look like a conflict to an Iceberg client. If
+cleanup discovers the uncommitted object is already absent, LakeCat treats that
+as successful cleanup rather than turning a resolved orphan into an internal
+error.
 
 Idempotency is part of correctness. Reusing the same key for the same commit can
 return the stored response even after the table has advanced beyond the

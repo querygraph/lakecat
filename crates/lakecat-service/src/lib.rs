@@ -2997,13 +2997,13 @@ async fn cleanup_planned_metadata(
         return Ok(());
     }
     let (store, object_path) = metadata_object_store(&write.location)?;
-    store.delete(&object_path).await.map_err(|err| {
-        LakeCatError::Internal(format!(
+    match store.delete(&object_path).await {
+        Ok(()) | Err(object_store::Error::NotFound { .. }) => Ok(()),
+        Err(err) => Err(LakeCatError::Internal(format!(
             "failed to clean up uncommitted metadata object '{}': {err}",
             write.location
-        ))
-    })?;
-    Ok(())
+        ))),
+    }
 }
 
 async fn cleanup_planned_metadata_after_commit_error(
@@ -9625,6 +9625,29 @@ mod tests {
         assert!(message.contains("metadata pointer changed"));
         assert!(message.contains("metadata cleanup also failed"));
         assert!(message.contains("failed to clean up object"));
+    }
+
+    #[tokio::test]
+    async fn metadata_cleanup_treats_missing_uncommitted_object_as_clean() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lakecat-missing-cleanup-{unique}"));
+        std::fs::create_dir_all(&root).unwrap();
+        let missing = root.join("metadata").join("00001.json");
+        let missing_location = url::Url::from_file_path(&missing).unwrap().to_string();
+
+        cleanup_planned_metadata(
+            Some(PlannedMetadataWrite {
+                location: missing_location,
+            }),
+            None,
+        )
+        .await
+        .expect("missing uncommitted metadata object should already be clean");
+
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[cfg(feature = "sail-local")]

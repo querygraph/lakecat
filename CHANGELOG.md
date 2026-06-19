@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made metadata-object cleanup idempotent when a rejected commit's uncommitted
+  object is already absent, while preserving the original commit error plus
+  cleanup context for real cleanup failures.
 - Made the embedded in-memory catalog store emit the same `table.commit`
   audit/outbox evidence as the Turso commit path, including redacted
   idempotency-key hash and authorization receipt, while keeping idempotent
