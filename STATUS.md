@@ -6,6 +6,30 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Use published Grust and TypeSec crates`.
+  A temporary registry-only Cargo probe under `/private/tmp` proved that
+  `grust-graph` 0.9.0, `grust-cypher` 0.9.0, and `typesec` 0.8.0 resolve from
+  crates.io and pass `cargo check` together. LakeCat now depends on published
+  Grust/TypeSec crates instead of sibling path pins, manual CI no longer checks
+  out those sibling repos, and `scripts/check-local-dependency-contract.sh`
+  now proves registry resolution for Grust/TypeSec while keeping the Sail
+  helper bridge local until those APIs are published.
+- Local verification for this published Grust/TypeSec dependency slice is
+  green:
+  temp registry probe `cargo metadata --format-version 1 --no-deps`;
+  temp registry probe `cargo check`;
+  `cargo test -p lakecat-graph --features grust-local`;
+  `cargo test -p lakecat-security --features typesec-local`;
+  `cargo test -p lakecat-service --features typesec-local`;
+  `cargo fmt -p lakecat-api -p lakecat-cli -p lakecat-core -p lakecat-graph -p lakecat-lineage -p lakecat-querygraph -p lakecat-sail -p lakecat-security -p lakecat-service -p lakecat-store -- --check`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test --workspace --all-features`;
+  `cargo test --workspace`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Harden storage-profile secret-ref URIs`.
   Storage-profile validation now parses external secret-store references and
   rejects query strings, fragments, or URI userinfo before the profile can be

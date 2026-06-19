@@ -33,16 +33,16 @@ if rg -q '(^|[[:space:]])(push|pull_request):' .github/workflows/ci.yml; then
   fail "CI must not run on push or pull_request until the local gates are proven stable"
 fi
 
-require_pattern 'grust-graph = \{ package = "grust-graph", path = "../grust/crates/grust", version = "0\.9\.0",' Cargo.toml \
-  "grust-graph must keep a versioned local path dependency on ../grust/crates/grust"
-require_pattern 'typesec = \{ path = "../typesec/crates/typesec", version = "0\.8\.0",' Cargo.toml \
-  "typesec must keep a versioned local path dependency on ../typesec/crates/typesec"
+require_pattern 'grust-graph = \{ package = "grust-graph", version = "0\.9\.0",' Cargo.toml \
+  "grust-graph must use the published 0.9.0 crate"
+require_pattern 'typesec = \{ version = "0\.8\.0",' Cargo.toml \
+  "typesec must use the published 0.8.0 crate"
 require_pattern 'sail-catalog = \{ path = "../sail/crates/sail-catalog" \}' Cargo.toml \
   "sail-catalog must stay an explicit local Sail path until the needed Sail API is published"
 require_pattern 'sail-common-datafusion = \{ path = "../sail/crates/sail-common-datafusion" \}' Cargo.toml \
   "sail-common-datafusion must stay an explicit local Sail path until the needed Sail API is published"
 
-for sibling in ../grust/crates/grust ../typesec/crates/typesec ../sail/crates/sail-catalog ../sail/crates/sail-common-datafusion; do
+for sibling in ../sail/crates/sail-catalog ../sail/crates/sail-common-datafusion; do
   require_dir "$sibling"
 done
 
@@ -58,17 +58,13 @@ require_pattern 'git -C sail' .github/workflows/ci.yml \
   "manual CI must apply the LakeCat Sail helper patches"
 require_pattern 'ci/sail-patches' .github/workflows/ci.yml \
   "manual CI must reference ci/sail-patches"
-require_pattern 'repository: querygraph/grust' .github/workflows/ci.yml \
-  "manual CI must check out the Grust sibling repository"
-require_pattern 'repository: querygraph/typesec' .github/workflows/ci.yml \
-  "manual CI must check out the TypeSec sibling repository"
 require_pattern 'repository: lakehq/sail' .github/workflows/ci.yml \
   "manual CI must check out the Sail sibling repository"
 
 cargo metadata --format-version 1 --no-deps > /tmp/lakecat-dependency-contract-metadata.json
-require_pattern '"name":"grust-graph".*"req":"\^0\.9\.0".*"path":"/.*/grust/crates/grust"' /tmp/lakecat-dependency-contract-metadata.json \
-  "cargo metadata must resolve grust-graph to the local path with version requirement ^0.9.0"
-require_pattern '"name":"typesec".*"req":"\^0\.8\.0".*"path":"/.*/typesec/crates/typesec"' /tmp/lakecat-dependency-contract-metadata.json \
-  "cargo metadata must resolve typesec to the local path with version requirement ^0.8.0"
+require_pattern '"name":"grust-graph".*"source":"registry\+https://github.com/rust-lang/crates.io-index".*"req":"\^0\.9\.0"' /tmp/lakecat-dependency-contract-metadata.json \
+  "cargo metadata must resolve grust-graph to crates.io with version requirement ^0.9.0"
+require_pattern '"name":"typesec".*"source":"registry\+https://github.com/rust-lang/crates.io-index".*"req":"\^0\.8\.0"' /tmp/lakecat-dependency-contract-metadata.json \
+  "cargo metadata must resolve typesec to crates.io with version requirement ^0.8.0"
 
 echo "LakeCat local dependency contract is intact."

@@ -515,9 +515,12 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   now has focused format-version 4 fixtures for JSON summary extraction,
   manifest-list scan planning, and stable commit-requirement validation, but
   pruning and typed metadata-tree semantics remain Sail-owned follow-up work.
-  A local dependency-contract audit now checks the versioned Grust/TypeSec path
-  pins, the Sail path/patch bridge, and the manual-only CI trigger so F10 drift
-  is executable even before automatic CI is re-enabled.
+  LakeCat now consumes the published `grust-graph` 0.9.0 and `typesec` 0.8.0
+  crates, with a registry-only probe proving `grust-cypher` 0.9.0 compatibility
+  for the Grust catalog graph boundary. The dependency-contract audit now checks
+  registry resolution for Grust/TypeSec, the remaining Sail path/patch bridge,
+  and the manual-only CI trigger so F10 drift is executable even before
+  automatic CI is re-enabled.
 
 ---
 

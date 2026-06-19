@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Switched LakeCat's Grust and TypeSec workspace dependencies from sibling
+  path pins to the published `grust-graph` 0.9.0 and `typesec` 0.8.0 crates,
+  removed the manual CI Grust/TypeSec checkouts, and updated the dependency
+  contract audit to keep only the Sail helper bridge local.
 - Clarified `GOAL.md` that `/Users/alexy/src/lakecat/AGENTS.md` is durable
   goal state and must be reconciled with the goal across resumes and future
   implementation slices.

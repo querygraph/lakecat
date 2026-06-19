@@ -100,9 +100,12 @@ crates/
 ```
 
 The service should use `axum`, `tokio`, `serde`, `tower`, `tracing`,
-`object_store`, `turso`, and the Sail crates by path during development. If
-LakeCat needs Iceberg structs, prefer reusing or upstreaming them through Sail
-instead of creating a second Rust Iceberg model.
+`object_store`, `turso`, published Grust/TypeSec crates for graph and
+governance boundaries, and Sail crates by path during development. If LakeCat
+needs Iceberg structs, prefer reusing or upstreaming them through Sail instead
+of creating a second Rust Iceberg model. Sail remains the local bridge until
+the helper APIs LakeCat needs are published; Grust and TypeSec should stay on
+published crate versions unless new reusable work is being landed upstream.
 
 ## What Belongs In Sail
 

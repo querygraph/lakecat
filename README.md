@@ -39,6 +39,11 @@ Turso-backed `TursoCatalogStore` for namespaces, table records, metadata pointer
 history, audit/outbox rows, and idempotent commit replay; without it the binary
 keeps the in-memory store.
 
+The Grust and TypeSec feature gates build against published crates
+(`grust-graph` 0.9.0 and `typesec` 0.8.0). Sail integration still uses local
+Sail paths plus the checked-in helper patch bridge until the required Sail APIs
+are published.
+
 Useful local checks:
 
 ```bash

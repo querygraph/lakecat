@@ -633,22 +633,26 @@ that only uses memory stores should not accidentally depend on a sibling repo.
 A test that claims to validate TypeSec should enable `typesec-local` and call
 TypeSec.
 
-The local dependency contract is executable because LakeCat still depends on
-active sibling work. Grust and TypeSec are versioned local path dependencies:
-LakeCat resolves them from `../grust` and `../typesec` while also pinning the
-published crate versions it expects. Sail is different today: LakeCat uses
-local Sail paths plus a checked-in patch bridge for helper APIs that are not
-yet published. Before pushing a slice that touches integration features, run:
+The dependency contract is executable because LakeCat still has one active
+sibling bridge. Grust and TypeSec now resolve from the published
+`grust-graph` 0.9.0 and `typesec` 0.8.0 crates, so the `grust-local` and
+`typesec-local` features no longer require sibling checkouts merely to compile.
+That makes the graph and governance boundaries reproducible outside this
+machine while still keeping their reusable behavior in Grust and TypeSec.
+
+Sail is different today: LakeCat still uses local Sail paths plus a checked-in
+patch bridge for helper APIs that are not yet published. Before pushing a slice
+that touches integration features, run:
 
 ```sh
 scripts/check-local-dependency-contract.sh
 ```
 
-The script checks the manual-only CI trigger, the Grust/TypeSec versioned path
-pins, the local Sail path bridge, and the Sail patch files manual CI applies.
-It is not a substitute for upstreaming the Sail helper APIs or re-enabling
-automatic CI; it is a guard that makes drift visible while LakeCat still lives
-across these sibling repositories.
+The script checks the manual-only CI trigger, crates.io resolution for the
+published Grust and TypeSec versions, the local Sail path bridge, and the Sail
+patch files manual CI applies. It is not a substitute for upstreaming the Sail
+helper APIs or re-enabling automatic CI; it is a guard that makes drift visible
+while LakeCat still depends on unpublished Sail helper work.
 
 ## Standard Compatibility And Extensions
 

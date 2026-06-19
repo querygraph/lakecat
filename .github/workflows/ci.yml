@@ -51,19 +51,6 @@ jobs:
             -c user.email=lakecat-ci@users.noreply.github.com \
             am "$PATCH_DIR"/*.patch
 
-      - name: Checkout Grust
-        uses: actions/checkout@v4
-        with:
-          repository: querygraph/grust
-          ref: codex/cypher-write
-          path: grust
-
-      - name: Checkout TypeSec
-        uses: actions/checkout@v4
-        with:
-          repository: querygraph/typesec
-          path: typesec
-
       - name: Install protoc
         run: |
           sudo apt-get update
