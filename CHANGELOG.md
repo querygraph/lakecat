@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake lineage-drain table commit-history replay to preserve
+  SHA-256-shaped commit hashes before pointer-history proof can feed compact
+  handoff verification.
 - Required QGLake lineage-drain bootstrap, tombstone, and namespace
   receipt-chain replay to preserve SHA-256-shaped view receipt and receipt-chain
   hashes before accepted-view proof can feed compact handoff verification.

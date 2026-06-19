@@ -6112,14 +6112,10 @@ fn verify_qglake_table_commit_history_replay(
     }
     if commit_history.table_commit_count.unwrap_or_default() == 0
         || commit_history.table_commit_sequence_numbers.is_empty()
-        || commit_history.table_commit_hashes.is_empty()
-        || commit_history
-            .table_commit_hashes
-            .iter()
-            .any(String::is_empty)
+        || !qglake_has_sha256_hashes(&commit_history.table_commit_hashes)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain table commit history replay is missing compact commit summary evidence"
+            "qglake lineage drain table commit history replay is missing compact commit summary or SHA-256 commit hash evidence"
                 .to_string(),
         ));
     }
@@ -14782,7 +14778,65 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should require compact table commit history summary");
         assert!(err.to_string().contains(
-            "qglake lineage drain table commit history replay is missing compact commit summary evidence"
+            "qglake lineage drain table commit history replay is missing compact commit summary or SHA-256 commit hash evidence"
+        ));
+
+        let mut commit_history_with_malformed_hash = qglake_table_commit_history_lineage_summary();
+        commit_history_with_malformed_hash.table_commit_hashes =
+            vec!["not-a-sha256-hash".to_string()];
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 13,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "view.version-receipt-chains-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "table.commits-listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 14,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    qglake_view_receipt_chain_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_storage_profile_upsert_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                    commit_history_with_malformed_hash,
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject malformed table commit hashes");
+        assert!(err.to_string().contains(
+            "qglake lineage drain table commit history replay is missing compact commit summary or SHA-256 commit hash evidence"
         ));
 
         let mut commit_history_without_graph = qglake_table_commit_history_lineage_summary();
