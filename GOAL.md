@@ -108,6 +108,7 @@ metadata-pointer state, policy gates, and integration events belong here.
 For LakeCat changes, prefer:
 
 - `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`
+- `cargo fmt -p lakecat-cli -- --check` when CLI behavior or fixtures change.
 - `cargo test -p lakecat-store --features turso-local`
 - `cargo test -p lakecat-service --features turso-local`
 - `cargo test -p lakecat-service --all-features`

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Mirrored the current `AGENTS.md` CLI formatting verification gate in the
+  pinned `GOAL.md` guidance.
 - Added a redacted storage-profile location-prefix hash to lineage-drain
   summaries, QGLake replay evidence, and handoff-summary verification so
   credential-root proofs bind to the configured storage scope without exposing
