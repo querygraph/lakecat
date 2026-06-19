@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made the compact QGLake credential replay operator line include the
+  redacted restricted-agent and trusted-human storage-profile anchors plus
+  credential-root graph event counts, so captured replay text exposes the same
+  compatibility proof required by the structured handoff verifier.
 - Required compact QGLake `credentialVendingProof` branches to include the
   redacted credential storage-profile graph evidence, and made saved
   lineage-drain verification reject credential replay that lacks that

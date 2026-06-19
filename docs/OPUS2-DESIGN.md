@@ -338,7 +338,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   audited raw-credential exception; the compact credential proof is now also
   self-validating in the Rust verifier, requiring restricted-agent identity,
   the Sail-planned-read block reason, trusted-human identity, the exact audited
-  exception reason, and replay/OpenLineage hashes; captured
+  exception reason, redacted storage-profile graph-anchor evidence, and
+  replay/OpenLineage hashes; the operator-readable credential replay line now
+  surfaces the same restricted-agent and trusted-human profile/provider/issuance
+  mode/secret-ref/graph-event proof so captured text cannot look complete while
+  hiding the credential-root graph anchor; captured
   `replay-evidence.requestIdentity`
   and `replay-evidence.queryGraphBootstrap` must also match their compact
   handoff proofs for principal, authorization, TypeDID slots, delegation,

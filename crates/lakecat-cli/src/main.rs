@@ -2929,10 +2929,41 @@ fn qglake_credential_replay_line(
     {
         return None;
     }
+    let restricted_profile = qglake_credential_storage_profile_line(restricted)?;
+    let human_profile = qglake_credential_storage_profile_line(human)?;
     Some(format!(
-        "credential replay restricted=blocked:sail-planned-read-required restricted_count={} human=allowed:trusted-human-audited-raw human_count={}",
+        "credential replay restricted=blocked:sail-planned-read-required restricted_count={} restricted_profile={} human=allowed:trusted-human-audited-raw human_count={} human_profile={}",
         restricted.credential_count.unwrap_or_default(),
-        human.credential_count.unwrap_or_default()
+        restricted_profile,
+        human.credential_count.unwrap_or_default(),
+        human_profile
+    ))
+}
+
+fn qglake_credential_storage_profile_line(event: &LineageDrainEventSummary) -> Option<String> {
+    let profile_id = event.storage_profile_id.as_deref()?.trim();
+    let provider = event.storage_profile_provider.as_deref()?.trim();
+    let issuance_mode = event.storage_profile_issuance_mode.as_deref()?.trim();
+    let graph_events = event.graph_events;
+    if profile_id.is_empty() || provider.is_empty() || issuance_mode.is_empty() || graph_events == 0
+    {
+        return None;
+    }
+    let secret_ref = if event.storage_profile_secret_ref_present? {
+        event
+            .storage_profile_secret_ref_provider
+            .as_deref()
+            .filter(|provider| !provider.trim().is_empty())
+            .unwrap_or("unknown")
+    } else {
+        if event.storage_profile_secret_ref_provider.is_some() {
+            return None;
+        }
+        "none"
+    };
+    Some(format!(
+        "{}:{}:{}:secret_ref={}:graph_events={}",
+        profile_id, provider, issuance_mode, secret_ref, graph_events
     ))
 }
 
@@ -10787,7 +10818,7 @@ mod tests {
 
         assert_eq!(
             line,
-            "credential replay restricted=blocked:sail-planned-read-required restricted_count=0 human=allowed:trusted-human-audited-raw human_count=1"
+            "credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_profile=events-local:file:local-file-no-secret:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_profile=events-local:file:local-file-no-secret:secret_ref=none:graph_events=2"
         );
     }
 

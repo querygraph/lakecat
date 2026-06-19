@@ -6,6 +6,24 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Expose credential-root graph anchors in compact replay text`.
+  `lakecat-cli qglake-verify-replay` now prints the same redacted
+  storage-profile graph-anchor evidence for restricted-agent and trusted-human
+  credential replay that the structured QGLake handoff verifier requires:
+  profile id, provider, issuance mode, secret-reference presence/provider, and
+  credential-root graph event count. This keeps operator-readable replay
+  captures byte-compatible with the stronger structured proof without moving
+  graph taxonomy or query behavior into LakeCat.
+- Local verification for this replay-text slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_credential_replay_line_summarizes_verified_evidence -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Prove credential-root graph anchors in QGLake handoff`.
   Compact `credentialVendingProof` branches now carry a redacted
   `storageProfile` object with profile id, provider, issuance mode,
