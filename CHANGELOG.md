@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made `lakecat-cli qglake-verify-replay` print compact management replay
+  counts for servers, projects, warehouses, policy bindings, and storage
+  profiles after accepting a saved QGLake drain.
 - Made `lakecat-cli qglake-verify-replay` print the verified table
   commit-history replay summary, including compact commit count, sequence
   numbers, and commit hashes for QueryGraph/operator handoff.

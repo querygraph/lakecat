@@ -237,7 +237,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   writing the verified bootstrap bundle, failing the fixture if the drain
   delivered zero events and requiring the drain receipt to show
   `querygraph.bootstrap` lineage replay; the drain response now reports
-  delivered event types plus graph and lineage projection counts; the embedded
+  delivered event types plus graph and lineage projection counts, and saved
+  replay verification prints compact management replay counts for the durable
+  tenant spine, policy-list read, and storage-profile read; the embedded
   memory store now records audit events into the same lineage-and-graph outbox
   envelope so default local acceptance runs exercise real replay rather than a
   no-op drain;

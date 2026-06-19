@@ -306,23 +306,52 @@ fn qglake_verify_replay(
     println!("querygraph import {}", verification.querygraph_import_hash);
     println!("tables {}", verification.table_count);
     println!("views {}", verification.view_count);
+    if let Some(line) = qglake_management_replay_line(&drain) {
+        println!("{line}");
+    }
     if let Some(line) = qglake_table_commit_history_replay_line(&drain) {
         println!("{line}");
     }
     Ok(())
 }
 
+fn qglake_management_replay_line(drain: &LineageDrainResponse) -> Option<String> {
+    Some(format!(
+        "management replay servers={} projects={} warehouses={} policies={} storage_profiles={}",
+        qglake_drain_event(drain, "server.listed")?
+            .server_count
+            .unwrap_or_default(),
+        qglake_drain_event(drain, "project.listed")?
+            .project_count
+            .unwrap_or_default(),
+        qglake_drain_event(drain, "warehouse.listed")?
+            .warehouse_count
+            .unwrap_or_default(),
+        qglake_drain_event(drain, "policy-binding.listed")?.policy_binding_count,
+        qglake_drain_event(drain, "storage-profile.listed")?
+            .storage_profile_count
+            .unwrap_or_default()
+    ))
+}
+
 fn qglake_table_commit_history_replay_line(drain: &LineageDrainResponse) -> Option<String> {
-    let commit_history = drain
-        .events
-        .iter()
-        .find(|event| event.event_type == "table.commits-listed")?;
+    let commit_history = qglake_drain_event(drain, "table.commits-listed")?;
     Some(format!(
         "table commit history commits={} sequences={} hashes={}",
         commit_history.table_commit_count.unwrap_or_default(),
         join_u64s(&commit_history.table_commit_sequence_numbers),
         commit_history.table_commit_hashes.join(",")
     ))
+}
+
+fn qglake_drain_event<'a>(
+    drain: &'a LineageDrainResponse,
+    event_type: &str,
+) -> Option<&'a LineageDrainEventSummary> {
+    drain
+        .events
+        .iter()
+        .find(|event| event.event_type == event_type)
 }
 
 fn join_u64s(values: &[u64]) -> String {
@@ -5337,6 +5366,39 @@ mod tests {
         assert_eq!(
             line,
             "table commit history commits=1 sequences=1 hashes=sha256:table-commit"
+        );
+    }
+
+    #[test]
+    fn qglake_management_replay_line_summarizes_verified_evidence() {
+        let line = qglake_management_replay_line(&LineageDrainResponse {
+            delivered: 5,
+            event_types: vec![
+                "server.listed".to_string(),
+                "project.listed".to_string(),
+                "warehouse.listed".to_string(),
+                "policy-binding.listed".to_string(),
+                "storage-profile.listed".to_string(),
+            ],
+            graph_events: 0,
+            lineage_events: 5,
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            events: vec![
+                qglake_server_list_lineage_summary(),
+                qglake_project_list_lineage_summary(),
+                qglake_warehouse_list_lineage_summary(),
+                qglake_policy_list_lineage_summary(),
+                qglake_storage_profile_list_lineage_summary(),
+            ],
+        })
+        .expect("management replay line should be present");
+
+        assert_eq!(
+            line,
+            "management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1"
         );
     }
 
