@@ -5,6 +5,17 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Lock OPUS consolidation`.
+  The active OPUS material is consolidated into `DESIGN.md`, the root tree has
+  no active `OPUS*.md` files, and the only tracked OPUS artifacts are the four
+  historical reviews under `docs/completed/`.
+- Local verification for this OPUS consolidation lock is green:
+  `git ls-files 'OPUS*.md'`;
+  `git ls-files 'docs/completed/OPUS*.md'`;
+  `rg --files -g 'OPUS*.md' -g '!docs/completed/**'`;
+  `rg --files docs/completed -g 'OPUS*.md'`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Prove management replay counts`.
   QGLake compact `managementProof` now carries server, project, warehouse,

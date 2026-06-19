@@ -14,6 +14,10 @@ architecture, or agent guidance documents.
 - `OPUS2.md`
 - `OPUS2-DESIGN.md`
 
+These files are deliberately archived here as of 2026-06-19. Their active
+design content has been merged into `../../DESIGN.md` and adjacent canonical
+docs; this directory is now provenance, not a work queue.
+
 The active tree should not contain root-level or live OPUS design files. The
 expected audit result is that `rg --files -g 'OPUS*.md' -g '!docs/completed/**'`
 returns no files, while `rg --files docs/completed -g 'OPUS*.md'` returns only
@@ -31,6 +35,15 @@ rg --files docs/completed -g 'OPUS*.md'
 The first command should return nothing. The second and fourth commands should
 return only the four archived OPUS files listed above. The third command should
 return nothing.
+
+Current audited shape:
+
+| Check | Expected result |
+| --- | --- |
+| Root `OPUS*.md` files | none |
+| Archived `docs/completed/OPUS*.md` files | exactly the four files listed above |
+| Active OPUS-numbered design plans | none |
+| Active OPUS guidance | consolidated into `../../DESIGN.md` |
 
 ## Consolidation Ledger
 

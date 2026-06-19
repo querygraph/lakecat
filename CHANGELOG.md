@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Locked the OPUS consolidation state by recording that the root tree has no
+  active `OPUS*.md` files, the four historical OPUS reviews live only under
+  `docs/completed/`, and `DESIGN.md` is the implementation-ready synthesis.
 - Added compact QGLake `managementProof` verification for server, project,
   warehouse, policy-binding, and storage-profile replay counts, with captured
   replay drift checks.

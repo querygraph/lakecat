@@ -88,6 +88,24 @@ this living design, update the specific canonical doc in the map above, or add a
 small dated note under `docs/completed/` only after its durable decisions have
 already been merged into the live docs.
 
+### 2026-06-19 Consolidation Lock
+
+The current OPUS consolidation state is intentional and complete. The root tree
+contains no active `OPUS*.md` files, and the only tracked OPUS files are the four
+archived review artifacts under `docs/completed/`. Treat this document as the
+implementation-ready design synthesis; do not mine archived OPUS files for new
+work without first moving the durable decision back into this file or the
+canonical document that owns that topic.
+
+Current archive inventory:
+
+| Archived file | Consolidated role |
+| --- | --- |
+| `docs/completed/OPUS1.md` | Historical scaffold review and original finding set. |
+| `docs/completed/OPUS1-DESIGN.md` | Historical compatibility, governance, and Sail-near-data design argument. |
+| `docs/completed/OPUS2.md` | Historical second review after the durable catalog spine landed. |
+| `docs/completed/OPUS2-DESIGN.md` | Historical restriction-first working plan and priority reset. |
+
 ### Consolidated OPUS Digest
 
 The durable OPUS guidance now collapses to these operating rules:
