@@ -297,6 +297,7 @@ pub mod typesec_credential_issuer {
     pub struct ExternalSecretRefCredentialResolver {
         env: Arc<EnvironmentSecretRefCredentialResolver>,
         vault: Option<Arc<VaultSecretRefCredentialResolver>>,
+        provider_backends: BTreeMap<SecretRefProvider, Arc<dyn SecretRefCredentialResolver>>,
     }
 
     impl ExternalSecretRefCredentialResolver {
@@ -304,6 +305,17 @@ pub mod typesec_credential_issuer {
             Arc::new(Self {
                 env: EnvironmentSecretRefCredentialResolver::new(),
                 vault: VaultSecretRefCredentialResolver::from_env(),
+                provider_backends: BTreeMap::new(),
+            })
+        }
+
+        pub fn with_provider_backends(
+            provider_backends: BTreeMap<SecretRefProvider, Arc<dyn SecretRefCredentialResolver>>,
+        ) -> Arc<Self> {
+            Arc::new(Self {
+                env: EnvironmentSecretRefCredentialResolver::new(),
+                vault: VaultSecretRefCredentialResolver::from_env(),
+                provider_backends,
             })
         }
 
@@ -314,6 +326,7 @@ pub mod typesec_credential_issuer {
             Arc::new(Self {
                 env: EnvironmentSecretRefCredentialResolver::with_reader(reader),
                 vault: None,
+                provider_backends: BTreeMap::new(),
             })
         }
 
@@ -322,6 +335,7 @@ pub mod typesec_credential_issuer {
             Arc::new(Self {
                 env: EnvironmentSecretRefCredentialResolver::new(),
                 vault: Some(vault),
+                provider_backends: BTreeMap::new(),
             })
         }
     }
@@ -346,7 +360,12 @@ pub mod typesec_credential_issuer {
                     };
                     vault.resolve(request).await
                 }
-                provider => Err(provider_not_configured(provider, secret_ref)),
+                provider => {
+                    let Some(backend) = self.provider_backends.get(&provider) else {
+                        return Err(provider_not_configured(provider, secret_ref));
+                    };
+                    backend.resolve(request).await
+                }
             }
         }
     }
@@ -519,8 +538,8 @@ pub mod typesec_credential_issuer {
         }
     }
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub(crate) enum SecretRefProvider {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    pub enum SecretRefProvider {
         TypeSecEnv,
         TypeSec,
         Vault,
@@ -5470,6 +5489,38 @@ mod tests {
             self.response.lock().await.clone().ok_or_else(|| {
                 LakeCatError::InvalidArgument("mock Vault response missing".to_string())
             })
+        }
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[derive(Debug)]
+    struct MockProductionSecretRefResolver {
+        provider_label: &'static str,
+        requests: Mutex<Vec<String>>,
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[async_trait]
+    impl crate::typesec_credential_issuer::SecretRefCredentialResolver
+        for MockProductionSecretRefResolver
+    {
+        async fn resolve(
+            &self,
+            request: &CredentialIssuanceRequest,
+        ) -> lakecat_core::LakeCatResult<Vec<StorageCredential>> {
+            let secret_ref = request.profile.secret_ref.clone().ok_or_else(|| {
+                LakeCatError::InvalidArgument(
+                    "mock production resolver missing secret ref".to_string(),
+                )
+            })?;
+            self.requests.lock().await.push(secret_ref);
+            Ok(vec![StorageCredential {
+                prefix: request.profile.location_prefix.clone(),
+                config: vec![ConfigEntry::new(
+                    "lakecat.credential-kind",
+                    format!("{}-short-lived", self.provider_label),
+                )],
+            }])
         }
     }
 
@@ -11587,6 +11638,115 @@ mod tests {
             assert!(
                 err.to_string()
                     .contains("TypeSec denied credential issuance")
+            );
+        }
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_dispatches_configured_production_secret_backends_after_authorization()
+     {
+        use crate::typesec_credential_issuer::{
+            ExternalSecretRefCredentialResolver, SecretRefCredentialResolver, SecretRefProvider,
+            TypeSecCredentialIssuer,
+        };
+
+        let principal = Principal::new("did:example:agent", PrincipalKind::Agent).unwrap();
+        let table = TableRecord::new(
+            table_ident("local", "default", "events").unwrap(),
+            "s3://lakecat-demo/events/tenant-a".to_string(),
+            Some("s3://lakecat-demo/events/tenant-a/metadata/00000.json".to_string()),
+            serde_json::json!({"format-version":3}),
+            principal.clone(),
+        );
+        let profile = StorageProfile::new(
+            "s3-events",
+            WarehouseName::new("local").unwrap(),
+            "s3://lakecat-demo/events",
+            StorageProvider::S3,
+            CredentialIssuanceMode::ShortLivedSecretRef,
+            Some("aws-sm://lakecat/s3-events".to_string()),
+            Default::default(),
+        )
+        .unwrap();
+        let request = CredentialIssuanceRequest {
+            table,
+            profile,
+            authorization_receipt: AuthorizationReceipt {
+                principal,
+                action: CatalogAction::CredentialsVend,
+                table: Some(table_ident("local", "default", "events").unwrap()),
+                allowed: true,
+                engine: "test".to_string(),
+                policy_hash: None,
+                context: serde_json::json!({}),
+                checked_at: chrono::Utc::now(),
+            },
+        };
+
+        for (provider, provider_label, secret_ref) in [
+            (
+                SecretRefProvider::AwsSecretsManager,
+                "aws-secrets-manager",
+                "aws-sm://lakecat/s3-events",
+            ),
+            (
+                SecretRefProvider::GcpSecretManager,
+                "gcp-secret-manager",
+                "gcp-sm://lakecat/s3-events",
+            ),
+            (
+                SecretRefProvider::AzureKeyVault,
+                "azure-key-vault",
+                "azure-kv://lakecat/s3-events",
+            ),
+        ] {
+            let backend = Arc::new(MockProductionSecretRefResolver {
+                provider_label,
+                requests: Mutex::new(Vec::new()),
+            });
+            let mut backends: BTreeMap<SecretRefProvider, Arc<dyn SecretRefCredentialResolver>> =
+                BTreeMap::new();
+            backends.insert(provider, backend.clone());
+            let issuer = TypeSecCredentialIssuer::new(
+                Arc::new(AllowCredentialIssuePolicy {
+                    subject: "did:example:agent".to_string(),
+                    resource: secret_ref.to_string(),
+                }),
+                ExternalSecretRefCredentialResolver::with_provider_backends(backends),
+            );
+
+            let mut allowed_request = request.clone();
+            allowed_request.profile.secret_ref = Some(secret_ref.to_string());
+            let credentials = issuer.issue(allowed_request.clone()).await.unwrap();
+            assert_eq!(credentials.len(), 1);
+            assert_eq!(credentials[0].prefix, "s3://lakecat-demo/events");
+            assert!(credentials[0].config.iter().any(|entry| {
+                entry.key == "lakecat.credential-kind"
+                    && entry.value == format!("{provider_label}-short-lived")
+            }));
+            assert_eq!(*backend.requests.lock().await, vec![secret_ref.to_string()]);
+
+            let denied = TypeSecCredentialIssuer::new(
+                Arc::new(AllowCredentialIssuePolicy {
+                    subject: "did:example:other".to_string(),
+                    resource: secret_ref.to_string(),
+                }),
+                ExternalSecretRefCredentialResolver::with_provider_backends(BTreeMap::from([(
+                    provider,
+                    backend.clone() as Arc<dyn SecretRefCredentialResolver>,
+                )])),
+            );
+            let err = denied.issue(allowed_request).await.unwrap_err();
+            assert!(matches!(err, LakeCatError::Conflict(_)));
+            assert!(
+                err.to_string()
+                    .contains("TypeSec denied credential issuance")
+            );
+            assert_eq!(
+                *backend.requests.lock().await,
+                vec![secret_ref.to_string()],
+                "denied TypeSec decisions must not dispatch to the production backend"
             );
         }
     }

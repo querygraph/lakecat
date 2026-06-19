@@ -512,8 +512,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   path; credential-vend attempts with
   fine-grained restrictions now fail closed into governed Sail-planned reads
   before any secret resolver is called; all accepted production secret-ref
-  schemes are now exercised through TypeSec authorization before failing closed
-  when no resolver backend is configured; governed view list/upsert/drop
+  schemes are now exercised through TypeSec authorization, and AWS/GCP/Azure
+  style refs can dispatch to explicitly configured provider backends after that
+  authorization gate while still failing closed when no backend is configured;
+  denied TypeSec decisions are tested to avoid backend dispatch; governed view
+  list/upsert/drop
   management endpoints now persist and delete durable `ViewRecord` values in
   memory and Turso and emit audited `view.*` events; `ViewRecord` now carries
   durable typed columns and store-assigned `view-version` counters,

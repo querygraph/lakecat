@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a pluggable production secret-ref backend dispatch seam for
+  `aws-sm://`, `gcp-sm://`, and `azure-kv://` credential roots, keeping TypeSec
+  authorization ahead of any backend call and preserving fail-closed behavior
+  when no provider backend is configured.
 - Made the compact QGLake credential replay operator line include the
   redacted restricted-agent and trusted-human storage-profile anchors plus
   credential-root graph event counts, so captured replay text exposes the same

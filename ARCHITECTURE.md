@@ -345,15 +345,17 @@ Compact storage-profile handoff proofs also enforce that the redacted
 `secretRefProvider` appears only when `secretRefPresent` is true.
 `vault://` refs can resolve through a
 Vault HTTP backend when `LAKECAT_VAULT_ADDR` / `LAKECAT_VAULT_TOKEN` (or the
-standard `VAULT_ADDR` / `VAULT_TOKEN`) are configured; the remaining production
-providers fail closed with explicit not-configured errors until their SDK
-resolvers are enabled. Tests now cover every accepted production secret-ref
-scheme (`vault://`, `aws-sm://`, `gcp-sm://`, and `azure-kv://`) through the
-TypeSec authorization gate before that fail-closed resolver boundary. Governed
-management endpoints can now upsert and list warehouse storage profiles, and
-Turso persists those profiles for
-longest-prefix credential selection. Production external secret-store resolver
-backend coverage beyond Vault remains pending. Governed management endpoints can
+standard `VAULT_ADDR` / `VAULT_TOKEN`) are configured. `aws-sm://`,
+`gcp-sm://`, and `azure-kv://` refs can dispatch to explicitly configured
+provider backends after the same TypeSec authorization check; when no backend
+is configured, they fail closed with explicit not-configured errors. Tests now
+cover every accepted production secret-ref scheme through the TypeSec
+authorization gate and prove that configured production backends are not called
+on denied decisions. Governed management endpoints can now upsert and list
+warehouse storage profiles, and Turso persists those profiles for
+longest-prefix credential selection. Built-in production external secret-store
+SDK resolver coverage beyond Vault remains pending. Governed management
+endpoints can
 also upsert and list durable semantic view records in memory and Turso, giving
 QueryGraph a stable catalog-owned view entity. Warehouse-prefixed catalog REST
 aliases can now list, load, upsert, and drop those durable views for

@@ -6,6 +6,23 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Dispatch configured production secret-ref backends`.
+  `ExternalSecretRefCredentialResolver` now accepts explicit provider backends
+  for production `aws-sm://`, `gcp-sm://`, and `azure-kv://` secret refs and
+  dispatches to them only after TypeSec authorizes the exact
+  `credentials.issue` resource. If no backend is configured, those providers
+  still fail closed with the existing not-configured error, and tests prove
+  denied TypeSec decisions do not call the backend. Built-in SDK resolvers
+  beyond Vault remain pending.
+- Local verification for this production secret backend dispatch slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_dispatches_configured_production_secret_backends_after_authorization -- --nocapture`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_gates_production_secret_refs_before_dispatch -- --nocapture`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-service --features typesec-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Expose credential-root graph anchors in compact replay text`.
   `lakecat-cli qglake-verify-replay` now prints the same redacted
   storage-profile graph-anchor evidence for restricted-agent and trusted-human

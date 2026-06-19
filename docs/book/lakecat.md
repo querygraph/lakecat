@@ -844,6 +844,14 @@ effective read restriction for the target table. Agents with fine-grained table
 restrictions are steered to governed Sail-planned reads instead of raw
 credentials. Trusted humans can receive audited standard credentials only when
 policy allows the exception.
+For production secret managers, LakeCat keeps a provider-dispatch seam rather
+than hard-coding credentials into catalog state. `vault://` can resolve through
+the built-in Vault HTTP backend when Vault environment configuration is present.
+`aws-sm://`, `gcp-sm://`, and `azure-kv://` can dispatch to explicitly
+configured provider backends after TypeSec authorizes the exact secret-ref
+resource. If no backend is configured, those providers fail closed with an
+operator-readable not-configured error, and denied TypeSec decisions do not call
+the backend at all.
 When storage-profile changes replay into lineage/OpenLineage evidence, LakeCat
 does not forward the full secret-store URI. The replay payload keeps
 `secret-ref-present` and `secret-ref-provider` so QueryGraph can verify that a
