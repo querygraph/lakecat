@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required QGLake lineage-drain scan source replay to preserve matching planned
+  and fetched read restrictions and to prove fetched projection/filter
+  requirements exactly match the fetched restriction before compact handoff
+  proof.
 - Required QGLake lineage-drain table commit-history source replay to match the
   compact commit count against sequence-number and commit-hash evidence and to
   reject non-positive or non-increasing commit sequences before handoff proof.

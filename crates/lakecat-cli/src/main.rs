@@ -5667,7 +5667,91 @@ fn verify_qglake_scan_replay(drain: &LineageDrainResponse) -> lakecat_core::Lake
                 .to_string(),
         ));
     }
+    verify_qglake_scan_restriction_replay(planned, fetched)?;
     Ok(())
+}
+
+fn verify_qglake_scan_restriction_replay(
+    planned: &LineageDrainEventSummary,
+    fetched: &LineageDrainEventSummary,
+) -> lakecat_core::LakeCatResult<()> {
+    let planned_restriction = qglake_lineage_drain_read_restriction(planned, "scan planning")?;
+    let fetched_restriction = qglake_lineage_drain_read_restriction(fetched, "scan task fetch")?;
+    require_read_restriction_evidence(
+        planned_restriction,
+        "qglake lineage drain scan planning read restriction",
+    )?;
+    require_read_restriction_evidence(
+        fetched_restriction,
+        "qglake lineage drain scan task fetch read restriction",
+    )?;
+    for field in [
+        "policy-hashes",
+        "allowed-columns",
+        "row-predicate",
+        "purpose",
+        "max-credential-ttl-seconds",
+    ] {
+        require_value_match(
+            planned_restriction,
+            field,
+            required_value(
+                fetched_restriction,
+                field,
+                "qglake lineage drain scan task fetch read restriction",
+            )?,
+            "qglake lineage drain scan planning read restriction",
+        )?;
+    }
+
+    let fetched_allowed_columns = required_value(
+        fetched_restriction,
+        "allowed-columns",
+        "qglake lineage drain scan task fetch read restriction",
+    )?;
+    let fetched_projection = Value::Array(
+        fetched
+            .required_projection
+            .iter()
+            .cloned()
+            .map(Value::String)
+            .collect(),
+    );
+    if &fetched_projection != fetched_allowed_columns {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain scan task fetch replay required projection does not match fetched read restriction"
+                .to_string(),
+        ));
+    }
+
+    let fetched_row_predicate = required_value(
+        fetched_restriction,
+        "row-predicate",
+        "qglake lineage drain scan task fetch read restriction",
+    )?;
+    let expected_filters = vec![fetched_row_predicate.clone()];
+    if fetched.required_filters.as_slice() != expected_filters.as_slice() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain scan task fetch replay required filters do not exactly preserve fetched row predicate"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn qglake_lineage_drain_read_restriction<'a>(
+    event: &'a LineageDrainEventSummary,
+    label: &str,
+) -> lakecat_core::LakeCatResult<&'a serde_json::Map<String, Value>> {
+    event
+        .read_restriction
+        .as_ref()
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain {label} replay is missing governed read restriction evidence"
+            ))
+        })
 }
 
 fn verify_qglake_replay_artifacts(
@@ -15092,6 +15176,140 @@ mod tests {
             err.to_string()
                 .contains("qglake lineage drain did not replay scan task fetch evidence")
         );
+
+        let mut fetched_with_restriction_drift = qglake_scan_tasks_fetched_lineage_summary();
+        fetched_with_restriction_drift.read_restriction = Some(json!({
+            "allowed-columns": ["event_id", "occurred_at"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": ["sha256:scan-policy"]
+        }));
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 15,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "view.version-receipt-chains-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "table.commits-listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 16,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    qglake_view_receipt_chain_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_storage_profile_upsert_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                    qglake_table_commit_history_lineage_summary(),
+                    qglake_scan_planned_lineage_summary(),
+                    fetched_with_restriction_drift,
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject scan restriction drift");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain scan planning read restriction")
+        );
+        assert!(err.to_string().contains("allowed-columns"));
+
+        let mut fetched_with_filter_drift = qglake_scan_tasks_fetched_lineage_summary();
+        fetched_with_filter_drift.required_filters = vec![json!({
+            "type": "not-eq",
+            "term": "severity",
+            "value": "info"
+        })];
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 15,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "view.version-receipt-chains-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "table.commits-listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 16,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    qglake_view_receipt_chain_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_storage_profile_upsert_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                    qglake_table_commit_history_lineage_summary(),
+                    qglake_scan_planned_lineage_summary(),
+                    fetched_with_filter_drift,
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject fetched filter drift");
+        assert!(err.to_string().contains(
+            "qglake lineage drain scan task fetch replay required filters do not exactly preserve fetched row predicate"
+        ));
 
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
