@@ -3420,6 +3420,9 @@ async fn querygraph_bootstrap(
                             .copied()
                             .unwrap_or_default(),
                         "receipt-hash": receipt_hash,
+                        "receipt-chain-hash": verification
+                            .verified_view_receipt_chain_hashes
+                            .get(stable_id),
                     }))
                     .collect::<Vec<_>>(),
                 "bundle-hash": verification.bundle_hash,
@@ -3481,19 +3484,28 @@ async fn querygraph_view_version_receipts(
             .store
             .list_view_version_receipts(&view.warehouse, &view.namespace, &view.name)
             .await?;
-        if let Some(receipt) = version_receipts
+        let response_receipts = version_receipts
+            .iter()
+            .map(view_version_receipt_response)
+            .collect::<LakeCatResult<Vec<_>>>()?;
+        if !view_version_receipt_chain_verified(&response_receipts) {
+            return Err(LakeCatError::Internal(format!(
+                "querygraph bootstrap view {}.{} has an unverified receipt chain",
+                view.namespace.path(),
+                view.name.as_str()
+            )));
+        }
+        let receipt_chain_hash = view_version_receipt_chain_hash(&response_receipts)?;
+        if let Some(receipt) = response_receipts
             .iter()
             .rev()
             .find(|receipt| receipt.view_version == view.view_version)
         {
-            let receipt_hash =
-                content_hash_json(&serde_json::to_value(receipt).map_err(|err| {
-                    LakeCatError::Internal(format!("failed to serialize view receipt: {err}"))
-                })?)?;
             receipts.push(QueryGraphViewReceiptEvidence {
                 stable_id: receipt.stable_id.clone(),
                 view_version: receipt.view_version,
-                receipt_hash,
+                receipt_hash: receipt.receipt_hash.clone(),
+                receipt_chain_hash,
             });
         } else {
             return Err(LakeCatError::Internal(format!(
@@ -4695,19 +4707,7 @@ fn view_version_receipt_chains(
                 .map(|receipt| view_version_receipt_response(receipt))
                 .collect::<LakeCatResult<Vec<_>>>();
             Some(response_receipts.and_then(|response_receipts| {
-                let chain_hash = content_hash_json(&json!({
-                    "stable-id": latest.stable_id,
-                    "warehouse": latest.warehouse.as_str(),
-                    "namespace": latest.namespace.parts(),
-                    "name": latest.name.as_str(),
-                    "latest-view-version": latest.view_version,
-                    "latest-operation": view_version_operation(&latest.operation),
-                    "tombstoned": latest.operation == ViewVersionOperation::Drop,
-                    "receipt-hashes": response_receipts
-                        .iter()
-                        .map(|receipt| receipt.receipt_hash.clone())
-                        .collect::<Vec<_>>(),
-                }))?;
+                let chain_hash = view_version_receipt_chain_hash(&response_receipts)?;
                 let chain_verified = view_version_receipt_chain_verified(&response_receipts);
                 Ok(ViewVersionReceiptChainResponse {
                     stable_id: latest.stable_id.clone(),
@@ -4725,6 +4725,29 @@ fn view_version_receipt_chains(
             }))
         })
         .collect()
+}
+
+fn view_version_receipt_chain_hash(
+    receipts: &[ViewVersionReceiptResponse],
+) -> LakeCatResult<String> {
+    let latest = receipts.last().ok_or_else(|| {
+        LakeCatError::InvalidArgument(
+            "view receipt-chain hash requires at least one receipt".to_string(),
+        )
+    })?;
+    content_hash_json(&json!({
+        "stable-id": latest.stable_id,
+        "warehouse": latest.warehouse,
+        "namespace": latest.namespace,
+        "name": latest.name,
+        "latest-view-version": latest.view_version,
+        "latest-operation": latest.operation,
+        "tombstoned": latest.operation == "drop",
+        "receipt-hashes": receipts
+            .iter()
+            .map(|receipt| receipt.receipt_hash.clone())
+            .collect::<Vec<_>>(),
+    }))
 }
 
 fn view_version_receipt_chain_verified(receipts: &[ViewVersionReceiptResponse]) -> bool {

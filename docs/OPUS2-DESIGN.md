@@ -565,7 +565,8 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   QGLake/QueryGraph acceptance;
   QueryGraph bootstrap now exports those stored views with manifest-covered OSI
   hashes, typed view columns, durable view versions, compact view receipt
-  evidence in the import compatibility contract, view-aware graph edges, and
+  evidence in the import compatibility contract, including both accepted
+  receipt hashes and per-view receipt-chain hashes, view-aware graph edges, and
   OpenLineage view counts, and QGLake lineage-drain acceptance rejects replay
   that does not preserve the accepted view version or its compact durable
   receipt hash; `lakecat-cli qglake-verify-replay` now runs the same handoff

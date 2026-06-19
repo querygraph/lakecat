@@ -310,6 +310,16 @@ impl QueryGraphBootstrap {
                 .iter()
                 .map(|evidence| (evidence.stable_id.clone(), evidence.receipt_hash.clone()))
                 .collect(),
+            verified_view_receipt_chain_hashes: import_contract
+                .view_receipt_evidence
+                .iter()
+                .map(|evidence| {
+                    (
+                        evidence.stable_id.clone(),
+                        evidence.receipt_chain_hash.clone(),
+                    )
+                })
+                .collect(),
             bundle_hash,
             graph_hash,
             open_lineage_hash,
@@ -479,6 +489,7 @@ pub struct QueryGraphViewReceiptEvidence {
     pub stable_id: String,
     pub view_version: u64,
     pub receipt_hash: String,
+    pub receipt_chain_hash: String,
 }
 
 fn validate_view_receipt_evidence(
@@ -520,6 +531,12 @@ fn validate_view_receipt_evidence(
         if record.receipt_hash.is_empty() {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "QueryGraph bootstrap import contract view receipt evidence for {} is missing a receipt hash",
+                view.stable_id
+            )));
+        }
+        if record.receipt_chain_hash.is_empty() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QueryGraph bootstrap import contract view receipt evidence for {} is missing a receipt-chain hash",
                 view.stable_id
             )));
         }
@@ -698,6 +715,8 @@ pub struct QueryGraphBootstrapVerification {
     pub verified_view_versions: BTreeMap<String, u64>,
     #[serde(default)]
     pub verified_view_receipt_hashes: BTreeMap<String, String>,
+    #[serde(default)]
+    pub verified_view_receipt_chain_hashes: BTreeMap<String, String>,
     pub bundle_hash: String,
     pub graph_hash: String,
     pub open_lineage_hash: String,
@@ -1809,6 +1828,7 @@ mod tests {
             stable_id: "lakecat:view:local:default:active_customers".to_string(),
             view_version: 1,
             receipt_hash: "sha256:view-version-receipt".to_string(),
+            receipt_chain_hash: "sha256:view-receipt-chain".to_string(),
         }])
         .unwrap();
 
@@ -1876,6 +1896,13 @@ mod tests {
                 .get(&bundle.views[0].stable_id)
                 .map(String::as_str),
             Some("sha256:view-version-receipt")
+        );
+        assert_eq!(
+            verification
+                .verified_view_receipt_chain_hashes
+                .get(&bundle.views[0].stable_id)
+                .map(String::as_str),
+            Some("sha256:view-receipt-chain")
         );
         let expected_evidence_hash = view_receipt_evidence_hash(
             &bundle
@@ -1947,6 +1974,7 @@ mod tests {
             stable_id: "lakecat:view:local:default:active_customers".to_string(),
             view_version: 1,
             receipt_hash: "sha256:view-version-receipt".to_string(),
+            receipt_chain_hash: "sha256:view-receipt-chain".to_string(),
         }])
         .unwrap();
 

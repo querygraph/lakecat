@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound QueryGraph view import evidence to the durable view receipt chain by
+  adding per-view `receipt-chain-hash` evidence to the import compatibility
+  contract, bootstrap verification, QGLake replay proof, and handoff verifier.
 - Added a pluggable production secret-ref backend dispatch seam for
   `aws-sm://`, `gcp-sm://`, and `azure-kv://` credential roots, keeping TypeSec
   authorization ahead of any backend call and preserving fail-closed behavior

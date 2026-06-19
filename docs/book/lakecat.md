@@ -1255,7 +1255,8 @@ for each exported view version:
       {
         "stable-id": "lakecat:view:local:default:events_view",
         "view-version": 1,
-        "receipt-hash": "sha256:..."
+        "receipt-hash": "sha256:...",
+        "receipt-chain-hash": "sha256:..."
       }
     ],
     "view-receipt-evidence-hash": "sha256:..."
@@ -1264,7 +1265,8 @@ for each exported view version:
 ```
 
 That gives QueryGraph a manifest-covered way to reject a view bootstrap that
-lost the catalog receipt chain before the richer graph import begins.
+lost the accepted catalog receipt or detached the ordered receipt chain before
+the richer graph import begins.
 
 The QueryGraph side should verify the same bundle before importing it:
 
@@ -1281,7 +1283,8 @@ cargo run -- lakecat-import \
 
 The importer checks the outer bundle hash, the manifest hashes, the
 QueryGraph-import compatibility hash, the graph hash, and view receipt
-evidence. The graph envelope must be valid as a graph, not just valid JSON:
+evidence, including the accepted receipt hash and receipt-chain hash for each
+exported view. The graph envelope must be valid as a graph, not just valid JSON:
 for example, a table and a view in the same namespace must share one namespace
 node, not emit duplicate vertex ids. That validation belongs on the
 QueryGraph/Grust side, while LakeCat is responsible for producing a clean
@@ -1398,7 +1401,8 @@ checked outside the local shell harness. The same standalone verifier now
 requires the compact view proof to keep `viewCount` consistent with the accepted
 view list, carry stable warehouse/namespace/name identity, prove
 `viewVersion == acceptedViewVersion`, and carry accepted receipt hashes,
-tombstone receipt hashes, positive verified-chain counts, receipt-chain
+accepted receipt-chain hashes, tombstone receipt hashes, positive
+verified-chain counts, receipt-chain
 warehouse/namespace identity, namespace chain hashes, and replay/OpenLineage
 hashes. The verifier also checks that each namespace receipt-chain summary's
 `verifiedChainCount` equals the number of chain hashes and that the receipt

@@ -6,6 +6,26 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QueryGraph view imports to receipt-chain hashes`.
+  QueryGraph bootstrap view receipt evidence now carries a per-view
+  `receipt-chain-hash` beside the accepted version receipt hash. The service
+  computes it from the same ordered durable receipt chain used by the
+  management receipt-chain endpoint, `lakecat-querygraph` verifies it in the
+  import compatibility contract and exposes it in
+  `QueryGraphBootstrapVerification`, and QGLake replay/handoff verification now
+  requires the accepted view proof to carry that chain anchor.
+- Local verification for this QueryGraph view receipt-chain import slice is
+  green:
+  `cargo fmt -p lakecat-querygraph -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-querygraph`;
+  `cargo test -p lakecat-service --features typesec-local querygraph_bootstrap_projects_catalog_views -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-service --features typesec-local`;
+  `cargo test -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-service --all-features`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Dispatch configured production secret-ref backends`.
   `ExternalSecretRefCredentialResolver` now accepts explicit provider backends
   for production `aws-sm://`, `gcp-sm://`, and `azure-kv://` secret refs and

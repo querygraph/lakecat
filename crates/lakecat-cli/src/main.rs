@@ -1110,6 +1110,7 @@ fn qglake_verification_from_handoff_summary(
     )?;
     let mut verified_view_versions = BTreeMap::new();
     let mut verified_view_receipt_hashes = BTreeMap::new();
+    let mut verified_view_receipt_chain_hashes = BTreeMap::new();
     for (index, view) in required_array(view_receipts, "views", "viewReceiptChainProof")?
         .iter()
         .enumerate()
@@ -1129,6 +1130,15 @@ fn qglake_verification_from_handoff_summary(
             require_hash_str(view, "acceptedReceiptHash", "viewReceiptChainProof.views[]")?
                 .to_string(),
         );
+        verified_view_receipt_chain_hashes.insert(
+            stable_id.to_string(),
+            require_hash_str(
+                view,
+                "acceptedReceiptChainHash",
+                "viewReceiptChainProof.views[]",
+            )?
+            .to_string(),
+        );
     }
 
     Ok(QueryGraphBootstrapVerification {
@@ -1147,6 +1157,7 @@ fn qglake_verification_from_handoff_summary(
         )?,
         verified_view_versions,
         verified_view_receipt_hashes,
+        verified_view_receipt_chain_hashes,
         bundle_hash: required_str(querygraph, "bundleHash", "querygraphVerification")?.to_string(),
         graph_hash: required_str(querygraph, "graphHash", "querygraphVerification")?.to_string(),
         open_lineage_hash: required_str(querygraph, "openLineageHash", "querygraphVerification")?
@@ -2509,6 +2520,11 @@ fn require_view_receipt_chain_evidence(
             )));
         }
         require_hash_str(view, "acceptedReceiptHash", "viewReceiptChainProof.views[]")?;
+        require_hash_str(
+            view,
+            "acceptedReceiptChainHash",
+            "viewReceiptChainProof.views[]",
+        )?;
         require_hash_array(view, "replayEventHashes", "viewReceiptChainProof.views[]")?;
         require_hash_array(view, "openLineageHashes", "viewReceiptChainProof.views[]")?;
     }
@@ -2849,6 +2865,9 @@ fn qglake_view_replay_evidence_json(
                 "viewVersion": view_replay.view_version,
                 "acceptedViewVersion": verification.verified_view_versions.get(view_stable_id),
                 "acceptedReceiptHash": verification.verified_view_receipt_hashes.get(view_stable_id),
+                "acceptedReceiptChainHash": verification
+                    .verified_view_receipt_chain_hashes
+                    .get(view_stable_id),
                 "eventType": view_replay.event_type,
                 "expectedViewVersion": view_replay.expected_view_version,
                 "replayEventHashes": &view_replay.replay_event_hashes,
@@ -3945,9 +3964,12 @@ fn verify_qglake_querygraph_import_contract(
                     view.stable_id
                 )));
             };
-            if evidence.view_version != view.view_version || evidence.receipt_hash.is_empty() {
+            if evidence.view_version != view.view_version
+                || evidence.receipt_hash.is_empty()
+                || evidence.receipt_chain_hash.is_empty()
+            {
                 return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-                    "QGLake bootstrap QueryGraph import contract receipt evidence for {} did not match the accepted view version",
+                    "QGLake bootstrap QueryGraph import contract receipt evidence for {} did not match the accepted view version and receipt chain",
                     view.stable_id
                 )));
             }
@@ -6950,6 +6972,7 @@ mod tests {
                         "viewVersion": 1,
                         "acceptedViewVersion": 1,
                         "acceptedReceiptHash": "sha256:view-receipt",
+                        "acceptedReceiptChainHash": "sha256:view-receipt-chain",
                         "eventType": "view.upserted",
                         "expectedViewVersion": null,
                         "replayEventHashes": ["sha256:view-replay"],
@@ -7134,6 +7157,7 @@ mod tests {
                         "viewVersion": 1,
                         "acceptedViewVersion": 1,
                         "acceptedReceiptHash": "sha256:view-receipt",
+                        "acceptedReceiptChainHash": "sha256:view-receipt-chain",
                         "eventType": "view.upserted",
                         "expectedViewVersion": null,
                         "replayEventHashes": ["sha256:view-replay"],
@@ -7406,6 +7430,10 @@ mod tests {
             verified_view_receipt_hashes: BTreeMap::from([(
                 "lakecat:view:local:default:active_customers_view".to_string(),
                 "sha256:view-receipt".to_string(),
+            )]),
+            verified_view_receipt_chain_hashes: BTreeMap::from([(
+                "lakecat:view:local:default:active_customers_view".to_string(),
+                "sha256:view-receipt-chain".to_string(),
             )]),
             bundle_hash: "sha256:bundle".to_string(),
             graph_hash: "sha256:graph".to_string(),
@@ -8150,6 +8178,20 @@ mod tests {
 
         assert!(err.to_string().contains("viewReceiptChainProof"));
         assert!(err.to_string().contains("acceptedReceiptHash"));
+        assert!(err.to_string().contains("sha256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_view_accepted_receipt_chain_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"][0]["acceptedReceiptChainHash"] =
+            json!("not-a-sha256-hash");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject invalid accepted view receipt-chain hashes");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("acceptedReceiptChainHash"));
         assert!(err.to_string().contains("sha256"));
     }
 
@@ -9689,6 +9731,10 @@ mod tests {
         assert_eq!(
             view_replay_json["views"]["views"][0]["acceptedReceiptHash"],
             json!("sha256:view-version-receipt")
+        );
+        assert_eq!(
+            view_replay_json["views"]["views"][0]["acceptedReceiptChainHash"],
+            json!("sha256:view-receipt-chain")
         );
         assert_eq!(
             view_replay_json["views"]["tombstoneReceipts"][0]["expectedViewVersion"],
@@ -13058,6 +13104,10 @@ mod tests {
             "lakecat:view:local:default:active_customers".to_string(),
             "sha256:view-version-receipt".to_string(),
         )]);
+        verification.verified_view_receipt_chain_hashes = BTreeMap::from([(
+            "lakecat:view:local:default:active_customers".to_string(),
+            "sha256:view-receipt-chain".to_string(),
+        )]);
         verification
     }
 
@@ -13070,6 +13120,7 @@ mod tests {
             verified_views: Vec::new(),
             verified_view_versions: BTreeMap::new(),
             verified_view_receipt_hashes: BTreeMap::new(),
+            verified_view_receipt_chain_hashes: BTreeMap::new(),
             bundle_hash: "sha256:bundle".to_string(),
             graph_hash: "sha256:graph".to_string(),
             open_lineage_hash: "sha256:openlineage".to_string(),

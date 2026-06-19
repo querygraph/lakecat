@@ -384,7 +384,11 @@ previous receipt. Full Iceberg view history and commit semantics should still
 move toward Sail-backed models as they become available. QueryGraph bootstrap
 now exports those stored views
 with manifest-covered OSI handoff hashes, typed view columns, view versions,
-view-aware graph edges, and OpenLineage view counts.
+view-aware graph edges, OpenLineage view counts, and per-view receipt evidence
+that includes both the accepted version receipt hash and the ordered receipt
+chain hash. That lets QueryGraph reject a view import whose current view
+artifact is intact but whose catalog-facing version chain has been detached or
+rewritten.
 Governed management endpoints now also upsert and list
 durable server records in memory and Turso; project records can attach to stored
 servers; and warehouse records must attach to stored projects. Project-scoped
