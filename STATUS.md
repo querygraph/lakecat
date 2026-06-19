@@ -6,6 +6,13 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require QGLake bootstrap tenant graph proof`.
+  `lakecat-cli qglake-fixture` / bootstrap verification now rejects accepted
+  bundles whose catalog graph lacks the full Catalog > Server > Project >
+  Warehouse > Namespace > Table path. This turns the manifest-covered tenant
+  spine from exported context into acceptance evidence while keeping graph
+  taxonomy, traversal, and query behavior in Grust.
+- Latest completed implementation slice:
   `Bind QueryGraph bootstrap tenant spine to management records`.
   QueryGraph bootstrap graphs now prefer durable `ServerRecord`,
   `ProjectRecord`, and `WarehouseRecord` values for the manifest-covered

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened QGLake bootstrap verification so accepted bundles must prove the
+  graph path from Catalog to Server, Project, Warehouse, Namespace, and the
+  table, rejecting handoffs that detach a namespace from its tenant spine.
 - Made QueryGraph bootstrap graphs prefer durable LakeCat management records
   for the Server > Project > Warehouse tenant spine, while preserving the
   deterministic default spine as a compatibility fallback when management rows

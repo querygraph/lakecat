@@ -3553,6 +3553,11 @@ fn verify_qglake_bootstrap_graph(
     bundle: &QueryGraphBootstrap,
     projection: &lakecat_querygraph::QueryGraphTableProjection,
 ) -> lakecat_core::LakeCatResult<()> {
+    let namespace_id = format!(
+        "lakecat:namespace:{}:{}",
+        projection.ident.warehouse, projection.ident.namespace
+    );
+    let warehouse_id = format!("lakecat:warehouse:{}", projection.ident.warehouse);
     let table_node = bundle
         .graph
         .nodes
@@ -3570,6 +3575,50 @@ fn verify_qglake_bootstrap_graph(
             table_node.properties["metadataLocation"].clone()
         )));
     }
+
+    let server_id = bundle
+        .graph
+        .edges
+        .iter()
+        .find(|edge| edge.from == "lakecat:catalog" && edge.label == "HAS_SERVER")
+        .map(|edge| edge.to.as_str())
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(
+                "QGLake bootstrap graph did not connect Catalog to a Server tenant anchor"
+                    .to_string(),
+            )
+        })?;
+    require_qglake_graph_node_label(bundle, server_id, "Server")?;
+
+    let project_id = bundle
+        .graph
+        .edges
+        .iter()
+        .find(|edge| edge.from == server_id && edge.label == "HAS_PROJECT")
+        .map(|edge| edge.to.as_str())
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap graph did not connect Server {server_id} to a Project tenant anchor"
+            ))
+        })?;
+    require_qglake_graph_node_label(bundle, project_id, "Project")?;
+
+    if !qglake_graph_has_edge(bundle, project_id, &warehouse_id, "HAS_WAREHOUSE") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap graph did not connect Project {project_id} to warehouse {}",
+            projection.ident.warehouse
+        )));
+    }
+    require_qglake_graph_node_label(bundle, &warehouse_id, "Warehouse")?;
+    require_qglake_graph_node_label(bundle, &namespace_id, "Namespace")?;
+
+    if !qglake_graph_has_edge(bundle, &warehouse_id, &namespace_id, "HAS_NAMESPACE") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap graph did not connect warehouse {} to namespace {}",
+            projection.ident.warehouse, projection.ident.namespace
+        )));
+    }
+
     let has_namespace_edge = bundle
         .graph
         .edges
@@ -3582,6 +3631,33 @@ fn verify_qglake_bootstrap_graph(
         )));
     }
     Ok(())
+}
+
+fn require_qglake_graph_node_label(
+    bundle: &QueryGraphBootstrap,
+    node_id: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let has_node = bundle
+        .graph
+        .nodes
+        .iter()
+        .any(|node| node.id == node_id && node.label == label);
+    if has_node {
+        Ok(())
+    } else {
+        Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap graph did not include {label} node {node_id}"
+        )))
+    }
+}
+
+fn qglake_graph_has_edge(bundle: &QueryGraphBootstrap, from: &str, to: &str, label: &str) -> bool {
+    bundle
+        .graph
+        .edges
+        .iter()
+        .any(|edge| edge.from == from && edge.to == to && edge.label == label)
 }
 
 async fn verify_qglake_policy_list(
@@ -8073,6 +8149,48 @@ mod tests {
         let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
             .expect_err("QGLake bootstrap should reject missing graph table anchor");
         assert!(err.to_string().contains("graph did not include table node"));
+    }
+
+    #[test]
+    fn qglake_bootstrap_verifier_requires_graph_tenant_spine() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let mut bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        bundle.graph.edges.retain(|edge| edge.label != "HAS_SERVER");
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect_err("QGLake bootstrap should reject a missing tenant spine");
+        assert!(err.to_string().contains("Catalog to a Server"));
+    }
+
+    #[test]
+    fn qglake_bootstrap_verifier_requires_graph_warehouse_namespace_edge() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let mut bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        bundle.graph.edges.retain(|edge| {
+            !(edge.from == "lakecat:warehouse:local" && edge.label == "HAS_NAMESPACE")
+        });
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect_err("QGLake bootstrap should reject a detached warehouse namespace");
+        assert!(err.to_string().contains("warehouse local to namespace"));
     }
 
     #[test]

@@ -1210,6 +1210,9 @@ the tenant path. The tenant anchors and warehouse-to-namespace edges are part
 of the manifest-covered graph hash, so an importer or handoff verifier can
 reject a bundle whose namespace is silently detached from the warehouse or
 rebound to a different durable tenant chain.
+The local QGLake verifier enforces that shape: an accepted bootstrap must prove
+`Catalog -> Server -> Project -> Warehouse -> Namespace -> Table`, not merely
+that a table node exists somewhere in the graph.
 
 ```sh
 curl -s \
