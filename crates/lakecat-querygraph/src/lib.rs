@@ -3,7 +3,7 @@ use lakecat_core::{LakeCatResult, TableIdent, WarehouseName, content_hash_json};
 use lakecat_store::{PolicyBinding, TableRecord, ViewRecord};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
@@ -746,58 +746,70 @@ impl QueryGraphCatalogGraph {
         tables: &[QueryGraphTableProjection],
         views: &[QueryGraphViewProjection],
     ) -> Self {
-        let mut nodes = Vec::with_capacity(tables.len() * 3 + views.len() * 2 + 1);
-        let mut edges = Vec::with_capacity(tables.len() * 3 + views.len() * 2);
-        nodes.push(QueryGraphNode {
-            id: "lakecat:catalog".to_string(),
-            label: "Catalog".to_string(),
-            properties: json!({ "name": "LakeCat" }),
-        });
+        let mut nodes = BTreeMap::new();
+        let mut edges = BTreeSet::new();
+        insert_node(
+            &mut nodes,
+            QueryGraphNode {
+                id: "lakecat:catalog".to_string(),
+                label: "Catalog".to_string(),
+                properties: json!({ "name": "LakeCat" }),
+            },
+        );
         for table in tables {
             let namespace_id = format!(
                 "lakecat:namespace:{}:{}",
                 table.ident.warehouse, table.ident.namespace
             );
-            nodes.push(QueryGraphNode {
-                id: namespace_id.clone(),
-                label: "Namespace".to_string(),
-                properties: json!({
-                    "warehouse": table.ident.warehouse.as_str(),
-                    "namespace": table.ident.namespace.path(),
-                }),
-            });
-            nodes.push(QueryGraphNode {
-                id: table.stable_id.clone(),
-                label: "IcebergTable".to_string(),
-                properties: json!({
-                    "name": table.ident.name.as_str(),
-                    "location": table.location,
-                    "metadataLocation": table.metadata_location,
-                    "formatVersion": table.format_version,
-                }),
-            });
+            insert_node(
+                &mut nodes,
+                QueryGraphNode {
+                    id: namespace_id.clone(),
+                    label: "Namespace".to_string(),
+                    properties: json!({
+                        "warehouse": table.ident.warehouse.as_str(),
+                        "namespace": table.ident.namespace.path(),
+                    }),
+                },
+            );
+            insert_node(
+                &mut nodes,
+                QueryGraphNode {
+                    id: table.stable_id.clone(),
+                    label: "IcebergTable".to_string(),
+                    properties: json!({
+                        "name": table.ident.name.as_str(),
+                        "location": table.location,
+                        "metadataLocation": table.metadata_location,
+                        "formatVersion": table.format_version,
+                    }),
+                },
+            );
             let policy_id = table
                 .odrl
                 .get("@id")
                 .and_then(Value::as_str)
                 .unwrap_or("lakecat:policy:unknown")
                 .to_string();
-            nodes.push(QueryGraphNode {
-                id: policy_id.clone(),
-                label: "ODRLPolicy".to_string(),
-                properties: json!({ "target": table.stable_id }),
-            });
-            edges.push(QueryGraphEdge {
+            insert_node(
+                &mut nodes,
+                QueryGraphNode {
+                    id: policy_id.clone(),
+                    label: "ODRLPolicy".to_string(),
+                    properties: json!({ "target": table.stable_id }),
+                },
+            );
+            edges.insert(QueryGraphEdge {
                 from: "lakecat:catalog".to_string(),
                 to: namespace_id.clone(),
                 label: "HAS_NAMESPACE".to_string(),
             });
-            edges.push(QueryGraphEdge {
+            edges.insert(QueryGraphEdge {
                 from: namespace_id,
                 to: table.stable_id.clone(),
                 label: "CONTAINS_TABLE".to_string(),
             });
-            edges.push(QueryGraphEdge {
+            edges.insert(QueryGraphEdge {
                 from: table.stable_id.clone(),
                 to: policy_id,
                 label: "GOVERNED_BY".to_string(),
@@ -809,37 +821,46 @@ impl QueryGraphCatalogGraph {
                 view.warehouse,
                 view.namespace.join(".")
             );
-            nodes.push(QueryGraphNode {
-                id: namespace_id.clone(),
-                label: "Namespace".to_string(),
-                properties: json!({
-                    "warehouse": view.warehouse,
-                    "namespace": view.namespace.join("."),
-                }),
-            });
-            nodes.push(QueryGraphNode {
-                id: view.stable_id.clone(),
-                label: "View".to_string(),
-                properties: json!({
-                    "name": view.name,
-                    "viewVersion": view.view_version,
-                    "dialect": view.dialect,
-                    "schemaVersion": view.schema_version,
-                    "columns": view.columns,
-                }),
-            });
-            edges.push(QueryGraphEdge {
+            insert_node(
+                &mut nodes,
+                QueryGraphNode {
+                    id: namespace_id.clone(),
+                    label: "Namespace".to_string(),
+                    properties: json!({
+                        "warehouse": view.warehouse,
+                        "namespace": view.namespace.join("."),
+                    }),
+                },
+            );
+            insert_node(
+                &mut nodes,
+                QueryGraphNode {
+                    id: view.stable_id.clone(),
+                    label: "View".to_string(),
+                    properties: json!({
+                        "name": view.name,
+                        "viewVersion": view.view_version,
+                        "dialect": view.dialect,
+                        "schemaVersion": view.schema_version,
+                        "columns": view.columns,
+                    }),
+                },
+            );
+            edges.insert(QueryGraphEdge {
                 from: "lakecat:catalog".to_string(),
                 to: namespace_id.clone(),
                 label: "HAS_NAMESPACE".to_string(),
             });
-            edges.push(QueryGraphEdge {
+            edges.insert(QueryGraphEdge {
                 from: namespace_id,
                 to: view.stable_id.clone(),
                 label: "CONTAINS_VIEW".to_string(),
             });
         }
-        Self { nodes, edges }
+        Self {
+            nodes: nodes.into_values().collect(),
+            edges: edges.into_iter().collect(),
+        }
     }
 }
 
@@ -855,6 +876,22 @@ pub struct QueryGraphEdge {
     pub from: String,
     pub to: String,
     pub label: String,
+}
+
+impl Ord for QueryGraphEdge {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (&self.from, &self.to, &self.label).cmp(&(&other.from, &other.to, &other.label))
+    }
+}
+
+impl PartialOrd for QueryGraphEdge {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+fn insert_node(nodes: &mut BTreeMap<String, QueryGraphNode>, node: QueryGraphNode) {
+    nodes.entry(node.id.clone()).or_insert(node);
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1611,6 +1648,82 @@ mod tests {
                 .as_deref(),
             Some(expected_evidence_hash.as_str())
         );
+    }
+
+    #[test]
+    fn querygraph_catalog_graph_deduplicates_shared_namespace_nodes() {
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = Namespace::new(vec!["default".to_string()]).unwrap();
+        let table = TableRecord::new(
+            TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("events").unwrap(),
+            ),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            json!({
+                "format-version": 3,
+                "current-schema-id": 1,
+                "schemas": [{
+                    "schema-id": 1,
+                    "fields": [{
+                        "id": 1,
+                        "name": "event_id",
+                        "type": "string",
+                        "required": true
+                    }]
+                }]
+            }),
+            Principal::anonymous(),
+        );
+        let view = ViewRecord::new(
+            warehouse.clone(),
+            namespace,
+            TableName::new("active_customers").unwrap(),
+            "select id from customers where active",
+            "sql",
+            Some(1),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+
+        let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
+            warehouse,
+            vec![(table, Vec::new())],
+            vec![view],
+        )
+        .unwrap()
+        .with_view_receipt_evidence(vec![QueryGraphViewReceiptEvidence {
+            stable_id: "lakecat:view:local:default:active_customers".to_string(),
+            view_version: 1,
+            receipt_hash: "sha256:view-version-receipt".to_string(),
+        }])
+        .unwrap();
+
+        let namespace_id = "lakecat:namespace:local:default";
+        assert_eq!(
+            bundle
+                .graph
+                .nodes
+                .iter()
+                .filter(|node| node.id == namespace_id)
+                .count(),
+            1
+        );
+        assert_eq!(
+            bundle
+                .graph
+                .edges
+                .iter()
+                .filter(|edge| edge.from == "lakecat:catalog"
+                    && edge.to == namespace_id
+                    && edge.label == "HAS_NAMESPACE")
+                .count(),
+            1
+        );
+        bundle.verify_manifest().unwrap();
     }
 
     #[test]

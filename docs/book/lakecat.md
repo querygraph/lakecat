@@ -1023,6 +1023,27 @@ for each exported view version:
 That gives QueryGraph a manifest-covered way to reject a view bootstrap that
 lost the catalog receipt chain before the richer graph import begins.
 
+The QueryGraph side should verify the same bundle before importing it:
+
+```sh
+cd /Users/alexy/src/querygraph/qg-rust
+
+cargo run -- lakecat-verify \
+  --bundle /Users/alexy/src/lakecat/target/qglake/lakecat-bootstrap.json
+
+cargo run -- lakecat-import \
+  --bundle /Users/alexy/src/lakecat/target/qglake/lakecat-bootstrap.json \
+  --output .querygraph/lakecat/import-plan.json
+```
+
+The importer checks the outer bundle hash, the manifest hashes, the
+QueryGraph-import compatibility hash, the graph hash, and view receipt
+evidence. The graph envelope must be valid as a graph, not just valid JSON:
+for example, a table and a view in the same namespace must share one namespace
+node, not emit duplicate vertex ids. That validation belongs on the
+QueryGraph/Grust side, while LakeCat is responsible for producing a clean
+catalog-facing graph projection.
+
 This gives the semantic layer a responsible starting point. LakeCat says:
 
 ```text

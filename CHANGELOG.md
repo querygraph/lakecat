@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Made QGLake policy fixtures use canonical Iceberg REST filter spelling
+  (`not-eq`), taught lineage-drain summaries to read current TypeSec
+  request-identity receipts under `authorization-receipt.context`, deduplicated
+  shared namespace nodes in QueryGraph bootstrap graph projections, and proved a
+  regenerated Sail-backed QGLake bundle through QueryGraph's Rust
+  `lakecat-verify` and `lakecat-import` commands.
 - Reconciled `GOAL.md` with the current pasted LakeCat `AGENTS.md` guidance,
   including the `/Users/alexy/src/lakecat/AGENTS.md` permanence rule and the
   CLI-specific local verification gate for QGLake fixture changes.

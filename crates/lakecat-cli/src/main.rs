@@ -1240,7 +1240,7 @@ fn verify_qglake_bootstrap_projection(
     }
     if restriction["row-predicate"]
         != json!({
-            "type": "not_eq",
+            "type": "not-eq",
             "term": "severity",
             "value": "debug"
         })
@@ -1714,7 +1714,7 @@ fn verify_qglake_scan_plan(plan: &PlanTableScanResponse) -> lakecat_core::LakeCa
     }
     if extension["read-restriction"]["row-predicate"]
         != json!({
-            "type": "not_eq",
+            "type": "not-eq",
             "term": "severity",
             "value": "debug"
         })
@@ -1962,7 +1962,7 @@ fn verify_qglake_fetch_restriction(
     }
     if extension["read-restriction"]["row-predicate"]
         != json!({
-            "type": "not_eq",
+            "type": "not-eq",
             "term": "severity",
             "value": "debug"
         })
@@ -2975,7 +2975,7 @@ fn qglake_odrl_policy(table: &str) -> Value {
         "lakecat:read-restriction": {
             "allowed-columns": ["event_id", "occurred_at", "severity"],
             "row-predicate": {
-                "type": "not_eq",
+                "type": "not-eq",
                 "term": "severity",
                 "value": "debug"
             },
@@ -4147,7 +4147,7 @@ mod tests {
         assert_eq!(
             policy["lakecat:read-restriction"]["row-predicate"],
             serde_json::json!({
-                "type": "not_eq",
+                "type": "not-eq",
                 "term": "severity",
                 "value": "debug"
             })
@@ -4171,7 +4171,7 @@ mod tests {
         assert_eq!(
             restriction.row_predicate,
             Some(serde_json::json!({
-                "type": "not_eq",
+                "type": "not-eq",
                 "term": "severity",
                 "value": "debug"
             }))
@@ -4206,7 +4206,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4246,7 +4246,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4288,7 +4288,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4330,7 +4330,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4371,7 +4371,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         }
@@ -4444,7 +4444,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4482,7 +4482,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4517,7 +4517,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4554,7 +4554,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4592,7 +4592,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4629,7 +4629,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4664,7 +4664,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4715,7 +4715,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4753,7 +4753,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4795,7 +4795,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4834,7 +4834,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4869,7 +4869,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4904,7 +4904,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4943,7 +4943,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -4987,7 +4987,7 @@ mod tests {
                             "raw_payload"
                         ],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         },
@@ -5025,7 +5025,7 @@ mod tests {
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
-                            "type": "not_eq",
+                            "type": "not-eq",
                             "term": "severity",
                             "value": "debug"
                         }

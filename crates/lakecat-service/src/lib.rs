@@ -1045,6 +1045,14 @@ fn lineage_drain_event_summary(
             })
         })
         .unwrap_or_default();
+    let authorization_receipt = payload.get("authorization-receipt");
+    let request_identity = authorization_receipt
+        .and_then(|receipt| receipt.get("request-identity"))
+        .or_else(|| {
+            authorization_receipt
+                .and_then(|receipt| receipt.get("context"))
+                .and_then(|context| context.get("request-identity"))
+        });
     LineageDrainEventSummary {
         event_id: event.event_id.clone(),
         event_type: event.event_type.clone(),
@@ -1059,16 +1067,16 @@ fn lineage_drain_event_summary(
         authorization_receipt_hash: payload
             .get("authorization-receipt")
             .and_then(|receipt| content_hash_json(receipt).ok()),
-        request_identity_state: payload
-            .pointer("/authorization-receipt/request-identity/attestation-state")
+        request_identity_state: request_identity
+            .and_then(|identity| identity.get("attestation-state"))
             .and_then(Value::as_str)
             .map(str::to_string),
-        agent_delegation_hash: payload
-            .pointer("/authorization-receipt/request-identity/agent-delegation-sha256")
+        agent_delegation_hash: request_identity
+            .and_then(|identity| identity.get("agent-delegation-sha256"))
             .and_then(Value::as_str)
             .map(str::to_string),
-        agent_summary_signature_hash: payload
-            .pointer("/authorization-receipt/request-identity/agent-summary-signature-sha256")
+        agent_summary_signature_hash: request_identity
+            .and_then(|identity| identity.get("agent-summary-signature-sha256"))
             .and_then(Value::as_str)
             .map(str::to_string),
         graph_events: receipt.graph_events,
@@ -7024,11 +7032,13 @@ mod tests {
                             "engine": "test",
                             "policy_hash": null,
                             "checked_at": chrono::Utc::now(),
-                            "request-identity": {
-                                "attestation-state": "verified",
-                                "agent-delegation-sha256": "sha256:delegation",
-                                "agent-summary-signature-sha256": "sha256:summary",
-                                "typedid": "did:example:agent"
+                            "context": {
+                                "request-identity": {
+                                    "attestation-state": "verified",
+                                    "agent-delegation-sha256": "sha256:delegation",
+                                    "agent-summary-signature-sha256": "sha256:summary",
+                                    "typedid": "did:example:agent"
+                                }
                             }
                         },
                         "warehouse": "local",
