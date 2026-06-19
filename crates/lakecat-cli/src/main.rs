@@ -6110,7 +6110,8 @@ fn verify_qglake_table_commit_history_replay(
                 .to_string(),
         ));
     }
-    if commit_history.table_commit_count.unwrap_or_default() == 0
+    let commit_count = commit_history.table_commit_count.unwrap_or_default();
+    if commit_count == 0
         || commit_history.table_commit_sequence_numbers.is_empty()
         || !qglake_has_sha256_hashes(&commit_history.table_commit_hashes)
     {
@@ -6118,6 +6119,24 @@ fn verify_qglake_table_commit_history_replay(
             "qglake lineage drain table commit history replay is missing compact commit summary or SHA-256 commit hash evidence"
                 .to_string(),
         ));
+    }
+    if commit_history.table_commit_sequence_numbers.len() != commit_count
+        || commit_history.table_commit_hashes.len() != commit_count
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain table commit history replay count does not match sequence-number and commit-hash evidence"
+                .to_string(),
+        ));
+    }
+    let mut previous_sequence = 0;
+    for sequence_number in &commit_history.table_commit_sequence_numbers {
+        if *sequence_number == 0 || *sequence_number <= previous_sequence {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain table commit history replay sequence numbers must be positive and strictly increasing"
+                    .to_string(),
+            ));
+        }
+        previous_sequence = *sequence_number;
     }
     Ok(())
 }
@@ -14837,6 +14856,126 @@ mod tests {
         .expect_err("QGLake lineage drain should reject malformed table commit hashes");
         assert!(err.to_string().contains(
             "qglake lineage drain table commit history replay is missing compact commit summary or SHA-256 commit hash evidence"
+        ));
+
+        let mut commit_history_with_count_drift = qglake_table_commit_history_lineage_summary();
+        commit_history_with_count_drift.table_commit_count = Some(2);
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 13,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "view.version-receipt-chains-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "table.commits-listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 14,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    qglake_view_receipt_chain_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_storage_profile_upsert_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                    commit_history_with_count_drift,
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject table commit count drift");
+        assert!(err.to_string().contains(
+            "qglake lineage drain table commit history replay count does not match sequence-number and commit-hash evidence"
+        ));
+
+        let mut commit_history_with_duplicate_sequence =
+            qglake_table_commit_history_lineage_summary();
+        commit_history_with_duplicate_sequence.table_commit_count = Some(2);
+        commit_history_with_duplicate_sequence.table_commit_sequence_numbers = vec![1, 1];
+        commit_history_with_duplicate_sequence.table_commit_hashes = vec![
+            "sha256:table-commit-one".to_string(),
+            "sha256:table-commit-two".to_string(),
+        ];
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 13,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "view.version-receipt-chains-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "table.commits-listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 14,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    qglake_view_receipt_chain_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_storage_profile_upsert_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                    commit_history_with_duplicate_sequence,
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject duplicate table commit sequences");
+        assert!(err.to_string().contains(
+            "qglake lineage drain table commit history replay sequence numbers must be positive and strictly increasing"
         ));
 
         let mut commit_history_without_graph = qglake_table_commit_history_lineage_summary();

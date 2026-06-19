@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake lineage-drain table commit-history source replay to match the
+  compact commit count against sequence-number and commit-hash evidence and to
+  reject non-positive or non-increasing commit sequences before handoff proof.
 - Consolidated the archived OPUS review/design corpus into `DESIGN.md` with a
   source ledger and reaffirmed `docs/completed/` as provenance-only archive
   storage.

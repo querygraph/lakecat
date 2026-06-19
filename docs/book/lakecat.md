@@ -1622,11 +1622,14 @@ with planned and fetched OpenLineage receipt hashes; for commit-history replay,
 it carries the commit count, committed sequence numbers, commit hashes, replay
 hashes, and OpenLineage hashes. The handoff verifier rejects compact scan
 proofs without those OpenLineage hashes and compact commit-history proofs whose
-counts, sequences, or hash arrays do not align. Source replay validation also
-requires the table commit hashes themselves to be SHA-256-shaped before
-pointer-history evidence can enter the compact handoff proof, so QueryGraph can
-verify the governed Sail-planned read and pointer-history inspection without
-parsing the full lineage payload. The bootstrap, scan, credential, view,
+counts, sequences, or hash arrays do not align. Source replay validation applies
+the same pointer-history discipline before compact proof generation: the table
+commit count must match the sequence-number and commit-hash arrays, commit
+sequences must be positive and strictly increasing, and commit hashes must be
+SHA-256-shaped before pointer-history evidence can enter the compact handoff
+proof. QueryGraph can therefore verify the governed Sail-planned read and
+pointer-history inspection without parsing the full lineage payload. The
+bootstrap, scan, credential, view,
 receipt-chain, and commit-history receipt arrays must also be SHA-256-shaped
 before compact proof generation can consume them. The same shape
 check applies to accepted-view receipt evidence: bootstrap view-version receipt

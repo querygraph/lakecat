@@ -5,6 +5,20 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Reject commit history count drift`.
+  QGLake lineage-drain table commit-history source replay now requires the
+  compact commit count to match both sequence-number and commit-hash evidence
+  and rejects non-positive or non-increasing commit sequences before
+  pointer-history evidence can feed compact handoff proof.
+- Local verification for this commit-history count/sequence slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Consolidate archived OPUS docs`.
   The active root contains no live `OPUS*.md` files; the four historical OPUS
