@@ -1624,9 +1624,11 @@ hashes, and OpenLineage hashes. The handoff verifier rejects compact scan
 proofs without those OpenLineage hashes and compact commit-history proofs whose
 counts, sequences, or hash arrays do not align, so QueryGraph can verify the
 governed Sail-planned read and pointer-history inspection without parsing the
-full lineage payload. The same replay now emits catalog-facing `Commit` graph
-events for the listed sequences, leaving traversal and query semantics to
-Grust.
+full lineage payload. Source replay validation now also requires the bootstrap,
+scan, credential, view, receipt-chain, and commit-history receipt arrays to be
+SHA-256-shaped before compact proof generation can consume them. The same
+replay now emits catalog-facing `Commit` graph events for the listed sequences,
+leaving traversal and query semantics to Grust.
 
 For handoff testing, LakeCat can verify a saved bootstrap bundle and a saved
 drain response together:

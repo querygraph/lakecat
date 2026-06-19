@@ -5603,16 +5603,12 @@ fn verify_qglake_lineage_drain(
             "qglake lineage drain bootstrap replay emitted no lineage projection".to_string(),
         ));
     }
-    if bootstrap.replay_event_hashes.is_empty()
-        || bootstrap.replay_event_hashes.iter().any(String::is_empty)
-        || bootstrap.replay_open_lineage_hashes.is_empty()
-        || bootstrap
-            .replay_open_lineage_hashes
-            .iter()
-            .any(String::is_empty)
+    if !qglake_has_sha256_hashes(&bootstrap.replay_event_hashes)
+        || !qglake_has_sha256_hashes(&bootstrap.replay_open_lineage_hashes)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain replay evidence is missing sink receipt hashes".to_string(),
+            "qglake lineage drain replay evidence is missing SHA-256 sink receipt hashes"
+                .to_string(),
         ));
     }
     verify_qglake_view_replay(drain, verification)?;
@@ -5639,17 +5635,12 @@ fn verify_qglake_scan_replay(drain: &LineageDrainResponse) -> lakecat_core::Lake
             .request_identity_state
             .as_deref()
             .map_or(true, str::is_empty)
-        || planned.replay_event_hashes.is_empty()
-        || planned.replay_event_hashes.iter().any(String::is_empty)
-        || planned.replay_open_lineage_hashes.is_empty()
-        || planned
-            .replay_open_lineage_hashes
-            .iter()
-            .any(String::is_empty)
+        || !qglake_has_sha256_hashes(&planned.replay_event_hashes)
+        || !qglake_has_sha256_hashes(&planned.replay_open_lineage_hashes)
         || planned.scan_task_count.unwrap_or_default() == 0
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain scan planning replay is missing compact task evidence"
+            "qglake lineage drain scan planning replay is missing compact task or SHA-256 receipt evidence"
                 .to_string(),
         ));
     }
@@ -5668,19 +5659,14 @@ fn verify_qglake_scan_replay(drain: &LineageDrainResponse) -> lakecat_core::Lake
             .request_identity_state
             .as_deref()
             .map_or(true, str::is_empty)
-        || fetched.replay_event_hashes.is_empty()
-        || fetched.replay_event_hashes.iter().any(String::is_empty)
-        || fetched.replay_open_lineage_hashes.is_empty()
-        || fetched
-            .replay_open_lineage_hashes
-            .iter()
-            .any(String::is_empty)
+        || !qglake_has_sha256_hashes(&fetched.replay_event_hashes)
+        || !qglake_has_sha256_hashes(&fetched.replay_open_lineage_hashes)
         || fetched.file_scan_task_count.unwrap_or_default() == 0
         || fetched.delete_file_count.unwrap_or_default() == 0
         || fetched.child_plan_task_count.unwrap_or_default() == 0
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain scan task fetch replay is missing compact file/delete task evidence"
+            "qglake lineage drain scan task fetch replay is missing compact file/delete task or SHA-256 receipt evidence"
                 .to_string(),
         ));
     }
@@ -5736,13 +5722,8 @@ fn verify_qglake_view_replay(
             .map_or(true, str::is_empty)
             || view_replay.view_namespace.is_empty()
             || view_replay.view_name.as_deref().map_or(true, str::is_empty)
-            || view_replay.replay_event_hashes.is_empty()
-            || view_replay.replay_event_hashes.iter().any(String::is_empty)
-            || view_replay.replay_open_lineage_hashes.is_empty()
-            || view_replay
-                .replay_open_lineage_hashes
-                .iter()
-                .any(String::is_empty)
+            || !qglake_has_sha256_hashes(&view_replay.replay_event_hashes)
+            || !qglake_has_sha256_hashes(&view_replay.replay_open_lineage_hashes)
         {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "qglake lineage drain view replay for {view_stable_id} is missing compact identity or receipt hashes"
@@ -5803,16 +5784,8 @@ fn verify_qglake_view_replay(
                 )));
             };
             if receipt_chain_read.lineage_events == 0
-                || receipt_chain_read.replay_event_hashes.is_empty()
-                || receipt_chain_read
-                    .replay_event_hashes
-                    .iter()
-                    .any(String::is_empty)
-                || receipt_chain_read.replay_open_lineage_hashes.is_empty()
-                || receipt_chain_read
-                    .replay_open_lineage_hashes
-                    .iter()
-                    .any(String::is_empty)
+                || !qglake_has_sha256_hashes(&receipt_chain_read.replay_event_hashes)
+                || !qglake_has_sha256_hashes(&receipt_chain_read.replay_open_lineage_hashes)
             {
                 return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                     "qglake lineage drain namespace receipt-chain replay for {view_stable_id} is missing chain, lineage, or sink receipt hashes"
@@ -5909,16 +5882,11 @@ fn verify_qglake_credential_lineage_projection(
         )));
     }
     verify_qglake_credential_storage_profile_projection(event, label)?;
-    if event.replay_event_hashes.is_empty()
-        || event.replay_event_hashes.iter().any(String::is_empty)
-        || event.replay_open_lineage_hashes.is_empty()
-        || event
-            .replay_open_lineage_hashes
-            .iter()
-            .any(String::is_empty)
+    if !qglake_has_sha256_hashes(&event.replay_event_hashes)
+        || !qglake_has_sha256_hashes(&event.replay_open_lineage_hashes)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "qglake lineage drain {label} credential replay is missing sink receipt hashes"
+            "qglake lineage drain {label} credential replay is missing SHA-256 sink receipt hashes"
         )));
     }
     Ok(())
@@ -6149,19 +6117,11 @@ fn verify_qglake_table_commit_history_replay(
                 .to_string(),
         ));
     }
-    if commit_history.replay_event_hashes.is_empty()
-        || commit_history
-            .replay_event_hashes
-            .iter()
-            .any(String::is_empty)
-        || commit_history.replay_open_lineage_hashes.is_empty()
-        || commit_history
-            .replay_open_lineage_hashes
-            .iter()
-            .any(String::is_empty)
+    if !qglake_has_sha256_hashes(&commit_history.replay_event_hashes)
+        || !qglake_has_sha256_hashes(&commit_history.replay_open_lineage_hashes)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain table commit history replay is missing receipt hashes"
+            "qglake lineage drain table commit history replay is missing SHA-256 receipt hashes"
                 .to_string(),
         ));
     }
@@ -12689,10 +12649,9 @@ mod tests {
             1,
         )
         .expect_err("QGLake lineage drain should require sink receipt evidence");
-        assert!(
-            err.to_string()
-                .contains("qglake lineage drain replay evidence is missing sink receipt hashes")
-        );
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay evidence is missing SHA-256 sink receipt hashes"
+        ));
 
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
@@ -13834,7 +13793,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should reject missing trusted human credential receipts");
         assert!(err.to_string().contains(
-            "qglake lineage drain trusted human credential replay is missing sink receipt hashes"
+            "qglake lineage drain trusted human credential replay is missing SHA-256 sink receipt hashes"
         ));
 
         let mut human_without_exception_reason = qglake_human_credential_summary();
@@ -15071,6 +15030,25 @@ mod tests {
 
         assert!(err.to_string().contains("policy list replay"));
         assert!(err.to_string().contains("SHA-256 receipt hashes"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_requires_scan_receipt_hash_shape() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let scan_plan = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.scan-planned")
+            .expect("scan plan replay fixture");
+        scan_plan.replay_open_lineage_hashes = vec!["not-a-sha256-hash".to_string()];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject malformed scan receipt hashes");
+
+        assert!(err
+            .to_string()
+            .contains("qglake lineage drain scan planning replay is missing compact task or SHA-256 receipt evidence"));
     }
 
     fn qglake_view_lineage_verification() -> QueryGraphBootstrapVerification {

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened QGLake lineage-drain replay so bootstrap, scan, credential, view,
+  receipt-chain, and table commit-history receipt arrays must contain
+  SHA-256-shaped hashes before compact handoff proof can consume them.
 - Tightened QGLake lineage-drain management-list replay so server, project,
   warehouse, policy-binding, storage-profile, and storage-profile-upsert
   receipt arrays must contain SHA-256-shaped hashes before compact handoff
