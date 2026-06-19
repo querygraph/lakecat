@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a compact `credentialVendingProof` object to QGLake
+  `handoff-summary.json`, proving restricted agents were blocked onto
+  Sail-planned reads while trusted humans used the audited raw-credential
+  exception.
 - Added a compact `storageProfileUpsertProof` object to QGLake
   `handoff-summary.json`, so operators and QueryGraph can verify the
   credential-root proof without parsing the full replay evidence tree.

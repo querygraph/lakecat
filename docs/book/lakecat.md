@@ -1183,9 +1183,11 @@ accepted only after LakeCat replay, `lakecat-verify`, and `lakecat-import`
 agree. It also records structured scan, management, credential, and
 table-commit replay evidence, plus a compact `storageProfileUpsertProof`
 object that lifts the redacted credential-root proof out of the full replay
-tree. The summary also records artifact paths, raw file hashes, captured
-LakeCat replay output, captured QueryGraph verification output, captured
-QueryGraph import output, and service log path.
+tree and a compact `credentialVendingProof` object that shows the restricted
+agent was blocked onto Sail-planned reads while the trusted human path used the
+audited raw-credential exception. The summary also records artifact paths, raw
+file hashes, captured LakeCat replay output, captured QueryGraph verification
+output, captured QueryGraph import output, and service log path.
 That makes the handoff repeatable from the LakeCat repo while keeping
 QueryGraph responsible for graph validation and import semantics.
 The handoff script also refuses to write the summary unless LakeCat replay JSON
@@ -1193,7 +1195,9 @@ contains redacted `storageProfileUpsert` evidence with replay and OpenLineage
 hashes, and the accepted summary repeats that evidence as
 `lakecatReplayVerification.storageProfileUpsertProof`. QueryGraph gets proof
 that the credential root was configured without receiving the underlying
-secret-store URI.
+secret-store URI. The script also refuses to write a summary unless LakeCat
+replay proves both sides of credential vending: untrusted agents get no raw
+credentials, and trusted humans receive only the audited standard exception.
 
 This gives the semantic layer a responsible starting point. LakeCat says:
 

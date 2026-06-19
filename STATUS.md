@@ -6,6 +6,31 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Lift credential vending proof into handoff summary`.
+  `scripts/qglake-handoff-local.sh` now writes
+  `lakecatReplayVerification.credentialVendingProof` in
+  `handoff-summary.json`, proving the restricted agent credential probe
+  returned zero raw credentials with the Sail-planned-read block reason while
+  the trusted human probe used the audited raw-credential exception and both
+  paths carried replay/OpenLineage hashes.
+- Local verification for the compact handoff credential-vending proof slice is
+  green:
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh` with local socket binding allowed. The live
+  handoff generated one table and one view, drained 26 outbox events, verified
+  LakeCat replay through `qglake-verify-replay`, ran QueryGraph
+  `lakecat-verify` and `lakecat-import`, and wrote
+  `lakecatReplayVerification.credentialVendingProof` to
+  `target/qglake-handoff/handoff-summary.json`;
+  direct Node summary check for
+  `lakecatReplayVerification.credentialVendingProof`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `cargo test -p lakecat-cli`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Lift storage profile proof into handoff summary`.
   `scripts/qglake-handoff-local.sh` now writes
   `lakecatReplayVerification.storageProfileUpsertProof` as a compact

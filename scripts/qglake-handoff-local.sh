@@ -130,6 +130,79 @@ process.stdout.write(JSON.stringify({
 ' "$file"
 }
 
+credential_vending_evidence_json() {
+  local file="$1"
+  node -e '
+const fs = require("fs");
+const [file] = process.argv.slice(1);
+const replay = JSON.parse(fs.readFileSync(file, "utf8"));
+const evidence = replay["replay-evidence"]?.credentials;
+if (!evidence || typeof evidence !== "object") {
+  console.error("LakeCat replay evidence is missing credentials");
+  process.exit(1);
+}
+const restricted = evidence.restricted;
+const trustedHuman = evidence.trustedHuman;
+function requireHashArray(value, label) {
+  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    console.error(`LakeCat credential replay evidence is missing ${label}`);
+    process.exit(1);
+  }
+}
+if (!restricted || typeof restricted !== "object") {
+  console.error("LakeCat replay evidence is missing credentials.restricted");
+  process.exit(1);
+}
+if (!restricted.principalSubject || !restricted.principalKind) {
+  console.error("LakeCat restricted credential evidence is missing principal identity");
+  process.exit(1);
+}
+if (restricted.credentialCount !== 0 || restricted.blockReason !== "fine-grained read restriction requires Sail-planned reads") {
+  console.error("LakeCat restricted credential evidence does not prove Sail-planned reads were required");
+  process.exit(1);
+}
+requireHashArray(restricted.replayEventHashes, "restricted replayEventHashes");
+requireHashArray(restricted.openLineageHashes, "restricted openLineageHashes");
+if (!trustedHuman || typeof trustedHuman !== "object") {
+  console.error("LakeCat replay evidence is missing credentials.trustedHuman");
+  process.exit(1);
+}
+if (!trustedHuman.principalSubject || trustedHuman.principalKind !== "human") {
+  console.error("LakeCat trusted-human credential evidence is missing human principal identity");
+  process.exit(1);
+}
+if (!(trustedHuman.credentialCount > 0) || trustedHuman.rawCredentialExceptionAllowed !== true) {
+  console.error("LakeCat trusted-human credential evidence does not prove audited credential vending");
+  process.exit(1);
+}
+if (trustedHuman.rawCredentialExceptionReason !== "trusted human principal may use audited raw credential vending") {
+  console.error("LakeCat trusted-human credential evidence is missing the audited exception reason");
+  process.exit(1);
+}
+requireHashArray(trustedHuman.replayEventHashes, "trusted-human replayEventHashes");
+requireHashArray(trustedHuman.openLineageHashes, "trusted-human openLineageHashes");
+process.stdout.write(JSON.stringify({
+  restricted: {
+    principalSubject: restricted.principalSubject,
+    principalKind: restricted.principalKind,
+    credentialCount: restricted.credentialCount,
+    blockReason: restricted.blockReason,
+    replayEventHashes: restricted.replayEventHashes,
+    openLineageHashes: restricted.openLineageHashes,
+  },
+  trustedHuman: {
+    principalSubject: trustedHuman.principalSubject,
+    principalKind: trustedHuman.principalKind,
+    credentialCount: trustedHuman.credentialCount,
+    rawCredentialExceptionAllowed: trustedHuman.rawCredentialExceptionAllowed,
+    rawCredentialExceptionReason: trustedHuman.rawCredentialExceptionReason,
+    replayEventHashes: trustedHuman.replayEventHashes,
+    openLineageHashes: trustedHuman.openLineageHashes,
+  },
+}));
+' "$file"
+}
+
 required_summary_field() {
   local label="$1"
   local source_file="$2"
@@ -155,7 +228,7 @@ write_summary() {
   local verified_tables verified_views bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   local verified_standards
   local lakecat_schema lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards lakecat_replay_evidence
-  local lakecat_storage_profile_upsert_evidence
+  local lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence
   local imported_tables imported_views imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
   local imported_standards
   bundle_sha="$(sha256_file "$BUNDLE")"
@@ -172,6 +245,7 @@ write_summary() {
   lakecat_standards="$(json_value_field "$LAKECAT_REPLAY_OUTPUT" "standards")"
   lakecat_replay_evidence="$(json_value_field "$LAKECAT_REPLAY_OUTPUT" "replay-evidence")"
   lakecat_storage_profile_upsert_evidence="$(storage_profile_upsert_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
+  lakecat_credential_vending_evidence="$(credential_vending_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   verified_tables="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "table-count")"
   verified_views="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "view-count")"
   bundle_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "bundle-hash")"
@@ -204,6 +278,7 @@ write_summary() {
   required_summary_field "standards" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_standards"
   required_summary_field "replay-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_replay_evidence"
   required_summary_field "storage-profile-upsert-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_storage_profile_upsert_evidence"
+  required_summary_field "credential-vending-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_credential_vending_evidence"
   required_summary_field "table-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_tables"
   required_summary_field "view-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_views"
   required_summary_field "bundle-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_bundle_hash"
@@ -253,6 +328,7 @@ write_summary() {
     "status": "$(json_string "$lakecat_status")",
     "matchesQueryGraph": true,
     "storageProfileUpsertProof": $lakecat_storage_profile_upsert_evidence,
+    "credentialVendingProof": $lakecat_credential_vending_evidence,
     "replayEvidence": $lakecat_replay_evidence
   },
   "artifacts": {

@@ -271,11 +271,12 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   verify, and QueryGraph import agree on those semantic counts, hashes, and
   standards; LakeCat replay JSON and the summary now also carry structured
   scan, management, credential, and table-commit replay evidence for
-  automation, and the summary lifts redacted storage-profile upsert proof into
-  a compact `storageProfileUpsertProof` object so QueryGraph/operators can
-  verify the credential-root boundary without parsing the full replay evidence
-  tree, with explicit schema versions for replay verification JSON and the
-  handoff summary.*
+  automation, and the summary lifts redacted storage-profile upsert proof and
+  governed credential-vending proof into compact `storageProfileUpsertProof`
+  and `credentialVendingProof` objects so QueryGraph/operators can verify the
+  credential-root boundary and the agent-versus-human credential decision
+  without parsing the full replay evidence tree, with explicit schema versions
+  for replay verification JSON and the handoff summary.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond
