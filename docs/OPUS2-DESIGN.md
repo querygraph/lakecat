@@ -272,19 +272,21 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   standards; LakeCat replay JSON and the summary now also carry structured
   request-identity, scan, management, credential, table-commit, and view
   receipt-chain replay evidence for automation, and the summary lifts request
-  identity proof, governed scan proof, table commit-history proof, redacted
-  storage-profile upsert proof, governed credential-vending proof, and view
-  receipt-chain proof into compact `requestIdentityProof`,
-  `governedScanProof`, `tableCommitHistoryProof`,
-  `storageProfileUpsertProof`, `credentialVendingProof`, and
-  `viewReceiptChainProof` objects so QueryGraph/operators can verify the
-  replay principal, request-identity source/state, authorization receipt hash,
-  sanitized TypeDID envelope/proof hashes when present, Sail-planned read path,
-  pointer-log read, credential-root boundary, agent-versus-human credential
-  decision, accepted view versions, tombstone receipts, and namespace
-  receipt-chain hashes without parsing the full replay evidence tree, with
-  explicit schema versions for replay verification JSON and the handoff
-  summary.*
+  identity proof, QueryGraph bootstrap proof, governed scan proof, table
+  commit-history proof, redacted storage-profile upsert proof, governed
+  credential-vending proof, and view receipt-chain proof into compact
+  `requestIdentityProof`, `queryGraphBootstrapProof`, `governedScanProof`,
+  `tableCommitHistoryProof`, `storageProfileUpsertProof`,
+  `credentialVendingProof`, and `viewReceiptChainProof` objects so
+  QueryGraph/operators can verify the replay principal, request-identity
+  source/state, authorization receipt hash, sanitized TypeDID envelope/proof
+  hashes when present, QueryGraph bootstrap/import hashes, table/view artifact
+  counts, policy count, standards, agent delegation and summary signature
+  hashes, Sail-planned read path, pointer-log read, credential-root boundary,
+  agent-versus-human credential decision, accepted view versions, tombstone
+  receipts, and namespace receipt-chain hashes without parsing the full replay
+  evidence tree, with explicit schema versions for replay verification JSON
+  and the handoff summary.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond

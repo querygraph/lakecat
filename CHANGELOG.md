@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added compact QueryGraph bootstrap replay evidence to `lakecat-cli
+  qglake-verify-replay --json` and lifted it into
+  `lakecatReplayVerification.queryGraphBootstrapProof` in
+  `handoff-summary.json`, proving QueryGraph bootstrap/import hashes, artifact
+  counts, policy count, standards, agent proof hashes, and replay/OpenLineage
+  sink hashes.
 - Added a dedicated pinned LakeCat agent-guidance section near the top of
   `GOAL.md`, mirroring the current repo boundaries, compatibility rules,
   implementation priorities, verification gates, and commit discipline from

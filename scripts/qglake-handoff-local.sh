@@ -136,6 +136,121 @@ process.stdout.write(JSON.stringify({
 ' "$file" "$expected_principal"
 }
 
+querygraph_bootstrap_evidence_json() {
+  local file="$1"
+  local expected_principal="$2"
+  local expected_table_count="$3"
+  local expected_view_count="$4"
+  local expected_bundle_hash="$5"
+  local expected_graph_hash="$6"
+  local expected_open_lineage_hash="$7"
+  local expected_querygraph_import_hash="$8"
+  local expected_standards_json="$9"
+  node -e '
+const fs = require("fs");
+const [
+  file,
+  expectedPrincipal,
+  expectedTableCount,
+  expectedViewCount,
+  expectedBundleHash,
+  expectedGraphHash,
+  expectedOpenLineageHash,
+  expectedQueryGraphImportHash,
+  expectedStandardsJson,
+] = process.argv.slice(1);
+const replay = JSON.parse(fs.readFileSync(file, "utf8"));
+const evidence = replay["replay-evidence"]?.queryGraphBootstrap;
+if (!evidence || typeof evidence !== "object") {
+  console.error("LakeCat replay evidence is missing queryGraphBootstrap");
+  process.exit(1);
+}
+function requireHash(value, label) {
+  if (typeof value !== "string" || value.length === 0) {
+    console.error(`LakeCat QueryGraph bootstrap evidence is missing ${label}`);
+    process.exit(1);
+  }
+}
+function requireHashArray(value, label) {
+  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    console.error(`LakeCat QueryGraph bootstrap evidence is missing ${label}`);
+    process.exit(1);
+  }
+}
+function requireIntegerMatch(value, expected, label) {
+  const expectedNumber = Number(expected);
+  if (!Number.isInteger(value) || value !== expectedNumber) {
+    console.error(`LakeCat QueryGraph bootstrap ${label} mismatch: expected=${expectedNumber} actual=${value}`);
+    process.exit(1);
+  }
+}
+function requireMatch(value, expected, label) {
+  if (value !== expected) {
+    console.error(`LakeCat QueryGraph bootstrap ${label} mismatch: expected=${expected} actual=${value}`);
+    process.exit(1);
+  }
+}
+requireMatch(evidence.bundleHash, expectedBundleHash, "bundleHash");
+requireMatch(evidence.graphHash, expectedGraphHash, "graphHash");
+requireMatch(evidence.openLineageHash, expectedOpenLineageHash, "openLineageHash");
+requireMatch(evidence.queryGraphImportHash, expectedQueryGraphImportHash, "queryGraphImportHash");
+requireIntegerMatch(evidence.tableArtifactCount, expectedTableCount, "tableArtifactCount");
+requireIntegerMatch(evidence.viewArtifactCount, expectedViewCount, "viewArtifactCount");
+if (!Number.isInteger(evidence.policyBindingCount) || evidence.policyBindingCount <= 0) {
+  console.error("LakeCat QueryGraph bootstrap evidence is missing positive policyBindingCount");
+  process.exit(1);
+}
+const expectedStandards = JSON.parse(expectedStandardsJson);
+if (JSON.stringify(evidence.standards) !== JSON.stringify(expectedStandards)) {
+  console.error("LakeCat QueryGraph bootstrap standards mismatch");
+  process.exit(1);
+}
+requireMatch(evidence.principalSubject, expectedPrincipal, "principalSubject");
+requireMatch(evidence.principalKind, "agent", "principalKind");
+if (typeof evidence.requestIdentitySource !== "string" || evidence.requestIdentitySource.length === 0) {
+  console.error("LakeCat QueryGraph bootstrap evidence is missing requestIdentitySource");
+  process.exit(1);
+}
+if (typeof evidence.requestIdentityState !== "string" || evidence.requestIdentityState.length === 0) {
+  console.error("LakeCat QueryGraph bootstrap evidence is missing requestIdentityState");
+  process.exit(1);
+}
+requireHash(evidence.authorizationReceiptHash, "authorizationReceiptHash");
+requireHash(evidence.agentDelegationHash, "agentDelegationHash");
+requireHash(evidence.agentSummarySignatureHash, "agentSummarySignatureHash");
+if (Number(expectedViewCount) > 0) {
+  requireHashArray(evidence.viewVersionReceiptHashes, "viewVersionReceiptHashes");
+} else if (!Array.isArray(evidence.viewVersionReceiptHashes)) {
+  console.error("LakeCat QueryGraph bootstrap evidence is missing viewVersionReceiptHashes");
+  process.exit(1);
+}
+requireHashArray(evidence.replayEventHashes, "replayEventHashes");
+requireHashArray(evidence.openLineageHashes, "openLineageHashes");
+process.stdout.write(JSON.stringify({
+  bundleHash: evidence.bundleHash,
+  graphHash: evidence.graphHash,
+  openLineageHash: evidence.openLineageHash,
+  queryGraphImportHash: evidence.queryGraphImportHash,
+  tableArtifactCount: evidence.tableArtifactCount,
+  viewArtifactCount: evidence.viewArtifactCount,
+  policyBindingCount: evidence.policyBindingCount,
+  standards: evidence.standards,
+  principalSubject: evidence.principalSubject,
+  principalKind: evidence.principalKind,
+  requestIdentitySource: evidence.requestIdentitySource,
+  requestIdentityState: evidence.requestIdentityState,
+  authorizationReceiptHash: evidence.authorizationReceiptHash,
+  agentDelegationHash: evidence.agentDelegationHash,
+  agentSummarySignatureHash: evidence.agentSummarySignatureHash,
+  typedidEnvelopeHash: evidence.typedidEnvelopeHash ?? null,
+  typedidProofHash: evidence.typedidProofHash ?? null,
+  viewVersionReceiptHashes: evidence.viewVersionReceiptHashes,
+  replayEventHashes: evidence.replayEventHashes,
+  openLineageHashes: evidence.openLineageHashes,
+}));
+' "$file" "$expected_principal" "$expected_table_count" "$expected_view_count" "$expected_bundle_hash" "$expected_graph_hash" "$expected_open_lineage_hash" "$expected_querygraph_import_hash" "$expected_standards_json"
+}
+
 storage_profile_upsert_evidence_json() {
   local file="$1"
   node -e '
@@ -469,7 +584,7 @@ write_summary() {
   local verified_tables verified_views bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   local verified_standards
   local lakecat_schema lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards lakecat_replay_evidence
-  local lakecat_request_identity_evidence lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence lakecat_table_commit_history_evidence lakecat_view_receipt_chain_evidence
+  local lakecat_request_identity_evidence lakecat_querygraph_bootstrap_evidence lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence lakecat_table_commit_history_evidence lakecat_view_receipt_chain_evidence
   local imported_tables imported_views imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
   local imported_standards
   bundle_sha="$(sha256_file "$BUNDLE")"
@@ -498,6 +613,7 @@ write_summary() {
   open_lineage_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "open-lineage-hash")"
   querygraph_import_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "querygraph-import-hash")"
   verified_standards="$(json_value_field "$QUERYGRAPH_VERIFY_OUTPUT" "standards")"
+  lakecat_querygraph_bootstrap_evidence="$(querygraph_bootstrap_evidence_json "$LAKECAT_REPLAY_OUTPUT" "$PRINCIPAL" "$verified_tables" "$verified_views" "$bundle_hash" "$graph_hash" "$open_lineage_hash" "$querygraph_import_hash" "$verified_standards")"
   imported_tables="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "table-count")"
   imported_views="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "view-count")"
   imported_bundle_hash="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "bundle-hash")"
@@ -523,6 +639,7 @@ write_summary() {
   required_summary_field "standards" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_standards"
   required_summary_field "replay-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_replay_evidence"
   required_summary_field "request-identity-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_request_identity_evidence"
+  required_summary_field "querygraph-bootstrap-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_querygraph_bootstrap_evidence"
   required_summary_field "storage-profile-upsert-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_storage_profile_upsert_evidence"
   required_summary_field "credential-vending-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_credential_vending_evidence"
   required_summary_field "governed-scan-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_governed_scan_evidence"
@@ -577,6 +694,7 @@ write_summary() {
     "status": "$(json_string "$lakecat_status")",
     "matchesQueryGraph": true,
     "requestIdentityProof": $lakecat_request_identity_evidence,
+    "queryGraphBootstrapProof": $lakecat_querygraph_bootstrap_evidence,
     "governedScanProof": $lakecat_governed_scan_evidence,
     "tableCommitHistoryProof": $lakecat_table_commit_history_evidence,
     "viewReceiptChainProof": $lakecat_view_receipt_chain_evidence,

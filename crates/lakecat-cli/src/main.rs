@@ -404,6 +404,7 @@ fn qglake_replay_evidence_json(
 ) -> Value {
     json!({
         "requestIdentity": qglake_request_identity_replay_evidence_json(drain),
+        "queryGraphBootstrap": qglake_querygraph_bootstrap_replay_evidence_json(drain),
         "scan": qglake_scan_replay_evidence_json(drain),
         "management": qglake_management_replay_evidence_json(drain),
         "credentials": qglake_credential_replay_evidence_json(drain, principal),
@@ -421,6 +422,32 @@ fn qglake_request_identity_replay_evidence_json(drain: &LineageDrainResponse) ->
         "requestIdentityState": drain.request_identity_state.as_deref()?,
         "typedidEnvelopeHash": drain.typedid_envelope_hash.as_deref(),
         "typedidProofHash": drain.typedid_proof_hash.as_deref(),
+    }))
+}
+
+fn qglake_querygraph_bootstrap_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Value> {
+    let bootstrap = qglake_drain_event(drain, "querygraph.bootstrap")?;
+    Some(json!({
+        "bundleHash": bootstrap.bundle_hash.as_deref(),
+        "graphHash": bootstrap.graph_hash.as_deref(),
+        "openLineageHash": bootstrap.open_lineage_hash.as_deref(),
+        "queryGraphImportHash": bootstrap.querygraph_import_hash.as_deref(),
+        "tableArtifactCount": bootstrap.table_artifact_count,
+        "viewArtifactCount": bootstrap.view_artifact_count,
+        "policyBindingCount": bootstrap.policy_binding_count,
+        "standards": &bootstrap.standards,
+        "principalSubject": bootstrap.principal_subject.as_deref(),
+        "principalKind": bootstrap.principal_kind.as_deref(),
+        "requestIdentitySource": bootstrap.request_identity_source.as_deref(),
+        "requestIdentityState": bootstrap.request_identity_state.as_deref(),
+        "authorizationReceiptHash": bootstrap.authorization_receipt_hash.as_deref(),
+        "agentDelegationHash": bootstrap.agent_delegation_hash.as_deref(),
+        "agentSummarySignatureHash": bootstrap.agent_summary_signature_hash.as_deref(),
+        "typedidEnvelopeHash": bootstrap.typedid_envelope_hash.as_deref(),
+        "typedidProofHash": bootstrap.typedid_proof_hash.as_deref(),
+        "viewVersionReceiptHashes": &bootstrap.view_version_receipt_hashes,
+        "replayEventHashes": &bootstrap.replay_event_hashes,
+        "openLineageHashes": &bootstrap.replay_open_lineage_hashes,
     }))
 }
 
@@ -4797,6 +4824,26 @@ mod tests {
         assert_eq!(
             replay_json["replay-evidence"]["requestIdentity"]["authorizationReceiptHash"],
             json!("sha256:lineage-read")
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["queryGraphBootstrap"]["bundleHash"],
+            json!(verification.bundle_hash)
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["queryGraphBootstrap"]["queryGraphImportHash"],
+            json!(verification.querygraph_import_hash)
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["queryGraphBootstrap"]["policyBindingCount"],
+            json!(1)
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["queryGraphBootstrap"]["agentDelegationHash"],
+            json!("sha256:delegation")
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["queryGraphBootstrap"]["agentSummarySignatureHash"],
+            json!("sha256:summary")
         );
         assert_eq!(
             replay_json["replay-evidence"]["management"]["policyBindingCount"],

@@ -1182,19 +1182,24 @@ counts, and semantic bundle/graph/OpenLineage/import hashes plus standards
 accepted only after LakeCat replay, `lakecat-verify`, and `lakecat-import`
 agree. It also records structured request-identity, scan, management,
 credential, table-commit, and view replay evidence, plus compact
-`requestIdentityProof`, `governedScanProof`, `tableCommitHistoryProof`,
-`viewReceiptChainProof`, `storageProfileUpsertProof`, and
-`credentialVendingProof` objects that lift the replay principal proof, governed
-scan counts, pointer-log read proof, view version and receipt-chain proof,
-redacted credential-root proof, and credential-vending decision out of the full
-replay tree. The identity proof shows the principal subject and kind used for
-the replay, the request-identity source and state, the authorization receipt
-hash, and sanitized TypeDID envelope/proof hashes when a TypeDID envelope is
-present. The local QGLake fixture currently records the agent-header source
-with null TypeDID hash slots; a future TypeDID-envelope run can fill those
-slots without changing the handoff schema. The scan proof shows LakeCat planned
-and fetched scan tasks through the governed path, including file, delete-file,
-and child plan-task counts with replay and OpenLineage hashes. The
+`requestIdentityProof`, `queryGraphBootstrapProof`, `governedScanProof`,
+`tableCommitHistoryProof`, `viewReceiptChainProof`,
+`storageProfileUpsertProof`, and `credentialVendingProof` objects that lift
+the replay principal proof, QueryGraph bootstrap/import proof, governed scan
+counts, pointer-log read proof, view version and receipt-chain proof, redacted
+credential-root proof, and credential-vending decision out of the full replay
+tree. The identity proof shows the principal subject and kind used for the
+replay, the request-identity source and state, the authorization receipt hash,
+and sanitized TypeDID envelope/proof hashes when a TypeDID envelope is present.
+The local QGLake fixture currently records the agent-header source with null
+TypeDID hash slots; a future TypeDID-envelope run can fill those slots without
+changing the handoff schema. The QueryGraph bootstrap proof shows the accepted
+bundle, graph, OpenLineage, and QueryGraph import hashes, the table and view
+artifact counts, standards, policy-binding count, agent delegation and summary
+signature hashes, view-version receipt hashes, and replay/OpenLineage sink
+hashes. The scan proof shows LakeCat planned and fetched scan tasks through the
+governed path, including file, delete-file, and child plan-task counts with
+replay and OpenLineage hashes. The
 commit-history proof shows the catalog
 pointer log was read back with commit count, sequence numbers, commit hashes,
 and replay/OpenLineage hashes. The view receipt-chain proof shows QueryGraph's

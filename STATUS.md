@@ -6,6 +6,37 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Lift QueryGraph bootstrap proof into handoff summary`.
+  `lakecat-cli qglake-verify-replay --json` now emits structured
+  `replay-evidence.queryGraphBootstrap`, and
+  `scripts/qglake-handoff-local.sh` now writes
+  `lakecatReplayVerification.queryGraphBootstrapProof` in
+  `handoff-summary.json`, proving QueryGraph bootstrap/import hashes,
+  table/view artifact counts, policy count, standards, agent delegation and
+  summary signature hashes, view-version receipt hashes, and replay/OpenLineage
+  sink hashes without requiring QueryGraph/operators to parse the full replay
+  tree.
+- Local verification for the QueryGraph bootstrap proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `scripts/qglake-handoff-local.sh`. The live handoff generated one table and
+  one view, drained 26 outbox events, verified LakeCat replay through
+  `qglake-verify-replay`, ran QueryGraph `lakecat-verify` and
+  `lakecat-import`, and wrote
+  `lakecatReplayVerification.queryGraphBootstrapProof` to
+  `target/qglake-handoff/handoff-summary.json` with matching
+  bundle/graph/OpenLineage/QueryGraph import hashes, one policy binding, one
+  view-version receipt hash, and agent delegation/summary signature hashes;
+  direct Node summary check for
+  `lakecatReplayVerification.queryGraphBootstrapProof`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test -p lakecat-cli`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Expose request identity source in handoff proof`.
   Lineage drain responses and event summaries now carry sanitized
   request-identity source plus optional TypeDID envelope/proof hashes. The
