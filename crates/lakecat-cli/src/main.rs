@@ -1277,6 +1277,16 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "fetchedReplayEventHashes",
         "governedScanProof",
     )?;
+    require_hash_array(
+        governed_scan,
+        "plannedOpenLineageHashes",
+        "governedScanProof",
+    )?;
+    require_hash_array(
+        governed_scan,
+        "fetchedOpenLineageHashes",
+        "governedScanProof",
+    )?;
 
     let commit_history = required_object(
         lakecat,
@@ -6344,6 +6354,20 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("allowed-columns mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_scan_openlineage_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["fetchedOpenLineageHashes"] =
+            json!([]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing scan OpenLineage hashes");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("fetchedOpenLineageHashes"));
+        assert!(err.to_string().contains("sha256"));
     }
 
     #[test]

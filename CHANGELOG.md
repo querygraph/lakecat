@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made compact `governedScanProof` validation require planned and fetched
+  OpenLineage hashes in `lakecat-cli qglake-verify-handoff`, matching the live
+  QGLake handoff harness's scan replay evidence contract.
 - Made compact `tableCommitHistoryProof` validation self-sufficient in
   `lakecat-cli qglake-verify-handoff`, requiring commit-count alignment with
   sequence numbers and commit hashes, positive strictly increasing sequences,

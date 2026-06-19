@@ -320,10 +320,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   hashes; captured `replay-evidence.scan` must match `governedScanProof` for
   plan/file/delete/child task counts, the planned and fetched governed
   read-restriction objects, plus planned/fetched replay and OpenLineage hashes,
-  and the handoff verifier rejects fetched restriction drift from the planned
-  restriction; captured `replay-evidence.tableCommitHistory` must match
-  `tableCommitHistoryProof` for commit count, sequence numbers, commit hashes,
-  replay hashes, and OpenLineage hashes; the compact table commit-history proof
+  and the compact Rust handoff verifier now requires those planned/fetched
+  OpenLineage hashes directly while rejecting fetched restriction drift from
+  the planned restriction; captured `replay-evidence.tableCommitHistory` must
+  match `tableCommitHistoryProof` for commit count, sequence numbers, commit
+  hashes, replay hashes, and OpenLineage hashes; the compact table commit-history proof
   is now self-validating in the Rust verifier, requiring count-aligned commit
   hashes and positive strictly increasing sequence numbers, and captured
   `replay-evidence.views` must match `viewReceiptChainProof` for accepted view

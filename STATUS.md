@@ -6,6 +6,24 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify governed scan OpenLineage handoff proof`.
+  `lakecat-cli qglake-verify-handoff` now requires compact
+  `governedScanProof` summaries to carry planned and fetched OpenLineage hashes
+  in addition to planned/fetched replay hashes and matching read restrictions.
+  This moves the live handoff harness's scan OpenLineage evidence contract into
+  the Rust verifier consumed by QueryGraph and operator automation.
+- Local verification for this governed scan OpenLineage handoff-proof slice is
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Verify table commit-history handoff proof`.
   `lakecat-cli qglake-verify-handoff` now independently validates compact
   `tableCommitHistoryProof` pointer-log evidence. The proof must carry a

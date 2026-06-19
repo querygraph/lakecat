@@ -1275,8 +1275,10 @@ read-restriction objects. The verifier rejects a summary if the fetched
 restriction drifts from the planned restriction, so the compact handoff proves
 the narrowed allowed columns, row predicate, and policy hashes alongside the
 planned/fetched replay and OpenLineage hashes that prove the Sail-planned read
-path. It also compares
-the captured `replay-evidence.tableCommitHistory` object with
+path. The compact Rust verifier requires both the planned and fetched
+OpenLineage hashes directly, so automation can reject incomplete scan lineage
+without falling back to the shell harness. It also compares the captured
+`replay-evidence.tableCommitHistory` object with
 `tableCommitHistoryProof`, including the commit count, sequence numbers, commit
 hashes, replay hashes, and OpenLineage hashes that prove the pointer-log commit
 history was not rewritten between replay and summary. The compact verifier also
@@ -1396,12 +1398,14 @@ drain that does not replay matching `server.listed`, `project.listed`,
 `warehouse.listed`, `policy-binding.listed`, `storage-profile.listed`,
 `table.scan-planned`, `table.scan-tasks-fetched`, and `table.commits-listed`
 evidence. For scan replay, the typed drain summary carries scan-plan task
-counts plus fetched file-scan, delete-file, and child-plan task counts; for
-commit-history replay, it carries the commit count, committed sequence numbers,
-commit hashes, replay hashes, and OpenLineage hashes. The handoff verifier
-rejects compact commit-history proofs whose counts, sequences, or hash arrays
-do not align, so QueryGraph can verify the governed Sail-planned read and
-pointer-history inspection without parsing the full lineage payload.
+counts plus fetched file-scan, delete-file, and child-plan task counts, along
+with planned and fetched OpenLineage receipt hashes; for commit-history replay,
+it carries the commit count, committed sequence numbers, commit hashes, replay
+hashes, and OpenLineage hashes. The handoff verifier rejects compact scan
+proofs without those OpenLineage hashes and compact commit-history proofs whose
+counts, sequences, or hash arrays do not align, so QueryGraph can verify the
+governed Sail-planned read and pointer-history inspection without parsing the
+full lineage payload.
 
 For handoff testing, LakeCat can verify a saved bootstrap bundle and a saved
 drain response together:
