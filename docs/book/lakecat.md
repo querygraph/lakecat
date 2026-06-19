@@ -1410,8 +1410,9 @@ positive graph event evidence, and replay/OpenLineage hashes. The view
 receipt-chain proof shows QueryGraph's
 accepted view versions together with accepted receipt hashes, accepted
 `expectedViewVersion` guard evidence when a mutation was guarded, tombstone
-receipt hashes, namespace chain hashes, verified-chain counts, and
-replay/OpenLineage hashes. The credential proof shows the restricted agent was
+receipt hashes, namespace chain hashes, verified-chain counts, positive graph
+event evidence for accepted view replay, and replay/OpenLineage hashes. The
+credential proof shows the restricted agent was
 blocked onto Sail-planned reads while the trusted human path used the audited
 raw-credential exception. The summary also records artifact paths, raw file
 hashes, captured LakeCat replay output, captured LakeCat handoff-summary
@@ -1456,9 +1457,10 @@ commit-hash arrays, requires every sequence number to be positive and strictly
 increasing, and requires positive graph event evidence plus replay and
 OpenLineage receipt hashes. It compares the captured
 `replay-evidence.views` object with `viewReceiptChainProof`, including accepted
-view receipts, expected-version guard evidence, tombstone receipts, namespace
-receipt-chain hashes, and their replay/OpenLineage hashes, so durable view
-history stays tied to the saved LakeCat replay artifact. It also compares the
+view receipts, accepted-view graph event counts, expected-version guard
+evidence, tombstone receipts, namespace receipt-chain hashes, and their
+replay/OpenLineage hashes, so durable view history stays tied to the saved
+LakeCat replay artifact. It also compares the
 tombstone branch's `expectedViewVersion` with the accepted view version, so a
 handoff cannot claim a governed deletion unless the saved LakeCat replay proves
 that deletion used the catalog's optimistic version guard; the standalone
@@ -1467,8 +1469,8 @@ checked outside the local shell harness. The same standalone verifier now
 requires the compact view proof to keep `viewCount` consistent with the accepted
 view list, carry stable warehouse/namespace/name identity, prove
 `viewVersion == acceptedViewVersion`, and carry accepted receipt hashes,
-accepted receipt-chain hashes, tombstone receipt hashes, positive
-verified-chain counts, receipt-chain
+accepted receipt-chain hashes, positive accepted-view graph event evidence,
+tombstone receipt hashes, positive verified-chain counts, receipt-chain
 warehouse/namespace identity, namespace chain hashes, and replay/OpenLineage
 hashes. The verifier also checks that each namespace receipt-chain summary's
 `verifiedChainCount` equals the number of chain hashes and that the receipt

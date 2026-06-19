@@ -6,6 +6,21 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Prove accepted-view graph replay`.
+  QGLake compact `viewReceiptChainProof.views[]` and captured LakeCat replay
+  semantics now require positive `graphEvents` evidence for accepted view
+  replay, aligning the handoff summary with the existing lineage-drain verifier
+  requirement that view replay emits catalog graph and lineage projections.
+- Local verification for this accepted-view graph replay slice is green:
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_view_graph_events -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_accept_matching_files -- --nocapture`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Prove table commit-history graph replay`.
   QGLake compact `tableCommitHistoryProof`, captured LakeCat replay semantics,
   and lineage-drain replay verification now require positive `graphEvents`

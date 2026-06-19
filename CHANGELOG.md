@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake accepted-view replay and compact handoff proof to carry
+  positive graph event evidence alongside view receipt-chain and OpenLineage
+  proof.
 - Required QGLake table commit-history replay and compact handoff proof to
   carry positive graph event evidence alongside commit, replay, and OpenLineage
   hashes, and surfaced that evidence in the operator-readable replay line.

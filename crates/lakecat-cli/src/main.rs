@@ -2693,6 +2693,7 @@ fn require_view_receipt_chain_evidence(
             )));
         }
         require_hash_str(view, "acceptedReceiptHash", "viewReceiptChainProof.views[]")?;
+        require_positive_u64(view, "graphEvents", "viewReceiptChainProof.views[]")?;
         accepted_receipt_chain_hashes.push((
             required_str(view, "stableId", "viewReceiptChainProof.views[]")?.to_string(),
             accepted_view_version,
@@ -3127,6 +3128,7 @@ fn qglake_view_replay_evidence_json(
                     .get(view_stable_id),
                 "eventType": view_replay.event_type,
                 "expectedViewVersion": view_replay.expected_view_version,
+                "graphEvents": view_replay.graph_events,
                 "replayEventHashes": &view_replay.replay_event_hashes,
                 "openLineageHashes": &view_replay.replay_open_lineage_hashes,
             }))
@@ -7432,6 +7434,7 @@ mod tests {
                         "acceptedReceiptChainHash": "sha256:view-receipt-chain",
                         "eventType": "view.upserted",
                         "expectedViewVersion": null,
+                        "graphEvents": 1,
                         "replayEventHashes": ["sha256:view-replay"],
                         "openLineageHashes": ["sha256:view-openlineage"]
                     }],
@@ -7635,6 +7638,7 @@ mod tests {
                         "acceptedReceiptChainHash": "sha256:view-receipt-chain",
                         "eventType": "view.upserted",
                         "expectedViewVersion": null,
+                        "graphEvents": 1,
                         "replayEventHashes": ["sha256:view-replay"],
                         "openLineageHashes": ["sha256:view-openlineage"]
                     }],
@@ -8957,6 +8961,20 @@ mod tests {
         assert!(err.to_string().contains("viewReceiptChainProof"));
         assert!(err.to_string().contains("acceptedReceiptHash"));
         assert!(err.to_string().contains("sha256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_view_graph_events() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"][0]["graphEvents"] =
+            json!(0);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing accepted-view graph projection");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("graphEvents"));
+        assert!(err.to_string().contains("positive"));
     }
 
     #[test]
