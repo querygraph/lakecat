@@ -2410,7 +2410,7 @@ fn require_credential_vending_evidence(
         "openLineageHashes",
         "credentialVendingProof.restricted",
     )?;
-    require_positive_u64(
+    let restricted_ttl = require_positive_u64(
         restricted,
         "maxCredentialTtlSeconds",
         "credentialVendingProof.restricted",
@@ -2466,11 +2466,16 @@ fn require_credential_vending_evidence(
         "openLineageHashes",
         "credentialVendingProof.trustedHuman",
     )?;
-    require_positive_u64(
+    let trusted_ttl = require_positive_u64(
         trusted,
         "maxCredentialTtlSeconds",
         "credentialVendingProof.trustedHuman",
     )?;
+    if trusted_ttl != restricted_ttl {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "credentialVendingProof.trustedHuman.maxCredentialTtlSeconds mismatch: expected={restricted_ttl} actual={trusted_ttl}"
+        )));
+    }
     require_credential_storage_profile_evidence(trusted, "credentialVendingProof.trustedHuman")?;
     require_credential_storage_profile_matches_upsert(
         trusted,
@@ -5722,6 +5727,23 @@ fn verify_qglake_credential_replay(
         ));
     }
     verify_qglake_credential_lineage_projection(human_probe, "trusted human")?;
+    let restricted_ttl = qglake_event_max_credential_ttl_seconds(restricted_probe).ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain restricted credential replay is missing max credential TTL evidence"
+                .to_string(),
+        )
+    })?;
+    let human_ttl = qglake_event_max_credential_ttl_seconds(human_probe).ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain trusted human credential replay is missing max credential TTL evidence"
+                .to_string(),
+        )
+    })?;
+    if human_ttl != restricted_ttl {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain trusted human credential replay TTL cap mismatch: expected={restricted_ttl} actual={human_ttl}"
+        )));
+    }
     Ok(())
 }
 
@@ -8650,6 +8672,19 @@ mod tests {
 
         assert!(err.to_string().contains("credentialVendingProof"));
         assert!(err.to_string().contains("maxCredentialTtlSeconds"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_credential_ttl_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]["maxCredentialTtlSeconds"] =
+            json!(60);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject credential TTL drift");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("maxCredentialTtlSeconds mismatch"));
     }
 
     #[test]
@@ -13468,6 +13503,53 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("trusted human credential replay is missing max credential TTL evidence")
+        );
+
+        let mut human_with_drifted_ttl = qglake_human_credential_summary();
+        human_with_drifted_ttl.read_restriction = Some(json!({
+            "allowed-columns": ["event_id", "occurred_at", "severity"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 60,
+            "policy-hashes": ["sha256:scan-policy"]
+        }));
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 4,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 4,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                    human_with_drifted_ttl,
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject credential TTL drift");
+        assert!(
+            err.to_string()
+                .contains("trusted human credential replay TTL cap mismatch")
         );
 
         let mut restricted_without_location_hash = qglake_restricted_credential_summary();

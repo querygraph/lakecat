@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Required QGLake credential replay and compact handoff proof to reject drift
+  between restricted-agent and trusted-human credential TTL caps.
 - Bound captured QGLake scan replay semantics to the compact
   `fetchedRequiredProjection` and `fetchedRequiredFilters` evidence so terminal
   replay output cannot drift from governed fetch proof.

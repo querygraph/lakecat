@@ -6,6 +6,19 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject credential TTL drift`.
+  QGLake saved lineage-drain replay and compact handoff verification now reject
+  drift between the restricted-agent credential TTL cap and the trusted-human
+  audited raw-credential exception TTL cap, keeping both branches bound to the
+  same policy-derived `max-credential-ttl-seconds` evidence.
+- Local verification for this credential TTL drift slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cross-check captured scan fetch requirements`.
   Captured QGLake LakeCat replay output now must match compact
   `governedScanProof` evidence for `fetchedRequiredProjection` and
