@@ -6,6 +6,30 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify QGLake handoff catalog scope`.
+  `lakecat-cli qglake-verify-handoff` now rejects compact handoff summaries
+  that omit non-empty `catalogUrl`, `warehouse`, `namespace`, or `table`
+  scope fields. The verifier also rejects captured QueryGraph verify/import
+  outputs whose `warehouse` no longer matches the summary, and the local
+  QGLake handoff harness now checks the same warehouse agreement before
+  writing `handoff-summary.json`.
+- Local verification for this QGLake handoff catalog-scope slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 outbox events, verified LakeCat replay, ran QueryGraph `lakecat-verify`
+  and `lakecat-import`, then verified `handoff-summary.json` with
+  `catalogUrl: http://127.0.0.1:18181`, `warehouse: local`,
+  `namespace: default`, `table: events`, and captured QueryGraph
+  verify/import warehouse semantics matching `local`);
+  `cargo test --workspace --all-features`;
+  `cargo test --workspace`.
+- Latest completed implementation slice:
   `Align TypeDID handoff hash slots`.
   `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness now
   reject compact `requestIdentityProof` and `queryGraphBootstrapProof`

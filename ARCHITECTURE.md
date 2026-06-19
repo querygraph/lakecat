@@ -562,6 +562,11 @@ dimensions, joins, business ontology, and authoritative semantic names.
 The corresponding `querygraph.bootstrap` audit/outbox event carries the verified
 bundle, graph, and OpenLineage hashes so downstream lineage replay can prove it
 is describing the same bootstrap material QueryGraph imported.
+Compact QGLake handoff summaries must also carry the catalog URL plus
+warehouse, namespace, and table scope. The handoff verifier rejects missing
+scope and rejects captured QueryGraph verify/import output whose warehouse does
+not match that scope, so automation cannot accidentally attach a verified bundle
+to the wrong catalog tenant.
 
 ## Lakekeeper Lessons To Adopt
 

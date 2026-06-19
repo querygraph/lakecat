@@ -496,6 +496,7 @@ fn verify_qglake_handoff_captured_output_semantics(
             "handoff summary root must be an object".to_string(),
         )
     })?;
+    let warehouse = required_str(summary, "warehouse", "handoff summary")?;
     let querygraph = required_object(summary, "querygraphVerification", "handoff summary")?;
     let lakecat = required_object(summary, "lakecatReplayVerification", "handoff summary")?;
     let artifacts = required_object(summary, "artifacts", "handoff summary")?;
@@ -528,11 +529,13 @@ fn verify_qglake_handoff_captured_output_semantics(
     verify_querygraph_capture_matches_summary(
         querygraph_verify,
         querygraph,
+        warehouse,
         "captured QueryGraph verify output",
     )?;
     verify_querygraph_capture_matches_summary(
         querygraph_import,
         querygraph,
+        warehouse,
         "captured QueryGraph import output",
     )?;
     let request_identity = Value::Object(lakecat_replay_request_identity(lakecat_replay)?.clone());
@@ -1002,8 +1005,10 @@ fn lakecat_replay_evidence(
 fn verify_querygraph_capture_matches_summary(
     capture: &serde_json::Map<String, Value>,
     querygraph: &serde_json::Map<String, Value>,
+    warehouse: &str,
     label: &str,
 ) -> lakecat_core::LakeCatResult<()> {
+    require_string_match(capture, "warehouse", warehouse, label)?;
     require_handoff_summary_fields_match_capture(capture, querygraph, label)
 }
 
@@ -1061,6 +1066,7 @@ fn querygraph_capture_semantics_json(
     label: &str,
 ) -> lakecat_core::LakeCatResult<Value> {
     Ok(json!({
+        "warehouse": required_str(capture, "warehouse", label)?,
         "tableCount": required_u64(capture, "table-count", label)?,
         "viewCount": required_u64(capture, "view-count", label)?,
         "bundleHash": required_str(capture, "bundle-hash", label)?,
@@ -1085,6 +1091,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     )?;
     require_string_eq(summary, "status", "verified", "handoff summary")?;
     let principal = required_str(summary, "principal", "handoff summary")?;
+    let scope = require_handoff_scope(summary)?;
     let querygraph = required_object(summary, "querygraphVerification", "handoff summary")?;
     let import = required_object(summary, "querygraphImportVerification", "handoff summary")?;
     if required_bool(import, "matchesVerify", "querygraphImportVerification")? != true {
@@ -1332,12 +1339,38 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "schemaVersion": "lakecat.qglake.handoff-verification.v1",
         "status": "verified",
         "principal": principal,
+        "catalogUrl": scope.catalog_url,
+        "warehouse": scope.warehouse,
+        "namespace": scope.namespace,
+        "table": scope.table,
         "tableCount": required_u64(querygraph, "tableCount", "querygraphVerification")?,
         "viewCount": required_u64(querygraph, "viewCount", "querygraphVerification")?,
         "standards": required_value(querygraph, "standards", "querygraphVerification")?,
         "queryGraphBootstrapProof": bootstrap,
         "requestIdentityProof": request_identity,
     }))
+}
+
+struct HandoffScope<'a> {
+    catalog_url: &'a str,
+    warehouse: &'a str,
+    namespace: &'a str,
+    table: &'a str,
+}
+
+fn require_handoff_scope<'a>(
+    summary: &'a serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<HandoffScope<'a>> {
+    let catalog_url = require_non_empty_str(summary, "catalogUrl", "handoff summary")?;
+    let warehouse = require_non_empty_str(summary, "warehouse", "handoff summary")?;
+    let namespace = require_non_empty_str(summary, "namespace", "handoff summary")?;
+    let table = require_non_empty_str(summary, "table", "handoff summary")?;
+    Ok(HandoffScope {
+        catalog_url,
+        warehouse,
+        namespace,
+        table,
+    })
 }
 
 fn require_storage_profile_upsert_evidence(
@@ -5781,7 +5814,11 @@ mod tests {
         json!({
             "schemaVersion": "lakecat.qglake.handoff-summary.v1",
             "status": "verified",
+            "catalogUrl": "http://127.0.0.1:18181",
             "principal": "did:example:agent",
+            "warehouse": "local",
+            "namespace": "default",
+            "table": "events",
             "querygraphVerification": {
                 "tableCount": 1,
                 "viewCount": 1,
@@ -6313,12 +6350,40 @@ mod tests {
         );
         assert_eq!(verification["status"], json!("verified"));
         assert_eq!(verification["principal"], json!("did:example:agent"));
+        assert_eq!(verification["warehouse"], json!("local"));
+        assert_eq!(verification["namespace"], json!("default"));
+        assert_eq!(verification["table"], json!("events"));
         assert_eq!(verification["tableCount"], json!(1));
         assert_eq!(verification["viewCount"], json!(1));
         assert_eq!(
             verification["queryGraphBootstrapProof"]["bundleHash"],
             json!("sha256:bundle")
         );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_catalog_scope() {
+        let mut summary = qglake_handoff_summary_json();
+        summary.as_object_mut().unwrap().remove("warehouse");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing warehouse scope");
+
+        assert!(err.to_string().contains("handoff summary"));
+        assert!(err.to_string().contains("warehouse"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_empty_catalog_scope() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["namespace"] = json!("");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject empty namespace scope");
+
+        assert!(err.to_string().contains("handoff summary"));
+        assert!(err.to_string().contains("namespace"));
+        assert!(err.to_string().contains("must not be empty"));
     }
 
     #[test]
@@ -6877,6 +6942,29 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("captured QueryGraph verify output.bundle-hash mismatch")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_querygraph_warehouse_drift() {
+        let temp = qglake_temp_dir("handoff-captured-warehouse-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("querygraph-verify.json")).expect("read QueryGraph verify");
+        drifted["warehouse"] = json!("other");
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("querygraph-verify.json"), &drifted_bytes)
+            .expect("write drifted QueryGraph verify output");
+        summary["artifacts"]["capturedOutputs"]["querygraphVerify"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured QueryGraph warehouse drift should be rejected");
+
+        assert!(
+            err.to_string()
+                .contains("captured QueryGraph verify output.warehouse mismatch")
         );
     }
 

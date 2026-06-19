@@ -1241,7 +1241,11 @@ URL, principal, table scope, LakeCat replay status from
 `lakecat.qglake.replay-verification.v1`, QueryGraph-verified table/view
 counts, and semantic bundle/graph/OpenLineage/import hashes plus standards
 accepted only after LakeCat replay, `lakecat-verify`, and `lakecat-import`
-agree. It also records structured request-identity, scan, management,
+agree. The compact verifier requires the catalog URL, warehouse, namespace, and
+table scope to be present before accepting the summary, and it rejects captured
+QueryGraph verify/import output whose warehouse no longer matches the summary.
+That keeps a verified artifact set from being replayed against the wrong
+catalog tenant. It also records structured request-identity, scan, management,
 credential, table-commit, and view replay evidence, plus compact
 `requestIdentityProof`, `queryGraphBootstrapProof`, `governedScanProof`,
 `tableCommitHistoryProof`, `viewReceiptChainProof`,
@@ -1277,8 +1281,8 @@ captured-output hashes for the LakeCat replay and QueryGraph verify/import
 JSON files, and service log path. The handoff verifier does not stop at byte
 hashes: it parses the saved LakeCat replay JSON and QueryGraph verify/import
 JSON captures and checks their replay schema/status, table and view counts,
-bundle hash, graph hash, OpenLineage hash, QueryGraph import hash, and
-standards against the compact summary. It compares the captured LakeCat
+warehouse, bundle hash, graph hash, OpenLineage hash, QueryGraph import hash,
+and standards against the compact summary. It compares the captured LakeCat
 `replay-evidence.requestIdentity` and `replay-evidence.queryGraphBootstrap`
 objects with the compact request-identity and bootstrap proofs, including the
 principal, authorization hash, TypeDID hash slots, delegation and summary

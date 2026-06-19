@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made compact QGLake handoff summaries require non-empty `catalogUrl`,
+  `warehouse`, `namespace`, and `table` scope fields, and made
+  `lakecat-cli qglake-verify-handoff` reject captured QueryGraph verify/import
+  outputs whose warehouse drifts from the summary.
 - Tightened compact `requestIdentityProof` and `queryGraphBootstrapProof`
   TypeDID hash-slot validation in `lakecat-cli qglake-verify-handoff` and the
   local QGLake handoff harness so optional TypeDID envelope/proof hashes must

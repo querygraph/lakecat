@@ -672,11 +672,11 @@ require_field_match() {
 
 write_summary() {
   local bundle_sha drain_sha import_plan_sha lakecat_replay_sha querygraph_verify_sha querygraph_import_sha
-  local verified_tables verified_views bundle_hash graph_hash open_lineage_hash querygraph_import_hash
+  local verified_tables verified_views verified_warehouse bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   local verified_standards
   local lakecat_schema lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards lakecat_replay_evidence
   local lakecat_request_identity_evidence lakecat_querygraph_bootstrap_evidence lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence lakecat_table_commit_history_evidence lakecat_view_receipt_chain_evidence
-  local imported_tables imported_views imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
+  local imported_tables imported_views imported_warehouse imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
   local imported_standards
   bundle_sha="$(sha256_file "$BUNDLE")"
   drain_sha="$(sha256_file "$DRAIN")"
@@ -707,6 +707,7 @@ write_summary() {
   open_lineage_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "open-lineage-hash")"
   querygraph_import_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "querygraph-import-hash")"
   verified_standards="$(json_value_field "$QUERYGRAPH_VERIFY_OUTPUT" "standards")"
+  verified_warehouse="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "warehouse")"
   lakecat_querygraph_bootstrap_evidence="$(querygraph_bootstrap_evidence_json "$LAKECAT_REPLAY_OUTPUT" "$PRINCIPAL" "$verified_tables" "$verified_views" "$bundle_hash" "$graph_hash" "$open_lineage_hash" "$querygraph_import_hash" "$verified_standards")"
   imported_tables="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "table-count")"
   imported_views="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "view-count")"
@@ -715,6 +716,8 @@ write_summary() {
   imported_open_lineage_hash="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "open-lineage-hash")"
   imported_querygraph_import_hash="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "querygraph-import-hash")"
   imported_standards="$(json_value_field "$QUERYGRAPH_IMPORT_OUTPUT" "standards")"
+  imported_warehouse="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "warehouse")"
+  required_summary_field "warehouse" "$QUERYGRAPH_VERIFY_OUTPUT" "$verified_warehouse"
   required_summary_field "table-count" "$QUERYGRAPH_VERIFY_OUTPUT" "$verified_tables"
   required_summary_field "view-count" "$QUERYGRAPH_VERIFY_OUTPUT" "$verified_views"
   required_summary_field "bundle-hash" "$QUERYGRAPH_VERIFY_OUTPUT" "$bundle_hash"
@@ -741,13 +744,16 @@ write_summary() {
   required_summary_field "view-receipt-chain-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_view_receipt_chain_evidence"
   required_summary_field "table-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_tables"
   required_summary_field "view-count" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_views"
+  required_summary_field "warehouse" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_warehouse"
   required_summary_field "bundle-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_bundle_hash"
   required_summary_field "graph-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_graph_hash"
   required_summary_field "open-lineage-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_open_lineage_hash"
   required_summary_field "querygraph-import-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_querygraph_import_hash"
   required_summary_field "standards" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_standards"
+  require_field_match "warehouse" "$verified_warehouse" "$WAREHOUSE"
   require_field_match "table-count" "$imported_tables" "$verified_tables"
   require_field_match "view-count" "$imported_views" "$verified_views"
+  require_field_match "import warehouse" "$imported_warehouse" "$verified_warehouse"
   require_field_match "bundle-hash" "$imported_bundle_hash" "$bundle_hash"
   require_field_match "graph-hash" "$imported_graph_hash" "$graph_hash"
   require_field_match "open-lineage-hash" "$imported_open_lineage_hash" "$open_lineage_hash"
