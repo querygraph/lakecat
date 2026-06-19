@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a dedicated pinned LakeCat agent-guidance section near the top of
+  `GOAL.md`, mirroring the current repo boundaries, compatibility rules,
+  implementation priorities, verification gates, and commit discipline from
+  `AGENTS.md`.
 - Added a compact `requestIdentityProof` object to QGLake
   `handoff-summary.json`, proving the replay principal, principal kind,
   request-identity source/state, authorization receipt hash, and sanitized

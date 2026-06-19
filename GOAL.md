@@ -39,6 +39,80 @@ Before choosing or implementing a slice, read the current state from:
 If these conflict, prefer the live code and the newest status/design entry, then
 update the docs as part of the logical unit.
 
+## Pinned LakeCat Agent Guidance
+
+The current `AGENTS.md` instructions for `/Users/alexy/src/lakecat` are part of
+this goal. Treat them as durable project constraints, not session-local advice.
+
+LakeCat is the Rust Iceberg-compatible catalog foundation for QueryGraph. Keep
+the catalog boundary thin: identity, tenancy, Iceberg REST compatibility,
+metadata-pointer state, policy gates, and integration events belong here.
+
+### Pinned Repo Boundaries
+
+- Push Iceberg format, manifest, scan-planning, pruning, delete handling,
+  metadata-as-data, and engine work into Sail (`/Users/alexy/src/sail`)
+  whenever it can be reusable. LakeCat should prefer Sail APIs and generated
+  Iceberg REST models over local reimplementation.
+- Push graph schema, graph taxonomy, projection logic, graph stores, traversal,
+  and graph query behavior into Grust (`/Users/alexy/src/grust`). LakeCat
+  should keep only catalog-facing graph sink/projection boundaries and call
+  Grust APIs.
+- Push governance, policy composition, capabilities, TypeDID envelopes, secure
+  agents, and authorization semantics into TypeSec
+  (`/Users/alexy/src/typesec`). LakeCat should ask TypeSec for decisions/proofs
+  and persist receipts.
+- Treat QueryGraph (`/Users/alexy/src/querygraph`) as the end-to-end
+  integration target. LakeCat changes should naturally support QueryGraph
+  bootstrap, Croissant/CDIF/OSI/ODRL/OpenLineage projection, and the QGLake
+  acceptance flow.
+
+### Pinned Compatibility Rules
+
+- Do not fork Iceberg semantics or make standard clients depend on
+  non-standard endpoints for normal table access.
+- Keep Iceberg metadata pristine. Business semantics, policy, graph, lineage,
+  and agent state should be derived control-plane or graph data, not required
+  custom Iceberg metadata.
+- For v4 work, prefer typed Sail support when available. JSON passthrough is an
+  explicit compatibility bridge, not the long-term implementation.
+- Raw credential vending must be a deliberate, audited exception. Governed
+  Sail-planned reads are the default path for agents and untrusted principals.
+
+### Pinned Implementation Priorities
+
+- Use the existing trait seams (`CatalogStore`, `SailCatalogEngine`,
+  `GovernanceEngine`, `CatalogGraphSink`, `LineageSink`) and keep defaults safe
+  for embedded tests.
+- Prefer pushing reusable fixes upstream to sibling repos, then depending on
+  them from LakeCat. For example, manifest-metric decoding belongs in Sail; a
+  reusable catalog graph taxonomy belongs in Grust.
+- Keep feature gates honest. Default-feature tests should pass, and real
+  integrations should be wired through explicit features such as `sail-local`,
+  `typesec-local`, and `grust-local`.
+- Side effects to graph and lineage should move toward a transactional outbox
+  so catalog state changes are not lost or blocked by external sinks.
+- Prefer the Rust `turso` crate for LakeCat's durable local catalog spine. Keep
+  the store contract portable, but do not reintroduce SQLx/SQLite unless the
+  user explicitly asks for that backend.
+- Check in after each logical unit of work. Before committing, add or update
+  `CHANGELOG.md` with a concise description of that unit, then stage only the
+  files that belong to the unit.
+
+### Pinned Verification
+
+For LakeCat changes, prefer:
+
+- `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`
+- `cargo test -p lakecat-store --features turso-local`
+- `cargo test -p lakecat-service --features turso-local`
+- `cargo test -p lakecat-service --all-features`
+- `cargo test --workspace --all-features`
+- `git diff --check`
+
+When a change touches Sail, Grust, TypeSec, or QueryGraph, run the focused
+tests in that sibling repo as well and report each repo separately.
+
 ## Agent Guidance
 
 Treat the guidance in `AGENTS.md` as part of this goal, not as separate
