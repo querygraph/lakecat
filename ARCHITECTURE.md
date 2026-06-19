@@ -346,9 +346,12 @@ QueryGraph a stable catalog-owned view entity. Warehouse-prefixed catalog REST
 aliases can now list, load, upsert, and drop those durable views for
 Iceberg-compatible clients. `ViewRecord` now carries durable typed columns and
 store-assigned `view-version` counters, and the in-process Sail provider can
-create, load, list, and drop those records as `TableKind::View` statuses; full
-Iceberg view history and commit semantics should still move toward Sail-backed
-models as they become available. QueryGraph bootstrap now exports those stored
+create, load, list, and drop those records as `TableKind::View` statuses.
+Management and catalog REST upserts can also carry `expected-view-version` so
+LakeCat rejects stale view replacements before the current view or receipt
+chain changes; full Iceberg view history and commit semantics should still
+move toward Sail-backed models as they become available. QueryGraph bootstrap
+now exports those stored
 views with manifest-covered OSI handoff hashes, typed view columns, view
 versions, view-aware graph edges, and OpenLineage view counts.
 Governed management endpoints now also upsert and list

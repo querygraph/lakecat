@@ -966,17 +966,35 @@ compact view replay identity:
 That `view-version` is assigned by the durable store on each upsert, not by the
 caller. It is the first compatibility bridge toward Iceberg view commit history:
 QueryGraph can compare a bootstrap view artifact with the catalog's current
-view version today. LakeCat also writes a compact view-version receipt in the
-durable store. The receipt records the stable view id, assigned version,
-previous version, previous receipt hash, content hash, principal, operation,
-and timestamp. That makes the compact receipt list a hash chain: version 2
-points at the version 1 receipt hash, and a later tombstone points at the last
-upsert receipt hash. Fuller version-log semantics remain a Sail-aligned
-implementation target. When a view is dropped, LakeCat appends a compact
-tombstone receipt instead of inventing a new view version: the receipt keeps
-`view-version` at the last durable version, sets `operation` to `drop`, links
-to the previous receipt, and preserves the last content hash so QueryGraph or
-an operator can prove which catalog view state was removed.
+view version today. A caller that wants optimistic commit behavior can include
+`expected-view-version` on the next upsert:
+
+```sh
+curl -s -X PUT \
+  http://127.0.0.1:3000/management/v1/warehouses/local/namespaces/default/views/events_view \
+  -H 'content-type: application/json' \
+  -d '{
+    "sql": "select event_id from default.events where severity = '\''critical'\''",
+    "dialect": "spark-sql",
+    "schema-version": 2,
+    "expected-view-version": 1
+  }'
+```
+
+If another writer has already advanced the view, LakeCat returns a conflict
+before it replaces the current view or appends a receipt. Omitting the field
+keeps the compatibility behavior: the store assigns the next version. LakeCat
+also writes a compact view-version receipt in the durable store. The receipt
+records the stable view id, assigned version, previous version, previous
+receipt hash, content hash, principal, operation, and timestamp. That makes the
+compact receipt list a hash chain: version 2 points at the version 1 receipt
+hash, and a later tombstone points at the last upsert receipt hash. Fuller
+version-log semantics remain a Sail-aligned implementation target. When a view
+is dropped, LakeCat appends a compact tombstone receipt instead of inventing a
+new view version: the receipt keeps `view-version` at the last durable version,
+sets `operation` to `drop`, links to the previous receipt, and preserves the
+last content hash so QueryGraph or an operator can prove which catalog view
+state was removed.
 
 ```json
 {

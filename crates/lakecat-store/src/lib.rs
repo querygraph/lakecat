@@ -163,6 +163,20 @@ pub trait CatalogStore: Send + Sync + 'static {
         view.validate()?;
         Ok(view)
     }
+    async fn upsert_view_if_version(
+        &self,
+        view: ViewRecord,
+        expected_view_version: Option<u64>,
+    ) -> LakeCatResult<ViewRecord> {
+        if let Some(expected) = expected_view_version {
+            validate_expected_view_version(expected)?;
+            let current = self
+                .load_view(&view.warehouse, &view.namespace, &view.name)
+                .await?;
+            require_expected_view_version(Some(&current), expected)?;
+        }
+        self.upsert_view(view).await
+    }
     async fn list_view_version_receipts(
         &self,
         _warehouse: &WarehouseName,
@@ -599,6 +613,33 @@ impl ViewRecord {
 
 fn default_view_version() -> u64 {
     1
+}
+
+fn validate_expected_view_version(expected: u64) -> LakeCatResult<()> {
+    if expected == 0 {
+        return Err(LakeCatError::InvalidArgument(
+            "expected view version must be greater than zero".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn require_expected_view_version(
+    previous: Option<&ViewRecord>,
+    expected: u64,
+) -> LakeCatResult<()> {
+    let Some(previous) = previous else {
+        return Err(LakeCatError::Conflict(format!(
+            "view expected version {expected} but no current view exists"
+        )));
+    };
+    if previous.view_version != expected {
+        return Err(LakeCatError::Conflict(format!(
+            "view expected version {expected} but current version is {}",
+            previous.view_version
+        )));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1544,6 +1585,36 @@ impl CatalogStore for MemoryCatalogStore {
         Ok(view)
     }
 
+    async fn upsert_view_if_version(
+        &self,
+        view: ViewRecord,
+        expected_view_version: Option<u64>,
+    ) -> LakeCatResult<ViewRecord> {
+        view.validate()?;
+        if let Some(expected) = expected_view_version {
+            validate_expected_view_version(expected)?;
+        }
+        let mut state = self.state.write().await;
+        let view_key = view_key(&view);
+        let principal = view.created.principal.clone();
+        let previous = state.views.get(&view_key);
+        if let Some(expected) = expected_view_version {
+            require_expected_view_version(previous, expected)?;
+        }
+        let view = view.with_next_version(previous)?;
+        let previous_receipt_hash = latest_view_receipt_hash(
+            state
+                .view_version_receipts
+                .iter()
+                .filter(|receipt| receipt.stable_id == view_stable_id(&view)),
+        )?;
+        let receipt =
+            ViewVersionReceipt::upsert(previous, previous_receipt_hash, &view, principal)?;
+        state.views.insert(view_key, view.clone());
+        state.view_version_receipts.push(receipt);
+        Ok(view)
+    }
+
     async fn list_view_version_receipts(
         &self,
         warehouse: &WarehouseName,
@@ -2320,8 +2391,30 @@ mod memory_tests {
             comment: Some("Customer identifier".to_string()),
         }])
         .unwrap();
-        let updated = store.upsert_view(updated).await.unwrap();
+        let updated = store
+            .upsert_view_if_version(updated, Some(1))
+            .await
+            .unwrap();
         assert_eq!(updated.view_version, 2);
+        let stale = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("active_customers").unwrap(),
+            "select id from customers where active",
+            "sql",
+            Some(3),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        let err = store
+            .upsert_view_if_version(stale, Some(1))
+            .await
+            .expect_err("stale expected view version must conflict");
+        assert!(matches!(
+            err,
+            LakeCatError::Conflict(message) if message.contains("expected version 1")
+        ));
         let receipts = store
             .list_view_version_receipts(
                 &warehouse,
@@ -2511,8 +2604,9 @@ pub mod turso_store {
         CatalogAuditEvent, CatalogStore, OutboxEvent, PolicyBinding, ProjectRecord, ServerRecord,
         SoftDeleteRecord, StorageProfile, TableCommit, TableCommitRecord, TableRecord, ViewRecord,
         ViewVersionReceipt, WarehouseRecord, namespace_not_empty, namespace_not_found,
-        policy_binding_key, policy_bindings_for_table, storage_profile_key, storage_profile_match,
-        table_key, validate_project_id, view_key, view_key_parts, view_receipt_hash,
+        policy_binding_key, policy_bindings_for_table, require_expected_view_version,
+        storage_profile_key, storage_profile_match, table_key, validate_expected_view_version,
+        validate_project_id, view_key, view_key_parts, view_receipt_hash,
     };
 
     #[derive(Debug, Clone)]
@@ -3470,7 +3564,18 @@ pub mod turso_store {
         }
 
         async fn upsert_view(&self, view: ViewRecord) -> LakeCatResult<ViewRecord> {
+            self.upsert_view_if_version(view, None).await
+        }
+
+        async fn upsert_view_if_version(
+            &self,
+            view: ViewRecord,
+            expected_view_version: Option<u64>,
+        ) -> LakeCatResult<ViewRecord> {
             view.validate()?;
+            if let Some(expected) = expected_view_version {
+                validate_expected_view_version(expected)?;
+            }
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
             let view_key = view_key(&view);
@@ -3489,6 +3594,9 @@ pub mod turso_store {
                 .map_err(turso_error)?
                 .map(|row| decode_json::<ViewRecord>(row_string(&row, 0)?))
                 .transpose()?;
+            if let Some(expected) = expected_view_version {
+                require_expected_view_version(previous.as_ref(), expected)?;
+            }
             let view = view.with_next_version(previous.as_ref())?;
             tx.execute(
                 "insert into views (
@@ -4450,8 +4558,30 @@ pub mod turso_store {
                 comment: Some("Customer identifier".to_string()),
             }])
             .unwrap();
-            let updated = store.upsert_view(updated).await.unwrap();
+            let updated = store
+                .upsert_view_if_version(updated, Some(1))
+                .await
+                .unwrap();
             assert_eq!(updated.view_version, 2);
+            let stale = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("active_customers").unwrap(),
+                "select id from customers where active",
+                "sql",
+                Some(3),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            let err = store
+                .upsert_view_if_version(stale, Some(1))
+                .await
+                .expect_err("stale expected view version must conflict");
+            assert!(matches!(
+                err,
+                LakeCatError::Conflict(message) if message.contains("expected version 1")
+            ));
             let receipts = store
                 .list_view_version_receipts(
                     &warehouse,

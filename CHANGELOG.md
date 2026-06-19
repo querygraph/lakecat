@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added optional `expected-view-version` guarded view upserts for management
+  and catalog REST view routes, with atomic memory/Turso store checks that
+  reject stale view replacements before appending a new view receipt.
 - Made `lakecat-cli qglake-verify-handoff` compare the compact
   `tableCommitHistoryProof` and `viewReceiptChainProof` values against the
   captured LakeCat replay JSON, so commit-history and durable view-receipt

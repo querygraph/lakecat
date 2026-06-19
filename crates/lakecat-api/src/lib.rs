@@ -268,6 +268,8 @@ pub struct UpsertViewRequest {
     #[serde(default)]
     pub schema_version: Option<u64>,
     #[serde(default)]
+    pub expected_view_version: Option<u64>,
+    #[serde(default)]
     pub columns: Vec<ViewColumnRequest>,
     #[serde(default)]
     pub properties: BTreeMap<String, String>,

@@ -456,6 +456,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   can create, bootstrap, drop, receipt-check by view and namespace, and drain a
   transient view while rejecting dropped-view replay that lacks either per-view
   tombstone receipt evidence or namespace-level receipt-chain evidence;
+  management and catalog REST view upserts now accept optional
+  `expected-view-version` guards that reject stale replacements before changing
+  the current view or appending a receipt, giving QueryGraph agents a
+  catalog-owned optimistic commit primitive while fuller Sail-aligned view
+  history remains pending;
   view-version receipts now carry `previous-receipt-hash` links so upsert and
   drop receipts form a compact hash chain over the catalog-facing version
   history, and namespace receipt-chain reads expose deterministic `chain-hash`

@@ -2484,7 +2484,10 @@ async fn upsert_view(
         capability.receipt().principal.clone(),
     )?
     .with_columns(view_columns_from_request(request.columns)?)?;
-    let record = state.store.upsert_view(record).await?;
+    let record = state
+        .store
+        .upsert_view_if_version(record, request.expected_view_version)
+        .await?;
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -2545,7 +2548,10 @@ async fn catalog_upsert_view(
         capability.receipt().principal.clone(),
     )?
     .with_columns(view_columns_from_request(request.columns)?)?;
-    let record = state.store.upsert_view(record).await?;
+    let record = state
+        .store
+        .upsert_view_if_version(record, request.expected_view_version)
+        .await?;
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -10317,6 +10323,7 @@ mod tests {
                     "sql": "select id from customers where active",
                     "dialect": "sql",
                     "schema-version": 2,
+                    "expected-view-version": 1,
                     "properties": {
                         "semantic-domain": "customer"
                     }
@@ -10331,6 +10338,24 @@ mod tests {
             .unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["view-version"], serde_json::json!(2));
+
+        let stale_update = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/active_customers")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "sql": "select email from customers where active",
+                    "dialect": "sql",
+                    "schema-version": 3,
+                    "expected-view-version": 1
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(stale_update).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
 
         let receipts = Request::builder()
             .method(Method::GET)

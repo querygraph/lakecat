@@ -2225,6 +2225,7 @@ async fn ensure_qglake_transient_view(
             ),
             dialect: "spark-sql".to_string(),
             schema_version: Some(1),
+            expected_view_version: None,
             columns: vec![lakecat_api::ViewColumnRequest {
                 name: "event_id".to_string(),
                 data_type: json!({"type": "long"}),
