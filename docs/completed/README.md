@@ -18,10 +18,10 @@ architecture, or agent guidance documents.
 
 | Archived file | Durable material now lives in |
 | --- | --- |
-| `OPUS1.md` | `../../DESIGN.md` `OPUS Closure Map`, `Finding Status`, `Priority Plan`; `../../ARCHITECTURE.md` repo placement rules |
-| `OPUS1-DESIGN.md` | `../../DESIGN.md` `Thesis`, `Critical Path: The Restriction`, `OPUS Decisions Kept Permanent`; `../../ARCHITECTURE.md` Sail/Grust/TypeSec boundaries |
-| `OPUS2.md` | `../../DESIGN.md` `Current State`, `Finding Status`, `OPUS Closure Map`; `../../STATUS.md` latest verified slices |
-| `OPUS2-DESIGN.md` | `../../DESIGN.md` `Critical Path: The Restriction`, `Priority Plan`, `Review Gate`; `../../GOAL.md` durable operating objective |
+| `OPUS1.md` | `../../DESIGN.md` `Review Log And Working Plan`, `OPUS Closure Map`, `Finding Status`, `Priority Plan`; `../../ARCHITECTURE.md` repo placement rules |
+| `OPUS1-DESIGN.md` | `../../DESIGN.md` `Review Log And Working Plan`, `Thesis`, `Critical Path: The Restriction`, `OPUS Decisions Kept Permanent`; `../../ARCHITECTURE.md` Sail/Grust/TypeSec boundaries |
+| `OPUS2.md` | `../../DESIGN.md` `Review Log And Working Plan`, `Current State`, `Finding Status`, `OPUS Closure Map`; `../../STATUS.md` latest verified slices |
+| `OPUS2-DESIGN.md` | `../../DESIGN.md` `Review Log And Working Plan`, `Critical Path: The Restriction`, `Priority Plan`, `Review Gate`; `../../GOAL.md` durable operating objective |
 
 ## Archive Rules
 

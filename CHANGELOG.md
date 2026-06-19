@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Consolidated the OPUS review log and dev-manager working plan into
+  `DESIGN.md`, making `docs/completed/OPUS*.md` provenance-only archive inputs
+  and refreshing the completed-doc ledger to point at the canonical design
+  sections.
 - Bound credential-vend replay evidence to a redacted storage scope by adding
   `location-prefix-hash` to credential storage-profile proof and requiring it
   in QGLake compact handoff verification.

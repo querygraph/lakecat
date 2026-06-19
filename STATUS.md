@@ -5,6 +5,18 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Consolidate OPUS review log`.
+  `DESIGN.md` now carries the durable OPUS1/OPUS2 review history and
+  dev-manager working plan, including the current restriction, QGLake handoff,
+  commit-hardening, graph-boundary, tenancy/credential, reproducibility, and
+  done-state expectations. `docs/completed/README.md` now points each archived
+  OPUS file at that consolidated active design section.
+- Local verification for this OPUS consolidation slice is green:
+  `cargo fmt --all -- --check`;
+  `docs/book/build.sh`;
+  `rg --files -g 'OPUS*.md' -g '!docs/completed/**'`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Bind credential-vend replay to storage scope`.
   Credential-vend audit/outbox payloads now include

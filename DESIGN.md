@@ -68,6 +68,89 @@ edits such as fixing links, adding an archive banner, or correcting broken
 provenance. New LakeCat design and implementation guidance belongs here or in
 the adjacent canonical docs.
 
+## Review Log And Working Plan
+
+This section consolidates the OPUS review history into the active
+dev-manager view. It is the place to look for the durable conclusion of the
+reviews; `docs/completed/OPUS*.md` is provenance only.
+
+### OPUS1 Review Baseline
+
+OPUS1 reviewed the first LakeCat scaffold. The important verdict was that the
+seams were right but the catalog was not yet load-bearing. The review found
+missing authentication, missing durable pointer state, missing metadata-pointer
+CAS, inactive real integration engines, shallow graph emission, and plan/code
+drift. The durable lesson from OPUS1 is still active: keep the trait seams,
+but never mistake a seam for the behavior it promises.
+
+The OPUS1 design companion made the core architecture durable:
+
+- Iceberg remains the compatibility floor.
+- QueryGraph innovation lives in the control plane, derived graph/lineage
+  projections, and governed Sail-planned reads.
+- The governed path is the default for agents; raw credential vending is a
+  deliberate audited exception.
+- Sail is the natural home for reusable scan planning, manifest work, pruning,
+  and typed v4 support.
+- Grust owns reusable graph mechanics; LakeCat emits only catalog-facing graph
+  facts and sinks.
+- TypeSec owns policy, capabilities, TypeDID, secure-agent, and authorization
+  semantics.
+
+### OPUS2 Review Baseline
+
+OPUS2 reviewed the repo after the catalog spine had landed. The headline moved:
+LakeCat had become a real authenticated, durably committing, CAS-correct,
+governance-gated Iceberg REST catalog with a CLI, Turso-backed state,
+idempotency, audit, outbox, an in-process Sail provider, and feature-gated
+TypeSec/Grust/Sail integrations. The frontier moved from "is it a catalog?" to
+"is the governed path narrow, replayable, and accepted by QueryGraph?"
+
+The OPUS2 design companion named the binding object: the restriction. The
+restriction is now the permanent design object for governed reads and credential
+decisions. It must be parsed from policy, carried in the capability and receipt,
+applied by Sail planning/fetch paths, and replayed into QueryGraph evidence.
+
+### Current Dev-Manager View
+
+The current working plan is:
+
+1. Keep closing the restriction loop. The route, provider, credential, and
+   handoff paths already carry ODRL-derived allowed columns, row predicates,
+   purpose, credential TTL, policy hashes, and re-applied fetch evidence. The
+   next reusable read-execution work should move upstream to Sail instead of
+   growing LakeCat-local planning code.
+2. Keep QGLake handoff as the acceptance gate. A change that affects bootstrap,
+   scan/fetch proof, credential proof, view receipt chains, graph/import hashes,
+   OpenLineage replay, captured output hashes, or QueryGraph import compatibility
+   must update the local handoff verifier and the book in the same unit.
+3. Keep commit hardening focused on REST-visible correctness: idempotency
+   replay, metadata object create-only writes, CAS conflict evidence, orphan
+   cleanup, object-store portability, and redacted operator-facing errors.
+4. Keep the graph bounded. LakeCat should emit stable catalog-domain facts for
+   Server, Project, Warehouse, Namespace, Table, View, Column, Snapshot, Policy,
+   StorageProfile, Principal, ScanPlan, Commit, and lineage runs. Traversal,
+   graph query, taxonomy evolution, backend storage, Cypher, and algorithms go
+   to Grust.
+5. Keep tenancy and credentials replayable. Durable server/project/warehouse,
+   namespace, view, policy, storage-profile, and credential-root changes should
+   create audit/outbox evidence. Secret references and storage roots must stay
+   redacted in replay, represented by provider labels, presence flags, and
+   content hashes such as `location-prefix-hash`.
+6. Keep reproducibility ahead of integration claims. Run local gates before
+   commit, keep cloud CI manual/disabled until it is known green, use published
+   Grust/TypeSec crates when available, and keep any Sail path/patch bridge
+   explicit until reusable Sail helpers are landed or pinned.
+
+### Done-State Expectations
+
+A LakeCat slice is complete only when the code, canonical docs, status,
+changelog, and relevant book/operator text agree. If a slice touches QueryGraph
+handoff semantics, the compact handoff verifier should reject missing or drifted
+evidence before the slice is considered done. If a slice touches Sail, Grust,
+TypeSec, or QueryGraph boundaries, either push the reusable work to that repo or
+record the local/published dependency state explicitly.
+
 ## Thesis
 
 Iceberg constrains one layer: how table state is stored and how standard
@@ -177,7 +260,7 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
   replayable outbox evidence. Grust owns reusable graph behavior.
 - QueryGraph bootstrap and QGLake handoff flows now carry table and view
   evidence, view receipt chains, accepted-view chain hashes, graph/import
-  proofs, and local verifier coverage.
+  proofs, credential storage-scope hashes, and local verifier coverage.
 - Local dependency-contract checks guard published Grust/TypeSec resolution,
   the remaining Sail local path/patch bridge, concrete Sail helper APIs, the
   manual-only CI trigger, and the sibling QueryGraph Rust importer's
@@ -264,8 +347,9 @@ receipts. Prefer upstream Sail APIs for any reusable planner or manifest work.
 Keep the live QGLake handoff harness in the verification loop. QueryGraph must
 continue importing LakeCat evidence without losing view receipt-chain hashes,
 accepted view versions, graph proof, import proof, or OpenLineage replay
-anchors. Credential replay must preserve the policy-derived TTL cap in both the
-captured LakeCat replay evidence and compact handoff summary.
+anchors. Credential replay must preserve the policy-derived TTL cap and
+redacted storage-scope hash in both the captured LakeCat replay evidence and
+compact handoff summary.
 
 ### P3 Commit Hardening
 
