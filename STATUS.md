@@ -5,6 +5,11 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest doc-only goal guidance slice:
+  `Pin agent contract in goal`. `GOAL.md` now explicitly pins the pasted
+  `/Users/alexy/src/lakecat/AGENTS.md` instructions as the durable operating
+  contract for repo boundaries, compatibility rules, implementation priorities,
+  verification, and commit discipline.
 - Latest committed LakeCat implementation slice:
   `fa392d5 Chain view version receipts`.
 - Paused after adding compact hash-chain links to durable view-version

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned the pasted `/Users/alexy/src/lakecat/AGENTS.md` operating contract in
+  `GOAL.md` so future work keeps goal guidance, repo boundaries, verification,
+  and commit discipline synchronized.
 - Chained durable view-version receipts by adding `previous-receipt-hash` to
   upsert and drop receipts in memory/Turso stores and exposing the link through
   governed view receipt management responses.

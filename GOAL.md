@@ -45,6 +45,13 @@ Treat the guidance in `AGENTS.md` as part of this goal, not as separate
 session-only advice. Keep this file and `AGENTS.md` aligned when the operating
 model changes.
 
+The `AGENTS.md` instructions for `/Users/alexy/src/lakecat` provided on
+2026-06-18 are a pinned operating contract for this goal. When future work
+changes repo boundaries, compatibility rules, implementation priorities,
+verification gates, or commit discipline, update both `AGENTS.md` and this
+goal in the same logical unit so agents do not have to choose between two
+sources of durable guidance.
+
 The current `/Users/alexy/src/lakecat/AGENTS.md` instructions are permanent
 goal constraints:
 
