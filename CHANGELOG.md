@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Tightened compact `requestIdentityProof` and `queryGraphBootstrapProof`
+  TypeDID hash-slot validation in `lakecat-cli qglake-verify-handoff` and the
+  local QGLake handoff harness so optional TypeDID envelope/proof hashes must
+  be null or SHA-256 values, and a proof hash cannot appear without an
+  envelope hash.
 - Consolidated the pinned `AGENTS.md` guidance in `GOAL.md` so future LakeCat
   resumes treat the user-supplied repo boundary, QueryGraph integration, Turso,
   book, verification, and commit rules as durable goal state.

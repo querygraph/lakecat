@@ -125,6 +125,22 @@ if (typeof evidence.authorizationReceiptHash !== "string" || evidence.authorizat
   console.error("LakeCat request identity evidence is missing authorizationReceiptHash");
   process.exit(1);
 }
+function requireOptionalHash(value, label) {
+  if (value == null) {
+    return false;
+  }
+  if (typeof value === "string" && value.startsWith("sha256:")) {
+    return true;
+  }
+  console.error(`LakeCat request identity evidence ${label} must be null or a sha256 hash`);
+  process.exit(1);
+}
+const hasTypedIdEnvelope = requireOptionalHash(evidence.typedidEnvelopeHash, "typedidEnvelopeHash");
+const hasTypedIdProof = requireOptionalHash(evidence.typedidProofHash, "typedidProofHash");
+if (hasTypedIdProof && !hasTypedIdEnvelope) {
+  console.error("LakeCat request identity evidence has typedidProofHash without typedidEnvelopeHash");
+  process.exit(1);
+}
 process.stdout.write(JSON.stringify({
   principalSubject: evidence.principalSubject,
   principalKind: evidence.principalKind,
@@ -171,6 +187,16 @@ function requireHash(value, label) {
     console.error(`LakeCat QueryGraph bootstrap evidence is missing ${label}`);
     process.exit(1);
   }
+}
+function requireOptionalHash(value, label) {
+  if (value == null) {
+    return false;
+  }
+  if (typeof value === "string" && value.startsWith("sha256:")) {
+    return true;
+  }
+  console.error(`LakeCat QueryGraph bootstrap evidence ${label} must be null or a sha256 hash`);
+  process.exit(1);
 }
 function requireHashArray(value, label) {
   if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
@@ -219,6 +245,12 @@ if (typeof evidence.requestIdentityState !== "string" || evidence.requestIdentit
 requireHash(evidence.authorizationReceiptHash, "authorizationReceiptHash");
 requireHash(evidence.agentDelegationHash, "agentDelegationHash");
 requireHash(evidence.agentSummarySignatureHash, "agentSummarySignatureHash");
+const hasTypedIdEnvelope = requireOptionalHash(evidence.typedidEnvelopeHash, "typedidEnvelopeHash");
+const hasTypedIdProof = requireOptionalHash(evidence.typedidProofHash, "typedidProofHash");
+if (hasTypedIdProof && !hasTypedIdEnvelope) {
+  console.error("LakeCat QueryGraph bootstrap evidence has typedidProofHash without typedidEnvelopeHash");
+  process.exit(1);
+}
 if (Number(expectedViewCount) > 0) {
   requireHashArray(evidence.viewVersionReceiptHashes, "viewVersionReceiptHashes");
 } else if (!Array.isArray(evidence.viewVersionReceiptHashes)) {

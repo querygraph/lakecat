@@ -1134,6 +1134,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "authorizationReceiptHash",
         "requestIdentityProof",
     )?;
+    require_typedid_hash_pair(request_identity, "requestIdentityProof")?;
 
     let bootstrap = required_object(
         lakecat,
@@ -1206,6 +1207,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "agentSummarySignatureHash",
         "queryGraphBootstrapProof",
     )?;
+    require_typedid_hash_pair(bootstrap, "queryGraphBootstrapProof")?;
     if required_u64(querygraph, "viewCount", "querygraphVerification")? > 0 {
         require_hash_array(
             bootstrap,
@@ -1382,6 +1384,20 @@ fn require_storage_profile_upsert_evidence(
         "openLineageHashes",
         "storageProfileUpsertProof",
     )?;
+    Ok(())
+}
+
+fn require_typedid_hash_pair(
+    value: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let envelope_present = require_optional_hash_value(value, "typedidEnvelopeHash", label)?;
+    let proof_present = require_optional_hash_value(value, "typedidProofHash", label)?;
+    if proof_present && !envelope_present {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.typedidProofHash requires typedidEnvelopeHash"
+        )));
+    }
     Ok(())
 }
 
@@ -5635,6 +5651,20 @@ fn require_hash_str<'a>(
     Ok(string)
 }
 
+fn require_optional_hash_value(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<bool> {
+    match required_value(value, field, label)? {
+        Value::Null => Ok(false),
+        Value::String(string) if string.starts_with("sha256:") => Ok(true),
+        _ => Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must be null or a sha256 hash"
+        ))),
+    }
+}
+
 fn require_hash_array(
     value: &serde_json::Map<String, Value>,
     field: &str,
@@ -6300,6 +6330,63 @@ mod tests {
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject mismatched bootstrap hash");
         assert!(err.to_string().contains("bundleHash mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_request_identity_typedid_hash_shape() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["requestIdentityProof"]["typedidEnvelopeHash"] =
+            json!("not-a-sha256-hash");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject invalid request identity TypeDID hash");
+
+        assert!(err.to_string().contains("requestIdentityProof"));
+        assert!(err.to_string().contains("typedidEnvelopeHash"));
+        assert!(err.to_string().contains("sha256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_request_identity_typedid_proof_without_envelope() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["requestIdentityProof"]["typedidProofHash"] =
+            json!("sha256:typedid-proof");
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject request identity TypeDID proof without envelope",
+        );
+
+        assert!(err.to_string().contains("requestIdentityProof"));
+        assert!(err.to_string().contains("typedidProofHash"));
+        assert!(err.to_string().contains("typedidEnvelopeHash"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_bootstrap_typedid_hash_shape() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["typedidEnvelopeHash"] =
+            json!("not-a-sha256-hash");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject invalid bootstrap TypeDID hash");
+
+        assert!(err.to_string().contains("queryGraphBootstrapProof"));
+        assert!(err.to_string().contains("typedidEnvelopeHash"));
+        assert!(err.to_string().contains("sha256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_bootstrap_typedid_proof_without_envelope() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["typedidProofHash"] =
+            json!("sha256:typedid-proof");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject bootstrap TypeDID proof without envelope");
+
+        assert!(err.to_string().contains("queryGraphBootstrapProof"));
+        assert!(err.to_string().contains("typedidProofHash"));
+        assert!(err.to_string().contains("typedidEnvelopeHash"));
     }
 
     #[test]

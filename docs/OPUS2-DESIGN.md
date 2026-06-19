@@ -318,7 +318,11 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   and `replay-evidence.queryGraphBootstrap` must also match their compact
   handoff proofs for principal, authorization, TypeDID slots, delegation,
   summary-signature, bootstrap hashes, artifact counts, standards, and replay
-  hashes; captured `replay-evidence.scan` must match `governedScanProof` for
+  hashes; the compact Rust verifier and local handoff harness now also require
+  those TypeDID envelope/proof slots to be null or SHA-256 hashes and reject a
+  proof hash without the paired envelope hash, keeping the TypeDID boundary
+  self-describing while TypeSec owns the trust semantics; captured
+  `replay-evidence.scan` must match `governedScanProof` for
   plan/file/delete/child task counts, the planned and fetched governed
   read-restriction objects, plus planned/fetched replay and OpenLineage hashes,
   and the compact Rust handoff verifier now requires those planned/fetched

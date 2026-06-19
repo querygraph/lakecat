@@ -521,6 +521,9 @@ calls TypeSec. Proof-like material is reduced to SHA-256 hashes and the envelope
 is marked `unverified` until TypeSec/TypeDID verification is plugged in. The
 authorization receipt, including this request context, should be persisted with
 the audit event and attached to QueryGraph lineage.
+Compact QGLake handoff proofs validate those TypeDID hash slots as null or
+SHA-256 values and reject a proof hash that is not paired with an envelope hash;
+TypeSec still owns the semantics and trust decision behind those hashes.
 
 ## QueryGraph Integration
 

@@ -6,6 +6,31 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Align TypeDID handoff hash slots`.
+  `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness now
+  reject compact `requestIdentityProof` and `queryGraphBootstrapProof`
+  TypeDID hash slots unless each optional envelope/proof hash is null or a
+  SHA-256 value. A TypeDID proof hash is accepted only when the paired envelope
+  hash is present, keeping compact QGLake handoffs self-describing while
+  TypeSec remains responsible for TypeDID trust semantics.
+- Local verification for this TypeDID handoff hash-slot slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 outbox events, verified LakeCat replay, ran QueryGraph `lakecat-verify`
+  and `lakecat-import`, then verified `handoff-summary.json` with
+  `requestIdentityProof.typedidEnvelopeHash: null`,
+  `requestIdentityProof.typedidProofHash: null`,
+  `queryGraphBootstrapProof.typedidEnvelopeHash: null`, and
+  `queryGraphBootstrapProof.typedidProofHash: null`);
+  `cargo test --workspace --all-features`;
+  `cargo test --workspace`.
+- Latest completed implementation slice:
   `Align storage-profile secret-ref provider proof`.
   `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness now
   reject compact `storageProfileUpsertProof` summaries that carry a

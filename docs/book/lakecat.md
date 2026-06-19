@@ -1283,7 +1283,11 @@ standards against the compact summary. It compares the captured LakeCat
 objects with the compact request-identity and bootstrap proofs, including the
 principal, authorization hash, TypeDID hash slots, delegation and summary
 signature hashes, artifact counts, standards, replay hashes, and the accepted
-bundle, graph, OpenLineage, and QueryGraph import hashes. It compares captured
+bundle, graph, OpenLineage, and QueryGraph import hashes. The compact verifier
+also validates the TypeDID hash-slot shape directly: envelope and proof slots
+must be null or SHA-256 hashes, and a TypeDID proof hash cannot appear without
+the paired envelope hash. That keeps the compact handoff self-describing
+without moving TypeDID trust semantics out of TypeSec. It compares captured
 `replay-evidence.scan` with `governedScanProof`, including the plan task, file
 task, delete file, and child plan task counts plus the planned and fetched
 read-restriction objects. The verifier rejects a summary if the fetched
@@ -1343,8 +1347,9 @@ QueryGraph responsible for graph validation and import semantics.
 The handoff script refuses to write the summary unless LakeCat replay JSON
 contains request-identity evidence for the expected agent principal, an
 explicit identity source/state, an authorization receipt hash, and explicit
-TypeDID envelope/proof hash slots. It also refuses to write the summary unless
-LakeCat replay JSON
+TypeDID envelope/proof hash slots that are either null or SHA-256 hashes. A
+proof hash is valid only when the matching envelope hash is present. It also
+refuses to write the summary unless LakeCat replay JSON
 contains redacted `storageProfileUpsert` evidence with replay and OpenLineage
 hashes, and the accepted summary repeats that evidence as
 `lakecatReplayVerification.storageProfileUpsertProof`. QueryGraph gets proof
@@ -1475,7 +1480,9 @@ captures cannot drift from the compact summary. Then it parses those captured
 JSON files and checks that the replay schema/status, table/view counts, semantic
 hashes, standards, request-identity proof, QueryGraph bootstrap proof,
 governed scan proof, storage-profile upsert proof, and credential-vending proof
-inside the captures still match the summary. The local handoff harness runs it
+inside the captures still match the summary. It also rejects malformed TypeDID
+hash slots in the request-identity and QueryGraph bootstrap proofs before a
+consumer has to interpret those slots. The local handoff harness runs it
 automatically and writes the captured verifier output to
 `target/qglake-handoff/lakecat-handoff-verify.json`.
 
