@@ -347,6 +347,7 @@ pub struct ViewVersionReceiptChainResponse {
     pub warehouse: String,
     pub namespace: Vec<String>,
     pub name: String,
+    pub chain_hash: String,
     pub latest_view_version: u64,
     pub latest_operation: String,
     pub tombstoned: bool,
@@ -442,6 +443,8 @@ pub struct LineageDrainEventSummary {
     pub view_artifact_count: usize,
     #[serde(default)]
     pub view_version_receipt_hashes: Vec<String>,
+    #[serde(default)]
+    pub view_version_receipt_chain_hashes: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view_warehouse: Option<String>,
     #[serde(default)]

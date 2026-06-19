@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added deterministic `chain-hash` proofs to governed namespace view receipt
+  chains, replayed those chain hashes through lineage-drain summaries, and made
+  QGLake dropped-view acceptance require compact namespace receipt-chain proof.
 - Pinned the pasted `/Users/alexy/src/lakecat/AGENTS.md` operating contract in
   `GOAL.md` so future work keeps goal guidance, repo boundaries, verification,
   and commit discipline synchronized.

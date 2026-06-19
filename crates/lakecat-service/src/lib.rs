@@ -1045,6 +1045,32 @@ fn lineage_drain_event_summary(
             })
         })
         .unwrap_or_default();
+    let view_version_receipt_chain_hashes = payload
+        .get("view-version-receipt-chains")
+        .and_then(Value::as_array)
+        .map(|chains| {
+            chains
+                .iter()
+                .filter_map(|chain| {
+                    chain
+                        .get("chain-hash")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
+                .collect()
+        })
+        .or_else(|| {
+            payload.get("chain-hashes").and_then(|hashes| {
+                hashes.as_array().map(|hashes| {
+                    hashes
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_string)
+                        .collect()
+                })
+            })
+        })
+        .unwrap_or_default();
     let authorization_receipt = payload.get("authorization-receipt");
     let request_identity = authorization_receipt
         .and_then(|receipt| receipt.get("request-identity"))
@@ -1106,6 +1132,7 @@ fn lineage_drain_event_summary(
             .and_then(Value::as_array)
             .map_or(0, Vec::len),
         view_version_receipt_hashes,
+        view_version_receipt_chain_hashes,
         view_warehouse,
         view_namespace,
         view_name,
@@ -2204,6 +2231,11 @@ async fn list_view_version_receipt_chains(
                 "chain-count": chains.len(),
                 "receipt-count": chains.iter().map(|chain| chain.receipt_count).sum::<usize>(),
                 "tombstone-count": chains.iter().filter(|chain| chain.tombstoned).count(),
+                "view-version-receipt-chains": chains,
+                "chain-hashes": chains
+                    .iter()
+                    .map(|chain| chain.chain_hash.clone())
+                    .collect::<Vec<_>>(),
                 "receipt-hashes": chains
                     .iter()
                     .flat_map(|chain| chain.receipts.iter().map(|receipt| receipt.receipt_hash.clone()))
@@ -4022,19 +4054,33 @@ fn view_version_receipt_chains(
                 .iter()
                 .map(|receipt| view_version_receipt_response(receipt))
                 .collect::<LakeCatResult<Vec<_>>>();
-            Some(
-                response_receipts.map(|response_receipts| ViewVersionReceiptChainResponse {
+            Some(response_receipts.and_then(|response_receipts| {
+                let chain_hash = content_hash_json(&json!({
+                    "stable-id": latest.stable_id,
+                    "warehouse": latest.warehouse.as_str(),
+                    "namespace": latest.namespace.parts(),
+                    "name": latest.name.as_str(),
+                    "latest-view-version": latest.view_version,
+                    "latest-operation": view_version_operation(&latest.operation),
+                    "tombstoned": latest.operation == ViewVersionOperation::Drop,
+                    "receipt-hashes": response_receipts
+                        .iter()
+                        .map(|receipt| receipt.receipt_hash.clone())
+                        .collect::<Vec<_>>(),
+                }))?;
+                Ok(ViewVersionReceiptChainResponse {
                     stable_id: latest.stable_id.clone(),
                     warehouse: latest.warehouse.as_str().to_string(),
                     namespace: latest.namespace.parts().to_vec(),
                     name: latest.name.as_str().to_string(),
+                    chain_hash,
                     latest_view_version: latest.view_version,
                     latest_operation: view_version_operation(&latest.operation).to_string(),
                     tombstoned: latest.operation == ViewVersionOperation::Drop,
                     receipt_count: response_receipts.len(),
                     receipts: response_receipts,
-                }),
-            )
+                })
+            }))
         })
         .collect()
 }
@@ -6741,6 +6787,7 @@ mod tests {
                             "chain-count": 1,
                             "receipt-count": 2,
                             "tombstone-count": 1,
+                            "chain-hashes": ["sha256:view-receipt-chain"],
                             "receipt-hashes": ["sha256:view-upsert-receipt", "sha256:view-drop-receipt"],
                             "drop-receipt-hashes": ["sha256:view-drop-receipt"],
                             "authorization-receipt": {
@@ -6815,6 +6862,10 @@ mod tests {
         assert_eq!(
             drain.events[5].view_version_receipt_hashes,
             vec!["sha256:view-drop-receipt".to_string()]
+        );
+        assert_eq!(
+            drain.events[5].view_version_receipt_chain_hashes,
+            vec!["sha256:view-receipt-chain".to_string()]
         );
 
         let graph_events = graph.events.lock().await;
@@ -8951,6 +9002,11 @@ mod tests {
             .unwrap();
         assert_eq!(active_chain["tombstoned"], serde_json::json!(true));
         assert_eq!(active_chain["latest-operation"], serde_json::json!("drop"));
+        assert!(
+            active_chain["chain-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
         let dropped_chain = chains
             .iter()
             .find(|chain| chain["name"] == serde_json::json!("active_customers"))
@@ -8959,6 +9015,12 @@ mod tests {
         assert_eq!(dropped_chain["latest-view-version"], serde_json::json!(2));
         assert_eq!(dropped_chain["latest-operation"], serde_json::json!("drop"));
         assert_eq!(dropped_chain["receipt-count"], serde_json::json!(3));
+        assert!(
+            dropped_chain["chain-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert_ne!(active_chain["chain-hash"], dropped_chain["chain-hash"]);
 
         let list = Request::builder()
             .method(Method::GET)

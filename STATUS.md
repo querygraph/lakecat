@@ -5,6 +5,27 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Add view receipt chain hashes`. Governed namespace view receipt-chain reads
+  now expose deterministic `chain-hash` values for each chain, lineage-drain
+  summaries carry `view-version-receipt-chain-hashes`, and QGLake dropped-view
+  acceptance requires that compact chain proof in addition to per-receipt
+  tombstone hashes.
+- Local verification for the view receipt chain-hash slice was green:
+  `cargo check -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities`;
+  `cargo test -p lakecat-service outbox_drain_projects_view_events_to_graph_and_lineage`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -p lakecat-sail -- --check`;
+  `git diff --check`;
+  `cargo test -p lakecat-cli`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`.
 - Latest doc-only goal guidance slice:
   `Pin agent contract in goal`. `GOAL.md` now explicitly pins the pasted
   `/Users/alexy/src/lakecat/AGENTS.md` instructions as the durable operating
