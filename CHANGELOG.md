@@ -4,8 +4,10 @@
 
 - Made `lakecat-cli qglake-verify-handoff` independently reject compact
   `viewReceiptChainProof` summaries whose view receipt-chain evidence lacks
-  accepted receipt hashes, tombstone receipt hashes, verified chain counts,
-  namespace chain hashes, or replay/OpenLineage hashes.
+  matching view counts, accepted view identity, accepted view-version proof,
+  receipt-chain namespace identity, accepted receipt hashes, tombstone receipt
+  hashes, verified chain counts, namespace chain hashes, or replay/OpenLineage
+  hashes.
 - Mirrored the active `AGENTS.md` contract directly into `GOAL.md`, including
   the repo boundaries, compatibility rules, Turso preference, local verification
   gates, and commit discipline.

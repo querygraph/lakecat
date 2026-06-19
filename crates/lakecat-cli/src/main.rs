@@ -1457,15 +1457,42 @@ fn require_view_receipt_chain_evidence(
         return Ok(());
     }
 
-    for (index, view) in required_array(views, "views", "viewReceiptChainProof")?
-        .iter()
-        .enumerate()
-    {
+    let accepted_views = required_array(views, "views", "viewReceiptChainProof")?;
+    if accepted_views.len() != view_count as usize {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.views length mismatch: expected={view_count} actual={}",
+            accepted_views.len()
+        )));
+    }
+
+    for (index, view) in accepted_views.iter().enumerate() {
         let view = view.as_object().ok_or_else(|| {
             lakecat_core::LakeCatError::InvalidArgument(format!(
                 "viewReceiptChainProof.views[{index}] must be an object"
             ))
         })?;
+        require_non_empty_str(view, "stableId", "viewReceiptChainProof.views[]")?;
+        require_non_empty_str(view, "warehouse", "viewReceiptChainProof.views[]")?;
+        let namespace = required_array(view, "namespace", "viewReceiptChainProof.views[]")?;
+        if namespace.is_empty()
+            || namespace
+                .iter()
+                .any(|component| !component.as_str().is_some_and(|value| !value.is_empty()))
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "viewReceiptChainProof.views[].namespace must contain namespace components"
+                    .to_string(),
+            ));
+        }
+        require_non_empty_str(view, "name", "viewReceiptChainProof.views[]")?;
+        let view_version = required_u64(view, "viewVersion", "viewReceiptChainProof.views[]")?;
+        let accepted_view_version =
+            required_u64(view, "acceptedViewVersion", "viewReceiptChainProof.views[]")?;
+        if view_version == 0 || view_version != accepted_view_version {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.views[{index}] must prove accepted view version: viewVersion={view_version} acceptedViewVersion={accepted_view_version}"
+            )));
+        }
         require_hash_str(view, "acceptedReceiptHash", "viewReceiptChainProof.views[]")?;
         require_hash_array(view, "replayEventHashes", "viewReceiptChainProof.views[]")?;
         require_hash_array(view, "openLineageHashes", "viewReceiptChainProof.views[]")?;
@@ -1510,6 +1537,19 @@ fn require_view_receipt_chain_evidence(
                 "viewReceiptChainProof.receiptChains[{index}] must be an object"
             ))
         })?;
+        require_non_empty_str(chain, "warehouse", "viewReceiptChainProof.receiptChains[]")?;
+        let namespace =
+            required_array(chain, "namespace", "viewReceiptChainProof.receiptChains[]")?;
+        if namespace.is_empty()
+            || namespace
+                .iter()
+                .any(|component| !component.as_str().is_some_and(|value| !value.is_empty()))
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "viewReceiptChainProof.receiptChains[].namespace must contain namespace components"
+                    .to_string(),
+            ));
+        }
         require_positive_u64(
             chain,
             "verifiedChainCount",
@@ -6193,6 +6233,49 @@ mod tests {
         assert!(err.to_string().contains("viewReceiptChainProof"));
         assert!(err.to_string().contains("acceptedReceiptHash"));
         assert!(err.to_string().contains("sha256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_view_count_mismatch() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["querygraphVerification"]["viewCount"] = json!(2);
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["viewArtifactCount"] =
+            json!(2);
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["viewCount"] = json!(2);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject view-count drift");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("views length mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_unaccepted_view_version() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"][0]["acceptedViewVersion"] =
+            json!(2);
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["tombstoneReceipts"][0]["expectedViewVersion"] =
+            json!(2);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject unaccepted view version evidence");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("accepted view version"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_view_receipt_chain_identity() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["namespace"] =
+            json!([]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject receipt chains without namespace identity");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("namespace"));
     }
 
     #[test]

@@ -6,18 +6,20 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
-  `Verify view receipt-chain handoff proof`.
+  `Verify view receipt-chain handoff identity proof`.
   `lakecat-cli qglake-verify-handoff` now independently validates the compact
   `viewReceiptChainProof` receipt-chain evidence instead of only checking that
-  the fields exist. For handoffs with views, the verifier requires accepted
-  receipt hashes, tombstone receipt hashes, positive verified-chain counts,
-  namespace chain hashes, and replay/OpenLineage hashes on the accepted,
-  tombstone, and namespace-chain branches. This keeps the hash-chain proof
-  self-contained in the Rust verifier and aligned with the local shell harness.
+  the fields exist. For handoffs with views, the verifier requires the compact
+  `views` array to match `viewCount`, preserves stable view warehouse,
+  namespace, and name identity, proves `viewVersion == acceptedViewVersion`,
+  and requires accepted receipt hashes, tombstone receipt hashes, positive
+  verified-chain counts, receipt-chain warehouse/namespace identity, namespace
+  chain hashes, and replay/OpenLineage hashes on the accepted, tombstone, and
+  namespace-chain branches. This keeps the hash-chain proof self-contained in
+  the Rust verifier and aligned with the local shell harness.
 - Local verification for this view receipt-chain handoff-proof slice is green:
   `cargo fmt -p lakecat-cli -- --check`;
   `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
-  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier`;
   `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
   `docs/book/build.sh`;
   `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
