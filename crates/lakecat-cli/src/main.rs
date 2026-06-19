@@ -1826,6 +1826,10 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         ));
     }
     require_querygraph_import_matches_verify(import, querygraph)?;
+    require_qglake_standards_value(
+        required_value(querygraph, "standards", "querygraphVerification")?,
+        "querygraphVerification.standards",
+    )?;
     let lakecat = required_object(summary, "lakecatReplayVerification", "handoff summary")?;
     require_string_eq(
         lakecat,
@@ -2165,6 +2169,23 @@ fn require_querygraph_verified_scope(
         {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "querygraphVerification.verifiedViews must include {expected_view}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn require_qglake_standards_value(value: &Value, label: &str) -> lakecat_core::LakeCatResult<()> {
+    let standards = value.as_array().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(format!("{label} must be an array"))
+    })?;
+    for expected in QGLAKE_BOOTSTRAP_STANDARDS {
+        if !standards
+            .iter()
+            .any(|standard| standard.as_str() == Some(*expected))
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} did not include required QGLake standard {expected}"
             )));
         }
     }
@@ -8207,6 +8228,28 @@ mod tests {
 
         assert!(err.to_string().contains("querygraphImportVerification"));
         assert!(err.to_string().contains("querygraphImportHash mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_required_standards() {
+        let mut summary = qglake_handoff_summary_json();
+        let incomplete = json!([
+            "Iceberg REST",
+            "Croissant",
+            "CDIF",
+            "OSI handoff",
+            "Grust catalog graph",
+            "OpenLineage"
+        ]);
+        summary["querygraphVerification"]["standards"] = incomplete.clone();
+        summary["querygraphImportVerification"]["standards"] = incomplete.clone();
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["standards"] = incomplete;
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject incomplete QGLake standards");
+
+        assert!(err.to_string().contains("querygraphVerification.standards"));
+        assert!(err.to_string().contains("ODRL"));
     }
 
     #[test]

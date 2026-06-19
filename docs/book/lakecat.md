@@ -1422,6 +1422,9 @@ hashes: it parses the saved LakeCat replay JSON and QueryGraph verify/import
 JSON captures and checks their replay schema/status, table and view counts,
 warehouse, verified table ids, bundle hash, graph hash, OpenLineage hash,
 QueryGraph import hash, and standards against the compact summary. It compares
+those standards across sections and independently requires the full QGLake
+standards set, so a compact handoff cannot omit ODRL or another required
+contract simply by making every section omit it consistently. It compares
 the captured LakeCat
 `replay-evidence.requestIdentity` and `replay-evidence.queryGraphBootstrap`
 objects with the compact request-identity and bootstrap proofs, including the

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required compact QGLake handoff summaries to include the full QGLake
+  standards set instead of merely agreeing across QueryGraph verify/import and
+  LakeCat bootstrap proof sections.
 - Cross-checked QGLake bootstrap embedded ODRL policy bindings against the
   structured policy-binding projection so QueryGraph import evidence cannot
   drift from LakeCat-verified restriction evidence.

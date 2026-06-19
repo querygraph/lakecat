@@ -6,6 +6,17 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require compact handoff QGLake standards`.
+  Compact QGLake handoff summary verification now rejects summaries that omit a
+  required QGLake standard such as `ODRL`, even when QueryGraph verify/import
+  and LakeCat bootstrap proof sections agree with each other.
+- Local verification for this compact standards slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cross-check bootstrap embedded ODRL policy evidence`.
   QGLake bootstrap projection verification now rejects embedded ODRL policy
   bindings that drift from the structured policy-binding projection, preventing
