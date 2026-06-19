@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reconciled `GOAL.md` with the current pasted LakeCat `AGENTS.md` guidance,
+  including the `/Users/alexy/src/lakecat/AGENTS.md` permanence rule and the
+  CLI-specific local verification gate for QGLake fixture changes.
 - Added `lakecat-cli qglake-verify-replay` to verify a saved QueryGraph
   bootstrap bundle together with a saved lineage-drain response, and added
   `qglake-fixture --drain-output` so local QGLake runs can emit both artifacts

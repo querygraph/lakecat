@@ -45,7 +45,8 @@ Treat the guidance in `AGENTS.md` as part of this goal, not as separate
 session-only advice. Keep this file and `AGENTS.md` aligned when the operating
 model changes.
 
-The current `AGENTS.md` instructions are permanent goal constraints:
+The current `/Users/alexy/src/lakecat/AGENTS.md` instructions are permanent
+goal constraints:
 
 - LakeCat is the Rust Iceberg-compatible catalog foundation for QueryGraph.
   Keep the catalog boundary thin: identity, tenancy, Iceberg REST
@@ -95,9 +96,10 @@ The current `AGENTS.md` instructions are permanent goal constraints:
   `CHANGELOG.md` with a concise description of that unit, then stage only the
   files that belong to the unit.
 - For LakeCat changes, prefer the local verification gates listed in
-  `AGENTS.md` and mirrored in this goal. When a change touches Sail, Grust,
-  TypeSec, or QueryGraph, run the focused tests in that sibling repo as well
-  and report each repo separately.
+  `AGENTS.md` and mirrored in this goal, including the CLI crate when CLI
+  behavior changes. When a change touches Sail, Grust, TypeSec, or QueryGraph,
+  run the focused tests in that sibling repo as well and report each repo
+  separately.
 
 ## Repo Boundaries
 
@@ -208,6 +210,7 @@ repo should receive the reusable capability.
 For LakeCat changes, prefer these local gates before pushing:
 
 - `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`
+- `cargo fmt -p lakecat-cli -- --check` when CLI behavior or fixtures change.
 - `cargo test -p lakecat-store --features turso-local`
 - `cargo test -p lakecat-service --features turso-local`
 - `cargo test -p lakecat-service --all-features`
