@@ -73,5 +73,6 @@ lineage-drain artifacts, verifies saved replay with LakeCat, then runs
 QueryGraph's `lakecat-verify` and `lakecat-import` over the same bundle while
 writing all generated artifacts under `target/qglake-handoff/`. It also writes
 `target/qglake-handoff/handoff-summary.json`, which records the verified
-artifact paths, file hashes, captured LakeCat replay output, QueryGraph verify
-output, QueryGraph import output, and service log path for automation.
+QueryGraph table/view counts and semantic hashes, artifact paths, raw file
+hashes, captured LakeCat replay output, QueryGraph verify output, QueryGraph
+import output, and service log path for automation.

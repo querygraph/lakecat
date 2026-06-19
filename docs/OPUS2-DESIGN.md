@@ -264,7 +264,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   `lakecat-verify` and `lakecat-import` over the same bundle without mutating
   the QueryGraph checkout; the harness now writes `handoff-summary.json` plus
   captured LakeCat replay and QueryGraph verify/import outputs so operators and
-  automation can consume the accepted artifact set without scraping stdout.*
+  automation can consume the accepted artifact set without scraping stdout; the
+  summary now embeds QueryGraph-verified table/view counts and semantic
+  bundle/graph/OpenLineage/import hashes beside raw artifact file hashes.*
 - **P3 — Commit hardening (F3, F4).** Wire REST idempotency keys into the
   existing store replay; make metadata writes survive CAS conflict (finalize
   after win, or bounded re-plan + orphan cleanup); generalize the writer beyond

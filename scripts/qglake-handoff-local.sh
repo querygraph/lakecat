@@ -64,11 +64,47 @@ json_string() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
+json_field() {
+  local file="$1"
+  local field="$2"
+  node -e '
+const fs = require("fs");
+const [file, field] = process.argv.slice(1);
+const value = JSON.parse(fs.readFileSync(file, "utf8"))[field];
+if (value === undefined || value === null || typeof value === "object") {
+  process.exit(2);
+}
+process.stdout.write(String(value));
+' "$file" "$field"
+}
+
+required_summary_field() {
+  local label="$1"
+  local value="$2"
+  if [[ -z "$value" ]]; then
+    echo "Missing $label in QueryGraph verification output $QUERYGRAPH_VERIFY_OUTPUT" >&2
+    return 1
+  fi
+}
+
 write_summary() {
   local bundle_sha drain_sha import_plan_sha
+  local verified_tables verified_views bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   bundle_sha="$(sha256_file "$BUNDLE")"
   drain_sha="$(sha256_file "$DRAIN")"
   import_plan_sha="$(sha256_file "$IMPORT_PLAN")"
+  verified_tables="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "table-count")"
+  verified_views="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "view-count")"
+  bundle_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "bundle-hash")"
+  graph_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "graph-hash")"
+  open_lineage_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "open-lineage-hash")"
+  querygraph_import_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "querygraph-import-hash")"
+  required_summary_field "table-count" "$verified_tables"
+  required_summary_field "view-count" "$verified_views"
+  required_summary_field "bundle-hash" "$bundle_hash"
+  required_summary_field "graph-hash" "$graph_hash"
+  required_summary_field "open-lineage-hash" "$open_lineage_hash"
+  required_summary_field "querygraph-import-hash" "$querygraph_import_hash"
   cat >"$SUMMARY" <<JSON
 {
   "status": "verified",
@@ -77,6 +113,14 @@ write_summary() {
   "warehouse": "$(json_string "$WAREHOUSE")",
   "namespace": "$(json_string "$NAMESPACE")",
   "table": "$(json_string "$TABLE")",
+  "querygraphVerification": {
+    "tableCount": $verified_tables,
+    "viewCount": $verified_views,
+    "bundleHash": "$(json_string "$bundle_hash")",
+    "graphHash": "$(json_string "$graph_hash")",
+    "openLineageHash": "$(json_string "$open_lineage_hash")",
+    "querygraphImportHash": "$(json_string "$querygraph_import_hash")"
+  },
   "artifacts": {
     "bundle": {
       "path": "$(json_string "$BUNDLE")",

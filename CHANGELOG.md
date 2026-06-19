@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Embedded QueryGraph verification counts and semantic bundle/graph/OpenLineage
+  import hashes directly in `handoff-summary.json`, while retaining raw file
+  hashes for the generated artifacts.
 - Made `scripts/qglake-handoff-local.sh` write a machine-readable
   `handoff-summary.json` plus captured LakeCat replay and QueryGraph
   verify/import outputs for operator and automation handoff.
