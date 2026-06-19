@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Clarified `GOAL.md` that the latest pasted `AGENTS.md` block is the current
+  standing operating contract for LakeCat work across resumes and context
+  compaction.
 - Made the live QGLake fixture drop its transient accepted view with
   `expected-view-version`, lifted the guarded tombstone value into
   `viewReceiptChainProof.tombstoneReceipts`, and made the local handoff harness

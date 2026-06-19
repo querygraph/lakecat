@@ -50,6 +50,15 @@ gates, commit discipline, and sibling-repo placement until explicitly changed.
 When future work changes any of those rules, update both `AGENTS.md` and this
 goal in the same logical unit.
 
+The latest pasted `AGENTS.md` block is the current standing operating contract
+for LakeCat work. Treat it as goal-level direction even after thread resumes or
+context compaction: LakeCat stays thin; reusable Iceberg/engine work goes to
+Sail; graph work goes to Grust; governance, TypeDID, secure-agent, and policy
+semantics go to TypeSec; QueryGraph remains the end-to-end integration target;
+the Rust `turso` crate remains the preferred durable local spine; and every
+logical unit updates `CHANGELOG.md`, verifies locally, commits, and pushes only
+after the local gates pass.
+
 The canonical agent contract is the repo-local `AGENTS.md` block titled
 `LakeCat Agent Guidance`. Treat its repo-boundary, compatibility,
 implementation, verification, Turso, book-workflow, and commit/check-in rules

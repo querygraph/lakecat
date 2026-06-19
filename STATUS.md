@@ -5,6 +5,13 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Pin latest AGENTS guidance in GOAL`.
+  `GOAL.md` now explicitly records that the latest pasted `AGENTS.md` block is
+  the current standing operating contract across thread resumes and context
+  compaction, including thin LakeCat boundaries, Sail/Grust/TypeSec placement,
+  QueryGraph integration, Turso preference, local verification, changelog, and
+  commit/push discipline.
 - Latest completed implementation slice:
   `Require guarded QGLake view tombstones`.
   The live QGLake fixture now remembers the durable version assigned to its
