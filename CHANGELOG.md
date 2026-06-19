@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Strengthened the local dependency-contract audit so it now verifies the
+  Sail helper API surface LakeCat depends on in the local Sail checkout, not
+  only the presence of checked-in Sail patch files.
 - Made compact QGLake handoff import proofs self-contained by embedding
   `querygraphImportVerification` table/view ids, counts, hashes, and standards
   and requiring them to match `querygraphVerification` plus the captured

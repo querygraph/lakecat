@@ -649,10 +649,13 @@ scripts/check-local-dependency-contract.sh
 ```
 
 The script checks the manual-only CI trigger, crates.io resolution for the
-published Grust and TypeSec versions, the local Sail path bridge, and the Sail
-patch files manual CI applies. It is not a substitute for upstreaming the Sail
-helper APIs or re-enabling automatic CI; it is a guard that makes drift visible
-while LakeCat still depends on unpublished Sail helper work.
+published Grust and TypeSec versions, the local Sail path bridge, the Sail patch
+files manual CI applies, and the concrete Sail helper API surface LakeCat uses:
+generated Iceberg REST models, typed metadata inputs, planning result helpers,
+fetchScanTasks result helpers, and table-status conversion. It is not a
+substitute for upstreaming the Sail helper APIs or re-enabling automatic CI; it
+is a guard that makes drift visible while LakeCat still depends on unpublished
+Sail helper work.
 
 ## Standard Compatibility And Extensions
 

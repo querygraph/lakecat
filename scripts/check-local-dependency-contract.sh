@@ -54,6 +54,30 @@ do
   require_file "$patch"
 done
 
+require_file ../sail/crates/sail-catalog-iceberg/src/lib.rs
+require_file ../sail/crates/sail-catalog-iceberg/src/planning.rs
+require_file ../sail/crates/sail-catalog-iceberg/src/provider.rs
+require_pattern 'pub mod models;' ../sail/crates/sail-catalog-iceberg/src/lib.rs \
+  "local Sail bridge must expose the generated Iceberg REST model module"
+require_pattern 'pub use crate::models::\{LoadTableResult, TableMetadata\};' ../sail/crates/sail-catalog-iceberg/src/lib.rs \
+  "local Sail bridge must expose LakeCat's typed table metadata inputs"
+require_pattern 'completed_planning_result_from_values' ../sail/crates/sail-catalog-iceberg/src/lib.rs \
+  "local Sail bridge must expose completed planning result helpers"
+require_pattern 'completed_planning_with_id_result_from_values' ../sail/crates/sail-catalog-iceberg/src/lib.rs \
+  "local Sail bridge must expose plan-id planning result helpers"
+require_pattern 'fetch_scan_tasks_result_from_values' ../sail/crates/sail-catalog-iceberg/src/lib.rs \
+  "local Sail bridge must expose fetchScanTasks result helpers"
+require_pattern 'load_table_result_to_status' ../sail/crates/sail-catalog-iceberg/src/lib.rs \
+  "local Sail bridge must expose table-status conversion"
+require_pattern 'pub fn completed_planning_result_from_values' ../sail/crates/sail-catalog-iceberg/src/planning.rs \
+  "local Sail planning helper module must define completed planning conversion"
+require_pattern 'pub fn completed_planning_with_id_result_from_values' ../sail/crates/sail-catalog-iceberg/src/planning.rs \
+  "local Sail planning helper module must define completed planning-with-id conversion"
+require_pattern 'pub fn fetch_scan_tasks_result_from_values' ../sail/crates/sail-catalog-iceberg/src/planning.rs \
+  "local Sail planning helper module must define fetchScanTasks conversion"
+require_pattern 'pub fn load_table_result_to_status' ../sail/crates/sail-catalog-iceberg/src/provider.rs \
+  "local Sail provider module must define table-status conversion"
+
 require_pattern 'git -C sail' .github/workflows/ci.yml \
   "manual CI must apply the LakeCat Sail helper patches"
 require_pattern 'ci/sail-patches' .github/workflows/ci.yml \

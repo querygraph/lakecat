@@ -6,6 +6,22 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify local Sail helper API surface`.
+  `scripts/check-local-dependency-contract.sh` now checks the local Sail
+  checkout for the helper exports LakeCat depends on: generated Iceberg REST
+  models, typed metadata inputs, planning result helpers, fetchScanTasks
+  helpers, and table-status conversion. This makes F10 drift visible even when
+  the local Sail checkout already contains the patch bridge and raw patch
+  application would be ambiguous.
+- Local verification for this dependency-contract slice is green:
+  `bash -n scripts/check-local-dependency-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`;
+  `cargo test --workspace`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Make QGLake import proof self-contained`.
   `lakecat-cli qglake-verify-handoff` now requires compact
   `querygraphImportVerification` to carry the same QueryGraph table/view ids,
