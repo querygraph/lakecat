@@ -49,6 +49,13 @@ compatibility rules, implementation priorities, Turso usage, local
 verification, changelog/commit discipline, book updates, and sibling-repo
 placement until explicitly changed.
 
+The current `AGENTS.md instructions for /Users/alexy/src/lakecat` block pasted
+into the conversation is therefore incorporated into this goal by reference.
+Future LakeCat work must treat that block as standing goal text, including its
+explicit direction to keep reusable graph work in Grust, reusable governance
+and secure-agent work in TypeSec, reusable Iceberg/engine work in Sail, and
+QueryGraph as the end-to-end integration target.
+
 Treat the `/Users/alexy/src/lakecat/AGENTS.md` contract as durable goal state
 even after thread resumes or context compaction. If `AGENTS.md` and this file
 drift, reconcile them before choosing the next implementation slice. When

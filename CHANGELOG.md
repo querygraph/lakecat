@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Incorporated the current user-supplied
+  `AGENTS.md instructions for /Users/alexy/src/lakecat` block into `GOAL.md`
+  as standing goal guidance, including sibling-repo placement, QueryGraph
+  integration, Turso, local verification, book, changelog, and commit
+  discipline.
 - Switched LakeCat's Grust and TypeSec workspace dependencies from sibling
   path pins to the published `grust-graph` 0.9.0 and `typesec` 0.8.0 crates,
   removed the manual CI Grust/TypeSec checkouts, and updated the dependency
