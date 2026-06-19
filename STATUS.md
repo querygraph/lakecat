@@ -6,6 +6,18 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Surface scan replay purpose`.
+  The operator-readable QGLake scan replay line now prints planned and fetched
+  read-restriction purpose values, so captured replay text preserves the same
+  purpose evidence required by compact handoff proof.
+- Local verification for this scan replay purpose slice is green:
+  `cargo test -p lakecat-cli qglake_scan_replay_line_summarizes_verified_evidence -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_governed_scan_drift -- --nocapture`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require QGLake scan restriction purpose`.
   QGLake governed scan replay and compact handoff verification now require the
   read-restriction `purpose` alongside allowed columns, row predicate,

@@ -347,9 +347,11 @@ receipts. Prefer upstream Sail APIs for any reusable planner or manifest work.
 Keep the live QGLake handoff harness in the verification loop. QueryGraph must
 continue importing LakeCat evidence without losing view receipt-chain hashes,
 accepted view versions, graph proof, import proof, or OpenLineage replay
-anchors. Credential replay must preserve the policy-derived TTL cap and
-redacted storage-scope hash in both the captured LakeCat replay evidence and
-compact handoff summary.
+anchors. Scan replay must preserve the server-derived purpose and
+policy-derived TTL cap in both captured LakeCat replay text and compact handoff
+proof. Credential replay must preserve the policy-derived TTL cap and redacted
+storage-scope hash in both the captured LakeCat replay evidence and compact
+handoff summary.
 
 ### P3 Commit Hardening
 

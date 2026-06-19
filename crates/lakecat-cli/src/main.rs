@@ -2975,6 +2975,15 @@ fn qglake_event_max_credential_ttl_seconds(event: &LineageDrainEventSummary) -> 
         .and_then(Value::as_u64)
 }
 
+fn qglake_event_read_restriction_purpose(event: &LineageDrainEventSummary) -> Option<&str> {
+    event
+        .read_restriction
+        .as_ref()
+        .and_then(|restriction| restriction.get("purpose"))
+        .and_then(Value::as_str)
+        .filter(|purpose| !purpose.trim().is_empty())
+}
+
 fn qglake_credential_storage_profile_evidence_json(event: &LineageDrainEventSummary) -> Value {
     json!({
         "profileId": event.storage_profile_id.as_deref(),
@@ -3177,14 +3186,18 @@ fn qglake_scan_replay_line(drain: &LineageDrainResponse) -> Option<String> {
     let fetched = qglake_drain_event(drain, "table.scan-tasks-fetched")?;
     let planned_ttl = qglake_event_max_credential_ttl_seconds(planned)?;
     let fetched_ttl = qglake_event_max_credential_ttl_seconds(fetched)?;
+    let planned_purpose = qglake_event_read_restriction_purpose(planned)?;
+    let fetched_purpose = qglake_event_read_restriction_purpose(fetched)?;
     Some(format!(
-        "scan replay plan_tasks={} planned_ttl={} file_tasks={} delete_files={} child_plan_tasks={} fetched_ttl={}",
+        "scan replay plan_tasks={} planned_ttl={} planned_purpose={} file_tasks={} delete_files={} child_plan_tasks={} fetched_ttl={} fetched_purpose={}",
         planned.scan_task_count.unwrap_or_default(),
         planned_ttl,
+        planned_purpose,
         fetched.file_scan_task_count.unwrap_or_default(),
         fetched.delete_file_count.unwrap_or_default(),
         fetched.child_plan_task_count.unwrap_or_default(),
-        fetched_ttl
+        fetched_ttl,
+        fetched_purpose
     ))
 }
 
@@ -11378,7 +11391,7 @@ mod tests {
 
         assert_eq!(
             line,
-            "scan replay plan_tasks=1 planned_ttl=300 file_tasks=1 delete_files=1 child_plan_tasks=1 fetched_ttl=300"
+            "scan replay plan_tasks=1 planned_ttl=300 planned_purpose=qglake-agent-demo file_tasks=1 delete_files=1 child_plan_tasks=1 fetched_ttl=300 fetched_purpose=qglake-agent-demo"
         );
     }
 

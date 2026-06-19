@@ -1616,7 +1616,7 @@ accepted bundle and QueryGraph import hashes, table/view counts, and compact
 control-plane lines such as:
 
 ```text
-scan replay plan_tasks=1 planned_ttl=300 file_tasks=1 delete_files=1 child_plan_tasks=1 fetched_ttl=300
+scan replay plan_tasks=1 planned_ttl=300 planned_purpose=qglake-agent-demo file_tasks=1 delete_files=1 child_plan_tasks=1 fetched_ttl=300 fetched_purpose=qglake-agent-demo
 management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none
 credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2
 table commit history commits=1 sequences=1 hashes=sha256:...
