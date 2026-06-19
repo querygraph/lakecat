@@ -5,6 +5,9 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- OPUS review/design notes are consolidated into `DESIGN.md` and archived under
+  `docs/completed/`; archive-relative links now resolve from their completed
+  location so the files remain useful as historical audit inputs.
 - Latest completed implementation slice:
   `Hash stale pointer conflict evidence`.
   Memory and Turso table commits now include SHA-256 hashes of the expected and

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed archive-relative links inside the completed OPUS review documents so
+  `docs/completed/` remains a usable historical audit trail after consolidation
+  into `DESIGN.md`.
 - Added audit-safe expected/actual metadata-location hashes to stale pointer
   conflict errors in both memory and Turso stores, without echoing raw metadata
   object locations.

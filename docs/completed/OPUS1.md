@@ -14,7 +14,7 @@ This document does two things the request asked for:
    Sail, uses Grust for the semantic graph, TypeSec for governance and secure
    agents, and lands QueryGraph end-to-end as the goal.
 
-The existing [`ARCHITECTURE.md`](../ARCHITECTURE.md) is a strong north star. This
+The existing [`ARCHITECTURE.md`](../../ARCHITECTURE.md) is a strong north star. This
 plan keeps its intent and corrects where the current code diverges from it.
 
 ---
@@ -56,7 +56,7 @@ Confirmed real (not stubbed) in sibling repos:
   and passes against the real crate.
 - QueryGraph's `qg-rust` already has `sail.rs`, `croissant.rs`, `cdif.rs`,
   `odrl.rs`, `lineage.rs`, `qglake.rs`, `lakehouse.rs`, `agent.rs`, and a fully
-  written end-to-end story in [`QGLake.md`](../../querygraph/qg-rust/QGLake.md)
+  written end-to-end story in [`QGLake.md`](../../../querygraph/qg-rust/QGLake.md)
   (the "Resilience Desk"). That story is the natural acceptance test for LakeCat.
 
 ---

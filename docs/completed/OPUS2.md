@@ -1,7 +1,7 @@
 # LakeCat Review (OPUS2)
 
 Second full review of `~/src/lakecat` (branch `master`, HEAD `293b71d`), against
-the new [`GOAL.md`](../GOAL.md) and the integration targets `~/src/sail`,
+the new [`GOAL.md`](../../GOAL.md) and the integration targets `~/src/sail`,
 `~/src/grust`, `~/src/typesec`, and `~/src/querygraph`.
 
 [OPUS1.md](OPUS1.md) reviewed a scaffold with *no commits* — a faithful
@@ -55,14 +55,14 @@ it closely, **correctly built**:
   when nothing is supplied. A sanitized `lakecat.request-identity.v1` envelope —
   proofs reduced to SHA-256 — rides into the governance context.
 - **The capability *is* the proof.** `Capability<Action, Resource>`
-  ([lakecat-security/src/lib.rs:55](../crates/lakecat-security/src/lib.rs)) has
+  ([lakecat-security/src/lib.rs:55](../../crates/lakecat-security/src/lib.rs)) has
   private fields and is mintable only via `from_receipt`, which rejects a receipt
   unless `allowed` is true, the action matches, and the table scope matches.
   Every privileged handler takes the *typed* capability, not a boolean — an
   unauthorized path cannot construct one. This is exactly the model OPUS1-DESIGN
   argued for.
 - **Durable, CAS-correct, auditable commit.** The Turso `commit_table`
-  ([lakecat-store/src/lib.rs:1144](../crates/lakecat-store/src/lib.rs)) runs one
+  ([lakecat-store/src/lib.rs:1144](../../crates/lakecat-store/src/lib.rs)) runs one
   transaction that: replays idempotency records, re-checks the expected previous
   pointer, performs the pointer swap as a guarded `UPDATE … WHERE
   metadata_location = :prev` (treating `rows_affected == 0` as a conflict), and
@@ -74,7 +74,7 @@ it closely, **correctly built**:
   `outbox_events` and `drain_outbox_once` projects them to the graph and lineage
   sinks. A flaky sink can no longer fail a commit or surface a rolled-back one.
 - **Sail promoted toward Tier 1.** `LakeCatCatalogProvider`
-  ([lakecat-sail/src/lib.rs:340](../crates/lakecat-sail/src/lib.rs)) implements
+  ([lakecat-sail/src/lib.rs:340](../../crates/lakecat-sail/src/lib.rs)) implements
   Sail's real `CatalogProvider` trait and runs the LakeCat governance gate
   *inside* each method, minting the same typed capabilities — the "policy and
   plan fuse in one process" property the design called the architectural prize.
