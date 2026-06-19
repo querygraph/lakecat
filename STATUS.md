@@ -6,6 +6,20 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Prove restricted credential exception denial`.
+  QGLake compact credential proof and captured LakeCat replay semantics now
+  require the restricted-agent branch to carry
+  `rawCredentialExceptionAllowed: false`, so an agent credential block cannot
+  be summarized as Sail-planned-read-only while replay evidence records a raw
+  credential exception.
+- Local verification for this restricted credential exception slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject credential TTL drift`.
   QGLake saved lineage-drain replay and compact handoff verification now reject
   drift between the restricted-agent credential TTL cap and the trusted-human

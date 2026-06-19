@@ -1502,8 +1502,9 @@ complete while omitting the credential-root boundary.
 The compact handoff verifier also validates that credential proof directly:
 the restricted branch must name the accepted agent principal, carry the
 Sail-planned-read block reason, prove zero credentials, carry the
-policy-derived `maxCredentialTtlSeconds` cap, and include replay/OpenLineage
-hashes; the trusted-human branch must name a human principal, prove a positive
+policy-derived `maxCredentialTtlSeconds` cap, explicitly set
+`rawCredentialExceptionAllowed` to false, and include replay/OpenLineage hashes;
+the trusted-human branch must name a human principal, prove a positive
 credential count, carry the same policy-derived TTL cap, carry the exact
 audited raw-credential exception reason, and include replay/OpenLineage hashes.
 That makes the handoff repeatable from the LakeCat repo while keeping

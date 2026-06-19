@@ -1572,6 +1572,16 @@ fn verify_lakecat_replay_credentials_match_summary(
         required_str(summary_restricted, "blockReason", "credentialVendingProof")?,
         "captured LakeCat replay output.replay-evidence.credentials.restricted",
     )?;
+    require_value_match(
+        captured_restricted,
+        "rawCredentialExceptionAllowed",
+        required_value(
+            summary_restricted,
+            "rawCredentialExceptionAllowed",
+            "credentialVendingProof",
+        )?,
+        "captured LakeCat replay output.replay-evidence.credentials.restricted",
+    )?;
 
     let captured_trusted = required_object(
         captured_credentials,
@@ -2394,6 +2404,17 @@ fn require_credential_vending_evidence(
         0,
         "credentialVendingProof.restricted",
     )?;
+    if required_bool(
+        restricted,
+        "rawCredentialExceptionAllowed",
+        "credentialVendingProof.restricted",
+    )? != false
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "credentialVendingProof.restricted.rawCredentialExceptionAllowed must not allow a raw credential exception"
+                .to_string(),
+        ));
+    }
     require_string_eq(
         restricted,
         "blockReason",
@@ -2989,6 +3010,7 @@ fn qglake_credential_replay_evidence_json(
             "principalSubject": restricted.principal_subject.as_deref(),
             "principalKind": restricted.principal_kind.as_deref(),
             "credentialCount": restricted.credential_count.unwrap_or_default(),
+            "rawCredentialExceptionAllowed": restricted.raw_credential_exception_allowed.unwrap_or_default(),
             "blockReason": restricted.credential_block_reason.as_deref(),
             "maxCredentialTtlSeconds": qglake_event_max_credential_ttl_seconds(restricted),
             "storageProfile": qglake_credential_storage_profile_evidence_json(restricted),
@@ -7417,6 +7439,7 @@ mod tests {
                         "principalSubject": "did:example:agent",
                         "principalKind": "agent",
                         "credentialCount": 0,
+                        "rawCredentialExceptionAllowed": false,
                         "blockReason": QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
                         "maxCredentialTtlSeconds": 300,
                         "storageProfile": {
@@ -7618,6 +7641,7 @@ mod tests {
                         "principalSubject": "did:example:agent",
                         "principalKind": "agent",
                         "credentialCount": 0,
+                        "rawCredentialExceptionAllowed": false,
                         "blockReason": QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
                         "maxCredentialTtlSeconds": 300,
                         "storageProfile": {
@@ -8660,6 +8684,38 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_requires_restricted_raw_exception_flag() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]
+            .as_object_mut()
+            .unwrap()
+            .remove("rawCredentialExceptionAllowed");
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should require restricted raw credential exception evidence",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("rawCredentialExceptionAllowed"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_restricted_raw_exception() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["rawCredentialExceptionAllowed"] =
+            json!(true);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject restricted raw credential exceptions");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(
+            err.to_string()
+                .contains("must not allow a raw credential exception")
+        );
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_credential_ttl_cap() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]
@@ -9592,6 +9648,30 @@ mod tests {
         assert!(
             err.to_string().contains(
                 "captured LakeCat replay output.replay-evidence.credentials.restricted.blockReason mismatch"
+            )
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_restricted_exception_drift() {
+        let temp = qglake_temp_dir("handoff-captured-restricted-exception-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["credentials"]["restricted"]["rawCredentialExceptionAllowed"] =
+            json!(true);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay restricted exception drift should be rejected");
+        assert!(
+            err.to_string().contains(
+                "captured LakeCat replay output.replay-evidence.credentials.restricted.rawCredentialExceptionAllowed mismatch"
             )
         );
     }
