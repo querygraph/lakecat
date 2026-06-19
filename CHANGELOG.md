@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Required QGLake trusted-human credential proof to carry and replay-check a
+  null `blockReason` beside the audited raw-credential exception.
 - Required QGLake restricted-agent credential proof to carry and replay-check
   `rawCredentialExceptionAllowed: false`.
 - Required QGLake credential replay and compact handoff proof to reject drift

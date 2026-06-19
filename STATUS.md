@@ -6,6 +6,19 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Prove trusted credential allowance`.
+  QGLake compact credential proof and captured LakeCat replay semantics now
+  require the trusted-human branch to carry `blockReason: null` alongside the
+  audited raw-credential exception reason, so the human exception path cannot
+  look both allowed and blocked in different replay views.
+- Local verification for this trusted credential allowance slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Prove restricted credential exception denial`.
   QGLake compact credential proof and captured LakeCat replay semantics now
   require the restricted-agent branch to carry

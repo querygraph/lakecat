@@ -1506,7 +1506,8 @@ policy-derived `maxCredentialTtlSeconds` cap, explicitly set
 `rawCredentialExceptionAllowed` to false, and include replay/OpenLineage hashes;
 the trusted-human branch must name a human principal, prove a positive
 credential count, carry the same policy-derived TTL cap, carry the exact
-audited raw-credential exception reason, and include replay/OpenLineage hashes.
+audited raw-credential exception reason, prove `blockReason` is null, and
+include replay/OpenLineage hashes.
 That makes the handoff repeatable from the LakeCat repo while keeping
 QueryGraph responsible for graph validation and import semantics.
 The handoff script refuses to write the summary unless LakeCat replay JSON

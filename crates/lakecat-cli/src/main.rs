@@ -1594,6 +1594,7 @@ fn verify_lakecat_replay_credentials_match_summary(
         "credentialVendingProof",
     )?;
     for field in [
+        "blockReason",
         "rawCredentialExceptionAllowed",
         "rawCredentialExceptionReason",
     ] {
@@ -2477,6 +2478,18 @@ fn require_credential_vending_evidence(
         QGLAKE_HUMAN_RAW_CREDENTIAL_EXCEPTION_REASON,
         "credentialVendingProof.trustedHuman",
     )?;
+    if !required_value(
+        trusted,
+        "blockReason",
+        "credentialVendingProof.trustedHuman",
+    )?
+    .is_null()
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "credentialVendingProof.trustedHuman.blockReason must be null for the audited raw credential exception"
+                .to_string(),
+        ));
+    }
     require_hash_array(
         trusted,
         "replayEventHashes",
@@ -3023,6 +3036,7 @@ fn qglake_credential_replay_evidence_json(
             "credentialCount": human.credential_count.unwrap_or_default(),
             "rawCredentialExceptionAllowed": human.raw_credential_exception_allowed.unwrap_or_default(),
             "rawCredentialExceptionReason": human.raw_credential_exception_reason.as_deref(),
+            "blockReason": human.credential_block_reason.as_deref(),
             "maxCredentialTtlSeconds": qglake_event_max_credential_ttl_seconds(human),
             "storageProfile": qglake_credential_storage_profile_evidence_json(human),
             "replayEventHashes": &human.replay_event_hashes,
@@ -7460,6 +7474,7 @@ mod tests {
                         "credentialCount": 1,
                         "rawCredentialExceptionAllowed": true,
                         "rawCredentialExceptionReason": QGLAKE_HUMAN_RAW_CREDENTIAL_EXCEPTION_REASON,
+                        "blockReason": null,
                         "maxCredentialTtlSeconds": 300,
                         "storageProfile": {
                             "profileId": "events-local",
@@ -7662,6 +7677,7 @@ mod tests {
                         "credentialCount": 1,
                         "rawCredentialExceptionAllowed": true,
                         "rawCredentialExceptionReason": QGLAKE_HUMAN_RAW_CREDENTIAL_EXCEPTION_REASON,
+                        "blockReason": null,
                         "maxCredentialTtlSeconds": 300,
                         "storageProfile": {
                             "profileId": "events-local",
@@ -8822,6 +8838,31 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_requires_trusted_human_null_block_reason() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]
+            .as_object_mut()
+            .unwrap()
+            .remove("blockReason");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should require trusted-human block reason proof");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("blockReason"));
+
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]["blockReason"] =
+            json!("blocked");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject blocked trusted-human credential proof");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("blockReason must be null"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_view_tombstone_expected_version() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["tombstoneReceipts"][0]["expectedViewVersion"] =
@@ -9672,6 +9713,29 @@ mod tests {
         assert!(
             err.to_string().contains(
                 "captured LakeCat replay output.replay-evidence.credentials.restricted.rawCredentialExceptionAllowed mismatch"
+            )
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_trusted_block_reason_drift() {
+        let temp = qglake_temp_dir("handoff-captured-trusted-block-reason-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["credentials"]["trustedHuman"]["blockReason"] = json!("blocked");
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay trusted-human block reason drift should be rejected");
+        assert!(
+            err.to_string().contains(
+                "captured LakeCat replay output.replay-evidence.credentials.trustedHuman.blockReason mismatch"
             )
         );
     }
