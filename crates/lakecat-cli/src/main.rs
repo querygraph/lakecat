@@ -1283,9 +1283,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "tableCommitHistoryProof",
         "lakecatReplayVerification",
     )?;
-    require_positive_u64(commit_history, "commitCount", "tableCommitHistoryProof")?;
-    required_array(commit_history, "sequenceNumbers", "tableCommitHistoryProof")?;
-    require_hash_array(commit_history, "commitHashes", "tableCommitHistoryProof")?;
+    require_table_commit_history_evidence(commit_history)?;
 
     let storage_profile = required_object(
         lakecat,
@@ -1361,6 +1359,60 @@ fn require_storage_profile_upsert_evidence(
         storage_profile,
         "openLineageHashes",
         "storageProfileUpsertProof",
+    )?;
+    Ok(())
+}
+
+fn require_table_commit_history_evidence(
+    commit_history: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let commit_count =
+        require_positive_u64(commit_history, "commitCount", "tableCommitHistoryProof")?;
+    let sequence_numbers =
+        required_array(commit_history, "sequenceNumbers", "tableCommitHistoryProof")?;
+    if sequence_numbers.len() as u64 != commit_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "tableCommitHistoryProof.sequenceNumbers length mismatch: expected={commit_count} actual={}",
+            sequence_numbers.len()
+        )));
+    }
+    let mut previous = 0;
+    for (index, sequence_number) in sequence_numbers.iter().enumerate() {
+        let Some(sequence_number) = sequence_number.as_u64() else {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "tableCommitHistoryProof.sequenceNumbers[{index}] must be a positive integer"
+            )));
+        };
+        if sequence_number == 0 {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "tableCommitHistoryProof.sequenceNumbers[{index}] must be positive"
+            )));
+        }
+        if sequence_number <= previous {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "tableCommitHistoryProof.sequenceNumbers must be strictly increasing"
+            )));
+        }
+        previous = sequence_number;
+    }
+
+    let commit_hashes = required_array(commit_history, "commitHashes", "tableCommitHistoryProof")?;
+    if commit_hashes.len() as u64 != commit_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "tableCommitHistoryProof.commitHashes length mismatch: expected={commit_count} actual={}",
+            commit_hashes.len()
+        )));
+    }
+    require_hash_array(commit_history, "commitHashes", "tableCommitHistoryProof")?;
+    require_hash_array(
+        commit_history,
+        "replayEventHashes",
+        "tableCommitHistoryProof",
+    )?;
+    require_hash_array(
+        commit_history,
+        "openLineageHashes",
+        "tableCommitHistoryProof",
     )?;
     Ok(())
 }
@@ -6292,6 +6344,64 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("allowed-columns mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_table_commit_history_count_match() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["commitCount"] = json!(2);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject commit-history count drift");
+
+        assert!(err.to_string().contains("tableCommitHistoryProof"));
+        assert!(err.to_string().contains("sequenceNumbers"));
+        assert!(err.to_string().contains("length mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_positive_commit_sequences() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["sequenceNumbers"] =
+            json!([0]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject non-positive commit sequences");
+
+        assert!(err.to_string().contains("tableCommitHistoryProof"));
+        assert!(err.to_string().contains("sequenceNumbers"));
+        assert!(err.to_string().contains("positive"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_increasing_commit_sequences() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["commitCount"] = json!(2);
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["sequenceNumbers"] =
+            json!([1, 1]);
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["commitHashes"] =
+            json!(["sha256:first", "sha256:second"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicate commit sequences");
+
+        assert!(err.to_string().contains("tableCommitHistoryProof"));
+        assert!(err.to_string().contains("sequenceNumbers"));
+        assert!(err.to_string().contains("strictly increasing"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_commit_history_replay_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["replayEventHashes"] =
+            json!([]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing commit-history replay hashes");
+
+        assert!(err.to_string().contains("tableCommitHistoryProof"));
+        assert!(err.to_string().contains("replayEventHashes"));
+        assert!(err.to_string().contains("sha256"));
     }
 
     #[test]

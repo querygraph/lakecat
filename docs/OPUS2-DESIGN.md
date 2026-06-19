@@ -323,14 +323,16 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   and the handoff verifier rejects fetched restriction drift from the planned
   restriction; captured `replay-evidence.tableCommitHistory` must match
   `tableCommitHistoryProof` for commit count, sequence numbers, commit hashes,
-  replay hashes, and OpenLineage hashes, and captured `replay-evidence.views`
-  must match `viewReceiptChainProof` for accepted view receipts, tombstone
-  receipts, namespace receipt-chain hashes, and their replay/OpenLineage
-  hashes; `lakecat-cli qglake-verify-handoff` also rejects compact tombstone
-  receipts whose `expectedViewVersion` is missing or does not match the
-  accepted view version for the same stable view id, keeping the guarded
-  deletion proof self-contained in the Rust verifier; the Rust verifier now
-  also rejects compact view receipt-chain proofs whose `views` array does not
+  replay hashes, and OpenLineage hashes; the compact table commit-history proof
+  is now self-validating in the Rust verifier, requiring count-aligned commit
+  hashes and positive strictly increasing sequence numbers, and captured
+  `replay-evidence.views` must match `viewReceiptChainProof` for accepted view
+  receipts, tombstone receipts, namespace receipt-chain hashes, and their
+  replay/OpenLineage hashes; `lakecat-cli qglake-verify-handoff` also rejects
+  compact tombstone receipts whose `expectedViewVersion` is missing or does not
+  match the accepted view version for the same stable view id, keeping the
+  guarded deletion proof self-contained in the Rust verifier; the Rust verifier
+  now also rejects compact view receipt-chain proofs whose `views` array does not
   match `viewCount`, whose accepted view identity/version proof is incomplete,
   or whose receipt-chain evidence lacks warehouse/namespace identity, accepted
   receipt hashes, tombstone receipt hashes, positive verified-chain counts,

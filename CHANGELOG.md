@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made compact `tableCommitHistoryProof` validation self-sufficient in
+  `lakecat-cli qglake-verify-handoff`, requiring commit-count alignment with
+  sequence numbers and commit hashes, positive strictly increasing sequences,
+  and replay/OpenLineage hashes.
 - Reconciled `GOAL.md` so the current user-supplied `LakeCat Agent Guidance`
   from `AGENTS.md` is pinned as durable goal state across resumes, context
   compaction, and future implementation slices.

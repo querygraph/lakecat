@@ -1279,7 +1279,10 @@ path. It also compares
 the captured `replay-evidence.tableCommitHistory` object with
 `tableCommitHistoryProof`, including the commit count, sequence numbers, commit
 hashes, replay hashes, and OpenLineage hashes that prove the pointer-log commit
-history was not rewritten between replay and summary. It compares the captured
+history was not rewritten between replay and summary. The compact verifier also
+requires the commit count to match the sequence-number and commit-hash arrays,
+requires every sequence number to be positive and strictly increasing, and
+requires replay and OpenLineage receipt hashes. It compares the captured
 `replay-evidence.views` object with `viewReceiptChainProof`, including accepted
 view receipts, expected-version guard evidence, tombstone receipts, namespace
 receipt-chain hashes, and their replay/OpenLineage hashes, so durable view
@@ -1395,8 +1398,10 @@ drain that does not replay matching `server.listed`, `project.listed`,
 evidence. For scan replay, the typed drain summary carries scan-plan task
 counts plus fetched file-scan, delete-file, and child-plan task counts; for
 commit-history replay, it carries the commit count, committed sequence numbers,
-and commit hashes. This lets QueryGraph verify the governed Sail-planned read
-and pointer-history inspection without parsing the full lineage payload.
+commit hashes, replay hashes, and OpenLineage hashes. The handoff verifier
+rejects compact commit-history proofs whose counts, sequences, or hash arrays
+do not align, so QueryGraph can verify the governed Sail-planned read and
+pointer-history inspection without parsing the full lineage payload.
 
 For handoff testing, LakeCat can verify a saved bootstrap bundle and a saved
 drain response together:

@@ -5,6 +5,26 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Verify table commit-history handoff proof`.
+  `lakecat-cli qglake-verify-handoff` now independently validates compact
+  `tableCommitHistoryProof` pointer-log evidence. The proof must carry a
+  positive commit count, sequence numbers whose length matches the count,
+  commit hashes whose length matches the count, positive strictly increasing
+  sequence numbers, and replay/OpenLineage hashes. This moves the shell
+  harness's commit-history guard into the Rust verifier used by QueryGraph and
+  operator automation.
+- Local verification for this table commit-history handoff-proof slice is
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`.
 - Latest completed documentation adjustment:
   `Pin current AGENTS contract in GOAL`.
   `GOAL.md` now explicitly treats the current user-supplied
