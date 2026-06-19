@@ -5,6 +5,17 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Finalize OPUS consolidation digest`.
+  `DESIGN.md` now carries the active OPUS synthesis as a concise operating
+  digest plus archive-health commands, and `docs/completed/README.md` records
+  the same mechanical audit expectations for the frozen OPUS provenance files.
+- Local verification for this OPUS consolidation digest slice is green:
+  `git ls-files 'OPUS*.md'`;
+  `git ls-files 'docs/completed/OPUS*.md'`;
+  `rg --files -g 'OPUS*.md' -g '!docs/completed/**'`;
+  `rg --files docs/completed -g 'OPUS*.md'`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Prove storage-profile graph replay`.
   QGLake compact storage-profile upsert proof and captured LakeCat replay

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added the final OPUS consolidation digest and archive audit commands to the
+  canonical design/archive docs so future work no longer needs to reopen OPUS
+  files for active guidance.
 - Required QGLake storage-profile upsert proof to carry and replay-check a
   positive graph event count.
 - Required QGLake trusted-human credential proof to carry and replay-check a

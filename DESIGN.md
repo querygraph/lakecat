@@ -88,6 +88,39 @@ this living design, update the specific canonical doc in the map above, or add a
 small dated note under `docs/completed/` only after its durable decisions have
 already been merged into the live docs.
 
+### Consolidated OPUS Digest
+
+The durable OPUS guidance now collapses to these operating rules:
+
+- Keep LakeCat standard at the Iceberg boundary and innovative in the control
+  plane. Standard clients should succeed through normal Iceberg REST behavior;
+  QueryGraph-specific semantics ride derived evidence, graph projections,
+  lineage, and governed workflows.
+- Treat the restriction as the binding governed-read object. It is derived by
+  the server from TypeSec/ODRL policy, carried by capabilities and receipts,
+  applied by Sail plan/fetch paths, and replayed into QGLake evidence.
+- Keep the catalog spine durable and auditable: pointer CAS, idempotency,
+  metadata-object handling, audit, outbox, redaction, and replay proof are
+  LakeCat-owned responsibilities.
+- Keep the repo boundaries active. Reusable Iceberg/planning work goes to Sail;
+  reusable graph taxonomy/query/storage work goes to Grust; reusable governance,
+  TypeDID, capability, and secure-agent semantics go to TypeSec.
+- Use QGLake as the acceptance loop. Bootstrap, scan/fetch, credentials, views,
+  graph/import, OpenLineage, and captured replay proofs should reject drift
+  before a slice is considered done.
+- Keep cloud automation manual until local verification is green. The OPUS
+  process finding is not "add more CI"; it is "prove locally first, then turn on
+  automation only when it is trustworthy."
+
+Archive health can be checked with:
+
+```text
+git ls-files 'OPUS*.md'
+git ls-files 'docs/completed/OPUS*.md'
+rg --files -g 'OPUS*.md' -g '!docs/completed/**'
+rg --files docs/completed -g 'OPUS*.md'
+```
+
 ## Review Log And Working Plan
 
 This section consolidates the OPUS review history into the active

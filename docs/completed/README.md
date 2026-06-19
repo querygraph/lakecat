@@ -19,6 +19,19 @@ expected audit result is that `rg --files -g 'OPUS*.md' -g '!docs/completed/**'`
 returns no files, while `rg --files docs/completed -g 'OPUS*.md'` returns only
 the four archived files above.
 
+For a full consolidation audit, run:
+
+```text
+git ls-files 'OPUS*.md'
+git ls-files 'docs/completed/OPUS*.md'
+rg --files -g 'OPUS*.md' -g '!docs/completed/**'
+rg --files docs/completed -g 'OPUS*.md'
+```
+
+The first command should return nothing. The second and fourth commands should
+return only the four archived OPUS files listed above. The third command should
+return nothing.
+
 ## Consolidation Ledger
 
 | Archived file | Durable material now lives in |
