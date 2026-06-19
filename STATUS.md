@@ -6,6 +6,28 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind handoff summary to LakeCat replay JSON`. `lakecat-cli
+  qglake-verify-replay --json` now emits machine-readable replay verification,
+  and `scripts/qglake-handoff-local.sh` requires LakeCat replay status, table
+  count, view count, bundle hash, and QueryGraph import hash to match the
+  QueryGraph verify/import outputs before writing the accepted handoff summary.
+- Local verification for the LakeCat replay JSON handoff slice was green:
+  `cargo fmt -p lakecat-cli`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `cargo test -p lakecat-cli`;
+  `scripts/qglake-handoff-local.sh` with local socket binding allowed;
+  `node -e` JSON parse/assertion check for
+  `target/qglake-handoff/handoff-summary.json`. The live handoff generated one
+  table and one view, drained 26 outbox events, verified LakeCat replay through
+  JSON output, ran QueryGraph `lakecat-verify` and `lakecat-import`, and wrote
+  `lakecatReplayVerification.matchesQueryGraph=true` plus
+  `querygraphImportVerification.matchesVerify=true`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cross-check QueryGraph handoff phases`. `scripts/qglake-handoff-local.sh`
   now fails closed unless QueryGraph `lakecat-verify` and `lakecat-import`
   agree on table/view counts and semantic bundle, graph, OpenLineage, and

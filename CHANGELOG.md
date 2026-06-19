@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added JSON output to `lakecat-cli qglake-verify-replay` and made the local
+  handoff summary cross-check LakeCat replay hashes against QueryGraph verify
+  and import hashes before accepting the artifact set.
 - Made the local QGLake handoff summary fail closed unless QueryGraph
   `lakecat-verify` and `lakecat-import` agree on table/view counts and semantic
   bundle/graph/OpenLineage/import hashes.

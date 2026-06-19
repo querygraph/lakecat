@@ -54,7 +54,8 @@ async fn run() -> lakecat_core::LakeCatResult<()> {
             bundle,
             drain,
             principal,
-        } => qglake_verify_replay(bundle, drain, principal),
+            json,
+        } => qglake_verify_replay(bundle, drain, principal, json),
         Command::PolicyList {
             catalog,
             warehouse,
@@ -300,27 +301,48 @@ fn qglake_verify_replay(
     bundle_path: PathBuf,
     drain_path: PathBuf,
     principal: Option<String>,
+    json_output: bool,
 ) -> lakecat_core::LakeCatResult<()> {
     let bundle =
         read_typed_json_file::<QueryGraphBootstrap>(&bundle_path, "QueryGraph bootstrap bundle")?;
     let drain =
         read_typed_json_file::<LineageDrainResponse>(&drain_path, "lineage drain response")?;
     let verification = verify_qglake_replay_artifacts(&bundle, &drain, principal.as_deref())?;
+    let scan_replay = qglake_scan_replay_line(&drain);
+    let management_replay = qglake_management_replay_line(&drain);
+    let credential_replay = qglake_credential_replay_line(&drain, principal.as_deref());
+    let table_commit_history_replay = qglake_table_commit_history_replay_line(&drain);
+    if json_output {
+        print_json(&json!({
+            "status": "verified",
+            "bundle-hash": verification.bundle_hash,
+            "querygraph-import-hash": verification.querygraph_import_hash,
+            "table-count": verification.table_count,
+            "view-count": verification.view_count,
+            "verified-tables": verification.verified_tables,
+            "verified-views": verification.verified_views,
+            "scan-replay": scan_replay,
+            "management-replay": management_replay,
+            "credential-replay": credential_replay,
+            "table-commit-history-replay": table_commit_history_replay,
+        }))?;
+        return Ok(());
+    }
     println!("verified qglake replay evidence");
     println!("bundle {}", verification.bundle_hash);
     println!("querygraph import {}", verification.querygraph_import_hash);
     println!("tables {}", verification.table_count);
     println!("views {}", verification.view_count);
-    if let Some(line) = qglake_scan_replay_line(&drain) {
+    if let Some(line) = scan_replay {
         println!("{line}");
     }
-    if let Some(line) = qglake_management_replay_line(&drain) {
+    if let Some(line) = management_replay {
         println!("{line}");
     }
-    if let Some(line) = qglake_credential_replay_line(&drain, principal.as_deref()) {
+    if let Some(line) = credential_replay {
         println!("{line}");
     }
-    if let Some(line) = qglake_table_commit_history_replay_line(&drain) {
+    if let Some(line) = table_commit_history_replay {
         println!("{line}");
     }
     Ok(())
@@ -3351,6 +3373,7 @@ enum Command {
         bundle: PathBuf,
         drain: PathBuf,
         principal: Option<String>,
+        json: bool,
     },
     PolicyList {
         catalog: String,
@@ -3478,12 +3501,14 @@ fn parse_qglake_verify_replay(
     let mut bundle = None;
     let mut drain = None;
     let mut principal = None;
+    let mut json = false;
     let mut args = args.peekable();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--bundle" => bundle = Some(PathBuf::from(next_arg(&mut args, "--bundle")?)),
             "--drain" => drain = Some(PathBuf::from(next_arg(&mut args, "--drain")?)),
             "--principal" => principal = Some(next_arg(&mut args, "--principal")?),
+            "--json" => json = true,
             _ => return Err(usage_error()),
         }
     }
@@ -3499,6 +3524,7 @@ fn parse_qglake_verify_replay(
             )
         })?,
         principal,
+        json,
     })
 }
 
@@ -3845,6 +3871,7 @@ mod tests {
             "target/qglake/lineage-drain.json".to_string(),
             "--principal".to_string(),
             "did:example:agent".to_string(),
+            "--json".to_string(),
         ])
         .unwrap();
         match command {
@@ -3852,6 +3879,7 @@ mod tests {
                 bundle,
                 drain,
                 principal,
+                json,
             } => {
                 assert_eq!(
                     bundle,
@@ -3859,6 +3887,7 @@ mod tests {
                 );
                 assert_eq!(drain, PathBuf::from("target/qglake/lineage-drain.json"));
                 assert_eq!(principal.as_deref(), Some("did:example:agent"));
+                assert!(json);
             }
             _ => panic!("expected qglake-verify-replay command"),
         }
