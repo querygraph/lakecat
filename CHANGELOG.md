@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made compact QGLake handoff summaries self-contained for QueryGraph scope by
+  embedding `querygraphVerification.verifiedTables` and `verifiedViews`,
+  validating their counts against `tableCount`/`viewCount`, and requiring them
+  to include the declared table scope plus every accepted replayed view id.
 - Bound compact QGLake handoff view scope to QueryGraph verification by making
   `lakecat-cli qglake-verify-handoff` and the local handoff harness require
   every accepted LakeCat view stable id from `viewReceiptChainProof` to appear

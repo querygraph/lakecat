@@ -6,6 +6,28 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Make QGLake handoff verified ids self-contained`.
+  Compact `handoff-summary.json` files now embed
+  `querygraphVerification.verifiedTables` and `verifiedViews`, and
+  `lakecat-cli qglake-verify-handoff` validates those arrays directly against
+  `tableCount`, `viewCount`, the declared warehouse/namespace/table scope, and
+  the accepted stable view ids in `viewReceiptChainProof.views`. The local
+  handoff harness also cross-checks the QueryGraph import arrays against the
+  QueryGraph verify arrays before writing the summary.
+- Local verification for this self-contained verified-id slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 outbox events, ran LakeCat replay, QueryGraph verify/import, and emitted
+  compact verification JSON with `verifiedTables` and `verifiedViews`);
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace --all-features`;
+  `cargo test --workspace`.
+- Latest completed implementation slice:
   `Bind QGLake handoff view scope`.
   `lakecat-cli qglake-verify-handoff` and the local QGLake handoff harness now
   require QueryGraph verify/import captures to list every accepted LakeCat view

@@ -1423,6 +1423,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "viewReceiptChainProof",
         "lakecatReplayVerification",
     )?;
+    require_querygraph_verified_scope(querygraph, &scope, views)?;
     require_u64_match(
         views,
         "viewCount",
@@ -1445,10 +1446,68 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "table": scope.table,
         "tableCount": required_u64(querygraph, "tableCount", "querygraphVerification")?,
         "viewCount": required_u64(querygraph, "viewCount", "querygraphVerification")?,
+        "verifiedTables": required_value(querygraph, "verifiedTables", "querygraphVerification")?,
+        "verifiedViews": required_value(querygraph, "verifiedViews", "querygraphVerification")?,
         "standards": required_value(querygraph, "standards", "querygraphVerification")?,
         "queryGraphBootstrapProof": bootstrap,
         "requestIdentityProof": request_identity,
     }))
+}
+
+fn require_querygraph_verified_scope(
+    querygraph: &serde_json::Map<String, Value>,
+    scope: &HandoffScope<'_>,
+    views: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let table_count = required_u64(querygraph, "tableCount", "querygraphVerification")?;
+    let verified_tables = required_array(querygraph, "verifiedTables", "querygraphVerification")?;
+    if verified_tables.len() as u64 != table_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "querygraphVerification.verifiedTables length mismatch: expected={table_count} actual={}",
+            verified_tables.len()
+        )));
+    }
+    let expected_table = format!(
+        "lakecat:table:{}:{}:{}",
+        scope.warehouse, scope.namespace, scope.table
+    );
+    if !verified_tables
+        .iter()
+        .any(|table| table.as_str() == Some(expected_table.as_str()))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "querygraphVerification.verifiedTables must include {expected_table}"
+        )));
+    }
+
+    let view_count = required_u64(querygraph, "viewCount", "querygraphVerification")?;
+    let verified_views = required_array(querygraph, "verifiedViews", "querygraphVerification")?;
+    if verified_views.len() as u64 != view_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "querygraphVerification.verifiedViews length mismatch: expected={view_count} actual={}",
+            verified_views.len()
+        )));
+    }
+    for (index, view) in required_array(views, "views", "viewReceiptChainProof")?
+        .iter()
+        .enumerate()
+    {
+        let view = view.as_object().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.views[{index}] must be an object"
+            ))
+        })?;
+        let expected_view = required_str(view, "stableId", "viewReceiptChainProof.views[]")?;
+        if !verified_views
+            .iter()
+            .any(|view| view.as_str() == Some(expected_view))
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "querygraphVerification.verifiedViews must include {expected_view}"
+            )));
+        }
+    }
+    Ok(())
 }
 
 struct HandoffScope<'a> {
@@ -5922,6 +5981,12 @@ mod tests {
             "querygraphVerification": {
                 "tableCount": 1,
                 "viewCount": 1,
+                "verifiedTables": [
+                    "lakecat:table:local:default:events"
+                ],
+                "verifiedViews": [
+                    "lakecat:view:local:default:active_customers_view"
+                ],
                 "bundleHash": "sha256:bundle",
                 "graphHash": "sha256:graph",
                 "openLineageHash": "sha256:openlineage",
@@ -6456,6 +6521,14 @@ mod tests {
         assert_eq!(verification["tableCount"], json!(1));
         assert_eq!(verification["viewCount"], json!(1));
         assert_eq!(
+            verification["verifiedTables"],
+            json!(["lakecat:table:local:default:events"])
+        );
+        assert_eq!(
+            verification["verifiedViews"],
+            json!(["lakecat:view:local:default:active_customers_view"])
+        );
+        assert_eq!(
             verification["queryGraphBootstrapProof"]["bundleHash"],
             json!("sha256:bundle")
         );
@@ -6484,6 +6557,70 @@ mod tests {
         assert!(err.to_string().contains("handoff summary"));
         assert!(err.to_string().contains("namespace"));
         assert!(err.to_string().contains("must not be empty"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_verified_table_scope() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["querygraphVerification"]["verifiedTables"] =
+            json!(["lakecat:table:local:default:other"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject table scope drift");
+
+        assert!(err.to_string().contains("querygraphVerification"));
+        assert!(err.to_string().contains("verifiedTables"));
+        assert!(
+            err.to_string()
+                .contains("lakecat:table:local:default:events")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_verified_table_count_mismatch() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["querygraphVerification"]["verifiedTables"] = json!([
+            "lakecat:table:local:default:events",
+            "lakecat:table:local:default:other"
+        ]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject verified table count drift");
+
+        assert!(err.to_string().contains("querygraphVerification"));
+        assert!(err.to_string().contains("verifiedTables length mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_verified_view_scope() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["querygraphVerification"]["verifiedViews"] =
+            json!(["lakecat:view:local:default:other_view"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject view scope drift");
+
+        assert!(err.to_string().contains("querygraphVerification"));
+        assert!(err.to_string().contains("verifiedViews"));
+        assert!(
+            err.to_string()
+                .contains("lakecat:view:local:default:active_customers_view")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_verified_view_count_mismatch() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["querygraphVerification"]["verifiedViews"] = json!([
+            "lakecat:view:local:default:active_customers_view",
+            "lakecat:view:local:default:other_view"
+        ]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject verified view count drift");
+
+        assert!(err.to_string().contains("querygraphVerification"));
+        assert!(err.to_string().contains("verifiedViews length mismatch"));
     }
 
     #[test]
@@ -6806,6 +6943,10 @@ mod tests {
     fn qglake_handoff_summary_verifier_rejects_view_count_mismatch() {
         let mut summary = qglake_handoff_summary_json();
         summary["querygraphVerification"]["viewCount"] = json!(2);
+        summary["querygraphVerification"]["verifiedViews"] = json!([
+            "lakecat:view:local:default:active_customers_view",
+            "lakecat:view:local:default:other_view"
+        ]);
         summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["viewArtifactCount"] =
             json!(2);
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["viewCount"] = json!(2);

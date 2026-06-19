@@ -713,12 +713,12 @@ for (const [index, view] of (evidence.views || []).entries()) {
 
 write_summary() {
   local bundle_sha drain_sha import_plan_sha lakecat_replay_sha querygraph_verify_sha querygraph_import_sha
-  local verified_tables verified_views verified_warehouse bundle_hash graph_hash open_lineage_hash querygraph_import_hash
+  local verified_tables verified_views verified_table_ids verified_view_ids verified_warehouse bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   local verified_standards
   local lakecat_schema lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards lakecat_replay_evidence
   local lakecat_request_identity_evidence lakecat_querygraph_bootstrap_evidence lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence lakecat_table_commit_history_evidence lakecat_view_receipt_chain_evidence
   local imported_tables imported_views imported_warehouse imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
-  local imported_standards
+  local imported_standards imported_table_ids imported_view_ids
   local expected_verified_table
   bundle_sha="$(sha256_file "$BUNDLE")"
   drain_sha="$(sha256_file "$DRAIN")"
@@ -744,6 +744,8 @@ write_summary() {
   lakecat_view_receipt_chain_evidence="$(view_receipt_chain_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   verified_tables="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "table-count")"
   verified_views="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "view-count")"
+  verified_table_ids="$(json_value_field "$QUERYGRAPH_VERIFY_OUTPUT" "verified-tables")"
+  verified_view_ids="$(json_value_field "$QUERYGRAPH_VERIFY_OUTPUT" "verified-views")"
   bundle_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "bundle-hash")"
   graph_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "graph-hash")"
   open_lineage_hash="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "open-lineage-hash")"
@@ -758,10 +760,14 @@ write_summary() {
   imported_open_lineage_hash="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "open-lineage-hash")"
   imported_querygraph_import_hash="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "querygraph-import-hash")"
   imported_standards="$(json_value_field "$QUERYGRAPH_IMPORT_OUTPUT" "standards")"
+  imported_table_ids="$(json_value_field "$QUERYGRAPH_IMPORT_OUTPUT" "verified-tables")"
+  imported_view_ids="$(json_value_field "$QUERYGRAPH_IMPORT_OUTPUT" "verified-views")"
   imported_warehouse="$(json_field "$QUERYGRAPH_IMPORT_OUTPUT" "warehouse")"
   required_summary_field "warehouse" "$QUERYGRAPH_VERIFY_OUTPUT" "$verified_warehouse"
   required_summary_field "table-count" "$QUERYGRAPH_VERIFY_OUTPUT" "$verified_tables"
   required_summary_field "view-count" "$QUERYGRAPH_VERIFY_OUTPUT" "$verified_views"
+  required_summary_field "verified-tables" "$QUERYGRAPH_VERIFY_OUTPUT" "$verified_table_ids"
+  required_summary_field "verified-views" "$QUERYGRAPH_VERIFY_OUTPUT" "$verified_view_ids"
   required_summary_field "bundle-hash" "$QUERYGRAPH_VERIFY_OUTPUT" "$bundle_hash"
   required_summary_field "graph-hash" "$QUERYGRAPH_VERIFY_OUTPUT" "$graph_hash"
   required_summary_field "open-lineage-hash" "$QUERYGRAPH_VERIFY_OUTPUT" "$open_lineage_hash"
@@ -792,10 +798,14 @@ write_summary() {
   required_summary_field "open-lineage-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_open_lineage_hash"
   required_summary_field "querygraph-import-hash" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_querygraph_import_hash"
   required_summary_field "standards" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_standards"
+  required_summary_field "verified-tables" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_table_ids"
+  required_summary_field "verified-views" "$QUERYGRAPH_IMPORT_OUTPUT" "$imported_view_ids"
   require_field_match "warehouse" "$verified_warehouse" "$WAREHOUSE"
   require_field_match "table-count" "$imported_tables" "$verified_tables"
   require_field_match "view-count" "$imported_views" "$verified_views"
   require_field_match "import warehouse" "$imported_warehouse" "$verified_warehouse"
+  require_field_match "verified-tables" "$imported_table_ids" "$verified_table_ids"
+  require_field_match "verified-views" "$imported_view_ids" "$verified_view_ids"
   expected_verified_table="lakecat:table:$WAREHOUSE:$NAMESPACE:$TABLE"
   require_verified_table_scope "$QUERYGRAPH_VERIFY_OUTPUT" "$expected_verified_table"
   require_verified_table_scope "$QUERYGRAPH_IMPORT_OUTPUT" "$expected_verified_table"
@@ -827,6 +837,8 @@ write_summary() {
   "querygraphVerification": {
     "tableCount": $verified_tables,
     "viewCount": $verified_views,
+    "verifiedTables": $verified_table_ids,
+    "verifiedViews": $verified_view_ids,
     "bundleHash": "$(json_string "$bundle_hash")",
     "graphHash": "$(json_string "$graph_hash")",
     "openLineageHash": "$(json_string "$open_lineage_hash")",
