@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a compact `tableCommitHistoryProof` object to QGLake
+  `handoff-summary.json`, proving pointer-log commit-history replay with
+  sequence numbers, commit hashes, and replay/OpenLineage hashes.
 - Added a compact `governedScanProof` object to QGLake `handoff-summary.json`,
   proving scan planning and scan-task fetch replay with file/delete task counts
   plus replay/OpenLineage hashes.
