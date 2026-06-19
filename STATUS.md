@@ -6,6 +6,21 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require QGLake scan restriction purpose`.
+  QGLake governed scan replay and compact handoff verification now require the
+  read-restriction `purpose` alongside allowed columns, row predicate,
+  policy-hash evidence, and `max-credential-ttl-seconds`, and reject drift
+  between planned and fetched purpose values.
+- Local verification for this scan restriction purpose slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_scan_restriction_purpose -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_scan_restriction_purpose_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_fixture_policy_installs_read_restriction -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind credential replay to storage-profile upsert replay`.
   QGLake lineage-drain replay verification now rejects restricted or trusted
   credential events whose redacted storage-profile evidence differs from the

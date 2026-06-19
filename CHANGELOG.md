@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake governed scan replay and compact handoff proof to carry the
+  server-derived restriction purpose, and documented that scan proof must bind
+  allowed columns, row predicate, purpose, policy hashes, and credential TTL.
 - Bound QGLake lineage-drain credential replay back to the storage-profile
   upsert replay so source replay verification rejects credential events whose
   profile identity, storage-scope hash, or secret-reference state is spliced

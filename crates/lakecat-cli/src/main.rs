@@ -2004,6 +2004,16 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "governedScanProof.plannedReadRestriction",
     )?;
     require_value_match(
+        planned_restriction,
+        "purpose",
+        required_value(
+            fetched_restriction,
+            "purpose",
+            "governedScanProof.fetchedReadRestriction",
+        )?,
+        "governedScanProof.plannedReadRestriction",
+    )?;
+    require_value_match(
         fetched_restriction,
         "allowed-columns",
         required_value(
@@ -2498,6 +2508,7 @@ fn require_read_restriction_evidence(
         )));
     }
     required_object(restriction, "row-predicate", label)?;
+    require_non_empty_str(restriction, "purpose", label)?;
     require_hash_array(restriction, "policy-hashes", label)?;
     require_positive_u64(restriction, "max-credential-ttl-seconds", label)?;
     Ok(())
@@ -6398,6 +6409,7 @@ fn qglake_odrl_policy(table: &str) -> Value {
                 "term": "severity",
                 "value": "debug"
             },
+            "purpose": "qglake-agent-demo",
             "max-credential-ttl-seconds": 300
         },
         "permission": [{
@@ -6407,6 +6419,10 @@ fn qglake_odrl_policy(table: &str) -> Value {
                 "leftOperand": "typesec:capability",
                 "operator": "odrl:eq",
                 "rightOperand": "catalog.table.plan_scan"
+            }, {
+                "leftOperand": "purpose",
+                "operator": "odrl:eq",
+                "rightOperand": "qglake-agent-demo"
             }]
         }]
     })
@@ -7225,6 +7241,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
@@ -7235,6 +7252,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
@@ -7422,6 +7440,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
@@ -7432,6 +7451,7 @@ mod tests {
                             "term": "severity",
                             "value": "debug"
                         },
+                        "purpose": "qglake-agent-demo",
                         "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
@@ -8322,6 +8342,34 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("allowed-columns mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_scan_restriction_purpose() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedReadRestriction"]
+            .as_object_mut()
+            .unwrap()
+            .remove("purpose");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing scan restriction purpose");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("purpose"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_scan_restriction_purpose_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["fetchedReadRestriction"]["purpose"] =
+            json!("different-purpose");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject drifted scan restriction purpose");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("purpose mismatch"));
     }
 
     #[test]
@@ -10186,6 +10234,10 @@ mod tests {
             })
         );
         assert_eq!(
+            policy["lakecat:read-restriction"]["purpose"],
+            serde_json::json!("qglake-agent-demo")
+        );
+        assert_eq!(
             policy["lakecat:read-restriction"]["max-credential-ttl-seconds"],
             serde_json::json!(300)
         );
@@ -10209,6 +10261,7 @@ mod tests {
                 "value": "debug"
             }))
         );
+        assert_eq!(restriction.purpose.as_deref(), Some("qglake-agent-demo"));
         assert_eq!(restriction.max_credential_ttl_seconds, Some(300));
     }
 
@@ -14321,6 +14374,7 @@ mod tests {
                 "term": "severity",
                 "value": "debug"
             },
+            "purpose": "qglake-agent-demo",
             "max-credential-ttl-seconds": 300,
             "policy-hashes": ["sha256:scan-policy"]
         })

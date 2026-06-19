@@ -1521,12 +1521,16 @@ credentials, trusted humans receive only the audited standard exception, and
 both branches preserve the `max-credential-ttl-seconds` restriction as
 `maxCredentialTtlSeconds` in compact evidence.
 For reads, the summary similarly refuses to omit proof that scan planning and
-scan-task fetch both replayed with sink receipt hashes. For catalog state, it
-refuses to omit proof that the table commit-history read replayed with
-sequence-number and commit-hash evidence. For views, it refuses to omit proof
-that accepted view versions line up with their receipt hashes and that the
-namespace-level tombstone and receipt-chain reads replayed with chain hashes
-and verified-chain counts.
+scan-task fetch both replayed with sink receipt hashes. The compact scan proof
+must preserve the server-derived read restriction as a full restriction, not
+only as columns and filters: allowed columns, row predicate, purpose,
+policy-hash evidence, and `max-credential-ttl-seconds` must be present, and
+the planned and fetched restrictions must agree. For catalog state, it refuses
+to omit proof that the table commit-history read replayed with sequence-number
+and commit-hash evidence. For views, it refuses to omit proof that accepted
+view versions line up with their receipt hashes and that the namespace-level
+tombstone and receipt-chain reads replayed with chain hashes and verified-chain
+counts.
 
 This gives the semantic layer a responsible starting point. LakeCat says:
 
@@ -1653,9 +1657,12 @@ then compares that regenerated replay evidence to the compact
 each restricted-agent and trusted-human branch carries the redacted
 `storageProfile` graph anchor and `maxCredentialTtlSeconds`, including profile
 id, provider, issuance mode, secret-reference presence, and the graph event
-count emitted by replay. A saved handoff is rejected if the archived lineage
-drain proves lineage receipt hashes but omits that credential TTL cap or
-credential-root graph projection. It also recomputes the
+count emitted by replay. The verifier also rejects a handoff when the
+credential branches do not bind back to the same storage-profile upsert proof:
+profile id, provider, issuance mode, location-prefix hash, and secret-reference
+state must all match the replayed management event. A saved handoff is rejected
+if the archived lineage drain proves lineage receipt hashes but omits that
+credential TTL cap or credential-root graph projection. It also recomputes the
 captured LakeCat replay and QueryGraph verify/import output hashes, so terminal
 captures cannot drift from the compact summary. It compares the legacy string
 path aliases for the LakeCat replay, QueryGraph verify, and QueryGraph import
