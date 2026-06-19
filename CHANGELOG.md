@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened storage-profile secret-reference validation so LakeCat rejects
+  external secret-store URIs with query strings, fragments, or userinfo before
+  persisting them in memory or Turso.
 - Made compact `governedScanProof` validation require planned and fetched
   OpenLineage hashes in `lakecat-cli qglake-verify-handoff`, matching the live
   QGLake handoff harness's scan replay evidence contract.

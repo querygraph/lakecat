@@ -11,6 +11,7 @@ use lakecat_core::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::RwLock;
+use url::Url;
 
 #[async_trait]
 pub trait CatalogStore: Send + Sync + 'static {
@@ -2073,17 +2074,30 @@ fn validate_secret_ref(secret_ref: &str) -> LakeCatResult<()> {
             "storage profile secret reference must not be empty".to_string(),
         ));
     }
-    let allowed = [
-        "typesec://",
-        "vault://",
-        "aws-sm://",
-        "gcp-sm://",
-        "azure-kv://",
-    ];
-    if !allowed.iter().any(|prefix| trimmed.starts_with(prefix)) {
+    let parsed = Url::parse(trimmed).map_err(|err| {
+        LakeCatError::InvalidArgument(format!(
+            "storage profile secret reference must be a valid external secret-store URI: {err}"
+        ))
+    })?;
+    if !matches!(
+        parsed.scheme(),
+        "typesec" | "vault" | "aws-sm" | "gcp-sm" | "azure-kv"
+    ) {
         return Err(LakeCatError::InvalidArgument(format!(
             "storage profile secret reference must use an external secret-store URI: {secret_ref}"
         )));
+    }
+    if parsed.query().is_some() || parsed.fragment().is_some() || !parsed.username().is_empty() {
+        return Err(LakeCatError::InvalidArgument(
+            "storage profile secret reference must not include query strings, fragments, or userinfo"
+                .to_string(),
+        ));
+    }
+    if parsed.password().is_some() {
+        return Err(LakeCatError::InvalidArgument(
+            "storage profile secret reference must not include query strings, fragments, or userinfo"
+                .to_string(),
+        ));
     }
     if embeds_raw_secret_material(trimmed) {
         return Err(LakeCatError::InvalidArgument(
@@ -5521,6 +5535,36 @@ pub mod turso_store {
                 BTreeMap::new(),
             );
             assert!(embedded_secret.is_err());
+        }
+
+        #[test]
+        fn storage_profiles_reject_decorated_secret_ref_uris() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            for (secret_ref, expected) in [
+                (
+                    "typesec://lakecat/local/s3-events?version=1",
+                    "query strings",
+                ),
+                ("vault://token@secret/data/lakecat/s3-events", "userinfo"),
+                ("aws-sm://lakecat/s3-events#current", "fragments"),
+            ] {
+                let err = StorageProfile::new(
+                    "decorated-secret-ref",
+                    warehouse.clone(),
+                    "s3://lakecat-demo/events",
+                    StorageProvider::S3,
+                    CredentialIssuanceMode::ShortLivedSecretRef,
+                    Some(secret_ref.to_string()),
+                    BTreeMap::new(),
+                )
+                .unwrap_err();
+
+                assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+                assert!(
+                    err.to_string().contains(expected),
+                    "expected {secret_ref} to reject {expected}, got {err}"
+                );
+            }
         }
 
         #[test]

@@ -433,7 +433,9 @@ The persistence/commit/auth spine (old P0–P3) is done. Re-baselined from here:
   outbox replay, and stores reject storage profiles whose declared provider
   conflicts with the URI scheme of the location prefix, whose issuance mode
   conflicts with the provider class, or whose public config appears to carry
-  raw secret material; storage-profile upsert replay redacts full secret-store
+  raw secret material; stores also reject secret-ref query strings, fragments,
+  and URI userinfo so secret references remain clean external locators rather
+  than credential transports; storage-profile upsert replay redacts full secret-store
   URIs to presence/provider evidence before lineage/OpenLineage projection, and
   lineage-drain summaries plus QGLake replay verification now expose the
   redacted profile id/provider/issuance-mode/location-prefix-hash/secret-ref

@@ -335,7 +335,10 @@ config from process environment after authorization; raw values still never live
 in catalog rows. Cloud-specific resolver backends can plug into that boundary
 without storing raw secrets in catalog state. Production secret-ref URI schemes
 (`vault://`, `aws-sm://`, `gcp-sm://`, and `azure-kv://`) now dispatch through
-the same TypeSec authorization boundary. `vault://` refs can resolve through a
+the same TypeSec authorization boundary. Storage profiles reject secret-ref
+query strings, fragments, and URI userinfo before persistence, keeping
+`secret-ref` as a clean external locator rather than a credential transport.
+`vault://` refs can resolve through a
 Vault HTTP backend when `LAKECAT_VAULT_ADDR` / `LAKECAT_VAULT_TOKEN` (or the
 standard `VAULT_ADDR` / `VAULT_TOKEN`) are configured; the remaining production
 providers fail closed with explicit not-configured errors until their SDK

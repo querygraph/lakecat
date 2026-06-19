@@ -6,6 +6,26 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Harden storage-profile secret-ref URIs`.
+  Storage-profile validation now parses external secret-store references and
+  rejects query strings, fragments, or URI userinfo before the profile can be
+  persisted in memory or Turso. This keeps `secret-ref` as a clean external
+  locator for TypeSec-gated resolution rather than another place to smuggle
+  token-like material into catalog state.
+- Local verification for this storage-profile secret-ref hardening slice is
+  green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_reject_decorated_secret_ref_uris`;
+  `cargo test -p lakecat-store --features turso-local turso_store_persists_secret_ref_profiles_without_secret_material`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `cargo test --workspace`;
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Verify governed scan OpenLineage handoff proof`.
   `lakecat-cli qglake-verify-handoff` now requires compact
   `governedScanProof` summaries to carry planned and fetched OpenLineage hashes
