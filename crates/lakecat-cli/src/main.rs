@@ -345,8 +345,9 @@ fn qglake_verify_replay(
 }
 
 fn qglake_management_replay_line(drain: &LineageDrainResponse) -> Option<String> {
+    let storage_profile_upsert = qglake_drain_event(drain, "storage-profile.upserted")?;
     Some(format!(
-        "management replay servers={} projects={} warehouses={} policies={} storage_profiles={}",
+        "management replay servers={} projects={} warehouses={} policies={} storage_profiles={} storage_profile_upserts={} credential_roots={}",
         qglake_drain_event(drain, "server.listed")?
             .server_count
             .unwrap_or_default(),
@@ -359,7 +360,12 @@ fn qglake_management_replay_line(drain: &LineageDrainResponse) -> Option<String>
         qglake_drain_event(drain, "policy-binding.listed")?.policy_binding_count,
         qglake_drain_event(drain, "storage-profile.listed")?
             .storage_profile_count
-            .unwrap_or_default()
+            .unwrap_or_default(),
+        usize::from(storage_profile_upsert.storage_profile_id.is_some()),
+        storage_profile_upsert
+            .storage_profile_provider
+            .as_deref()
+            .unwrap_or("unknown")
     ))
 }
 
@@ -416,12 +422,21 @@ fn qglake_scan_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Valu
 }
 
 fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Value> {
+    let storage_profile_upsert = qglake_drain_event(drain, "storage-profile.upserted")?;
     Some(json!({
         "serverCount": qglake_drain_event(drain, "server.listed")?.server_count.unwrap_or_default(),
         "projectCount": qglake_drain_event(drain, "project.listed")?.project_count.unwrap_or_default(),
         "warehouseCount": qglake_drain_event(drain, "warehouse.listed")?.warehouse_count.unwrap_or_default(),
         "policyBindingCount": qglake_drain_event(drain, "policy-binding.listed")?.policy_binding_count,
         "storageProfileCount": qglake_drain_event(drain, "storage-profile.listed")?.storage_profile_count.unwrap_or_default(),
+        "storageProfileUpsert": {
+            "profileId": storage_profile_upsert.storage_profile_id.as_deref(),
+            "provider": storage_profile_upsert.storage_profile_provider.as_deref(),
+            "secretRefPresent": storage_profile_upsert.storage_profile_secret_ref_present.unwrap_or_default(),
+            "secretRefProvider": storage_profile_upsert.storage_profile_secret_ref_provider.as_deref(),
+            "replayEventHashes": &storage_profile_upsert.replay_event_hashes,
+            "openLineageHashes": &storage_profile_upsert.replay_open_lineage_hashes,
+        },
     }))
 }
 
@@ -4667,6 +4682,14 @@ mod tests {
             json!(1)
         );
         assert_eq!(
+            replay_json["replay-evidence"]["management"]["storageProfileUpsert"]["provider"],
+            json!("file")
+        );
+        assert_eq!(
+            replay_json["replay-evidence"]["management"]["storageProfileUpsert"]["secretRefPresent"],
+            json!(false)
+        );
+        assert_eq!(
             replay_json["replay-evidence"]["credentials"]["restricted"]["blockReason"],
             json!(QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON)
         );
@@ -5748,7 +5771,7 @@ mod tests {
 
         assert_eq!(
             line,
-            "management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1"
+            "management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_roots=file"
         );
     }
 

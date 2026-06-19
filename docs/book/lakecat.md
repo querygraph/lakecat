@@ -1266,7 +1266,7 @@ control-plane lines such as:
 
 ```text
 scan replay plan_tasks=1 file_tasks=1 delete_files=1 child_plan_tasks=1
-management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1
+management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_roots=file
 credential replay restricted=blocked:sail-planned-read-required restricted_count=0 human=allowed:trusted-human-audited-raw human_count=1
 table commit history commits=1 sequences=1 hashes=sha256:...
 ```

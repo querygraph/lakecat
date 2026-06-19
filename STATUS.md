@@ -6,6 +6,24 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Print storage profile upsert replay proof`. `lakecat-cli
+  qglake-verify-replay` now surfaces the redacted storage-profile upsert proof
+  it already verifies: the management replay line reports
+  `storage_profile_upserts` and `credential_roots`, and structured replay JSON
+  includes a `storageProfileUpsert` object with profile id, provider,
+  `secretRefPresent`, optional provider label, and replay/OpenLineage hashes.
+- Local verification for the storage-profile replay output slice is green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_management_replay_line_summarizes_verified_evidence`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain`;
+  `cargo test -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Latest completed implementation slice:
   `Verify storage profile upsert replay evidence`. Lineage-drain event
   summaries now lift redacted storage-profile upsert evidence into compact
   fields: profile id, provider, `secret-ref-present`, and

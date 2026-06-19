@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Printed redacted storage-profile upsert proof in QGLake management replay
+  output and structured replay JSON.
 - Added compact redacted storage-profile upsert evidence to lineage-drain
   summaries and QGLake replay verification.
 - Redacted storage-profile secret references from upsert audit/outbox replay
