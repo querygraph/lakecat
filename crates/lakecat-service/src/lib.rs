@@ -1172,12 +1172,20 @@ fn lineage_drain_event_summary(
     let storage_profile_secret_ref = storage_profile
         .and_then(|profile| profile.get("secret-ref"))
         .and_then(Value::as_str);
-    let storage_profile_location_prefix_hash = storage_profile
-        .and_then(|profile| profile.get("location-prefix"))
-        .and_then(Value::as_str)
-        .and_then(|location_prefix| {
-            content_hash_json(&json!({"location-prefix": location_prefix})).ok()
-        });
+    let storage_profile_location_prefix_hash = storage_profile.and_then(|profile| {
+        profile
+            .get("location-prefix-hash")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .or_else(|| {
+                profile
+                    .get("location-prefix")
+                    .and_then(Value::as_str)
+                    .and_then(|location_prefix| {
+                        content_hash_json(&json!({"location-prefix": location_prefix})).ok()
+                    })
+            })
+    });
     let authorization_receipt = payload
         .get("authorization-receipt")
         .or_else(|| payload.pointer("/payload/authorization-receipt"));
@@ -4677,6 +4685,14 @@ fn redact_storage_profile_event_payload(mut payload: Value) -> Value {
     else {
         return payload;
     };
+    if let Some(location_prefix) = profile.remove("location-prefix").and_then(|value| {
+        value
+            .as_str()
+            .map(|location_prefix| location_prefix.to_string())
+    }) && let Ok(hash) = content_hash_json(&json!({"location-prefix": location_prefix}))
+    {
+        profile.insert("location-prefix-hash".to_string(), json!(hash));
+    }
     let provider = profile
         .get("secret-ref")
         .and_then(Value::as_str)
@@ -7707,6 +7723,18 @@ mod tests {
         );
         assert!(
             graph_events[1].properties["storage-profile"]
+                .get("location-prefix")
+                .is_none(),
+            "storage profile graph projection must not expose the raw location prefix"
+        );
+        assert_eq!(
+            graph_events[1].properties["storage-profile"]["location-prefix-hash"],
+            serde_json::json!(
+                content_hash_json(&json!({"location-prefix": "s3://lakecat/events"})).unwrap()
+            )
+        );
+        assert!(
+            graph_events[1].properties["storage-profile"]
                 .get("secret-ref")
                 .is_none(),
             "storage profile graph projection must not expose the secret-ref URI"
@@ -7738,6 +7766,18 @@ mod tests {
         assert_eq!(
             lineage_events[0].payload["storage-profile"]["secret-ref-provider"],
             serde_json::json!("vault")
+        );
+        assert!(
+            lineage_events[0].payload["storage-profile"]
+                .get("location-prefix")
+                .is_none(),
+            "storage profile lineage projection must not expose the raw location prefix"
+        );
+        assert_eq!(
+            lineage_events[0].payload["storage-profile"]["location-prefix-hash"],
+            serde_json::json!(
+                content_hash_json(&json!({"location-prefix": "s3://lakecat/events"})).unwrap()
+            )
         );
         assert!(
             lineage_events[0].payload["storage-profile"]

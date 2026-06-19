@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted storage-profile outbox graph and lineage projections so replayed
+  payloads carry `location-prefix-hash` instead of raw storage roots while
+  preserving management API access to the configured prefix.
 - Hardened storage-profile validation so deserialized or manually constructed
   profiles cannot bypass public-config secret-material checks before memory or
   Turso persistence.

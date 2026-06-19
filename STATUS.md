@@ -6,6 +6,19 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact storage-profile replay location prefixes`.
+  Storage-profile outbox projection now removes raw `location-prefix` values
+  before graph and lineage emission and replaces them with
+  `location-prefix-hash`, while summary extraction remains compatible with
+  older raw-prefix outbox rows.
+- Local verification for this storage-profile replay redaction slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_projects_storage_profile_upserts_to_lineage -- --nocapture`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate storage-profile public config on upsert`.
   `StorageProfile::validate` now enforces the same public-config
   secret-material checks as `StorageProfile::new`, so deserialized or manually

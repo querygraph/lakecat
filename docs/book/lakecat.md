@@ -899,7 +899,11 @@ When storage-profile changes replay into lineage/OpenLineage evidence, LakeCat
 does not forward the full secret-store URI. The replay payload keeps
 `secret-ref-present` and `secret-ref-provider` so QueryGraph can verify that a
 production credential root exists without learning the Vault, cloud secret
-manager, or TypeSec environment path.
+manager, or TypeSec environment path. It also replaces the raw storage
+`location-prefix` with `location-prefix-hash` before graph and lineage
+projection, so replayed evidence can bind a credential root to a storage scope
+without exposing the bucket, path, or local filesystem root to downstream
+consumers.
 The drain summary lifts the same proof into compact fields alongside the
 profile id and provider. QGLake replay verification requires that compact
 storage-profile upsert evidence, which means a saved handoff can prove the
