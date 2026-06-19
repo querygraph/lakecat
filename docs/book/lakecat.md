@@ -1288,7 +1288,12 @@ tombstone branch's `expectedViewVersion` with the accepted view version, so a
 handoff cannot claim a governed deletion unless the saved LakeCat replay proves
 that deletion used the catalog's optimistic version guard; the standalone
 `qglake-verify-handoff` command enforces this match even when a summary is
-checked outside the local shell harness. It also compares the
+checked outside the local shell harness. The same standalone verifier now
+requires the compact view proof to carry accepted receipt hashes, tombstone
+receipt hashes, positive verified-chain counts, namespace chain hashes, and
+replay/OpenLineage hashes, so a consumer can reject a handoff whose view history
+claim lacks hash-chain evidence before parsing the full replay tree. It also
+compares the
 captured LakeCat replay
 `replay-evidence.management.storageProfileUpsert` object with the compact
 `lakecatReplayVerification.storageProfileUpsertProof`, including the

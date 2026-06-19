@@ -5,6 +5,25 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Verify view receipt-chain handoff proof`.
+  `lakecat-cli qglake-verify-handoff` now independently validates the compact
+  `viewReceiptChainProof` receipt-chain evidence instead of only checking that
+  the fields exist. For handoffs with views, the verifier requires accepted
+  receipt hashes, tombstone receipt hashes, positive verified-chain counts,
+  namespace chain hashes, and replay/OpenLineage hashes on the accepted,
+  tombstone, and namespace-chain branches. This keeps the hash-chain proof
+  self-contained in the Rust verifier and aligned with the local shell harness.
+- Local verification for this view receipt-chain handoff-proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test --workspace --all-features`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Pin latest AGENTS guidance in GOAL`.
   `GOAL.md` now explicitly records that the latest pasted `AGENTS.md` block is

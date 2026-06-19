@@ -1367,6 +1367,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     required_array(views, "tombstoneReceipts", "viewReceiptChainProof")?;
     required_array(views, "receiptChains", "viewReceiptChainProof")?;
     require_view_tombstone_expected_versions(views)?;
+    require_view_receipt_chain_evidence(views)?;
 
     Ok(json!({
         "schemaVersion": "lakecat.qglake.handoff-verification.v1",
@@ -1443,6 +1444,97 @@ fn require_view_tombstone_expected_versions(
                 "viewReceiptChainProof.tombstoneReceipts[{index}].expectedViewVersion mismatch: expected={accepted_view_version} actual={expected_view_version}"
             )));
         }
+    }
+
+    Ok(())
+}
+
+fn require_view_receipt_chain_evidence(
+    views: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let view_count = required_u64(views, "viewCount", "viewReceiptChainProof")?;
+    if view_count == 0 {
+        return Ok(());
+    }
+
+    for (index, view) in required_array(views, "views", "viewReceiptChainProof")?
+        .iter()
+        .enumerate()
+    {
+        let view = view.as_object().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.views[{index}] must be an object"
+            ))
+        })?;
+        require_hash_str(view, "acceptedReceiptHash", "viewReceiptChainProof.views[]")?;
+        require_hash_array(view, "replayEventHashes", "viewReceiptChainProof.views[]")?;
+        require_hash_array(view, "openLineageHashes", "viewReceiptChainProof.views[]")?;
+    }
+
+    for (index, receipt) in required_array(views, "tombstoneReceipts", "viewReceiptChainProof")?
+        .iter()
+        .enumerate()
+    {
+        let receipt = receipt.as_object().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.tombstoneReceipts[{index}] must be an object"
+            ))
+        })?;
+        require_hash_array(
+            receipt,
+            "receiptHashes",
+            "viewReceiptChainProof.tombstoneReceipts[]",
+        )?;
+        require_hash_array(
+            receipt,
+            "replayEventHashes",
+            "viewReceiptChainProof.tombstoneReceipts[]",
+        )?;
+        require_hash_array(
+            receipt,
+            "openLineageHashes",
+            "viewReceiptChainProof.tombstoneReceipts[]",
+        )?;
+    }
+
+    let receipt_chains = required_array(views, "receiptChains", "viewReceiptChainProof")?;
+    if receipt_chains.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "viewReceiptChainProof.receiptChains must contain verified receipt-chain evidence"
+                .to_string(),
+        ));
+    }
+    for (index, chain) in receipt_chains.iter().enumerate() {
+        let chain = chain.as_object().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.receiptChains[{index}] must be an object"
+            ))
+        })?;
+        require_positive_u64(
+            chain,
+            "verifiedChainCount",
+            "viewReceiptChainProof.receiptChains[]",
+        )?;
+        require_hash_array(
+            chain,
+            "receiptHashes",
+            "viewReceiptChainProof.receiptChains[]",
+        )?;
+        require_hash_array(
+            chain,
+            "chainHashes",
+            "viewReceiptChainProof.receiptChains[]",
+        )?;
+        require_hash_array(
+            chain,
+            "replayEventHashes",
+            "viewReceiptChainProof.receiptChains[]",
+        )?;
+        require_hash_array(
+            chain,
+            "openLineageHashes",
+            "viewReceiptChainProof.receiptChains[]",
+        )?;
     }
 
     Ok(())
@@ -6087,6 +6179,47 @@ mod tests {
         assert!(err.to_string().contains("viewReceiptChainProof"));
         assert!(err.to_string().contains("expectedViewVersion mismatch"));
         assert!(err.to_string().contains("expected=1 actual=99"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_view_accepted_receipt_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"][0]["acceptedReceiptHash"] =
+            json!("not-a-sha256-hash");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject invalid accepted view receipt hashes");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("acceptedReceiptHash"));
+        assert!(err.to_string().contains("sha256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_view_receipt_chain_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chainHashes"] =
+            json!([]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing view receipt-chain hashes");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("chainHashes"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_verified_view_receipt_chain_count() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["verifiedChainCount"] =
+            json!(0);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject unverified view receipt chains");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("verifiedChainCount"));
+        assert!(err.to_string().contains("positive"));
     }
 
     #[test]
