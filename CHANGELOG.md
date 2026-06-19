@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Proved configured production secret-ref credential backends receive
+  policy-derived TTL caps by exercising AWS/GCP/Azure provider dispatch with a
+  `max-credential-ttl-seconds` cap and requiring the returned credential config
+  to preserve it.
 - Consolidated the durable OPUS review decisions into `DESIGN.md` with a
   closure map for OPUS1/OPUS2 findings, and added an archive index under
   `docs/completed/` so the OPUS files remain audit history rather than active

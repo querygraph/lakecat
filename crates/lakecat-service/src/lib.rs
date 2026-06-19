@@ -5594,7 +5594,7 @@ mod tests {
     #[derive(Debug)]
     struct MockProductionSecretRefResolver {
         provider_label: &'static str,
-        requests: Mutex<Vec<String>>,
+        requests: Mutex<Vec<(String, Option<u64>)>>,
     }
 
     #[cfg(feature = "typesec-local")]
@@ -5611,7 +5611,10 @@ mod tests {
                     "mock production resolver missing secret ref".to_string(),
                 )
             })?;
-            self.requests.lock().await.push(secret_ref);
+            self.requests
+                .lock()
+                .await
+                .push((secret_ref, request.max_credential_ttl_seconds));
             Ok(vec![StorageCredential {
                 prefix: request.profile.location_prefix.clone(),
                 config: vec![ConfigEntry::new(
@@ -11843,7 +11846,7 @@ mod tests {
                 context: serde_json::json!({}),
                 checked_at: chrono::Utc::now(),
             },
-            max_credential_ttl_seconds: None,
+            max_credential_ttl_seconds: Some(300),
         };
 
         for (provider, provider_label, secret_ref) in [
@@ -11887,7 +11890,13 @@ mod tests {
                 entry.key == "lakecat.credential-kind"
                     && entry.value == format!("{provider_label}-short-lived")
             }));
-            assert_eq!(*backend.requests.lock().await, vec![secret_ref.to_string()]);
+            assert!(credentials[0].config.iter().any(|entry| {
+                entry.key == "lakecat.max-credential-ttl-seconds" && entry.value == "300"
+            }));
+            assert_eq!(
+                *backend.requests.lock().await,
+                vec![(secret_ref.to_string(), Some(300))]
+            );
 
             let denied = TypeSecCredentialIssuer::new(
                 Arc::new(AllowCredentialIssuePolicy {
@@ -11907,7 +11916,7 @@ mod tests {
             );
             assert_eq!(
                 *backend.requests.lock().await,
-                vec![secret_ref.to_string()],
+                vec![(secret_ref.to_string(), Some(300))],
                 "denied TypeSec decisions must not dispatch to the production backend"
             );
         }

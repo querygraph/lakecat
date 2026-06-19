@@ -876,7 +876,10 @@ the built-in Vault HTTP backend when Vault environment configuration is present.
 configured provider backends after TypeSec authorizes the exact secret-ref
 resource. If no backend is configured, those providers fail closed with an
 operator-readable not-configured error, and denied TypeSec decisions do not call
-the backend at all.
+the backend at all. Configured provider backends receive the same
+policy-derived `max-credential-ttl-seconds` cap that LakeCat records in the
+read restriction, and returned credentials must preserve that cap in
+`lakecat.max-credential-ttl-seconds`.
 When storage-profile changes replay into lineage/OpenLineage evidence, LakeCat
 does not forward the full secret-store URI. The replay payload keeps
 `secret-ref-present` and `secret-ref-provider` so QueryGraph can verify that a

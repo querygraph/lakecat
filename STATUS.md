@@ -5,6 +5,22 @@ Updated: 2026-06-19
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Prove production credential TTL caps`.
+  Configured `aws-sm://`, `gcp-sm://`, and `azure-kv://` production secret-ref
+  backends are now exercised with a policy-derived
+  `max-credential-ttl-seconds` cap. The test backend records that it received
+  the cap, returned credentials must preserve the cap in
+  `lakecat.max-credential-ttl-seconds`, and denied TypeSec decisions still avoid
+  backend dispatch entirely.
+- Local verification for this production credential TTL cap slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_dispatches_configured_production_secret_backends_after_authorization -- --nocapture`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_gates_production_secret_refs_before_dispatch -- --nocapture`;
+  `cargo test -p lakecat-service --features typesec-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/build.sh`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Consolidate OPUS design reviews`.
   The active OPUS review decisions are now represented directly in `DESIGN.md`
