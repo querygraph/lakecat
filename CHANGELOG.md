@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Pinned the latest user-supplied LakeCat `AGENTS.md` operating contract in
+  `GOAL.md`, including the thin catalog boundary, sibling-repo placement,
+  QueryGraph integration target, Turso preference, local-first verification,
+  book workflow, and changelog-before-commit discipline.
 - Bound compact QGLake handoff table scope to QueryGraph verification by making
   `lakecat-cli qglake-verify-handoff` and the local handoff harness require the
   declared `warehouse`/`namespace`/`table` to appear in QueryGraph

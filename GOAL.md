@@ -48,6 +48,16 @@ boundaries, compatibility rules, Turso usage, local verification,
 changelog/commit discipline, book updates, and sibling-repo placement until the
 user explicitly changes it.
 
+The pasted `AGENTS.md instructions for /Users/alexy/src/lakecat` block is the
+active operating contract for this goal. On every resume, treat it as if it had
+been freshly read from the user: LakeCat remains the thin Rust
+Iceberg-compatible catalog foundation for QueryGraph; reusable engine work goes
+to Sail; reusable graph work goes to Grust; reusable governance and secure-agent
+semantics go to TypeSec; QueryGraph remains the end-to-end integration target;
+Turso is the preferred durable local spine; local verification comes before
+cloud CI; and `CHANGELOG.md` must be updated before committing each logical
+unit.
+
 Treat the `/Users/alexy/src/lakecat/AGENTS.md` contract as durable goal state
 after thread resumes and context compaction. If `AGENTS.md` and this file
 drift, reconcile them before choosing the next implementation slice. When
