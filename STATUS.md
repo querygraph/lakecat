@@ -6,6 +6,28 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest committed LakeCat implementation slice:
+  `fa392d5 Chain view version receipts`.
+- Paused after adding compact hash-chain links to durable view-version
+  receipts. Memory and Turso stores now attach `previous-receipt-hash` to each
+  view upsert/drop receipt after the first receipt for a view. Governed
+  `version-receipts` and namespace receipt-chain responses expose the link, so
+  QueryGraph/operators can validate ordered view history without reading
+  backend storage or adding custom Iceberg metadata. This moves LakeCat toward
+  Iceberg view commit/history semantics while keeping full Sail-aligned view
+  history work pending.
+- Local verification for the view receipt-chain link slice was green:
+  `cargo fmt -p lakecat-store -p lakecat-api -p lakecat-service -- --check`;
+  `cargo test -p lakecat-store memory_store_persists_view_records`;
+  `cargo test -p lakecat-store turso_store_persists_view_records --features turso-local`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub 'lakecat (0.1.0)'`;
+  `git diff --check`;
+  `cargo test --workspace --all-features`.
+- Previous committed LakeCat implementation slice:
   `3b4d8ed Prove QGLake handoff through QueryGraph`.
 - Paused after proving a regenerated Sail-backed QGLake handoff through both
   LakeCat and QueryGraph. QGLake policy fixtures now use canonical Iceberg REST
