@@ -2975,6 +2975,14 @@ fn require_credential_vending_evidence(
         QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
         "credentialVendingProof.restricted",
     )?;
+    if let Some(reason) = restricted.get("rawCredentialExceptionReason") {
+        if !reason.is_null() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "credentialVendingProof.restricted.rawCredentialExceptionReason must be null when raw credentials are blocked"
+                    .to_string(),
+            ));
+        }
+    }
     require_hash_array(
         restricted,
         "replayEventHashes",
@@ -10143,6 +10151,21 @@ mod tests {
             err.to_string()
                 .contains("must not allow a raw credential exception")
         );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_restricted_exception_reason() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["rawCredentialExceptionReason"] =
+            json!("trusted-human-override");
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject a raw credential exception reason on blocked restricted proofs",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("rawCredentialExceptionReason"));
+        assert!(err.to_string().contains("must be null"));
     }
 
     #[test]

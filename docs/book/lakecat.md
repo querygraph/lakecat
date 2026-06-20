@@ -1642,7 +1642,8 @@ The compact handoff verifier also validates that credential proof directly:
 the restricted branch must name the accepted agent principal, carry the
 Sail-planned-read block reason, prove zero credentials, carry the
 policy-derived `maxCredentialTtlSeconds` cap, explicitly set
-`rawCredentialExceptionAllowed` to false, and include replay/OpenLineage hashes;
+`rawCredentialExceptionAllowed` to false, reject any non-null
+`rawCredentialExceptionReason`, and include replay/OpenLineage hashes;
 the trusted-human branch must name a human principal, prove a positive
 credential count, carry the same policy-derived TTL cap, carry the exact
 audited raw-credential exception reason, prove `blockReason` is null, and

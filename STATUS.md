@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject restricted QGLake exception reasons`.
+  The compact QGLake handoff verifier now rejects restricted-agent
+  `credentialVendingProof` branches that carry a
+  `rawCredentialExceptionReason`; the exception reason is reserved for the
+  audited trusted-human raw-credential path.
+- Local verification for this compact credential-proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_restricted_exception_reason -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_restricted_raw_exception -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject unrequested QGLake source stats proof`.
   QGLake source replay verification now rejects effective stats-field evidence
   that was not present in the requested stats fields, keeping captured replay
