@@ -2039,7 +2039,11 @@ by `created_at,event_id` in both embedded memory tests and the durable Turso
 store, so a QGLake replay does not depend on writer interleaving or database
 row-return quirks. Delivery acknowledgement is duplicate-safe as well: if a
 drainer accidentally reports the same event id twice, LakeCat marks the event
-once and the receipt count remains tied to committed catalog facts.
+once and the receipt count remains tied to committed catalog facts. Pending
+batch validation happens before projection: if a store returns duplicate event
+IDs in the same drain batch, LakeCat fails the drain with only the duplicate
+event-id hash and does not emit graph, OpenLineage, or acknowledgement side
+effects for that batch.
 
 ### An Agentic QGLake Flow
 

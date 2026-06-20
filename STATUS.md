@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject duplicate pending outbox ids`.
+  Outbox drains now validate the pending batch before projection and fail on
+  duplicate event IDs with only a duplicate event-id hash. The regression proves
+  graph projection, lineage projection, and delivery acknowledgement are all
+  untouched when a corrupted or custom store returns duplicate pending IDs.
+- Local verification for this outbox hardening slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_duplicate_pending_event_ids_before_projection -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_rejects_partial_acknowledgement -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Scan all workflows for automatic triggers`.
   The local dependency contract now scans every GitHub workflow file, including
   future `.yml` and `.yaml` additions, for forbidden automatic cloud triggers

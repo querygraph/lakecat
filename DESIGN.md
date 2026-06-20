@@ -368,7 +368,9 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
 - Graph and lineage side effects are moving through bounded catalog events and
   replayable outbox evidence. Drains fail rather than reporting partial
   acknowledgement success when the store does not mark the whole projected
-  batch delivered. Grust owns reusable graph behavior.
+  batch delivered. Drains also reject duplicate pending event IDs before
+  projection, with hash-only duplicate evidence, so corrupted pending batches
+  cannot duplicate downstream side effects. Grust owns reusable graph behavior.
 - QueryGraph bootstrap and QGLake handoff flows now carry table and view
   evidence, view receipt chains, accepted-view chain hashes, graph/import
   proofs, credential storage-scope hashes, and local verifier coverage.

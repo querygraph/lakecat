@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected duplicate pending outbox event IDs before graph or lineage
+  projection, returning only a duplicate event-id hash so a corrupted pending
+  batch cannot duplicate downstream side effects.
 - Tightened the local dependency-contract audit so every GitHub workflow file,
   not only `.github/workflows/ci.yml`, is scanned for forbidden automatic cloud
   triggers while CI remains manual-only.

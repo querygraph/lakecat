@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -1000,6 +1000,15 @@ pub async fn drain_outbox_once(
         .store
         .pending_outbox_events(Some("lakecat.lineage-and-graph"), limit)
         .await?;
+    let mut seen_event_ids = BTreeSet::new();
+    for event in &events {
+        if !seen_event_ids.insert(event.event_id.as_str()) {
+            return Err(LakeCatError::Conflict(format!(
+                "outbox pending batch contained duplicate event id hash {}",
+                content_hash_bytes(event.event_id.as_bytes())
+            )));
+        }
+    }
     let mut delivered = Vec::with_capacity(events.len());
     let mut event_types = Vec::with_capacity(events.len());
     let mut summaries = Vec::with_capacity(events.len());
@@ -7958,6 +7967,89 @@ mod tests {
         assert!(
             !lineage.events.lock().await.is_empty(),
             "lineage projection should have happened before the short acknowledgement"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_duplicate_pending_event_ids_before_projection() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let payload = json!({
+            "audit-event-id": "audit-duplicate-id",
+            "event-type": "table.created",
+            "table": table,
+            "payload": {
+                "authorization-receipt": {
+                    "principal": principal,
+                    "action": "table-create",
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "checked_at": chrono::Utc::now(),
+                },
+                "metadata-location": "file:///tmp/events/metadata/00000.json",
+            }
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![
+                OutboxEvent {
+                    event_id: "evt-duplicate".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.created".to_string(),
+                    payload: payload.clone(),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+                OutboxEvent {
+                    event_id: "evt-duplicate".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.created".to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                },
+            ]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("duplicate pending outbox event ids must fail before projection");
+
+        let message = err.to_string();
+        assert!(message.contains("outbox pending batch contained duplicate event id hash"));
+        assert!(message.contains("sha256:"));
+        assert!(
+            !message.contains("evt-duplicate"),
+            "duplicate event id should be redacted from the operator-facing error"
+        );
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "duplicate pending ids must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "duplicate pending ids must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "duplicate pending ids must fail before lineage projection"
         );
     }
 
