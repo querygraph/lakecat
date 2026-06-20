@@ -6,6 +6,24 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact storage-profile public-config validation`.
+  Storage-profile public-config validation now returns
+  `public-config-key-hash` evidence for secret-looking keys, rejected values,
+  and reserved LakeCat credential-evidence keys without echoing submitted public
+  config keys or values.
+- Local verification for this public-config redaction slice is green:
+  `cargo fmt -p lakecat-store -p lakecat-service -- --check`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_reject_public_config_secret_values -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local storage_profile_validate_rejects_public_config_secret_values -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_redact_secret_like_public_config_keys -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_reject_reserved_public_config_keys -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local storage_profile_upsert_rejects_deserialized_public_config_secrets -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local storage_profile_upsert_rejects_reserved_public_config_keys -- --nocapture`;
+  `cargo test -p lakecat-service management_storage_profile_rejects_public_secret_values -- --nocapture`;
+  `cargo test -p lakecat-service management_storage_profile_rejects_reserved_public_config_keys -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact resolver secret-ref parse failures`.
   TypeSec-gated credential provider detection plus Vault and TypeSec
   environment resolver parsing now return `secret-ref-hash` evidence for

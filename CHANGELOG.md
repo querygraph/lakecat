@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted storage-profile public-config validation failures so secret-looking,
+  reserved, or value-rejected public config entries report
+  `public-config-key-hash` evidence without echoing submitted keys or values.
 - Redacted production resolver secret-ref parse failures for TypeSec-gated
   credential issuance, so provider detection plus Vault and TypeSec environment
   resolver parsing return `secret-ref-hash` evidence without echoing malformed

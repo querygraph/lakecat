@@ -2140,12 +2140,14 @@ fn validate_public_config(config: &BTreeMap<String, String>) -> LakeCatResult<()
             || normalized.contains("credential")
         {
             return Err(LakeCatError::InvalidArgument(format!(
-                "storage profile public config key may expose secret material: {key}"
+                "storage profile public config key may expose secret material; {}",
+                public_config_key_hash_context(key)
             )));
         }
         if embeds_raw_secret_material(value) {
             return Err(LakeCatError::InvalidArgument(format!(
-                "storage profile public config value for key '{key}' may expose secret material"
+                "storage profile public config value may expose secret material; {}",
+                public_config_key_hash_context(key)
             )));
         }
     }
@@ -2158,11 +2160,19 @@ fn validate_storage_profile_public_config(config: &BTreeMap<String, String>) -> 
         let normalized = key.to_ascii_lowercase();
         if RESERVED_STORAGE_PROFILE_PUBLIC_CONFIG_KEYS.contains(&normalized.as_str()) {
             return Err(LakeCatError::InvalidArgument(format!(
-                "storage profile public config key is reserved for LakeCat credential evidence: {key}"
+                "storage profile public config key is reserved for LakeCat credential evidence; {}",
+                public_config_key_hash_context(key)
             )));
         }
     }
     Ok(())
+}
+
+fn public_config_key_hash_context(key: &str) -> String {
+    format!(
+        "public-config-key-hash={}",
+        content_hash_bytes(key.as_bytes())
+    )
 }
 
 const RESERVED_STORAGE_PROFILE_PUBLIC_CONFIG_KEYS: &[&str] = &[
@@ -6478,10 +6488,11 @@ pub mod turso_store {
             .unwrap_err();
 
             assert!(matches!(err, LakeCatError::InvalidArgument(_)));
-            assert!(
-                err.to_string()
-                    .contains("public config value for key 'lakecat.endpoint'")
-            );
+            let message = err.to_string();
+            assert!(message.contains("public config value may expose secret material"));
+            assert!(message.contains("public-config-key-hash=sha256:"));
+            assert!(!message.contains("lakecat.endpoint"));
+            assert!(!message.contains("raw-secret"));
         }
 
         #[test]
@@ -6501,10 +6512,34 @@ pub mod turso_store {
 
             let err = profile.validate().unwrap_err();
             assert!(matches!(err, LakeCatError::InvalidArgument(_)));
-            assert!(
-                err.to_string()
-                    .contains("public config value for key 'lakecat.endpoint'")
-            );
+            let message = err.to_string();
+            assert!(message.contains("public config value may expose secret material"));
+            assert!(message.contains("public-config-key-hash=sha256:"));
+            assert!(!message.contains("lakecat.endpoint"));
+            assert!(!message.contains("raw-secret"));
+        }
+
+        #[test]
+        fn storage_profiles_redact_secret_like_public_config_keys() {
+            let err = StorageProfile::new(
+                "secret-key-public-config",
+                WarehouseName::new("local").unwrap(),
+                "file:///tmp/events",
+                StorageProvider::File,
+                CredentialIssuanceMode::LocalFileNoSecret,
+                None,
+                BTreeMap::from([(
+                    "customer-secret-token".to_string(),
+                    "metadata-only".to_string(),
+                )]),
+            )
+            .unwrap_err();
+
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            let message = err.to_string();
+            assert!(message.contains("public config key may expose secret material"));
+            assert!(message.contains("public-config-key-hash=sha256:"));
+            assert!(!message.contains("customer-secret-token"));
         }
 
         #[test]
@@ -6524,10 +6559,10 @@ pub mod turso_store {
             .unwrap_err();
 
             assert!(matches!(err, LakeCatError::InvalidArgument(_)));
-            assert!(
-                err.to_string()
-                    .contains("reserved for LakeCat credential evidence")
-            );
+            let message = err.to_string();
+            assert!(message.contains("reserved for LakeCat credential evidence"));
+            assert!(message.contains("public-config-key-hash=sha256:"));
+            assert!(!message.contains("lakecat.storage-profile-id"));
         }
 
         #[tokio::test]
@@ -6551,20 +6586,20 @@ pub mod turso_store {
                 .await
                 .unwrap_err();
             assert!(matches!(memory_err, LakeCatError::InvalidArgument(_)));
-            assert!(
-                memory_err
-                    .to_string()
-                    .contains("public config value for key 'lakecat.endpoint'")
-            );
+            let memory_message = memory_err.to_string();
+            assert!(memory_message.contains("public config value may expose secret material"));
+            assert!(memory_message.contains("public-config-key-hash=sha256:"));
+            assert!(!memory_message.contains("lakecat.endpoint"));
+            assert!(!memory_message.contains("raw-secret"));
 
             let turso = TursoCatalogStore::in_memory().await.unwrap();
             let turso_err = turso.upsert_storage_profile(profile).await.unwrap_err();
             assert!(matches!(turso_err, LakeCatError::InvalidArgument(_)));
-            assert!(
-                turso_err
-                    .to_string()
-                    .contains("public config value for key 'lakecat.endpoint'")
-            );
+            let turso_message = turso_err.to_string();
+            assert!(turso_message.contains("public config value may expose secret material"));
+            assert!(turso_message.contains("public-config-key-hash=sha256:"));
+            assert!(!turso_message.contains("lakecat.endpoint"));
+            assert!(!turso_message.contains("raw-secret"));
             assert_eq!(
                 turso.list_storage_profiles(&warehouse).await.unwrap(),
                 vec![]
@@ -6592,20 +6627,18 @@ pub mod turso_store {
                 .await
                 .unwrap_err();
             assert!(matches!(memory_err, LakeCatError::InvalidArgument(_)));
-            assert!(
-                memory_err
-                    .to_string()
-                    .contains("reserved for LakeCat credential evidence")
-            );
+            let memory_message = memory_err.to_string();
+            assert!(memory_message.contains("reserved for LakeCat credential evidence"));
+            assert!(memory_message.contains("public-config-key-hash=sha256:"));
+            assert!(!memory_message.contains("lakecat.storage-profile-id"));
 
             let turso = TursoCatalogStore::in_memory().await.unwrap();
             let turso_err = turso.upsert_storage_profile(profile).await.unwrap_err();
             assert!(matches!(turso_err, LakeCatError::InvalidArgument(_)));
-            assert!(
-                turso_err
-                    .to_string()
-                    .contains("reserved for LakeCat credential evidence")
-            );
+            let turso_message = turso_err.to_string();
+            assert!(turso_message.contains("reserved for LakeCat credential evidence"));
+            assert!(turso_message.contains("public-config-key-hash=sha256:"));
+            assert!(!turso_message.contains("lakecat.storage-profile-id"));
             assert_eq!(
                 turso.list_storage_profiles(&warehouse).await.unwrap(),
                 vec![]

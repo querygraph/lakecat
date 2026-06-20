@@ -12738,6 +12738,15 @@ mod tests {
             .unwrap();
         let response = app.oneshot(upsert).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(message.contains("public config value may expose secret material"));
+        assert!(message.contains("public-config-key-hash=sha256:"));
+        assert!(!message.contains("lakecat.endpoint"));
+        assert!(!message.contains("raw-secret"));
     }
 
     #[tokio::test]
@@ -12793,6 +12802,8 @@ mod tests {
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let message = body["error"]["message"].as_str().unwrap();
         assert!(message.contains("reserved for LakeCat credential evidence"));
+        assert!(message.contains("public-config-key-hash=sha256:"));
+        assert!(!message.contains("lakecat.storage-profile-id"));
     }
 
     #[tokio::test]

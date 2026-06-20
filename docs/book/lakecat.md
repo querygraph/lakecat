@@ -924,7 +924,10 @@ query parameters must move behind `secret-ref` and the TypeSec-authorized
 resolver path. That rule is enforced both when a profile is built from a
 management request and when a storage profile is revalidated before memory or
 Turso persistence, so deserialized control-plane records cannot bypass the
-public-config guard. LakeCat also reserves credential-evidence keys such as
+public-config guard. Public-config validation failures also use
+`public-config-key-hash=sha256:...` evidence rather than echoing the submitted
+key or value, because even a rejected key name may contain a secret-looking
+identifier. LakeCat also reserves credential-evidence keys such as
 `lakecat.storage-profile-id`, `lakecat.storage-provider`,
 `lakecat.credential-mode`, and `lakecat.max-credential-ttl-seconds`; operators
 may still publish non-secret hints such as `lakecat.endpoint`, but they cannot
