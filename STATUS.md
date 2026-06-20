@@ -6,11 +6,30 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reconcile live QGLake handoff replay proofs`.
+  The full local QGLake handoff harness is green again. LakeCat now preserves
+  failed `qglake-fixture --drain-output` artifacts before replay verification,
+  suppresses restricted-agent `rawCredentialExceptionReason` in lineage-drain
+  summaries while keeping the explicit block reason, treats request-identity
+  and QueryGraph bootstrap authorization/TypeDID hashes as distinct replay
+  receipts that are independently shaped and artifact-bound, and emits explicit
+  `secretRefHash: null` proof in compact handoff summaries for no-secret
+  storage profiles.
+- Local verification for this live handoff reconciliation slice is green:
+  `cargo fmt -p lakecat-cli -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_allows_distinct_bootstrap_authorization_receipt -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_allows_distinct_bootstrap_typedid -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind QGLake bootstrap TypeDID hashes`.
-  Compact QGLake handoff verification now requires the optional
-  `queryGraphBootstrapProof.typedidEnvelopeHash` and `typedidProofHash` values
-  to match `requestIdentityProof`, so a TypeDID-backed handoff cannot combine a
-  valid-looking bootstrap proof with a different identity envelope or proof.
+  Superseded by `Reconcile live QGLake handoff replay proofs`: live handoff
+  replay proved request and bootstrap TypeDID hashes are independent
+  request/event evidence slots, not equality-bound fields.
 - Local verification for this handoff TypeDID-binding slice is green:
   `cargo fmt -p lakecat-cli -- --check`;
   `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs -- --nocapture`;
@@ -20,11 +39,10 @@ Updated: 2026-06-20
   `git diff --check`.
 - Latest completed implementation slice:
   `Bind QGLake bootstrap authorization receipt`.
-  Compact QGLake handoff verification now requires
-  `queryGraphBootstrapProof.authorizationReceiptHash` to match
-  `requestIdentityProof.authorizationReceiptHash`, so a handoff cannot splice a
-  valid-looking bootstrap proof from a different authorization receipt into the
-  same agent summary.
+  Superseded by `Reconcile live QGLake handoff replay proofs`: live handoff
+  replay proved the request-identity authorization receipt is the lineage-drain
+  read receipt while the bootstrap authorization receipt is the original
+  bootstrap event receipt.
 - Local verification for this handoff authorization-receipt slice is green:
   `cargo fmt -p lakecat-cli -- --check`;
   `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs -- --nocapture`;

@@ -2,12 +2,12 @@
 
 ## Unreleased
 
-- Tightened compact QGLake handoff verification so the QueryGraph bootstrap
-  proof must carry the same optional TypeDID envelope/proof hashes as the
-  request-identity proof.
-- Tightened compact QGLake handoff verification so the QueryGraph bootstrap
-  proof must carry the same authorization receipt hash as the request-identity
-  proof, rejecting cross-receipt handoff splices.
+- Reconciled live QGLake handoff verification with replay semantics: preserved
+  failed drain artifacts for diagnosis, suppressed restricted-agent raw
+  credential exception reasons in lineage-drain summaries, kept request and
+  bootstrap receipt/TypeDID proofs independently shaped rather than forced
+  equal, and made handoff summaries carry explicit `secretRefHash: null`
+  evidence for no-secret storage profiles.
 - Tightened the local dependency-contract audit so manual-only CI also rejects
   `pull_request_target`, merge-queue, repository-dispatch, and reusable-workflow
   triggers.

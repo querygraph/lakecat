@@ -316,8 +316,16 @@ if (evidence.secretRefPresent && !evidence.secretRefProvider) {
   console.error("LakeCat storage-profile upsert evidence is missing secretRefProvider");
   process.exit(1);
 }
+if (evidence.secretRefPresent && !evidence.secretRefHash) {
+  console.error("LakeCat storage-profile upsert evidence is missing secretRefHash");
+  process.exit(1);
+}
 if (!evidence.secretRefPresent && evidence.secretRefProvider != null) {
   console.error("LakeCat storage-profile upsert evidence has secretRefProvider without secretRefPresent");
+  process.exit(1);
+}
+if (!evidence.secretRefPresent && evidence.secretRefHash != null) {
+  console.error("LakeCat storage-profile upsert evidence has secretRefHash without secretRefPresent");
   process.exit(1);
 }
 if (!Array.isArray(evidence.replayEventHashes) || evidence.replayEventHashes.length === 0) {
@@ -339,6 +347,7 @@ process.stdout.write(JSON.stringify({
   locationPrefixHash: evidence.locationPrefixHash,
   secretRefPresent: evidence.secretRefPresent,
   secretRefProvider: evidence.secretRefProvider ?? null,
+  secretRefHash: evidence.secretRefHash ?? null,
   graphEvents: evidence.graphEvents,
   replayEventHashes: evidence.replayEventHashes,
   openLineageHashes: evidence.openLineageHashes,
@@ -462,6 +471,14 @@ function requireStorageProfile(value, label) {
     console.error(`LakeCat credential replay evidence carried ${label} secret-ref provider without secret-ref presence`);
     process.exit(1);
   }
+  if (value.secretRefPresent === true && !value.secretRefHash) {
+    console.error(`LakeCat credential replay evidence is missing ${label} secret-ref hash`);
+    process.exit(1);
+  }
+  if (value.secretRefPresent === false && value.secretRefHash !== null && value.secretRefHash !== undefined) {
+    console.error(`LakeCat credential replay evidence carried ${label} secret-ref hash without secret-ref presence`);
+    process.exit(1);
+  }
   return {
     profileId: value.profileId,
     provider: value.provider,
@@ -469,6 +486,7 @@ function requireStorageProfile(value, label) {
     locationPrefixHash: value.locationPrefixHash,
     secretRefPresent: value.secretRefPresent,
     secretRefProvider: value.secretRefProvider ?? null,
+    secretRefHash: value.secretRefHash ?? null,
     graphEvents: value.graphEvents,
   };
 }

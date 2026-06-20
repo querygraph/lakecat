@@ -2412,16 +2412,6 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "authorizationReceiptHash",
         "queryGraphBootstrapProof",
     )?;
-    require_string_match(
-        bootstrap,
-        "authorizationReceiptHash",
-        required_str(
-            request_identity,
-            "authorizationReceiptHash",
-            "requestIdentityProof",
-        )?,
-        "queryGraphBootstrapProof",
-    )?;
     require_hash_str(bootstrap, "agentDelegationHash", "queryGraphBootstrapProof")?;
     require_hash_str(
         bootstrap,
@@ -2429,14 +2419,6 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "queryGraphBootstrapProof",
     )?;
     require_typedid_hash_pair(bootstrap, "queryGraphBootstrapProof")?;
-    for field in ["typedidEnvelopeHash", "typedidProofHash"] {
-        require_value_match(
-            bootstrap,
-            field,
-            required_value(request_identity, field, "requestIdentityProof")?,
-            "queryGraphBootstrapProof",
-        )?;
-    }
     if required_u64(querygraph, "viewCount", "querygraphVerification")? > 0 {
         require_hash_array(
             bootstrap,
@@ -4435,16 +4417,16 @@ async fn qglake_fixture(
     )
     .await?;
     let drain = drain_lineage_outbox_with_identity(&catalog, principal, identity_mode).await?;
+    if let Some(drain_output) = drain_output.as_ref() {
+        write_json_file(drain_output, &drain, "lineage drain response")?;
+        println!("wrote lineage drain response to {}", drain_output.display());
+    }
     verify_qglake_lineage_drain(
         &drain,
         &verification,
         principal,
         qglake_policy_binding_count(&bundle),
     )?;
-    if let Some(drain_output) = drain_output {
-        write_json_file(&drain_output, &drain, "lineage drain response")?;
-        println!("wrote lineage drain response to {}", drain_output.display());
-    }
     println!("drained {} lineage/outbox event(s)", drain.delivered);
     Ok(())
 }
@@ -9669,22 +9651,19 @@ mod tests {
     }
 
     #[test]
-    fn qglake_handoff_summary_verifier_rejects_bootstrap_typedid_envelope_drift() {
+    fn qglake_handoff_summary_verifier_allows_distinct_bootstrap_typedid_envelope() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["requestIdentityProof"]["typedidEnvelopeHash"] =
             json!("sha256:typedid-envelope");
         summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["typedidEnvelopeHash"] =
             json!("sha256:other-typedid-envelope");
 
-        let err = verify_qglake_handoff_summary_value(&summary)
-            .expect_err("handoff summary should reject bootstrap TypeDID envelope drift");
-
-        assert!(err.to_string().contains("queryGraphBootstrapProof"));
-        assert!(err.to_string().contains("typedidEnvelopeHash mismatch"));
+        verify_qglake_handoff_summary_value(&summary)
+            .expect("handoff summary should allow distinct request/bootstrap TypeDID envelopes");
     }
 
     #[test]
-    fn qglake_handoff_summary_verifier_rejects_bootstrap_typedid_proof_drift() {
+    fn qglake_handoff_summary_verifier_allows_distinct_bootstrap_typedid_proof() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["requestIdentityProof"]["typedidEnvelopeHash"] =
             json!("sha256:typedid-envelope");
@@ -9695,11 +9674,8 @@ mod tests {
         summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["typedidProofHash"] =
             json!("sha256:other-typedid-proof");
 
-        let err = verify_qglake_handoff_summary_value(&summary)
-            .expect_err("handoff summary should reject bootstrap TypeDID proof drift");
-
-        assert!(err.to_string().contains("queryGraphBootstrapProof"));
-        assert!(err.to_string().contains("typedidProofHash mismatch"));
+        verify_qglake_handoff_summary_value(&summary)
+            .expect("handoff summary should allow distinct request/bootstrap TypeDID proofs");
     }
 
     #[test]
@@ -9729,18 +9705,13 @@ mod tests {
     }
 
     #[test]
-    fn qglake_handoff_summary_verifier_rejects_bootstrap_authorization_receipt_drift() {
+    fn qglake_handoff_summary_verifier_allows_distinct_bootstrap_authorization_receipt() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["authorizationReceiptHash"] =
             json!("sha256:other-authorization");
 
-        let err = verify_qglake_handoff_summary_value(&summary)
-            .expect_err("handoff summary should reject bootstrap authorization receipt drift");
-
-        assert!(err.to_string().contains("queryGraphBootstrapProof"));
-        assert!(
-            err.to_string()
-                .contains("authorizationReceiptHash mismatch")
+        verify_qglake_handoff_summary_value(&summary).expect(
+            "handoff summary should allow distinct request/bootstrap authorization receipts",
         );
     }
 

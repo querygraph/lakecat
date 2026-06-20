@@ -1558,20 +1558,20 @@ principal, authorization hash, TypeDID hash slots, delegation and summary
 signature hashes, artifact counts, standards, replay hashes, and the accepted
 bundle, graph, OpenLineage, and QueryGraph import hashes. The compact verifier
 also requires the bootstrap proof to carry the same request-identity source and
-verification state as `requestIdentityProof`, and it now requires
-`queryGraphBootstrapProof.authorizationReceiptHash` to match
-`requestIdentityProof.authorizationReceiptHash`. A handoff therefore cannot
-splice a valid-looking QueryGraph bootstrap from a different identity path or
-authorization receipt into the same agent summary.
+verification state as `requestIdentityProof`. The authorization receipt hashes
+are intentionally distinct proof slots: `requestIdentityProof` records the
+lineage-drain read receipt, while `queryGraphBootstrapProof` records the
+original bootstrap event receipt. The verifier requires both hashes to be
+SHA-256-shaped and bound back to their captured replay sections rather than
+forcing them to be equal.
 The compact verifier
 also validates the TypeDID hash-slot shape directly: envelope and proof slots
 must be null or SHA-256 hashes, and a TypeDID proof hash cannot appear without
-the paired envelope hash. The bootstrap proof must carry the same optional
-TypeDID envelope and proof hashes as `requestIdentityProof`, so a
-TypeDID-backed handoff cannot splice a bootstrap generated under a different
-identity envelope into the same summary. That keeps the compact handoff
-self-describing without moving TypeDID trust semantics out of TypeSec. It
-compares captured
+the paired envelope hash. As with authorization receipts, the request and
+bootstrap TypeDID hash slots are independently shaped replay evidence because
+they may come from different requests in the captured workflow. That keeps the
+compact handoff self-describing without moving TypeDID trust semantics out of
+TypeSec. It compares captured
 `replay-evidence.scan` with `governedScanProof`, requiring positive plan task,
 scan-plan graph event, file task, delete file, and child plan task counts plus
 the planned and fetched read-restriction objects and the fetch-side required
@@ -1660,7 +1660,9 @@ secret reference is present, provider and hash evidence must be absent.
 Source replay and compact handoff verification both reserve
 `rawCredentialExceptionReason` for the audited trusted-human path; a restricted
 agent proof must be blocked with `blockReason` and cannot carry a raw
-exception reason.
+exception reason. The local handoff harness now preserves the lineage-drain
+artifact before replay verification, so if any of these proof checks fail the
+operator still has the exact failed drain JSON for diagnosis.
 The compact handoff verifier also validates that credential proof directly:
 the restricted branch must name the accepted agent principal, carry the
 Sail-planned-read block reason, prove zero credentials, carry the

@@ -1211,6 +1211,17 @@ fn lineage_drain_event_summary(
                 .and_then(|receipt| receipt.get("context"))
                 .and_then(|context| context.get("request-identity"))
         });
+    let raw_credential_exception_allowed = payload
+        .pointer("/lakecat:raw-credential-exception/allowed")
+        .and_then(Value::as_bool);
+    let raw_credential_exception_reason = raw_credential_exception_allowed
+        .filter(|allowed| *allowed)
+        .and_then(|_| {
+            payload
+                .pointer("/lakecat:raw-credential-exception/reason")
+                .and_then(Value::as_str)
+        })
+        .map(str::to_string);
     LineageDrainEventSummary {
         event_id: event.event_id.clone(),
         event_type: event.event_type.clone(),
@@ -1431,13 +1442,8 @@ fn lineage_drain_event_summary(
             .get("lakecat:credential-block-reason")
             .and_then(Value::as_str)
             .map(str::to_string),
-        raw_credential_exception_allowed: payload
-            .pointer("/lakecat:raw-credential-exception/allowed")
-            .and_then(Value::as_bool),
-        raw_credential_exception_reason: payload
-            .pointer("/lakecat:raw-credential-exception/reason")
-            .and_then(Value::as_str)
-            .map(str::to_string),
+        raw_credential_exception_allowed,
+        raw_credential_exception_reason,
         replay_event_hashes: receipt.lineage_event_hashes.clone(),
         replay_open_lineage_hashes: receipt.open_lineage_hashes.clone(),
     }
@@ -7290,7 +7296,7 @@ mod tests {
             credential_summary
                 .raw_credential_exception_reason
                 .as_deref(),
-            Some("fine-grained read restriction requires Sail-planned reads")
+            None
         );
         assert_eq!(
             credential_summary.replay_event_hashes,
