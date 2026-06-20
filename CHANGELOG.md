@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made `scripts/qglake-handoff-local.sh` require and embed governed-scan
+  planned/fetched projection evidence, including fetched `effectiveProjection`,
+  before writing the compact QGLake handoff summary.
 - Required QGLake fetch replay and compact handoff verification to include
   fetched `effective-projection` evidence matching the server-derived read
   restriction.

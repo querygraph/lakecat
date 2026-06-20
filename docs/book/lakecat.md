@@ -1572,7 +1572,11 @@ URL, principal, table scope, LakeCat replay status from
 `lakecat.qglake.replay-verification.v1`, QueryGraph-verified table/view
 counts, and semantic bundle/graph/OpenLineage/import hashes plus standards
 accepted only after LakeCat replay, `lakecat-verify`, and `lakecat-import`
-agree. The compact verifier requires the catalog URL to be an absolute HTTP(S)
+agree. Before writing that compact summary, the harness also requires the
+governed scan replay evidence to include planned requested/effective projection,
+planned requested/effective stats fields, fetched required/effective projection,
+and fetched filters, with effective projection matching the server-derived read
+restriction. The compact verifier requires the catalog URL to be an absolute HTTP(S)
 endpoint and requires warehouse, namespace, and table scope to be present before
 accepting the summary. It rejects captured QueryGraph verify/import output
 whose warehouse no longer matches the summary.
@@ -1981,7 +1985,9 @@ server-derived required projection and mirrors it as `effective-projection`, so
 replay can compare both stages with the same policy-narrowed vocabulary. QGLake
 acceptance now rejects handoffs where the fetched effective projection is missing
 or drifts away from the fetched read restriction, which means a compact replay
-summary cannot quietly widen what the server actually planned.
+summary cannot quietly widen what the server actually planned. The live handoff
+harness performs that projection check before writing `handoff-summary.json`, so
+the artifact is born with the same proof shape the verifier later enforces.
 
 After the full local handoff writes `handoff-summary.json`, LakeCat can also
 verify the compact summary itself:

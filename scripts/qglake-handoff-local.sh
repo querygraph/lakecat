@@ -604,6 +604,30 @@ if (!Array.isArray(evidence.fetchedRequiredProjection) || evidence.fetchedRequir
   console.error("LakeCat scan replay evidence is missing fetchedRequiredProjection");
   process.exit(1);
 }
+if (!Array.isArray(evidence.fetchedEffectiveProjection) || evidence.fetchedEffectiveProjection.length === 0) {
+  console.error("LakeCat scan replay evidence is missing fetchedEffectiveProjection");
+  process.exit(1);
+}
+if (!Array.isArray(evidence.plannedRequestedProjection) || evidence.plannedRequestedProjection.length === 0) {
+  console.error("LakeCat scan replay evidence is missing plannedRequestedProjection");
+  process.exit(1);
+}
+if (!Array.isArray(evidence.plannedEffectiveProjection) || evidence.plannedEffectiveProjection.length === 0) {
+  console.error("LakeCat scan replay evidence is missing plannedEffectiveProjection");
+  process.exit(1);
+}
+if (evidence.plannedRequestedProjection.some((item) => typeof item !== "string" || item.length === 0)) {
+  console.error("LakeCat scan replay evidence has invalid plannedRequestedProjection");
+  process.exit(1);
+}
+if (evidence.plannedEffectiveProjection.some((item) => typeof item !== "string" || item.length === 0)) {
+  console.error("LakeCat scan replay evidence has invalid plannedEffectiveProjection");
+  process.exit(1);
+}
+if (evidence.plannedRequestedProjection.length <= evidence.plannedEffectiveProjection.length) {
+  console.error("LakeCat scan replay evidence does not prove projection narrowing");
+  process.exit(1);
+}
 if (!Array.isArray(evidence.plannedRequestedStatsFields) || evidence.plannedRequestedStatsFields.length === 0) {
   console.error("LakeCat scan replay evidence is missing plannedRequestedStatsFields");
   process.exit(1);
@@ -653,6 +677,25 @@ if (JSON.stringify(evidence.plannedEffectiveStatsFields) !== JSON.stringify(evid
   console.error("LakeCat scan replay evidence plannedEffectiveStatsFields do not match allowed columns");
   process.exit(1);
 }
+if (JSON.stringify(evidence.plannedEffectiveProjection) !== JSON.stringify(evidence.plannedReadRestriction["allowed-columns"])) {
+  console.error("LakeCat scan replay evidence plannedEffectiveProjection does not match allowed columns");
+  process.exit(1);
+}
+if (JSON.stringify(evidence.fetchedEffectiveProjection) !== JSON.stringify(evidence.fetchedReadRestriction["allowed-columns"])) {
+  console.error("LakeCat scan replay evidence fetchedEffectiveProjection does not match allowed columns");
+  process.exit(1);
+}
+if (JSON.stringify(evidence.fetchedRequiredProjection) !== JSON.stringify(evidence.fetchedReadRestriction["allowed-columns"])) {
+  console.error("LakeCat scan replay evidence fetchedRequiredProjection does not match allowed columns");
+  process.exit(1);
+}
+const requestedProjection = new Set(evidence.plannedRequestedProjection);
+for (const field of evidence.plannedEffectiveProjection) {
+  if (!requestedProjection.has(field)) {
+    console.error("LakeCat scan replay evidence has an effective projection field that was not requested");
+    process.exit(1);
+  }
+}
 const requestedStats = new Set(evidence.plannedRequestedStatsFields);
 for (const field of evidence.plannedEffectiveStatsFields) {
   if (!requestedStats.has(field)) {
@@ -668,9 +711,12 @@ process.stdout.write(JSON.stringify({
   childPlanTaskCount: evidence.childPlanTaskCount,
   plannedReadRestriction: evidence.plannedReadRestriction,
   fetchedReadRestriction: evidence.fetchedReadRestriction,
+  plannedRequestedProjection: evidence.plannedRequestedProjection,
+  plannedEffectiveProjection: evidence.plannedEffectiveProjection,
   plannedRequestedStatsFields: evidence.plannedRequestedStatsFields,
   plannedEffectiveStatsFields: evidence.plannedEffectiveStatsFields,
   fetchedRequiredProjection: evidence.fetchedRequiredProjection,
+  fetchedEffectiveProjection: evidence.fetchedEffectiveProjection,
   fetchedRequiredFilters: evidence.fetchedRequiredFilters,
   plannedReplayEventHashes: evidence.plannedReplayEventHashes,
   fetchedReplayEventHashes: evidence.fetchedReplayEventHashes,

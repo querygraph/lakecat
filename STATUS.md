@@ -6,6 +6,22 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require live handoff projection proof`.
+  The local QGLake handoff harness now requires the same governed-scan
+  planned/fetched projection evidence as the CLI verifier before it writes the
+  compact `handoff-summary.json`, including fetched `effectiveProjection`
+  evidence matched to the fetched read restriction.
+- Local verification for this live handoff projection-proof slice is green:
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_fetch_effective_projection_evidence -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs -- --nocapture`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran QueryGraph verify/import, and self-verified
+  `handoff-summary.json` with fetched effective projection evidence);
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require QGLake fetch effective projection proof`.
   QGLake CLI replay and compact handoff verification now reject missing or
   drifted fetched `effective-projection` evidence, tying fetch replay to the
