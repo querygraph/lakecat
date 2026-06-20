@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned Turso idempotency mismatch redaction so durable-store reused-key
+  conflicts and replay probes do not echo raw idempotency keys, mismatched
+  request hashes, or mismatched metadata object locations.
 - Added REST credential-vending coverage proving malformed JSON-LD ODRL
   allowed-column lists fail before credential issuer dispatch and before
   `credentials.vend-attempted` replay evidence is emitted.

@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin Turso idempotency mismatch redaction`.
+  Turso store coverage now proves reused-key commit conflicts and explicit
+  replay probes return the generic idempotency mismatch conflict without
+  echoing the raw idempotency key, mismatched request hash, or mismatched
+  metadata object location.
+- Local verification for this Turso idempotency slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local turso_store_round_trips_namespaces_tables_and_idempotent_commits -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Route-prove malformed JSON-LD ODRL blocks credentials`.
   The REST credential-vending route now has focused regression coverage proving
   a malformed JSON-LD ODRL allowed-column `@list` fails before credential issuer

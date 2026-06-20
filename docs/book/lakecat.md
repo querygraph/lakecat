@@ -364,7 +364,10 @@ keys, including non-ASCII or invalid header bytes, fail before LakeCat performs
 authorization, Sail validation, table loading, or metadata-object writes.
 When a reused key is attached to a different commit body, the conflict response
 also stays redacted: it does not echo the raw key or the mismatched metadata
-object location.
+object location. The Turso spine pins the same redaction for both commit-time
+reused-key conflicts and explicit idempotency replay probes: the raw key,
+mismatched request hash, and mismatched metadata object location are not
+operator-facing error text.
 The service regression for this path proves the replay happens before
 metadata-object writes: an exact retry returns the stored response without
 touching the already committed metadata object. The same regression pins the

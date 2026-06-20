@@ -5312,10 +5312,11 @@ pub mod turso_store {
                 })),
             };
             let err = store.commit_table(&ident, mismatched).await.unwrap_err();
-            assert!(
-                err.to_string()
-                    .contains("idempotency key reused with different commit request")
-            );
+            let message = err.to_string();
+            assert!(message.contains("idempotency key reused with different commit request"));
+            assert!(!message.contains("commit-1"));
+            assert!(!message.contains("00002.json"));
+            assert!(!message.contains("file:///tmp/events/metadata/00002.json"));
 
             let commit_count = store.count_rows("metadata_pointer_log").await.unwrap();
             assert_eq!(commit_count, 1);
@@ -5339,11 +5340,10 @@ pub mod turso_store {
                 .replay_table_commit(&ident, "commit-1", "sha256:different-request")
                 .await
                 .unwrap_err();
-            assert!(
-                replay_mismatch
-                    .to_string()
-                    .contains("idempotency key reused with different commit request")
-            );
+            let message = replay_mismatch.to_string();
+            assert!(message.contains("idempotency key reused with different commit request"));
+            assert!(!message.contains("commit-1"));
+            assert!(!message.contains("sha256:different-request"));
             assert_eq!(
                 commit_records[0].idempotency_key_sha256.as_deref(),
                 Some(content_hash_bytes("commit-1".as_bytes()).as_str())
