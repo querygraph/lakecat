@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound saved QGLake handoff-verifier lineage-drain identity semantics back to
+  the compact request-identity proof, rejecting rehashed verifier artifacts
+  whose saved drain principal, authorization receipt, source/state, or TypeDID
+  hash slots drift from accepted replay evidence.
 - Made QGLake handoff verifier output preserve lineage-drain request identity
   semantics: `lineageDrainArtifactSemantics` now reports the accepted
   request-identity source/state and TypeDID envelope/proof hash slots alongside

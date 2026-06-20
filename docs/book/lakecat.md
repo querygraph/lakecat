@@ -1574,8 +1574,11 @@ compact handoff self-describing without moving TypeDID trust semantics out of
 TypeSec. The JSON output from `lakecat-cli qglake-verify-handoff` also carries
 the accepted lineage-drain identity source, identity state, and TypeDID
 envelope/proof hash slots in `lineageDrainArtifactSemantics`, so QueryGraph can
-index the verified drain boundary without reparsing the raw drain artifact. It
-compares captured
+index the verified drain boundary without reparsing the raw drain artifact. If
+a saved `lakecatHandoffVerifyOutput` artifact is present, LakeCat binds those
+saved drain identity semantics back to the compact `requestIdentityProof`, so a
+rehash cannot disguise drift in principal, authorization receipt, source/state,
+or TypeDID hash-slot evidence. It compares captured
 `replay-evidence.scan` with `governedScanProof`, requiring positive plan task,
 scan-plan graph event, file task, delete file, and child plan task counts plus
 the planned and fetched read-restriction objects and the fetch-side required

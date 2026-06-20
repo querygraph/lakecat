@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind saved handoff drain identity semantics`.
+  Saved `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics`
+  sections are now checked against the compact `requestIdentityProof`, so a
+  rehashed verifier artifact cannot drift the accepted drain principal,
+  authorization receipt, request-identity source/state, or TypeDID hash slots.
+- Local verification for this saved handoff semantics slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_lineage_identity_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_accepts_handoff_verify_output_hash -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Expose handoff drain identity semantics`.
   `lakecat-cli qglake-verify-handoff --json` now carries the
   lineage-drain request identity source/state and TypeDID envelope/proof hash

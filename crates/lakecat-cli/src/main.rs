@@ -714,15 +714,47 @@ fn require_qglake_handoff_verify_output_semantic_sections_match_summary(
         )?;
     }
 
+    let lineage_drain = required_object(
+        output,
+        "lineageDrainArtifactSemantics",
+        "lakecatHandoffVerifyOutput",
+    )?;
     require_qglake_handoff_verify_output_querygraph_semantics_match_summary(
-        required_object(
-            output,
-            "lineageDrainArtifactSemantics",
-            "lakecatHandoffVerifyOutput",
-        )?,
+        lineage_drain,
         querygraph,
         "lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics",
     )?;
+    require_qglake_handoff_verify_output_lineage_drain_identity_match_summary(
+        lineage_drain,
+        required_object(lakecat, "requestIdentityProof", "lakecatReplayVerification")?,
+    )?;
+    Ok(())
+}
+
+fn require_qglake_handoff_verify_output_lineage_drain_identity_match_summary(
+    semantics: &serde_json::Map<String, Value>,
+    request_identity: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    for field in [
+        "principalSubject",
+        "principalKind",
+        "authorizationReceiptHash",
+        "requestIdentitySource",
+        "requestIdentityState",
+        "typedidEnvelopeHash",
+        "typedidProofHash",
+    ] {
+        require_value_match(
+            semantics,
+            field,
+            required_value(
+                request_identity,
+                field,
+                "lakecatReplayVerification.requestIdentityProof",
+            )?,
+            "lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics",
+        )?;
+    }
     Ok(())
 }
 
@@ -10904,6 +10936,32 @@ mod tests {
         assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
         assert!(err.to_string().contains("capturedOutputSemantics"));
         assert!(err.to_string().contains("graphHash mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_lineage_identity_drift() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-lineage-identity-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["lineageDrainArtifactSemantics"]["requestIdentitySource"] =
+            json!("x-lakecat-human-did");
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject handoff verifier identity drift");
+
+        assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
+        assert!(err.to_string().contains("lineageDrainArtifactSemantics"));
+        assert!(err.to_string().contains("requestIdentitySource mismatch"));
     }
 
     #[test]
