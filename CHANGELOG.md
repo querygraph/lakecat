@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required compact QGLake storage-profile and credential-vending
+  `secretRefHash` evidence to contain full `sha256:`-prefixed 64-hex digests
+  when a secret reference is present, rejecting short placeholder credential
+  root proof anchors in saved handoff summaries.
 - Required compact QGLake TypeDID envelope/proof hash slots to contain full
   `sha256:`-prefixed 64-hex digests when present, rejecting short placeholder
   TypeDID proof anchors in saved handoff summaries.

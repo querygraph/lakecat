@@ -6,6 +6,21 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full compact secret-ref hashes`.
+  Compact QGLake handoff verification now rejects storage-profile upsert and
+  credential-vending `secretRefHash` proof anchors unless every present hash is
+  a full `sha256:`-prefixed 64-hex digest, closing short placeholder
+  credential-root evidence while preserving the redacted provider/hash-only
+  secret-reference boundary.
+- Local verification for this compact secret-ref hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_short_secret_ref_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_short_credential_secret_ref_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require full compact TypeDID hashes`.
   Compact QGLake handoff verification now rejects request-identity and
   QueryGraph bootstrap TypeDID envelope/proof hash slots unless every present

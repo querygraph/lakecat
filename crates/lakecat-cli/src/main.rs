@@ -2882,7 +2882,7 @@ fn require_storage_profile_upsert_evidence(
             "secretRefProvider",
             "storageProfileUpsertProof",
         )?;
-        require_hash_str(
+        require_full_hash_str(
             storage_profile,
             "secretRefHash",
             "storageProfileUpsertProof",
@@ -3220,7 +3220,7 @@ fn require_credential_storage_profile_evidence(
     )?;
     if required_bool(storage_profile, "secretRefPresent", storage_label.as_str())? {
         require_non_empty_str(storage_profile, "secretRefProvider", storage_label.as_str())?;
-        require_hash_str(storage_profile, "secretRefHash", storage_label.as_str())?;
+        require_full_hash_str(storage_profile, "secretRefHash", storage_label.as_str())?;
     } else if !matches!(
         required_value(storage_profile, "secretRefProvider", storage_label.as_str())?,
         Value::Null
@@ -10211,7 +10211,25 @@ mod tests {
 
         assert!(err.to_string().contains("storageProfileUpsertProof"));
         assert!(err.to_string().contains("secretRefHash"));
-        assert!(err.to_string().contains("sha256"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_short_secret_ref_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefPresent"] =
+            json!(true);
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefProvider"] =
+            json!("vault");
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefHash"] =
+            json!("sha256:storage-secret-ref");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short storage-profile secret-ref hashes");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("secretRefHash"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
@@ -10806,7 +10824,7 @@ mod tests {
         storage_profile.insert("secretRefProvider".to_string(), Value::Null);
         storage_profile.insert(
             "secretRefHash".to_string(),
-            json!("sha256:credential-secret-ref"),
+            json!(qglake_fixture_hash("credential-secret-ref")),
         );
 
         let err = verify_qglake_handoff_summary_value(&summary).expect_err(
@@ -10849,7 +10867,29 @@ mod tests {
 
         assert!(err.to_string().contains("credentialVendingProof"));
         assert!(err.to_string().contains("secretRefHash"));
-        assert!(err.to_string().contains("sha256"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_short_credential_secret_ref_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        let storage_profile = summary["lakecatReplayVerification"]["credentialVendingProof"]
+            ["trustedHuman"]["storageProfile"]
+            .as_object_mut()
+            .unwrap();
+        storage_profile.insert("secretRefPresent".to_string(), json!(true));
+        storage_profile.insert("secretRefProvider".to_string(), json!("vault"));
+        storage_profile.insert(
+            "secretRefHash".to_string(),
+            json!("sha256:credential-secret-ref"),
+        );
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short credential secret-ref hashes");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("secretRefHash"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
@@ -10888,7 +10928,7 @@ mod tests {
         summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefProvider"] =
             json!("vault");
         summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefHash"] =
-            json!("sha256:storage-secret-ref");
+            json!(qglake_fixture_hash("storage-secret-ref"));
 
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject credential secret-ref state drift");

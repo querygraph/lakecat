@@ -1820,8 +1820,9 @@ the same hash so captured terminal output cannot look complete while omitting
 the credential-root boundary.
 Source replay validates secret-reference shape on the credential branches
 themselves: if a credential-root proof says a secret reference is present, it
-must carry a non-empty provider and SHA-256 `secretRefHash`; if it says no
-secret reference is present, provider and hash evidence must be absent.
+must carry a non-empty provider and full `sha256:`-prefixed 64-hex
+`secretRefHash`; if it says no secret reference is present, provider and hash
+evidence must be absent.
 Source replay and compact handoff verification both reserve
 `rawCredentialExceptionReason` for the audited trusted-human path; a restricted
 agent proof must be blocked with `blockReason` and cannot carry a raw
@@ -1860,9 +1861,9 @@ contains redacted `storageProfileUpsert` evidence with replay and OpenLineage
 hashes, and the accepted summary repeats that evidence as
 `lakecatReplayVerification.storageProfileUpsertProof`. QueryGraph gets proof
 that the credential root was configured, including the provider, issuance mode,
-the configured location-prefix hash, and a redacted hash of the secret
-reference, without receiving the underlying secret-store URI or full storage
-prefix in the compact proof. The
+the configured location-prefix hash, and a full `sha256:`-prefixed 64-hex
+digest of the secret reference, without receiving the underlying secret-store
+URI or full storage prefix in the compact proof. The
 operator-readable management replay line now prints the same storage-scope hash
 and redacted secret-reference state, so a captured transcript cannot describe
 the credential root only by provider while omitting its redacted storage scope or
