@@ -29,11 +29,11 @@ require_file .github/workflows/ci.yml
 
 require_pattern 'workflow_dispatch:' .github/workflows/ci.yml \
   "CI must remain manual-only through workflow_dispatch"
-if rg -q '(^|[[:space:]])(push|pull_request):' .github/workflows/ci.yml; then
-  fail "CI must not run on push or pull_request until the local gates are proven stable"
+if rg -q '(^|[[:space:]])(push|pull_request|pull_request_target|merge_group|repository_dispatch):' .github/workflows/ci.yml; then
+  fail "CI must not run on push, pull_request, pull_request_target, merge_group, or repository_dispatch until the local gates are proven stable"
 fi
-if rg -q '(^|[[:space:]])(schedule|workflow_run):' .github/workflows/ci.yml; then
-  fail "CI must not run on schedule or workflow_run until the local gates are proven stable"
+if rg -q '(^|[[:space:]])(schedule|workflow_run|workflow_call):' .github/workflows/ci.yml; then
+  fail "CI must not run on schedule, workflow_run, or workflow_call until the local gates are proven stable"
 fi
 
 require_pattern 'grust-graph = \{ package = "grust-graph", version = "0\.9\.0",' Cargo.toml \

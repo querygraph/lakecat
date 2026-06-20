@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Tightened the local dependency-contract audit so manual-only CI also rejects
+  `pull_request_target`, merge-queue, repository-dispatch, and reusable-workflow
+  triggers.
+- Tightened the local dependency-contract audit so manual-only CI also rejects
   scheduled and workflow-chained GitHub Actions triggers.
 - Pinned REST idempotency side-effect behavior so exact replay and mismatched
   reused-key conflicts do not enqueue extra table-commit outbox events.

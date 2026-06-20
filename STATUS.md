@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Block chained CI trigger classes`.
+  The local dependency-contract audit now rejects additional automatic or
+  chained GitHub Actions triggers: `pull_request_target`, `merge_group`,
+  `repository_dispatch`, and `workflow_call`. Manual CI remains limited to
+  direct `workflow_dispatch` while local gates are the proof source.
+- Local verification for this reproducibility slice is green:
+  `bash -n scripts/check-local-dependency-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Block scheduled CI triggers in dependency contract`.
   The local dependency-contract audit now rejects `schedule` and `workflow_run`
   triggers in addition to push and pull-request triggers, keeping cloud CI
