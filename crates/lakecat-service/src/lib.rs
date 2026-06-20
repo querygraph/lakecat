@@ -4060,6 +4060,7 @@ async fn project_outbox_event(
         }
     } else if event.event_type == "catalog.config-read" {
         let warehouse = outbox_warehouse(event, &state.warehouse)?;
+        let event_payload = redact_warehouse_event_payload(event_payload);
         state
             .graph
             .emit(
@@ -8772,6 +8773,12 @@ mod tests {
                             "checked_at": chrono::Utc::now(),
                         },
                         "warehouse": "local",
+                        "warehouse-record": {
+                            "warehouse": "local",
+                            "project-id": "default",
+                            "storage-root": "file:///tmp/lakecat/config",
+                            "properties": {"purpose": "config-read"}
+                        }
                     }
                 }),
                 created_at: chrono::Utc::now(),
@@ -8817,6 +8824,20 @@ mod tests {
             graph_events[1].properties["authorization-receipt"]["principal"]["subject"],
             serde_json::json!("agent:reader")
         );
+        assert!(
+            graph_events[1].properties["warehouse-record"]
+                .get("storage-root")
+                .is_none(),
+            "catalog config graph projection must not expose raw storage roots"
+        );
+        assert_eq!(
+            graph_events[1].properties["warehouse-record"]["storage-root-hash"],
+            serde_json::json!(
+                content_hash_json(&json!({"storage-root": "file:///tmp/lakecat/config"})).unwrap()
+            )
+        );
+        let graph_payload = serde_json::to_string(&graph_events[1].properties).unwrap();
+        assert!(!graph_payload.contains("file:///tmp/lakecat/config"));
         drop(graph_events);
 
         let lineage_events = lineage.events.lock().await;
@@ -8829,6 +8850,20 @@ mod tests {
             lineage_events[0].payload["warehouse"],
             serde_json::json!("local")
         );
+        assert!(
+            lineage_events[0].payload["warehouse-record"]
+                .get("storage-root")
+                .is_none(),
+            "catalog config lineage projection must not expose raw storage roots"
+        );
+        assert_eq!(
+            lineage_events[0].payload["warehouse-record"]["storage-root-hash"],
+            serde_json::json!(
+                content_hash_json(&json!({"storage-root": "file:///tmp/lakecat/config"})).unwrap()
+            )
+        );
+        let lineage_payload = serde_json::to_string(&lineage_events[0].payload).unwrap();
+        assert!(!lineage_payload.contains("file:///tmp/lakecat/config"));
     }
 
     #[tokio::test]

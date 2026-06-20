@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Applied warehouse storage-root replay redaction to catalog config-read
+  projections as well, so any warehouse record attached to config replay emits
+  only `storage-root-hash` evidence to graph and lineage sinks.
 - Redacted warehouse storage roots before graph and lineage replay, replacing
   raw `storage-root` values with `storage-root-hash` evidence while leaving the
   authorized management response shape unchanged.

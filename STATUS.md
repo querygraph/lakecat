@@ -6,6 +6,15 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact config-read warehouse roots`.
+  Catalog config-read replay now applies the same warehouse-record redaction as
+  warehouse upserts, so any attached `storage-root` is replaced with
+  `storage-root-hash` before graph or lineage projection.
+- Local verification for this config-read redaction slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_projects_catalog_config_reads_to_graph_and_lineage -- --nocapture`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact warehouse replay storage roots`.
   Warehouse upsert replay now strips raw `storage-root` values before graph and
   lineage projection and replaces them with `storage-root-hash` evidence,
