@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added management-route coverage proving decorated storage-profile location
+  prefixes fail with hash-only evidence and do not echo raw prefixes, query
+  tokens, or userinfo.
 - Rejected storage-profile location prefixes with query strings, fragments, or
   URI userinfo before memory or Turso persistence, returning only
   `storage-profile-prefix-hash` evidence.

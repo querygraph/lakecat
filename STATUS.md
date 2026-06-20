@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Route-prove decorated storage prefixes are redacted`.
+  The management storage-profile route now has focused regression coverage
+  proving decorated `location-prefix` values fail with
+  `storage-profile-prefix-hash` evidence and do not echo the raw prefix, query
+  token, or embedded userinfo.
+- Local verification for this management-route storage-profile slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service management_storage_profile_rejects_decorated_location_prefixes -- --nocapture`;
+  `cargo test -p lakecat-service management_storage_profile_rejects_provider_prefix_mismatch -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject decorated storage profile prefixes`.
   Storage-profile validation now rejects location prefixes with query strings,
   fragments, or URI userinfo before memory or Turso persistence and returns only

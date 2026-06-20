@@ -13048,6 +13048,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn management_storage_profile_rejects_decorated_location_prefixes() {
+        let app = test_app();
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/storage-profiles/decorated-prefix")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "location-prefix": "s3://lakecat-demo/events?token=raw-secret",
+                    "provider": "s3",
+                    "issuance-mode": "governed-read-required"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(message.contains("query strings, fragments, or userinfo"));
+        assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+        assert!(!message.contains("s3://lakecat-demo/events"));
+        assert!(!message.contains("lakecat-demo"));
+        assert!(!message.contains("token=raw-secret"));
+        assert!(!message.contains("raw-secret"));
+    }
+
+    #[tokio::test]
     async fn management_storage_profile_rejects_remote_local_no_secret_mode() {
         let app = test_app();
         let upsert = Request::builder()

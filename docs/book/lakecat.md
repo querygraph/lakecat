@@ -942,7 +942,9 @@ and percent-encoded dot path segments, query strings, fragments, and URI
 userinfo before the profile can reach memory or Turso persistence.
 Traversal-shaped or decorated storage roots fail with
 `storage-profile-prefix-hash=sha256:...` evidence rather than echoing the raw
-prefix, token-like query value, or embedded userinfo.
+prefix, token-like query value, or embedded userinfo. The management route pins
+the same operator-facing behavior, so a rejected storage-profile upsert does
+not leak the submitted decorated prefix.
 It also rejects unsafe issuance-mode combinations: `local-file-no-secret` is
 for file storage only, while `short-lived-secret-ref` is for configured remote
 providers such as S3, GCS, and Azure.
