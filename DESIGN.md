@@ -214,7 +214,10 @@ The current working plan is:
 2. Keep QGLake handoff as the acceptance gate. A change that affects bootstrap,
    scan/fetch proof, credential proof, view receipt chains, graph/import hashes,
    OpenLineage replay, captured output hashes, or QueryGraph import compatibility
-   must update the local handoff verifier and the book in the same unit.
+   must update the local handoff verifier and the book in the same unit. View
+   receipt-chain checks must reject forged previous-receipt links, unsupported
+   operations, skipped versions, and tombstones that advance the durable view
+   version.
 3. Keep commit hardening focused on REST-visible correctness: idempotency
    replay, metadata object create-only writes, CAS conflict evidence, orphan
    cleanup, object-store portability, and redacted operator-facing errors.
@@ -462,6 +465,9 @@ policy-derived TTL cap in both captured LakeCat replay text and compact handoff
 proof. Credential replay must preserve the policy-derived TTL cap and redacted
 storage-scope hash in both the captured LakeCat replay evidence and compact
 handoff summary.
+View receipt-chain proof must remain a structural proof, not just a bag of
+hashes: each link must point at the previous receipt hash, use a supported
+operation, and preserve the expected version transition.
 
 ### P3 Commit Hardening
 

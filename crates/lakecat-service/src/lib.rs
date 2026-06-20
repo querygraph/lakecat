@@ -6133,6 +6133,20 @@ mod tests {
         assert!(!view_version_receipt_chain_verified(
             &wrong_previous_version
         ));
+
+        let wrong_previous_receipt_hash = vec![
+            test_view_receipt(1, None, None, "upsert", "sha256:r1"),
+            test_view_receipt(2, Some(1), Some("sha256:other"), "upsert", "sha256:r2"),
+        ];
+        assert!(!view_version_receipt_chain_verified(
+            &wrong_previous_receipt_hash
+        ));
+
+        let unsupported_operation = vec![
+            test_view_receipt(1, None, None, "upsert", "sha256:r1"),
+            test_view_receipt(2, Some(1), Some("sha256:r1"), "replace", "sha256:r2"),
+        ];
+        assert!(!view_version_receipt_chain_verified(&unsupported_operation));
     }
 
     #[cfg(feature = "typesec-local")]

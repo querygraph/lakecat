@@ -1344,8 +1344,9 @@ be a version-1 upsert with no previous version or receipt hash. Later upserts
 must point at the previous receipt hash and advance exactly one durable view
 version. Drop tombstones must point at the previous receipt hash, cite the
 previous view version, and keep `view-version` equal to the accepted version
-that was deleted. That lets QueryGraph reject a chain that is cryptographically
-linked but lies about how the catalog view advanced.
+that was deleted. Unsupported operations and forged `previous-receipt-hash`
+links fail the same check. That lets QueryGraph reject a chain that is
+cryptographically linked but lies about how the catalog view advanced.
 
 QueryGraph and operators can also read the compact receipt chain directly from
 the governed management surface:

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened view receipt-chain verifier coverage so forged previous-receipt
+  hashes and unsupported operations fail the compact QueryGraph/QGLake chain
+  check.
 - Added service coverage proving view mutations reject
   `expected-view-version=0` before changing the active view or appending
   version receipts.

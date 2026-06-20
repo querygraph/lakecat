@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin forged view receipt-chain rejection`.
+  View receipt-chain verifier coverage now directly proves forged
+  `previous-receipt-hash` links and unsupported operations fail the compact
+  QueryGraph/QGLake chain check, alongside the existing version-transition and
+  tombstone checks.
+- Local verification for this view receipt-chain verifier slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service view_receipt_chain_verifier_requires_version_transitions -- --nocapture`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject zero expected view versions`.
   View mutation routes now have focused regression coverage proving
   `expected-view-version=0` is rejected before LakeCat updates the active view
