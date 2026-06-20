@@ -5717,6 +5717,31 @@ mod tests {
     }
 
     #[derive(Debug, Default)]
+    struct DuplicateTtlCredentialIssuer {
+        requests: Mutex<Vec<CredentialIssuanceRequest>>,
+    }
+
+    #[async_trait]
+    impl CredentialIssuer for DuplicateTtlCredentialIssuer {
+        async fn issue(
+            &self,
+            request: CredentialIssuanceRequest,
+        ) -> lakecat_core::LakeCatResult<Vec<StorageCredential>> {
+            self.requests.lock().await.push(request.clone());
+            Ok(vec![StorageCredential {
+                prefix: request.profile.location_prefix.clone(),
+                config: vec![
+                    ConfigEntry::new("lakecat.credential-kind", "duplicate-ttl-test"),
+                    ConfigEntry::new("lakecat.max-credential-ttl-seconds", "600"),
+                    ConfigEntry::new("aws.session-token", "temporary-test-token"),
+                    ConfigEntry::new("lakecat.max-credential-ttl-seconds", "120"),
+                    ConfigEntry::new("lakecat.max-credential-ttl-seconds", "not-a-number"),
+                ],
+            }])
+        }
+    }
+
+    #[derive(Debug, Default)]
     struct RecordingSailEngine {
         commit_prepare_count: Mutex<usize>,
     }
@@ -13372,6 +13397,86 @@ mod tests {
                 .get("lakecat:credential-block-reason")
                 .is_none()
         );
+    }
+
+    #[tokio::test]
+    async fn credential_vend_response_normalizes_duplicate_ttl_entries() {
+        let store = MemoryCatalogStore::new();
+        let issuer = Arc::new(DuplicateTtlCredentialIssuer::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_credential_issuer(issuer.clone());
+        let table = TableRecord::new(
+            TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            ),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({
+                "format-version": 3,
+                "current-schema-id": 1,
+                "schemas": [{
+                    "schema-id": 1,
+                    "fields": [
+                        {"id": 1, "name": "event_id", "type": "string", "required": true}
+                    ]
+                }]
+            }),
+            Principal::anonymous(),
+        );
+        let ident = table.ident.clone();
+        store.create_table(table).await.unwrap();
+        store
+            .upsert_policy_binding(
+                PolicyBinding::new(
+                    "trusted-human-ttl-cap",
+                    WarehouseName::new("local").unwrap(),
+                    Some(ident.namespace.clone()),
+                    Some(ident.name.clone()),
+                    true,
+                    serde_json::json!({
+                        "uid": "policy:trusted-human-ttl-cap",
+                        "lakecat:read-restriction": {
+                            "allowed-columns": ["event_id"],
+                            "max-credential-ttl-seconds": 300
+                        }
+                    }),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-lakecat-principal",
+            axum::http::HeaderValue::from_static("human:operator"),
+        );
+        let response = load_credentials(
+            State(state),
+            headers,
+            Path(("default".to_string(), "events".to_string())),
+        )
+        .await
+        .unwrap();
+
+        let credentials = response.0.storage_credentials;
+        assert_eq!(credentials.len(), 1);
+        let ttl_entries = credentials[0]
+            .config
+            .iter()
+            .filter(|entry| entry.key == "lakecat.max-credential-ttl-seconds")
+            .collect::<Vec<_>>();
+        assert_eq!(ttl_entries.len(), 1);
+        assert_eq!(ttl_entries[0].value, "120");
+        assert!(credentials[0].config.iter().any(|entry| {
+            entry.key == "aws.session-token" && entry.value == "temporary-test-token"
+        }));
+
+        let requests = issuer.requests.lock().await;
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].max_credential_ttl_seconds, Some(300));
     }
 
     #[test]

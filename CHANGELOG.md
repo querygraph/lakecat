@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added REST-level credential-vending coverage proving the public
+  `loadCredentials` response collapses duplicate backend TTL config entries to
+  one effective `lakecat.max-credential-ttl-seconds` value.
 - Normalized credential-vending TTL evidence so every returned credential has
   exactly one `lakecat.max-credential-ttl-seconds` entry, preserving stricter
   issuer TTLs while removing duplicate or wider backend-supplied TTL entries.

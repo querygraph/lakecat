@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin REST credential TTL normalization`.
+  The public credential-vending path now has a service-level regression proving
+  a backend that returns duplicate, wider, or malformed
+  `lakecat.max-credential-ttl-seconds` entries is normalized before the
+  `loadCredentials` response leaves LakeCat, while non-TTL credential config is
+  preserved.
+- Local verification for this REST credential TTL normalization slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service credential_vend_response_normalizes_duplicate_ttl_entries -- --nocapture`;
+  `cargo test -p lakecat-service credential_ttl_cap -- --nocapture`.
+- Latest completed implementation slice:
   `Normalize credential TTL evidence`.
   Credential-vending responses now collapse duplicate
   `lakecat.max-credential-ttl-seconds` config entries into one effective value,

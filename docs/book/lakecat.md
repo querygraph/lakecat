@@ -529,7 +529,10 @@ credential issuer and annotates each returned credential with
 duration bound. If an issuer returns that LakeCat TTL key itself, LakeCat
 normalizes the response to one TTL entry per credential and keeps the stricter
 valid TTL, so duplicate backend-supplied entries cannot widen or confuse the
-policy cap.
+policy cap. The REST credential-vending regression exercises this at the public
+response boundary: a backend can return multiple TTL entries, but
+`loadCredentials` exposes exactly one effective value and preserves the other
+credential config entries.
 
 ## Rust-First Engines And The V3 To V4 Path
 
@@ -941,13 +944,15 @@ read restriction, and returned credentials must preserve that cap in
 `lakecat.max-credential-ttl-seconds`. LakeCat rewrites duplicate TTL config
 entries into one effective value before returning credentials, preserving a
 stricter issuer TTL when it is valid and otherwise falling back to the policy
-cap. The issuer also rejects any credential whose returned prefix is outside the
-storage profile's `location-prefix`, so a misconfigured cloud secret backend
-cannot widen a table's storage scope after TypeSec has authorized the secret
-reference. A not-configured resolver error reports the provider label and a
+cap. The service test for the REST credential endpoint proves this response
+shape directly, not just through the helper that applies the cap. The issuer
+also rejects any credential whose returned prefix is outside the storage
+profile's `location-prefix`, so a misconfigured cloud secret backend cannot
+widen a table's storage scope after TypeSec has authorized the secret reference.
+A not-configured resolver error reports the provider label and a
 `secret-ref-hash=sha256:...` value, not the raw secret URI, so the operator can
-correlate configuration without leaking the credential root. Resolver
-validation errors for malformed Vault and TypeSec
+correlate configuration without leaking the credential root. Resolver validation
+errors for malformed Vault and TypeSec
 environment references follow the same rule: wrong schemes, missing Vault
 mounts or paths, and invalid environment-variable names produce hash evidence
 instead of echoing the malformed secret reference.
