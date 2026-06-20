@@ -1983,14 +1983,19 @@ fn verify_lakecat_replay_management_matches_summary(
 
     for field in [
         "serverCount",
+        "serverIds",
         "serverGraphEvents",
         "projectCount",
+        "projectIds",
         "projectGraphEvents",
         "warehouseCount",
+        "warehouseNames",
         "warehouseGraphEvents",
         "policyBindingCount",
+        "policyIds",
         "policyGraphEvents",
         "storageProfileCount",
+        "storageProfileIds",
         "storageProfileGraphEvents",
         "serverReplayEventHashes",
         "serverOpenLineageHashes",
@@ -9140,6 +9145,14 @@ mod tests {
                 }
             }
         });
+        lakecat_replay_json["replay-evidence"]["management"]["serverIds"] =
+            json!(["qglake-server"]);
+        lakecat_replay_json["replay-evidence"]["management"]["projectIds"] = json!(["analytics"]);
+        lakecat_replay_json["replay-evidence"]["management"]["warehouseNames"] = json!(["local"]);
+        lakecat_replay_json["replay-evidence"]["management"]["policyIds"] =
+            json!(["agent-columns"]);
+        lakecat_replay_json["replay-evidence"]["management"]["storageProfileIds"] =
+            json!(["events-local"]);
         qglake_add_management_receipt_hashes(
             &mut lakecat_replay_json["replay-evidence"]["management"],
         );
@@ -12273,6 +12286,27 @@ mod tests {
                 "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert.graphEvents mismatch"
             )
         );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_management_id_drift() {
+        let temp = qglake_temp_dir("handoff-captured-management-id-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["management"]["serverIds"] = json!(["other-server"]);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay management ID proof drift should be rejected");
+        assert!(err.to_string().contains(
+            "captured LakeCat replay output.replay-evidence.management.serverIds mismatch"
+        ));
     }
 
     #[test]

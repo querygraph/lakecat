@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required captured LakeCat replay output to match compact QGLake
+  `managementProof` ID arrays for servers, projects, warehouses, policies, and
+  storage profiles, so saved handoff summaries cannot drift from the captured
+  replay artifact while keeping artifact hashes valid.
 - Lifted redacted management-list ID arrays into lineage-drain summaries and
   compact QGLake `managementProof`, and rejected source replay or saved handoff
   summaries when those arrays are missing, empty, or drift from the recorded

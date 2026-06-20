@@ -2017,7 +2017,11 @@ digest shape for every management replay and OpenLineage array, and it verifies
 that `serverIds`, `projectIds`, `warehouseNames`, `policyIds`, and
 `storageProfileIds` match their recorded counts. Saved summaries therefore
 cannot preserve only prefix-shaped placeholders for control-plane read receipts
-or normalize malformed management identities later. It also rejects management-list source
+or normalize malformed management identities later. Captured replay agreement
+checks the same ID arrays against the saved compact `managementProof`, so a
+handoff cannot keep valid artifact hashes while swapping the server, project,
+warehouse, policy, or storage-profile identities between source replay and the
+summary. It also rejects management-list source
 replay without catalog graph projection evidence, keeping the durable
 server/project/warehouse, policy, and storage-profile facts visible to
 QueryGraph through Grust-facing graph events. Compact `managementProof` carries

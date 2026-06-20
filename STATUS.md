@@ -6,6 +6,26 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject captured management ID drift`.
+  Captured LakeCat replay output must now match compact QGLake
+  `managementProof` ID arrays for servers, projects, warehouses, policies, and
+  storage profiles. Saved handoff summaries therefore cannot preserve valid
+  artifact hashes while drifting catalog management identities between the
+  captured replay artifact and compact proof.
+- Local verification for this captured management ID drift slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_management_id_drift`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics`;
+  `cargo test -p lakecat-cli qglake`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import,
+  verified the handoff summary with captured management ID agreement, and ended
+  with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Carry management-list IDs through QGLake proof`.
   Lineage-drain summaries and compact QGLake `managementProof` now preserve the
   redacted stable ID arrays emitted by management-list reads. LakeCat replay
