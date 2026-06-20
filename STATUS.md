@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full compact management hashes`.
+  Compact QGLake handoff verification now rejects management proof
+  server/project/warehouse/policy/storage-profile replay and OpenLineage arrays
+  unless every entry is a full `sha256:`-prefixed 64-hex digest, closing the
+  short placeholder hash path for control-plane read receipts in saved handoff
+  summaries.
+- Local verification for this compact management hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_short_management_receipt_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require full compact governed scan hashes`.
   Compact QGLake handoff verification now rejects `governedScanProof`
   planned/fetched replay and OpenLineage arrays unless every entry is a full

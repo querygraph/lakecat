@@ -1922,7 +1922,11 @@ only that the right number of management records existed while losing the
 receipt evidence for the reads. The lineage-drain verifier rejects those source
 replay events when the receipt arrays are empty or not SHA-256-shaped, so the
 compact `managementProof` starts from verified replay evidence rather than
-normalizing malformed hashes later. It also rejects management-list source
+untrusted text. The compact handoff verifier repeats that check with the stricter
+full `sha256:`-prefixed 64-hex digest shape for every management replay and
+OpenLineage array, so saved summaries cannot preserve only prefix-shaped
+placeholders for control-plane read receipts or normalize malformed hashes
+later. It also rejects management-list source
 replay without catalog graph projection evidence, keeping the durable
 server/project/warehouse, policy, and storage-profile facts visible to
 QueryGraph through Grust-facing graph events. Compact `managementProof` carries

@@ -2971,7 +2971,7 @@ fn require_management_evidence(
         "storageProfileReplayEventHashes",
         "storageProfileOpenLineageHashes",
     ] {
-        require_hash_array(management, field, "managementProof")?;
+        require_full_hash_array(management, field, "managementProof")?;
     }
     Ok(())
 }
@@ -8499,18 +8499,26 @@ mod tests {
     const QGLAKE_TEST_LOCATION: &str = "file:///tmp/lakecat-qglake/events";
 
     fn qglake_add_management_receipt_hashes(management: &mut Value) {
-        management["serverReplayEventHashes"] = json!(["sha256:server-list-replay-event"]);
-        management["serverOpenLineageHashes"] = json!(["sha256:server-list-openlineage"]);
-        management["projectReplayEventHashes"] = json!(["sha256:project-list-replay-event"]);
-        management["projectOpenLineageHashes"] = json!(["sha256:project-list-openlineage"]);
-        management["warehouseReplayEventHashes"] = json!(["sha256:warehouse-list-replay-event"]);
-        management["warehouseOpenLineageHashes"] = json!(["sha256:warehouse-list-openlineage"]);
-        management["policyReplayEventHashes"] = json!(["sha256:policy-list-replay-event"]);
-        management["policyOpenLineageHashes"] = json!(["sha256:policy-list-openlineage"]);
+        management["serverReplayEventHashes"] =
+            json!([qglake_fixture_hash("server-list-replay-event")]);
+        management["serverOpenLineageHashes"] =
+            json!([qglake_fixture_hash("server-list-openlineage")]);
+        management["projectReplayEventHashes"] =
+            json!([qglake_fixture_hash("project-list-replay-event")]);
+        management["projectOpenLineageHashes"] =
+            json!([qglake_fixture_hash("project-list-openlineage")]);
+        management["warehouseReplayEventHashes"] =
+            json!([qglake_fixture_hash("warehouse-list-replay-event")]);
+        management["warehouseOpenLineageHashes"] =
+            json!([qglake_fixture_hash("warehouse-list-openlineage")]);
+        management["policyReplayEventHashes"] =
+            json!([qglake_fixture_hash("policy-list-replay-event")]);
+        management["policyOpenLineageHashes"] =
+            json!([qglake_fixture_hash("policy-list-openlineage")]);
         management["storageProfileReplayEventHashes"] =
-            json!(["sha256:storage-profile-list-replay-event"]);
+            json!([qglake_fixture_hash("storage-profile-list-replay-event")]);
         management["storageProfileOpenLineageHashes"] =
-            json!(["sha256:storage-profile-list-openlineage"]);
+            json!([qglake_fixture_hash("storage-profile-list-openlineage")]);
     }
 
     fn qglake_handoff_summary_json() -> Value {
@@ -9884,7 +9892,21 @@ mod tests {
 
         assert!(err.to_string().contains("managementProof"));
         assert!(err.to_string().contains("storageProfileReplayEventHashes"));
-        assert!(err.to_string().contains("sha256"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_short_management_receipt_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["serverReplayEventHashes"] =
+            json!(["sha256:server-list-replay-event"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short management receipt hashes");
+
+        assert!(err.to_string().contains("managementProof"));
+        assert!(err.to_string().contains("serverReplayEventHashes"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]

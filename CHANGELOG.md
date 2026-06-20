@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required compact QGLake management proof replay/OpenLineage hash arrays to
+  contain full `sha256:`-prefixed 64-hex digests, rejecting short placeholder
+  control-plane read receipt hashes in saved handoff summaries.
 - Required compact QGLake governed scan proof replay/OpenLineage hash arrays
   to contain full `sha256:`-prefixed 64-hex digests, rejecting short
   placeholder scan receipt hashes in saved handoff summaries.
