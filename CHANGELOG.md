@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted configured TypeSec environment and Vault credential resolver
+  failures so backend lookup and secret payload parse errors expose only
+  `secret-ref-hash` and `error-detail-hash` evidence.
 - Hardened metadata cleanup conflict reporting so cleanup failures appended to
   preserved commit conflicts include only `error-detail-hash` evidence.
 - Added hash evidence to malformed outbox table/principal decode diagnostics,

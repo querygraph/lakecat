@@ -168,7 +168,7 @@ pub mod typesec_credential_issuer {
     use typesec::{PolicyEngine, PolicyResult, ResourceId, SubjectId};
     use url::Url;
 
-    use crate::{CredentialIssuanceRequest, CredentialIssuer};
+    use crate::{CredentialIssuanceRequest, CredentialIssuer, error_detail_hash_context};
 
     #[async_trait]
     pub trait SecretRefCredentialResolver: Send + Sync + 'static {
@@ -458,10 +458,23 @@ pub mod typesec_credential_issuer {
             let secret = self
                 .client
                 .read_secret(&url, &self.token, self.namespace.as_deref())
-                .await?;
+                .await
+                .map_err(|err| {
+                    LakeCatError::InvalidArgument(format!(
+                        "failed to resolve Vault credential secret; {}; {}",
+                        secret_ref_hash_context(secret_ref),
+                        error_detail_hash_context(err),
+                    ))
+                })?;
             Ok(vec![StorageCredential {
                 prefix: request.profile.location_prefix.clone(),
-                config: config_entries_from_vault_secret_json(secret)?,
+                config: config_entries_from_vault_secret_json(secret).map_err(|err| {
+                    LakeCatError::InvalidArgument(format!(
+                        "failed to parse Vault credential secret; {}; {}",
+                        secret_ref_hash_context(secret_ref),
+                        error_detail_hash_context(err),
+                    ))
+                })?,
             }])
         }
     }
@@ -539,12 +552,20 @@ pub mod typesec_credential_issuer {
             let variable = env_secret_variable(secret_ref)?;
             let raw = (self.reader)(&variable).map_err(|err| {
                 LakeCatError::InvalidArgument(format!(
-                    "failed to resolve environment credential secret {variable}: {err}"
+                    "failed to resolve environment credential secret; {}; {}",
+                    secret_ref_hash_context(secret_ref),
+                    error_detail_hash_context(err),
                 ))
             })?;
             Ok(vec![StorageCredential {
                 prefix: request.profile.location_prefix.clone(),
-                config: config_entries_from_secret_json(&raw)?,
+                config: config_entries_from_secret_json(&raw).map_err(|err| {
+                    LakeCatError::InvalidArgument(format!(
+                        "failed to parse environment credential secret; {}; {}",
+                        secret_ref_hash_context(secret_ref),
+                        error_detail_hash_context(err),
+                    ))
+                })?,
             }])
         }
     }
@@ -6281,6 +6302,7 @@ mod tests {
     struct MockVaultSecretClient {
         requests: Mutex<Vec<(String, String, Option<String>)>>,
         response: Mutex<Option<serde_json::Value>>,
+        error: Mutex<Option<String>>,
     }
 
     #[cfg(feature = "typesec-local")]
@@ -6297,9 +6319,49 @@ mod tests {
                 token.to_string(),
                 namespace.map(ToString::to_string),
             ));
+            if let Some(error) = self.error.lock().await.clone() {
+                return Err(LakeCatError::InvalidArgument(error));
+            }
             self.response.lock().await.clone().ok_or_else(|| {
                 LakeCatError::InvalidArgument("mock Vault response missing".to_string())
             })
+        }
+    }
+
+    #[cfg(feature = "typesec-local")]
+    fn production_secret_credential_request(secret_ref: &str) -> CredentialIssuanceRequest {
+        let principal = Principal::new("did:example:agent", PrincipalKind::Agent).unwrap();
+        let table = TableRecord::new(
+            table_ident("local", "default", "events").unwrap(),
+            "s3://lakecat-demo/events/tenant-a".to_string(),
+            Some("s3://lakecat-demo/events/tenant-a/metadata/00000.json".to_string()),
+            serde_json::json!({"format-version":3}),
+            principal.clone(),
+        );
+        let profile = StorageProfile::new(
+            "s3-events",
+            WarehouseName::new("local").unwrap(),
+            "s3://lakecat-demo/events",
+            StorageProvider::S3,
+            CredentialIssuanceMode::ShortLivedSecretRef,
+            Some(secret_ref.to_string()),
+            Default::default(),
+        )
+        .unwrap();
+        CredentialIssuanceRequest {
+            table,
+            profile,
+            authorization_receipt: AuthorizationReceipt {
+                principal,
+                action: CatalogAction::CredentialsVend,
+                table: Some(table_ident("local", "default", "events").unwrap()),
+                allowed: true,
+                engine: "test".to_string(),
+                policy_hash: None,
+                context: serde_json::json!({}),
+                checked_at: chrono::Utc::now(),
+            },
+            max_credential_ttl_seconds: None,
         }
     }
 
@@ -14240,6 +14302,98 @@ mod tests {
         );
         assert_eq!(requests[0].1, "vault-token");
         assert_eq!(requests[0].2.as_deref(), Some("lakecat/admin"));
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_redacts_vault_backend_failures() {
+        use crate::typesec_credential_issuer::{
+            ExternalSecretRefCredentialResolver, TypeSecCredentialIssuer,
+            VaultSecretRefCredentialResolver,
+        };
+
+        let secret_ref = "vault://secret/data/lakecat/s3-events";
+        let vault_client = Arc::new(MockVaultSecretClient::default());
+        *vault_client.error.lock().await = Some(
+            "backend token vault-token failed for vault://secret/data/lakecat/s3-events"
+                .to_string(),
+        );
+        let vault = VaultSecretRefCredentialResolver::new(
+            "https://vault.example.test/",
+            "vault-token",
+            Some("lakecat/admin".to_string()),
+            vault_client.clone(),
+        )
+        .unwrap();
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:agent".to_string(),
+                resource: secret_ref.to_string(),
+            }),
+            ExternalSecretRefCredentialResolver::with_vault(vault),
+        );
+
+        let err = issuer
+            .issue(production_secret_credential_request(secret_ref))
+            .await
+            .unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("failed to resolve Vault credential secret"));
+        assert!(message.contains("secret-ref-hash=sha256:"));
+        assert!(message.contains("error-detail-hash=sha256:"));
+        for forbidden in [
+            secret_ref,
+            "vault-token",
+            "lakecat/admin",
+            "backend token",
+            "s3-events",
+        ] {
+            assert!(
+                !message.contains(forbidden),
+                "Vault backend failures must not expose {forbidden}"
+            );
+        }
+        let requests = vault_client.requests.lock().await;
+        assert_eq!(requests.len(), 1);
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_redacts_environment_backend_failures() {
+        use crate::typesec_credential_issuer::{
+            EnvironmentSecretRefCredentialResolver, TypeSecCredentialIssuer,
+        };
+
+        let secret_ref = "typesec://env/LAKECAT_S3_EVENTS_CREDENTIALS";
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:agent".to_string(),
+                resource: secret_ref.to_string(),
+            }),
+            EnvironmentSecretRefCredentialResolver::with_reader(|_| {
+                Err(std::env::VarError::NotPresent)
+            }),
+        );
+
+        let err = issuer
+            .issue(production_secret_credential_request(secret_ref))
+            .await
+            .unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("failed to resolve environment credential secret"));
+        assert!(message.contains("secret-ref-hash=sha256:"));
+        assert!(message.contains("error-detail-hash=sha256:"));
+        for forbidden in [
+            secret_ref,
+            "LAKECAT_S3_EVENTS_CREDENTIALS",
+            "environment variable not found",
+            "NotPresent",
+        ] {
+            assert!(
+                !message.contains(forbidden),
+                "environment backend failures must not expose {forbidden}"
+            );
+        }
     }
 
     #[cfg(feature = "typesec-local")]

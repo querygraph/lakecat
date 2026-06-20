@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact credential resolver failure details`.
+  Configured TypeSec environment and Vault credential resolvers now report
+  lookup and secret payload parse failures with `secret-ref-hash` plus
+  `error-detail-hash` evidence instead of echoing environment variable names,
+  Vault paths, tokens, namespaces, or backend error text.
+- Local verification for this credential resolver redaction slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_redacts_vault_backend_failures -- --nocapture`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_redacts_environment_backend_failures -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Hash metadata cleanup conflict details`.
   Metadata cleanup failures appended to preserved commit conflicts now expose
   only `error-detail-hash` evidence, so a cleanup path cannot leak raw backend

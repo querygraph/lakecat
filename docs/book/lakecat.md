@@ -1078,7 +1078,11 @@ environment references follow the same rule: wrong schemes, missing Vault
 mounts or paths, and invalid environment-variable names produce hash evidence
 instead of echoing the malformed secret reference. Generic provider detection
 and resolver URI parsing follow that rule too, so malformed credential-root
-strings cannot leak through production resolver diagnostics.
+strings cannot leak through production resolver diagnostics. Once a configured
+resolver is authorized to run, backend lookup and secret payload parse failures
+still stay hash-only: LakeCat returns the secret-reference hash and an
+error-detail hash instead of the environment variable name, Vault path, token,
+namespace, backend exception text, or malformed secret fields.
 When storage-profile changes replay into lineage/OpenLineage evidence, LakeCat
 does not forward the full secret-store URI. The replay payload keeps
 `secret-ref-present` and `secret-ref-provider` so QueryGraph can verify that a
