@@ -416,10 +416,11 @@ version, current snapshot id, and the policy hash from the authorization
 receipt when one exists. QueryGraph can inspect those fields from the
 pointer-log/outbox stream without parsing full table metadata for every
 catalog audit question. Before a `table.commit` outbox event is projected or
-acknowledged, LakeCat now checks that its request hash, response hash,
-idempotency-key hash, and present policy hash are full `sha256:`-prefixed
-64-hex digests. A prefix-shaped placeholder cannot become delivered commit
-replay evidence.
+acknowledged, LakeCat now checks that it carries a commit object, an unsigned
+sequence number, a decodable root table identity, matching nested commit-table
+identity when present, and full `sha256:`-prefixed 64-hex request, response,
+idempotency-key, and present policy hashes. A prefix-shaped placeholder or
+contradictory commit identity cannot become delivered commit replay evidence.
 
 Operators and QueryGraph can read that pointer-log evidence through a governed
 management endpoint:
@@ -2053,7 +2054,11 @@ upsert without previous links, and every later upsert or drop links to the
 previous receipt with the expected view-version transition. That keeps
 malformed view-history evidence out of both graph projection and OpenLineage
 replay before QueryGraph ever sees a compact handoff. The verifier also requires
-commit-history replay to be internally consistent before delivery: a
+table-commit replay to be internally consistent before delivery:
+`table.commit` must carry a commit object, unsigned sequence number, stable
+table identity, matching nested commit-table identity, and full SHA-256 commit
+hash evidence before graph or OpenLineage projection can start. Commit-history
+replay has the same shape:
 `table.commits-listed` event must carry a `commit-count` that matches both
 full SHA-256 commit hashes and unsigned sequence numbers, so malformed
 pointer-log summaries cannot become delivered replay evidence. Credential-vend

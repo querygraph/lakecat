@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for `table.commit` events whose commit object,
+  sequence number, table identity, or commit-table identity evidence is missing
+  or contradictory, so invalid commit replay fails before graph/lineage
+  projection acknowledgement.
 - Rejected outbox delivery for table lifecycle events whose table identity,
   optional scope hints, or soft-delete evidence is missing or contradictory, so
   invalid table create/load/delete/restore replay fails before graph/lineage
