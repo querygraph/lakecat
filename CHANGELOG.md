@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for namespace lifecycle events whose warehouse or
+  namespace evidence is malformed, so invalid namespace create/load/drop replay
+  fails before graph/lineage projection acknowledgement.
 - Rejected outbox delivery for `project.upserted` events whose project evidence
   has mismatched project ids, malformed server scope, invalid public
   properties, or malformed identifiers, so invalid project replay fails before

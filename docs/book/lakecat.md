@@ -956,6 +956,10 @@ evidence must carry a valid policy id, warehouse, optional namespace/table
 scope, an enforcement flag, and the captured ODRL material. LakeCat does not
 reason over that ODRL during replay, but malformed binding shape fails closed
 before the policy anchor can be delivered to graph or lineage sinks.
+Namespace lifecycle replay is checked before projection as well: create, load,
+and drop events must carry a valid warehouse and either a valid namespace path
+or non-empty namespace component array. A malformed namespace lifecycle event
+stays pending and reaches neither the Grust-facing graph sink nor OpenLineage.
 Server endpoint URLs are operator-visible management metadata, so LakeCat keeps
 them deliberately plain: they must be absolute `http` or `https` URLs, and they
 cannot include query strings, fragments, or URI userinfo. Rejected submissions
@@ -2046,7 +2050,9 @@ must likewise reject raw secret references and contradictory
 secret-reference-state evidence before delivery. Policy-binding upsert replay
 must carry valid catalog scope evidence before delivery, including policy id,
 warehouse, optional namespace/table scope, enforcement state, and captured ODRL
-material. Project, server, and warehouse upsert replay must carry valid
+material. Namespace lifecycle replay must carry a valid warehouse and namespace
+path or component array before create/load/drop events can be delivered.
+Project, server, and warehouse upsert replay must carry valid
 tenant-root evidence too: project ids, server scopes, endpoint URLs, storage
 roots, identifiers, properties, and pre-redacted hash anchors are checked
 before delivery. It also requires

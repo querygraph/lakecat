@@ -1127,6 +1127,12 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     if event.event_type == "warehouse.upserted" {
         validate_warehouse_upsert_event_evidence(event, payload)?;
     }
+    if matches!(
+        event.event_type.as_str(),
+        "namespace.created" | "namespace.dropped" | "namespace.loaded"
+    ) {
+        validate_namespace_lifecycle_event_evidence(event, payload)?;
+    }
     if event.event_type == "view.version-receipts-listed" {
         validate_view_receipt_list_event_evidence(event, payload)?;
     }
@@ -1538,6 +1544,72 @@ fn validate_warehouse_upsert_event_evidence(
             "warehouse upsert evidence has invalid storage root, properties, or scope",
         )
     })?;
+    Ok(())
+}
+
+fn validate_namespace_lifecycle_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(warehouse_name) = payload
+        .get("warehouse")
+        .and_then(Value::as_str)
+        .filter(|warehouse| !warehouse.is_empty())
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            "namespace lifecycle evidence must contain warehouse",
+        ));
+    };
+    WarehouseName::new(warehouse_name).map_err(|_| {
+        outbox_evidence_error(event, "namespace lifecycle evidence has invalid warehouse")
+    })?;
+    let Some(namespace) = payload.get("namespace") else {
+        return Err(outbox_evidence_error(
+            event,
+            "namespace lifecycle evidence must contain namespace",
+        ));
+    };
+    validate_namespace_lifecycle_value(event, namespace)?;
+    Ok(())
+}
+
+fn validate_namespace_lifecycle_value(
+    event: &OutboxEvent,
+    namespace: &Value,
+) -> Result<(), LakeCatError> {
+    match namespace {
+        Value::Array(parts) => {
+            let parts = parts
+                .iter()
+                .map(|part| {
+                    part.as_str()
+                        .filter(|part| !part.is_empty())
+                        .map(ToString::to_string)
+                        .ok_or_else(|| {
+                            outbox_evidence_error(
+                                event,
+                                "namespace lifecycle namespace components must be non-empty strings",
+                            )
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            Namespace::new(parts).map_err(|_| {
+                outbox_evidence_error(event, "namespace lifecycle evidence has invalid namespace")
+            })?;
+        }
+        Value::String(path) if !path.is_empty() => {
+            path.parse::<Namespace>().map_err(|_| {
+                outbox_evidence_error(event, "namespace lifecycle evidence has invalid namespace")
+            })?;
+        }
+        _ => {
+            return Err(outbox_evidence_error(
+                event,
+                "namespace lifecycle namespace must be a non-empty string or array",
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -10019,7 +10091,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn outbox_drain_redacts_corrupt_pending_event_ids() {
+    async fn outbox_drain_rejects_malformed_namespace_lifecycle_evidence() {
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {
                 event_id: "evt-secret-tenant-token".to_string(),
@@ -10030,6 +10102,7 @@ mod tests {
                     "event-type": "namespace.created",
                     "payload": {
                         "warehouse": "local",
+                        "namespace": ["default", ""],
                     }
                 }),
                 created_at: chrono::Utc::now(),
@@ -10052,8 +10125,14 @@ mod tests {
             .expect_err("corrupt pending outbox event should fail");
 
         let message = err.to_string();
-        assert!(message.contains("outbox event hash sha256:"));
-        assert!(message.contains("is missing namespace payload"));
+        assert!(
+            message
+                .contains("outbox event namespace.created (lakecat.lineage-and-graph) has invalid")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(
+            message.contains("namespace lifecycle namespace components must be non-empty strings")
+        );
         assert!(
             !message.contains("evt-secret-tenant-token"),
             "corrupt event id should be redacted from the operator-facing error"

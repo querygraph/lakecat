@@ -6,6 +6,26 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject malformed outbox namespace evidence`.
+  Outbox draining now rejects `namespace.created`, `namespace.loaded`, and
+  `namespace.dropped` pending events when lifecycle evidence has a malformed
+  warehouse or namespace. Unsafe namespace replay evidence stays pending and
+  reaches neither graph projection nor lineage acknowledgement.
+- Local verification for this outbox namespace evidence slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_namespace_lifecycle_evidence -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_namespace_reads_to_graph_and_lineage -- --nocapture`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain -- --nocapture`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --nocapture --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import, and
+  ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Reject malformed outbox project evidence`.
   Outbox draining now rejects `project.upserted` pending events when project
   evidence has mismatched project ids, malformed optional server scope, invalid
