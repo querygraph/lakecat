@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Collapsed the repeated OPUS archive/consolidation notes in `DESIGN.md` into a
+  single canonical OPUS consolidation section with one source ledger and archive
+  lock, and refreshed `docs/completed/README.md` to point historical OPUS review
+  files back to that living design section.
 - Required compact QGLake bootstrap proof to preserve the same request identity
   source and verification state as `requestIdentityProof`, rejecting summaries
   that splice bootstrap evidence across identity paths.

@@ -26,20 +26,21 @@ The catalog boundary stays intentionally thin:
 - QueryGraph is the end-to-end integration target for Croissant, CDIF, OSI,
   ODRL, OpenLineage, agent workflows, and QGLake acceptance.
 
-## Consolidation Note
+## OPUS Consolidation
 
-The historical OPUS files remain available for audit:
+The OPUS corpus is consolidated into this living design and the adjacent
+canonical docs. The archived files under `docs/completed/` preserve review
+provenance only:
 
 - `docs/completed/OPUS1.md`
 - `docs/completed/OPUS1-DESIGN.md`
 - `docs/completed/OPUS2.md`
 - `docs/completed/OPUS2-DESIGN.md`
 
-They should not be treated as active instructions. Their live decisions,
-findings, and priorities are merged here as the permanent design record. Current
-work should read this file, `AGENTS.md`, `ARCHITECTURE.md`, `GOAL.md`,
-`STATUS.md`, and the live code. If those disagree, prefer the live code and
-newest status/design entry, then reconcile the docs in the same logical unit.
+Current work should read this file, `ARCHITECTURE.md`, `GOAL.md`, `AGENTS.md`,
+`STATUS.md`, `CHANGELOG.md`, the book, and the live code. If those disagree,
+prefer the live code and newest status/design entry, then reconcile the docs in
+the same logical unit.
 
 ### Canonical Document Map
 
@@ -68,63 +69,6 @@ edits such as fixing links, adding an archive banner, or correcting broken
 provenance. New LakeCat design and implementation guidance belongs here or in
 the adjacent canonical docs.
 
-### Consolidation Completion
-
-The full OPUS corpus is consolidated:
-
-- `OPUS1.md` review findings are represented by `Finding Status`, `OPUS Closure
-  Map`, `Priority Plan`, and the review gate below.
-- `OPUS1-DESIGN.md` architecture guidance is represented by `Thesis`,
-  `Ownership`, `Compatibility Rules`, `Critical Path: The Restriction`, and
-  `OPUS Decisions Kept Permanent`.
-- `OPUS2.md` updated code-review findings are represented by `Current State`,
-  `Finding Status`, and `OPUS Closure Map`.
-- `OPUS2-DESIGN.md` working-plan guidance is represented by `Review Log And
-  Working Plan`, `Critical Path: The Restriction`, `Priority Plan`, and
-  `Review Gate`.
-
-Do not create new OPUS-numbered design files. New reviews should either update
-this living design, update the specific canonical doc in the map above, or add a
-small dated note under `docs/completed/` only after its durable decisions have
-already been merged into the live docs.
-
-### 2026-06-20 Consolidation Lock
-
-The current OPUS consolidation state is intentional and complete. The root tree
-contains no active `OPUS*.md` files, and the only tracked OPUS files are the four
-archived review artifacts under `docs/completed/`. Treat this document as the
-implementation-ready design synthesis; do not mine archived OPUS files for new
-work without first moving the durable decision back into this file or the
-canonical document that owns that topic.
-
-The consolidation was re-audited on 2026-06-20 against the archived OPUS
-corpus. The active design record remains this file plus the canonical document
-map above. The OPUS files are not a hidden backlog, and they are not an
-alternate status source. They preserve review provenance only.
-
-Current archive inventory:
-
-| Archived file | Consolidated role |
-| --- | --- |
-| `docs/completed/OPUS1.md` | Historical scaffold review and original finding set. |
-| `docs/completed/OPUS1-DESIGN.md` | Historical compatibility, governance, and Sail-near-data design argument. |
-| `docs/completed/OPUS2.md` | Historical second review after the durable catalog spine landed. |
-| `docs/completed/OPUS2-DESIGN.md` | Historical restriction-first working plan and priority reset. |
-
-### Final OPUS Archive Reconciliation
-
-The OPUS corpus is no longer a parallel design system. Every durable OPUS
-finding, review verdict, architectural rule, and working-plan priority has been
-merged into this file or routed to the canonical document map above. The
-archived files under `docs/completed/` may be opened for provenance, but active
-work must proceed from `DESIGN.md`, `ARCHITECTURE.md`, `GOAL.md`, `STATUS.md`,
-`AGENTS.md`, `CHANGELOG.md`, the book, and the live code.
-
-Do not create `OPUS3.md`, revive root-level OPUS notes, or append new working
-plans to archived OPUS files. A future review should update the canonical
-document that owns the decision and can add a small completed-review artifact
-only after the durable guidance has already landed in the active docs.
-
 ### Consolidated Source Ledger
 
 The durable OPUS sections have been absorbed into the active docs as follows.
@@ -139,6 +83,14 @@ should not reopen archived OPUS files just to find the current plan.
 | `OPUS1-DESIGN.md` working plan | The early dev-manager review gate, verification discipline, Turso pivot endorsement, QueryGraph OSI cleanup, Grust/TypeSec reconciliation, and priority ordering. | `Review Log And Working Plan`, `Current Dev-Manager View`, `Priority Plan`, `Review Gate`, `STATUS.md` |
 | `OPUS2.md` second review | Current catalog-spine assessment after Turso/CAS/auth/outbox/Sail-provider work, OPUS1 closure state, and successor findings F1-F10. | `OPUS2 Review Baseline`, `Current State`, `Finding Status`, `OPUS Closure Map` |
 | `OPUS2-DESIGN.md` restriction-first plan | The restriction as the binding governed-read object, ODRL-to-restriction path, Sail-planned enforcement, QueryGraph/QGLake acceptance, repo division of labor, and anti-pattern updates. | `Critical Path: The Restriction`, `Current Dev-Manager View`, `Priority Plan`, `OPUS Decisions Kept Permanent` |
+
+### Archive Lock
+
+The root tree should contain no active `OPUS*.md` files. Do not create
+`OPUS3.md`, revive root-level OPUS notes, or append new working plans to the
+archived OPUS files. A future review should update the canonical document that
+owns the decision and may add a completed-review artifact under `docs/completed/`
+only after the durable guidance has landed in the active docs.
 
 ### Consolidated OPUS Digest
 

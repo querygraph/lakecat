@@ -5,6 +5,19 @@ Updated: 2026-06-20
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Consolidate OPUS archive notes`.
+  `DESIGN.md` now has one canonical OPUS consolidation section with the active
+  document map, archive policy, source ledger, archive lock, and operating
+  digest. The four OPUS files remain archived under `docs/completed/`, and
+  `docs/completed/README.md` points future review work back through the living
+  design instead of treating archived reviews as an active backlog.
+- Local verification for this OPUS consolidation cleanup is documentation-only:
+  `git ls-files 'OPUS*.md'`;
+  `git ls-files 'docs/completed/OPUS*.md'`;
+  `rg --files -g 'OPUS*.md' -g '!docs/completed/**'`;
+  `rg --files docs/completed -g 'OPUS*.md'`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Bind bootstrap request identity state`.
   Compact QGLake handoff verification now requires
