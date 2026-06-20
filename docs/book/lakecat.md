@@ -1665,7 +1665,10 @@ governance or capability receipt creation, so raw proof material cannot become
 either policy context or operator-facing diagnostics. TypeDID verifier failures
 follow the same rule: malformed or rejected envelopes report only the envelope
 hash and error-detail hash, and a verified-subject mismatch reports only hashes
-of the verified and supplied principals before governance dispatch. The JSON output from
+of the verified and supplied principals before governance dispatch. LakeCat
+applies that redaction at the verifier trait boundary, so a custom TypeDID
+verifier can choose the error class without leaking raw envelope, DID, gateway,
+or payload text into the catalog response. The JSON output from
 `lakecat-cli qglake-verify-handoff` also carries
 the accepted lineage-drain identity source, identity state, and TypeDID
 envelope/proof hash slots in `lineageDrainArtifactSemantics`, so QueryGraph can

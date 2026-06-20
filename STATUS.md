@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact custom TypeDID verifier errors`.
+  The live request-identity path now wraps every configured TypeDID verifier
+  failure before HTTP response or governance dispatch, preserving the original
+  error class while exposing only `typedid-envelope-hash` and
+  `error-detail-hash` evidence.
+- Local verification for this TypeDID verifier boundary slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service config_endpoint_redacts_custom_typedid_verifier_errors_before_governance -- --nocapture`;
+  `cargo test -p lakecat-service config_endpoint_redacts_typedid_subject_mismatch_before_governance -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact TypeDID verifier failures`.
   Live TypeDID envelope verification now reports malformed/rejected envelopes
   with `typedid-envelope-hash` plus `error-detail-hash`, and subject mismatch

@@ -5571,7 +5571,11 @@ async fn verify_typedid_identity(
     let Some(envelope_json) = identity.typedid_envelope.as_deref() else {
         return Ok(identity);
     };
-    let verification = state.typedid_verifier.verify(envelope_json).await?;
+    let verification = state
+        .typedid_verifier
+        .verify(envelope_json)
+        .await
+        .map_err(|err| redact_typedid_verifier_error(envelope_json, err))?;
     if identity.principal.kind != PrincipalKind::Anonymous
         && identity.principal != verification.principal
     {
@@ -5590,6 +5594,24 @@ async fn verify_typedid_identity(
     identity.envelope["attestation-state"] = json!("verified");
     identity.envelope["typedid-attestation"] = verification.attestation;
     Ok(identity)
+}
+
+fn redact_typedid_verifier_error(envelope_json: &str, err: LakeCatError) -> LakeCatError {
+    let message = format!(
+        "TypeDID envelope verification failed; typedid-envelope-hash={}; {}",
+        content_hash_bytes(envelope_json.as_bytes()),
+        error_detail_hash_context(&err),
+    );
+    match err {
+        LakeCatError::InvalidArgument(_) => LakeCatError::InvalidArgument(message),
+        LakeCatError::Conflict(_) => LakeCatError::Conflict(message),
+        LakeCatError::NotSupported(_) => LakeCatError::NotSupported(message),
+        LakeCatError::Internal(_) => LakeCatError::Internal(message),
+        LakeCatError::NotFound { .. } => LakeCatError::NotFound {
+            object: "TypeDID verifier failure",
+            name: message,
+        },
+    }
 }
 
 async fn authorize(
@@ -5948,6 +5970,32 @@ mod tests {
             _envelope_json: &str,
         ) -> lakecat_core::LakeCatResult<TypeDidVerification> {
             Ok(self.verification.clone())
+        }
+    }
+
+    #[derive(Debug)]
+    struct LeakingTypeDidVerifier {
+        err: LakeCatError,
+    }
+
+    #[async_trait]
+    impl TypeDidVerifier for LeakingTypeDidVerifier {
+        async fn verify(
+            &self,
+            _envelope_json: &str,
+        ) -> lakecat_core::LakeCatResult<TypeDidVerification> {
+            Err(match &self.err {
+                LakeCatError::InvalidArgument(message) => {
+                    LakeCatError::InvalidArgument(message.clone())
+                }
+                LakeCatError::Conflict(message) => LakeCatError::Conflict(message.clone()),
+                LakeCatError::NotSupported(message) => LakeCatError::NotSupported(message.clone()),
+                LakeCatError::Internal(message) => LakeCatError::Internal(message.clone()),
+                LakeCatError::NotFound { object, name } => LakeCatError::NotFound {
+                    object,
+                    name: name.clone(),
+                },
+            })
         }
     }
 
@@ -6876,6 +6924,66 @@ mod tests {
         assert!(!message.contains("did:example:verified-secret"));
         assert!(!message.contains("did:example:supplied-secret"));
         assert!(!message.contains("typedid-envelope"));
+        assert!(governance.principals.lock().await.is_empty());
+        assert!(governance.contexts.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn config_endpoint_redacts_custom_typedid_verifier_errors_before_governance() {
+        let governance = Arc::new(RecordingGovernance::default());
+        let verifier = Arc::new(LeakingTypeDidVerifier {
+            err: LakeCatError::Conflict(
+                "gateway rejected did:example:agent with raw envelope payload secret=abc"
+                    .to_string(),
+            ),
+        });
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_integrations(
+            default_sail_engine(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        )
+        .with_typedid_verifier(verifier));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/config")
+                    .header("x-lakecat-agent-did", "did:example:agent")
+                    .header(
+                        "x-lakecat-typedid-envelope",
+                        r#"{"protected":"typedid-envelope","payload":"secret=abc"}"#,
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let message = String::from_utf8(body.to_vec()).unwrap();
+        assert!(message.contains("TypeDID envelope verification failed"));
+        assert!(message.contains("typedid-envelope-hash=sha256:"));
+        assert!(message.contains("error-detail-hash=sha256:"));
+        for forbidden in [
+            "did:example:agent",
+            "raw envelope payload",
+            "secret=abc",
+            r#""protected":"typedid-envelope""#,
+        ] {
+            assert!(
+                !message.contains(forbidden),
+                "TypeDID verifier errors must not expose {forbidden}"
+            );
+        }
         assert!(governance.principals.lock().await.is_empty());
         assert!(governance.contexts.lock().await.is_empty());
     }
