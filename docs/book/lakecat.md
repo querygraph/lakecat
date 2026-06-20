@@ -778,7 +778,8 @@ that touches integration features, run:
 scripts/check-local-dependency-contract.sh
 ```
 
-The script checks the manual-only CI trigger, crates.io resolution for the
+The script checks the manual-only CI trigger, scans every GitHub workflow file
+for forbidden automatic cloud triggers, verifies crates.io resolution for the
 published Grust graph/Cypher and TypeSec versions, the local Sail path bridge,
 the Sail patch files manual CI applies, and the concrete Sail helper API surface
 LakeCat uses:

@@ -24,17 +24,32 @@ require_pattern() {
   rg -q "$pattern" "$file" || fail "$description"
 }
 
+require_manual_only_workflows() {
+  local workflow
+  local workflow_files=()
+
+  while IFS= read -r -d '' workflow; do
+    workflow_files+=("$workflow")
+  done < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | sort -z)
+
+  [[ "${#workflow_files[@]}" -gt 0 ]] || fail "missing GitHub workflow files"
+
+  for workflow in "${workflow_files[@]}"; do
+    if rg -q '^[[:space:]]*(push|pull_request|pull_request_target|merge_group|repository_dispatch):' "$workflow"; then
+      fail "$workflow must not run on push, pull_request, pull_request_target, merge_group, or repository_dispatch until the local gates are proven stable"
+    fi
+    if rg -q '^[[:space:]]*(schedule|workflow_run|workflow_call):' "$workflow"; then
+      fail "$workflow must not run on schedule, workflow_run, or workflow_call until the local gates are proven stable"
+    fi
+  done
+}
+
 require_file Cargo.toml
 require_file .github/workflows/ci.yml
 
 require_pattern 'workflow_dispatch:' .github/workflows/ci.yml \
   "CI must remain manual-only through workflow_dispatch"
-if rg -q '(^|[[:space:]])(push|pull_request|pull_request_target|merge_group|repository_dispatch):' .github/workflows/ci.yml; then
-  fail "CI must not run on push, pull_request, pull_request_target, merge_group, or repository_dispatch until the local gates are proven stable"
-fi
-if rg -q '(^|[[:space:]])(schedule|workflow_run|workflow_call):' .github/workflows/ci.yml; then
-  fail "CI must not run on schedule, workflow_run, or workflow_call until the local gates are proven stable"
-fi
+require_manual_only_workflows
 
 require_pattern 'grust-graph = \{ package = "grust-graph", version = "0\.9\.0",' Cargo.toml \
   "grust-graph must use the published 0.9.0 crate"

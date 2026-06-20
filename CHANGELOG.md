@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened the local dependency-contract audit so every GitHub workflow file,
+  not only `.github/workflows/ci.yml`, is scanned for forbidden automatic cloud
+  triggers while CI remains manual-only.
 - Tightened view receipt-chain verifier coverage for chain-head invariants:
   chains must start with a version-1 upsert, no previous-link fields, and no
   zero-version or first-receipt tombstone.

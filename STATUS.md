@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Scan all workflows for automatic triggers`.
+  The local dependency contract now scans every GitHub workflow file, including
+  future `.yml` and `.yaml` additions, for forbidden automatic cloud triggers
+  while LakeCat keeps CI manual-only and relies on local proof before pushes.
+- Local verification for this reproducibility slice is green:
+  `bash -n scripts/check-local-dependency-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin view receipt-chain head invariants`.
   View receipt-chain verifier coverage now directly proves a chain must begin
   with a version-1 upsert that has no previous version or previous receipt hash.

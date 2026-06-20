@@ -508,6 +508,9 @@ QueryGraph receipt chains cannot be extended by invalid guarded requests.
 Keep local verification ahead of cloud CI. Land reusable Sail helpers upstream
 or pin published versions before removing local path/patch bridges. Replace v4
 JSON passthrough with typed Sail support when Sail exposes stable APIs.
+The local dependency contract is the guardrail while cloud CI is manual-only:
+it must reject automatic triggers across every GitHub workflow file, not just
+the primary CI workflow, before any pushed slice depends on cloud feedback.
 
 ## Review Gate
 
