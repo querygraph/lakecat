@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin stale view guard replay boundary`.
+  Route-level coverage now proves stale guarded view upserts and drops fail
+  without emitting new replay outbox events or extending view-version receipt
+  evidence, preserving QueryGraph receipt-chain semantics at the catalog
+  boundary.
+- Local verification for this stale view guard replay slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service stale_view_mutation_guards_do_not_emit_replay_events -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin planned projection drain summary`.
   Service replay-summary coverage now asserts `table.scan-planned` outbox drain
   summaries preserve requested/effective projection and statistics-field

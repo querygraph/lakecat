@@ -13600,6 +13600,128 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stale_view_mutation_guards_do_not_emit_replay_events() {
+        let store = MemoryCatalogStore::new();
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            store.clone(),
+        ));
+        let create = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/guarded_view")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "sql": "select id from customers",
+                    "dialect": "sql",
+                    "schema-version": 1
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let guarded_update = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/guarded_view")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "sql": "select id, email from customers",
+                    "dialect": "sql",
+                    "schema-version": 2,
+                    "expected-view-version": 1
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(guarded_update).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let pending_before = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 100)
+            .await
+            .unwrap();
+        assert_eq!(pending_before.len(), 2);
+        assert!(
+            pending_before
+                .iter()
+                .all(|event| event.event_type == "view.upserted")
+        );
+
+        let stale_update = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/guarded_view")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "sql": "select email from customers",
+                    "dialect": "sql",
+                    "schema-version": 3,
+                    "expected-view-version": 1
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(stale_update).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        let stale_catalog_drop = Request::builder()
+            .method(Method::DELETE)
+            .uri("/catalog/v1/local/namespaces/default/views/guarded_view?expected-view-version=1")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(stale_catalog_drop).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        let pending_after = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 100)
+            .await
+            .unwrap();
+        assert_eq!(
+            pending_after
+                .iter()
+                .map(|event| event.event_id.as_str())
+                .collect::<Vec<_>>(),
+            pending_before
+                .iter()
+                .map(|event| event.event_id.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            pending_after
+                .iter()
+                .map(|event| event.event_type.as_str())
+                .collect::<Vec<_>>(),
+            vec!["view.upserted", "view.upserted"]
+        );
+
+        let receipts = Request::builder()
+            .method(Method::GET)
+            .uri(
+                "/management/v1/warehouses/local/namespaces/default/views/guarded_view/version-receipts",
+            )
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(receipts).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let receipts = body["receipts"].as_array().unwrap();
+        assert_eq!(receipts.len(), 2);
+        assert_eq!(receipts[0]["view-version"], serde_json::json!(1));
+        assert_eq!(receipts[1]["view-version"], serde_json::json!(2));
+    }
+
+    #[tokio::test]
     async fn management_storage_profile_overrides_inferred_credentials_by_prefix() {
         let app = test_app();
         let upsert = Request::builder()

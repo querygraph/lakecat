@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned route-level stale view mutation guards so rejected guarded view upserts
+  and drops do not emit new replay outbox events or extend QueryGraph receipt
+  evidence.
 - Pinned service replay-summary coverage for `table.scan-planned` so requested
   and effective projection/statistics evidence survives outbox drain before
   QGLake handoff verification consumes it.
