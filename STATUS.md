@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full tenant-root hashes in QGLake bootstrap verification`.
+  QGLake bootstrap verification now rejects tenant `Server.endpointUrlHash` and
+  `Warehouse.storageRootHash` values unless they are full `sha256:`-prefixed
+  64-hex digests, so QueryGraph acceptance cannot be satisfied by placeholder
+  hash labels after a bundle hash resync.
+- Local verification for this tenant-root hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_bootstrap_verifier_rejects_short -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_bootstrap_verifier_rejects_raw -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_bootstrap_verifier_requires_graph_tenant_spine -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require HTTP server endpoint URLs`.
   Server endpoint URLs now must parse as absolute `http` or `https` URLs before
   memory or Turso persistence. Invalid strings and non-HTTP schemes fail with

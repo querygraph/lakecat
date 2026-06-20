@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required QGLake bootstrap tenant-root hash evidence to be full
+  `sha256:`-prefixed 64-hex digests for `endpointUrlHash` and
+  `storageRootHash`, rejecting short placeholder hashes even when the bundle
+  hashes are recomputed.
 - Required server endpoint URLs to be absolute `http` or `https` URLs before
   memory or Turso persistence, returning only `server-endpoint-url-hash`
   evidence for invalid or non-HTTP endpoint submissions.

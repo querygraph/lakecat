@@ -1514,7 +1514,10 @@ that a table node exists somewhere in the graph. It also rejects bundles whose
 tenant graph nodes expose raw `endpointUrl` or `storageRoot` properties, even
 if the graph hash and bundle hash have been recomputed around those raw values.
 Accepted handoffs must use hash-only `endpointUrlHash` and `storageRootHash`
-evidence for those roots.
+evidence for those roots. Those fields are not merely labels with a
+`sha256:` prefix: the QGLake verifier requires a full 64-hex SHA-256 digest,
+so an importer cannot accept a rewritten bundle that replaces raw roots with
+placeholder hash text after the fact.
 The saved handoff verifier repeats that check against the archived
 `lakecat-bootstrap.json` artifact, so a later replay cannot pass with a compact
 summary whose bundle file has lost the tenant path or drifted from the summary

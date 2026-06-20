@@ -5452,12 +5452,10 @@ fn verify_qglake_tenant_root_redaction(
     }
     if let Some(hash) = node.properties.get(hash_field)
         && !hash.is_null()
-        && !hash
-            .as_str()
-            .is_some_and(|value| value.starts_with("sha256:"))
+        && !hash.as_str().is_some_and(is_full_sha256_hash)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "QGLake bootstrap graph {label} node {hash_field} must be sha256 hash evidence"
+            "QGLake bootstrap graph {label} node {hash_field} must be full SHA-256 hash evidence"
         )));
     }
     Ok(())
@@ -8341,6 +8339,13 @@ fn require_hash_str<'a>(
 
 fn is_sha256_hash(string: &str) -> bool {
     string.starts_with("sha256:")
+}
+
+fn is_full_sha256_hash(string: &str) -> bool {
+    let Some(digest) = string.strip_prefix("sha256:") else {
+        return false;
+    };
+    digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn require_optional_hash_value(
@@ -12628,12 +12633,41 @@ mod tests {
             .find(|node| node.label == "Server")
             .expect("fixture should include Server node");
         server.properties["endpointUrl"] = json!("https://lakecat.example.com?token=raw");
-        server.properties["endpointUrlHash"] = json!("sha256:endpoint-url");
+        server.properties["endpointUrlHash"] =
+            json!("sha256:0000000000000000000000000000000000000000000000000000000000000000");
         qglake_resync_bundle_hashes(&mut bundle);
 
         let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
             .expect_err("QGLake bootstrap should reject raw tenant server endpoint URLs");
         assert!(err.to_string().contains("raw endpointUrl"));
+    }
+
+    #[test]
+    fn qglake_bootstrap_verifier_rejects_short_server_endpoint_hash() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let mut bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        let server = bundle
+            .graph
+            .nodes
+            .iter_mut()
+            .find(|node| node.label == "Server")
+            .expect("fixture should include Server node");
+        server.properties["endpointUrlHash"] = json!("sha256:endpoint-url");
+        qglake_resync_bundle_hashes(&mut bundle);
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect_err("QGLake bootstrap should reject short tenant endpoint hash evidence");
+        assert!(err.to_string().contains("endpointUrlHash"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
@@ -12656,12 +12690,41 @@ mod tests {
             .find(|node| node.label == "Warehouse")
             .expect("fixture should include Warehouse node");
         warehouse.properties["storageRoot"] = json!("file:///tmp/lakecat?token=raw");
-        warehouse.properties["storageRootHash"] = json!("sha256:storage-root");
+        warehouse.properties["storageRootHash"] =
+            json!("sha256:1111111111111111111111111111111111111111111111111111111111111111");
         qglake_resync_bundle_hashes(&mut bundle);
 
         let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
             .expect_err("QGLake bootstrap should reject raw tenant warehouse storage roots");
         assert!(err.to_string().contains("raw storageRoot"));
+    }
+
+    #[test]
+    fn qglake_bootstrap_verifier_rejects_short_warehouse_storage_root_hash() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let mut bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        let warehouse = bundle
+            .graph
+            .nodes
+            .iter_mut()
+            .find(|node| node.label == "Warehouse")
+            .expect("fixture should include Warehouse node");
+        warehouse.properties["storageRootHash"] = json!("sha256:storage-root");
+        qglake_resync_bundle_hashes(&mut bundle);
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect_err("QGLake bootstrap should reject short tenant storage-root hash evidence");
+        assert!(err.to_string().contains("storageRootHash"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
