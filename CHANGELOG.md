@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for pending events whose `read-restriction`
+  `policy-hashes` are not full `sha256:`-prefixed 64-hex digests, so malformed
+  governed-read evidence fails before graph/lineage projection acknowledgement.
 - Required governed scan read-restriction `policy-hashes` in QGLake source
   replay and compact handoff proof to contain full `sha256:`-prefixed 64-hex
   digests, rejecting short placeholder policy anchors.

@@ -6,6 +6,24 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject short outbox policy hashes`.
+  Outbox draining now rejects pending events whose
+  `read-restriction.policy-hashes` are not full `sha256:`-prefixed 64-hex
+  digests before graph/lineage projection or delivery acknowledgement, keeping
+  malformed governed-read source evidence pending instead of letting it reach
+  QGLake replay as delivered catalog evidence.
+- Local verification for this outbox policy hash slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_short_read_restriction_policy_hashes -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain -- --nocapture`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, and ended with `QGLake handoff verified`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require full governed policy hashes`.
   QGLake source replay and compact handoff verification now reject governed
   scan read-restriction `policy-hashes` unless each value is a full

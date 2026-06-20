@@ -1067,6 +1067,7 @@ pub async fn drain_outbox_once(
     let mut graph_events = 0usize;
     let mut lineage_events = 0usize;
     for event in events {
+        validate_outbox_event_evidence(&event)?;
         let receipt = project_outbox_event(state, &event).await?;
         graph_events += receipt.graph_events;
         lineage_events += receipt.lineage_events;
@@ -1097,6 +1098,55 @@ pub async fn drain_outbox_once(
         typedid_proof_hash: None,
         events: summaries,
     })
+}
+
+fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatError> {
+    let payload = event.payload.get("payload").unwrap_or(&event.payload);
+    validate_read_restriction_policy_hashes(event, payload.get("read-restriction"))
+}
+
+fn validate_read_restriction_policy_hashes(
+    event: &OutboxEvent,
+    restriction: Option<&Value>,
+) -> Result<(), LakeCatError> {
+    let Some(policy_hashes) = restriction.and_then(|restriction| restriction.get("policy-hashes"))
+    else {
+        return Ok(());
+    };
+    let Some(policy_hashes) = policy_hashes.as_array() else {
+        return Err(outbox_evidence_error(
+            event,
+            "read restriction policy-hashes must be an array",
+        ));
+    };
+    for policy_hash in policy_hashes {
+        if !policy_hash
+            .as_str()
+            .is_some_and(is_full_sha256_digest_evidence)
+        {
+            return Err(outbox_evidence_error(
+                event,
+                "read restriction policy-hashes must contain full SHA-256 digest evidence",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn outbox_evidence_error(event: &OutboxEvent, message: &str) -> LakeCatError {
+    LakeCatError::InvalidArgument(format!(
+        "outbox event {} ({}) has invalid {message}; event-id-hash={}",
+        event.event_type,
+        event.sink,
+        content_hash_bytes(event.event_id.as_bytes())
+    ))
+}
+
+fn is_full_sha256_digest_evidence(value: &str) -> bool {
+    let Some(digest) = value.strip_prefix("sha256:") else {
+        return false;
+    };
+    digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn attach_lineage_drain_authorization(
@@ -6053,10 +6103,7 @@ mod tests {
     use tower::ServiceExt;
 
     fn is_full_sha256_hash(value: &str) -> bool {
-        let Some(digest) = value.strip_prefix("sha256:") else {
-            return false;
-        };
-        digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+        is_full_sha256_digest_evidence(value)
     }
 
     #[derive(Debug, Default)]
@@ -7562,6 +7609,9 @@ mod tests {
             subject: "agent:writer".to_string(),
             kind: PrincipalKind::Agent,
         };
+        let full_policy_hash =
+            content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                .unwrap();
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![
                 OutboxEvent {
@@ -7685,7 +7735,7 @@ mod tests {
                                     "term": "severity",
                                     "value": "debug"
                                 },
-                                "policy-hashes": ["sha256:policy"]
+                                "policy-hashes": [full_policy_hash.clone()]
                             },
                             "required-projection": ["event_id"],
                             "effective-projection": ["event_id"],
@@ -8526,6 +8576,83 @@ mod tests {
             !lineage.events.lock().await.is_empty(),
             "lineage projection should have happened before the short acknowledgement"
         );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_short_read_restriction_policy_hashes() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-short-policy".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-tasks-fetched".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-short-policy",
+                    "event-type": "table.scan-tasks-fetched",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": {
+                            "allowed-columns": ["event_id"],
+                            "row-predicate": {
+                                "type": "not-eq",
+                                "term": "severity",
+                                "value": "debug"
+                            },
+                            "policy-hashes": ["sha256:policy"]
+                        },
+                        "required-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "required-filters": [{
+                            "type": "not-eq",
+                            "term": "severity",
+                            "value": "debug"
+                        }],
+                        "file-scan-task-count": 1,
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("short read restriction policy hash should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.scan-tasks-fetched"));
+        assert!(message.contains("read restriction policy-hashes"));
+        assert!(message.contains("full SHA-256"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
     }
 
     #[tokio::test]
@@ -16493,6 +16620,9 @@ mod tests {
     #[test]
     fn scan_planned_drain_summary_preserves_projection_evidence() {
         let principal = Principal::new("did:example:agent", PrincipalKind::Agent).unwrap();
+        let policy_hash =
+            content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                .unwrap();
         let event = OutboxEvent {
             event_id: "evt-plan".to_string(),
             sink: "lakecat.lineage-and-graph".to_string(),
@@ -16516,7 +16646,7 @@ mod tests {
                             "term": "event_id",
                             "value": "evt-1"
                         },
-                        "policy-hashes": ["sha256:policy"]
+                        "policy-hashes": [policy_hash]
                     },
                     "requested-projection": ["event_id", "payload"],
                     "effective-projection": ["event_id"],

@@ -470,6 +470,13 @@ events were acknowledged than LakeCat projected, the drain fails with an
 acknowledgement mismatch instead of returning a quiet partial success. That
 keeps retry and operator evidence honest when a concurrent drain or backend
 anomaly interferes with delivery accounting.
+The drain also validates governed-read evidence before projection. If a pending
+event contains a `read-restriction.policy-hashes` array, each entry must already
+be a full `sha256:`-prefixed 64-hex digest. A readable placeholder such as
+`sha256:policy-name` fails the drain before graph or lineage sinks run and
+before the store can mark the event delivered, keeping malformed source
+evidence available for retry or operator repair instead of promoting it into a
+QGLake handoff.
 
 ## Grust For Graph Concepts
 
@@ -1980,7 +1987,10 @@ itself is part of that proof: both source replay and compact
 `plannedReadRestriction`/`fetchedReadRestriction` evidence require
 `policy-hashes` to be full `sha256:`-prefixed 64-hex digests, so a
 self-consistent handoff cannot smuggle placeholder policy names through a field
-that later readers treat as integrity evidence. The verifier also requires
+that later readers treat as integrity evidence. The outbox drain checks the
+same digest shape before acknowledging any pending event that carries
+`read-restriction.policy-hashes`, so malformed source evidence is stopped
+before it becomes delivered replay material. The verifier also requires
 planned and fetched read restrictions to match before compact proof generation,
 requires both requested/effective projection and
 requested/effective stats-field evidence, requires effective projection to be a
