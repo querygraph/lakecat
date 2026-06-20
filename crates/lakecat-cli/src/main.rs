@@ -5963,6 +5963,7 @@ fn verify_qglake_credential_replay(
             "qglake lineage drain trusted human credential replay TTL cap mismatch: expected={restricted_ttl} actual={human_ttl}"
         )));
     }
+    verify_qglake_credential_restriction_match(restricted_probe, human_probe)?;
     Ok(())
 }
 
@@ -5985,6 +5986,11 @@ fn verify_qglake_credential_lineage_projection(
             "qglake lineage drain {label} credential replay is missing max credential TTL evidence"
         )));
     }
+    let restriction = qglake_lineage_drain_read_restriction(event, &format!("{label} credential"))?;
+    require_read_restriction_evidence(
+        restriction,
+        &format!("qglake lineage drain {label} credential read restriction"),
+    )?;
     verify_qglake_credential_storage_profile_projection(event, label)?;
     if !qglake_has_sha256_hashes(&event.replay_event_hashes)
         || !qglake_has_sha256_hashes(&event.replay_open_lineage_hashes)
@@ -5992,6 +5998,35 @@ fn verify_qglake_credential_lineage_projection(
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain {label} credential replay is missing SHA-256 sink receipt hashes"
         )));
+    }
+    Ok(())
+}
+
+fn verify_qglake_credential_restriction_match(
+    restricted: &LineageDrainEventSummary,
+    human: &LineageDrainEventSummary,
+) -> lakecat_core::LakeCatResult<()> {
+    let restricted_restriction =
+        qglake_lineage_drain_read_restriction(restricted, "restricted credential")?;
+    let human_restriction =
+        qglake_lineage_drain_read_restriction(human, "trusted human credential")?;
+    for field in [
+        "policy-hashes",
+        "allowed-columns",
+        "row-predicate",
+        "purpose",
+        "max-credential-ttl-seconds",
+    ] {
+        require_value_match(
+            restricted_restriction,
+            field,
+            required_value(
+                human_restriction,
+                field,
+                "qglake lineage drain trusted human credential read restriction",
+            )?,
+            "qglake lineage drain restricted credential read restriction",
+        )?;
     }
     Ok(())
 }
@@ -14163,6 +14198,97 @@ mod tests {
             err.to_string()
                 .contains("trusted human credential replay TTL cap mismatch")
         );
+
+        let mut human_without_purpose = qglake_human_credential_summary();
+        human_without_purpose.read_restriction = Some(json!({
+            "allowed-columns": ["event_id", "occurred_at", "severity"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": ["sha256:scan-policy"]
+        }));
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 4,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 4,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                    human_without_purpose,
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject missing credential restriction purpose");
+        assert!(err.to_string().contains(
+            "qglake lineage drain trusted human credential read restriction is missing required field purpose"
+        ));
+
+        let mut human_with_drifted_purpose = qglake_human_credential_summary();
+        human_with_drifted_purpose.read_restriction = Some(json!({
+            "allowed-columns": ["event_id", "occurred_at", "severity"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "other-purpose",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": ["sha256:scan-policy"]
+        }));
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 4,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 4,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                    human_with_drifted_purpose,
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject credential restriction purpose drift");
+        assert!(err.to_string().contains(
+            "qglake lineage drain restricted credential read restriction.purpose mismatch"
+        ));
 
         let mut restricted_without_location_hash = qglake_restricted_credential_summary();
         restricted_without_location_hash.storage_profile_location_prefix_hash = None;

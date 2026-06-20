@@ -1626,8 +1626,12 @@ delete-file, and child-plan task counts, along with planned and fetched
 OpenLineage receipt hashes. Source replay validation now also requires planned
 and fetched read restrictions to match before compact proof generation, and
 requires the fetched projection and filter requirements to exactly preserve the
-fetched allowed columns and row predicate. For commit-history replay, the typed
-drain summary carries the commit count,
+fetched allowed columns and row predicate. Credential replay applies the same
+policy-proof discipline to the two credential branches: the restricted-agent
+denial and trusted-human audited raw-credential exception must both carry a
+complete read restriction, and those restrictions must match before credential
+proof can feed the compact handoff summary. For commit-history replay, the
+typed drain summary carries the commit count,
 committed sequence numbers, commit hashes, replay hashes, and OpenLineage
 hashes. The handoff verifier rejects compact scan proofs without those
 OpenLineage hashes and compact commit-history proofs whose counts, sequences,
