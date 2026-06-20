@@ -13580,6 +13580,46 @@ mod tests {
             event.payload["payload"]["storage-profile"]["secret-ref-present"],
             serde_json::json!(false)
         );
+        let response_evidence = event.payload["payload"]["credential-response-evidence"]
+            .as_array()
+            .expect("credential response evidence should be recorded in outbox");
+        assert_eq!(response_evidence.len(), 1);
+        assert_eq!(
+            response_evidence[0]["storage-profile-id"],
+            serde_json::json!("local:file")
+        );
+        assert_eq!(
+            response_evidence[0]["storage-provider"],
+            serde_json::json!("file")
+        );
+        assert_eq!(
+            response_evidence[0]["credential-mode"],
+            serde_json::json!("local-file-no-secret")
+        );
+        assert_eq!(
+            response_evidence[0]["authorization-principal"],
+            serde_json::json!("human:operator")
+        );
+        assert_eq!(
+            response_evidence[0]["governed-read-required"],
+            serde_json::json!("true")
+        );
+        assert_eq!(
+            response_evidence[0]["max-credential-ttl-seconds"],
+            serde_json::json!("300")
+        );
+        assert!(
+            response_evidence[0]["prefix-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert!(
+            response_evidence[0]["issuer-config-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        let evidence_text = serde_json::to_string(&response_evidence).unwrap();
+        assert!(!evidence_text.contains("file:///tmp/events"));
         assert!(
             event.payload["payload"]
                 .get("lakecat:credential-block-reason")

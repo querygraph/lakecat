@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin credential response outbox evidence`.
+  The trusted-human raw credential exception route now has regression coverage
+  proving the committed credential-vend outbox payload contains one redacted
+  `credential-response-evidence` entry with canonical LakeCat profile/provider/
+  mode/principal/governed-read/TTL values, SHA-256-shaped prefix and issuer
+  config hashes, and no raw credential prefix.
+- Local verification for this credential outbox evidence slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service credential_vend_allows_trusted_human_raw_exception_for_restricted_table -- --nocapture`;
+  `cargo test -p lakecat-service credentials_vend_audit_payload_surfaces_policy_context -- --nocapture`.
+- Latest completed implementation slice:
   `Audit canonical credential response evidence`.
   Credential-vend audit/outbox payloads now include redacted
   `credential-response-evidence` for each returned credential. The proof carries

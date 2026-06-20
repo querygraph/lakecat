@@ -970,7 +970,9 @@ The audit event for the credential attempt records redacted
 `credential-response-evidence`: the response prefix is hashed, LakeCat-owned
 proof fields are kept as canonical values, and issuer-owned config is hashed
 rather than copied. That keeps OpenLineage and QueryGraph replay useful without
-turning lineage into a credential leak.
+turning lineage into a credential leak. The trusted-human credential-vending
+route test pins that the committed outbox payload contains this redacted proof
+for the audited raw-credential exception path.
 A not-configured resolver error reports the provider label and a
 `secret-ref-hash=sha256:...` value, not the raw secret URI, so the operator can
 correlate configuration without leaking the credential root. Resolver validation

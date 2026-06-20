@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned route-level credential-vend outbox coverage proving trusted-human raw
+  credential exceptions record redacted canonical `credential-response-evidence`
+  without storing the raw credential prefix in replay proof.
 - Added redacted credential response evidence to credential-vend audit/outbox
   payloads, hashing credential prefixes and issuer-owned config so replay can
   prove LakeCat's canonical `loadCredentials` evidence without leaking raw
