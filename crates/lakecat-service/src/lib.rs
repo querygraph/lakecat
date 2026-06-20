@@ -9500,6 +9500,12 @@ mod tests {
                     .as_str()
             )
         );
+        assert!(
+            drain.events[0]
+                .storage_profile_location_prefix_hash
+                .as_deref()
+                .is_some_and(is_full_sha256_hash)
+        );
         assert_eq!(
             drain.events[0].storage_profile_secret_ref_present,
             Some(true)
@@ -9553,6 +9559,11 @@ mod tests {
             )
         );
         assert!(
+            graph_events[1].properties["storage-profile"]["location-prefix-hash"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
+        );
+        assert!(
             graph_events[1].properties["storage-profile"]
                 .get("secret-ref")
                 .is_none(),
@@ -9601,6 +9612,11 @@ mod tests {
             serde_json::json!(
                 content_hash_json(&json!({"location-prefix": "s3://lakecat/events"})).unwrap()
             )
+        );
+        assert!(
+            lineage_events[0].payload["storage-profile"]["location-prefix-hash"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
         );
         assert!(
             lineage_events[0].payload["storage-profile"]
@@ -16155,6 +16171,11 @@ mod tests {
             serde_json::json!(
                 content_hash_json(&json!({"location-prefix": "file:///tmp/events"})).unwrap()
             )
+        );
+        assert!(
+            payload["storage-profile"]["location-prefix-hash"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
         );
         assert!(
             payload["storage-profile"].get("location-prefix").is_none(),

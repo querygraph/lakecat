@@ -1076,11 +1076,14 @@ The audit event for the credential attempt records redacted
 `credential-response-evidence`: the response prefix is hashed, LakeCat-owned
 proof fields are kept as canonical values, and issuer-owned config is hashed
 rather than copied. That keeps OpenLineage and QueryGraph replay useful without
-turning lineage into a credential leak. The trusted-human credential-vending
-route test pins that the committed outbox payload contains this redacted proof
-for the audited raw-credential exception path. The blocked-agent route pins the
-other side of the same contract: when Sail-planned reads are required and no
-raw credentials are returned, the outbox records an explicit empty
+turning lineage into a credential leak. The storage-profile and
+credential-vend service tests pin that producer-side `location-prefix-hash`
+evidence is already a full SHA-256 digest before QGLake receives the compact
+`locationPrefixHash` proof. The trusted-human credential-vending route test
+pins that the committed outbox payload contains this redacted proof for the
+audited raw-credential exception path. The blocked-agent route pins the other
+side of the same contract: when Sail-planned reads are required and no raw
+credentials are returned, the outbox records an explicit empty
 `credential-response-evidence` array rather than leaving replay to infer why no
 credential proof exists.
 A not-configured resolver error reports the provider label and a

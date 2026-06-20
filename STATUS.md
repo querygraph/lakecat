@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin service storage-scope hash producer evidence`.
+  Service-side storage-profile upsert replay and credential-vend audit payload
+  coverage now explicitly proves produced `location-prefix-hash` values are
+  full SHA-256 digests before the QGLake verifier consumes the corresponding
+  `locationPrefixHash` proof.
+- Local verification for this service storage-scope producer slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_projects_storage_profile_upserts_to_lineage -- --nocapture`;
+  `cargo test -p lakecat-service credentials_vend_audit_payload_surfaces_policy_context -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require full QGLake storage-scope hashes`.
   QGLake compact handoff summaries, management replay lines, credential replay
   lines, and storage-profile upsert lineage replay now require

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned service-side storage-profile replay and credential audit coverage so
+  producer evidence emits full SHA-256 `location-prefix-hash` values before
+  QGLake accepts the corresponding `locationPrefixHash` proof.
 - Required QGLake storage-profile and credential storage-scope
   `locationPrefixHash` evidence to be full `sha256:`-prefixed 64-hex digests
   in compact handoff summaries and lineage-drain replay checks.
