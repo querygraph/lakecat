@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Preserve live QGLake replay evidence in handoff summaries`.
+  The local handoff harness now carries governed scan graph events, fetched
+  projection/filter requirements, management graph proof, storage-profile graph
+  proof, credential exception/blocking proof, and table commit-history graph
+  events from `qglake-verify-replay` into `handoff-summary.json` before running
+  the compact Rust verifier.
+- Local verification for this live handoff reconciliation slice is green:
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh`.
+- Latest completed implementation slice:
   `Reject invalid REST idempotency keys`.
   REST table commits now have service-level coverage proving illegal or
   overlong `x-lakecat-idempotency-key` values fail with `400 Bad Request`

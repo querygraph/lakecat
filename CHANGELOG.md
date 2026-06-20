@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserved live QGLake replay evidence in the local handoff summary bridge,
+  carrying governed scan graph/restriction proof, management graph proof,
+  storage-profile graph proof, credential exception/blocking proof, and table
+  commit-history graph proof into the compact Rust verifier input.
 - Added service-level coverage for invalid REST commit idempotency keys,
   proving illegal or overlong `x-lakecat-idempotency-key` values fail before
   catalog commit work begins.

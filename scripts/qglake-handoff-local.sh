@@ -327,6 +327,10 @@ if (!Array.isArray(evidence.openLineageHashes) || evidence.openLineageHashes.len
   console.error("LakeCat storage-profile upsert evidence is missing openLineageHashes");
   process.exit(1);
 }
+if (!Number.isInteger(evidence.graphEvents) || evidence.graphEvents <= 0) {
+  console.error("LakeCat storage-profile upsert evidence is missing graphEvents");
+  process.exit(1);
+}
 process.stdout.write(JSON.stringify({
   profileId: evidence.profileId,
   provider: evidence.provider,
@@ -334,8 +338,85 @@ process.stdout.write(JSON.stringify({
   locationPrefixHash: evidence.locationPrefixHash,
   secretRefPresent: evidence.secretRefPresent,
   secretRefProvider: evidence.secretRefProvider ?? null,
+  graphEvents: evidence.graphEvents,
   replayEventHashes: evidence.replayEventHashes,
   openLineageHashes: evidence.openLineageHashes,
+}));
+' "$file"
+}
+
+management_evidence_json() {
+  local file="$1"
+  node -e '
+const fs = require("fs");
+const [file] = process.argv.slice(1);
+const replay = JSON.parse(fs.readFileSync(file, "utf8"));
+const evidence = replay["replay-evidence"]?.management;
+if (!evidence || typeof evidence !== "object") {
+  console.error("LakeCat replay evidence is missing management");
+  process.exit(1);
+}
+function requirePositiveInteger(value, label) {
+  if (!Number.isInteger(value) || value <= 0) {
+    console.error(`LakeCat management replay evidence is missing positive ${label}`);
+    process.exit(1);
+  }
+}
+function requireHashArray(value, label) {
+  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    console.error(`LakeCat management replay evidence is missing ${label}`);
+    process.exit(1);
+  }
+}
+for (const field of [
+  "serverCount",
+  "serverGraphEvents",
+  "projectCount",
+  "projectGraphEvents",
+  "warehouseCount",
+  "warehouseGraphEvents",
+  "policyBindingCount",
+  "policyGraphEvents",
+  "storageProfileCount",
+  "storageProfileGraphEvents",
+]) {
+  requirePositiveInteger(evidence[field], field);
+}
+for (const field of [
+  "serverReplayEventHashes",
+  "serverOpenLineageHashes",
+  "projectReplayEventHashes",
+  "projectOpenLineageHashes",
+  "warehouseReplayEventHashes",
+  "warehouseOpenLineageHashes",
+  "policyReplayEventHashes",
+  "policyOpenLineageHashes",
+  "storageProfileReplayEventHashes",
+  "storageProfileOpenLineageHashes",
+]) {
+  requireHashArray(evidence[field], field);
+}
+process.stdout.write(JSON.stringify({
+  serverCount: evidence.serverCount,
+  serverGraphEvents: evidence.serverGraphEvents,
+  projectCount: evidence.projectCount,
+  projectGraphEvents: evidence.projectGraphEvents,
+  warehouseCount: evidence.warehouseCount,
+  warehouseGraphEvents: evidence.warehouseGraphEvents,
+  policyBindingCount: evidence.policyBindingCount,
+  policyGraphEvents: evidence.policyGraphEvents,
+  storageProfileCount: evidence.storageProfileCount,
+  storageProfileGraphEvents: evidence.storageProfileGraphEvents,
+  serverReplayEventHashes: evidence.serverReplayEventHashes,
+  serverOpenLineageHashes: evidence.serverOpenLineageHashes,
+  projectReplayEventHashes: evidence.projectReplayEventHashes,
+  projectOpenLineageHashes: evidence.projectOpenLineageHashes,
+  warehouseReplayEventHashes: evidence.warehouseReplayEventHashes,
+  warehouseOpenLineageHashes: evidence.warehouseOpenLineageHashes,
+  policyReplayEventHashes: evidence.policyReplayEventHashes,
+  policyOpenLineageHashes: evidence.policyOpenLineageHashes,
+  storageProfileReplayEventHashes: evidence.storageProfileReplayEventHashes,
+  storageProfileOpenLineageHashes: evidence.storageProfileOpenLineageHashes,
 }));
 ' "$file"
 }
@@ -364,7 +445,7 @@ function requireStorageProfile(value, label) {
     console.error(`LakeCat credential replay evidence is missing ${label}.storageProfile`);
     process.exit(1);
   }
-  if (!value.profileId || !value.provider || !value.issuanceMode) {
+  if (!value.profileId || !value.provider || !value.issuanceMode || !value.locationPrefixHash) {
     console.error(`LakeCat credential replay evidence is missing ${label} storage-profile identity`);
     process.exit(1);
   }
@@ -384,6 +465,7 @@ function requireStorageProfile(value, label) {
     profileId: value.profileId,
     provider: value.provider,
     issuanceMode: value.issuanceMode,
+    locationPrefixHash: value.locationPrefixHash,
     secretRefPresent: value.secretRefPresent,
     secretRefProvider: value.secretRefProvider ?? null,
     graphEvents: value.graphEvents,
@@ -438,6 +520,7 @@ process.stdout.write(JSON.stringify({
     principalSubject: restricted.principalSubject,
     principalKind: restricted.principalKind,
     credentialCount: restricted.credentialCount,
+    rawCredentialExceptionAllowed: restricted.rawCredentialExceptionAllowed,
     blockReason: restricted.blockReason,
     maxCredentialTtlSeconds: restrictedMaxCredentialTtlSeconds,
     storageProfile: restrictedStorageProfile,
@@ -450,6 +533,7 @@ process.stdout.write(JSON.stringify({
     credentialCount: trustedHuman.credentialCount,
     rawCredentialExceptionAllowed: trustedHuman.rawCredentialExceptionAllowed,
     rawCredentialExceptionReason: trustedHuman.rawCredentialExceptionReason,
+    blockReason: trustedHuman.blockReason ?? null,
     maxCredentialTtlSeconds: trustedHumanMaxCredentialTtlSeconds,
     storageProfile: trustedHumanStorageProfile,
     replayEventHashes: trustedHuman.replayEventHashes,
@@ -489,6 +573,7 @@ function requireHashArray(value, label) {
   }
 }
 requirePositiveInteger(evidence.planTaskCount, "planTaskCount");
+requirePositiveInteger(evidence.planGraphEvents, "planGraphEvents");
 requirePositiveInteger(evidence.fileTaskCount, "fileTaskCount");
 requirePositiveInteger(evidence.childPlanTaskCount, "childPlanTaskCount");
 requireNonNegativeInteger(evidence.deleteFileCount, "deleteFileCount");
@@ -496,6 +581,14 @@ requireHashArray(evidence.plannedReplayEventHashes, "plannedReplayEventHashes");
 requireHashArray(evidence.fetchedReplayEventHashes, "fetchedReplayEventHashes");
 requireHashArray(evidence.plannedOpenLineageHashes, "plannedOpenLineageHashes");
 requireHashArray(evidence.fetchedOpenLineageHashes, "fetchedOpenLineageHashes");
+if (!Array.isArray(evidence.fetchedRequiredProjection) || evidence.fetchedRequiredProjection.length === 0) {
+  console.error("LakeCat scan replay evidence is missing fetchedRequiredProjection");
+  process.exit(1);
+}
+if (!Array.isArray(evidence.fetchedRequiredFilters) || evidence.fetchedRequiredFilters.length === 0) {
+  console.error("LakeCat scan replay evidence is missing fetchedRequiredFilters");
+  process.exit(1);
+}
 function requireRestriction(value, label) {
   if (!value || typeof value !== "object") {
     console.error(`LakeCat scan replay evidence is missing ${label}`);
@@ -519,11 +612,14 @@ if (JSON.stringify(evidence.plannedReadRestriction) !== JSON.stringify(evidence.
 }
 process.stdout.write(JSON.stringify({
   planTaskCount: evidence.planTaskCount,
+  planGraphEvents: evidence.planGraphEvents,
   fileTaskCount: evidence.fileTaskCount,
   deleteFileCount: evidence.deleteFileCount,
   childPlanTaskCount: evidence.childPlanTaskCount,
   plannedReadRestriction: evidence.plannedReadRestriction,
   fetchedReadRestriction: evidence.fetchedReadRestriction,
+  fetchedRequiredProjection: evidence.fetchedRequiredProjection,
+  fetchedRequiredFilters: evidence.fetchedRequiredFilters,
   plannedReplayEventHashes: evidence.plannedReplayEventHashes,
   fetchedReplayEventHashes: evidence.fetchedReplayEventHashes,
   plannedOpenLineageHashes: evidence.plannedOpenLineageHashes,
@@ -569,12 +665,14 @@ if (evidence.sequenceNumbers.some((item) => !Number.isInteger(item) || item <= 0
   process.exit(1);
 }
 requireHashArray(evidence.commitHashes, "commitHashes");
+requirePositiveInteger(evidence.graphEvents, "graphEvents");
 requireHashArray(evidence.replayEventHashes, "replayEventHashes");
 requireHashArray(evidence.openLineageHashes, "openLineageHashes");
 process.stdout.write(JSON.stringify({
   commitCount: evidence.commitCount,
   sequenceNumbers: evidence.sequenceNumbers,
   commitHashes: evidence.commitHashes,
+  graphEvents: evidence.graphEvents,
   replayEventHashes: evidence.replayEventHashes,
   openLineageHashes: evidence.openLineageHashes,
 }));
@@ -781,7 +879,7 @@ write_summary() {
   local verified_tables verified_views verified_table_ids verified_view_ids verified_warehouse bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   local verified_standards
   local lakecat_schema lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards lakecat_replay_evidence
-  local lakecat_request_identity_evidence lakecat_querygraph_bootstrap_evidence lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence lakecat_table_commit_history_evidence lakecat_view_receipt_chain_evidence
+  local lakecat_request_identity_evidence lakecat_querygraph_bootstrap_evidence lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence lakecat_table_commit_history_evidence lakecat_management_evidence lakecat_view_receipt_chain_evidence
   local imported_tables imported_views imported_warehouse imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
   local imported_standards imported_table_ids imported_view_ids
   local expected_verified_table
@@ -807,6 +905,7 @@ write_summary() {
   lakecat_credential_vending_evidence="$(credential_vending_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_governed_scan_evidence="$(governed_scan_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_table_commit_history_evidence="$(table_commit_history_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
+  lakecat_management_evidence="$(management_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_view_receipt_chain_evidence="$(view_receipt_chain_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   verified_tables="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "table-count")"
   verified_views="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "view-count")"
@@ -931,6 +1030,7 @@ write_summary() {
     "queryGraphBootstrapProof": $lakecat_querygraph_bootstrap_evidence,
     "governedScanProof": $lakecat_governed_scan_evidence,
     "tableCommitHistoryProof": $lakecat_table_commit_history_evidence,
+    "managementProof": $lakecat_management_evidence,
     "viewReceiptChainProof": $lakecat_view_receipt_chain_evidence,
     "storageProfileUpsertProof": $lakecat_storage_profile_upsert_evidence,
     "credentialVendingProof": $lakecat_credential_vending_evidence,

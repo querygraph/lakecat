@@ -1539,6 +1539,12 @@ the trusted-human branch must name a human principal, prove a positive
 credential count, carry the same policy-derived TTL cap, carry the exact
 audited raw-credential exception reason, prove `blockReason` is null, and
 include replay/OpenLineage hashes.
+The local handoff harness now preserves those replay fields while building the
+compact summary, rather than relying on the nested raw replay blob alone: scan
+graph events and fetch-side projection/filter requirements, management graph
+events, storage-profile graph events, credential block/exception fields, and
+table commit-history graph events all move into the verifier-facing proof
+sections before `qglake-verify-handoff` runs.
 That makes the handoff repeatable from the LakeCat repo while keeping
 QueryGraph responsible for graph validation and import semantics.
 The handoff script refuses to write the summary unless LakeCat replay JSON
