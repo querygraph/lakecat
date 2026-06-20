@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin default scan planning policy scope`.
+  Default-feature REST scan-planning coverage now proves the service sends
+  only the server-derived effective projection and mandatory policy filter to
+  Sail while preserving requested/effective stats and restriction evidence in
+  both the response extension and durable audit/outbox payload.
+- Local verification for this scan-planning policy-scope slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service scan_planning_route_sends_effective_policy_scope_to_sail -- --nocapture`;
+  `cargo test -p lakecat-service scan_planned_audit_payload_surfaces_policy_context -- --nocapture`.
+- Latest completed implementation slice:
   `Enforce credential issuer scope at service boundary`.
   The public `loadCredentials` path now revalidates every credential returned
   by the configured issuer against the selected storage profile before

@@ -5985,6 +5985,50 @@ mod tests {
         }
     }
 
+    #[derive(Debug, Default)]
+    struct CapturingSailEngine {
+        last_scan: Mutex<Option<lakecat_sail::ScanPlanningRequest>>,
+    }
+
+    #[async_trait]
+    impl SailCatalogEngine for CapturingSailEngine {
+        async fn prepare_commit(
+            &self,
+            _request: lakecat_sail::CommitPreparationRequest,
+        ) -> lakecat_core::LakeCatResult<lakecat_sail::CommitPlan> {
+            Err(LakeCatError::Internal(
+                "capturing Sail engine should not prepare commit".to_string(),
+            ))
+        }
+
+        async fn plan_scan(
+            &self,
+            request: lakecat_sail::ScanPlanningRequest,
+        ) -> lakecat_core::LakeCatResult<lakecat_sail::ScanPlan> {
+            *self.last_scan.lock().await = Some(request.clone());
+            Ok(lakecat_sail::ScanPlan {
+                planned_by: "capturing-sail".to_string(),
+                snapshot_id: Some(42),
+                scan_tasks: vec![serde_json::json!({
+                    "plan-task": "lakecat:plan:captured"
+                })],
+                residual_filter: Some(serde_json::json!({
+                    "projection": request.projection,
+                    "filters": request.filters
+                })),
+            })
+        }
+
+        async fn fetch_scan_tasks(
+            &self,
+            _request: lakecat_sail::FetchScanTasksRequest,
+        ) -> lakecat_core::LakeCatResult<lakecat_sail::FetchScanTasksPlan> {
+            Err(LakeCatError::NotSupported(
+                "capturing Sail engine does not fetch scan tasks".to_string(),
+            ))
+        }
+    }
+
     fn test_view_receipt(
         view_version: u64,
         previous_view_version: Option<u64>,
@@ -14350,6 +14394,148 @@ mod tests {
             restriction
                 .effective_projection(&["payload".to_string()])
                 .is_err()
+        );
+    }
+
+    #[cfg(not(feature = "sail-local"))]
+    #[tokio::test]
+    async fn scan_planning_route_sends_effective_policy_scope_to_sail() {
+        let store = MemoryCatalogStore::new();
+        let sail = Arc::new(CapturingSailEngine::default());
+        let app = app(
+            LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    sail.clone(),
+                    AllowAllGovernanceEngine::new(),
+                    NoopCatalogGraphSink::new(),
+                    HashOnlyLineageSink::new(),
+                ),
+        );
+
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/policies/agent-columns")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "namespace": ["default"],
+                    "table": "events",
+                    "enforced": true,
+                    "odrl": {
+                        "uid": "policy:agent-columns",
+                        "lakecat:read-restriction": {
+                            "allowed-columns": ["event_id"],
+                            "row-predicate": {
+                                "type": "eq",
+                                "term": "event_id",
+                                "value": "evt-1"
+                            }
+                        }
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"current-schema-id":1,"schemas":[{"schema-id":1,"fields":[{"id":1,"name":"event_id","type":"string","required":true},{"id":2,"name":"payload","type":"string","required":false}]}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let plan = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/plan")
+            .header("content-type", "application/json")
+            .header("x-lakecat-agent-did", "did:example:agent")
+            .body(Body::from(
+                serde_json::json!({
+                    "select": ["event_id", "payload"],
+                    "stats-fields": ["event_id", "payload"],
+                    "case-sensitive": true
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(plan).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            body["residual-filter"]["projection"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            body["residual-filter"]["filters"][0],
+            serde_json::json!({
+                "type": "eq",
+                "term": "event_id",
+                "value": "evt-1"
+            })
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:scan-request"]["requested-projection"],
+            serde_json::json!(["event_id", "payload"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:scan-request"]["effective-projection"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:scan-request"]["requested-stats-fields"],
+            serde_json::json!(["event_id", "payload"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:scan-request"]["effective-stats-fields"],
+            serde_json::json!(["event_id"])
+        );
+
+        let captured = sail
+            .last_scan
+            .lock()
+            .await
+            .clone()
+            .expect("scan should reach Sail");
+        assert_eq!(captured.projection, vec!["event_id".to_string()]);
+        assert_eq!(
+            captured.filters,
+            vec![serde_json::json!({
+                "type": "eq",
+                "term": "event_id",
+                "value": "evt-1"
+            })]
+        );
+
+        let ident = table_ident("local", "default", "events").unwrap();
+        let outbox = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        let event = outbox
+            .iter()
+            .find(|event| event.event_type == "table.scan-planned")
+            .expect("scan planning should be audited for replay");
+        assert_eq!(event.payload["payload"]["table"], serde_json::json!(ident));
+        assert_eq!(
+            event.payload["payload"]["requested-stats-fields"],
+            serde_json::json!(["event_id", "payload"])
+        );
+        assert_eq!(
+            event.payload["payload"]["effective-stats-fields"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            event.payload["payload"]["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
         );
     }
 

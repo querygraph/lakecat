@@ -284,9 +284,12 @@ means the allowed columns. A client projection can narrow further, but cannot
 widen. The same rule applies to stats-field requests: LakeCat records both the
 client's requested stats fields and the effective stats fields that survived
 the server-derived column restriction, while the compatibility `stats-fields`
-extension remains the narrowed effective set. During `fetchScanTasks`, LakeCat
-recomputes the current restriction and requires the token to satisfy it. A stale
-or legacy token cannot silently expand back to all columns.
+extension remains the narrowed effective set. The default REST path is tested
+at the Sail boundary: Sail receives only the effective projection and mandatory
+policy filters, while LakeCat keeps the broader request and narrowed result as
+replay evidence. During `fetchScanTasks`, LakeCat recomputes the current
+restriction and requires the token to satisfy it. A stale or legacy token
+cannot silently expand back to all columns.
 
 ## The Commit Path
 

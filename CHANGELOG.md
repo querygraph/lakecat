@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned default REST scan-planning coverage proving LakeCat sends only the
+  effective policy projection and mandatory filters to Sail while auditing both
+  requested and effective replay evidence.
 - Enforced storage-profile scope at the `loadCredentials` service boundary so
   custom credential issuers cannot return broader prefixes than the catalog
   profile selected for the table.
