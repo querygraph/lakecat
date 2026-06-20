@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject root metadata-object commit locations`.
+  Metadata-object commit validation now requires the planned new metadata
+  location to be a strict child of the selected storage-profile prefix, not the
+  storage root itself. Root-targeted metadata-write plans fail before
+  object-store writes with redacted metadata-location and storage-profile prefix
+  hashes.
+- Local verification for this commit-location slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_write_plan_rejects_storage_profile_root_location -- --nocapture`.
+- Latest completed implementation slice:
   `Reject overbroad secret-manager credential prefixes`.
   TypeSec-authorized production secret-manager backends may now issue
   credentials only when every returned credential prefix is within the selected

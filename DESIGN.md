@@ -432,8 +432,10 @@ handoff summary.
 ### P3 Commit Hardening
 
 Continue hardening REST-visible idempotency, metadata object orphan cleanup, CAS
-conflict receipts, and recovery behavior. Catalog state changes should not lose
-outbox side effects.
+conflict receipts, and recovery behavior. Metadata-object writes must be
+create-only child objects under the selected storage profile, never overwrites
+of the current pointer, existing objects, or the storage root itself. Catalog
+state changes should not lose outbox side effects.
 
 ### P4 Semantic Catalog Graph
 

@@ -303,7 +303,8 @@ Sail owns reusable Iceberg validation and metadata preparation.
 8. LakeCat rejects metadata-write plans that do not carry a concrete new
    metadata location.
 9. LakeCat rejects metadata-object locations outside the table's matched
-   storage profile prefix.
+   storage profile prefix, and also rejects the storage-profile root itself
+   because metadata commits must create a child object.
 10. LakeCat writes the new metadata object through the warehouse storage
     profile with create-only object-store semantics.
 11. LakeCat advances the table pointer with compare-and-swap.
@@ -326,7 +327,9 @@ into an internal error. The same audit-safe shape applies before the write:
 current-pointer overwrite, existing-object overwrite, unsupported object-store
 configuration, and storage-profile-prefix failures report metadata-location
 hashes, and prefix mismatches also report a storage-profile-prefix hash rather
-than raw object paths.
+than raw object paths. A root-targeted metadata write uses the same redacted
+error shape: the operator sees that the plan did not name a child metadata
+object without receiving the raw table or storage root.
 
 Idempotency is part of correctness. Reusing the same key for the same commit can
 return the stored response even after the table has advanced beyond the
@@ -347,7 +350,8 @@ Another sends a commit to a different metadata location that already exists and
 verifies that LakeCat returns a conflict without overwriting that non-current
 object.
 The same guard fails closed if a future Sail plan asks LakeCat to write metadata
-but does not provide a new object location.
+but does not provide a new object location, or if it tries to use the storage
+profile root as the new metadata object.
 
 The embedded in-memory store follows the same commit evidence contract as the
 Turso path. A successful commit emits one `table.commit` audit/outbox event

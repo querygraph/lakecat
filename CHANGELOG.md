@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected metadata-object commit plans whose new metadata location is the
+  selected storage-profile root instead of a child object, preventing the commit
+  path from attempting create-only writes at the table/storage root.
 - Rejected TypeSec-authorized secret-manager credentials whose returned prefix
   falls outside the selected LakeCat storage-profile prefix, keeping production
   credential backends from widening catalog-owned storage scope after

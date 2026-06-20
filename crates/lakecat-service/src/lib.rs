@@ -3022,12 +3022,12 @@ fn validate_planned_metadata_location(
             metadata_location_hash_context(new_metadata_location)
         )));
     }
-    if !location_is_within_prefix(
+    if !location_is_strictly_within_prefix(
         new_metadata_location,
         storage_profile.location_prefix.as_str(),
     ) {
         return Err(LakeCatError::InvalidArgument(format!(
-            "metadata object location {} is outside storage profile '{}' prefix; storage-profile-prefix-hash={}",
+            "metadata object location {} is outside storage profile '{}' prefix or is not a child object; storage-profile-prefix-hash={}",
             metadata_location_hash_context(new_metadata_location),
             storage_profile.profile_id,
             content_hash_bytes(storage_profile.location_prefix.as_bytes())
@@ -3039,6 +3039,13 @@ fn validate_planned_metadata_location(
 fn location_is_within_prefix(location: &str, prefix: &str) -> bool {
     if location == prefix {
         return true;
+    }
+    location_is_strictly_within_prefix(location, prefix)
+}
+
+fn location_is_strictly_within_prefix(location: &str, prefix: &str) -> bool {
+    if location == prefix {
+        return false;
     }
     if prefix.ends_with('/') {
         location.starts_with(prefix)
@@ -9879,6 +9886,40 @@ mod tests {
             err.to_string()
                 .contains("metadata object commit requires a new metadata location")
         );
+    }
+
+    #[test]
+    fn metadata_write_plan_rejects_storage_profile_root_location() {
+        let table = TableRecord::new(
+            table_ident("local", "default", "events").unwrap(),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        );
+        let storage_profile = StorageProfile::inferred_for_table(&table);
+        let plan = lakecat_sail::CommitPlan {
+            prepared_by: "test".to_string(),
+            requirements: Vec::new(),
+            updates: Vec::new(),
+            new_metadata_location: Some("file:///tmp/events".to_string()),
+            new_metadata: serde_json::json!({"format-version": 3}),
+            metadata_write_required: true,
+            metadata_patch: serde_json::json!({}),
+        };
+
+        let err = validate_planned_metadata_location(
+            &plan,
+            table.metadata_location.as_deref(),
+            &storage_profile,
+        )
+        .unwrap_err();
+        assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+        let message = err.to_string();
+        assert!(message.contains("not a child object"));
+        assert!(message.contains("metadata-location-hash=sha256:"));
+        assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+        assert!(!message.contains("file:///tmp/events"));
     }
 
     #[test]
