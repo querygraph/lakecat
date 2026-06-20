@@ -10952,6 +10952,36 @@ mod tests {
     }
 
     #[test]
+    fn metadata_object_store_redacts_invalid_location_parse_failures() {
+        let location = "not a uri /tmp/lakecat-secret/events/metadata/00001.json";
+        let err = metadata_object_store(location).unwrap_err();
+        let message = err.to_string();
+
+        assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+        assert!(message.contains("metadata-location-hash=sha256:"));
+        assert!(message.contains("error-detail-hash=sha256:"));
+        assert!(!message.contains(location));
+        assert!(!message.contains("lakecat-secret"));
+        assert!(!message.contains("00001.json"));
+        assert!(!message.contains("relative URL"));
+    }
+
+    #[test]
+    fn metadata_object_store_redacts_unsupported_backend_setup_failures() {
+        let location = "ftp://lakecat-secret/events/metadata/00001.json";
+        let err = metadata_object_store(location).unwrap_err();
+        let message = err.to_string();
+
+        assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+        assert!(message.contains("metadata-location-hash=sha256:"));
+        assert!(message.contains("error-detail-hash=sha256:"));
+        assert!(!message.contains(location));
+        assert!(!message.contains("lakecat-secret"));
+        assert!(!message.contains("00001.json"));
+        assert!(!message.contains("ftp"));
+    }
+
+    #[test]
     fn metadata_cleanup_failure_preserves_commit_conflict() {
         let err = commit_error_with_cleanup_failure(
             LakeCatError::Conflict("metadata pointer changed".to_string()),

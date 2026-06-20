@@ -220,7 +220,9 @@ The current working plan is:
    Backend object-store error details should be represented by hash evidence,
    not raw paths, bucket/object names, or configuration text. Metadata object
    writes must target child objects under the selected storage profile root, not
-   the root itself.
+   the root itself. Store setup failures, including invalid metadata URI parsing
+   and unsupported backend configuration, must follow the same hash-only error
+   evidence rule.
 4. Keep the graph bounded. LakeCat should emit stable catalog-domain facts for
    Server, Project, Warehouse, Namespace, Table, View, Column, Snapshot, Policy,
    StorageProfile, Principal, ScanPlan, Commit, and lineage runs. Traversal,
@@ -465,7 +467,9 @@ conflict receipts, and recovery behavior. Metadata-object writes must be
 create-only child objects under the selected storage profile, never overwrites
 of the current pointer, existing objects, or the storage root itself; rejection
 evidence stays hash-only for both the submitted metadata location and storage
-profile root. Catalog state changes should not lose outbox side effects.
+profile root. Metadata object-store setup failures should likewise expose only
+metadata-location and backend-error hashes, not raw URI parse text, schemes, or
+backend diagnostics. Catalog state changes should not lose outbox side effects.
 Pending outbox replay should
 stay deterministic across embedded and Turso stores, ordered by
 `created_at,event_id`, with duplicate-safe delivery accounting. Draining should

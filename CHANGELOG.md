@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned metadata-object store setup redaction so invalid metadata URI parsing
+  and unsupported backend setup failures return only metadata-location and
+  backend-error hashes, not raw paths, object names, schemes, or backend text.
 - Pinned metadata-object storage-root protection so planned metadata writes must
   target child objects under the selected storage profile root, returning only
   metadata-location and storage-profile-prefix hashes when the root itself is

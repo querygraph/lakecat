@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin metadata object-store setup redaction`.
+  Metadata-object store setup now has direct regression coverage proving invalid
+  metadata URI parsing and unsupported backend setup failures return only
+  `metadata-location-hash` and `error-detail-hash` evidence. The error surface
+  does not echo raw local paths, object names, schemes, or backend error text.
+- Local verification for this metadata object-store setup redaction slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_object_store_redacts_invalid_location_parse_failures -- --nocapture`;
+  `cargo test -p lakecat-service metadata_object_store_redacts_unsupported_backend_setup_failures -- --nocapture`;
+  `cargo test -p lakecat-service metadata_object_store_redacts -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin metadata root child-object guard`.
   Metadata-object commit validation now has direct regression coverage proving a
   planned metadata write cannot target the selected storage profile root itself.

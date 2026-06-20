@@ -383,7 +383,10 @@ profile root as the new metadata object. A companion regression rejects both
 literal and percent-encoded dot path segments in a planned metadata location.
 When a backend object store fails setup, create-only write, or cleanup, LakeCat
 keeps the metadata location hash and adds `error-detail-hash` evidence instead
-of returning raw backend text. That matters for local files, cloud bucket keys,
+of returning raw backend text. That includes invalid metadata URI parsing and
+unsupported backend setup failures: the response names the hashed metadata
+location and hashed backend detail, not the submitted path, object name, scheme,
+or parser/backend diagnostic. That matters for local files, cloud bucket keys,
 and credential-provider diagnostics: operators can correlate a failure without
 copying sensitive storage topology into API responses or logs.
 
