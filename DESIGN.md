@@ -347,7 +347,9 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
 - ODRL restrictions are no longer only transported as opaque context; the
   enforceable subset is moving through restrictions and receipts, and
   constraint-form operators now fail closed when they are missing or do not
-  mean "use this value as the allowed/narrowing restriction."
+  mean "use this value as the allowed/narrowing restriction." Purpose
+  composition also fails closed unless all enforced policy material agrees on
+  the same purpose.
 - Graph and lineage side effects are moving through bounded catalog events and
   replayable outbox evidence. Grust owns reusable graph behavior.
 - QueryGraph bootstrap and QGLake handoff flows now carry table and view

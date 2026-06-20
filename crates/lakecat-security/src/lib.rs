@@ -135,8 +135,16 @@ impl ReadRestriction {
                     None => row_predicate,
                 });
             }
-            if restriction.purpose.is_none() {
-                restriction.purpose = purpose_from_odrl(odrl)?;
+            if let Some(purpose) = purpose_from_odrl(odrl)? {
+                restriction.purpose = Some(match restriction.purpose.take() {
+                    Some(existing) if existing == purpose => existing,
+                    Some(existing) => {
+                        return Err(LakeCatError::Conflict(format!(
+                            "ODRL read restriction carries conflicting purposes {existing} and {purpose}"
+                        )));
+                    }
+                    None => purpose,
+                });
             }
             if let Some(ttl) = ttl_from_odrl(odrl)? {
                 restriction.max_credential_ttl_seconds =
@@ -305,9 +313,10 @@ fn and_row_predicates(left: Value, right: Value) -> Value {
 }
 
 fn purpose_from_odrl(odrl: &Value) -> LakeCatResult<Option<String>> {
-    if let Some(purpose) = odrl.get("purpose").and_then(Value::as_str) {
-        return Ok(Some(purpose.to_string()));
-    }
+    let mut purpose = odrl
+        .get("purpose")
+        .and_then(Value::as_str)
+        .map(str::to_string);
 
     for constraint in odrl_constraints(odrl) {
         let left = constraint
@@ -317,19 +326,28 @@ fn purpose_from_odrl(odrl: &Value) -> LakeCatResult<Option<String>> {
             .unwrap_or_default();
         if left == "purpose" {
             require_constraint_operator(constraint, "purpose", &["eq"])?;
-            return constraint
+            let next = constraint
                 .get("rightOperand")
                 .or_else(|| constraint.get("right-operand"))
                 .and_then(Value::as_str)
-                .map(|purpose| Some(purpose.to_string()))
                 .ok_or_else(|| {
                     LakeCatError::InvalidArgument(
                         "ODRL purpose constraint must use a string right operand".to_string(),
                     )
-                });
+                })?
+                .to_string();
+            purpose = Some(match purpose.take() {
+                Some(existing) if existing == next => existing,
+                Some(existing) => {
+                    return Err(LakeCatError::Conflict(format!(
+                        "ODRL read restriction carries conflicting purposes {existing} and {next}"
+                    )));
+                }
+                None => next,
+            });
         }
     }
-    Ok(None)
+    Ok(purpose)
 }
 
 fn ttl_from_odrl(odrl: &Value) -> LakeCatResult<Option<u64>> {
@@ -993,6 +1011,52 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("ODRL purpose constraint uses unsupported operator")
+        );
+    }
+
+    #[test]
+    fn read_restriction_rejects_conflicting_purpose_constraints() {
+        let policy = serde_json::json!({
+            "purpose": "resilience-demo",
+            "permission": [{
+                "constraint": {
+                    "leftOperand": "purpose",
+                    "operator": "eq",
+                    "rightOperand": "training"
+                }
+            }]
+        });
+
+        let err = ReadRestriction::from_odrl_policies([&policy]).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("ODRL read restriction carries conflicting purposes")
+        );
+    }
+
+    #[test]
+    fn read_restriction_rejects_conflicting_policy_purposes() {
+        let policy_a = serde_json::json!({
+            "uid": "policy-a",
+            "purpose": "resilience-demo"
+        });
+        let policy_b = serde_json::json!({
+            "uid": "policy-b",
+            "permission": [{
+                "constraint": {
+                    "leftOperand": "purpose",
+                    "operator": "eq",
+                    "rightOperand": "training"
+                }
+            }]
+        });
+
+        let err = ReadRestriction::from_odrl_policies([&policy_a, &policy_b]).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("ODRL read restriction carries conflicting purposes")
         );
     }
 

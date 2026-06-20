@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject conflicting ODRL purposes`.
+  `lakecat-security` now composes ODRL read-restriction purposes by agreement:
+  top-level purpose fields, purpose constraints, and multiple active policy
+  bindings must all name the same purpose or authorization fails closed before
+  the restriction can reach Sail planning or credential decisions.
+- Local verification for this ODRL purpose slice is green:
+  `cargo fmt -p lakecat-security -- --check`;
+  `cargo test -p lakecat-security read_restriction -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject ambiguous storage profile roots`.
   Storage-profile selection now fails closed if multiple profiles
   in one warehouse match a table with the same longest location prefix, so

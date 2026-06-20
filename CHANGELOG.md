@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made ODRL read-restriction purpose composition fail closed when a policy
+  document or multiple active policy bindings carry conflicting purposes,
+  preventing first-purpose-wins parsing from authorizing agent reads under an
+  ambiguous purpose.
 - Made storage-profile selection fail closed when multiple profiles in the same
   warehouse match a table with the same longest location prefix, returning only
   profile ids and a redacted location-prefix hash instead of choosing an
