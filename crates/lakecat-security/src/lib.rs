@@ -231,10 +231,8 @@ fn allowed_columns_from_odrl(odrl: &Value) -> LakeCatResult<Option<Vec<String>>>
         if matches!(
             left,
             "column" | "columns" | "allowed-columns" | "allowedColumns" | "lakecat:allowed-columns"
-        ) && let Some(value) = constraint
-            .get("rightOperand")
-            .or_else(|| constraint.get("right-operand"))
-        {
+        ) {
+            let value = constraint_right_operand(constraint, "allowed columns")?;
             require_constraint_operator(
                 constraint,
                 "allowed columns",
@@ -280,10 +278,8 @@ fn row_predicate_from_odrl(odrl: &Value) -> LakeCatResult<Option<Value>> {
         if matches!(
             left,
             "row-predicate" | "rowPredicate" | "lakecat:row-predicate"
-        ) && let Some(value) = constraint
-            .get("rightOperand")
-            .or_else(|| constraint.get("right-operand"))
-        {
+        ) {
+            let value = constraint_right_operand(constraint, "row predicate")?;
             require_constraint_operator(constraint, "row predicate", &["eq"])?;
             let next = row_predicate_value(value)?;
             predicate = Some(match predicate {
@@ -326,10 +322,8 @@ fn purpose_from_odrl(odrl: &Value) -> LakeCatResult<Option<String>> {
             .unwrap_or_default();
         if left == "purpose" {
             require_constraint_operator(constraint, "purpose", &["eq"])?;
-            let next = constraint
-                .get("rightOperand")
-                .or_else(|| constraint.get("right-operand"))
-                .and_then(Value::as_str)
+            let next = constraint_right_operand(constraint, "purpose")?
+                .as_str()
                 .ok_or_else(|| {
                     LakeCatError::InvalidArgument(
                         "ODRL purpose constraint must use a string right operand".to_string(),
@@ -383,10 +377,8 @@ fn ttl_from_odrl(odrl: &Value) -> LakeCatResult<Option<u64>> {
                 | "credential-ttl"
                 | "credentialTtl"
                 | "lakecat:max-credential-ttl-seconds"
-        ) && let Some(value) = constraint
-            .get("rightOperand")
-            .or_else(|| constraint.get("right-operand"))
-        {
+        ) {
+            let value = constraint_right_operand(constraint, "max credential TTL")?;
             require_constraint_operator(constraint, "max credential TTL", &["eq", "lteq", "lt"])?;
             ttl = tighten_ttl(ttl, ttl_value(value)?);
         }
@@ -430,6 +422,17 @@ fn constraint_operator(constraint: &Value) -> Option<&str> {
         .get("operator")
         .or_else(|| constraint.get("odrl:operator"))
         .and_then(Value::as_str)
+}
+
+fn constraint_right_operand<'a>(constraint: &'a Value, label: &str) -> LakeCatResult<&'a Value> {
+    constraint
+        .get("rightOperand")
+        .or_else(|| constraint.get("right-operand"))
+        .ok_or_else(|| {
+            LakeCatError::InvalidArgument(format!(
+                "ODRL {label} constraint must include a right operand"
+            ))
+        })
 }
 
 fn ttl_value(value: &Value) -> LakeCatResult<Option<u64>> {
@@ -1030,6 +1033,34 @@ mod tests {
             err.to_string()
                 .contains("ODRL row predicate constraint must include an operator")
         );
+    }
+
+    #[test]
+    fn read_restriction_rejects_missing_odrl_constraint_right_operands() {
+        for (left_operand, label) in [
+            ("allowed-columns", "allowed columns"),
+            ("row-predicate", "row predicate"),
+            ("purpose", "purpose"),
+            ("credential-ttl", "max credential TTL"),
+        ] {
+            let policy = serde_json::json!({
+                "permission": [{
+                    "constraint": {
+                        "leftOperand": left_operand,
+                        "operator": "eq"
+                    }
+                }]
+            });
+
+            let err = ReadRestriction::from_odrl_policies([&policy]).unwrap_err();
+
+            assert!(
+                err.to_string().contains(&format!(
+                    "ODRL {label} constraint must include a right operand"
+                )),
+                "unexpected error for {left_operand}: {err}"
+            );
+        }
     }
 
     #[test]

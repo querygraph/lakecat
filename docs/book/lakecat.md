@@ -541,11 +541,14 @@ TypeSec. LakeCat should ask TypeSec, not grow a parallel security language.
 When that subset is expressed through ODRL constraints, LakeCat accepts only
 operators that actually mean "use this as the allowed or narrowing value";
 missing or deny-shaped operators fail closed instead of being treated as
-governed read permission. Purpose is composed the same way: every purpose
-source in the active policy material must agree. If one binding says a read is
-for `resilience-demo` and another says `training`, LakeCat rejects the
-restriction instead of guessing which purpose should follow the agent into Sail
-planning, credential TTL proof, and QueryGraph handoff evidence.
+governed read permission. Recognized constraint operands must also include a
+right operand; otherwise LakeCat rejects the policy material instead of
+silently dropping an allowed-column, row-predicate, purpose, or credential-TTL
+restriction. Purpose is composed the same way: every purpose source in the
+active policy material must agree. If one binding says a read is for
+`resilience-demo` and another says `training`, LakeCat rejects the restriction
+instead of guessing which purpose should follow the agent into Sail planning,
+credential TTL proof, and QueryGraph handoff evidence.
 
 Credential vending follows the same rule. Raw credential vending is an audited
 exception. Governed Sail-planned reads are the default path for agents and

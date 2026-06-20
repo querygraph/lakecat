@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject missing ODRL right operands`.
+  `lakecat-security` now rejects recognized ODRL read-restriction constraints
+  for allowed columns, row predicates, purpose, and credential TTL when the
+  constraint omits `rightOperand`/`right-operand`, preventing silently dropped
+  narrowing policy material.
+- Local verification for this ODRL right-operand slice is green:
+  `cargo fmt -p lakecat-security -- --check`;
+  `cargo test -p lakecat-security read_restriction_rejects_missing_odrl_constraint_right_operands -- --nocapture`;
+  `cargo test -p lakecat-security read_restriction -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin metadata cleanup current-pointer skip`.
   Rejected-commit metadata cleanup now has direct regression coverage proving
   that a staged write equal to the previous committed metadata pointer is skipped
