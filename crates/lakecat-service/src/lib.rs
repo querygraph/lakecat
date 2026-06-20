@@ -1115,6 +1115,9 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     if event.event_type == "storage-profile.upserted" {
         validate_storage_profile_upsert_event_evidence(event, payload)?;
     }
+    if event.event_type == "policy-binding.upserted" {
+        validate_policy_binding_upsert_event_evidence(event, payload)?;
+    }
     if event.event_type == "view.version-receipts-listed" {
         validate_view_receipt_list_event_evidence(event, payload)?;
     }
@@ -1244,6 +1247,125 @@ fn validate_storage_profile_upsert_event_evidence(
         ));
     }
     validate_secret_ref_evidence(event, storage_profile, "storage-profile upsert")?;
+    Ok(())
+}
+
+fn validate_policy_binding_upsert_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(policy) = payload.get("policy") else {
+        return Err(outbox_evidence_error(
+            event,
+            "policy-binding upsert evidence must contain policy",
+        ));
+    };
+    let Some(policy_id) = policy
+        .get("policy-id")
+        .and_then(Value::as_str)
+        .filter(|policy_id| !policy_id.is_empty())
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            "policy-binding upsert evidence must contain policy-id",
+        ));
+    };
+    let Some(warehouse_name) = policy
+        .get("warehouse")
+        .or_else(|| payload.get("warehouse"))
+        .and_then(Value::as_str)
+        .filter(|warehouse| !warehouse.is_empty())
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            "policy-binding upsert evidence must contain warehouse",
+        ));
+    };
+    if let Some(payload_warehouse) = payload.get("warehouse").and_then(Value::as_str) {
+        if policy.get("warehouse").and_then(Value::as_str) != Some(payload_warehouse) {
+            return Err(outbox_evidence_error(
+                event,
+                "policy-binding upsert policy warehouse must match payload warehouse",
+            ));
+        }
+    }
+    let warehouse = WarehouseName::new(warehouse_name).map_err(|_| {
+        outbox_evidence_error(
+            event,
+            "policy-binding upsert evidence has invalid warehouse",
+        )
+    })?;
+    let namespace = match policy.get("namespace") {
+        Some(Value::Array(parts)) => {
+            let parts = parts
+                .iter()
+                .map(|part| {
+                    part.as_str()
+                        .filter(|part| !part.is_empty())
+                        .map(ToString::to_string)
+                        .ok_or_else(|| {
+                            outbox_evidence_error(
+                                event,
+                                "policy-binding upsert namespace components must be non-empty strings",
+                            )
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            Some(Namespace::new(parts).map_err(|_| {
+                outbox_evidence_error(
+                    event,
+                    "policy-binding upsert evidence has invalid namespace",
+                )
+            })?)
+        }
+        Some(Value::Null) | None => None,
+        _ => {
+            return Err(outbox_evidence_error(
+                event,
+                "policy-binding upsert namespace must be an array when present",
+            ));
+        }
+    };
+    let table = match policy.get("table") {
+        Some(Value::String(table)) if !table.is_empty() => {
+            Some(TableName::new(table).map_err(|_| {
+                outbox_evidence_error(event, "policy-binding upsert evidence has invalid table")
+            })?)
+        }
+        Some(Value::Null) | None => None,
+        _ => {
+            return Err(outbox_evidence_error(
+                event,
+                "policy-binding upsert table must be a non-empty string when present",
+            ));
+        }
+    };
+    let Some(enforced) = policy.get("enforced").and_then(Value::as_bool) else {
+        return Err(outbox_evidence_error(
+            event,
+            "policy-binding upsert evidence must contain enforced",
+        ));
+    };
+    let Some(odrl) = policy.get("odrl") else {
+        return Err(outbox_evidence_error(
+            event,
+            "policy-binding upsert evidence must contain odrl",
+        ));
+    };
+    PolicyBinding::new(
+        policy_id,
+        warehouse,
+        namespace,
+        table,
+        enforced,
+        odrl.clone(),
+    )
+    .map_err(|_| {
+        outbox_evidence_error(
+            event,
+            "policy-binding upsert evidence has invalid scope or identifier",
+        )
+    })?;
     Ok(())
 }
 
@@ -9155,6 +9277,71 @@ mod tests {
         assert!(message.contains("table.scan-tasks-fetched"));
         assert!(message.contains("read restriction policy-hashes"));
         assert!(message.contains("full SHA-256"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_policy_binding_upsert_evidence() {
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-policy-malformed-scope".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "policy-binding.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-policy-malformed-scope",
+                    "event-type": "policy-binding.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "policy-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "policy": {
+                            "policy-id": "agent-read",
+                            "warehouse": "local",
+                            "table": "events",
+                            "enforced": true,
+                            "odrl": {
+                                "uid": "policy:agent-read",
+                                "lakecat:read-restriction": {
+                                    "allowed-columns": ["event_id"]
+                                }
+                            }
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("malformed policy-binding replay evidence should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("policy-binding.upserted"));
+        assert!(message.contains("invalid scope or identifier"));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());

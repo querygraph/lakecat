@@ -942,9 +942,14 @@ curl -s -X PUT http://127.0.0.1:3000/management/v1/projects/resilience/warehouse
 These writes are not Iceberg table metadata. They are catalog control-plane
 state. LakeCat persists them durably, records authorization receipts, and writes
 outbox events. When the outbox drains, server, project, warehouse, and
-storage-profile changes become catalog graph events; the same management
-changes also become OpenLineage receipts. QueryGraph can later learn the
-management shape without requiring every Iceberg client to understand it.
+storage-profile, and policy-binding changes become catalog graph events; the
+same management changes also become OpenLineage receipts. QueryGraph can later
+learn the management shape without requiring every Iceberg client to understand
+it. Policy-binding upsert replay is checked before projection: the evidence
+must carry a valid policy id, warehouse, optional namespace/table scope, an
+enforcement flag, and the captured ODRL material. LakeCat does not reason over
+that ODRL during replay, but malformed binding shape fails closed before the
+policy anchor can be delivered to graph or lineage sinks.
 Server endpoint URLs are operator-visible management metadata, so LakeCat keeps
 them deliberately plain: they must be absolute `http` or `https` URLs, and they
 cannot include query strings, fragments, or URI userinfo. Rejected submissions
@@ -2032,7 +2037,10 @@ matching credential count, full credential-response hashes, a full redacted
 storage-profile location hash, and internally consistent secret-reference
 presence/provider/hash fields before delivery. Storage-profile upsert replay
 must likewise reject raw secret references and contradictory
-secret-reference-state evidence before delivery. It also requires
+secret-reference-state evidence before delivery. Policy-binding upsert replay
+must carry valid catalog scope evidence before delivery, including policy id,
+warehouse, optional namespace/table scope, enforcement state, and captured ODRL
+material. It also requires
 planned and fetched read restrictions to match before compact proof generation,
 requires both requested/effective projection and
 requested/effective stats-field evidence, requires effective projection to be a

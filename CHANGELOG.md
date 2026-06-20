@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for `policy-binding.upserted` events whose
+  policy-binding evidence has malformed identifiers, warehouse scope,
+  namespace/table scope, or missing enforcement/ODRL fields, so invalid policy
+  replay fails before graph/lineage projection acknowledgement.
 - Rejected outbox delivery for `storage-profile.upserted` events whose
   storage-profile evidence carries a raw `secret-ref`, malformed
   secret-reference provider/hash state, or neither a location prefix nor a
