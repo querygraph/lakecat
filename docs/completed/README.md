@@ -7,10 +7,11 @@ here for audit and provenance only; do not use them as live instructions unless
 you first reconcile the relevant point back into the root design, status, goal,
 architecture, or agent guidance documents.
 
-Consolidation was audited on 2026-06-19. The durable OPUS findings, design
-decisions, and working-plan entries are represented in `../../DESIGN.md`,
-especially its consolidation note, source ledger, review log, closure map, and
-priority plan. This directory is intentionally an archive, not a backlog.
+Consolidation was audited on 2026-06-19 and re-audited on 2026-06-20. The
+durable OPUS findings, design decisions, and working-plan entries are
+represented in `../../DESIGN.md`, especially its consolidation note, source
+ledger, review log, closure map, and priority plan. This directory is
+intentionally an archive, not a backlog.
 
 ## Archived OPUS Files
 
@@ -22,6 +23,10 @@ priority plan. This directory is intentionally an archive, not a backlog.
 These files are deliberately archived here as of 2026-06-19. Their active
 design content has been merged into `../../DESIGN.md` and adjacent canonical
 docs; this directory is now provenance, not a work queue.
+
+Each OPUS file carries an archive banner pointing back to `../../DESIGN.md`.
+Future design changes should update the active docs directly and leave these
+historical reviews frozen except for small archive-maintenance edits.
 
 The active tree should not contain root-level or live OPUS design files. The
 expected audit result is that `rg --files -g 'OPUS*.md' -g '!docs/completed/**'`

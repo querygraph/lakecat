@@ -1,10 +1,19 @@
 # LakeCat Status
 
-Updated: 2026-06-19
+Updated: 2026-06-20
 
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Re-audit OPUS consolidation`.
+  `DESIGN.md` remains the active synthesis for all OPUS review/design guidance,
+  `docs/completed/README.md` records the archive shape, and each archived
+  `OPUS*.md` file is explicitly marked as historical provenance rather than a
+  live backlog.
+- Local verification for this OPUS consolidation slice is documentation-only:
+  archive inventory commands confirmed no active root `OPUS*.md` files and the
+  four archived OPUS files under `docs/completed/`.
 - Latest completed implementation slice:
   `Prove scan-plan graph replay`.
   QGLake governed scan source replay now requires scan-planned graph projection

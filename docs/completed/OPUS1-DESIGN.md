@@ -3,6 +3,8 @@
 > Archived completed review. The active LakeCat design record is
 > [`../../DESIGN.md`](../../DESIGN.md); use this file only for historical audit
 > and provenance.
+> Re-audited 2026-06-20: durable guidance has been merged into the active
+> design/source-of-truth docs. Do not treat this file as a live backlog.
 
 A design-level companion to [`OPUS1.md`](OPUS1.md). Where OPUS1 reviews *what
 Codex built*, this answers a sharper question:

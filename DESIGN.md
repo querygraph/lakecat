@@ -1,6 +1,6 @@
 # LakeCat Design
 
-Updated: 2026-06-19
+Updated: 2026-06-20
 
 Status: living design. This document supersedes the OPUS review/design notes
 that are now archived under `docs/completed/`.
@@ -88,7 +88,7 @@ this living design, update the specific canonical doc in the map above, or add a
 small dated note under `docs/completed/` only after its durable decisions have
 already been merged into the live docs.
 
-### 2026-06-19 Consolidation Lock
+### 2026-06-20 Consolidation Lock
 
 The current OPUS consolidation state is intentional and complete. The root tree
 contains no active `OPUS*.md` files, and the only tracked OPUS files are the four
@@ -96,6 +96,11 @@ archived review artifacts under `docs/completed/`. Treat this document as the
 implementation-ready design synthesis; do not mine archived OPUS files for new
 work without first moving the durable decision back into this file or the
 canonical document that owns that topic.
+
+The consolidation was re-audited on 2026-06-20 against the archived OPUS
+corpus. The active design record remains this file plus the canonical document
+map above. The OPUS files are not a hidden backlog, and they are not an
+alternate status source. They preserve review provenance only.
 
 Current archive inventory:
 

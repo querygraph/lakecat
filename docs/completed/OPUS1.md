@@ -3,6 +3,8 @@
 > Archived completed review. The active LakeCat design record is
 > [`../../DESIGN.md`](../../DESIGN.md); use this file only for historical audit
 > and provenance.
+> Re-audited 2026-06-20: durable guidance has been merged into the active
+> design/source-of-truth docs. Do not treat this file as a live backlog.
 
 Review of `~/src/lakecat` (branch `master`, no commits yet — working tree only),
 plus the integration targets it depends on: `~/src/sail`, `~/src/grust`,

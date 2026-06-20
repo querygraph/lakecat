@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Re-audited the OPUS review/design consolidation, refreshed `DESIGN.md` and
+  `docs/completed/README.md`, and marked each archived OPUS file as historical
+  provenance rather than a live backlog.
 - Added scan-plan graph event evidence to QGLake governed scan source replay,
   compact `governedScanProof`, captured replay agreement, and the
   operator-readable scan replay line.
