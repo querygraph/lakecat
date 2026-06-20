@@ -1192,6 +1192,40 @@ fn lineage_drain_event_summary(
                 .collect()
         })
         .or_else(|| {
+            payload
+                .get("view-version-receipt-chains")
+                .and_then(Value::as_array)
+                .map(|chains| {
+                    chains
+                        .iter()
+                        .flat_map(|chain| {
+                            chain
+                                .get("receipts")
+                                .and_then(Value::as_array)
+                                .into_iter()
+                                .flatten()
+                        })
+                        .filter_map(|receipt| {
+                            receipt
+                                .get("receipt-hash")
+                                .and_then(Value::as_str)
+                                .map(str::to_string)
+                        })
+                        .collect()
+                })
+        })
+        .or_else(|| {
+            payload.get("receipt-hashes").and_then(|hashes| {
+                hashes.as_array().map(|hashes| {
+                    hashes
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_string)
+                        .collect()
+                })
+            })
+        })
+        .or_else(|| {
             payload.get("drop-receipt-hashes").and_then(|hashes| {
                 hashes.as_array().map(|hashes| {
                     hashes
@@ -9787,6 +9821,49 @@ mod tests {
                             "receipt-count": 2,
                             "tombstone-count": 1,
                             "chain-verified-count": 1,
+                            "view-version-receipt-chains": [{
+                                "stable-id": "lakecat:view:local:default:events_view",
+                                "warehouse": "local",
+                                "namespace": ["default"],
+                                "name": "events_view",
+                                "chain-hash": "sha256:view-receipt-chain",
+                                "chain-verified": true,
+                                "latest-view-version": 1,
+                                "latest-operation": "drop",
+                                "tombstoned": true,
+                                "receipt-count": 2,
+                                "receipts": [
+                                    {
+                                        "stable-id": "lakecat:view:local:default:events_view",
+                                        "warehouse": "local",
+                                        "namespace": ["default"],
+                                        "name": "events_view",
+                                        "view-version": 1,
+                                        "previous-view-version": null,
+                                        "operation": "upsert",
+                                        "view-hash": "sha256:view-upsert",
+                                        "receipt-hash": "sha256:view-upsert-receipt",
+                                        "principal-subject": "agent:operator",
+                                        "principal-kind": "agent",
+                                        "recorded-at": "2026-06-20T00:00:00Z"
+                                    },
+                                    {
+                                        "stable-id": "lakecat:view:local:default:events_view",
+                                        "warehouse": "local",
+                                        "namespace": ["default"],
+                                        "name": "events_view",
+                                        "view-version": 1,
+                                        "previous-view-version": 1,
+                                        "previous-receipt-hash": "sha256:view-upsert-receipt",
+                                        "operation": "drop",
+                                        "view-hash": "sha256:view-drop",
+                                        "receipt-hash": "sha256:view-drop-receipt",
+                                        "principal-subject": "agent:operator",
+                                        "principal-kind": "agent",
+                                        "recorded-at": "2026-06-20T00:00:01Z"
+                                    }
+                                ]
+                            }],
                             "chain-hashes": ["sha256:view-receipt-chain"],
                             "receipt-hashes": ["sha256:view-upsert-receipt", "sha256:view-drop-receipt"],
                             "drop-receipt-hashes": ["sha256:view-drop-receipt"],
@@ -9860,11 +9937,17 @@ mod tests {
         );
         assert_eq!(
             drain.events[4].view_version_receipt_hashes,
-            vec!["sha256:view-drop-receipt".to_string()]
+            vec![
+                "sha256:view-upsert-receipt".to_string(),
+                "sha256:view-drop-receipt".to_string()
+            ]
         );
         assert_eq!(
             drain.events[5].view_version_receipt_hashes,
-            vec!["sha256:view-drop-receipt".to_string()]
+            vec![
+                "sha256:view-upsert-receipt".to_string(),
+                "sha256:view-drop-receipt".to_string()
+            ]
         );
         assert_eq!(
             drain.events[5].view_version_receipt_chain_hashes,

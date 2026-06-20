@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Preserve full view receipt replay coverage`.
+  Lineage-drain summaries for view receipt-list and namespace receipt-chain
+  reads now preserve full receipt hash coverage, including nested receipts from
+  `view-version-receipt-chains`, so QGLake replay can prove namespace chains
+  cover both upsert and tombstone receipts.
+- Local verification for this view receipt replay coverage slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_projects_view_events_to_graph_and_lineage -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind tombstoned view chains in compact QGLake handoff`.
   Compact QGLake handoff verification now rejects tombstoned accepted views
   whose `acceptedReceiptChainHash` is not covered by namespace

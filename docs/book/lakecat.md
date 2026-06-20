@@ -1866,7 +1866,10 @@ that the table commit-history read replayed with sequence-number and
 commit-hash evidence. For views, it refuses to omit proof that accepted
 view versions line up with their receipt hashes and that the namespace-level
 tombstone and receipt-chain reads replayed with chain hashes and verified-chain
-counts.
+counts. The service-side lineage-drain summary preserves the full receipt hash
+set from receipt-list reads and nested namespace receipt-chain payloads, so the
+QGLake verifier can prove that both upsert and tombstone receipts are covered
+by the replayed namespace chain.
 
 This gives the semantic layer a responsible starting point. LakeCat says:
 
@@ -1991,8 +1994,10 @@ summary.
 Dropped accepted-view source replay also binds the namespace receipt-chain read
 back to the accepted view warehouse/namespace and rejects verified-chain count
 or receipt-hash coverage drift before compact handoff proof is generated. The
-same replay now emits catalog-facing `Commit` graph events for the listed
-sequences, leaving traversal and query semantics to Grust.
+lineage-drain summary now carries the nested chain receipts as full receipt
+hash coverage before that check runs. The same replay now emits catalog-facing
+`Commit` graph events for the listed sequences, leaving traversal and query
+semantics to Grust.
 
 For handoff testing, LakeCat can verify a saved bootstrap bundle and a saved
 drain response together:

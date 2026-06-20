@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserved full view receipt coverage in lineage-drain summaries for
+  `view.version-receipts-listed` and nested
+  `view.version-receipt-chains-listed` payloads, so QGLake replay evidence can
+  prove namespace chains cover every upsert and tombstone receipt.
 - Tightened compact QGLake handoff verification so tombstoned accepted views
   must still have their `acceptedReceiptChainHash` covered by namespace
   `receiptChains[].chainHashes`, binding deletion evidence to the accepted
