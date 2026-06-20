@@ -13103,10 +13103,46 @@ mod tests {
             .unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let message = body["error"]["message"].as_str().unwrap();
-        assert!(message.contains("public config value may expose secret material"));
-        assert!(message.contains("public-config-key-hash=sha256:"));
-        assert!(!message.contains("lakecat.endpoint"));
+        assert!(message.contains("local-file-no-secret issuance mode requires file provider"));
+        assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+        assert!(!message.contains("s3://lakecat-demo/events"));
+        assert!(!message.contains("lakecat-demo"));
         assert!(!message.contains("raw-secret"));
+    }
+
+    #[tokio::test]
+    async fn management_storage_profile_rejects_local_secret_ref_mode() {
+        let app = test_app();
+        let secret_ref = "typesec://lakecat/local/raw-secret-root";
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/storage-profiles/local-secret-ref")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "location-prefix": "file:///tmp/events",
+                    "provider": "file",
+                    "issuance-mode": "short-lived-secret-ref",
+                    "secret-ref": secret_ref
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(
+            message.contains("short-lived-secret-ref issuance mode requires s3, gcs, or azure")
+        );
+        assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+        assert!(!message.contains("file:///tmp/events"));
+        assert!(!message.contains(secret_ref));
+        assert!(!message.contains("raw-secret-root"));
     }
 
     #[tokio::test]

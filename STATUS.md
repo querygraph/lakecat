@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin storage-profile issuance mismatch redaction`.
+  Storage-profile issuance/provider mismatch errors now carry
+  `storage-profile-prefix-hash` evidence, and management-route coverage proves
+  remote roots cannot use local no-secret mode and local roots cannot use
+  short-lived secret-ref mode without echoing raw prefixes or secret refs.
+- Local verification for this storage-profile credential-mode slice is green:
+  `cargo fmt -p lakecat-store -p lakecat-service -- --check`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_reject_provider_issuance_mismatch -- --nocapture`;
+  `cargo test -p lakecat-service management_storage_profile_rejects_remote_local_no_secret_mode -- --nocapture`;
+  `cargo test -p lakecat-service management_storage_profile_rejects_local_secret_ref_mode -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Route-prove decorated storage prefixes are redacted`.
   The management storage-profile route now has focused regression coverage
   proving decorated `location-prefix` values fail with

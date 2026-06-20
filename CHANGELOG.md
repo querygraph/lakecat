@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned storage-profile issuance/provider mismatch diagnostics so local-vs-
+  remote credential-mode errors carry `storage-profile-prefix-hash` evidence and
+  management routes do not echo raw prefixes or secret references.
 - Added management-route coverage proving decorated storage-profile location
   prefixes fail with hash-only evidence and do not echo raw prefixes, query
   tokens, or userinfo.

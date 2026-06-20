@@ -947,7 +947,11 @@ the same operator-facing behavior, so a rejected storage-profile upsert does
 not leak the submitted decorated prefix.
 It also rejects unsafe issuance-mode combinations: `local-file-no-secret` is
 for file storage only, while `short-lived-secret-ref` is for configured remote
-providers such as S3, GCS, and Azure.
+providers such as S3, GCS, and Azure. Those mismatches fail with the same
+`storage-profile-prefix-hash=sha256:...` anchor and without echoing the raw
+storage prefix or submitted `secret-ref`, so operators can correlate the
+credential-root error without turning the management API into a credential
+leak.
 The `public-config` map is only for non-secret routing hints such as region,
 endpoint labels, and operational purpose. LakeCat rejects secret-looking
 public keys and values, so raw tokens, passwords, access keys, and credential
