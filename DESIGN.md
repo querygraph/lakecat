@@ -416,7 +416,9 @@ whether an old OPUS item still needs work.
 
 Keep tightening the read path so the effective restriction is derived by the
 server, carried by capability, applied by Sail plan/fetch paths, and captured in
-receipts. Prefer upstream Sail APIs for any reusable planner or manifest work.
+receipts. Scan evidence should preserve both requested and effective
+projection/stat metadata so replay can prove what policy narrowed. Prefer
+upstream Sail APIs for any reusable planner or manifest work.
 
 ### P2 QGLake Acceptance
 

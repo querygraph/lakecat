@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserved requested and effective scan stats-field evidence in governed scan
+  plan extensions, so replay can prove policy narrowed metadata/stat requests
+  without losing what the client originally asked for.
 - Rejected metadata-object commit plans whose new metadata location is the
   selected storage-profile root instead of a child object, preventing the commit
   path from attempting create-only writes at the table/storage root.

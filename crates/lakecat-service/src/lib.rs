@@ -3215,6 +3215,8 @@ async fn plan_scan_with_capability(
         "requested-projection": requested_projection,
         "effective-projection": projection,
         "read-restriction": restriction,
+        "requested-stats-fields": request.stats_fields,
+        "effective-stats-fields": stats_fields,
         "stats-fields": stats_fields,
     });
     #[cfg(feature = "sail-local")]
@@ -13200,6 +13202,7 @@ mod tests {
             .body(Body::from(
                 serde_json::json!({
                     "select": ["event_id", "payload"],
+                    "stats-fields": ["event_id", "payload"],
                     "case-sensitive": true
                 })
                 .to_string(),
@@ -13221,6 +13224,18 @@ mod tests {
         );
         assert_eq!(
             body["residual-filter"]["lakecat:scan-request"]["effective-projection"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:scan-request"]["requested-stats-fields"],
+            serde_json::json!(["event_id", "payload"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:scan-request"]["effective-stats-fields"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:scan-request"]["stats-fields"],
             serde_json::json!(["event_id"])
         );
         assert_eq!(

@@ -281,9 +281,12 @@ governed Sail plan.
 The important detail is that the policy restriction becomes part of planning,
 not a note beside it. An empty client projection under a column restriction
 means the allowed columns. A client projection can narrow further, but cannot
-widen. During `fetchScanTasks`, LakeCat recomputes the current restriction and
-requires the token to satisfy it. A stale or legacy token cannot silently expand
-back to all columns.
+widen. The same rule applies to stats-field requests: LakeCat records both the
+client's requested stats fields and the effective stats fields that survived
+the server-derived column restriction, while the compatibility `stats-fields`
+extension remains the narrowed effective set. During `fetchScanTasks`, LakeCat
+recomputes the current restriction and requires the token to satisfy it. A stale
+or legacy token cannot silently expand back to all columns.
 
 ## The Commit Path
 
@@ -963,19 +966,20 @@ Sail receives:   event_id, severity
 The catalog does not trust the client to remember that. The restriction is
 re-applied when scan tasks are fetched, and the audit payload records the
 policy hash, narrowed columns, row predicate, storage location, metadata
-location, and principal. The fetch response also carries LakeCat extension
-evidence for the exact `required-projection` and `required-filters` derived
-from the authorized capability. That makes a stateless `fetchScanTasks` replay
-prove the restriction was re-applied, not merely that the original policy
-object was echoed. The QGLake fixture verifier checks those fields directly
-when it fetches scan tasks, so a local acceptance run fails if the response
-drops either the narrowed projection or the mandatory row predicate proof. The
-same verifier now checks that the exported policy binding, scan planning
-extension, and fetch extension all preserve the server-derived purpose and
-policy-derived `max-credential-ttl-seconds` cap before compact replay proof can
-be accepted. It also cross-checks the embedded ODRL policy projection against
-the structured binding so QueryGraph cannot import a stale copy while LakeCat
-verifies a different one.
+location, principal, requested stats fields, and effective stats fields. The
+fetch response also carries LakeCat extension evidence for the exact
+`required-projection` and `required-filters` derived from the authorized
+capability. That makes a stateless `fetchScanTasks` replay prove the restriction
+was re-applied, not merely that the original policy object was echoed. The
+QGLake fixture verifier checks those fields directly when it fetches scan
+tasks, so a local acceptance run fails if the response drops either the narrowed
+projection or the mandatory row predicate proof. The same verifier now checks
+that the exported policy binding, scan planning extension, and fetch extension
+all preserve the server-derived purpose and policy-derived
+`max-credential-ttl-seconds` cap before compact replay proof can be accepted.
+It also cross-checks the embedded ODRL policy projection against the structured
+binding so QueryGraph cannot import a stale copy while LakeCat verifies a
+different one.
 
 ### A Notebook Requests Credentials
 

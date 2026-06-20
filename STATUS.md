@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Record requested scan stats-field evidence`.
+  Governed scan planning now records both `requested-stats-fields` and
+  `effective-stats-fields` in the LakeCat scan-request extension while
+  preserving the existing effective `stats-fields` alias. This keeps replay
+  evidence from hiding attempted metadata/stat requests for columns outside the
+  server-derived restriction.
+- Local verification for this scan-proof slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features sail-local scan_planning_applies_policy_column_restriction_before_sail -- --nocapture`.
+- Latest completed implementation slice:
   `Reject root metadata-object commit locations`.
   Metadata-object commit validation now requires the planned new metadata
   location to be a strict child of the selected storage-profile prefix, not the
