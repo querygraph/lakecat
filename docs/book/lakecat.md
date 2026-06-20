@@ -1766,8 +1766,9 @@ planned and fetched OpenLineage receipt hashes. Source replay validation now
 also requires planned and fetched read restrictions to match before compact
 proof generation, requires both requested and effective stats-field evidence,
 requires effective stats fields to be a narrowed subset of the requested
-stats fields, and requires the fetched projection and filter requirements to
-exactly preserve the fetched allowed columns and row predicate. A fetched
+stats fields in both source replay and compact handoff proof, and requires the
+fetched projection and filter requirements to exactly preserve the fetched
+allowed columns and row predicate. A fetched
 response that omits required-filter proof is rejected just like one that widens
 or changes that proof, and the compact handoff summary applies the same
 missing-proof check before accepting governed scan evidence. Credential

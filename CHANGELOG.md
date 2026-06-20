@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Tightened QGLake source replay verification to reject effective scan
+  stats-field evidence that was not present in the requested stats fields.
 - Tightened compact QGLake handoff verification to reject effective scan
   stats-field evidence that was not present in the requested stats fields.
 - Tightened compact QGLake handoff verification to reject governed scan proofs

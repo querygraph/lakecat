@@ -13900,6 +13900,31 @@ mod tests {
     }
 
     #[test]
+    fn qglake_scan_replay_rejects_unrequested_effective_stats_fields() {
+        let mut planned = qglake_scan_planned_lineage_summary();
+        planned.requested_stats_fields = vec![
+            "event_id".to_string(),
+            "occurred_at".to_string(),
+            "severity".to_string(),
+            "raw_payload".to_string(),
+        ];
+        planned.effective_stats_fields = vec![
+            "event_id".to_string(),
+            "occurred_at".to_string(),
+            "tenant_id".to_string(),
+        ];
+
+        let err = verify_qglake_scan_restriction_replay(
+            &planned,
+            &qglake_scan_tasks_fetched_lineage_summary(),
+        )
+        .expect_err("scan replay should reject effective stats fields that were never requested");
+
+        assert!(err.to_string().contains("tenant_id"));
+        assert!(err.to_string().contains("was not requested"));
+    }
+
+    #[test]
     fn qglake_management_replay_line_summarizes_verified_evidence() {
         let line = qglake_management_replay_line(&LineageDrainResponse {
             delivered: 5,

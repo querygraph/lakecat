@@ -6,6 +6,15 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject unrequested QGLake source stats proof`.
+  QGLake source replay verification now rejects effective stats-field evidence
+  that was not present in the requested stats fields, keeping captured replay
+  proof aligned with the compact handoff verifier.
+- Local verification for this source stats narrowing slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_scan_replay_rejects_unrequested_effective_stats_fields -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_scan_replay_rejects_widened_effective_stats_fields -- --nocapture`.
+- Latest completed implementation slice:
   `Reject unrequested QGLake handoff stats proof`.
   The compact QGLake handoff verifier now rejects
   `plannedEffectiveStatsFields` entries that were not present in
