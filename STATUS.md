@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin fetch scan-task policy scope`.
+  Default-feature REST `fetchScanTasks` coverage now proves the service
+  re-sends the required projection and mandatory policy filter to Sail while
+  preserving required-projection/filter evidence in both the response extension
+  and durable audit/outbox payload.
+- Local verification for this fetch scan-task policy-scope slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service fetch_scan_tasks_route_sends_required_policy_scope_to_sail -- --nocapture`;
+  `cargo test -p lakecat-service scan_tasks_fetched_audit_payload_surfaces_policy_context -- --nocapture`.
+- Latest completed implementation slice:
   `Pin default scan planning policy scope`.
   Default-feature REST scan-planning coverage now proves the service sends
   only the server-derived effective projection and mandatory policy filter to

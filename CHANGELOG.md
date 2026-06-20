@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned default REST `fetchScanTasks` coverage proving LakeCat re-sends the
+  required policy projection and mandatory filters to Sail while auditing the
+  replay proof.
 - Pinned default REST scan-planning coverage proving LakeCat sends only the
   effective policy projection and mandatory filters to Sail while auditing both
   requested and effective replay evidence.

@@ -288,8 +288,9 @@ extension remains the narrowed effective set. The default REST path is tested
 at the Sail boundary: Sail receives only the effective projection and mandatory
 policy filters, while LakeCat keeps the broader request and narrowed result as
 replay evidence. During `fetchScanTasks`, LakeCat recomputes the current
-restriction and requires the token to satisfy it. A stale or legacy token
-cannot silently expand back to all columns.
+restriction and sends Sail the required projection and mandatory filters again;
+the response extension and audit outbox record the same proof. A stale or
+legacy token cannot silently expand back to all columns.
 
 ## The Commit Path
 
