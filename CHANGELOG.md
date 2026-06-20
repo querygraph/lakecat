@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Enforced storage-profile scope at the `loadCredentials` service boundary so
+  custom credential issuers cannot return broader prefixes than the catalog
+  profile selected for the table.
 - Rejected metadata-object commit locations containing URI query strings,
   fragments, or URI userinfo before object-store writes, returning hash-only
   metadata-location evidence.

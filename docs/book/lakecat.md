@@ -913,7 +913,10 @@ also matched on a storage-root boundary. A profile for
 such as `s3://lakecat/events-shadow/table`. That keeps credential roots from
 accidentally governing more storage than their configured prefix describes; if
 no stored profile matches, LakeCat falls back to an inferred governed-read
-profile for the table location.
+profile for the table location. The same check runs after the credential
+issuer returns: `loadCredentials` rejects any returned prefix broader than the
+selected profile before LakeCat attaches canonical response evidence, so a
+custom issuer cannot widen catalog-owned storage scope.
 
 ```sh
 curl -s -X PUT \

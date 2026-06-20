@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Enforce credential issuer scope at service boundary`.
+  The public `loadCredentials` path now revalidates every credential returned
+  by the configured issuer against the selected storage profile before
+  canonical evidence is attached. A default-feature route test proves a custom
+  issuer cannot return a broader prefix than the table profile, and the error
+  remains hash-only.
+- Local verification for this credential issuer scope slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service credential_vend_rejects_issuer_credentials_outside_profile_scope -- --nocapture`;
+  `cargo test -p lakecat-service credential_vend_allows_trusted_human_raw_exception_for_restricted_table -- --nocapture`.
+- Latest completed implementation slice:
   `Reject userinfo metadata object locations`.
   Metadata-object commit validation now rejects planned new metadata locations
   containing URI query strings, fragments, or URI userinfo before object-store

@@ -1943,15 +1943,19 @@ async fn load_credentials_in_warehouse(
         Vec::new()
     } else {
         canonicalize_credential_response_evidence(
-            state
-                .credential_issuer
-                .issue(CredentialIssuanceRequest {
-                    table: table.clone(),
-                    profile: storage_profile.clone(),
-                    authorization_receipt: capability.receipt().clone(),
-                    max_credential_ttl_seconds,
-                })
-                .await?,
+            issued_credentials_for_profile(
+                state
+                    .credential_issuer
+                    .issue(CredentialIssuanceRequest {
+                        table: table.clone(),
+                        profile: storage_profile.clone(),
+                        authorization_receipt: capability.receipt().clone(),
+                        max_credential_ttl_seconds,
+                    })
+                    .await?,
+                &storage_profile,
+                max_credential_ttl_seconds,
+            )?,
             &storage_profile,
             capability.receipt(),
             read_restriction.requires_governed_read(),
@@ -5918,6 +5922,28 @@ mod tests {
                     ConfigEntry::new("lakecat.credential-kind", "shadow-test"),
                     ConfigEntry::new("aws.session-token", "temporary-test-token"),
                     ConfigEntry::new("lakecat.max-credential-ttl-seconds", "120"),
+                ],
+            }])
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct BroadCredentialIssuer {
+        requests: Mutex<Vec<CredentialIssuanceRequest>>,
+    }
+
+    #[async_trait]
+    impl CredentialIssuer for BroadCredentialIssuer {
+        async fn issue(
+            &self,
+            request: CredentialIssuanceRequest,
+        ) -> lakecat_core::LakeCatResult<Vec<StorageCredential>> {
+            self.requests.lock().await.push(request.clone());
+            Ok(vec![StorageCredential {
+                prefix: "s3://lakecat-demo".to_string(),
+                config: vec![
+                    ConfigEntry::new("lakecat.credential-kind", "broad-test"),
+                    ConfigEntry::new("aws.session-token", "temporary-test-token"),
                 ],
             }])
         }
@@ -13571,6 +13597,52 @@ mod tests {
         assert_eq!(
             event.payload["payload"]["lakecat:credential-block-reason"],
             serde_json::json!("fine-grained read restriction requires Sail-planned reads")
+        );
+    }
+
+    #[tokio::test]
+    async fn credential_vend_rejects_issuer_credentials_outside_profile_scope() {
+        let store = MemoryCatalogStore::new();
+        let issuer = Arc::new(BroadCredentialIssuer::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_credential_issuer(issuer.clone());
+        let create = TableRecord::new(
+            TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            ),
+            "s3://lakecat-demo/events/tenant-a".to_string(),
+            Some("s3://lakecat-demo/events/tenant-a/metadata/00000.json".to_string()),
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        );
+        store.create_table(create).await.unwrap();
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-lakecat-principal",
+            axum::http::HeaderValue::from_static("human:operator"),
+        );
+        let err = load_credentials(
+            State(state),
+            headers,
+            Path(("default".to_string(), "events".to_string())),
+        )
+        .await
+        .expect_err("broad issuer credentials must be rejected by LakeCat");
+        let message = err.0.to_string();
+        assert!(matches!(err.0, LakeCatError::InvalidArgument(_)));
+        assert!(message.contains("issued credential prefix is outside storage profile scope"));
+        assert!(message.contains("credential-prefix-hash=sha256:"));
+        assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+        assert!(!message.contains("s3://lakecat-demo"));
+
+        let requests = issuer.requests.lock().await;
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            requests[0].profile.location_prefix,
+            "s3://lakecat-demo/events/tenant-a"
         );
     }
 
