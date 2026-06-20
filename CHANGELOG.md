@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected metadata-object commit locations containing URI query strings or
+  fragments before object-store writes, returning hash-only metadata-location
+  evidence.
 - Pinned the blocked-agent credential-vend outbox contract so governed
   Sail-planned-read decisions record an explicit empty
   `credential-response-evidence` array instead of omitting response proof.

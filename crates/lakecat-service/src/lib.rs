@@ -3146,6 +3146,12 @@ fn validate_planned_metadata_location(
             metadata_location_hash_context(new_metadata_location)
         )));
     }
+    if location_has_query_or_fragment(new_metadata_location) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "metadata object location {} must not include query strings or fragments",
+            metadata_location_hash_context(new_metadata_location)
+        )));
+    }
     if !location_is_strictly_within_prefix(
         new_metadata_location,
         storage_profile.location_prefix.as_str(),
@@ -3165,6 +3171,12 @@ fn location_has_dot_path_segment(location: &str) -> bool {
         .split_once(['?', '#'])
         .map_or(location, |(path, _)| path);
     path.split('/').any(is_dot_path_segment)
+}
+
+fn location_has_query_or_fragment(location: &str) -> bool {
+    Url::parse(location)
+        .map(|url| url.query().is_some() || url.fragment().is_some())
+        .unwrap_or_else(|_| location.contains(['?', '#']))
 }
 
 fn is_dot_path_segment(segment: &str) -> bool {
@@ -10511,6 +10523,45 @@ mod tests {
             assert!(matches!(err, LakeCatError::InvalidArgument(_)));
             let message = err.to_string();
             assert!(message.contains("dot path segments"));
+            assert!(message.contains("metadata-location-hash=sha256:"));
+            assert!(!message.contains(location));
+            assert!(!message.contains("00001.json"));
+        }
+    }
+
+    #[test]
+    fn metadata_write_plan_rejects_query_or_fragment_locations() {
+        let table = TableRecord::new(
+            table_ident("local", "default", "events").unwrap(),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        );
+        let storage_profile = StorageProfile::inferred_for_table(&table);
+        for location in [
+            "file:///tmp/events/metadata/00001.json?version=staged",
+            "file:///tmp/events/metadata/00001.json#staged",
+        ] {
+            let plan = lakecat_sail::CommitPlan {
+                prepared_by: "test".to_string(),
+                requirements: Vec::new(),
+                updates: Vec::new(),
+                new_metadata_location: Some(location.to_string()),
+                new_metadata: serde_json::json!({"format-version": 3}),
+                metadata_write_required: true,
+                metadata_patch: serde_json::json!({}),
+            };
+
+            let err = validate_planned_metadata_location(
+                &plan,
+                table.metadata_location.as_deref(),
+                &storage_profile,
+            )
+            .unwrap_err();
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            let message = err.to_string();
+            assert!(message.contains("query strings or fragments"));
             assert!(message.contains("metadata-location-hash=sha256:"));
             assert!(!message.contains(location));
             assert!(!message.contains("00001.json"));
