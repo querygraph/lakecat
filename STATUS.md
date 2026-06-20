@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Compose ODRL TTL caps within policies`.
+  `lakecat-security` now folds every supported ODRL credential-TTL source in a
+  policy document to the tightest `max-credential-ttl-seconds` cap before
+  composing active bindings, so direct fields cannot mask stricter constraint
+  caps in the same policy.
+- Local verification for this ODRL TTL slice is green:
+  `cargo fmt -p lakecat-security -- --check`;
+  `cargo test -p lakecat-security read_restriction -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject conflicting ODRL purposes`.
   `lakecat-security` now composes ODRL read-restriction purposes by agreement:
   top-level purpose fields, purpose constraints, and multiple active policy

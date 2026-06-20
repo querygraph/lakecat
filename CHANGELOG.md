@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Composed all ODRL `max-credential-ttl-seconds` sources within each policy
+  document to the tightest cap, including direct read-restriction fields and
+  constraint forms, before composing caps across active bindings.
 - Made ODRL read-restriction purpose composition fail closed when a policy
   document or multiple active policy bindings carry conflicting purposes,
   preventing first-purpose-wins parsing from authorizing agent reads under an

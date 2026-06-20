@@ -351,6 +351,7 @@ fn purpose_from_odrl(odrl: &Value) -> LakeCatResult<Option<String>> {
 }
 
 fn ttl_from_odrl(odrl: &Value) -> LakeCatResult<Option<u64>> {
+    let mut ttl = None;
     for value in [
         odrl.get("max-credential-ttl-seconds"),
         odrl.get("maxCredentialTtlSeconds"),
@@ -366,7 +367,7 @@ fn ttl_from_odrl(odrl: &Value) -> LakeCatResult<Option<u64>> {
     .into_iter()
     .flatten()
     {
-        return ttl_value(value);
+        ttl = tighten_ttl(ttl, ttl_value(value)?);
     }
 
     for constraint in odrl_constraints(odrl) {
@@ -387,10 +388,18 @@ fn ttl_from_odrl(odrl: &Value) -> LakeCatResult<Option<u64>> {
             .or_else(|| constraint.get("right-operand"))
         {
             require_constraint_operator(constraint, "max credential TTL", &["eq", "lteq", "lt"])?;
-            return ttl_value(value);
+            ttl = tighten_ttl(ttl, ttl_value(value)?);
         }
     }
-    Ok(None)
+    Ok(ttl)
+}
+
+fn tighten_ttl(existing: Option<u64>, next: Option<u64>) -> Option<u64> {
+    match (existing, next) {
+        (Some(existing), Some(next)) => Some(existing.min(next)),
+        (Some(existing), None) => Some(existing),
+        (None, next) => next,
+    }
 }
 
 fn require_constraint_operator(
@@ -947,6 +956,35 @@ mod tests {
         });
 
         let restriction = ReadRestriction::from_odrl_policies([&policy_a, &policy_b]).unwrap();
+
+        assert_eq!(restriction.max_credential_ttl_seconds, Some(300));
+    }
+
+    #[test]
+    fn read_restriction_uses_tightest_ttl_within_policy_document() {
+        let policy = serde_json::json!({
+            "uid": "policy-a",
+            "max-credential-ttl-seconds": 900,
+            "lakecat:read-restriction": {
+                "max-credential-ttl-seconds": 600
+            },
+            "permission": [{
+                "constraint": [
+                    {
+                        "leftOperand": "max-credential-ttl-seconds",
+                        "operator": "lteq",
+                        "rightOperand": 300
+                    },
+                    {
+                        "leftOperand": "credential-ttl",
+                        "operator": "eq",
+                        "rightOperand": 1200
+                    }
+                ]
+            }]
+        });
+
+        let restriction = ReadRestriction::from_odrl_policies([&policy]).unwrap();
 
         assert_eq!(restriction.max_credential_ttl_seconds, Some(300));
     }

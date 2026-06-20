@@ -342,8 +342,8 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
   into Sail.
 - TypeSec-backed governance is wired through the service layer, with receipts
   and fail-closed credential behavior. Policy-derived credential TTL caps are
-  carried into issuance requests, returned credential config, and QGLake
-  credential replay/handoff evidence.
+  composed to the tightest value, carried into issuance requests, returned
+  credential config, and QGLake credential replay/handoff evidence.
 - ODRL restrictions are no longer only transported as opaque context; the
   enforceable subset is moving through restrictions and receipts, and
   constraint-form operators now fail closed when they are missing or do not

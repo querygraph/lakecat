@@ -544,10 +544,13 @@ returns only scoped, short-lived credential configuration. If policy carries a
 `max-credential-ttl-seconds` restriction, LakeCat passes that cap to the
 credential issuer and annotates each returned credential with
 `lakecat.max-credential-ttl-seconds`, so the exception path has an auditable
-duration bound. If an issuer returns that LakeCat TTL key itself, LakeCat
-normalizes the response to one TTL entry per credential and keeps the stricter
-valid TTL, so duplicate backend-supplied entries cannot widen or confuse the
-policy cap. The same response boundary owns the rest of the LakeCat evidence:
+duration bound. If the cap appears in multiple supported ODRL locations in the
+same policy document, or across multiple active policy bindings, LakeCat keeps
+the tightest value before asking the credential issuer. If an issuer returns
+that LakeCat TTL key itself, LakeCat normalizes the response to one TTL entry
+per credential and keeps the stricter valid TTL, so duplicate backend-supplied
+entries cannot widen or confuse the policy cap. The same response boundary owns
+the rest of the LakeCat evidence:
 issuer-supplied values for `lakecat.storage-profile-id`,
 `lakecat.storage-provider`, `lakecat.credential-mode`,
 `lakecat.authorization-principal`, and `lakecat.governed-read-required` are
