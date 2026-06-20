@@ -844,6 +844,11 @@ authorize issuance before any resolver sees the secret reference.
 LakeCat rejects profiles whose declared provider conflicts with the URI scheme
 of the location prefix, so a credential root cannot claim to be local while
 pointing at an S3 prefix.
+The location prefix itself must be plainly addressed: LakeCat rejects literal
+and percent-encoded dot path segments before the profile can reach memory or
+Turso persistence. Traversal-shaped storage roots fail with
+`storage-profile-prefix-hash=sha256:...` evidence rather than echoing the raw
+prefix.
 It also rejects unsafe issuance-mode combinations: `local-file-no-secret` is
 for file storage only, while `short-lived-secret-ref` is for configured remote
 providers such as S3, GCS, and Azure.

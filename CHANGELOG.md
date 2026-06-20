@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected storage-profile location prefixes containing literal or
+  percent-encoded dot path segments before memory/Turso persistence, reporting
+  only a storage-profile-prefix hash for traversal-shaped credential roots.
 - Required storage-profile selection to respect location-prefix boundaries, so
   a profile for `s3://bucket/events` can match that root or child paths but not
   a sibling such as `s3://bucket/events-shadow`.

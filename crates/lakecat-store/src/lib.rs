@@ -826,6 +826,7 @@ impl StorageProfile {
                 "storage profile location prefix must not be empty".to_string(),
             ));
         }
+        validate_location_prefix_path(&location_prefix)?;
         validate_location_prefix_provider(&location_prefix, provider)?;
         validate_issuance_mode_provider(issuance_mode, provider)?;
         if let Some(secret_ref) = secret_ref.as_deref() {
@@ -851,6 +852,7 @@ impl StorageProfile {
     }
 
     pub fn validate(&self) -> LakeCatResult<()> {
+        validate_location_prefix_path(&self.location_prefix)?;
         validate_location_prefix_provider(&self.location_prefix, self.provider)?;
         validate_issuance_mode_provider(self.issuance_mode, self.provider)?;
         if let Some(secret_ref) = self.secret_ref.as_deref() {
@@ -2040,6 +2042,23 @@ fn validate_location_prefix_provider(
     Ok(())
 }
 
+fn validate_location_prefix_path(location_prefix: &str) -> LakeCatResult<()> {
+    if location_prefix_has_dot_path_segment(location_prefix) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "storage profile location prefix must not include dot path segments; {}",
+            storage_profile_prefix_hash_context(location_prefix)
+        )));
+    }
+    Ok(())
+}
+
+fn location_prefix_has_dot_path_segment(location_prefix: &str) -> bool {
+    let path = location_prefix
+        .split_once(['?', '#'])
+        .map_or(location_prefix, |(path, _)| path);
+    path.split('/').any(is_dot_path_segment)
+}
+
 fn validate_issuance_mode_provider(
     issuance_mode: CredentialIssuanceMode,
     provider: StorageProvider,
@@ -2229,6 +2248,13 @@ fn secret_ref_hash_context(secret_ref: &str) -> String {
     format!(
         "secret-ref-hash={}",
         content_hash_bytes(secret_ref.as_bytes())
+    )
+}
+
+fn storage_profile_prefix_hash_context(location_prefix: &str) -> String {
+    format!(
+        "storage-profile-prefix-hash={}",
+        content_hash_bytes(location_prefix.as_bytes())
     )
 }
 
@@ -5848,6 +5874,89 @@ pub mod turso_store {
                 let matched = store.storage_profile_for_table(&table).await.unwrap();
                 assert_eq!(matched.profile_id, expected_profile_id, "{location}");
             }
+        }
+
+        #[test]
+        fn storage_profiles_reject_dot_segment_location_prefixes() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            for location_prefix in [
+                "s3://lakecat-demo/events/../private",
+                "s3://lakecat-demo/events/%2e%2e/private",
+                "file:///tmp/lakecat/%2E/events",
+            ] {
+                let err = StorageProfile::new(
+                    "dot-prefix",
+                    warehouse.clone(),
+                    location_prefix,
+                    StorageProvider::from_location(location_prefix),
+                    CredentialIssuanceMode::GovernedReadRequired,
+                    None,
+                    BTreeMap::new(),
+                )
+                .unwrap_err();
+
+                let message = err.to_string();
+                assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+                assert!(message.contains("dot path segments"));
+                assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+                assert!(
+                    !message.contains(location_prefix),
+                    "dot-segment location-prefix validation must not expose raw storage roots"
+                );
+            }
+        }
+
+        #[test]
+        fn location_prefix_dot_segment_detection_allows_ordinary_dotted_names() {
+            assert!(crate::location_prefix_has_dot_path_segment(
+                "s3://lakecat-demo/events/../private"
+            ));
+            assert!(crate::location_prefix_has_dot_path_segment(
+                "s3://lakecat-demo/events/%2e%2e/private"
+            ));
+            assert!(!crate::location_prefix_has_dot_path_segment(
+                "s3://lakecat-demo/events/service.v1/table"
+            ));
+        }
+
+        #[tokio::test]
+        async fn storage_profile_upsert_rejects_deserialized_dot_segment_location_prefixes() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            let profile = StorageProfile {
+                profile_id: "dot-prefix".to_string(),
+                warehouse: warehouse.clone(),
+                location_prefix: "s3://lakecat-demo/events/../private".to_string(),
+                provider: StorageProvider::S3,
+                issuance_mode: CredentialIssuanceMode::GovernedReadRequired,
+                secret_ref: None,
+                public_config: BTreeMap::new(),
+            };
+
+            let memory_err = MemoryCatalogStore::new()
+                .upsert_storage_profile(profile.clone())
+                .await
+                .unwrap_err();
+            assert!(matches!(memory_err, LakeCatError::InvalidArgument(_)));
+            assert!(memory_err.to_string().contains("dot path segments"));
+            assert!(
+                memory_err
+                    .to_string()
+                    .contains("storage-profile-prefix-hash=sha256:")
+            );
+
+            let turso = TursoCatalogStore::in_memory().await.unwrap();
+            let turso_err = turso.upsert_storage_profile(profile).await.unwrap_err();
+            assert!(matches!(turso_err, LakeCatError::InvalidArgument(_)));
+            assert!(turso_err.to_string().contains("dot path segments"));
+            assert!(
+                turso_err
+                    .to_string()
+                    .contains("storage-profile-prefix-hash=sha256:")
+            );
+            assert_eq!(
+                turso.list_storage_profiles(&warehouse).await.unwrap(),
+                vec![]
+            );
         }
 
         #[tokio::test]

@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject storage-profile dot-segment prefixes`.
+  Storage-profile validation now rejects `location-prefix` values containing
+  literal or percent-encoded `.`/`..` path segments before memory/Turso
+  persistence. The validation error reports
+  `storage-profile-prefix-hash=sha256:...` instead of echoing traversal-shaped
+  storage roots.
+- Local verification for this location-prefix hardening slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_reject_dot_segment_location_prefixes -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local location_prefix_dot_segment_detection_allows_ordinary_dotted_names -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local storage_profile_upsert_rejects_deserialized_dot_segment_location_prefixes -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject sibling storage-profile prefix matches`.
   Storage-profile selection now treats the stored `location-prefix` as an exact
   root or path-boundary parent, not a raw string prefix. A credential root such
