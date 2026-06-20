@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for `storage-profile.upserted` events whose
+  storage-profile evidence carries a raw `secret-ref`, malformed
+  secret-reference provider/hash state, or neither a location prefix nor a
+  full `location-prefix-hash`, so storage-profile replay fails before
+  graph/lineage projection when its redaction proof is unsafe.
 - Rejected outbox delivery for `credentials.vend-attempted` events whose
   credential count, response-evidence hashes, storage-profile
   `location-prefix-hash`, or secret-reference state are malformed, so invalid

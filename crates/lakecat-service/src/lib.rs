@@ -1112,6 +1112,9 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     if event.event_type == "credentials.vend-attempted" {
         validate_credential_vend_event_evidence(event, payload)?;
     }
+    if event.event_type == "storage-profile.upserted" {
+        validate_storage_profile_upsert_event_evidence(event, payload)?;
+    }
     if event.event_type == "view.version-receipts-listed" {
         validate_view_receipt_list_event_evidence(event, payload)?;
     }
@@ -1204,6 +1207,43 @@ fn validate_table_commit_history_event_evidence(
             "table commit-history commit-count does not match sequence-numbers",
         ));
     }
+    Ok(())
+}
+
+fn validate_storage_profile_upsert_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(storage_profile) = payload.get("storage-profile") else {
+        return Err(outbox_evidence_error(
+            event,
+            "storage-profile upsert evidence must contain storage-profile",
+        ));
+    };
+    if storage_profile.get("secret-ref").is_some() {
+        return Err(outbox_evidence_error(
+            event,
+            "storage-profile upsert evidence must not contain raw secret-ref",
+        ));
+    }
+    if storage_profile
+        .get("location-prefix-hash")
+        .and_then(Value::as_str)
+        .is_some_and(is_full_sha256_digest_evidence)
+    {
+        // Already redacted replay evidence.
+    } else if storage_profile
+        .get("location-prefix")
+        .and_then(Value::as_str)
+        .filter(|location_prefix| !location_prefix.is_empty())
+        .is_none()
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "storage-profile upsert evidence must contain location-prefix or full location-prefix-hash",
+        ));
+    }
+    validate_secret_ref_evidence(event, storage_profile, "storage-profile upsert")?;
     Ok(())
 }
 
@@ -10287,7 +10327,9 @@ mod tests {
                             "location-prefix": "s3://lakecat/events",
                             "provider": "s3",
                             "issuance-mode": "secret-ref",
-                            "secret-ref": "vault://kv/lakecat/events",
+                            "secret-ref-present": true,
+                            "secret-ref-provider": "vault",
+                            "secret-ref-hash": content_hash_bytes("vault://kv/lakecat/events".as_bytes()),
                             "public-config": {"region": "us-west-2"}
                         }
                     }
@@ -10460,6 +10502,65 @@ mod tests {
                 .get("secret-ref")
                 .is_none()
         );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_raw_storage_profile_secret_ref_evidence() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-storage-profile-secret-ref".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-storage-profile-secret-ref",
+                    "event-type": "storage-profile.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "storage-profile-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "storage-profile": {
+                            "profile-id": "s3-events",
+                            "warehouse": "local",
+                            "location-prefix": "s3://lakecat/events",
+                            "provider": "s3",
+                            "issuance-mode": "secret-ref",
+                            "secret-ref": "vault://kv/lakecat/events",
+                            "secret-ref-present": true,
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("raw storage-profile secret-ref evidence should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("storage-profile.upserted"));
+        assert!(message.contains("raw secret-ref"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
     }
 
     #[test]

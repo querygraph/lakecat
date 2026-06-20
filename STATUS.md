@@ -6,6 +6,27 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject raw outbox storage-profile secrets`.
+  Outbox draining now rejects `storage-profile.upserted` pending events when
+  the storage-profile payload carries a raw `secret-ref`, has malformed
+  secret-reference provider/hash state, or lacks both a raw location prefix and
+  a full redacted `location-prefix-hash`. Unsafe storage-profile replay
+  evidence stays pending and reaches neither graph projection nor lineage
+  acknowledgement.
+- Local verification for this outbox storage-profile evidence slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_raw_storage_profile_secret_ref_evidence -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_storage_profile_upserts_to_lineage -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain -- --nocapture`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import, and
+  ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Reject malformed outbox credential evidence`.
   Outbox draining now rejects `credentials.vend-attempted` pending events when
   `credential-count` does not match `credential-response-evidence`,

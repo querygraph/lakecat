@@ -1127,6 +1127,12 @@ without exposing the bucket, path, or local filesystem root to downstream
 consumers. Warehouse replay follows the same shape: `storage-root` becomes
 `storage-root-hash` before graph and lineage projection, keeping the tenant
 root replayable without exposing the raw root itself.
+The drain also rejects unsafe storage-profile upsert evidence before delivery:
+`storage-profile.upserted` may carry the storage prefix that LakeCat hashes for
+projection, or a pre-redacted full `location-prefix-hash`, but it may not carry
+a raw `secret-ref`. If secret-reference presence is true, the replay evidence
+must carry a provider and full `secret-ref-hash`; if presence is false, provider
+and hash evidence must be absent.
 The drain summary lifts the same proof into compact fields alongside the
 profile id and provider. QGLake replay verification requires that compact
 storage-profile upsert evidence, which means a saved handoff can prove the
@@ -2024,7 +2030,9 @@ pointer-log summaries cannot become delivered replay evidence. Credential-vend
 replay gets the same treatment: `credentials.vend-attempted` must carry a
 matching credential count, full credential-response hashes, a full redacted
 storage-profile location hash, and internally consistent secret-reference
-presence/provider/hash fields before delivery. It also requires
+presence/provider/hash fields before delivery. Storage-profile upsert replay
+must likewise reject raw secret references and contradictory
+secret-reference-state evidence before delivery. It also requires
 planned and fetched read restrictions to match before compact proof generation,
 requires both requested/effective projection and
 requested/effective stats-field evidence, requires effective projection to be a
