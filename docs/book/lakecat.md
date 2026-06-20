@@ -1487,11 +1487,13 @@ evidence, active-chain coverage or tombstone guard evidence, or replay evidence
 before parsing the full replay tree. It compares captured LakeCat replay
 `replay-evidence.management` list counts with compact
 `lakecatReplayVerification.managementProof`, requiring positive server,
-project, warehouse, and storage-profile counts and a policy-binding count that
-matches the QueryGraph bootstrap proof. Those management-list counts are
-receipt-backed: the compact proof and captured replay must also agree on replay
-and OpenLineage hash arrays for `server.listed`, `project.listed`,
-`warehouse.listed`, `policy-binding.listed`, and `storage-profile.listed`.
+project, warehouse, and storage-profile counts, positive graph event counts for
+server, project, warehouse, policy-binding, and storage-profile list replay,
+and a policy-binding count that matches the QueryGraph bootstrap proof. Those
+management-list counts are receipt-backed: the compact proof and captured
+replay must also agree on replay and OpenLineage hash arrays for
+`server.listed`, `project.listed`, `warehouse.listed`, `policy-binding.listed`,
+and `storage-profile.listed`.
 It also compares the captured LakeCat replay
 `replay-evidence.management.storageProfileUpsert` object with the compact
 `lakecatReplayVerification.storageProfileUpsertProof`, including the
@@ -1612,7 +1614,10 @@ compact `managementProof` starts from verified replay evidence rather than
 normalizing malformed hashes later. It also rejects management-list source
 replay without catalog graph projection evidence, keeping the durable
 server/project/warehouse, policy, and storage-profile facts visible to
-QueryGraph through Grust-facing graph events. The QGLake acceptance workflow now
+QueryGraph through Grust-facing graph events. Compact `managementProof` carries
+those graph event counts too, and captured replay agreement checks them, so the
+graph evidence cannot disappear between source replay and handoff verification.
+The QGLake acceptance workflow now
 establishes its server/project/warehouse tenant spine, performs governed
 server, project, warehouse, policy-list, storage-profile-list, scan-planning,
 scan-task-fetch, and table commit-history reads before bootstrap, and rejects a

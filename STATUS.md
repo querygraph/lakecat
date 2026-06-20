@@ -6,6 +6,20 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Prove management graph replay counts`.
+  Compact QGLake `managementProof` and captured LakeCat replay agreement now
+  carry positive graph event counts for server, project, warehouse,
+  policy-binding, and storage-profile list replay, preserving the graph
+  projection evidence that source replay already requires.
+- Local verification for this management graph-count handoff slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject management graph replay gaps`.
   QGLake lineage-drain management-list source replay now requires catalog graph
   projection evidence for server, project, warehouse, policy-binding,

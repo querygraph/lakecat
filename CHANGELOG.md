@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added management-list graph event counts to compact QGLake `managementProof`
+  and captured replay agreement, so handoff proof preserves the graph
+  projection evidence required by source replay.
 - Required QGLake lineage-drain management-list source replay to carry catalog
   graph projection evidence before server, project, warehouse, policy, or
   storage-profile list proof can feed compact handoff verification.

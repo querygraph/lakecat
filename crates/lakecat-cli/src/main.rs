@@ -1512,10 +1512,15 @@ fn verify_lakecat_replay_management_matches_summary(
 
     for field in [
         "serverCount",
+        "serverGraphEvents",
         "projectCount",
+        "projectGraphEvents",
         "warehouseCount",
+        "warehouseGraphEvents",
         "policyBindingCount",
+        "policyGraphEvents",
         "storageProfileCount",
+        "storageProfileGraphEvents",
         "serverReplayEventHashes",
         "serverOpenLineageHashes",
         "projectReplayEventHashes",
@@ -2386,9 +2391,14 @@ fn require_management_evidence(
     expected_policy_binding_count: u64,
 ) -> lakecat_core::LakeCatResult<()> {
     require_positive_u64(management, "serverCount", "managementProof")?;
+    require_positive_u64(management, "serverGraphEvents", "managementProof")?;
     require_positive_u64(management, "projectCount", "managementProof")?;
+    require_positive_u64(management, "projectGraphEvents", "managementProof")?;
     require_positive_u64(management, "warehouseCount", "managementProof")?;
+    require_positive_u64(management, "warehouseGraphEvents", "managementProof")?;
+    require_positive_u64(management, "policyGraphEvents", "managementProof")?;
     require_positive_u64(management, "storageProfileCount", "managementProof")?;
+    require_positive_u64(management, "storageProfileGraphEvents", "managementProof")?;
     require_u64_match(
         management,
         "policyBindingCount",
@@ -3081,10 +3091,15 @@ fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Optio
     let storage_profile_upsert = qglake_drain_event(drain, "storage-profile.upserted")?;
     Some(json!({
         "serverCount": server.server_count.unwrap_or_default(),
+        "serverGraphEvents": server.graph_events,
         "projectCount": project.project_count.unwrap_or_default(),
+        "projectGraphEvents": project.graph_events,
         "warehouseCount": warehouse.warehouse_count.unwrap_or_default(),
+        "warehouseGraphEvents": warehouse.graph_events,
         "policyBindingCount": policy.policy_binding_count,
+        "policyGraphEvents": policy.graph_events,
         "storageProfileCount": storage_profile.storage_profile_count.unwrap_or_default(),
+        "storageProfileGraphEvents": storage_profile.graph_events,
         "serverReplayEventHashes": &server.replay_event_hashes,
         "serverOpenLineageHashes": &server.replay_open_lineage_hashes,
         "projectReplayEventHashes": &project.replay_event_hashes,
@@ -7709,10 +7724,15 @@ mod tests {
                 },
                 "managementProof": {
                     "serverCount": 1,
+                    "serverGraphEvents": 1,
                     "projectCount": 1,
+                    "projectGraphEvents": 1,
                     "warehouseCount": 1,
+                    "warehouseGraphEvents": 1,
                     "policyBindingCount": 1,
-                    "storageProfileCount": 1
+                    "policyGraphEvents": 1,
+                    "storageProfileCount": 1,
+                    "storageProfileGraphEvents": 1
                 },
                 "viewReceiptChainProof": {
                     "viewCount": 1,
@@ -7924,10 +7944,15 @@ mod tests {
                 },
                 "management": {
                     "serverCount": 1,
+                    "serverGraphEvents": 1,
                     "projectCount": 1,
+                    "projectGraphEvents": 1,
                     "warehouseCount": 1,
+                    "warehouseGraphEvents": 1,
                     "policyBindingCount": 1,
+                    "policyGraphEvents": 1,
                     "storageProfileCount": 1,
+                    "storageProfileGraphEvents": 1,
                     "storageProfileUpsert": {
                         "profileId": "events-local",
                         "provider": "file",
@@ -8684,6 +8709,19 @@ mod tests {
 
         assert!(err.to_string().contains("managementProof"));
         assert!(err.to_string().contains("policyBindingCount mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_management_graph_events() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["serverGraphEvents"] = json!(0);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing management graph proof");
+
+        assert!(err.to_string().contains("managementProof"));
+        assert!(err.to_string().contains("serverGraphEvents"));
+        assert!(err.to_string().contains("positive"));
     }
 
     #[test]
