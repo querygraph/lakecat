@@ -6,6 +6,31 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject malformed outbox QueryGraph bootstrap evidence`.
+  Outbox draining now rejects malformed `querygraph.bootstrap` pending events
+  when their warehouse, table/view counts, verified ids, manifest hashes,
+  artifact hashes, view receipt hashes, standards, or optional TypeDID/agent
+  proof hashes are missing or malformed. Unsafe QueryGraph bootstrap replay
+  evidence stays pending and reaches neither graph projection nor lineage
+  acknowledgement.
+- Local verification for this outbox QueryGraph bootstrap evidence slice is
+  green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_querygraph_bootstrap_evidence -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
+  `cargo test -p lakecat-service lineage_drain_endpoint_replays_querygraph_bootstrap_outbox -- --nocapture`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain -- --nocapture`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --nocapture --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --nocapture --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import, and
+  ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Reject malformed outbox scan evidence`.
   Outbox draining now rejects malformed `table.scan-planned` and
   `table.scan-tasks-fetched` pending events when their table identity,

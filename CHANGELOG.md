@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for malformed `querygraph.bootstrap` evidence whose
+  warehouse, table/view counts, verified ids, manifest hashes, artifact hashes,
+  view receipt hashes, standards, or optional TypeDID/agent proof hashes are
+  missing or malformed, so invalid QueryGraph bootstrap replay fails before
+  graph/lineage projection acknowledgement.
 - Rejected outbox delivery for malformed `table.scan-planned` and
   `table.scan-tasks-fetched` evidence whose table identity, projection/stat
   arrays, task counts, fetched filters, or governed read-restriction projection

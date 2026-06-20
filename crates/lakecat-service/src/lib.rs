@@ -1176,6 +1176,9 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     if event.event_type == "view.version-receipt-chains-listed" {
         validate_view_receipt_chain_event_evidence(event, payload)?;
     }
+    if event.event_type == "querygraph.bootstrap" {
+        validate_querygraph_bootstrap_event_evidence(event, payload)?;
+    }
     Ok(())
 }
 
@@ -2451,6 +2454,251 @@ fn validate_view_receipt_chain_event_evidence(
     validate_optional_full_hash_array_field(event, payload, "chain-hashes")?;
     validate_optional_full_hash_array_field(event, payload, "receipt-hashes")?;
     validate_optional_full_hash_array_field(event, payload, "drop-receipt-hashes")?;
+    Ok(())
+}
+
+fn validate_querygraph_bootstrap_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    validate_required_warehouse_field(event, payload, "querygraph bootstrap")?;
+    for field in [
+        "bundle-hash",
+        "graph-hash",
+        "open-lineage-hash",
+        "querygraph-import-hash",
+    ] {
+        validate_required_full_hash_field(event, payload, field)?;
+    }
+
+    let verified_tables = validate_required_string_array_field(
+        event,
+        payload,
+        "verified-tables",
+        "querygraph bootstrap",
+    )?;
+    let verified_views = validate_required_string_array_field(
+        event,
+        payload,
+        "verified-views",
+        "querygraph bootstrap",
+    )?;
+    let table_count = validate_required_unsigned_count_field(
+        event,
+        payload,
+        "table-count",
+        "querygraph bootstrap",
+    )?;
+    let view_count = validate_required_unsigned_count_field(
+        event,
+        payload,
+        "view-count",
+        "querygraph bootstrap",
+    )?;
+    validate_required_unsigned_count_field(
+        event,
+        payload,
+        "policy-binding-count",
+        "querygraph bootstrap",
+    )?;
+    if verified_tables.len() as u64 != table_count {
+        return Err(outbox_evidence_error(
+            event,
+            "querygraph bootstrap table-count does not match verified-tables",
+        ));
+    }
+    if verified_views.len() as u64 != view_count {
+        return Err(outbox_evidence_error(
+            event,
+            "querygraph bootstrap view-count does not match verified-views",
+        ));
+    }
+
+    validate_querygraph_artifacts(
+        event,
+        payload,
+        "table-artifacts",
+        table_count,
+        &[
+            "croissant-hash",
+            "cdif-hash",
+            "osi-hash",
+            "odrl-hash",
+            "policy-bindings-hash",
+        ],
+    )?;
+    validate_querygraph_artifacts(event, payload, "view-artifacts", view_count, &["osi-hash"])?;
+    validate_querygraph_view_receipts(event, payload, view_count)?;
+    validate_querygraph_bootstrap_standards(event, payload)?;
+    validate_querygraph_bootstrap_request_identity(event, payload)?;
+    Ok(())
+}
+
+fn validate_querygraph_artifacts(
+    event: &OutboxEvent,
+    payload: &Value,
+    field: &str,
+    expected_count: u64,
+    hash_fields: &[&str],
+) -> Result<(), LakeCatError> {
+    let Some(artifacts) = payload.get(field).and_then(Value::as_array) else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("querygraph bootstrap evidence must contain {field}"),
+        ));
+    };
+    if artifacts.len() as u64 != expected_count {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("querygraph bootstrap {field} count does not match manifest count"),
+        ));
+    }
+    for artifact in artifacts {
+        let Some(stable_id) = artifact
+            .get("stable-id")
+            .and_then(Value::as_str)
+            .filter(|stable_id| !stable_id.is_empty())
+        else {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("querygraph bootstrap {field} entries must contain stable-id"),
+            ));
+        };
+        if stable_id.contains(char::is_whitespace) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("querygraph bootstrap {field} stable-id must not contain whitespace"),
+            ));
+        }
+        for hash_field in hash_fields {
+            validate_required_full_hash_field(event, artifact, hash_field)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_querygraph_view_receipts(
+    event: &OutboxEvent,
+    payload: &Value,
+    view_count: u64,
+) -> Result<(), LakeCatError> {
+    let Some(receipts) = payload.get("view-version-receipts") else {
+        if view_count == 0 {
+            return Ok(());
+        }
+        return Err(outbox_evidence_error(
+            event,
+            "querygraph bootstrap evidence must contain view-version-receipts",
+        ));
+    };
+    let Some(receipts) = receipts.as_array() else {
+        return Err(outbox_evidence_error(
+            event,
+            "querygraph bootstrap view-version-receipts must be an array",
+        ));
+    };
+    if receipts.len() as u64 != view_count {
+        return Err(outbox_evidence_error(
+            event,
+            "querygraph bootstrap view-version-receipts count does not match view-count",
+        ));
+    }
+    for receipt in receipts {
+        let Some(stable_id) = receipt
+            .get("stable-id")
+            .and_then(Value::as_str)
+            .filter(|stable_id| !stable_id.is_empty())
+        else {
+            return Err(outbox_evidence_error(
+                event,
+                "querygraph bootstrap view-version receipt must contain stable-id",
+            ));
+        };
+        if stable_id.contains(char::is_whitespace) {
+            return Err(outbox_evidence_error(
+                event,
+                "querygraph bootstrap view-version receipt stable-id must not contain whitespace",
+            ));
+        }
+        let Some(view_version) = receipt.get("view-version").and_then(Value::as_u64) else {
+            return Err(outbox_evidence_error(
+                event,
+                "querygraph bootstrap view-version receipt must contain view-version",
+            ));
+        };
+        if view_version == 0 {
+            return Err(outbox_evidence_error(
+                event,
+                "querygraph bootstrap view-version receipt version must be positive",
+            ));
+        }
+        validate_required_full_hash_field(event, receipt, "receipt-hash")?;
+        validate_required_full_hash_field(event, receipt, "receipt-chain-hash")?;
+    }
+    Ok(())
+}
+
+fn validate_querygraph_bootstrap_standards(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let standards =
+        validate_required_string_array_field(event, payload, "standards", "querygraph bootstrap")?;
+    let standards = standards
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    for required in [
+        "Iceberg REST",
+        "Croissant",
+        "CDIF",
+        "OSI handoff",
+        "ODRL",
+        "Grust catalog graph",
+        "OpenLineage",
+    ] {
+        if !standards.contains(required) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("querygraph bootstrap standards must include {required}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_querygraph_bootstrap_request_identity(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(request_identity) = payload
+        .pointer("/authorization-receipt/context/request-identity")
+        .or_else(|| payload.pointer("/authorization-receipt/request-identity"))
+    else {
+        return Ok(());
+    };
+    for field in [
+        "typedid-envelope-sha256",
+        "typedid-proof-sha256",
+        "agent-delegation-sha256",
+        "agent-summary-signature-sha256",
+    ] {
+        validate_optional_full_hash_field(event, request_identity, field)?;
+    }
+    if request_identity
+        .get("typedid-proof-sha256")
+        .and_then(Value::as_str)
+        .is_some()
+        && request_identity
+            .get("typedid-envelope-sha256")
+            .and_then(Value::as_str)
+            .is_none()
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "querygraph bootstrap TypeDID proof hash requires envelope hash",
+        ));
+    }
     Ok(())
 }
 
@@ -9199,6 +9447,47 @@ mod tests {
         let commit_request_hash = content_hash_json(&json!({"request": "commit"})).unwrap();
         let commit_response_hash = content_hash_json(&json!({"response": "commit"})).unwrap();
         let commit_idempotency_hash = content_hash_bytes("commit:events:0001".as_bytes());
+        let bootstrap_bundle_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "bundle"})).unwrap();
+        let bootstrap_graph_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "graph"})).unwrap();
+        let bootstrap_open_lineage_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "open-lineage"})).unwrap();
+        let bootstrap_import_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "querygraph-import"})).unwrap();
+        let bootstrap_croissant_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "croissant"})).unwrap();
+        let bootstrap_cdif_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "cdif"})).unwrap();
+        let bootstrap_osi_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "osi"})).unwrap();
+        let bootstrap_odrl_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "odrl"})).unwrap();
+        let bootstrap_policy_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "policies"})).unwrap();
+        let bootstrap_view_osi_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "view-osi"})).unwrap();
+        let bootstrap_view_receipt_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "view-receipt"})).unwrap();
+        let bootstrap_view_chain_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "view-chain"})).unwrap();
+        let bootstrap_typedid_envelope_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "typedid-envelope"})).unwrap();
+        let bootstrap_typedid_proof_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "typedid-proof"})).unwrap();
+        let bootstrap_agent_delegation_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "agent-delegation"})).unwrap();
+        let bootstrap_agent_summary_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "agent-summary"})).unwrap();
+        let bootstrap_standards = vec![
+            "Iceberg REST",
+            "Croissant",
+            "CDIF",
+            "OSI handoff",
+            "ODRL",
+            "Grust catalog graph",
+            "OpenLineage",
+        ];
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![
                 OutboxEvent {
@@ -9442,35 +9731,42 @@ mod tests {
                                 "request-identity": {
                                     "attestation-state": "verified",
                                     "source": "x-lakecat-typedid-envelope",
-                                    "typedid-envelope-sha256": "sha256:typedid-envelope",
-                                    "typedid-proof-sha256": "sha256:typedid-proof",
-                                    "agent-delegation-sha256": "sha256:delegation",
-                                    "agent-summary-signature-sha256": "sha256:summary",
+                                    "typedid-envelope-sha256": bootstrap_typedid_envelope_hash,
+                                    "typedid-proof-sha256": bootstrap_typedid_proof_hash,
+                                    "agent-delegation-sha256": bootstrap_agent_delegation_hash,
+                                    "agent-summary-signature-sha256": bootstrap_agent_summary_hash,
                                     "typedid": "did:example:agent"
                                 }
                             },
                             "warehouse": "local",
                             "table-count": 1,
+                            "view-count": 1,
                             "policy-binding-count": 1,
                             "verified-tables": ["local.default.events"],
                             "verified-views": ["lakecat:view:local:default:active_customers"],
-                            "bundle-hash": "sha256:bundle",
-                            "graph-hash": "sha256:graph",
-                            "open-lineage-hash": "sha256:openlineage",
-                            "querygraph-import-hash": "sha256:querygraph-import",
+                            "bundle-hash": bootstrap_bundle_hash,
+                            "graph-hash": bootstrap_graph_hash,
+                            "open-lineage-hash": bootstrap_open_lineage_hash,
+                            "querygraph-import-hash": bootstrap_import_hash,
                             "table-artifacts": [{
                                 "stable-id": "local.default.events",
-                                "croissant-hash": "sha256:croissant",
-                                "cdif-hash": "sha256:cdif",
-                                "osi-hash": "sha256:osi",
-                                "odrl-hash": "sha256:odrl",
-                                "policy-bindings-hash": "sha256:policies"
+                                "croissant-hash": bootstrap_croissant_hash,
+                                "cdif-hash": bootstrap_cdif_hash,
+                                "osi-hash": bootstrap_osi_hash,
+                                "odrl-hash": bootstrap_odrl_hash,
+                                "policy-bindings-hash": bootstrap_policy_hash
                             }],
                             "view-artifacts": [{
                                 "stable-id": "lakecat:view:local:default:active_customers",
-                                "osi-hash": "sha256:view-osi"
+                                "osi-hash": bootstrap_view_osi_hash
                             }],
-                            "standards": ["OpenLineage", "Grust catalog graph"]
+                            "view-version-receipts": [{
+                                "stable-id": "lakecat:view:local:default:active_customers",
+                                "view-version": 1,
+                                "receipt-hash": bootstrap_view_receipt_hash,
+                                "receipt-chain-hash": bootstrap_view_chain_hash
+                            }],
+                            "standards": bootstrap_standards
                         }
                     }),
                     created_at: chrono::Utc::now(),
@@ -9656,26 +9952,29 @@ mod tests {
         assert_eq!(bootstrap_summary.lineage_events, 1);
         assert_eq!(
             bootstrap_summary.bundle_hash.as_deref(),
-            Some("sha256:bundle")
+            Some(bootstrap_bundle_hash.as_str())
         );
         assert_eq!(
             bootstrap_summary.graph_hash.as_deref(),
-            Some("sha256:graph")
+            Some(bootstrap_graph_hash.as_str())
         );
         assert_eq!(
             bootstrap_summary.open_lineage_hash.as_deref(),
-            Some("sha256:openlineage")
+            Some(bootstrap_open_lineage_hash.as_str())
         );
         assert_eq!(
             bootstrap_summary.querygraph_import_hash.as_deref(),
-            Some("sha256:querygraph-import")
+            Some(bootstrap_import_hash.as_str())
         );
         assert_eq!(bootstrap_summary.table_artifact_count, 1);
         assert_eq!(bootstrap_summary.view_artifact_count, 1);
         assert_eq!(bootstrap_summary.policy_binding_count, 1);
         assert_eq!(
             bootstrap_summary.standards,
-            vec!["OpenLineage".to_string(), "Grust catalog graph".to_string()]
+            bootstrap_standards
+                .iter()
+                .map(|standard| standard.to_string())
+                .collect::<Vec<_>>()
         );
         assert_eq!(
             bootstrap_summary.replay_event_hashes,
@@ -9936,23 +10235,23 @@ mod tests {
         );
         assert_eq!(
             lineage_events[6].payload["bundle-hash"],
-            serde_json::json!("sha256:bundle")
+            serde_json::json!(bootstrap_bundle_hash)
         );
         assert_eq!(
             lineage_events[6].payload["graph-hash"],
-            serde_json::json!("sha256:graph")
+            serde_json::json!(bootstrap_graph_hash)
         );
         assert_eq!(
             lineage_events[6].payload["open-lineage-hash"],
-            serde_json::json!("sha256:openlineage")
+            serde_json::json!(bootstrap_open_lineage_hash)
         );
         assert_eq!(
             lineage_events[6].payload["querygraph-import-hash"],
-            serde_json::json!("sha256:querygraph-import")
+            serde_json::json!(bootstrap_import_hash)
         );
         assert_eq!(
             lineage_events[6].payload["table-artifacts"][0]["cdif-hash"],
-            serde_json::json!("sha256:cdif")
+            serde_json::json!(bootstrap_cdif_hash)
         );
         assert_eq!(
             lineage_events[6].payload["view-artifacts"][0]["stable-id"],
@@ -11481,6 +11780,118 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "malformed scan-task fetch evidence must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_querygraph_bootstrap_evidence() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let bundle_hash = content_hash_json(&json!({"querygraph-bootstrap": "bundle"})).unwrap();
+        let open_lineage_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "open-lineage"})).unwrap();
+        let import_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "querygraph-import"})).unwrap();
+        let table_hash = content_hash_json(&json!({"querygraph-bootstrap": "table"})).unwrap();
+        let view_hash = content_hash_json(&json!({"querygraph-bootstrap": "view"})).unwrap();
+        let receipt_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "view-receipt"})).unwrap();
+        let receipt_chain_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "view-chain"})).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-secret-bootstrap-token".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-corrupt-bootstrap",
+                    "event-type": "querygraph.bootstrap",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "graph-read",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "table-count": 1,
+                        "view-count": 1,
+                        "policy-binding-count": 1,
+                        "verified-tables": ["local.default.events"],
+                        "verified-views": ["lakecat:view:local:default:active_customers"],
+                        "bundle-hash": bundle_hash,
+                        "graph-hash": "sha256:graph",
+                        "open-lineage-hash": open_lineage_hash,
+                        "querygraph-import-hash": import_hash,
+                        "table-artifacts": [{
+                            "stable-id": "local.default.events",
+                            "croissant-hash": table_hash,
+                            "cdif-hash": table_hash,
+                            "osi-hash": table_hash,
+                            "odrl-hash": table_hash,
+                            "policy-bindings-hash": table_hash
+                        }],
+                        "view-artifacts": [{
+                            "stable-id": "lakecat:view:local:default:active_customers",
+                            "osi-hash": view_hash
+                        }],
+                        "view-version-receipts": [{
+                            "stable-id": "lakecat:view:local:default:active_customers",
+                            "view-version": 1,
+                            "receipt-hash": receipt_hash,
+                            "receipt-chain-hash": receipt_chain_hash
+                        }],
+                        "standards": [
+                            "Iceberg REST",
+                            "Croissant",
+                            "CDIF",
+                            "OSI handoff",
+                            "ODRL",
+                            "Grust catalog graph",
+                            "OpenLineage"
+                        ]
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("short QueryGraph bootstrap hash evidence should fail");
+
+        let message = err.to_string();
+        assert!(
+            message.contains(
+                "outbox event querygraph.bootstrap (lakecat.lineage-and-graph) has invalid"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("graph-hash must contain full SHA-256 digest evidence"));
+        assert!(!message.contains("evt-secret-bootstrap-token"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "malformed QueryGraph bootstrap evidence must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "malformed QueryGraph bootstrap evidence must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "malformed QueryGraph bootstrap evidence must fail before lineage projection"
         );
     }
 
@@ -13418,6 +13829,47 @@ mod tests {
             subject: "did:example:agent".to_string(),
             kind: PrincipalKind::Agent,
         };
+        let bootstrap_bundle_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "bundle"})).unwrap();
+        let bootstrap_graph_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "graph"})).unwrap();
+        let bootstrap_open_lineage_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "open-lineage"})).unwrap();
+        let bootstrap_import_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "querygraph-import"})).unwrap();
+        let bootstrap_croissant_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "croissant"})).unwrap();
+        let bootstrap_cdif_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "cdif"})).unwrap();
+        let bootstrap_osi_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "osi"})).unwrap();
+        let bootstrap_odrl_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "odrl"})).unwrap();
+        let bootstrap_policy_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "policies"})).unwrap();
+        let bootstrap_view_osi_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "view-osi"})).unwrap();
+        let bootstrap_view_receipt_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "view-receipt"})).unwrap();
+        let bootstrap_view_chain_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "view-chain"})).unwrap();
+        let bootstrap_typedid_envelope_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "typedid-envelope"})).unwrap();
+        let bootstrap_typedid_proof_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "typedid-proof"})).unwrap();
+        let bootstrap_agent_delegation_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "agent-delegation"})).unwrap();
+        let bootstrap_agent_summary_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "agent-summary"})).unwrap();
+        let bootstrap_standards = vec![
+            "Iceberg REST",
+            "Croissant",
+            "CDIF",
+            "OSI handoff",
+            "ODRL",
+            "Grust catalog graph",
+            "OpenLineage",
+        ];
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {
                 event_id: "evt-bootstrap".to_string(),
@@ -13438,41 +13890,43 @@ mod tests {
                                 "request-identity": {
                                     "attestation-state": "verified",
                                     "source": "x-lakecat-typedid-envelope",
-                                    "typedid-envelope-sha256": "sha256:typedid-envelope",
-                                    "typedid-proof-sha256": "sha256:typedid-proof",
-                                    "agent-delegation-sha256": "sha256:delegation",
-                                    "agent-summary-signature-sha256": "sha256:summary",
+                                    "typedid-envelope-sha256": bootstrap_typedid_envelope_hash,
+                                    "typedid-proof-sha256": bootstrap_typedid_proof_hash,
+                                    "agent-delegation-sha256": bootstrap_agent_delegation_hash,
+                                    "agent-summary-signature-sha256": bootstrap_agent_summary_hash,
                                     "typedid": "did:example:agent"
                                 }
                             }
                         },
                         "warehouse": "local",
                         "table-count": 1,
+                        "view-count": 1,
                         "policy-binding-count": 1,
                         "verified-tables": ["local.default.events"],
                         "verified-views": ["lakecat:view:local:default:active_customers"],
-                        "bundle-hash": "sha256:bundle",
-                        "graph-hash": "sha256:graph",
-                        "open-lineage-hash": "sha256:openlineage",
-                        "querygraph-import-hash": "sha256:querygraph-import",
+                        "bundle-hash": bootstrap_bundle_hash,
+                        "graph-hash": bootstrap_graph_hash,
+                        "open-lineage-hash": bootstrap_open_lineage_hash,
+                        "querygraph-import-hash": bootstrap_import_hash,
                         "table-artifacts": [{
                             "stable-id": "local.default.events",
-                            "croissant-hash": "sha256:croissant",
-                            "cdif-hash": "sha256:cdif",
-                            "osi-hash": "sha256:osi",
-                            "odrl-hash": "sha256:odrl",
-                            "policy-bindings-hash": "sha256:policies"
+                            "croissant-hash": bootstrap_croissant_hash,
+                            "cdif-hash": bootstrap_cdif_hash,
+                            "osi-hash": bootstrap_osi_hash,
+                            "odrl-hash": bootstrap_odrl_hash,
+                            "policy-bindings-hash": bootstrap_policy_hash
                         }],
                         "view-artifacts": [{
                             "stable-id": "lakecat:view:local:default:active_customers",
-                            "osi-hash": "sha256:view-osi"
+                            "osi-hash": bootstrap_view_osi_hash
                         }],
                         "view-version-receipts": [{
                             "stable-id": "lakecat:view:local:default:active_customers",
                             "view-version": 1,
-                            "receipt-hash": "sha256:view-version-receipt"
+                            "receipt-hash": bootstrap_view_receipt_hash,
+                            "receipt-chain-hash": bootstrap_view_chain_hash
                         }],
-                        "standards": ["OpenLineage", "Grust catalog graph"]
+                        "standards": bootstrap_standards
                     }
                 }),
                 created_at: chrono::Utc::now(),
@@ -13565,11 +14019,11 @@ mod tests {
         );
         assert_eq!(
             payload["events"][0]["typedid-envelope-hash"],
-            serde_json::json!("sha256:typedid-envelope")
+            serde_json::json!(bootstrap_typedid_envelope_hash)
         );
         assert_eq!(
             payload["events"][0]["typedid-proof-hash"],
-            serde_json::json!("sha256:typedid-proof")
+            serde_json::json!(bootstrap_typedid_proof_hash)
         );
         assert!(
             payload["events"][0]["agent-delegation-hash"]
@@ -13585,19 +14039,19 @@ mod tests {
         assert_eq!(payload["events"][0]["lineage-events"], serde_json::json!(1));
         assert_eq!(
             payload["events"][0]["bundle-hash"],
-            serde_json::json!("sha256:bundle")
+            serde_json::json!(bootstrap_bundle_hash)
         );
         assert_eq!(
             payload["events"][0]["graph-hash"],
-            serde_json::json!("sha256:graph")
+            serde_json::json!(bootstrap_graph_hash)
         );
         assert_eq!(
             payload["events"][0]["open-lineage-hash"],
-            serde_json::json!("sha256:openlineage")
+            serde_json::json!(bootstrap_open_lineage_hash)
         );
         assert_eq!(
             payload["events"][0]["querygraph-import-hash"],
-            serde_json::json!("sha256:querygraph-import")
+            serde_json::json!(bootstrap_import_hash)
         );
         assert_eq!(
             payload["events"][0]["table-artifact-count"],
@@ -13609,7 +14063,7 @@ mod tests {
         );
         assert_eq!(
             payload["events"][0]["view-version-receipt-hashes"],
-            serde_json::json!(["sha256:view-version-receipt"])
+            serde_json::json!([bootstrap_view_receipt_hash])
         );
         assert_eq!(
             payload["events"][0]["policy-binding-count"],
@@ -13617,7 +14071,7 @@ mod tests {
         );
         assert_eq!(
             payload["events"][0]["standards"],
-            serde_json::json!(["OpenLineage", "Grust catalog graph"])
+            serde_json::json!(bootstrap_standards)
         );
         assert_eq!(
             payload["events"][0]["replay-event-hashes"],
@@ -13652,31 +14106,31 @@ mod tests {
         assert_eq!(lineage_events[0].principal.subject, "did:example:agent");
         assert_eq!(
             lineage_events[0].payload["bundle-hash"],
-            serde_json::json!("sha256:bundle")
+            serde_json::json!(bootstrap_bundle_hash)
         );
         assert_eq!(
             lineage_events[0].payload["graph-hash"],
-            serde_json::json!("sha256:graph")
+            serde_json::json!(bootstrap_graph_hash)
         );
         assert_eq!(
             lineage_events[0].payload["querygraph-import-hash"],
-            serde_json::json!("sha256:querygraph-import")
+            serde_json::json!(bootstrap_import_hash)
         );
         assert_eq!(
             lineage_events[0].payload["table-artifacts"][0]["croissant-hash"],
-            serde_json::json!("sha256:croissant")
+            serde_json::json!(bootstrap_croissant_hash)
         );
         assert_eq!(
             lineage_events[0].payload["table-artifacts"][0]["policy-bindings-hash"],
-            serde_json::json!("sha256:policies")
+            serde_json::json!(bootstrap_policy_hash)
         );
         assert_eq!(
             lineage_events[0].payload["view-artifacts"][0]["osi-hash"],
-            serde_json::json!("sha256:view-osi")
+            serde_json::json!(bootstrap_view_osi_hash)
         );
         assert_eq!(
             lineage_events[0].payload["standards"],
-            serde_json::json!(["OpenLineage", "Grust catalog graph"])
+            serde_json::json!(bootstrap_standards)
         );
     }
 

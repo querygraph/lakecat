@@ -2051,7 +2051,13 @@ file/delete/child-plan counts, required filters, and required/effective
 projection arrays. When a governed read restriction is present, the effective
 projection must remain inside the allowed columns, and explicit effective
 projection or stats evidence cannot widen beyond the caller-requested or
-server-required evidence it claims to preserve. View receipt replay follows the
+server-required evidence it claims to preserve. QueryGraph bootstrap replay is
+also checked at the drain boundary before it becomes accepted handoff material:
+the event must carry a valid warehouse, table/view counts matching the verified
+ids and artifact arrays, full SHA-256 bundle/graph/OpenLineage/import hashes,
+full table/view artifact hashes, view receipt and receipt-chain hashes for
+accepted views, the expected standards list, and full optional TypeDID or agent
+proof hashes when those slots are present. View receipt replay follows the
 same fail-closed rule at the drain boundary. A
 `view.version-receipts-listed` event is not acknowledged unless its
 `receipt-count` matches full SHA-256 receipt hashes and every drop receipt hash
