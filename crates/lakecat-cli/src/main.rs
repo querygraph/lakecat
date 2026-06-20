@@ -13657,6 +13657,44 @@ mod tests {
     }
 
     #[test]
+    fn qglake_fetch_scan_tasks_verifier_rejects_missing_required_filters() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            plan_task: "lakecat:sail-json-hmac:test".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![qglake_file_scan_task_with_delete_ref()],
+            delete_files: qglake_delete_files(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not-eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
+                        "policy-hashes": [expected_policy_hash]
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"]
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake governed fetch should require row-predicate proof");
+        assert!(err.to_string().contains("required filters"));
+    }
+
+    #[test]
     fn qglake_credentials_verifier_requires_empty_raw_credentials() {
         verify_qglake_credentials_response(&LoadCredentialsResponse {
             storage_credentials: Vec::new(),

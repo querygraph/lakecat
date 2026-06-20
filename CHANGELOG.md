@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened QGLake `fetchScanTasks` verification to reject fetched scan-task
+  responses that omit the required filter proof for the server-derived row
+  predicate.
 - Pinned default REST `fetchScanTasks` coverage proving LakeCat re-sends the
   required policy projection and mandatory filters to Sail while auditing the
   replay proof.

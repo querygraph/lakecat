@@ -6,6 +6,15 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require QGLake fetch filter proof`.
+  The QGLake `fetchScanTasks` verifier now rejects fetched scan-task responses
+  that omit the `required-filters` proof for the server-derived row predicate,
+  complementing the existing required-projection and drift checks.
+- Local verification for this QGLake fetch filter-proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_fetch_scan_tasks_verifier_rejects_missing_required_filters -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_fetch_scan_tasks_verifier_rejects_missing_required_projection -- --nocapture`.
+- Latest completed implementation slice:
   `Pin fetch scan-task policy scope`.
   Default-feature REST `fetchScanTasks` coverage now proves the service
   re-sends the required projection and mandatory policy filter to Sail while
