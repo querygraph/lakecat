@@ -2412,6 +2412,16 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "authorizationReceiptHash",
         "queryGraphBootstrapProof",
     )?;
+    require_string_match(
+        bootstrap,
+        "authorizationReceiptHash",
+        required_str(
+            request_identity,
+            "authorizationReceiptHash",
+            "requestIdentityProof",
+        )?,
+        "queryGraphBootstrapProof",
+    )?;
     require_hash_str(bootstrap, "agentDelegationHash", "queryGraphBootstrapProof")?;
     require_hash_str(
         bootstrap,
@@ -8340,7 +8350,7 @@ mod tests {
                     "principalKind": "agent",
                     "requestIdentitySource": "x-lakecat-agent-did",
                     "requestIdentityState": "unverified",
-                    "authorizationReceiptHash": "sha256:bootstrap-auth",
+                    "authorizationReceiptHash": "sha256:identity",
                     "agentDelegationHash": "sha256:delegation",
                     "agentSummarySignatureHash": "sha256:summary",
                     "typedidEnvelopeHash": null,
@@ -8566,7 +8576,7 @@ mod tests {
                     "principalKind": "agent",
                     "requestIdentitySource": "x-lakecat-agent-did",
                     "requestIdentityState": "unverified",
-                    "authorizationReceiptHash": "sha256:bootstrap-auth",
+                    "authorizationReceiptHash": "sha256:identity",
                     "agentDelegationHash": "sha256:delegation",
                     "agentSummarySignatureHash": "sha256:summary",
                     "typedidEnvelopeHash": null,
@@ -9674,6 +9684,22 @@ mod tests {
 
         assert!(err.to_string().contains("queryGraphBootstrapProof"));
         assert!(err.to_string().contains("requestIdentityState mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_bootstrap_authorization_receipt_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["authorizationReceiptHash"] =
+            json!("sha256:other-authorization");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject bootstrap authorization receipt drift");
+
+        assert!(err.to_string().contains("queryGraphBootstrapProof"));
+        assert!(
+            err.to_string()
+                .contains("authorizationReceiptHash mismatch")
+        );
     }
 
     #[test]

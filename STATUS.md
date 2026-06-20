@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake bootstrap authorization receipt`.
+  Compact QGLake handoff verification now requires
+  `queryGraphBootstrapProof.authorizationReceiptHash` to match
+  `requestIdentityProof.authorizationReceiptHash`, so a handoff cannot splice a
+  valid-looking bootstrap proof from a different authorization receipt into the
+  same agent summary.
+- Local verification for this handoff authorization-receipt slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_bootstrap_authorization_receipt_drift -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Block chained CI trigger classes`.
   The local dependency-contract audit now rejects additional automatic or
   chained GitHub Actions triggers: `pull_request_target`, `merge_group`,

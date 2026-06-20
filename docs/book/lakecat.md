@@ -1558,9 +1558,11 @@ principal, authorization hash, TypeDID hash slots, delegation and summary
 signature hashes, artifact counts, standards, replay hashes, and the accepted
 bundle, graph, OpenLineage, and QueryGraph import hashes. The compact verifier
 also requires the bootstrap proof to carry the same request-identity source and
-verification state as `requestIdentityProof`, so a handoff cannot splice a
-valid-looking QueryGraph bootstrap from a different identity path into the same
-agent summary.
+verification state as `requestIdentityProof`, and it now requires
+`queryGraphBootstrapProof.authorizationReceiptHash` to match
+`requestIdentityProof.authorizationReceiptHash`. A handoff therefore cannot
+splice a valid-looking QueryGraph bootstrap from a different identity path or
+authorization receipt into the same agent summary.
 The compact verifier
 also validates the TypeDID hash-slot shape directly: envelope and proof slots
 must be null or SHA-256 hashes, and a TypeDID proof hash cannot appear without
