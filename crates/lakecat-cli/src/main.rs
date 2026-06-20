@@ -2912,12 +2912,12 @@ fn require_storage_profile_upsert_evidence(
                 .to_string(),
         ));
     }
-    require_hash_array(
+    require_full_hash_array(
         storage_profile,
         "replayEventHashes",
         "storageProfileUpsertProof",
     )?;
-    require_hash_array(
+    require_full_hash_array(
         storage_profile,
         "openLineageHashes",
         "storageProfileUpsertProof",
@@ -8727,8 +8727,8 @@ mod tests {
                     "secretRefProvider": null,
                             "secretRefHash": null,
                         "graphEvents": 1,
-                    "replayEventHashes": ["sha256:storage-replay"],
-                    "openLineageHashes": ["sha256:storage-openlineage"]
+                    "replayEventHashes": [qglake_fixture_hash("storage-replay")],
+                    "openLineageHashes": [qglake_fixture_hash("storage-openlineage")]
                 },
                 "credentialVendingProof": {
                     "restricted": {
@@ -8921,8 +8921,8 @@ mod tests {
                         "secretRefProvider": null,
                         "secretRefHash": null,
                         "graphEvents": 1,
-                        "replayEventHashes": ["sha256:storage-replay"],
-                        "openLineageHashes": ["sha256:storage-openlineage"]
+                        "replayEventHashes": [qglake_fixture_hash("storage-replay")],
+                        "openLineageHashes": [qglake_fixture_hash("storage-openlineage")]
                     }
                 },
                 "views": {
@@ -10123,6 +10123,20 @@ mod tests {
         assert!(err.to_string().contains("storageProfileUpsertProof"));
         assert!(err.to_string().contains("graphEvents"));
         assert!(err.to_string().contains("positive"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_short_storage_profile_replay_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["replayEventHashes"] =
+            json!(["sha256:storage-replay"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short storage-profile replay hashes");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("replayEventHashes"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]

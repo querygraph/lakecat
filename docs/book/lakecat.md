@@ -1787,8 +1787,10 @@ It also compares the captured LakeCat replay
 `replay-evidence.management.storageProfileUpsert` object with the compact
 `lakecatReplayVerification.storageProfileUpsertProof`, including the
 profile id, provider, issuance mode, location-prefix hash, secret-reference
-presence/provider/hash, replay hashes, and OpenLineage hashes. The compact verifier
-also requires that location-prefix value to be a SHA-256 hash and requires a
+presence/provider/hash, replay hashes, and OpenLineage hashes. The compact
+verifier also requires those replay and OpenLineage arrays to contain full
+`sha256:`-prefixed 64-hex digests. It requires that location-prefix value to be
+a SHA-256 hash and requires a
 redacted secret-reference provider and `secretRefHash` whenever the proof says a
 secret reference is present. If the proof says no secret reference is present,
 the provider and hash must both be null. It also compares
