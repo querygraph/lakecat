@@ -2998,14 +2998,16 @@ fn metadata_object_store(
 ) -> Result<(Box<dyn ObjectStore>, ObjectPath), LakeCatError> {
     let url = Url::parse(location).map_err(|err| {
         LakeCatError::InvalidArgument(format!(
-            "invalid metadata location {}; {err}",
-            metadata_location_hash_context(location)
+            "invalid metadata location {}; {}",
+            metadata_location_hash_context(location),
+            error_detail_hash_context(err)
         ))
     })?;
     object_store::parse_url_opts(&url, std::env::vars()).map_err(|err| {
         LakeCatError::InvalidArgument(format!(
-            "metadata object location {} is not supported or is not configured: {err}",
-            metadata_location_hash_context(location)
+            "metadata object location {} is not supported or is not configured: {}",
+            metadata_location_hash_context(location),
+            error_detail_hash_context(err)
         ))
     })
 }
@@ -3034,10 +3036,7 @@ async fn write_planned_metadata(
                 "metadata object {} already exists; refusing to overwrite existing metadata",
                 metadata_location_hash_context(location)
             )),
-            err => LakeCatError::Internal(format!(
-                "failed to write metadata object {}: {err}",
-                metadata_location_hash_context(location)
-            )),
+            err => metadata_object_write_error(location, err),
         })?;
     Ok(Some(PlannedMetadataWrite {
         location: location.to_string(),
@@ -3172,10 +3171,22 @@ async fn cleanup_planned_metadata(
     }
 }
 
+fn metadata_object_write_error(
+    metadata_location: &str,
+    err: impl std::fmt::Display,
+) -> LakeCatError {
+    LakeCatError::Internal(format!(
+        "failed to write metadata object {}: {}",
+        metadata_location_hash_context(metadata_location),
+        error_detail_hash_context(err)
+    ))
+}
+
 fn metadata_cleanup_error(metadata_location: &str, err: impl std::fmt::Display) -> LakeCatError {
     LakeCatError::Internal(format!(
-        "failed to clean up uncommitted metadata object {}: {err}",
-        metadata_location_hash_context(metadata_location)
+        "failed to clean up uncommitted metadata object {}: {}",
+        metadata_location_hash_context(metadata_location),
+        error_detail_hash_context(err)
     ))
 }
 
@@ -3183,6 +3194,13 @@ fn metadata_location_hash_context(metadata_location: &str) -> String {
     format!(
         "metadata-location-hash={}",
         content_hash_bytes(metadata_location.as_bytes())
+    )
+}
+
+fn error_detail_hash_context(err: impl std::fmt::Display) -> String {
+    format!(
+        "error-detail-hash={}",
+        content_hash_bytes(err.to_string().as_bytes())
     )
 }
 
@@ -10195,14 +10213,35 @@ mod tests {
     #[test]
     fn metadata_cleanup_error_redacts_metadata_location() {
         let location = "file:///tmp/lakecat-secret/events/metadata/00001.json";
-        let err = metadata_cleanup_error(location, "permission denied");
+        let err = metadata_cleanup_error(
+            location,
+            "permission denied at /tmp/lakecat-secret/events/metadata/00001.json",
+        );
         let message = err.to_string();
 
         assert!(matches!(err, LakeCatError::Internal(_)));
         assert!(message.contains("metadata-location-hash=sha256:"));
-        assert!(message.contains("permission denied"));
+        assert!(message.contains("error-detail-hash=sha256:"));
         assert!(!message.contains("lakecat-secret"));
         assert!(!message.contains("00001.json"));
+        assert!(!message.contains("permission denied"));
+    }
+
+    #[test]
+    fn metadata_write_error_redacts_backend_detail() {
+        let location = "file:///tmp/lakecat-secret/events/metadata/00001.json";
+        let err = metadata_object_write_error(
+            location,
+            "backend write failed for /tmp/lakecat-secret/events/metadata/00001.json",
+        );
+        let message = err.to_string();
+
+        assert!(matches!(err, LakeCatError::Internal(_)));
+        assert!(message.contains("metadata-location-hash=sha256:"));
+        assert!(message.contains("error-detail-hash=sha256:"));
+        assert!(!message.contains("lakecat-secret"));
+        assert!(!message.contains("00001.json"));
+        assert!(!message.contains("backend write failed"));
     }
 
     #[test]

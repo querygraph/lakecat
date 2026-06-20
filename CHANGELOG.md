@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted metadata-object backend error details: object-store setup, write,
+  and cleanup failures now expose `error-detail-hash=sha256:...` evidence
+  instead of raw backend error text that may contain paths or configuration.
 - Pinned lineage/graph outbox draining to an all-or-retry acknowledgement
   contract: if projection fails, the drain fails before marking any event
   delivered, leaving committed catalog events pending for retry.

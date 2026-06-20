@@ -361,6 +361,11 @@ The same guard fails closed if a future Sail plan asks LakeCat to write metadata
 but does not provide a new object location, or if it tries to use the storage
 profile root as the new metadata object. A companion regression rejects both
 literal and percent-encoded dot path segments in a planned metadata location.
+When a backend object store fails setup, create-only write, or cleanup, LakeCat
+keeps the metadata location hash and adds `error-detail-hash` evidence instead
+of returning raw backend text. That matters for local files, cloud bucket keys,
+and credential-provider diagnostics: operators can correlate a failure without
+copying sensitive storage topology into API responses or logs.
 
 The embedded in-memory store follows the same commit evidence contract as the
 Turso path. A successful commit emits one `table.commit` audit/outbox event

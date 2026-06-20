@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact metadata backend error details`.
+  Metadata-object object-store setup, create-only write, and cleanup failures
+  now expose `error-detail-hash=sha256:...` evidence instead of raw backend
+  error text that may contain local paths, bucket/object names, or configuration
+  details. Metadata-location evidence remains hash-only.
+- Local verification for this metadata backend redaction slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_write_error_redacts_backend_detail -- --nocapture`;
+  `cargo test -p lakecat-service metadata_cleanup_error_redacts_metadata_location -- --nocapture`.
+- Latest completed implementation slice:
   `Pin outbox drain all-or-retry acknowledgement`.
   Lineage/graph draining now has an explicit regression for the recovery
   contract: if a projection fails, `drain_outbox_once` returns the projection

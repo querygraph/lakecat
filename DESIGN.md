@@ -217,6 +217,8 @@ The current working plan is:
 3. Keep commit hardening focused on REST-visible correctness: idempotency
    replay, metadata object create-only writes, CAS conflict evidence, orphan
    cleanup, object-store portability, and redacted operator-facing errors.
+   Backend object-store error details should be represented by hash evidence,
+   not raw paths, bucket/object names, or configuration text.
 4. Keep the graph bounded. LakeCat should emit stable catalog-domain facts for
    Server, Project, Warehouse, Namespace, Table, View, Column, Snapshot, Policy,
    StorageProfile, Principal, ScanPlan, Commit, and lineage runs. Traversal,
