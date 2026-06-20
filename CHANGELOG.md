@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound saved QGLake handoff-verifier output back to compact summary semantics:
+  when `lakecatHandoffVerifyOutputHash` is present, the verifier now rejects
+  saved self-verifier output whose table/view ids, standards, request identity,
+  or QueryGraph bootstrap proof drift from the summary.
 - Bound QueryGraph import-plan graph counts to the verified bootstrap bundle
   graph counts during QGLake handoff verification, rejecting saved import plans
   that preserve table/view ids and hashes while dropping graph material.

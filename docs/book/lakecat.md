@@ -1785,7 +1785,9 @@ a second sidecar self-check: first it writes
 hash in the summary, then it verifies the summary again without overwriting the
 declared artifact. The verifier checks that saved JSON is a
 `lakecat.qglake.handoff-verification.v1` success for the same principal,
-catalog URL, warehouse, namespace, and table. Then it parses those captured
+catalog URL, warehouse, namespace, and table, and that its table/view counts,
+stable ids, standards, request-identity proof, and QueryGraph bootstrap proof
+still match the compact handoff summary. Then it parses those captured
 JSON files and checks that the replay schema/status,
 table/view counts, semantic hashes, standards, request-identity proof,
 QueryGraph bootstrap proof, governed scan proof, storage-profile upsert proof,

@@ -6,6 +6,22 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind handoff self-verifier semantics`.
+  When a QGLake handoff summary carries `lakecatHandoffVerifyOutputHash`, the
+  saved `lakecat-handoff-verify.json` artifact must now match the compact
+  summary's table/view counts, stable ids, standards, request-identity proof,
+  and QueryGraph bootstrap proof, so an archived self-verifier capture cannot
+  be spliced from a different semantic handoff.
+- Local verification for this self-verifier artifact slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_accepts_handoff_verify_output_hash -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_semantic_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_proof_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_scope_drift -- --nocapture`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind QueryGraph import-plan graph counts`.
   QGLake handoff verification now compares
   `querygraphImportPlanSemantics.graphNodes` and `graphEdges` with
