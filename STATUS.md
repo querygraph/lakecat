@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Route-prove malformed JSON-LD ODRL blocks fetch`.
+  The REST `fetchScanTasks` route now has focused regression coverage proving a
+  malformed JSON-LD ODRL allowed-column `@list` fails before Sail fetch
+  execution and before `table.scan-tasks-fetched` replay evidence is emitted.
+- Local verification for this route-level ODRL fetch slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service fetch_scan_tasks_rejects_malformed_jsonld_odrl_before_sail -- --nocapture`;
+  `cargo test -p lakecat-service fetch_scan_tasks_rejects_malformed_odrl_before_sail -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Route-prove malformed JSON-LD ODRL blocks scan`.
   The REST scan-planning route now has focused regression coverage proving a
   malformed JSON-LD ODRL allowed-column `@list` fails before Sail planning and
