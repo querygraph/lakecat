@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned the blocked-agent credential-vend outbox contract so governed
+  Sail-planned-read decisions record an explicit empty
+  `credential-response-evidence` array instead of omitting response proof.
 - Pinned route-level credential-vend outbox coverage proving trusted-human raw
   credential exceptions record redacted canonical `credential-response-evidence`
   without storing the raw credential prefix in replay proof.

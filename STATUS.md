@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin blocked credential response evidence`.
+  The blocked-agent credential-vend route now proves governed
+  Sail-planned-read decisions commit an explicit empty
+  `credential-response-evidence` array in the outbox payload, while the paired
+  trusted-human route still proves one redacted credential response proof for
+  the audited raw-credential exception path.
+- Local verification for this blocked credential response evidence slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service credential_vend_blocks_raw_credentials_for_fine_grained_restriction -- --nocapture`;
+  `cargo test -p lakecat-service credential_vend_allows_trusted_human_raw_exception_for_restricted_table -- --nocapture`.
+- Latest completed implementation slice:
   `Pin credential response outbox evidence`.
   The trusted-human raw credential exception route now has regression coverage
   proving the committed credential-vend outbox payload contains one redacted

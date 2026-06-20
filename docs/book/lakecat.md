@@ -972,7 +972,11 @@ proof fields are kept as canonical values, and issuer-owned config is hashed
 rather than copied. That keeps OpenLineage and QueryGraph replay useful without
 turning lineage into a credential leak. The trusted-human credential-vending
 route test pins that the committed outbox payload contains this redacted proof
-for the audited raw-credential exception path.
+for the audited raw-credential exception path. The blocked-agent route pins the
+other side of the same contract: when Sail-planned reads are required and no
+raw credentials are returned, the outbox records an explicit empty
+`credential-response-evidence` array rather than leaving replay to infer why no
+credential proof exists.
 A not-configured resolver error reports the provider label and a
 `secret-ref-hash=sha256:...` value, not the raw secret URI, so the operator can
 correlate configuration without leaking the credential root. Resolver validation

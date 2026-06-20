@@ -13456,6 +13456,10 @@ mod tests {
             serde_json::json!(false)
         );
         assert_eq!(
+            event.payload["payload"]["credential-response-evidence"],
+            serde_json::json!([])
+        );
+        assert_eq!(
             event.payload["payload"]["lakecat:credential-block-reason"],
             serde_json::json!("fine-grained read restriction requires Sail-planned reads")
         );
