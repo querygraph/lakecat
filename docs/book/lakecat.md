@@ -1616,13 +1616,18 @@ scan-task-fetch, and table commit-history reads before bootstrap, and rejects a
 drain that does not replay matching `server.listed`, `project.listed`,
 `warehouse.listed`, `policy-binding.listed`, `storage-profile.listed`,
 `table.scan-planned`, `table.scan-tasks-fetched`, and `table.commits-listed`
-evidence. For scan replay, the typed drain summary carries scan-plan task
-counts plus fetched file-scan, delete-file, and child-plan task counts, along
-with planned and fetched OpenLineage receipt hashes. Source replay validation
-now also requires planned and fetched read restrictions to match before compact
-proof generation, and requires the fetched projection and filter requirements
-to exactly preserve the fetched allowed columns and row predicate. For
-commit-history replay, the typed drain summary carries the commit count,
+evidence. Request-identity and bootstrap replay are checked before any compact
+handoff proof is built: the drain authorization, bootstrap authorization,
+QueryGraph bundle/import hashes, agent delegation hash, agent summary signature
+hash, and TypeDID envelope/proof hashes must be SHA-256-shaped, and a TypeDID
+proof hash cannot appear without its paired envelope hash. For scan replay, the
+typed drain summary carries scan-plan task counts plus fetched file-scan,
+delete-file, and child-plan task counts, along with planned and fetched
+OpenLineage receipt hashes. Source replay validation now also requires planned
+and fetched read restrictions to match before compact proof generation, and
+requires the fetched projection and filter requirements to exactly preserve the
+fetched allowed columns and row predicate. For commit-history replay, the typed
+drain summary carries the commit count,
 committed sequence numbers, commit hashes, replay hashes, and OpenLineage
 hashes. The handoff verifier rejects compact scan proofs without those
 OpenLineage hashes and compact commit-history proofs whose counts, sequences,

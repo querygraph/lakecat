@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake lineage-drain request identity and bootstrap source replay to
+  preserve SHA-256-shaped authorization, QueryGraph, agent, and TypeDID proof
+  hashes before compact handoff proof.
 - Required QGLake lineage-drain scan source replay to preserve matching planned
   and fetched read restrictions and to prove fetched projection/filter
   requirements exactly match the fetched restriction before compact handoff

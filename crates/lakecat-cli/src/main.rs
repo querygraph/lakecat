@@ -5460,10 +5460,19 @@ fn verify_qglake_lineage_drain(
     if drain
         .authorization_receipt_hash
         .as_deref()
+        .map_or(true, |hash| !is_sha256_hash(hash))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain read is missing SHA-256 authorization receipt hash".to_string(),
+        ));
+    }
+    if drain
+        .request_identity_source
+        .as_deref()
         .map_or(true, str::is_empty)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain read is missing authorization receipt hash".to_string(),
+            "qglake lineage drain read is missing request identity source".to_string(),
         ));
     }
     if drain
@@ -5475,6 +5484,11 @@ fn verify_qglake_lineage_drain(
             "qglake lineage drain read is missing request identity attestation state".to_string(),
         ));
     }
+    verify_qglake_typedid_hash_pair(
+        drain.typedid_envelope_hash.as_deref(),
+        drain.typedid_proof_hash.as_deref(),
+        "qglake lineage drain read",
+    )?;
     let Some(bootstrap) = drain
         .events
         .iter()
@@ -5484,19 +5498,25 @@ fn verify_qglake_lineage_drain(
             "qglake lineage drain did not expose querygraph.bootstrap replay evidence".to_string(),
         ));
     };
-    if bootstrap.bundle_hash.as_deref().map_or(true, str::is_empty)
-        || bootstrap.graph_hash.as_deref().map_or(true, str::is_empty)
+    if bootstrap
+        .bundle_hash
+        .as_deref()
+        .map_or(true, |hash| !is_sha256_hash(hash))
+        || bootstrap
+            .graph_hash
+            .as_deref()
+            .map_or(true, |hash| !is_sha256_hash(hash))
         || bootstrap
             .open_lineage_hash
             .as_deref()
-            .map_or(true, str::is_empty)
+            .map_or(true, |hash| !is_sha256_hash(hash))
         || bootstrap
             .querygraph_import_hash
             .as_deref()
-            .map_or(true, str::is_empty)
+            .map_or(true, |hash| !is_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain replay evidence is missing QueryGraph hashes".to_string(),
+            "qglake lineage drain replay evidence is missing SHA-256 QueryGraph hashes".to_string(),
         ));
     }
     if bootstrap.principal_subject.as_deref() != Some(expected_principal) {
@@ -5512,11 +5532,20 @@ fn verify_qglake_lineage_drain(
     if bootstrap
         .authorization_receipt_hash
         .as_deref()
+        .map_or(true, |hash| !is_sha256_hash(hash))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain replay evidence is missing SHA-256 authorization receipt hash"
+                .to_string(),
+        ));
+    }
+    if bootstrap
+        .request_identity_source
+        .as_deref()
         .map_or(true, str::is_empty)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain replay evidence is missing authorization receipt hash"
-                .to_string(),
+            "qglake lineage drain replay evidence is missing request identity source".to_string(),
         ));
     }
     if bootstrap
@@ -5533,23 +5562,29 @@ fn verify_qglake_lineage_drain(
         if bootstrap
             .agent_delegation_hash
             .as_deref()
-            .map_or(true, str::is_empty)
+            .map_or(true, |hash| !is_sha256_hash(hash))
         {
             return Err(lakecat_core::LakeCatError::InvalidArgument(
-                "qglake lineage drain replay evidence is missing agent delegation hash".to_string(),
+                "qglake lineage drain replay evidence is missing SHA-256 agent delegation hash"
+                    .to_string(),
             ));
         }
         if bootstrap
             .agent_summary_signature_hash
             .as_deref()
-            .map_or(true, str::is_empty)
+            .map_or(true, |hash| !is_sha256_hash(hash))
         {
             return Err(lakecat_core::LakeCatError::InvalidArgument(
-                "qglake lineage drain replay evidence is missing agent summary signature hash"
+                "qglake lineage drain replay evidence is missing SHA-256 agent summary signature hash"
                     .to_string(),
             ));
         }
     }
+    verify_qglake_typedid_hash_pair(
+        bootstrap.typedid_envelope_hash.as_deref(),
+        bootstrap.typedid_proof_hash.as_deref(),
+        "qglake lineage drain bootstrap replay",
+    )?;
     if bootstrap.bundle_hash.as_deref() != Some(verification.bundle_hash.as_str())
         || bootstrap.graph_hash.as_deref() != Some(verification.graph_hash.as_str())
         || bootstrap.open_lineage_hash.as_deref() != Some(verification.open_lineage_hash.as_str())
@@ -6309,6 +6344,29 @@ fn verify_qglake_management_list_receipts(
 
 fn qglake_has_sha256_hashes(hashes: &[String]) -> bool {
     !hashes.is_empty() && hashes.iter().all(|hash| is_sha256_hash(hash))
+}
+
+fn verify_qglake_typedid_hash_pair(
+    envelope_hash: Option<&str>,
+    proof_hash: Option<&str>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    if envelope_hash.is_some_and(|hash| !is_sha256_hash(hash)) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} TypeDID envelope hash must be SHA-256-shaped"
+        )));
+    }
+    if proof_hash.is_some_and(|hash| !is_sha256_hash(hash)) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} TypeDID proof hash must be SHA-256-shaped"
+        )));
+    }
+    if proof_hash.is_some() && envelope_hash.is_none() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} TypeDID proof hash requires an envelope hash"
+        )));
+    }
+    Ok(())
 }
 
 fn standards_set(standards: &[String]) -> BTreeSet<&str> {
@@ -12598,8 +12656,9 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should require read authorization proof");
         assert!(
-            err.to_string()
-                .contains("qglake lineage drain read is missing authorization receipt hash")
+            err.to_string().contains(
+                "qglake lineage drain read is missing SHA-256 authorization receipt hash"
+            )
         );
 
         let err = verify_qglake_lineage_drain(
@@ -12612,7 +12671,7 @@ mod tests {
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
                 request_identity_state: None,
-                request_identity_source: None,
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
                 typedid_proof_hash: None,
                 events: Vec::new(),
@@ -12817,8 +12876,9 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should require QueryGraph import replay hash");
         assert!(
-            err.to_string()
-                .contains("qglake lineage drain replay evidence is missing QueryGraph hashes")
+            err.to_string().contains(
+                "qglake lineage drain replay evidence is missing SHA-256 QueryGraph hashes"
+            )
         );
 
         let err = verify_qglake_lineage_drain(
@@ -13150,7 +13210,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should reject missing authorization receipt proof");
         assert!(err.to_string().contains(
-            "qglake lineage drain replay evidence is missing authorization receipt hash"
+            "qglake lineage drain replay evidence is missing SHA-256 authorization receipt hash"
         ));
 
         let err = verify_qglake_lineage_drain(
@@ -13173,7 +13233,7 @@ mod tests {
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
                     request_identity_state: None,
-                    request_identity_source: None,
+                    request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
                     typedid_proof_hash: None,
                     agent_delegation_hash: Some("sha256:delegation".to_string()),
@@ -13315,10 +13375,9 @@ mod tests {
             1,
         )
         .expect_err("QGLake lineage drain should reject missing agent delegation proof");
-        assert!(
-            err.to_string()
-                .contains("qglake lineage drain replay evidence is missing agent delegation hash")
-        );
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay evidence is missing SHA-256 agent delegation hash"
+        ));
 
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
@@ -13400,7 +13459,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should reject missing agent summary proof");
         assert!(err.to_string().contains(
-            "qglake lineage drain replay evidence is missing agent summary signature hash"
+            "qglake lineage drain replay evidence is missing SHA-256 agent summary signature hash"
         ));
 
         let err = verify_qglake_lineage_drain(
@@ -13735,6 +13794,111 @@ mod tests {
             err.to_string()
                 .contains("qglake lineage drain bootstrap replay emitted no lineage projection")
         );
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("not-a-sha256-hash".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![qglake_bootstrap_lineage_summary()],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject malformed read authorization hash");
+        assert!(
+            err.to_string().contains(
+                "qglake lineage drain read is missing SHA-256 authorization receipt hash"
+            )
+        );
+
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: Some("sha256:typedid-proof".to_string()),
+                events: vec![qglake_bootstrap_lineage_summary()],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject request TypeDID proof without envelope");
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain read TypeDID proof hash requires an envelope hash")
+        );
+
+        let mut bootstrap_malformed_agent_hash = qglake_bootstrap_lineage_summary();
+        bootstrap_malformed_agent_hash.agent_delegation_hash =
+            Some("not-a-sha256-hash".to_string());
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![bootstrap_malformed_agent_hash],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject malformed bootstrap agent delegation hash");
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay evidence is missing SHA-256 agent delegation hash"
+        ));
+
+        let mut bootstrap_typedid_without_envelope = qglake_bootstrap_lineage_summary();
+        bootstrap_typedid_without_envelope.typedid_proof_hash =
+            Some("sha256:typedid-proof".to_string());
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 1,
+                event_types: vec!["querygraph.bootstrap".to_string()],
+                graph_events: 1,
+                lineage_events: 1,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![bootstrap_typedid_without_envelope],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject bootstrap TypeDID proof without envelope");
+        assert!(err.to_string().contains(
+            "qglake lineage drain bootstrap replay TypeDID proof hash requires an envelope hash"
+        ));
 
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {

@@ -6,6 +6,20 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject malformed bootstrap proof hashes`.
+  QGLake lineage-drain request identity and QueryGraph bootstrap source replay
+  now require SHA-256-shaped authorization, QueryGraph, agent delegation,
+  summary-signature, and TypeDID proof hashes before request/bootstrap evidence
+  can feed compact handoff proof.
+- Local verification for this request/bootstrap proof-hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject scan restriction replay drift`.
   QGLake lineage-drain scan source replay now requires planned and fetched read
   restrictions to match and requires fetched projection/filter requirements to
