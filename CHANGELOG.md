@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required compact QGLake request-identity and bootstrap authorization,
+  delegation, and summary-signature proof hashes to contain full
+  `sha256:`-prefixed 64-hex digests, rejecting short placeholder proof anchors.
 - Required compact QGLake view receipt-chain proof receipt/replay/OpenLineage
   hashes to contain full `sha256:`-prefixed 64-hex digests, rejecting short
   placeholder accepted-view, tombstone, and namespace chain evidence.

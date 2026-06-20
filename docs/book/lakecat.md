@@ -1693,8 +1693,11 @@ verification state as `requestIdentityProof`. The authorization receipt hashes
 are intentionally distinct proof slots: `requestIdentityProof` records the
 lineage-drain read receipt, while `queryGraphBootstrapProof` records the
 original bootstrap event receipt. The verifier requires both hashes to be
-SHA-256-shaped and bound back to their captured replay sections rather than
-forcing them to be equal.
+full `sha256:`-prefixed 64-hex digests and bound back to their captured replay
+sections rather than forcing them to be equal. The same full-digest rule applies
+to the required agent delegation and agent summary-signature hashes in the
+bootstrap proof, so a saved handoff cannot replace those proof anchors with
+short readable placeholders.
 The compact verifier
 also validates the TypeDID hash-slot shape directly: envelope and proof slots
 must be null or SHA-256 hashes, and a TypeDID proof hash cannot appear without

@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full compact authorization hashes`.
+  Compact QGLake handoff verification now rejects request-identity
+  authorization, bootstrap authorization, agent delegation, and agent summary
+  signature hashes unless every required proof anchor is a full
+  `sha256:`-prefixed 64-hex digest, closing short placeholder identity proof
+  anchors in saved handoff summaries.
+- Local verification for this compact authorization hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_short_authorization_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require full compact view hashes`.
   Compact QGLake handoff verification now rejects view receipt-chain proof
   accepted-view receipt hashes, accepted chain hashes, tombstone receipts,

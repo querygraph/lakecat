@@ -2413,7 +2413,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "requestIdentityState",
         "requestIdentityProof",
     )?;
-    require_hash_str(
+    require_full_hash_str(
         request_identity,
         "authorizationReceiptHash",
         "requestIdentityProof",
@@ -2493,13 +2493,13 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
             "queryGraphBootstrapProof",
         )?;
     }
-    require_hash_str(
+    require_full_hash_str(
         bootstrap,
         "authorizationReceiptHash",
         "queryGraphBootstrapProof",
     )?;
-    require_hash_str(bootstrap, "agentDelegationHash", "queryGraphBootstrapProof")?;
-    require_hash_str(
+    require_full_hash_str(bootstrap, "agentDelegationHash", "queryGraphBootstrapProof")?;
+    require_full_hash_str(
         bootstrap,
         "agentSummarySignatureHash",
         "queryGraphBootstrapProof",
@@ -8586,7 +8586,7 @@ mod tests {
                     "principalKind": "agent",
                     "requestIdentitySource": "x-lakecat-agent-did",
                     "requestIdentityState": "unverified",
-                    "authorizationReceiptHash": "sha256:identity",
+                    "authorizationReceiptHash": qglake_fixture_hash("identity"),
                     "typedidEnvelopeHash": null,
                     "typedidProofHash": null
                 },
@@ -8611,9 +8611,9 @@ mod tests {
                     "principalKind": "agent",
                     "requestIdentitySource": "x-lakecat-agent-did",
                     "requestIdentityState": "unverified",
-                    "authorizationReceiptHash": "sha256:identity",
-                    "agentDelegationHash": "sha256:delegation",
-                    "agentSummarySignatureHash": "sha256:summary",
+                    "authorizationReceiptHash": qglake_fixture_hash("identity"),
+                    "agentDelegationHash": qglake_fixture_hash("delegation"),
+                    "agentSummarySignatureHash": qglake_fixture_hash("summary"),
                     "typedidEnvelopeHash": null,
                     "typedidProofHash": null,
                     "viewVersionReceiptHashes": [qglake_fixture_hash("view-receipt")],
@@ -8815,7 +8815,7 @@ mod tests {
                     "principalKind": "agent",
                     "requestIdentitySource": "x-lakecat-agent-did",
                     "requestIdentityState": "unverified",
-                    "authorizationReceiptHash": "sha256:identity",
+                    "authorizationReceiptHash": qglake_fixture_hash("identity"),
                     "typedidEnvelopeHash": null,
                     "typedidProofHash": null
                 },
@@ -8840,9 +8840,9 @@ mod tests {
                     "principalKind": "agent",
                     "requestIdentitySource": "x-lakecat-agent-did",
                     "requestIdentityState": "unverified",
-                    "authorizationReceiptHash": "sha256:identity",
-                    "agentDelegationHash": "sha256:delegation",
-                    "agentSummarySignatureHash": "sha256:summary",
+                    "authorizationReceiptHash": qglake_fixture_hash("identity"),
+                    "agentDelegationHash": qglake_fixture_hash("delegation"),
+                    "agentSummarySignatureHash": qglake_fixture_hash("summary"),
                     "typedidEnvelopeHash": null,
                     "typedidProofHash": null,
                     "viewVersionReceiptHashes": [qglake_fixture_hash("view-receipt")],
@@ -10038,11 +10038,25 @@ mod tests {
     fn qglake_handoff_summary_verifier_allows_distinct_bootstrap_authorization_receipt() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["authorizationReceiptHash"] =
-            json!("sha256:other-authorization");
+            json!(qglake_fixture_hash("other-authorization"));
 
         verify_qglake_handoff_summary_value(&summary).expect(
             "handoff summary should allow distinct request/bootstrap authorization receipts",
         );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_short_authorization_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["requestIdentityProof"]["authorizationReceiptHash"] =
+            json!("sha256:identity");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short authorization hashes");
+
+        assert!(err.to_string().contains("requestIdentityProof"));
+        assert!(err.to_string().contains("authorizationReceiptHash"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
