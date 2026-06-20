@@ -5,6 +5,22 @@ Updated: 2026-06-20
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Bind QueryGraph import-plan graph counts`.
+  QGLake handoff verification now compares
+  `querygraphImportPlanSemantics.graphNodes` and `graphEdges` with
+  `bundleArtifactSemantics.graphNodes` and `graphEdges`, rejecting a compact
+  handoff whose QueryGraph import plan drops graph material from the verified
+  bootstrap bundle while preserving table/view ids and semantic hashes.
+- Local verification for this import-plan graph-count slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_semantics_reject_saved_import_plan_graph_count_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_rejects_import_plan_graph_count_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_bundle_artifact_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_querygraph_import_plan_semantics -- --nocapture`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Consolidate OPUS archive notes`.
   `DESIGN.md` now has one canonical OPUS consolidation section with the active

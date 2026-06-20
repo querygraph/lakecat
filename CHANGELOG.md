@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound QueryGraph import-plan graph counts to the verified bootstrap bundle
+  graph counts during QGLake handoff verification, rejecting saved import plans
+  that preserve table/view ids and hashes while dropping graph material.
 - Collapsed the repeated OPUS archive/consolidation notes in `DESIGN.md` into a
   single canonical OPUS consolidation section with one source ledger and archive
   lock, and refreshed `docs/completed/README.md` to point historical OPUS review

@@ -358,6 +358,10 @@ fn qglake_verify_handoff(
         verify_qglake_handoff_bundle_artifact_semantics(&summary_path, &summary)?;
     let querygraph_import_plan_semantics =
         verify_qglake_handoff_querygraph_import_plan_semantics(&summary_path, &summary)?;
+    require_qglake_import_plan_graph_counts_match_bundle(
+        &bundle_artifact_semantics,
+        &querygraph_import_plan_semantics,
+    )?;
     let lineage_drain_artifact_semantics =
         verify_qglake_handoff_lineage_drain_artifact_semantics(&summary_path, &summary)?;
     verification
@@ -902,7 +906,34 @@ fn verify_qglake_handoff_bundle_artifact_semantics(
         "openLineageHash": verification.open_lineage_hash,
         "queryGraphImportHash": verification.querygraph_import_hash,
         "standards": verification.standards,
+        "graphNodes": bundle.graph.nodes.len(),
+        "graphEdges": bundle.graph.edges.len(),
     }))
+}
+
+fn require_qglake_import_plan_graph_counts_match_bundle(
+    bundle_semantics: &Value,
+    import_plan_semantics: &Value,
+) -> lakecat_core::LakeCatResult<()> {
+    let bundle = bundle_semantics.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::Internal(
+            "handoff bundle artifact semantics must be an object".to_string(),
+        )
+    })?;
+    let import_plan = import_plan_semantics.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::Internal(
+            "handoff QueryGraph import plan semantics must be an object".to_string(),
+        )
+    })?;
+    for field in ["graphNodes", "graphEdges"] {
+        require_value_match(
+            import_plan,
+            field,
+            required_value(bundle, field, "bundleArtifactSemantics")?,
+            "querygraphImportPlanSemantics",
+        )?;
+    }
+    Ok(())
 }
 
 fn verify_qglake_handoff_querygraph_import_plan_semantics(
@@ -10107,6 +10138,58 @@ mod tests {
             err.to_string()
                 .contains("tables must include stable-id lakecat:table:local:default:events")
         );
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_semantics_reject_saved_import_plan_graph_count_drift() {
+        let temp = qglake_temp_dir("handoff-import-plan-graph-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let (mut summary, _) = qglake_handoff_summary_json_with_verified_bundle(&temp);
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"] = json!([]);
+        let mut plan = qglake_write_handoff_import_plan_artifact(&temp, &mut summary);
+        plan["graph-nodes"] = json!(5);
+        let bytes = serde_json::to_vec_pretty(&plan).expect("drifted import plan JSON");
+        fs::write(temp.join("querygraph-import-plan.json"), &bytes)
+            .expect("write drifted import plan");
+        summary["artifacts"]["querygraphImportPlan"]["sha256"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let bundle_semantics =
+            verify_qglake_handoff_bundle_artifact_semantics(&summary_path, &summary)
+                .expect("bundle artifact semantics should verify");
+        let import_plan_semantics =
+            verify_qglake_handoff_querygraph_import_plan_semantics(&summary_path, &summary)
+                .expect("import plan artifact semantics should verify before cross-check");
+        let err = require_qglake_import_plan_graph_counts_match_bundle(
+            &bundle_semantics,
+            &import_plan_semantics,
+        )
+        .expect_err("handoff should reject saved import-plan graph count drift");
+
+        assert!(err.to_string().contains("querygraphImportPlanSemantics"));
+        assert!(err.to_string().contains("graphNodes mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_rejects_import_plan_graph_count_drift() {
+        let bundle = json!({
+            "graphNodes": 8,
+            "graphEdges": 8
+        });
+        let import_plan = json!({
+            "graphNodes": 7,
+            "graphEdges": 8
+        });
+
+        let err = require_qglake_import_plan_graph_counts_match_bundle(&bundle, &import_plan)
+            .expect_err("handoff should reject import-plan graph count drift");
+
+        assert!(err.to_string().contains("querygraphImportPlanSemantics"));
+        assert!(err.to_string().contains("graphNodes mismatch"));
     }
 
     #[test]
