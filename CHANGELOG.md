@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake handoff summaries to carry and verify a SHA-256 service log
+  hash so saved operational logs cannot drift from the compact artifact
+  manifest.
 - Recorded the final OPUS archive reconciliation in `DESIGN.md` and
   `docs/completed/README.md`, making the root design the sole active synthesis
   and keeping `docs/completed/OPUS*.md` as provenance-only artifacts.

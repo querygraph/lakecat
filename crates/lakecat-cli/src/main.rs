@@ -523,13 +523,7 @@ fn verify_qglake_handoff_artifact_path_aliases(
     )?;
     let handoff_verify_output =
         required_resolved_artifact_path(artifacts, "lakecatHandoffVerifyOutput", base_dir)?;
-    let service_log = required_resolved_artifact_path(artifacts, "serviceLog", base_dir)?;
-    if !service_log.exists() {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "handoff artifact serviceLog does not exist at {}",
-            service_log.display()
-        )));
-    }
+    let service_log = verify_qglake_handoff_service_log(artifacts, base_dir)?;
     Ok(json!({
         "lakecatReplayOutput": lakecat_replay.display().to_string(),
         "querygraphVerifyOutput": querygraph_verify.display().to_string(),
@@ -537,6 +531,28 @@ fn verify_qglake_handoff_artifact_path_aliases(
         "lakecatHandoffVerifyOutput": handoff_verify_output.display().to_string(),
         "serviceLog": service_log.display().to_string(),
     }))
+}
+
+fn verify_qglake_handoff_service_log(
+    artifacts: &serde_json::Map<String, Value>,
+    base_dir: &Path,
+) -> lakecat_core::LakeCatResult<PathBuf> {
+    let service_log = required_resolved_artifact_path(artifacts, "serviceLog", base_dir)?;
+    let expected_sha256 =
+        require_hash_str(artifacts, "serviceLogHash", "handoff summary artifacts")?;
+    let bytes = fs::read(&service_log).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "failed to read handoff artifact serviceLog at {}: {err}",
+            service_log.display()
+        ))
+    })?;
+    let actual_sha256 = content_hash_bytes(&bytes);
+    if actual_sha256 != expected_sha256 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff artifact serviceLog hash mismatch: expected={expected_sha256} actual={actual_sha256}"
+        )));
+    }
+    Ok(service_log)
 }
 
 fn verify_qglake_handoff_path_alias(
@@ -8211,7 +8227,8 @@ mod tests {
                     "sha256": content_hash_bytes(&querygraph_import_bytes)
                 }
             },
-            "serviceLog": service_log
+            "serviceLog": service_log,
+            "serviceLogHash": content_hash_bytes(b"service log")
         });
         summary
     }
@@ -9695,6 +9712,26 @@ mod tests {
             err.to_string()
                 .contains("capturedOutputs.querygraphVerify.path")
         );
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_service_log_hash_drift() {
+        let temp = qglake_temp_dir("handoff-artifacts-service-log-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        fs::write(temp.join("lakecat-service.log"), b"tampered service log")
+            .expect("tamper service log");
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject service log hash drift");
+
+        assert!(err.to_string().contains("serviceLog"));
+        assert!(err.to_string().contains("hash mismatch"));
     }
 
     #[test]

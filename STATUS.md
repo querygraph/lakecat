@@ -5,6 +5,20 @@ Updated: 2026-06-20
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Hash QGLake handoff service logs`.
+  QGLake handoff summaries now carry `serviceLogHash`, and
+  `qglake-verify-handoff` recomputes the service log bytes so an archived
+  operational log cannot drift behind a path-only artifact alias.
+- Local verification for this service-log artifact slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Finalize OPUS archive consolidation`.
   `DESIGN.md` now explicitly records that the OPUS corpus is no longer a

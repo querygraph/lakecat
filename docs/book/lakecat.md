@@ -1755,8 +1755,9 @@ credential TTL cap or credential-root graph projection. It also recomputes the
 captured LakeCat replay and QueryGraph verify/import output hashes, so terminal
 captures cannot drift from the compact summary. It compares the legacy string
 path aliases for the LakeCat replay, QueryGraph verify, and QueryGraph import
-captures with the hashed `capturedOutputs` paths they duplicate. It requires
-the service log path to exist as operational evidence, while treating
+captures with the hashed `capturedOutputs` paths they duplicate. It also hashes
+the service log through `serviceLogHash`, so archived operational logs cannot
+drift behind a stable path. It still treats
 `lakecatHandoffVerifyOutput` as a declared output path because the local harness
 writes that verifier capture after the verifier accepts the summary. Then it
 parses those captured JSON files and checks that the replay schema/status,
