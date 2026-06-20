@@ -378,6 +378,12 @@ function requireHashArray(value, label) {
     process.exit(1);
   }
 }
+function requireStringArrayCount(value, expected, label) {
+  if (!Array.isArray(value) || value.length !== expected || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    console.error(`LakeCat management replay evidence ${label} must have ${expected} non-empty string value(s)`);
+    process.exit(1);
+  }
+}
 for (const field of [
   "serverCount",
   "serverGraphEvents",
@@ -406,16 +412,26 @@ for (const field of [
 ]) {
   requireHashArray(evidence[field], field);
 }
+requireStringArrayCount(evidence.serverIds, evidence.serverCount, "serverIds");
+requireStringArrayCount(evidence.projectIds, evidence.projectCount, "projectIds");
+requireStringArrayCount(evidence.warehouseNames, evidence.warehouseCount, "warehouseNames");
+requireStringArrayCount(evidence.policyIds, evidence.policyBindingCount, "policyIds");
+requireStringArrayCount(evidence.storageProfileIds, evidence.storageProfileCount, "storageProfileIds");
 process.stdout.write(JSON.stringify({
   serverCount: evidence.serverCount,
+  serverIds: evidence.serverIds,
   serverGraphEvents: evidence.serverGraphEvents,
   projectCount: evidence.projectCount,
+  projectIds: evidence.projectIds,
   projectGraphEvents: evidence.projectGraphEvents,
   warehouseCount: evidence.warehouseCount,
+  warehouseNames: evidence.warehouseNames,
   warehouseGraphEvents: evidence.warehouseGraphEvents,
   policyBindingCount: evidence.policyBindingCount,
+  policyIds: evidence.policyIds,
   policyGraphEvents: evidence.policyGraphEvents,
   storageProfileCount: evidence.storageProfileCount,
+  storageProfileIds: evidence.storageProfileIds,
   storageProfileGraphEvents: evidence.storageProfileGraphEvents,
   serverReplayEventHashes: evidence.serverReplayEventHashes,
   serverOpenLineageHashes: evidence.serverOpenLineageHashes,

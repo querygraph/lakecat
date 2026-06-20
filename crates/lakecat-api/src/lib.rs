@@ -484,12 +484,20 @@ pub struct LineageDrainEventSummary {
     pub expected_view_version: Option<u64>,
     #[serde(default)]
     pub policy_binding_count: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub policy_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub project_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub server_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_profile_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub storage_profile_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_profile_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -506,6 +514,8 @@ pub struct LineageDrainEventSummary {
     pub storage_profile_secret_ref_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub warehouse_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warehouse_names: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub table_commit_count: Option<usize>,
     #[serde(default)]

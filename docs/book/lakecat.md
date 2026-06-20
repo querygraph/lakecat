@@ -2003,18 +2003,21 @@ stable ID arrays beside the counts: policy ids, project ids, server ids,
 storage-profile ids, and warehouse names. Before projection, LakeCat rejects a
 management-list event when an optional ID array is malformed, contains an
 invalid identifier, or no longer matches the recorded count. The drain response
-lifts their counts and management scope into compact fields, so QueryGraph can
-verify the control-plane read evidence without opening the raw lineage payload.
-It also carries replay and OpenLineage hash arrays for those management-list
-reads, so a compact handoff cannot prove only that the right number of
-management records existed while losing the receipt evidence for the reads. The
-lineage-drain verifier rejects those source replay events when the receipt
+lifts their counts, ID arrays, and management scope into compact fields, so
+QueryGraph can verify the control-plane read evidence without opening the raw
+lineage payload. It also carries replay and OpenLineage hash arrays for those
+management-list reads, so a compact handoff cannot prove only that the right
+number of management records existed while losing the identities or receipt
+evidence for the reads. The lineage-drain verifier rejects those source replay
+events when the ID arrays are missing, empty, count-drifted, or when the receipt
 arrays are empty or not SHA-256-shaped, so the compact `managementProof` starts
 from verified replay evidence rather than untrusted text. The compact handoff
 verifier repeats that check with the stricter full `sha256:`-prefixed 64-hex
-digest shape for every management replay and OpenLineage array, so saved
-summaries cannot preserve only prefix-shaped placeholders for control-plane read
-receipts or normalize malformed hashes later. It also rejects management-list source
+digest shape for every management replay and OpenLineage array, and it verifies
+that `serverIds`, `projectIds`, `warehouseNames`, `policyIds`, and
+`storageProfileIds` match their recorded counts. Saved summaries therefore
+cannot preserve only prefix-shaped placeholders for control-plane read receipts
+or normalize malformed management identities later. It also rejects management-list source
 replay without catalog graph projection evidence, keeping the durable
 server/project/warehouse, policy, and storage-profile facts visible to
 QueryGraph through Grust-facing graph events. Compact `managementProof` carries

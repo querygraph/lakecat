@@ -6,6 +6,27 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Carry management-list IDs through QGLake proof`.
+  Lineage-drain summaries and compact QGLake `managementProof` now preserve the
+  redacted stable ID arrays emitted by management-list reads. LakeCat replay
+  verification and saved handoff-summary verification reject missing, empty, or
+  count-drifted management ID arrays before accepting the compact proof.
+- Local verification for this management-list QGLake proof slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_accept_matching_files`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import,
+  verified the handoff summary with management ID arrays, and ended with
+  `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Harden management-list outbox ID evidence`.
   Management-list audit/outbox reads now carry redacted stable ID arrays beside
   their counts for policies, projects, servers, storage profiles, and

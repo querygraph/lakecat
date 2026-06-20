@@ -3398,18 +3398,22 @@ fn lineage_drain_event_summary(
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok())
             .unwrap_or_default(),
+        policy_ids: string_array_summary(payload.get("policy-ids")),
         project_count: payload
             .get("project-count")
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok()),
+        project_ids: string_array_summary(payload.get("project-ids")),
         server_count: payload
             .get("server-count")
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok()),
+        server_ids: string_array_summary(payload.get("server-ids")),
         storage_profile_count: payload
             .get("storage-profile-count")
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok()),
+        storage_profile_ids: string_array_summary(payload.get("storage-profile-ids")),
         storage_profile_id: storage_profile
             .and_then(|profile| profile.get("profile-id"))
             .and_then(Value::as_str)
@@ -3437,6 +3441,7 @@ fn lineage_drain_event_summary(
             .get("warehouse-count")
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok()),
+        warehouse_names: string_array_summary(payload.get("warehouse-names")),
         table_commit_count: payload
             .get("commit-count")
             .and_then(Value::as_u64)
@@ -3578,6 +3583,19 @@ fn namespace_summary_parts(value: Option<&Value>) -> Vec<String> {
         Some(Value::String(path)) => path.split('.').map(str::to_string).collect(),
         _ => Vec::new(),
     }
+}
+
+fn string_array_summary(value: Option<&Value>) -> Vec<String> {
+    value
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 async fn get_config(

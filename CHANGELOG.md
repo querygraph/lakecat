@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Lifted redacted management-list ID arrays into lineage-drain summaries and
+  compact QGLake `managementProof`, and rejected source replay or saved handoff
+  summaries when those arrays are missing, empty, or drift from the recorded
+  counts.
 - Rejected outbox delivery for malformed `querygraph.bootstrap` evidence whose
   warehouse, table/view counts, verified ids, manifest hashes, artifact hashes,
   view receipt hashes, standards, or optional TypeDID/agent proof hashes are

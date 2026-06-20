@@ -2944,15 +2944,36 @@ fn require_management_evidence(
     management: &serde_json::Map<String, Value>,
     expected_policy_binding_count: u64,
 ) -> lakecat_core::LakeCatResult<()> {
-    require_positive_u64(management, "serverCount", "managementProof")?;
+    let server_count = require_positive_u64(management, "serverCount", "managementProof")?;
     require_positive_u64(management, "serverGraphEvents", "managementProof")?;
-    require_positive_u64(management, "projectCount", "managementProof")?;
+    require_string_array_count(management, "serverIds", server_count, "managementProof")?;
+    let project_count = require_positive_u64(management, "projectCount", "managementProof")?;
     require_positive_u64(management, "projectGraphEvents", "managementProof")?;
-    require_positive_u64(management, "warehouseCount", "managementProof")?;
+    require_string_array_count(management, "projectIds", project_count, "managementProof")?;
+    let warehouse_count = require_positive_u64(management, "warehouseCount", "managementProof")?;
     require_positive_u64(management, "warehouseGraphEvents", "managementProof")?;
+    require_string_array_count(
+        management,
+        "warehouseNames",
+        warehouse_count,
+        "managementProof",
+    )?;
     require_positive_u64(management, "policyGraphEvents", "managementProof")?;
-    require_positive_u64(management, "storageProfileCount", "managementProof")?;
+    require_string_array_count(
+        management,
+        "policyIds",
+        expected_policy_binding_count,
+        "managementProof",
+    )?;
+    let storage_profile_count =
+        require_positive_u64(management, "storageProfileCount", "managementProof")?;
     require_positive_u64(management, "storageProfileGraphEvents", "managementProof")?;
+    require_string_array_count(
+        management,
+        "storageProfileIds",
+        storage_profile_count,
+        "managementProof",
+    )?;
     require_u64_match(
         management,
         "policyBindingCount",
@@ -3749,14 +3770,19 @@ fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Optio
     let storage_profile_upsert = qglake_drain_event(drain, "storage-profile.upserted")?;
     Some(json!({
         "serverCount": server.server_count.unwrap_or_default(),
+        "serverIds": &server.server_ids,
         "serverGraphEvents": server.graph_events,
         "projectCount": project.project_count.unwrap_or_default(),
+        "projectIds": &project.project_ids,
         "projectGraphEvents": project.graph_events,
         "warehouseCount": warehouse.warehouse_count.unwrap_or_default(),
+        "warehouseNames": &warehouse.warehouse_names,
         "warehouseGraphEvents": warehouse.graph_events,
         "policyBindingCount": policy.policy_binding_count,
+        "policyIds": &policy.policy_ids,
         "policyGraphEvents": policy.graph_events,
         "storageProfileCount": storage_profile.storage_profile_count.unwrap_or_default(),
+        "storageProfileIds": &storage_profile.storage_profile_ids,
         "storageProfileGraphEvents": storage_profile.graph_events,
         "serverReplayEventHashes": &server.replay_event_hashes,
         "serverOpenLineageHashes": &server.replay_open_lineage_hashes,
@@ -7127,6 +7153,11 @@ fn verify_qglake_management_list_replay(
                 .to_string(),
         ));
     }
+    verify_qglake_management_ids(
+        &policy_list.policy_ids,
+        policy_list.policy_binding_count,
+        "policy list",
+    )?;
     let Some(storage_profile_list) = drain
         .events
         .iter()
@@ -7147,6 +7178,13 @@ fn verify_qglake_management_list_replay(
                 .to_string(),
         ));
     }
+    verify_qglake_management_ids(
+        &storage_profile_list.storage_profile_ids,
+        storage_profile_list
+            .storage_profile_count
+            .unwrap_or_default(),
+        "storage profile list",
+    )?;
     let Some(storage_profile_upsert) = drain
         .events
         .iter()
@@ -7172,6 +7210,11 @@ fn verify_qglake_management_list_replay(
             "qglake lineage drain server list replay did not expose any servers".to_string(),
         ));
     }
+    verify_qglake_management_ids(
+        &server_list.server_ids,
+        server_list.server_count.unwrap_or_default(),
+        "server list",
+    )?;
     let Some(project_list) = drain
         .events
         .iter()
@@ -7187,6 +7230,11 @@ fn verify_qglake_management_list_replay(
             "qglake lineage drain project list replay did not expose any projects".to_string(),
         ));
     }
+    verify_qglake_management_ids(
+        &project_list.project_ids,
+        project_list.project_count.unwrap_or_default(),
+        "project list",
+    )?;
     let Some(warehouse_list) = drain
         .events
         .iter()
@@ -7201,6 +7249,24 @@ fn verify_qglake_management_list_replay(
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain warehouse list replay did not expose any warehouses".to_string(),
         ));
+    }
+    verify_qglake_management_ids(
+        &warehouse_list.warehouse_names,
+        warehouse_list.warehouse_count.unwrap_or_default(),
+        "warehouse list",
+    )?;
+    Ok(())
+}
+
+fn verify_qglake_management_ids(
+    ids: &[String],
+    expected_count: usize,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    if ids.len() != expected_count || ids.iter().any(|id| id.trim().is_empty()) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} replay is missing compact management ID evidence"
+        )));
     }
     Ok(())
 }
@@ -8347,6 +8413,27 @@ fn require_positive_u64(
     Ok(number)
 }
 
+fn require_string_array_count(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    expected_count: u64,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let values = required_string_array(value, field, label)?;
+    if values.len() as u64 != expected_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} count mismatch: expected={expected_count} actual={}",
+            values.len()
+        )));
+    }
+    if values.iter().any(|value| value.trim().is_empty()) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must contain non-empty strings"
+        )));
+    }
+    Ok(())
+}
+
 fn require_non_empty_str<'a>(
     value: &'a serde_json::Map<String, Value>,
     field: &str,
@@ -8718,14 +8805,19 @@ mod tests {
                 },
                 "managementProof": {
                     "serverCount": 1,
+                    "serverIds": ["qglake-server"],
                     "serverGraphEvents": 1,
                     "projectCount": 1,
+                    "projectIds": ["analytics"],
                     "projectGraphEvents": 1,
                     "warehouseCount": 1,
+                    "warehouseNames": ["local"],
                     "warehouseGraphEvents": 1,
                     "policyBindingCount": 1,
+                    "policyIds": ["agent-columns"],
                     "policyGraphEvents": 1,
                     "storageProfileCount": 1,
+                    "storageProfileIds": ["events-local"],
                     "storageProfileGraphEvents": 1
                 },
                 "viewReceiptChainProof": {
@@ -9951,6 +10043,19 @@ mod tests {
         assert!(err.to_string().contains("managementProof"));
         assert!(err.to_string().contains("storageProfileReplayEventHashes"));
         assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_management_ids() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["serverIds"] = json!([]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing management ids");
+
+        assert!(err.to_string().contains("managementProof"));
+        assert!(err.to_string().contains("serverIds"));
+        assert!(err.to_string().contains("count mismatch"));
     }
 
     #[test]
@@ -11681,7 +11786,7 @@ mod tests {
         );
         assert_eq!(
             semantics["querygraphVerify"]["bundleHash"],
-            json!("sha256:bundle")
+            json!(content_hash_bytes(b"bundle"))
         );
         assert_eq!(
             semantics["querygraphVerify"]["verifiedTables"],
@@ -11693,7 +11798,7 @@ mod tests {
         );
         assert_eq!(
             semantics["querygraphImport"]["queryGraphImportHash"],
-            json!("sha256:querygraph-import")
+            json!(qglake_fixture_hash("querygraph-import"))
         );
         assert_eq!(
             semantics["lakecatReplay"]["storageProfileUpsertProof"]["locationPrefixHash"],
@@ -11705,7 +11810,7 @@ mod tests {
         );
         assert_eq!(
             semantics["lakecatReplay"]["queryGraphBootstrapProof"]["agentDelegationHash"],
-            json!("sha256:delegation")
+            json!(qglake_fixture_hash("delegation"))
         );
         assert_eq!(
             semantics["lakecatReplay"]["governedScanProof"]["planTaskCount"],
@@ -11717,7 +11822,7 @@ mod tests {
         );
         assert_eq!(
             semantics["lakecatReplay"]["tableCommitHistoryProof"]["commitHashes"],
-            json!(["sha256:commit"])
+            json!([qglake_fixture_hash("commit")])
         );
         assert_eq!(
             semantics["lakecatReplay"]["tableCommitHistoryProof"]["graphEvents"],
@@ -11725,7 +11830,7 @@ mod tests {
         );
         assert_eq!(
             semantics["lakecatReplay"]["viewReceiptChainProof"]["views"][0]["acceptedReceiptHash"],
-            json!("sha256:view-receipt")
+            json!(qglake_fixture_hash("view-receipt"))
         );
         assert_eq!(
             semantics["lakecatReplay"]["credentialVendingProof"]["restricted"]["blockReason"],
@@ -15513,9 +15618,13 @@ mod tests {
                     view_version: None,
                     expected_view_version: None,
                     policy_binding_count: 1,
+                    policy_ids: Vec::new(),
                     project_count: None,
+                    project_ids: Vec::new(),
                     server_count: None,
+                    server_ids: Vec::new(),
                     storage_profile_count: None,
+                    storage_profile_ids: Vec::new(),
                     storage_profile_id: None,
                     storage_profile_provider: None,
                     storage_profile_issuance_mode: None,
@@ -15524,6 +15633,7 @@ mod tests {
                     storage_profile_secret_ref_provider: None,
                     storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
+                    warehouse_names: Vec::new(),
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
@@ -15601,9 +15711,13 @@ mod tests {
                     view_version: None,
                     expected_view_version: None,
                     policy_binding_count: 1,
+                    policy_ids: Vec::new(),
                     project_count: None,
+                    project_ids: Vec::new(),
                     server_count: None,
+                    server_ids: Vec::new(),
                     storage_profile_count: None,
+                    storage_profile_ids: Vec::new(),
                     storage_profile_id: None,
                     storage_profile_provider: None,
                     storage_profile_issuance_mode: None,
@@ -15612,6 +15726,7 @@ mod tests {
                     storage_profile_secret_ref_provider: None,
                     storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
+                    warehouse_names: Vec::new(),
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
@@ -15691,9 +15806,13 @@ mod tests {
                     view_version: None,
                     expected_view_version: None,
                     policy_binding_count: 1,
+                    policy_ids: Vec::new(),
                     project_count: None,
+                    project_ids: Vec::new(),
                     server_count: None,
+                    server_ids: Vec::new(),
                     storage_profile_count: None,
+                    storage_profile_ids: Vec::new(),
                     storage_profile_id: None,
                     storage_profile_provider: None,
                     storage_profile_issuance_mode: None,
@@ -15702,6 +15821,7 @@ mod tests {
                     storage_profile_secret_ref_provider: None,
                     storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
+                    warehouse_names: Vec::new(),
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
@@ -15779,9 +15899,13 @@ mod tests {
                     view_version: None,
                     expected_view_version: None,
                     policy_binding_count: 1,
+                    policy_ids: Vec::new(),
                     project_count: None,
+                    project_ids: Vec::new(),
                     server_count: None,
+                    server_ids: Vec::new(),
                     storage_profile_count: None,
+                    storage_profile_ids: Vec::new(),
                     storage_profile_id: None,
                     storage_profile_provider: None,
                     storage_profile_issuance_mode: None,
@@ -15790,6 +15914,7 @@ mod tests {
                     storage_profile_secret_ref_provider: None,
                     storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
+                    warehouse_names: Vec::new(),
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
@@ -15867,9 +15992,13 @@ mod tests {
                     view_version: None,
                     expected_view_version: None,
                     policy_binding_count: 1,
+                    policy_ids: Vec::new(),
                     project_count: None,
+                    project_ids: Vec::new(),
                     server_count: None,
+                    server_ids: Vec::new(),
                     storage_profile_count: None,
+                    storage_profile_ids: Vec::new(),
                     storage_profile_id: None,
                     storage_profile_provider: None,
                     storage_profile_issuance_mode: None,
@@ -15878,6 +16007,7 @@ mod tests {
                     storage_profile_secret_ref_provider: None,
                     storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
+                    warehouse_names: Vec::new(),
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
@@ -15955,9 +16085,13 @@ mod tests {
                     view_version: None,
                     expected_view_version: None,
                     policy_binding_count: 1,
+                    policy_ids: Vec::new(),
                     project_count: None,
+                    project_ids: Vec::new(),
                     server_count: None,
+                    server_ids: Vec::new(),
                     storage_profile_count: None,
+                    storage_profile_ids: Vec::new(),
                     storage_profile_id: None,
                     storage_profile_provider: None,
                     storage_profile_issuance_mode: None,
@@ -15966,6 +16100,7 @@ mod tests {
                     storage_profile_secret_ref_provider: None,
                     storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
+                    warehouse_names: Vec::new(),
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
@@ -16043,9 +16178,13 @@ mod tests {
                     view_version: None,
                     expected_view_version: None,
                     policy_binding_count: 1,
+                    policy_ids: Vec::new(),
                     project_count: None,
+                    project_ids: Vec::new(),
                     server_count: None,
+                    server_ids: Vec::new(),
                     storage_profile_count: None,
+                    storage_profile_ids: Vec::new(),
                     storage_profile_id: None,
                     storage_profile_provider: None,
                     storage_profile_issuance_mode: None,
@@ -16054,6 +16193,7 @@ mod tests {
                     storage_profile_secret_ref_provider: None,
                     storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
+                    warehouse_names: Vec::new(),
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
@@ -16131,9 +16271,13 @@ mod tests {
                     view_version: None,
                     expected_view_version: None,
                     policy_binding_count: 1,
+                    policy_ids: Vec::new(),
                     project_count: None,
+                    project_ids: Vec::new(),
                     server_count: None,
+                    server_ids: Vec::new(),
                     storage_profile_count: None,
+                    storage_profile_ids: Vec::new(),
                     storage_profile_id: None,
                     storage_profile_provider: None,
                     storage_profile_issuance_mode: None,
@@ -16142,6 +16286,7 @@ mod tests {
                     storage_profile_secret_ref_provider: None,
                     storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
+                    warehouse_names: Vec::new(),
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
@@ -16219,9 +16364,13 @@ mod tests {
                     view_version: None,
                     expected_view_version: None,
                     policy_binding_count: 1,
+                    policy_ids: Vec::new(),
                     project_count: None,
+                    project_ids: Vec::new(),
                     server_count: None,
+                    server_ids: Vec::new(),
                     storage_profile_count: None,
+                    storage_profile_ids: Vec::new(),
                     storage_profile_id: None,
                     storage_profile_provider: None,
                     storage_profile_issuance_mode: None,
@@ -16230,6 +16379,7 @@ mod tests {
                     storage_profile_secret_ref_provider: None,
                     storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
+                    warehouse_names: Vec::new(),
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
@@ -16307,9 +16457,13 @@ mod tests {
                     view_version: None,
                     expected_view_version: None,
                     policy_binding_count: 1,
+                    policy_ids: Vec::new(),
                     project_count: None,
+                    project_ids: Vec::new(),
                     server_count: None,
+                    server_ids: Vec::new(),
                     storage_profile_count: None,
+                    storage_profile_ids: Vec::new(),
                     storage_profile_id: None,
                     storage_profile_provider: None,
                     storage_profile_issuance_mode: None,
@@ -16318,6 +16472,7 @@ mod tests {
                     storage_profile_secret_ref_provider: None,
                     storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
+                    warehouse_names: Vec::new(),
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
@@ -16395,9 +16550,13 @@ mod tests {
                     view_version: None,
                     expected_view_version: None,
                     policy_binding_count: 1,
+                    policy_ids: Vec::new(),
                     project_count: None,
+                    project_ids: Vec::new(),
                     server_count: None,
+                    server_ids: Vec::new(),
                     storage_profile_count: None,
+                    storage_profile_ids: Vec::new(),
                     storage_profile_id: None,
                     storage_profile_provider: None,
                     storage_profile_issuance_mode: None,
@@ -16406,6 +16565,7 @@ mod tests {
                     storage_profile_secret_ref_provider: None,
                     storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
+                    warehouse_names: Vec::new(),
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
@@ -16483,9 +16643,13 @@ mod tests {
                     view_version: None,
                     expected_view_version: None,
                     policy_binding_count: 0,
+                    policy_ids: Vec::new(),
                     project_count: None,
+                    project_ids: Vec::new(),
                     server_count: None,
+                    server_ids: Vec::new(),
                     storage_profile_count: None,
+                    storage_profile_ids: Vec::new(),
                     storage_profile_id: None,
                     storage_profile_provider: None,
                     storage_profile_issuance_mode: None,
@@ -16494,6 +16658,7 @@ mod tests {
                     storage_profile_secret_ref_provider: None,
                     storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
+                    warehouse_names: Vec::new(),
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
@@ -16571,9 +16736,13 @@ mod tests {
                     view_version: None,
                     expected_view_version: None,
                     policy_binding_count: 1,
+                    policy_ids: Vec::new(),
                     project_count: None,
+                    project_ids: Vec::new(),
                     server_count: None,
+                    server_ids: Vec::new(),
                     storage_profile_count: None,
+                    storage_profile_ids: Vec::new(),
                     storage_profile_id: None,
                     storage_profile_provider: None,
                     storage_profile_issuance_mode: None,
@@ -16582,6 +16751,7 @@ mod tests {
                     storage_profile_secret_ref_provider: None,
                     storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
+                    warehouse_names: Vec::new(),
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
                     table_commit_hashes: Vec::new(),
@@ -19128,6 +19298,24 @@ mod tests {
     }
 
     #[test]
+    fn qglake_lineage_drain_verifier_requires_management_ids() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let storage_profile_list = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "storage-profile.listed")
+            .expect("storage profile list replay fixture");
+        storage_profile_list.storage_profile_ids.clear();
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject missing management IDs");
+
+        assert!(err.to_string().contains("storage profile list replay"));
+        assert!(err.to_string().contains("compact management ID evidence"));
+    }
+
+    #[test]
     fn qglake_lineage_drain_verifier_requires_scan_receipt_hash_shape() {
         let verification = qglake_handoff_lineage_verification();
         let mut drain = qglake_handoff_lineage_drain();
@@ -19316,9 +19504,13 @@ mod tests {
             view_version: None,
             expected_view_version: None,
             policy_binding_count: 1,
+            policy_ids: vec!["agent-columns".to_string()],
             project_count: None,
+            project_ids: Vec::new(),
             server_count: None,
+            server_ids: Vec::new(),
             storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
             storage_profile_id: None,
             storage_profile_provider: None,
             storage_profile_issuance_mode: None,
@@ -19327,6 +19519,7 @@ mod tests {
             storage_profile_secret_ref_provider: None,
             storage_profile_secret_ref_hash: None,
             warehouse_count: None,
+            warehouse_names: Vec::new(),
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
@@ -19405,9 +19598,13 @@ mod tests {
             view_version: Some(2),
             expected_view_version: Some(1),
             policy_binding_count: 0,
+            policy_ids: Vec::new(),
             project_count: None,
+            project_ids: Vec::new(),
             server_count: None,
+            server_ids: Vec::new(),
             storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
             storage_profile_id: None,
             storage_profile_provider: None,
             storage_profile_issuance_mode: None,
@@ -19416,6 +19613,7 @@ mod tests {
             storage_profile_secret_ref_provider: None,
             storage_profile_secret_ref_hash: None,
             warehouse_count: None,
+            warehouse_names: Vec::new(),
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
@@ -19519,9 +19717,13 @@ mod tests {
             view_version: None,
             expected_view_version: None,
             policy_binding_count: 0,
+            policy_ids: Vec::new(),
             project_count: None,
+            project_ids: Vec::new(),
             server_count: None,
+            server_ids: Vec::new(),
             storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
             storage_profile_id: None,
             storage_profile_provider: None,
             storage_profile_issuance_mode: None,
@@ -19530,6 +19732,7 @@ mod tests {
             storage_profile_secret_ref_provider: None,
             storage_profile_secret_ref_hash: None,
             warehouse_count: None,
+            warehouse_names: Vec::new(),
             table_commit_count: Some(1),
             table_commit_sequence_numbers: vec![1],
             table_commit_hashes: vec!["sha256:table-commit".to_string()],
@@ -19605,9 +19808,13 @@ mod tests {
             view_version: None,
             expected_view_version: None,
             policy_binding_count: 0,
+            policy_ids: Vec::new(),
             project_count: None,
+            project_ids: Vec::new(),
             server_count: None,
+            server_ids: Vec::new(),
             storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
             storage_profile_id: None,
             storage_profile_provider: None,
             storage_profile_issuance_mode: None,
@@ -19616,6 +19823,7 @@ mod tests {
             storage_profile_secret_ref_provider: None,
             storage_profile_secret_ref_hash: None,
             warehouse_count: None,
+            warehouse_names: Vec::new(),
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
@@ -19691,9 +19899,13 @@ mod tests {
             view_version: None,
             expected_view_version: None,
             policy_binding_count: 0,
+            policy_ids: Vec::new(),
             project_count: None,
+            project_ids: Vec::new(),
             server_count: None,
+            server_ids: Vec::new(),
             storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
             storage_profile_id: None,
             storage_profile_provider: None,
             storage_profile_issuance_mode: None,
@@ -19702,6 +19914,7 @@ mod tests {
             storage_profile_secret_ref_provider: None,
             storage_profile_secret_ref_hash: None,
             warehouse_count: None,
+            warehouse_names: Vec::new(),
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
@@ -19771,9 +19984,13 @@ mod tests {
             view_version: None,
             expected_view_version: None,
             policy_binding_count: 1,
+            policy_ids: vec!["agent-columns".to_string()],
             project_count: None,
+            project_ids: Vec::new(),
             server_count: None,
+            server_ids: Vec::new(),
             storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
             storage_profile_id: None,
             storage_profile_provider: None,
             storage_profile_issuance_mode: None,
@@ -19782,6 +19999,7 @@ mod tests {
             storage_profile_secret_ref_provider: None,
             storage_profile_secret_ref_hash: None,
             warehouse_count: None,
+            warehouse_names: Vec::new(),
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
@@ -19841,9 +20059,13 @@ mod tests {
             view_version: None,
             expected_view_version: None,
             policy_binding_count: 0,
+            policy_ids: Vec::new(),
             project_count: None,
+            project_ids: Vec::new(),
             server_count: None,
+            server_ids: Vec::new(),
             storage_profile_count: Some(1),
+            storage_profile_ids: vec!["events-local".to_string()],
             storage_profile_id: None,
             storage_profile_provider: None,
             storage_profile_issuance_mode: None,
@@ -19852,6 +20074,7 @@ mod tests {
             storage_profile_secret_ref_provider: None,
             storage_profile_secret_ref_hash: None,
             warehouse_count: None,
+            warehouse_names: Vec::new(),
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
@@ -19911,9 +20134,13 @@ mod tests {
             view_version: None,
             expected_view_version: None,
             policy_binding_count: 0,
+            policy_ids: Vec::new(),
             project_count: None,
+            project_ids: Vec::new(),
             server_count: None,
+            server_ids: Vec::new(),
             storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
             storage_profile_id: Some("events-local".to_string()),
             storage_profile_provider: Some("file".to_string()),
             storage_profile_issuance_mode: Some("local-file-no-secret".to_string()),
@@ -19925,6 +20152,7 @@ mod tests {
             storage_profile_secret_ref_provider: None,
             storage_profile_secret_ref_hash: None,
             warehouse_count: None,
+            warehouse_names: Vec::new(),
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
@@ -19984,9 +20212,13 @@ mod tests {
             view_version: None,
             expected_view_version: None,
             policy_binding_count: 0,
+            policy_ids: Vec::new(),
             project_count: None,
+            project_ids: Vec::new(),
             server_count: Some(1),
+            server_ids: vec!["qglake-server".to_string()],
             storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
             storage_profile_id: None,
             storage_profile_provider: None,
             storage_profile_issuance_mode: None,
@@ -19995,6 +20227,7 @@ mod tests {
             storage_profile_secret_ref_provider: None,
             storage_profile_secret_ref_hash: None,
             warehouse_count: None,
+            warehouse_names: Vec::new(),
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
@@ -20052,9 +20285,13 @@ mod tests {
             view_version: None,
             expected_view_version: None,
             policy_binding_count: 0,
+            policy_ids: Vec::new(),
             project_count: Some(1),
+            project_ids: vec!["analytics".to_string()],
             server_count: None,
+            server_ids: Vec::new(),
             storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
             storage_profile_id: None,
             storage_profile_provider: None,
             storage_profile_issuance_mode: None,
@@ -20063,6 +20300,7 @@ mod tests {
             storage_profile_secret_ref_provider: None,
             storage_profile_secret_ref_hash: None,
             warehouse_count: None,
+            warehouse_names: Vec::new(),
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
@@ -20120,9 +20358,13 @@ mod tests {
             view_version: None,
             expected_view_version: None,
             policy_binding_count: 0,
+            policy_ids: Vec::new(),
             project_count: None,
+            project_ids: Vec::new(),
             server_count: None,
+            server_ids: Vec::new(),
             storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
             storage_profile_id: None,
             storage_profile_provider: None,
             storage_profile_issuance_mode: None,
@@ -20131,6 +20373,7 @@ mod tests {
             storage_profile_secret_ref_provider: None,
             storage_profile_secret_ref_hash: None,
             warehouse_count: Some(1),
+            warehouse_names: vec!["local".to_string()],
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
@@ -20188,9 +20431,13 @@ mod tests {
             view_version: None,
             expected_view_version: None,
             policy_binding_count: 0,
+            policy_ids: Vec::new(),
             project_count: None,
+            project_ids: Vec::new(),
             server_count: None,
+            server_ids: Vec::new(),
             storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
             storage_profile_id: Some("events-local".to_string()),
             storage_profile_provider: Some("file".to_string()),
             storage_profile_issuance_mode: Some("local-file-no-secret".to_string()),
@@ -20202,6 +20449,7 @@ mod tests {
             storage_profile_secret_ref_provider: None,
             storage_profile_secret_ref_hash: None,
             warehouse_count: None,
+            warehouse_names: Vec::new(),
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
@@ -20261,9 +20509,13 @@ mod tests {
             view_version: None,
             expected_view_version: None,
             policy_binding_count: 0,
+            policy_ids: Vec::new(),
             project_count: None,
+            project_ids: Vec::new(),
             server_count: None,
+            server_ids: Vec::new(),
             storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
             storage_profile_id: Some("events-local".to_string()),
             storage_profile_provider: Some("file".to_string()),
             storage_profile_issuance_mode: Some("local-file-no-secret".to_string()),
@@ -20275,6 +20527,7 @@ mod tests {
             storage_profile_secret_ref_provider: None,
             storage_profile_secret_ref_hash: None,
             warehouse_count: None,
+            warehouse_names: Vec::new(),
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
             table_commit_hashes: Vec::new(),
