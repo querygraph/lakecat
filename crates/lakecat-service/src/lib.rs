@@ -3388,7 +3388,10 @@ fn commit_error_with_cleanup_failure(
     commit_error: LakeCatError,
     cleanup_error: LakeCatError,
 ) -> LakeCatError {
-    let cleanup_context = format!("metadata cleanup also failed: {cleanup_error}");
+    let cleanup_context = format!(
+        "metadata cleanup also failed; {}",
+        error_detail_hash_context(cleanup_error)
+    );
     match commit_error {
         LakeCatError::InvalidArgument(message) => {
             LakeCatError::InvalidArgument(format!("{message}; {cleanup_context}"))
@@ -11504,7 +11507,9 @@ mod tests {
     fn metadata_cleanup_failure_preserves_commit_conflict() {
         let err = commit_error_with_cleanup_failure(
             LakeCatError::Conflict("metadata pointer changed".to_string()),
-            LakeCatError::Internal("failed to clean up object".to_string()),
+            LakeCatError::Internal(
+                "failed to clean up /tmp/lakecat-secret/events/metadata/00001.json".to_string(),
+            ),
         );
 
         let LakeCatError::Conflict(message) = err else {
@@ -11512,7 +11517,10 @@ mod tests {
         };
         assert!(message.contains("metadata pointer changed"));
         assert!(message.contains("metadata cleanup also failed"));
-        assert!(message.contains("failed to clean up object"));
+        assert!(message.contains("error-detail-hash=sha256:"));
+        assert!(!message.contains("lakecat-secret"));
+        assert!(!message.contains("00001.json"));
+        assert!(!message.contains("failed to clean up"));
     }
 
     #[test]

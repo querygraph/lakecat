@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Hash metadata cleanup conflict details`.
+  Metadata cleanup failures appended to preserved commit conflicts now expose
+  only `error-detail-hash` evidence, so a cleanup path cannot leak raw backend
+  text while preserving the original commit error class.
+- Local verification for this metadata cleanup conflict slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_cleanup_failure_preserves_commit_conflict -- --nocapture`;
+  `cargo test -p lakecat-service metadata_cleanup_error_redacts_metadata_location -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Hash malformed outbox decode diagnostics`.
   Malformed outbox table/principal JSON decode failures now include outbox
   event-hash evidence without echoing raw event IDs, and focused drain

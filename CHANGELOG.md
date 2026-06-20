@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Hardened metadata cleanup conflict reporting so cleanup failures appended to
+  preserved commit conflicts include only `error-detail-hash` evidence.
 - Added hash evidence to malformed outbox table/principal decode diagnostics,
   proving corrupt pending records fail without echoing raw event IDs.
 - Redacted corrupt pending outbox event diagnostics so malformed projection
