@@ -1798,10 +1798,13 @@ profile id, provider, issuance mode, location-prefix hash, secret-reference
 presence/provider/hash, replay hashes, and OpenLineage hashes. The compact
 verifier also requires those replay and OpenLineage arrays to contain full
 `sha256:`-prefixed 64-hex digests. It requires that location-prefix value to be
-a SHA-256 hash and requires a
-redacted secret-reference provider and `secretRefHash` whenever the proof says a
-secret reference is present. If the proof says no secret reference is present,
-the provider and hash must both be null. It also compares
+a full `sha256:`-prefixed 64-hex digest and requires a redacted
+secret-reference provider plus full-digest `secretRefHash` whenever the proof
+says a secret reference is present. If the proof says no secret reference is
+present, the provider and hash must both be null. Source replay enforces the
+same full-digest secret-reference rule before compact proof generation, so the
+saved summary cannot launder short placeholder credential-root hashes through
+the lineage-drain artifact. It also compares
 the captured `replay-evidence.credentials` restricted-agent and trusted-human
 branches with the compact `credentialVendingProof`, so a saved handoff cannot
 claim that agents were blocked onto Sail-planned reads or that humans used an
@@ -2025,7 +2028,11 @@ Dropped accepted-view source replay also binds the namespace receipt-chain read
 back to the accepted view warehouse/namespace and rejects verified-chain count
 or receipt-hash coverage drift before compact handoff proof is generated. The
 lineage-drain summary now carries the nested chain receipts as full receipt
-hash coverage before that check runs. The same replay now emits catalog-facing
+hash coverage before that check runs. Generated replay evidence also preserves
+each accepted view's `acceptedReceiptChainHash` inside the namespace
+`receiptChains[].chainHashes` set, even when the namespace read has its own
+chain hash, so the compact summary can prove the accepted chain is covered by
+the namespace proof it verifies. The same replay now emits catalog-facing
 `Commit` graph events for the listed sequences, leaving traversal and query
 semantics to Grust.
 

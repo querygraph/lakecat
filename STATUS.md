@@ -6,6 +6,29 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full source secret-ref hashes and covered view chains`.
+  QGLake lineage-drain source replay now rejects storage-profile upsert and
+  credential-vending `secretRefHash` evidence unless each present hash is a
+  full `sha256:`-prefixed 64-hex digest before compact handoff proof
+  generation. Generated QGLake view replay evidence now also carries accepted
+  view receipt-chain hashes in namespace `receiptChains[].chainHashes`, so the
+  live handoff summary covers every `acceptedReceiptChainHash` it later
+  verifies.
+- Local verification for this source secret-ref and receipt-chain coverage
+  slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_storage_profile_upsert_replay_rejects_short_location_prefix_hash -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_credential_replay_line_summarizes_verified_evidence -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, and ended with `QGLake handoff verified`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require full handoff artifact hashes`.
   QGLake handoff artifact verification now rejects bundle, lineage-drain,
   QueryGraph import-plan, captured-output, service-log, and optional

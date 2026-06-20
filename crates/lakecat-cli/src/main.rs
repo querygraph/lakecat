@@ -3940,12 +3940,40 @@ fn qglake_view_replay_evidence_json(
         .iter()
         .filter(|event| event.event_type == "view.version-receipt-chains-listed")
         .map(|event| {
+            let mut chain_hashes = event
+                .view_version_receipt_chain_hashes
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            for view_stable_id in &verification.verified_views {
+                let Some(accepted_chain_hash) = verification
+                    .verified_view_receipt_chain_hashes
+                    .get(view_stable_id)
+                else {
+                    continue;
+                };
+                let Some(view_replay) = drain.events.iter().find(|candidate| {
+                    matches!(
+                        candidate.event_type.as_str(),
+                        "view.upserted" | "view.loaded" | "view.dropped"
+                    ) && candidate.view_stable_id.as_deref() == Some(view_stable_id.as_str())
+                }) else {
+                    continue;
+                };
+                if view_replay.view_warehouse == event.view_warehouse
+                    && view_replay.view_namespace == event.view_namespace
+                {
+                    chain_hashes.insert(accepted_chain_hash.clone());
+                }
+            }
+            let chain_hashes = chain_hashes.into_iter().collect::<Vec<_>>();
+            let verified_chain_count = chain_hashes.len();
             json!({
                 "warehouse": event.view_warehouse.as_deref(),
                 "namespace": &event.view_namespace,
                 "receiptHashes": &event.view_version_receipt_hashes,
-                "chainHashes": &event.view_version_receipt_chain_hashes,
-                "verifiedChainCount": event.view_version_receipt_chain_verified_count,
+                "chainHashes": chain_hashes,
+                "verifiedChainCount": verified_chain_count,
                 "replayEventHashes": &event.replay_event_hashes,
                 "openLineageHashes": &event.replay_open_lineage_hashes,
             })
@@ -6985,10 +7013,10 @@ fn verify_qglake_credential_storage_profile_projection(
         && event
             .storage_profile_secret_ref_hash
             .as_deref()
-            .map_or(true, |hash| !is_sha256_hash(hash))
+            .map_or(true, |hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "qglake lineage drain {label} credential replay is missing secret-ref hash evidence"
+            "qglake lineage drain {label} credential replay is missing full SHA-256 secret-ref hash evidence"
         )));
     }
     Ok(())
@@ -7269,10 +7297,10 @@ fn verify_qglake_storage_profile_upsert_replay(
         && event
             .storage_profile_secret_ref_hash
             .as_deref()
-            .map_or(true, |hash| !is_sha256_hash(hash))
+            .map_or(true, |hash| !is_full_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain storage profile upsert replay is missing secret-ref hash evidence"
+            "qglake lineage drain storage profile upsert replay is missing full SHA-256 secret-ref hash evidence"
                 .to_string(),
         ));
     }
@@ -13284,6 +13312,10 @@ mod tests {
         bootstrap_with_view.view_artifact_count = 1;
         bootstrap_with_view.view_version_receipt_hashes =
             vec!["sha256:view-version-receipt".to_string()];
+        let mut namespace_receipt_chain = qglake_view_receipt_chain_lineage_summary();
+        namespace_receipt_chain.view_version_receipt_chain_hashes =
+            vec!["sha256:namespace-receipt-chain".to_string()];
+        namespace_receipt_chain.view_version_receipt_chain_verified_count = 1;
         let view_drain = LineageDrainResponse {
             delivered: 15,
             event_types: vec![
@@ -13319,7 +13351,7 @@ mod tests {
                 qglake_view_lineage_summary(),
                 qglake_view_drop_lineage_summary(),
                 qglake_view_tombstone_receipt_lineage_summary(),
-                qglake_view_receipt_chain_lineage_summary(),
+                namespace_receipt_chain,
                 qglake_policy_list_lineage_summary(),
                 qglake_storage_profile_list_lineage_summary(),
                 qglake_storage_profile_upsert_lineage_summary(),
@@ -13363,11 +13395,14 @@ mod tests {
         );
         assert_eq!(
             view_replay_json["views"]["receiptChains"][0]["chainHashes"],
-            json!(["sha256:view-receipt-chain"])
+            json!([
+                "sha256:namespace-receipt-chain",
+                "sha256:view-receipt-chain"
+            ])
         );
         assert_eq!(
             view_replay_json["views"]["receiptChains"][0]["verifiedChainCount"],
-            json!(1)
+            json!(2)
         );
     }
 
@@ -17076,7 +17111,7 @@ mod tests {
         restricted_missing_secret_ref_provider.storage_profile_secret_ref_present = Some(true);
         restricted_missing_secret_ref_provider.storage_profile_secret_ref_provider = None;
         restricted_missing_secret_ref_provider.storage_profile_secret_ref_hash =
-            Some("sha256:credential-secret-ref".to_string());
+            Some(qglake_fixture_hash("credential-secret-ref"));
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 4,
@@ -17151,7 +17186,47 @@ mod tests {
             "QGLake lineage drain should reject credential secret-ref presence without hash",
         );
         assert!(err.to_string().contains(
-            "qglake lineage drain restricted credential replay is missing secret-ref hash evidence"
+            "qglake lineage drain restricted credential replay is missing full SHA-256 secret-ref hash evidence"
+        ));
+
+        let mut restricted_short_secret_ref_hash = qglake_restricted_credential_summary();
+        restricted_short_secret_ref_hash.storage_profile_secret_ref_present = Some(true);
+        restricted_short_secret_ref_hash.storage_profile_secret_ref_provider =
+            Some("vault".to_string());
+        restricted_short_secret_ref_hash.storage_profile_secret_ref_hash =
+            Some("sha256:credential-secret-ref".to_string());
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 4,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 4,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    restricted_short_secret_ref_hash,
+                    qglake_human_credential_summary(),
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject short credential secret-ref hashes");
+        assert!(err.to_string().contains(
+            "qglake lineage drain restricted credential replay is missing full SHA-256 secret-ref hash evidence"
         ));
 
         let mut restricted_hash_without_secret_ref = qglake_restricted_credential_summary();
@@ -17684,6 +17759,56 @@ mod tests {
             "{err}"
         );
 
+        let mut short_secret_ref_storage_profile_upsert =
+            qglake_storage_profile_upsert_lineage_summary();
+        short_secret_ref_storage_profile_upsert.storage_profile_secret_ref_present = Some(true);
+        short_secret_ref_storage_profile_upsert.storage_profile_secret_ref_provider =
+            Some("vault".to_string());
+        short_secret_ref_storage_profile_upsert.storage_profile_secret_ref_hash =
+            Some("sha256:storage-secret-ref".to_string());
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 7,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "storage-profile.upserted".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 7,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    short_secret_ref_storage_profile_upsert,
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject short storage-profile secret-ref hashes");
+        assert!(err.to_string().contains(
+            "qglake lineage drain storage profile upsert replay is missing full SHA-256 secret-ref hash evidence"
+        ));
+
         let mut contradictory_storage_profile_upsert =
             qglake_storage_profile_upsert_lineage_summary();
         contradictory_storage_profile_upsert.storage_profile_secret_ref_provider =
@@ -17787,7 +17912,7 @@ mod tests {
         upsert_secret_ref_drift.storage_profile_secret_ref_present = Some(true);
         upsert_secret_ref_drift.storage_profile_secret_ref_provider = Some("vault".to_string());
         upsert_secret_ref_drift.storage_profile_secret_ref_hash =
-            Some("sha256:storage-secret-ref".to_string());
+            Some(qglake_fixture_hash("storage-secret-ref"));
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 7,
