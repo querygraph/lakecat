@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required compact QGLake credential-vending proof replay/OpenLineage hash
+  arrays to contain full `sha256:`-prefixed 64-hex digests for both restricted
+  agent and trusted-human branches, rejecting short placeholder receipt hashes.
 - Required compact QGLake storage-profile upsert replay/OpenLineage hash
   arrays to contain full `sha256:`-prefixed 64-hex digests, rejecting short
   placeholder credential-root replay anchors in saved handoff summaries.

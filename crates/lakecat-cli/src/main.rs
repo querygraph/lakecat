@@ -3080,12 +3080,12 @@ fn require_credential_vending_evidence(
             ));
         }
     }
-    require_hash_array(
+    require_full_hash_array(
         restricted,
         "replayEventHashes",
         "credentialVendingProof.restricted",
     )?;
-    require_hash_array(
+    require_full_hash_array(
         restricted,
         "openLineageHashes",
         "credentialVendingProof.restricted",
@@ -3148,12 +3148,12 @@ fn require_credential_vending_evidence(
                 .to_string(),
         ));
     }
-    require_hash_array(
+    require_full_hash_array(
         trusted,
         "replayEventHashes",
         "credentialVendingProof.trustedHuman",
     )?;
-    require_hash_array(
+    require_full_hash_array(
         trusted,
         "openLineageHashes",
         "credentialVendingProof.trustedHuman",
@@ -8748,8 +8748,8 @@ mod tests {
                             "secretRefHash": null,
                             "graphEvents": 2
                         },
-                        "replayEventHashes": ["sha256:restricted-replay"],
-                        "openLineageHashes": ["sha256:restricted-openlineage"]
+                        "replayEventHashes": [qglake_fixture_hash("restricted-replay")],
+                        "openLineageHashes": [qglake_fixture_hash("restricted-openlineage")]
                     },
                     "trustedHuman": {
                         "principalSubject": "human:qglake-operator",
@@ -8769,8 +8769,8 @@ mod tests {
                             "secretRefHash": null,
                             "graphEvents": 2
                         },
-                        "replayEventHashes": ["sha256:human-replay"],
-                        "openLineageHashes": ["sha256:human-openlineage"]
+                        "replayEventHashes": [qglake_fixture_hash("human-replay")],
+                        "openLineageHashes": [qglake_fixture_hash("human-openlineage")]
                     }
                 },
                 "replayEvidence": {}
@@ -8977,8 +8977,8 @@ mod tests {
                             "secretRefHash": null,
                             "graphEvents": 2
                         },
-                        "replayEventHashes": ["sha256:restricted-replay"],
-                        "openLineageHashes": ["sha256:restricted-openlineage"]
+                        "replayEventHashes": [qglake_fixture_hash("restricted-replay")],
+                        "openLineageHashes": [qglake_fixture_hash("restricted-openlineage")]
                     },
                     "trustedHuman": {
                         "principalSubject": "human:qglake-operator",
@@ -8998,8 +8998,8 @@ mod tests {
                             "secretRefHash": null,
                             "graphEvents": 2
                         },
-                        "replayEventHashes": ["sha256:human-replay"],
-                        "openLineageHashes": ["sha256:human-openlineage"]
+                        "replayEventHashes": [qglake_fixture_hash("human-replay")],
+                        "openLineageHashes": [qglake_fixture_hash("human-openlineage")]
                     }
                 }
             }
@@ -10630,6 +10630,21 @@ mod tests {
 
         assert!(err.to_string().contains("credentialVendingProof"));
         assert!(err.to_string().contains("replayEventHashes"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_short_credential_replay_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["replayEventHashes"] =
+            json!(["sha256:restricted-replay"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short credential replay hashes");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("replayEventHashes"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]

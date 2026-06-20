@@ -1798,6 +1798,9 @@ the captured `replay-evidence.credentials` restricted-agent and trusted-human
 branches with the compact `credentialVendingProof`, so a saved handoff cannot
 claim that agents were blocked onto Sail-planned reads or that humans used an
 audited exception unless the captured LakeCat replay proves the same decision.
+Both credential branches must carry replay and OpenLineage arrays whose entries
+are full `sha256:`-prefixed 64-hex digests, so the compact proof cannot replace
+credential receipt evidence with prefix-shaped placeholders.
 Each credential branch carries the same redacted storage-scope anchor as the
 storage-profile upsert proof: `locationPrefixHash` binds the credential-vend
 attempt to the configured storage root without replaying the raw prefix. That

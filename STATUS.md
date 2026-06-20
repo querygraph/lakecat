@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full compact credential hashes`.
+  Compact QGLake handoff verification now rejects
+  `credentialVendingProof` restricted-agent and trusted-human replay and
+  OpenLineage arrays unless every entry is a full `sha256:`-prefixed 64-hex
+  digest, closing the short placeholder hash path for credential-vending
+  receipt anchors in saved handoff summaries.
+- Local verification for this compact credential hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_short_credential_replay_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require full compact storage-profile hashes`.
   Compact QGLake handoff verification now rejects
   `storageProfileUpsertProof` replay and OpenLineage arrays unless every entry
