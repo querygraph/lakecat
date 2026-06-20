@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject partial outbox drain acknowledgements`.
+  `drain_outbox_once` now treats graph/lineage projection followed by a short
+  store acknowledgement as a conflict instead of returning a successful drain
+  with a smaller delivered count. This keeps the lineage/graph outbox recovery
+  contract visibly all-or-retry under concurrent or anomalous acknowledgement.
+- Local verification for this outbox acknowledgement slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_partial_acknowledgement -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_does_not_acknowledge -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Compose ODRL TTL caps within policies`.
   `lakecat-security` now folds every supported ODRL credential-TTL source in a
   policy document to the tightest `max-credential-ttl-seconds` cap before

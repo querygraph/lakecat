@@ -448,6 +448,14 @@ atomic pointer, management state, idempotency evidence, and event record. This
 mirrors the Iceberg catalog contract: metadata files describe the table;
 catalog state decides which metadata file is current.
 
+Outbox draining is intentionally strict. LakeCat projects a batch to graph and
+lineage sinks first, then acknowledges the whole projected batch in the store.
+If projection fails, nothing is acknowledged. If the store reports that fewer
+events were acknowledged than LakeCat projected, the drain fails with an
+acknowledgement mismatch instead of returning a quiet partial success. That
+keeps retry and operator evidence honest when a concurrent drain or backend
+anomaly interferes with delivery accounting.
+
 ## Grust For Graph Concepts
 
 Catalog events naturally form a graph. A server contains projects. A project

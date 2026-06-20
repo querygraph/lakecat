@@ -1005,7 +1005,13 @@ pub async fn drain_outbox_once(
     }
     // Acknowledgement is all-or-retry: if any projection fails above, no pending
     // event is marked delivered and the outbox remains the recovery source.
+    let projected = delivered.len();
     let delivered = state.store.mark_outbox_delivered(&delivered).await?;
+    if delivered != projected {
+        return Err(LakeCatError::Conflict(format!(
+            "outbox drain acknowledgement mismatch: projected {projected} event(s) but marked {delivered} delivered"
+        )));
+    }
     Ok(LineageDrainResponse {
         delivered,
         event_types,
@@ -6327,6 +6333,12 @@ mod tests {
             event_ids: &[String],
         ) -> lakecat_core::LakeCatResult<usize> {
             self.delivered.lock().await.extend_from_slice(event_ids);
+            if event_ids
+                .iter()
+                .any(|event_id| event_id == "evt-partial-ack")
+            {
+                return Ok(event_ids.len().saturating_sub(1));
+            }
             Ok(event_ids.len())
         }
     }
@@ -7836,6 +7848,75 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "lineage projection must not run after graph projection failure"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_partial_acknowledgement() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-partial-ack".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.created".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-partial-ack",
+                    "event-type": "table.created",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-create",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("partial acknowledgement must fail the drain");
+
+        let message = err.to_string();
+        assert!(message.contains("outbox drain acknowledgement mismatch"));
+        assert!(message.contains("projected 1 event(s)"));
+        assert!(message.contains("marked 0 delivered"));
+        assert_eq!(
+            store.delivered.lock().await.as_slice(),
+            &["evt-partial-ack".to_string()]
+        );
+        assert!(
+            !graph.events.lock().await.is_empty(),
+            "graph projection should have happened before the short acknowledgement"
+        );
+        assert!(
+            !lineage.events.lock().await.is_empty(),
+            "lineage projection should have happened before the short acknowledgement"
         );
     }
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made outbox draining reject partial acknowledgement mismatches after
+  successful graph/lineage projection, so a drain cannot silently report success
+  when fewer events were marked delivered than the projected batch.
 - Composed all ODRL `max-credential-ttl-seconds` sources within each policy
   document to the tightest cap, including direct read-restriction fields and
   constraint forms, before composing caps across active bindings.
