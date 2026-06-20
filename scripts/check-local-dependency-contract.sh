@@ -27,6 +27,7 @@ require_pattern() {
 require_manual_only_workflows() {
   local workflow
   local workflow_files=()
+  local automatic_events="push|pull_request|pull_request_target|merge_group|repository_dispatch|schedule|workflow_run|workflow_call"
 
   while IFS= read -r -d '' workflow; do
     workflow_files+=("$workflow")
@@ -35,11 +36,17 @@ require_manual_only_workflows() {
   [[ "${#workflow_files[@]}" -gt 0 ]] || fail "missing GitHub workflow files"
 
   for workflow in "${workflow_files[@]}"; do
-    if rg -q '^[[:space:]]*(push|pull_request|pull_request_target|merge_group|repository_dispatch):' "$workflow"; then
-      fail "$workflow must not run on push, pull_request, pull_request_target, merge_group, or repository_dispatch until the local gates are proven stable"
+    if rg -q "^[[:space:]]*(${automatic_events}):" "$workflow"; then
+      fail "$workflow must not run on automatic GitHub events until the local gates are proven stable"
     fi
-    if rg -q '^[[:space:]]*(schedule|workflow_run|workflow_call):' "$workflow"; then
-      fail "$workflow must not run on schedule, workflow_run, or workflow_call until the local gates are proven stable"
+    if rg -q "^[[:space:]]*on:[[:space:]]*(${automatic_events})([[:space:]#]|$)" "$workflow"; then
+      fail "$workflow must not use compact automatic GitHub event syntax until the local gates are proven stable"
+    fi
+    if rg -q "^[[:space:]]*on:[[:space:]]*\\[[^]]*\\b(${automatic_events})\\b" "$workflow"; then
+      fail "$workflow must not use inline automatic GitHub event lists until the local gates are proven stable"
+    fi
+    if rg -q "^[[:space:]]*on:[[:space:]]*\\{[^}]*\\b(${automatic_events})\\b[[:space:]]*:" "$workflow"; then
+      fail "$workflow must not use inline automatic GitHub event maps until the local gates are proven stable"
     fi
   done
 }

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened the local dependency-contract workflow audit so manual-only CI checks
+  reject compact GitHub trigger forms such as `on: push`,
+  `on: [push, pull_request]`, and inline event maps, not only mapping-style
+  trigger blocks.
 - Rejected decorated credential resolver secret refs at the resolver boundary
   itself, so query strings, fragments, and URI userinfo fail with only
   `secret-ref-hash` evidence even for legacy/imported profiles that bypass

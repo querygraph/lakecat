@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject compact automatic workflow triggers`.
+  The local dependency-contract audit now rejects compact GitHub Actions
+  trigger forms such as `on: push`, inline event lists, and inline event maps,
+  preserving the manual-only cloud CI policy even if a future workflow avoids
+  mapping-style trigger blocks.
+- Local verification for this workflow-contract slice is green:
+  `bash -n scripts/check-local-dependency-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  compact-trigger smoke checks against temporary workflow files;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject decorated resolver secret refs`.
   Credential resolver provider detection, Vault path construction, and
   TypeSec environment secret resolution now fail closed on secret refs with
