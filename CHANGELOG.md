@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required compact QGLake TypeDID envelope/proof hash slots to contain full
+  `sha256:`-prefixed 64-hex digests when present, rejecting short placeholder
+  TypeDID proof anchors in saved handoff summaries.
 - Required compact QGLake request-identity and bootstrap authorization,
   delegation, and summary-signature proof hashes to contain full
   `sha256:`-prefixed 64-hex digests, rejecting short placeholder proof anchors.

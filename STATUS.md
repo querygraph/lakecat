@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full compact TypeDID hashes`.
+  Compact QGLake handoff verification now rejects request-identity and
+  QueryGraph bootstrap TypeDID envelope/proof hash slots unless every present
+  hash is a full `sha256:`-prefixed 64-hex digest, closing short placeholder
+  TypeDID proof anchors in saved handoff summaries while keeping TypeSec
+  responsible for TypeDID trust semantics.
+- Local verification for this compact TypeDID hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_short_typedid_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require full compact authorization hashes`.
   Compact QGLake handoff verification now rejects request-identity
   authorization, bootstrap authorization, agent delegation, and agent summary

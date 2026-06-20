@@ -1700,13 +1700,14 @@ bootstrap proof, so a saved handoff cannot replace those proof anchors with
 short readable placeholders.
 The compact verifier
 also validates the TypeDID hash-slot shape directly: envelope and proof slots
-must be null or SHA-256 hashes, and a TypeDID proof hash cannot appear without
-the paired envelope hash. As with authorization receipts, the request and
-bootstrap TypeDID hash slots are independently shaped replay evidence because
-they may come from different requests in the captured workflow. That keeps the
-compact handoff self-describing without moving TypeDID trust semantics out of
-TypeSec. Live request parsing now enforces the same boundary earlier: a caller
-that sends `x-lakecat-typedid-proof` without `x-lakecat-typedid-envelope`
+must be null or full `sha256:`-prefixed 64-hex digests, and a TypeDID proof
+hash cannot appear without the paired envelope hash. As with authorization
+receipts, the request and bootstrap TypeDID hash slots are independently shaped
+replay evidence because they may come from different requests in the captured
+workflow. That keeps the compact handoff self-describing without moving TypeDID
+trust semantics out of TypeSec. Live request parsing now enforces the same
+boundary earlier: a caller that sends `x-lakecat-typedid-proof` without
+`x-lakecat-typedid-envelope`
 receives a hash-only `typedid-proof-hash` rejection, and a caller that sends
 agent delegation or agent summary proof headers without an agent-shaped
 identity receives only the matching proof hash. Those failures happen before
@@ -1851,8 +1852,9 @@ QueryGraph responsible for graph validation and import semantics.
 The handoff script refuses to write the summary unless LakeCat replay JSON
 contains request-identity evidence for the expected agent principal, an
 explicit identity source/state, an authorization receipt hash, and explicit
-TypeDID envelope/proof hash slots that are either null or SHA-256 hashes. A
-proof hash is valid only when the matching envelope hash is present. It also
+TypeDID envelope/proof hash slots that are either null or full
+`sha256:`-prefixed 64-hex digests. A proof hash is valid only when the matching
+envelope hash is present. It also
 refuses to write the summary unless LakeCat replay JSON
 contains redacted `storageProfileUpsert` evidence with replay and OpenLineage
 hashes, and the accepted summary repeats that evidence as
@@ -1958,9 +1960,10 @@ drain that does not replay matching `server.listed`, `project.listed`,
 evidence. Request-identity and bootstrap replay are checked before any compact
 handoff proof is built: the drain authorization, bootstrap authorization,
 QueryGraph bundle/import hashes, agent delegation hash, agent summary signature
-hash, and TypeDID envelope/proof hashes must be SHA-256-shaped, and a TypeDID
-proof hash cannot appear without its paired envelope hash. For scan replay, the
-typed drain summary carries scan-plan task counts, scan-plan graph event
+hash, and TypeDID envelope/proof hashes must be full `sha256:`-prefixed 64-hex
+digests, and a TypeDID proof hash cannot appear without its paired envelope
+hash. For scan replay, the typed drain summary carries scan-plan task counts,
+scan-plan graph event
 evidence, fetched file-scan, delete-file, and child-plan task counts, along with
 planned and fetched OpenLineage receipt hashes. Source replay validation now
 also requires planned/fetched replay and OpenLineage receipt arrays to be full
