@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted warehouse storage roots before graph and lineage replay, replacing
+  raw `storage-root` values with `storage-root-hash` evidence while leaving the
+  authorized management response shape unchanged.
 - Extended the manual-only workflow audit to reject YAML block-list event
   triggers such as `on:\n  - push`, closing another compact GitHub Actions
   syntax path around the local-first CI policy.

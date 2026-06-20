@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact warehouse replay storage roots`.
+  Warehouse upsert replay now strips raw `storage-root` values before graph and
+  lineage projection and replaces them with `storage-root-hash` evidence,
+  keeping tenant roots replayable without exposing local paths or bucket roots
+  downstream.
+- Local verification for this warehouse replay redaction slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_projects_warehouse_upserts_to_graph -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject block-list workflow triggers`.
   The local dependency-contract audit now also rejects YAML block-list trigger
   syntax under top-level `on:`, such as `on:\n  - push`, so manual-only cloud

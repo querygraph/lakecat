@@ -4346,6 +4346,7 @@ async fn project_outbox_event(
         receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "warehouse.upserted" {
         let warehouse = outbox_warehouse(event, &state.warehouse)?;
+        let event_payload = redact_warehouse_event_payload(event_payload);
         state
             .graph
             .emit(
@@ -5156,6 +5157,28 @@ fn redact_storage_profile_event_payload(mut payload: Value) -> Value {
     profile.insert("secret-ref-present".to_string(), json!(secret_ref_present));
     if let Some(provider) = provider {
         profile.insert("secret-ref-provider".to_string(), json!(provider));
+    }
+    payload
+}
+
+fn redact_warehouse_event_payload(mut payload: Value) -> Value {
+    let Some(warehouse) = payload
+        .get_mut("warehouse-record")
+        .and_then(Value::as_object_mut)
+    else {
+        return payload;
+    };
+    if let Some(storage_root) = warehouse
+        .remove("storage-root")
+        .and_then(|value| value.as_str().map(str::to_string))
+    {
+        warehouse.insert(
+            "storage-root-hash".to_string(),
+            json!(
+                content_hash_json(&json!({"storage-root": storage_root}))
+                    .unwrap_or_else(|_| content_hash_bytes(storage_root.as_bytes()))
+            ),
+        );
     }
     payload
 }
@@ -9845,16 +9868,40 @@ mod tests {
             graph_events[1].properties["warehouse-record"]["project-id"],
             serde_json::json!("default")
         );
+        assert!(
+            graph_events[1].properties["warehouse-record"]
+                .get("storage-root")
+                .is_none(),
+            "warehouse graph projection must not expose raw storage roots"
+        );
+        assert_eq!(
+            graph_events[1].properties["warehouse-record"]["storage-root-hash"],
+            serde_json::json!(
+                content_hash_json(&json!({"storage-root": "file:///tmp/lakecat"})).unwrap()
+            )
+        );
+        let graph_payload = serde_json::to_string(&graph_events[1].properties).unwrap();
+        assert!(!graph_payload.contains("file:///tmp/lakecat"));
         let lineage_events = lineage.events.lock().await;
         assert_eq!(lineage_events.len(), 1);
         assert_eq!(
             lineage_events[0].event_type,
             LineageEventType::WarehouseUpserted
         );
-        assert_eq!(
-            lineage_events[0].payload["warehouse-record"]["storage-root"],
-            serde_json::json!("file:///tmp/lakecat")
+        assert!(
+            lineage_events[0].payload["warehouse-record"]
+                .get("storage-root")
+                .is_none(),
+            "warehouse lineage projection must not expose raw storage roots"
         );
+        assert_eq!(
+            lineage_events[0].payload["warehouse-record"]["storage-root-hash"],
+            serde_json::json!(
+                content_hash_json(&json!({"storage-root": "file:///tmp/lakecat"})).unwrap()
+            )
+        );
+        let lineage_payload = serde_json::to_string(&lineage_events[0].payload).unwrap();
+        assert!(!lineage_payload.contains("file:///tmp/lakecat"));
     }
 
     #[tokio::test]

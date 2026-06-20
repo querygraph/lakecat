@@ -929,6 +929,10 @@ outbox events. When the outbox drains, server, project, warehouse, and
 storage-profile changes become catalog graph events; the same management
 changes also become OpenLineage receipts. QueryGraph can later learn the
 management shape without requiring every Iceberg client to understand it.
+Warehouse replay does not forward the raw storage root to graph or lineage
+consumers. The drained payload replaces `storage-root` with
+`storage-root-hash`, so QueryGraph can bind tenant evidence to a configured
+root without receiving the local filesystem path or bucket URI.
 
 ### Storage Profiles And Credential Roots
 
@@ -1092,7 +1096,9 @@ manager, or TypeSec environment path. It also replaces the raw storage
 `location-prefix` with `location-prefix-hash` before graph and lineage
 projection, so replayed evidence can bind a credential root to a storage scope
 without exposing the bucket, path, or local filesystem root to downstream
-consumers.
+consumers. Warehouse replay follows the same shape: `storage-root` becomes
+`storage-root-hash` before graph and lineage projection, keeping the tenant
+root replayable without exposing the raw root itself.
 The drain summary lifts the same proof into compact fields alongside the
 profile id and provider. QGLake replay verification requires that compact
 storage-profile upsert evidence, which means a saved handoff can prove the
