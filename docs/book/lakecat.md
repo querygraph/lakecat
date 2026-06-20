@@ -341,10 +341,10 @@ error shape: the operator sees that the plan did not name a child metadata
 object without receiving the raw table or storage root. Dot-segment failures
 use the same style: literal `..` and percent-encoded `%2e%2e` paths fail before
 object-store writes and expose only the metadata-location hash. Decorated
-metadata object locations with URI query strings or fragments are rejected at
-the same pre-write boundary, so a commit plan cannot smuggle version selectors,
-backend hints, or fragment markers into what should be a plain metadata object
-address.
+metadata object locations with URI query strings, fragments, or URI userinfo
+are rejected at the same pre-write boundary, so a commit plan cannot smuggle
+version selectors, backend hints, fragment markers, or embedded credentials
+into what should be a plain metadata object address.
 
 Idempotency is part of correctness. Reusing the same key for the same commit can
 return the stored response even after the table has advanced beyond the

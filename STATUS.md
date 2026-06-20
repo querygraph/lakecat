@@ -6,15 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
-  `Reject decorated metadata object locations`.
+  `Reject userinfo metadata object locations`.
   Metadata-object commit validation now rejects planned new metadata locations
-  containing URI query strings or fragments before object-store writes. The
-  error reports `metadata-location-hash=sha256:...` without echoing the raw
-  decorated object location.
+  containing URI query strings, fragments, or URI userinfo before object-store
+  writes. The error reports `metadata-location-hash=sha256:...` without
+  echoing the raw decorated object location or embedded userinfo.
 - Local verification for this metadata location decoration slice is green:
   `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_write_plan_rejects_userinfo_locations -- --nocapture`;
   `cargo test -p lakecat-service metadata_write_plan_rejects_query_or_fragment_locations -- --nocapture`;
-  `cargo test -p lakecat-service metadata_write_plan_rejects_dot_segment_locations -- --nocapture`.
+  `git diff --check`.
 - Latest completed implementation slice:
   `Pin blocked credential response evidence`.
   The blocked-agent credential-vend route now proves governed
