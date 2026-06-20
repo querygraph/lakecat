@@ -1102,7 +1102,11 @@ pub async fn drain_outbox_once(
 
 fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatError> {
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
-    validate_read_restriction_policy_hashes(event, payload.get("read-restriction"))
+    validate_read_restriction_policy_hashes(event, payload.get("read-restriction"))?;
+    if event.event_type == "table.commit" {
+        validate_table_commit_hash_evidence(event)?;
+    }
+    Ok(())
 }
 
 fn validate_read_restriction_policy_hashes(
@@ -1131,6 +1135,41 @@ fn validate_read_restriction_policy_hashes(
         }
     }
     Ok(())
+}
+
+fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCatError> {
+    let Some(commit) = event.payload.get("commit") else {
+        return Ok(());
+    };
+    for field in [
+        "request_hash",
+        "response_hash",
+        "idempotency_key_sha256",
+        "policy_hash",
+    ] {
+        validate_optional_full_hash_field(event, commit, field)?;
+    }
+    Ok(())
+}
+
+fn validate_optional_full_hash_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+) -> Result<(), LakeCatError> {
+    let Some(value) = object.get(field) else {
+        return Ok(());
+    };
+    if value.is_null() {
+        return Ok(());
+    }
+    if value.as_str().is_some_and(is_full_sha256_digest_evidence) {
+        return Ok(());
+    }
+    Err(outbox_evidence_error(
+        event,
+        &format!("{field} must contain full SHA-256 digest evidence"),
+    ))
 }
 
 fn outbox_evidence_error(event: &OutboxEvent, message: &str) -> LakeCatError {
@@ -7612,6 +7651,9 @@ mod tests {
         let full_policy_hash =
             content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
                 .unwrap();
+        let commit_request_hash = content_hash_json(&json!({"request": "commit"})).unwrap();
+        let commit_response_hash = content_hash_json(&json!({"response": "commit"})).unwrap();
+        let commit_idempotency_hash = content_hash_bytes("commit:events:0001".as_bytes());
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![
                 OutboxEvent {
@@ -7770,10 +7812,10 @@ mod tests {
                             "principal": principal,
                             "format_version": 3,
                             "snapshot_id": 42,
-                            "policy_hash": "sha256:policy",
-                            "request_hash": "sha256:request",
-                            "response_hash": "sha256:response",
-                            "idempotency_key_sha256": "sha256:idempotency",
+                            "policy_hash": full_policy_hash,
+                            "request_hash": commit_request_hash,
+                            "response_hash": commit_response_hash,
+                            "idempotency_key_sha256": commit_idempotency_hash,
                             "committed_at": chrono::Utc::now(),
                         },
                         "authorization-receipt": {
@@ -8200,11 +8242,11 @@ mod tests {
         );
         assert_eq!(
             graph_events[14].properties["commit"]["idempotency_key_sha256"],
-            serde_json::json!("sha256:idempotency")
+            serde_json::json!(commit_idempotency_hash)
         );
         assert_eq!(
             graph_events[14].properties["commit"]["response_hash"],
-            serde_json::json!("sha256:response")
+            serde_json::json!(commit_response_hash)
         );
         assert_eq!(
             graph_events[14].properties["commit"]["format_version"],
@@ -8216,7 +8258,7 @@ mod tests {
         );
         assert_eq!(
             graph_events[14].properties["commit"]["policy_hash"],
-            serde_json::json!("sha256:policy")
+            serde_json::json!(full_policy_hash)
         );
         assert!(
             graph_events
@@ -8308,7 +8350,7 @@ mod tests {
         );
         assert_eq!(
             lineage_events[4].payload["commit"]["response_hash"],
-            serde_json::json!("sha256:response")
+            serde_json::json!(commit_response_hash)
         );
         assert_eq!(
             lineage_events[4].payload["commit"]["format_version"],
@@ -8320,7 +8362,7 @@ mod tests {
         );
         assert_eq!(
             lineage_events[4].payload["commit"]["policy_hash"],
-            serde_json::json!("sha256:policy")
+            serde_json::json!(full_policy_hash)
         );
         assert_eq!(
             lineage_events[5].event_type,
@@ -8648,6 +8690,78 @@ mod tests {
         let message = err.to_string();
         assert!(message.contains("table.scan-tasks-fetched"));
         assert!(message.contains("read restriction policy-hashes"));
+        assert!(message.contains("full SHA-256"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_short_table_commit_hash_evidence() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-short-commit-hash".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commit".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-short-commit-hash",
+                    "event-type": "table.commit",
+                    "table": table,
+                    "commit": {
+                        "table": table,
+                        "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+                        "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+                        "sequence_number": 7,
+                        "principal": principal,
+                        "format_version": 3,
+                        "snapshot_id": 42,
+                        "policy_hash": null,
+                        "request_hash": "sha256:request",
+                        "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+                        "idempotency_key_sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+                        "committed_at": chrono::Utc::now(),
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-commit",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("short table commit hash evidence should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commit"));
+        assert!(message.contains("request_hash"));
         assert!(message.contains("full SHA-256"));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(store.delivered.lock().await.is_empty());

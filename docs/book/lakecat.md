@@ -415,7 +415,11 @@ The same commit record includes compact summary evidence: Iceberg format
 version, current snapshot id, and the policy hash from the authorization
 receipt when one exists. QueryGraph can inspect those fields from the
 pointer-log/outbox stream without parsing full table metadata for every
-catalog audit question.
+catalog audit question. Before a `table.commit` outbox event is projected or
+acknowledged, LakeCat now checks that its request hash, response hash,
+idempotency-key hash, and present policy hash are full `sha256:`-prefixed
+64-hex digests. A prefix-shaped placeholder cannot become delivered commit
+replay evidence.
 
 Operators and QueryGraph can read that pointer-log evidence through a governed
 management endpoint:
@@ -476,7 +480,10 @@ be a full `sha256:`-prefixed 64-hex digest. A readable placeholder such as
 `sha256:policy-name` fails the drain before graph or lineage sinks run and
 before the store can mark the event delivered, keeping malformed source
 evidence available for retry or operator repair instead of promoting it into a
-QGLake handoff.
+QGLake handoff. Table commit events receive the same treatment for compact
+commit receipt evidence: `request_hash`, `response_hash`,
+`idempotency_key_sha256`, and any present `policy_hash` must be full digests
+before the event can be projected or acknowledged.
 
 ## Grust For Graph Concepts
 

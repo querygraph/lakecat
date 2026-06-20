@@ -6,6 +6,24 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject short outbox commit hashes`.
+  Outbox draining now rejects `table.commit` pending events whose
+  `request_hash`, `response_hash`, `idempotency_key_sha256`, or present
+  `policy_hash` evidence is not a full `sha256:`-prefixed 64-hex digest before
+  graph/lineage projection or delivery acknowledgement, keeping malformed REST
+  commit receipt evidence out of delivered replay.
+- Local verification for this outbox commit hash slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_short_table_commit_hash_evidence -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain -- --nocapture`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, and ended with `QGLake handoff verified`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject short outbox policy hashes`.
   Outbox draining now rejects pending events whose
   `read-restriction.policy-hashes` are not full `sha256:`-prefixed 64-hex

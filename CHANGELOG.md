@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for `table.commit` events whose request, response,
+  idempotency-key, or policy hash evidence is not a full `sha256:`-prefixed
+  64-hex digest, so malformed REST commit receipts fail before projection.
 - Rejected outbox delivery for pending events whose `read-restriction`
   `policy-hashes` are not full `sha256:`-prefixed 64-hex digests, so malformed
   governed-read evidence fails before graph/lineage projection acknowledgement.
