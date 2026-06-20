@@ -6437,8 +6437,8 @@ fn verify_qglake_scan_replay(drain: &LineageDrainResponse) -> lakecat_core::Lake
             .request_identity_state
             .as_deref()
             .map_or(true, str::is_empty)
-        || !qglake_has_sha256_hashes(&planned.replay_event_hashes)
-        || !qglake_has_sha256_hashes(&planned.replay_open_lineage_hashes)
+        || !qglake_has_full_sha256_hashes(&planned.replay_event_hashes)
+        || !qglake_has_full_sha256_hashes(&planned.replay_open_lineage_hashes)
         || planned.scan_task_count.unwrap_or_default() == 0
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
@@ -6461,8 +6461,8 @@ fn verify_qglake_scan_replay(drain: &LineageDrainResponse) -> lakecat_core::Lake
             .request_identity_state
             .as_deref()
             .map_or(true, str::is_empty)
-        || !qglake_has_sha256_hashes(&fetched.replay_event_hashes)
-        || !qglake_has_sha256_hashes(&fetched.replay_open_lineage_hashes)
+        || !qglake_has_full_sha256_hashes(&fetched.replay_event_hashes)
+        || !qglake_has_full_sha256_hashes(&fetched.replay_open_lineage_hashes)
         || fetched.file_scan_task_count.unwrap_or_default() == 0
         || fetched.delete_file_count.unwrap_or_default() == 0
         || fetched.child_plan_task_count.unwrap_or_default() == 0
@@ -7325,6 +7325,10 @@ fn verify_qglake_management_list_receipts(
 
 fn qglake_has_sha256_hashes(hashes: &[String]) -> bool {
     !hashes.is_empty() && hashes.iter().all(|hash| is_sha256_hash(hash))
+}
+
+fn qglake_has_full_sha256_hashes(hashes: &[String]) -> bool {
+    !hashes.is_empty() && hashes.iter().all(|hash| is_full_sha256_hash(hash))
 }
 
 fn verify_qglake_typedid_hash_pair(
@@ -18736,6 +18740,25 @@ mod tests {
     }
 
     #[test]
+    fn qglake_lineage_drain_verifier_rejects_short_scan_receipt_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let scan_fetch = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.scan-tasks-fetched")
+            .expect("scan fetch replay fixture");
+        scan_fetch.replay_event_hashes = vec!["sha256:scan-fetch-replay".to_string()];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short scan receipt hashes");
+
+        assert!(err
+            .to_string()
+            .contains("qglake lineage drain scan task fetch replay is missing compact file/delete task or SHA-256 receipt evidence"));
+    }
+
+    #[test]
     fn qglake_lineage_drain_verifier_requires_scan_plan_graph_events() {
         let verification = qglake_handoff_lineage_verification();
         let mut drain = qglake_handoff_lineage_drain();
@@ -19108,6 +19131,10 @@ mod tests {
         })
     }
 
+    fn qglake_fixture_hash(label: &str) -> String {
+        content_hash_bytes(label.as_bytes())
+    }
+
     fn qglake_scan_planned_lineage_summary() -> LineageDrainEventSummary {
         LineageDrainEventSummary {
             event_id: "evt-scan-planned".to_string(),
@@ -19189,8 +19216,8 @@ mod tests {
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
-            replay_event_hashes: vec!["sha256:scan-planned-replay".to_string()],
-            replay_open_lineage_hashes: vec!["sha256:scan-planned-openlineage".to_string()],
+            replay_event_hashes: vec![qglake_fixture_hash("scan-planned-replay")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash("scan-planned-openlineage")],
         }
     }
 
@@ -19269,8 +19296,8 @@ mod tests {
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
-            replay_event_hashes: vec!["sha256:scan-fetch-replay".to_string()],
-            replay_open_lineage_hashes: vec!["sha256:scan-fetch-openlineage".to_string()],
+            replay_event_hashes: vec![qglake_fixture_hash("scan-fetch-replay")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash("scan-fetch-openlineage")],
         }
     }
 

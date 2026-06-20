@@ -6,6 +6,21 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full governed scan replay hashes`.
+  QGLake lineage-drain verification now rejects governed scan replay and
+  OpenLineage receipt arrays unless they contain full `sha256:`-prefixed
+  64-hex digests, closing the short placeholder hash path for scan planning and
+  scan-task fetch evidence.
+- Local verification for this governed scan replay hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_short_scan_receipt_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_scan_replay_line_summarizes_verified_evidence -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Preserve full view receipt replay coverage`.
   Lineage-drain summaries for view receipt-list and namespace receipt-chain
   reads now preserve full receipt hash coverage, including nested receipts from

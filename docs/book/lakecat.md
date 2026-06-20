@@ -1727,9 +1727,9 @@ The verifier rejects a summary if the fetched restriction drifts from the
 planned restriction, so the compact handoff proves the narrowed allowed
 columns, row predicate, and policy hashes alongside the planned/fetched replay
 and OpenLineage hashes that prove the Sail-planned read path. The compact Rust
-verifier requires both the planned and fetched
-OpenLineage hashes directly, so automation can reject incomplete scan lineage
-without falling back to the shell harness. It also compares the captured
+verifier requires both planned and fetched replay/OpenLineage arrays to contain
+full `sha256:`-prefixed 64-hex digests, so automation can reject incomplete or
+placeholder scan lineage without falling back to the shell harness. It also compares the captured
 `replay-evidence.tableCommitHistory` object with
 `tableCommitHistoryProof`, including the commit count, sequence numbers, commit
 hashes, graph event count, replay hashes, and OpenLineage hashes that prove the
@@ -1855,13 +1855,13 @@ credentials, trusted humans receive only the audited standard exception, and
 both branches preserve the `max-credential-ttl-seconds` restriction as
 `maxCredentialTtlSeconds` in compact evidence.
 For reads, the summary similarly refuses to omit proof that scan planning and
-scan-task fetch both replayed with sink receipt hashes. The compact scan proof
-must preserve the server-derived read restriction as a full restriction, not
-only as columns and filters: allowed columns, row predicate, purpose,
-policy-hash evidence, and `max-credential-ttl-seconds` must be present, and
-the planned and fetched restrictions must agree. The fetched required filters
-must also be exactly the mandatory row predicate evidence, not a prefix with
-extra unverified filters appended. For catalog state, it refuses to omit proof
+scan-task fetch both replayed with full digest-shaped sink receipt hashes. The
+compact scan proof must preserve the server-derived read restriction as a full
+restriction, not only as columns and filters: allowed columns, row predicate,
+purpose, policy-hash evidence, and `max-credential-ttl-seconds` must be
+present, and the planned and fetched restrictions must agree. The fetched
+required filters must also be exactly the mandatory row predicate evidence, not
+a prefix with extra unverified filters appended. For catalog state, it refuses to omit proof
 that the table commit-history read replayed with sequence-number and
 commit-hash evidence. For views, it refuses to omit proof that accepted
 view versions line up with their receipt hashes and that the namespace-level
@@ -1943,8 +1943,9 @@ proof hash cannot appear without its paired envelope hash. For scan replay, the
 typed drain summary carries scan-plan task counts, scan-plan graph event
 evidence, fetched file-scan, delete-file, and child-plan task counts, along with
 planned and fetched OpenLineage receipt hashes. Source replay validation now
-also requires planned and fetched read restrictions to match before compact
-proof generation, requires both requested/effective projection and
+also requires planned/fetched replay and OpenLineage receipt arrays to be full
+SHA-256 digests, requires planned and fetched read restrictions to match before
+compact proof generation, requires both requested/effective projection and
 requested/effective stats-field evidence, requires effective projection to be a
 narrowed subset of the requested projection and to match the planned allowed
 columns, and requires effective stats fields to be a narrowed subset of the
