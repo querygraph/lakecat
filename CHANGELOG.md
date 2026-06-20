@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound saved QGLake handoff-verifier artifact hashes back to the compact
+  summary, rejecting self-verifier output whose bundle, lineage-drain,
+  QueryGraph import-plan, captured-output, or service-log hashes drift from the
+  accepted handoff artifact manifest.
 - Bound saved QGLake handoff-verifier output back to compact summary semantics:
   when `lakecatHandoffVerifyOutputHash` is present, the verifier now rejects
   saved self-verifier output whose table/view ids, standards, request identity,

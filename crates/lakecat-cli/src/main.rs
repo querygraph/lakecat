@@ -483,6 +483,7 @@ fn verify_qglake_handoff_artifact_files(
         "querygraphImportPlan": querygraph_import_plan,
         "capturedOutputs": captured_outputs,
         "pathAliases": path_aliases,
+        "serviceLogHash": required_value(artifacts, "serviceLogHash", "handoff summary artifacts")?,
     }))
 }
 
@@ -630,6 +631,73 @@ fn require_qglake_handoff_verify_output_matches_summary(
             "lakecatHandoffVerifyOutput",
         )?;
     }
+    require_qglake_handoff_verify_output_artifact_hashes_match_summary(output, summary)?;
+    Ok(())
+}
+
+fn require_qglake_handoff_verify_output_artifact_hashes_match_summary(
+    output: &serde_json::Map<String, Value>,
+    summary: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let output_artifacts = required_object(output, "artifactFiles", "lakecatHandoffVerifyOutput")?;
+    let summary_artifacts = required_object(summary, "artifacts", "handoff summary")?;
+    for field in ["bundle", "lineageDrain", "querygraphImportPlan"] {
+        let output_artifact = required_object(
+            output_artifacts,
+            field,
+            "lakecatHandoffVerifyOutput.artifactFiles",
+        )?;
+        let summary_artifact =
+            required_object(summary_artifacts, field, "handoff summary artifacts")?;
+        require_value_match(
+            output_artifact,
+            "sha256",
+            required_value(summary_artifact, "sha256", "handoff summary artifacts")?,
+            "lakecatHandoffVerifyOutput.artifactFiles",
+        )?;
+    }
+    let output_captures = required_object(
+        output_artifacts,
+        "capturedOutputs",
+        "lakecatHandoffVerifyOutput.artifactFiles",
+    )?;
+    let summary_captures = required_object(
+        summary_artifacts,
+        "capturedOutputs",
+        "handoff summary artifacts",
+    )?;
+    for field in ["lakecatReplay", "querygraphVerify", "querygraphImport"] {
+        let output_capture = required_object(
+            output_captures,
+            field,
+            "lakecatHandoffVerifyOutput.artifactFiles.capturedOutputs",
+        )?;
+        let summary_capture = required_object(
+            summary_captures,
+            field,
+            "handoff summary artifacts.capturedOutputs",
+        )?;
+        require_value_match(
+            output_capture,
+            "sha256",
+            required_value(
+                summary_capture,
+                "sha256",
+                "handoff summary artifacts.capturedOutputs",
+            )?,
+            "lakecatHandoffVerifyOutput.artifactFiles.capturedOutputs",
+        )?;
+    }
+    require_value_match(
+        output_artifacts,
+        "serviceLogHash",
+        required_value(
+            summary_artifacts,
+            "serviceLogHash",
+            "handoff summary artifacts",
+        )?,
+        "lakecatHandoffVerifyOutput.artifactFiles",
+    )?;
     Ok(())
 }
 
@@ -8401,6 +8469,29 @@ mod tests {
             "standards": summary["querygraphVerification"]["standards"].clone(),
             "requestIdentityProof": summary["lakecatReplayVerification"]["requestIdentityProof"].clone(),
             "queryGraphBootstrapProof": summary["lakecatReplayVerification"]["queryGraphBootstrapProof"].clone(),
+            "artifactFiles": {
+                "bundle": {
+                    "sha256": summary["artifacts"]["bundle"]["sha256"].clone()
+                },
+                "lineageDrain": {
+                    "sha256": summary["artifacts"]["lineageDrain"]["sha256"].clone()
+                },
+                "querygraphImportPlan": {
+                    "sha256": summary["artifacts"]["querygraphImportPlan"]["sha256"].clone()
+                },
+                "capturedOutputs": {
+                    "lakecatReplay": {
+                        "sha256": summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"].clone()
+                    },
+                    "querygraphVerify": {
+                        "sha256": summary["artifacts"]["capturedOutputs"]["querygraphVerify"]["sha256"].clone()
+                    },
+                    "querygraphImport": {
+                        "sha256": summary["artifacts"]["capturedOutputs"]["querygraphImport"]["sha256"].clone()
+                    }
+                },
+                "serviceLogHash": summary["artifacts"]["serviceLogHash"].clone()
+            },
         });
         let bytes = serde_json::to_vec_pretty(&output).expect("handoff verify JSON bytes");
         fs::write(dir.join("lakecat-handoff-verify.json"), &bytes)
@@ -10035,6 +10126,57 @@ mod tests {
             err.to_string()
                 .contains("queryGraphBootstrapProof mismatch")
         );
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_artifact_hash_drift() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-artifact-hash-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["artifactFiles"]["bundle"]["sha256"] = json!("sha256:other-bundle-bytes");
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject handoff verifier artifact hash drift");
+
+        assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
+        assert!(err.to_string().contains("artifactFiles"));
+        assert!(err.to_string().contains("sha256 mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_capture_hash_drift() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-capture-hash-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["artifactFiles"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!("sha256:other-replay-capture");
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject handoff verifier capture hash drift");
+
+        assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
+        assert!(err.to_string().contains("capturedOutputs"));
+        assert!(err.to_string().contains("sha256 mismatch"));
     }
 
     #[test]
