@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned service view receipt route coverage so produced receipt hashes,
+  view-content hashes, and namespace chain hashes are full SHA-256 digests
+  before QGLake consumes view receipt-chain evidence.
 - Pinned service-side storage-profile replay and credential audit coverage so
   producer evidence emits full SHA-256 `location-prefix-hash` values before
   QGLake accepts the corresponding `locationPrefixHash` proof.

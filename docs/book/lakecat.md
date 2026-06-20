@@ -1382,6 +1382,9 @@ chain through the governed management endpoints by view name and namespace, and
 then requires lineage-drain replay to include `view.dropped`,
 `view.version-receipts-listed`, and `view.version-receipt-chains-listed`
 evidence with non-empty tombstone receipt hashes and namespace chain hashes.
+The service route tests pin those produced `receipt-hash`, `view-hash`, and
+`chain-hash` fields as full SHA-256 digest evidence before the QGLake verifier
+consumes them.
 LakeCat also validates the ordered `previous-receipt-hash` links before marking
 a namespace chain as `chain-verified`, so QueryGraph can reject a replay that
 contains hashes but not a coherent chain.

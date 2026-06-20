@@ -13622,13 +13622,28 @@ mod tests {
         assert!(
             receipts[0]["receipt-hash"]
                 .as_str()
-                .is_some_and(|hash| hash.starts_with("sha256:"))
+                .is_some_and(is_full_sha256_hash)
+        );
+        assert!(
+            receipts[0]["view-hash"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
         );
         assert_eq!(receipts[1]["view-version"], serde_json::json!(2));
         assert_eq!(receipts[1]["previous-view-version"], serde_json::json!(1));
         assert_eq!(
             receipts[1]["previous-receipt-hash"],
             receipts[0]["receipt-hash"]
+        );
+        assert!(
+            receipts[1]["receipt-hash"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
+        );
+        assert!(
+            receipts[1]["view-hash"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
         );
         assert_ne!(receipts[0]["view-hash"], receipts[1]["view-hash"]);
 
@@ -13747,7 +13762,12 @@ mod tests {
         assert!(
             receipts[2]["receipt-hash"]
                 .as_str()
-                .is_some_and(|hash| hash.starts_with("sha256:"))
+                .is_some_and(is_full_sha256_hash)
+        );
+        assert!(
+            receipts[2]["view-hash"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
         );
 
         let chains_after_drop = Request::builder()
@@ -13774,7 +13794,7 @@ mod tests {
         assert!(
             active_chain["chain-hash"]
                 .as_str()
-                .is_some_and(|hash| hash.starts_with("sha256:"))
+                .is_some_and(is_full_sha256_hash)
         );
         let dropped_chain = chains
             .iter()
@@ -13788,7 +13808,7 @@ mod tests {
         assert!(
             dropped_chain["chain-hash"]
                 .as_str()
-                .is_some_and(|hash| hash.starts_with("sha256:"))
+                .is_some_and(is_full_sha256_hash)
         );
         assert_ne!(active_chain["chain-hash"], dropped_chain["chain-hash"]);
 

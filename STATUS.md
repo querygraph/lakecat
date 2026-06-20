@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin service view receipt hash producer evidence`.
+  Service view workflow coverage now explicitly proves produced
+  `receipt-hash`, `view-hash`, and namespace `chain-hash` values are full
+  SHA-256 digests while preserving the positive receipt-chain structure that
+  QGLake and QueryGraph consume.
+- Local verification for this service view receipt producer slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin service storage-scope hash producer evidence`.
   Service-side storage-profile upsert replay and credential-vend audit payload
   coverage now explicitly proves produced `location-prefix-hash` values are
