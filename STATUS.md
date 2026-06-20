@@ -6,6 +6,15 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require QGLake handoff effective stats proof`.
+  The compact QGLake handoff verifier now rejects governed scan proofs that
+  omit `plannedEffectiveStatsFields`, complementing the existing missing
+  requested-stats and widened-effective-stats checks.
+- Local verification for this handoff stats-proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_effective_scan_stats_field_evidence -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_scan_stats_field_widening -- --nocapture`.
+- Latest completed implementation slice:
   `Require QGLake handoff fetch filter proof`.
   The compact QGLake handoff verifier now rejects governed scan proofs that
   omit fetched `required-filters` evidence, matching the existing response-side

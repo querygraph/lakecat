@@ -9860,6 +9860,21 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_requires_effective_scan_stats_field_evidence() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("plannedEffectiveStatsFields");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing effective stats-field evidence");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("plannedEffectiveStatsFields"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_scan_stats_field_widening() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["governedScanProof"]["plannedEffectiveStatsFields"] =
