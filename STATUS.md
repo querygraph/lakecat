@@ -6,6 +6,20 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject view receipt-chain namespace drift`.
+  QGLake lineage-drain dropped-view source replay now requires namespace
+  receipt-chain evidence to come from the accepted view's warehouse/namespace
+  and rejects verified-chain count or receipt-hash coverage drift before view
+  receipt proof can feed compact handoff verification.
+- Local verification for this view receipt-chain source-replay slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject credential restriction drift`.
   QGLake lineage-drain credential source replay now requires both restricted
   agent and trusted-human branches to carry complete read-restriction evidence

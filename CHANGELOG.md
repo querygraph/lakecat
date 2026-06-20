@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake lineage-drain dropped-view source replay to bind namespace
+  receipt-chain evidence to the accepted view's warehouse/namespace and reject
+  verified-chain count or coverage drift before compact handoff proof.
 - Required QGLake lineage-drain credential source replay to carry complete
   read-restriction evidence on both restricted-agent and trusted-human branches
   and to reject drift between those credential restrictions before handoff

@@ -1647,7 +1647,10 @@ receipt-chain, and commit-history receipt arrays must also be SHA-256-shaped
 before compact proof generation can consume them. The same shape
 check applies to accepted-view receipt evidence: bootstrap view-version receipt
 hashes, tombstone receipt hashes, and namespace receipt-chain hashes must be
-SHA-256-shaped before accepted-view proof feeds the compact handoff summary. The
+SHA-256-shaped before accepted-view proof feeds the compact handoff summary.
+Dropped accepted-view source replay also binds the namespace receipt-chain read
+back to the accepted view warehouse/namespace and rejects verified-chain count
+or receipt-hash coverage drift before compact handoff proof is generated. The
 same replay now emits catalog-facing `Commit` graph events for the listed
 sequences, leaving traversal and query semantics to Grust.
 

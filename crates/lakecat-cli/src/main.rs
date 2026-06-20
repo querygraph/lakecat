@@ -5879,14 +5879,30 @@ fn verify_qglake_view_replay(
             }
             let Some(receipt_chain_read) = drain.events.iter().find(|event| {
                 event.event_type == "view.version-receipt-chains-listed"
+                    && event.view_warehouse == view_replay.view_warehouse
+                    && event.view_namespace == view_replay.view_namespace
                     && qglake_has_sha256_hashes(&event.view_version_receipt_chain_hashes)
                     && event.view_version_receipt_chain_verified_count > 0
                     && qglake_has_sha256_hashes(&event.view_version_receipt_hashes)
             }) else {
                 return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-                    "qglake lineage drain view drop replay for {view_stable_id} is missing SHA-256 namespace receipt-chain evidence"
+                    "qglake lineage drain view drop replay for {view_stable_id} is missing SHA-256 namespace receipt-chain evidence for the accepted view namespace"
                 )));
             };
+            if receipt_chain_read.view_version_receipt_chain_hashes.len()
+                != receipt_chain_read.view_version_receipt_chain_verified_count
+            {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "qglake lineage drain namespace receipt-chain replay for {view_stable_id} verified-chain count does not match chain hash evidence"
+                )));
+            }
+            if receipt_chain_read.view_version_receipt_hashes.len()
+                < receipt_chain_read.view_version_receipt_chain_hashes.len()
+            {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "qglake lineage drain namespace receipt-chain replay for {view_stable_id} receipt hashes do not cover verified chain hashes"
+                )));
+            }
             if receipt_chain_read.lineage_events == 0
                 || !qglake_has_sha256_hashes(&receipt_chain_read.replay_event_hashes)
                 || !qglake_has_sha256_hashes(&receipt_chain_read.replay_open_lineage_hashes)
@@ -14997,6 +15013,116 @@ mod tests {
         .expect_err("QGLake lineage drain should require namespace receipt-chain evidence for dropped accepted views");
         assert!(err.to_string().contains(
             "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing SHA-256 namespace receipt-chain evidence"
+        ));
+
+        let mut drifted_receipt_chain = qglake_view_receipt_chain_lineage_summary();
+        drifted_receipt_chain.view_namespace = vec!["other_namespace".to_string()];
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 12,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "view.version-receipt-chains-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 13,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    drifted_receipt_chain,
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_storage_profile_upsert_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject receipt-chain namespace drift");
+        assert!(err.to_string().contains(
+            "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing SHA-256 namespace receipt-chain evidence for the accepted view namespace"
+        ));
+
+        let mut receipt_chain_count_drift = qglake_view_receipt_chain_lineage_summary();
+        receipt_chain_count_drift.view_version_receipt_chain_verified_count = 2;
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 12,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "view.version-receipt-chains-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 13,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    receipt_chain_count_drift,
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_storage_profile_upsert_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject receipt-chain count drift");
+        assert!(err.to_string().contains(
+            "qglake lineage drain namespace receipt-chain replay for lakecat:view:local:default:active_customers verified-chain count does not match chain hash evidence"
         ));
 
         let mut unguarded_drop_replay = qglake_view_drop_lineage_summary();
