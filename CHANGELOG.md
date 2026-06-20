@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Tightened compact QGLake handoff verification to reject governed scan proofs
+  that omit fetched required-filter evidence.
 - Tightened QGLake `fetchScanTasks` verification to reject fetched scan-task
   responses that omit the required filter proof for the server-derived row
   predicate.

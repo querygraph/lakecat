@@ -1767,7 +1767,8 @@ also requires planned and fetched read restrictions to match before compact
 proof generation, and requires the fetched projection and filter requirements to
 exactly preserve the fetched allowed columns and row predicate. A fetched
 response that omits required-filter proof is rejected just like one that widens
-or changes that proof. Credential
+or changes that proof, and the compact handoff summary applies the same
+missing-proof check before accepting governed scan evidence. Credential
 replay applies the same policy-proof discipline to the two credential branches:
 the restricted-agent denial and trusted-human audited raw-credential exception
 must both carry a complete read restriction, and those restrictions must match

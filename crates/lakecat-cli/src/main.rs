@@ -9948,6 +9948,21 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_requires_fetch_filter_evidence() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("fetchedRequiredFilters");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing fetched filter evidence");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("fetchedRequiredFilters"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_extra_fetch_filter_evidence() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["governedScanProof"]["fetchedRequiredFilters"]

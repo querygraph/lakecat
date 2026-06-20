@@ -6,6 +6,15 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require QGLake handoff fetch filter proof`.
+  The compact QGLake handoff verifier now rejects governed scan proofs that
+  omit fetched `required-filters` evidence, matching the existing response-side
+  verifier and extra-filter drift checks.
+- Local verification for this handoff fetch filter-proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_fetch_filter_evidence -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_fetch_filter_evidence -- --nocapture`.
+- Latest completed implementation slice:
   `Require QGLake fetch filter proof`.
   The QGLake `fetchScanTasks` verifier now rejects fetched scan-task responses
   that omit the `required-filters` proof for the server-derived row predicate,
