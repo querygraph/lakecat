@@ -1942,7 +1942,7 @@ async fn load_credentials_in_warehouse(
     let storage_credentials = if credential_block_reason.is_some() {
         Vec::new()
     } else {
-        apply_credential_ttl_cap(
+        canonicalize_credential_response_evidence(
             state
                 .credential_issuer
                 .issue(CredentialIssuanceRequest {
@@ -1952,6 +1952,9 @@ async fn load_credentials_in_warehouse(
                     max_credential_ttl_seconds,
                 })
                 .await?,
+            &storage_profile,
+            capability.receipt(),
+            read_restriction.requires_governed_read(),
             max_credential_ttl_seconds,
         )
     };
@@ -4792,6 +4795,57 @@ fn apply_credential_ttl_cap(
     credentials
 }
 
+fn canonicalize_credential_response_evidence(
+    mut credentials: Vec<StorageCredential>,
+    profile: &StorageProfile,
+    receipt: &AuthorizationReceipt,
+    governed_read_required: bool,
+    max_credential_ttl_seconds: Option<u64>,
+) -> Vec<StorageCredential> {
+    for credential in &mut credentials {
+        let mut effective_ttl = max_credential_ttl_seconds;
+        credential.config.retain(|entry| {
+            let normalized = entry.key.to_ascii_lowercase();
+            if normalized == "lakecat.max-credential-ttl-seconds" {
+                if let Ok(existing) = entry.value.parse::<u64>() {
+                    effective_ttl =
+                        Some(effective_ttl.map_or(existing, |current| current.min(existing)));
+                }
+                return false;
+            }
+            !LAKECAT_CREDENTIAL_RESPONSE_EVIDENCE_KEYS.contains(&normalized.as_str())
+        });
+        credential.config.extend([
+            ConfigEntry::new("lakecat.storage-profile-id", profile.profile_id.clone()),
+            ConfigEntry::new("lakecat.storage-provider", profile.provider.as_str()),
+            ConfigEntry::new("lakecat.credential-mode", profile.issuance_mode.as_str()),
+            ConfigEntry::new(
+                "lakecat.authorization-principal",
+                receipt.principal.subject.clone(),
+            ),
+            ConfigEntry::new(
+                "lakecat.governed-read-required",
+                governed_read_required.to_string(),
+            ),
+        ]);
+        if let Some(effective_ttl) = effective_ttl {
+            credential.config.push(ConfigEntry::new(
+                "lakecat.max-credential-ttl-seconds",
+                effective_ttl.to_string(),
+            ));
+        }
+    }
+    credentials
+}
+
+const LAKECAT_CREDENTIAL_RESPONSE_EVIDENCE_KEYS: &[&str] = &[
+    "lakecat.storage-profile-id",
+    "lakecat.storage-provider",
+    "lakecat.credential-mode",
+    "lakecat.authorization-principal",
+    "lakecat.governed-read-required",
+];
+
 fn issued_credentials_for_profile(
     credentials: Vec<StorageCredential>,
     profile: &StorageProfile,
@@ -5736,6 +5790,35 @@ mod tests {
                     ConfigEntry::new("aws.session-token", "temporary-test-token"),
                     ConfigEntry::new("lakecat.max-credential-ttl-seconds", "120"),
                     ConfigEntry::new("lakecat.max-credential-ttl-seconds", "not-a-number"),
+                ],
+            }])
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct ShadowingCredentialEvidenceIssuer {
+        requests: Mutex<Vec<CredentialIssuanceRequest>>,
+    }
+
+    #[async_trait]
+    impl CredentialIssuer for ShadowingCredentialEvidenceIssuer {
+        async fn issue(
+            &self,
+            request: CredentialIssuanceRequest,
+        ) -> lakecat_core::LakeCatResult<Vec<StorageCredential>> {
+            self.requests.lock().await.push(request.clone());
+            Ok(vec![StorageCredential {
+                prefix: request.profile.location_prefix.clone(),
+                config: vec![
+                    ConfigEntry::new("lakecat.storage-profile-id", "forged-profile"),
+                    ConfigEntry::new("lakecat.storage-provider", "gcs"),
+                    ConfigEntry::new("lakecat.credential-mode", "forged-mode"),
+                    ConfigEntry::new("lakecat.authorization-principal", "did:example:attacker"),
+                    ConfigEntry::new("lakecat.governed-read-required", "false"),
+                    ConfigEntry::new("lakecat.max-credential-ttl-seconds", "600"),
+                    ConfigEntry::new("lakecat.credential-kind", "shadow-test"),
+                    ConfigEntry::new("aws.session-token", "temporary-test-token"),
+                    ConfigEntry::new("lakecat.max-credential-ttl-seconds", "120"),
                 ],
             }])
         }
@@ -13507,6 +13590,98 @@ mod tests {
         let requests = issuer.requests.lock().await;
         assert_eq!(requests.len(), 1);
         assert_eq!(requests[0].max_credential_ttl_seconds, Some(300));
+    }
+
+    #[tokio::test]
+    async fn credential_vend_response_replaces_shadowed_lakecat_evidence() {
+        let store = MemoryCatalogStore::new();
+        let issuer = Arc::new(ShadowingCredentialEvidenceIssuer::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_credential_issuer(issuer.clone());
+        let table = TableRecord::new(
+            TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            ),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({
+                "format-version": 3,
+                "current-schema-id": 1,
+                "schemas": [{
+                    "schema-id": 1,
+                    "fields": [
+                        {"id": 1, "name": "event_id", "type": "string", "required": true}
+                    ]
+                }]
+            }),
+            Principal::anonymous(),
+        );
+        let ident = table.ident.clone();
+        store.create_table(table).await.unwrap();
+        store
+            .upsert_policy_binding(
+                PolicyBinding::new(
+                    "trusted-human-shadowed-evidence",
+                    WarehouseName::new("local").unwrap(),
+                    Some(ident.namespace.clone()),
+                    Some(ident.name.clone()),
+                    true,
+                    serde_json::json!({
+                        "uid": "policy:trusted-human-shadowed-evidence",
+                        "lakecat:read-restriction": {
+                            "allowed-columns": ["event_id"],
+                            "max-credential-ttl-seconds": 300
+                        }
+                    }),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-lakecat-principal",
+            axum::http::HeaderValue::from_static("human:operator"),
+        );
+        let response = load_credentials(
+            State(state),
+            headers,
+            Path(("default".to_string(), "events".to_string())),
+        )
+        .await
+        .unwrap();
+
+        let credentials = response.0.storage_credentials;
+        assert_eq!(credentials.len(), 1);
+        let config = &credentials[0].config;
+        assert_single_config_value(config, "lakecat.storage-profile-id", "local:file");
+        assert_single_config_value(config, "lakecat.storage-provider", "file");
+        assert_single_config_value(config, "lakecat.credential-mode", "local-file-no-secret");
+        assert_single_config_value(config, "lakecat.authorization-principal", "human:operator");
+        assert_single_config_value(config, "lakecat.governed-read-required", "true");
+        assert_single_config_value(config, "lakecat.max-credential-ttl-seconds", "120");
+        assert!(config.iter().any(|entry| {
+            entry.key == "lakecat.credential-kind" && entry.value == "shadow-test"
+        }));
+        assert!(config.iter().any(|entry| {
+            entry.key == "aws.session-token" && entry.value == "temporary-test-token"
+        }));
+
+        let requests = issuer.requests.lock().await;
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].max_credential_ttl_seconds, Some(300));
+    }
+
+    fn assert_single_config_value(config: &[ConfigEntry], key: &str, expected: &str) {
+        let values = config
+            .iter()
+            .filter(|entry| entry.key == key)
+            .map(|entry| entry.value.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(values, vec![expected], "{key} must be canonical");
     }
 
     #[test]

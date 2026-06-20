@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Canonicalized LakeCat-owned credential response evidence so an issuer cannot
+  shadow `lakecat.storage-profile-id`, provider, mode, principal, governed-read
+  requirement, or TTL proof in the public `loadCredentials` response.
 - Rejected reserved storage-profile `public-config` keys such as
   `lakecat.storage-profile-id`, so operator-supplied routing hints cannot
   shadow LakeCat-owned credential evidence in memory, Turso, or management API

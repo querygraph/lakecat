@@ -529,10 +529,16 @@ credential issuer and annotates each returned credential with
 duration bound. If an issuer returns that LakeCat TTL key itself, LakeCat
 normalizes the response to one TTL entry per credential and keeps the stricter
 valid TTL, so duplicate backend-supplied entries cannot widen or confuse the
-policy cap. The REST credential-vending regression exercises this at the public
-response boundary: a backend can return multiple TTL entries, but
-`loadCredentials` exposes exactly one effective value and preserves the other
-credential config entries.
+policy cap. The same response boundary owns the rest of the LakeCat evidence:
+issuer-supplied values for `lakecat.storage-profile-id`,
+`lakecat.storage-provider`, `lakecat.credential-mode`,
+`lakecat.authorization-principal`, and `lakecat.governed-read-required` are
+removed and replaced with catalog-derived values before the response is
+returned. The REST credential-vending regressions exercise this at the public
+response boundary: a backend can return multiple TTL entries or forged catalog
+evidence, but `loadCredentials` exposes one canonical proof while preserving
+issuer-owned credential details such as credential kind and provider session
+tokens.
 
 ## Rust-First Engines And The V3 To V4 Path
 
@@ -949,11 +955,14 @@ read restriction, and returned credentials must preserve that cap in
 `lakecat.max-credential-ttl-seconds`. LakeCat rewrites duplicate TTL config
 entries into one effective value before returning credentials, preserving a
 stricter issuer TTL when it is valid and otherwise falling back to the policy
-cap. The service test for the REST credential endpoint proves this response
-shape directly, not just through the helper that applies the cap. The issuer
-also rejects any credential whose returned prefix is outside the storage
-profile's `location-prefix`, so a misconfigured cloud secret backend cannot
-widen a table's storage scope after TypeSec has authorized the secret reference.
+cap. It also rewrites LakeCat-owned profile, provider, mode, principal, and
+governed-read-required evidence after issuance, so a cloud secret backend cannot
+make the response look like a different catalog decision. The service tests for
+the REST credential endpoint prove this response shape directly, not just
+through helper functions. The issuer also rejects any credential whose returned
+prefix is outside the storage profile's `location-prefix`, so a misconfigured
+cloud secret backend cannot widen a table's storage scope after TypeSec has
+authorized the secret reference.
 A not-configured resolver error reports the provider label and a
 `secret-ref-hash=sha256:...` value, not the raw secret URI, so the operator can
 correlate configuration without leaking the credential root. Resolver validation

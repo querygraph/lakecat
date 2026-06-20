@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Canonicalize credential response evidence`.
+  The public credential-vending path now strips issuer-supplied values for
+  LakeCat-owned evidence keys and appends canonical catalog values for storage
+  profile id, provider, issuance mode, authorization principal,
+  governed-read-required, and effective TTL. Issuer-owned credential details
+  such as credential kind and provider session tokens are preserved.
+- Local verification for this credential response evidence slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service credential_vend_response_replaces_shadowed_lakecat_evidence -- --nocapture`;
+  `cargo test -p lakecat-service credential_vend_response_normalizes_duplicate_ttl_entries -- --nocapture`.
+- Latest completed implementation slice:
   `Reject reserved storage-profile public config keys`.
   Storage profiles now reject user-supplied `public-config` keys reserved for
   LakeCat credential evidence, including `lakecat.storage-profile-id`, before
