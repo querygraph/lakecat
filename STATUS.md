@@ -6,6 +6,19 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Prove scan-plan graph replay`.
+  QGLake governed scan source replay now requires scan-planned graph projection
+  evidence and carries `planGraphEvents` through compact `governedScanProof`,
+  captured LakeCat replay agreement, and the operator-readable scan replay line.
+- Local verification for this scan-plan graph replay slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Prove management graph replay counts`.
   Compact QGLake `managementProof` and captured LakeCat replay agreement now
   carry positive graph event counts for server, project, warehouse,

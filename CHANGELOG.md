@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added scan-plan graph event evidence to QGLake governed scan source replay,
+  compact `governedScanProof`, captured replay agreement, and the
+  operator-readable scan replay line.
 - Added management-list graph event counts to compact QGLake `managementProof`
   and captured replay agreement, so handoff proof preserves the graph
   projection evidence required by source replay.

@@ -1439,8 +1439,9 @@ must be null or SHA-256 hashes, and a TypeDID proof hash cannot appear without
 the paired envelope hash. That keeps the compact handoff self-describing
 without moving TypeDID trust semantics out of TypeSec. It compares captured
 `replay-evidence.scan` with `governedScanProof`, requiring positive plan task,
-file task, delete file, and child plan task counts plus the planned and fetched
-read-restriction objects and the fetch-side required projection/filter evidence.
+scan-plan graph event, file task, delete file, and child plan task counts plus
+the planned and fetched read-restriction objects and the fetch-side required
+projection/filter evidence.
 The verifier rejects a summary if the fetched restriction drifts from the
 planned restriction, so the compact handoff proves the narrowed allowed
 columns, row predicate, and policy hashes alongside the planned/fetched replay
@@ -1629,16 +1630,17 @@ handoff proof is built: the drain authorization, bootstrap authorization,
 QueryGraph bundle/import hashes, agent delegation hash, agent summary signature
 hash, and TypeDID envelope/proof hashes must be SHA-256-shaped, and a TypeDID
 proof hash cannot appear without its paired envelope hash. For scan replay, the
-typed drain summary carries scan-plan task counts plus fetched file-scan,
-delete-file, and child-plan task counts, along with planned and fetched
-OpenLineage receipt hashes. Source replay validation now also requires planned
-and fetched read restrictions to match before compact proof generation, and
-requires the fetched projection and filter requirements to exactly preserve the
-fetched allowed columns and row predicate. Credential replay applies the same
-policy-proof discipline to the two credential branches: the restricted-agent
-denial and trusted-human audited raw-credential exception must both carry a
-complete read restriction, and those restrictions must match before credential
-proof can feed the compact handoff summary. For commit-history replay, the
+typed drain summary carries scan-plan task counts, scan-plan graph event
+evidence, fetched file-scan, delete-file, and child-plan task counts, along with
+planned and fetched OpenLineage receipt hashes. Source replay validation now
+also requires planned and fetched read restrictions to match before compact
+proof generation, and requires the fetched projection and filter requirements to
+exactly preserve the fetched allowed columns and row predicate. Credential
+replay applies the same policy-proof discipline to the two credential branches:
+the restricted-agent denial and trusted-human audited raw-credential exception
+must both carry a complete read restriction, and those restrictions must match
+before credential proof can feed the compact handoff summary. For
+commit-history replay, the
 typed drain summary carries the commit count,
 committed sequence numbers, commit hashes, replay hashes, and OpenLineage
 hashes. The handoff verifier rejects compact scan proofs without those
@@ -1685,7 +1687,7 @@ accepted bundle and QueryGraph import hashes, table/view counts, and compact
 control-plane lines such as:
 
 ```text
-scan replay plan_tasks=1 planned_ttl=300 planned_purpose=qglake-agent-demo file_tasks=1 delete_files=1 child_plan_tasks=1 fetched_ttl=300 fetched_purpose=qglake-agent-demo
+scan replay plan_tasks=1 plan_graph_events=1 planned_ttl=300 planned_purpose=qglake-agent-demo file_tasks=1 delete_files=1 child_plan_tasks=1 fetched_ttl=300 fetched_purpose=qglake-agent-demo
 management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none
 credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2
 table commit history commits=1 sequences=1 hashes=sha256:... graph_events=1

@@ -1356,6 +1356,7 @@ fn verify_lakecat_replay_scan_matches_summary(
         "fileTaskCount",
         "deleteFileCount",
         "childPlanTaskCount",
+        "planGraphEvents",
         "plannedReadRestriction",
         "fetchedReadRestriction",
         "fetchedRequiredProjection",
@@ -2029,6 +2030,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
 
     let governed_scan = required_object(lakecat, "governedScanProof", "lakecatReplayVerification")?;
     require_positive_u64(governed_scan, "planTaskCount", "governedScanProof")?;
+    require_positive_u64(governed_scan, "planGraphEvents", "governedScanProof")?;
     require_positive_u64(governed_scan, "fileTaskCount", "governedScanProof")?;
     require_positive_u64(governed_scan, "deleteFileCount", "governedScanProof")?;
     require_positive_u64(governed_scan, "childPlanTaskCount", "governedScanProof")?;
@@ -3068,6 +3070,7 @@ fn qglake_scan_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Valu
     let fetched = qglake_drain_event(drain, "table.scan-tasks-fetched")?;
     Some(json!({
         "planTaskCount": planned.scan_task_count.unwrap_or_default(),
+        "planGraphEvents": planned.graph_events,
         "fileTaskCount": fetched.file_scan_task_count.unwrap_or_default(),
         "deleteFileCount": fetched.delete_file_count.unwrap_or_default(),
         "childPlanTaskCount": fetched.child_plan_task_count.unwrap_or_default(),
@@ -3388,8 +3391,9 @@ fn qglake_scan_replay_line(drain: &LineageDrainResponse) -> Option<String> {
     let planned_purpose = qglake_event_read_restriction_purpose(planned)?;
     let fetched_purpose = qglake_event_read_restriction_purpose(fetched)?;
     Some(format!(
-        "scan replay plan_tasks={} planned_ttl={} planned_purpose={} file_tasks={} delete_files={} child_plan_tasks={} fetched_ttl={} fetched_purpose={}",
+        "scan replay plan_tasks={} plan_graph_events={} planned_ttl={} planned_purpose={} file_tasks={} delete_files={} child_plan_tasks={} fetched_ttl={} fetched_purpose={}",
         planned.scan_task_count.unwrap_or_default(),
+        planned.graph_events,
         planned_ttl,
         planned_purpose,
         fetched.file_scan_task_count.unwrap_or_default(),
@@ -5691,6 +5695,7 @@ fn verify_qglake_scan_replay(drain: &LineageDrainResponse) -> lakecat_core::Lake
         )
     })?;
     if planned.lineage_events == 0
+        || planned.graph_events == 0
         || planned
             .authorization_receipt_hash
             .as_deref()
@@ -5704,7 +5709,7 @@ fn verify_qglake_scan_replay(drain: &LineageDrainResponse) -> lakecat_core::Lake
         || planned.scan_task_count.unwrap_or_default() == 0
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain scan planning replay is missing compact task or SHA-256 receipt evidence"
+            "qglake lineage drain scan planning replay is missing compact task, graph, or SHA-256 receipt evidence"
                 .to_string(),
         ));
     }
@@ -7678,6 +7683,7 @@ mod tests {
                 },
                 "governedScanProof": {
                     "planTaskCount": 1,
+                    "planGraphEvents": 1,
                     "fileTaskCount": 1,
                     "deleteFileCount": 1,
                     "childPlanTaskCount": 2,
@@ -7898,6 +7904,7 @@ mod tests {
                 },
                 "scan": {
                     "planTaskCount": 1,
+                    "planGraphEvents": 1,
                     "fileTaskCount": 1,
                     "deleteFileCount": 1,
                     "childPlanTaskCount": 2,
@@ -8923,6 +8930,19 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("deleteFileCount"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_scan_plan_graph_events() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["planGraphEvents"] = json!(0);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing scan-plan graph proof");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("planGraphEvents"));
+        assert!(err.to_string().contains("positive"));
     }
 
     #[test]
@@ -12481,7 +12501,7 @@ mod tests {
                 "table.scan-planned".to_string(),
                 "table.scan-tasks-fetched".to_string(),
             ],
-            graph_events: 0,
+            graph_events: 1,
             lineage_events: 2,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
@@ -12499,7 +12519,7 @@ mod tests {
 
         assert_eq!(
             line,
-            "scan replay plan_tasks=1 planned_ttl=300 planned_purpose=qglake-agent-demo file_tasks=1 delete_files=1 child_plan_tasks=1 fetched_ttl=300 fetched_purpose=qglake-agent-demo"
+            "scan replay plan_tasks=1 plan_graph_events=1 planned_ttl=300 planned_purpose=qglake-agent-demo file_tasks=1 delete_files=1 child_plan_tasks=1 fetched_ttl=300 fetched_purpose=qglake-agent-demo"
         );
     }
 
@@ -16068,7 +16088,26 @@ mod tests {
 
         assert!(err
             .to_string()
-            .contains("qglake lineage drain scan planning replay is missing compact task or SHA-256 receipt evidence"));
+            .contains("qglake lineage drain scan planning replay is missing compact task, graph, or SHA-256 receipt evidence"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_requires_scan_plan_graph_events() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let scan_plan = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.scan-planned")
+            .expect("scan plan replay fixture");
+        scan_plan.graph_events = 0;
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject missing scan-plan graph proof");
+
+        assert!(err
+            .to_string()
+            .contains("qglake lineage drain scan planning replay is missing compact task, graph, or SHA-256 receipt evidence"));
     }
 
     fn qglake_view_lineage_verification() -> QueryGraphBootstrapVerification {
@@ -16423,7 +16462,7 @@ mod tests {
             typedid_proof_hash: None,
             agent_delegation_hash: Some("sha256:delegation".to_string()),
             agent_summary_signature_hash: Some("sha256:summary".to_string()),
-            graph_events: 0,
+            graph_events: 1,
             lineage_events: 1,
             bundle_hash: None,
             graph_hash: None,
