@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject non-ASCII idempotency keys early`.
+  REST table commits now validate `x-lakecat-idempotency-key` from raw header
+  bytes against the documented ASCII key contract, so non-ASCII and invalid
+  header bytes fail as `400 Bad Request` before authorization, Sail commit
+  preparation, table loading, or metadata-object writes can run.
+- Local verification for this idempotency-key validation slice is green:
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service commit_rejects_invalid_rest_idempotency_keys -- --nocapture`;
+  `cargo test -p lakecat-service`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind handoff self-verifier semantic sections`.
   When a QGLake handoff summary carries `lakecatHandoffVerifyOutputHash`, the
   saved `lakecat-handoff-verify.json` artifact must now preserve the compact

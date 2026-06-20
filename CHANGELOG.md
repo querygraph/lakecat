@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened REST commit idempotency-key validation so non-ASCII and invalid
+  header bytes fail under the documented ASCII key contract before
+  authorization, Sail commit preparation, table loading, or metadata-object
+  writes can run.
 - Bound saved QGLake handoff-verifier semantic sections back to the compact
   summary, rejecting self-verifier output whose captured replay semantics,
   bootstrap-bundle semantics, QueryGraph import-plan semantics, lineage-drain

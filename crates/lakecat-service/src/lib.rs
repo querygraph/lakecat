@@ -5075,17 +5075,18 @@ fn request_idempotency_key(headers: &HeaderMap) -> Result<Option<String>, LakeCa
     let Some(value) = headers.get("x-lakecat-idempotency-key") else {
         return Ok(None);
     };
-    let key = value.to_str().map_err(|_| {
-        LakeCatError::InvalidArgument(
-            "invalid UTF-8 in x-lakecat-idempotency-key header".to_string(),
-        )
-    })?;
-    if key.is_empty() || key.len() > 128 {
+    let key_bytes = value.as_bytes();
+    if key_bytes.is_empty() || key_bytes.len() > 128 || !key_bytes.iter().all(u8::is_ascii) {
         return Err(LakeCatError::InvalidArgument(
             "x-lakecat-idempotency-key must be 1..=128 ASCII characters".to_string(),
         )
         .into());
     }
+    let key = std::str::from_utf8(key_bytes).map_err(|_| {
+        LakeCatError::InvalidArgument(
+            "x-lakecat-idempotency-key must be 1..=128 ASCII characters".to_string(),
+        )
+    })?;
     if !key
         .chars()
         .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | ':'))
@@ -5456,7 +5457,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use axum::body::Body;
-    use http::{Method, Request, StatusCode};
+    use http::{HeaderValue, Method, Request, StatusCode};
     use lakecat_graph::GraphNodeLabel;
     use lakecat_lineage::LineageReceipt;
     use lakecat_store::{MemoryCatalogStore, OutboxEvent};
@@ -5526,6 +5527,42 @@ mod tests {
                 }]);
             }
             Ok(public_storage_credentials_for_profile(&request.profile))
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct RecordingSailEngine {
+        commit_prepare_count: Mutex<usize>,
+    }
+
+    #[async_trait]
+    impl SailCatalogEngine for RecordingSailEngine {
+        async fn prepare_commit(
+            &self,
+            _request: lakecat_sail::CommitPreparationRequest,
+        ) -> lakecat_core::LakeCatResult<lakecat_sail::CommitPlan> {
+            *self.commit_prepare_count.lock().await += 1;
+            Err(LakeCatError::Internal(
+                "recording Sail engine should not prepare commit".to_string(),
+            ))
+        }
+
+        async fn plan_scan(
+            &self,
+            _request: lakecat_sail::ScanPlanningRequest,
+        ) -> lakecat_core::LakeCatResult<lakecat_sail::ScanPlan> {
+            Err(LakeCatError::NotSupported(
+                "recording Sail engine does not plan scans".to_string(),
+            ))
+        }
+
+        async fn fetch_scan_tasks(
+            &self,
+            _request: lakecat_sail::FetchScanTasksRequest,
+        ) -> lakecat_core::LakeCatResult<lakecat_sail::FetchScanTasksPlan> {
+            Err(LakeCatError::NotSupported(
+                "recording Sail engine does not fetch scan tasks".to_string(),
+            ))
         }
     }
 
@@ -8935,17 +8972,33 @@ mod tests {
 
     #[tokio::test]
     async fn commit_rejects_invalid_rest_idempotency_keys() {
+        let sail = Arc::new(RecordingSailEngine::default());
+        let governance = Arc::new(RecordingGovernance::default());
         let app = app(LakeCatState::new(
             WarehouseName::new("local").unwrap(),
             MemoryCatalogStore::new(),
+        )
+        .with_integrations(
+            sail.clone(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            Arc::new(RecordingLineage::default()),
         ));
-        let cases = [
+        let cases = vec![
             (
-                "commit events 0001".to_string(),
+                HeaderValue::from_static("commit events 0001"),
                 "x-lakecat-idempotency-key may only contain",
             ),
             (
-                "x".repeat(129),
+                HeaderValue::from_str("x".repeat(129).as_str()).unwrap(),
+                "x-lakecat-idempotency-key must be 1..=128 ASCII characters",
+            ),
+            (
+                HeaderValue::from_bytes("commit:é".as_bytes()).unwrap(),
+                "x-lakecat-idempotency-key must be 1..=128 ASCII characters",
+            ),
+            (
+                HeaderValue::from_bytes(b"commit:\xff").unwrap(),
                 "x-lakecat-idempotency-key must be 1..=128 ASCII characters",
             ),
         ];
@@ -8955,7 +9008,7 @@ mod tests {
                 .method(Method::POST)
                 .uri("/catalog/v1/namespaces/default/tables/events/commit")
                 .header("content-type", "application/json")
-                .header("x-lakecat-idempotency-key", key.as_str())
+                .header("x-lakecat-idempotency-key", key)
                 .body(Body::from(r#"{"requirements":[],"updates":[]}"#))
                 .unwrap();
             let response = app.clone().oneshot(commit).await.unwrap();
@@ -8966,6 +9019,11 @@ mod tests {
             let message = String::from_utf8_lossy(&body);
             assert!(message.contains(expected_message), "{message}");
         }
+        assert_eq!(*sail.commit_prepare_count.lock().await, 0);
+        assert!(
+            governance.principals.lock().await.is_empty(),
+            "invalid idempotency keys must fail before authorization"
+        );
     }
 
     #[tokio::test]
