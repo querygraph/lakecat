@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for table lifecycle events whose table identity,
+  optional scope hints, or soft-delete evidence is missing or contradictory, so
+  invalid table create/load/delete/restore replay fails before graph/lineage
+  projection acknowledgement.
 - Rejected outbox delivery for view list and lifecycle events whose warehouse,
   namespace, name, or count evidence is malformed, so invalid view replay fails
   before graph/lineage projection acknowledgement.

@@ -1109,6 +1109,12 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     if event.event_type == "table.commits-listed" {
         validate_table_commit_history_event_evidence(event, payload)?;
     }
+    if matches!(
+        event.event_type.as_str(),
+        "table.created" | "table.loaded" | "table.deleted" | "table.restored"
+    ) {
+        validate_table_lifecycle_event_evidence(event, payload)?;
+    }
     if event.event_type == "credentials.vend-attempted" {
         validate_credential_vend_event_evidence(event, payload)?;
     }
@@ -1251,6 +1257,205 @@ fn validate_table_commit_history_event_evidence(
         ));
     }
     Ok(())
+}
+
+fn validate_table_lifecycle_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(table_value) = event.payload.get("table") else {
+        return Err(outbox_evidence_error(
+            event,
+            "table lifecycle evidence must contain table identity",
+        ));
+    };
+    let table = decode_table_lifecycle_identity(event, table_value, "table lifecycle")?;
+    validate_table_lifecycle_payload_scope(event, payload, &table, "table lifecycle")?;
+
+    if let Some(payload_table) = payload.get("table") {
+        validate_table_lifecycle_table_hint(
+            event,
+            payload_table,
+            &table,
+            "table lifecycle payload table",
+        )?;
+    }
+    if let Some(soft_delete) = payload
+        .get("soft-delete")
+        .or_else(|| event.payload.get("soft-delete"))
+    {
+        let Some(soft_delete) = soft_delete.as_object() else {
+            return Err(outbox_evidence_error(
+                event,
+                "table lifecycle soft-delete evidence must be an object",
+            ));
+        };
+        let Some(soft_delete_table) = soft_delete.get("table") else {
+            return Err(outbox_evidence_error(
+                event,
+                "table lifecycle soft-delete evidence must contain table identity",
+            ));
+        };
+        validate_table_lifecycle_table_hint(
+            event,
+            soft_delete_table,
+            &table,
+            "table lifecycle soft-delete table",
+        )?;
+        if soft_delete.get("version").and_then(Value::as_u64).is_none() {
+            return Err(outbox_evidence_error(
+                event,
+                "table lifecycle soft-delete evidence must contain unsigned version",
+            ));
+        }
+        optional_string_field(
+            event,
+            &Value::Object(soft_delete.clone()),
+            "metadata-location",
+            "table lifecycle soft-delete",
+        )?;
+    }
+
+    optional_string_field(event, payload, "metadata-location", "table lifecycle")?;
+    optional_string_field(event, payload, "location", "table lifecycle")?;
+    Ok(())
+}
+
+fn decode_table_lifecycle_identity(
+    event: &OutboxEvent,
+    table: &Value,
+    label: &str,
+) -> Result<TableIdent, LakeCatError> {
+    serde_json::from_value(table.clone()).map_err(|_| {
+        outbox_evidence_error(
+            event,
+            &format!("{label} evidence has invalid table identity"),
+        )
+    })
+}
+
+fn validate_table_lifecycle_payload_scope(
+    event: &OutboxEvent,
+    payload: &Value,
+    table: &TableIdent,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    if let Some(warehouse) = payload.get("warehouse") {
+        let warehouse = warehouse
+            .as_str()
+            .filter(|warehouse| !warehouse.is_empty())
+            .ok_or_else(|| {
+                outbox_evidence_error(
+                    event,
+                    &format!("{label} warehouse must be a non-empty string when present"),
+                )
+            })?;
+        if warehouse != table.warehouse.as_str() {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} warehouse does not match table identity"),
+            ));
+        }
+    }
+    if let Some(namespace) = payload.get("namespace") {
+        let namespace = table_lifecycle_namespace_from_value(event, namespace, label)?;
+        if namespace != table.namespace {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} namespace does not match table identity"),
+            ));
+        }
+    }
+    if let Some(table_name) = payload.get("table") {
+        if table_name.is_object() {
+            return Ok(());
+        }
+        let table_name = table_name
+            .as_str()
+            .filter(|table_name| !table_name.is_empty())
+            .ok_or_else(|| {
+                outbox_evidence_error(
+                    event,
+                    &format!("{label} table must be a non-empty string when present"),
+                )
+            })?;
+        if table_name != table.name.as_str() {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} table name does not match table identity"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_table_lifecycle_table_hint(
+    event: &OutboxEvent,
+    table_hint: &Value,
+    table: &TableIdent,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    if table_hint.is_object() {
+        let hinted_table = decode_table_lifecycle_identity(event, table_hint, label)?;
+        if hinted_table != *table {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} does not match table identity"),
+            ));
+        }
+        return Ok(());
+    }
+    let table_name = table_hint
+        .as_str()
+        .filter(|table_name| !table_name.is_empty())
+        .ok_or_else(|| {
+            outbox_evidence_error(
+                event,
+                &format!("{label} must be a table identity object or non-empty table name"),
+            )
+        })?;
+    if table_name != table.name.as_str() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} name does not match table identity"),
+        ));
+    }
+    Ok(())
+}
+
+fn table_lifecycle_namespace_from_value(
+    event: &OutboxEvent,
+    namespace: &Value,
+    label: &str,
+) -> Result<Namespace, LakeCatError> {
+    match namespace {
+        Value::Array(parts) => {
+            let parts = parts
+                .iter()
+                .map(|part| {
+                    part.as_str()
+                        .filter(|part| !part.is_empty())
+                        .map(ToString::to_string)
+                        .ok_or_else(|| {
+                            outbox_evidence_error(
+                                event,
+                                &format!("{label} namespace components must be non-empty strings"),
+                            )
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            Namespace::new(parts).map_err(|_| {
+                outbox_evidence_error(event, &format!("{label} evidence has invalid namespace"))
+            })
+        }
+        Value::String(path) if !path.is_empty() => path.parse::<Namespace>().map_err(|_| {
+            outbox_evidence_error(event, &format!("{label} evidence has invalid namespace"))
+        }),
+        _ => Err(outbox_evidence_error(
+            event,
+            &format!("{label} namespace must be a non-empty string or array"),
+        )),
+    }
 }
 
 fn validate_storage_profile_upsert_event_evidence(
@@ -10683,6 +10888,150 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_missing_table_lifecycle_identity() {
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-secret-table-token".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.created".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-corrupt-table",
+                    "event-type": "table.created",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-create",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("missing table lifecycle identity should fail");
+
+        let message = err.to_string();
+        assert!(
+            message.contains("outbox event table.created (lakecat.lineage-and-graph) has invalid")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("table lifecycle evidence must contain table identity"));
+        assert!(!message.contains("evt-secret-table-token"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "malformed table lifecycle evidence must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "malformed table lifecycle evidence must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "malformed table lifecycle evidence must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_mismatched_table_soft_delete_evidence() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let other_table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("shadow_events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-secret-delete-token".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.deleted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-corrupt-delete",
+                    "event-type": "table.deleted",
+                    "table": table,
+                    "soft-delete": {
+                        "table": other_table,
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 1,
+                        "principal": principal,
+                        "authorization-receipt": null,
+                        "deleted-at": chrono::Utc::now(),
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-drop",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("mismatched soft-delete evidence should fail");
+
+        let message = err.to_string();
+        assert!(
+            message.contains("outbox event table.deleted (lakecat.lineage-and-graph) has invalid")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(
+            message.contains("table lifecycle soft-delete table does not match table identity")
+        );
+        assert!(!message.contains("evt-secret-delete-token"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "mismatched table soft-delete evidence must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "mismatched table soft-delete evidence must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "mismatched table soft-delete evidence must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_hashes_malformed_table_decode_errors() {
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {
@@ -10719,7 +11068,11 @@ mod tests {
             .expect_err("malformed table identity should fail the drain");
 
         let message = err.to_string();
-        assert!(message.contains("failed to decode outbox table for event hash sha256:"));
+        assert!(
+            message.contains("outbox event table.created (lakecat.lineage-and-graph) has invalid")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("table lifecycle evidence has invalid table identity"));
         assert!(!message.contains("evt-secret-table-token"));
         assert!(store.delivered.lock().await.is_empty());
     }

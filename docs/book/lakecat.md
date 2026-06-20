@@ -971,7 +971,10 @@ project scope must be a string before those reads can become replay evidence.
 View replay is checked at the same boundary: view list events must carry valid
 warehouse, namespace, and count evidence, while view create/load/drop evidence
 must carry a valid warehouse, namespace, and non-empty view name before graph or
-OpenLineage projection.
+OpenLineage projection. Table lifecycle replay now follows the same rule:
+create, load, delete, and restore events must carry a valid root table identity,
+and any payload warehouse, namespace, table-name, or soft-delete table evidence
+must agree with that identity before the event can be acknowledged.
 Server endpoint URLs are operator-visible management metadata, so LakeCat keeps
 them deliberately plain: they must be absolute `http` or `https` URLs, and they
 cannot include query strings, fragments, or URI userinfo. Rejected submissions
@@ -2075,6 +2078,10 @@ project scope before delivery.
 View list and lifecycle replay must carry valid warehouse, namespace, view
 name, and count evidence before those view events become graph/OpenLineage
 material for QueryGraph.
+Table lifecycle replay applies the same identity discipline before delivery:
+`table.created`, `table.loaded`, `table.deleted`, and `table.restored` must
+carry a decodable table identity, optional payload scope hints must match it,
+and soft-delete evidence must point at the same table with an unsigned version.
 Project, server, and warehouse upsert replay must carry valid
 tenant-root evidence too: project ids, server scopes, endpoint URLs, storage
 roots, identifiers, properties, and pre-redacted hash anchors are checked
