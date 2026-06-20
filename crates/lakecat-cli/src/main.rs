@@ -3330,7 +3330,7 @@ fn require_bootstrap_view_receipt_hashes_match_views(
         ));
     }
 
-    require_hash_array(
+    require_full_hash_array(
         bootstrap,
         "viewVersionReceiptHashes",
         "queryGraphBootstrapProof",
@@ -3355,7 +3355,7 @@ fn require_bootstrap_view_receipt_hashes_match_views(
                 "viewReceiptChainProof.views[{index}] must be an object"
             ))
         })?;
-        accepted_hashes.insert(require_hash_str(
+        accepted_hashes.insert(require_full_hash_str(
             view,
             "acceptedReceiptHash",
             "viewReceiptChainProof.views[]",
@@ -3416,20 +3416,20 @@ fn require_view_receipt_chain_evidence(
                 "viewReceiptChainProof.views[{index}] must prove accepted view version: viewVersion={view_version} acceptedViewVersion={accepted_view_version}"
             )));
         }
-        require_hash_str(view, "acceptedReceiptHash", "viewReceiptChainProof.views[]")?;
+        require_full_hash_str(view, "acceptedReceiptHash", "viewReceiptChainProof.views[]")?;
         require_positive_u64(view, "graphEvents", "viewReceiptChainProof.views[]")?;
         accepted_receipt_chain_hashes.push((
             required_str(view, "stableId", "viewReceiptChainProof.views[]")?.to_string(),
             accepted_view_version,
-            require_hash_str(
+            require_full_hash_str(
                 view,
                 "acceptedReceiptChainHash",
                 "viewReceiptChainProof.views[]",
             )?
             .to_string(),
         ));
-        require_hash_array(view, "replayEventHashes", "viewReceiptChainProof.views[]")?;
-        require_hash_array(view, "openLineageHashes", "viewReceiptChainProof.views[]")?;
+        require_full_hash_array(view, "replayEventHashes", "viewReceiptChainProof.views[]")?;
+        require_full_hash_array(view, "openLineageHashes", "viewReceiptChainProof.views[]")?;
     }
 
     let mut tombstone_receipt_hashes = BTreeSet::new();
@@ -3442,7 +3442,7 @@ fn require_view_receipt_chain_evidence(
                 "viewReceiptChainProof.tombstoneReceipts[{index}] must be an object"
             ))
         })?;
-        require_hash_array(
+        require_full_hash_array(
             receipt,
             "receiptHashes",
             "viewReceiptChainProof.tombstoneReceipts[]",
@@ -3456,12 +3456,12 @@ fn require_view_receipt_chain_evidence(
                 tombstone_receipt_hashes.insert(hash.to_string());
             }
         }
-        require_hash_array(
+        require_full_hash_array(
             receipt,
             "replayEventHashes",
             "viewReceiptChainProof.tombstoneReceipts[]",
         )?;
-        require_hash_array(
+        require_full_hash_array(
             receipt,
             "openLineageHashes",
             "viewReceiptChainProof.tombstoneReceipts[]",
@@ -3506,7 +3506,7 @@ fn require_view_receipt_chain_evidence(
             "receiptHashes",
             "viewReceiptChainProof.receiptChains[]",
         )?;
-        require_hash_array(
+        require_full_hash_array(
             chain,
             "receiptHashes",
             "viewReceiptChainProof.receiptChains[]",
@@ -3521,7 +3521,7 @@ fn require_view_receipt_chain_evidence(
             "chainHashes",
             "viewReceiptChainProof.receiptChains[]",
         )?;
-        require_hash_array(
+        require_full_hash_array(
             chain,
             "chainHashes",
             "viewReceiptChainProof.receiptChains[]",
@@ -3542,12 +3542,12 @@ fn require_view_receipt_chain_evidence(
                 verified_chain_hashes.insert(chain_hash.to_string());
             }
         }
-        require_hash_array(
+        require_full_hash_array(
             chain,
             "replayEventHashes",
             "viewReceiptChainProof.receiptChains[]",
         )?;
-        require_hash_array(
+        require_full_hash_array(
             chain,
             "openLineageHashes",
             "viewReceiptChainProof.receiptChains[]",
@@ -8616,7 +8616,7 @@ mod tests {
                     "agentSummarySignatureHash": "sha256:summary",
                     "typedidEnvelopeHash": null,
                     "typedidProofHash": null,
-                    "viewVersionReceiptHashes": ["sha256:view-receipt"],
+                    "viewVersionReceiptHashes": [qglake_fixture_hash("view-receipt")],
                     "replayEventHashes": [qglake_fixture_hash("bootstrap-replay")],
                     "openLineageHashes": [qglake_fixture_hash("bootstrap-openlineage")]
                 },
@@ -8693,29 +8693,29 @@ mod tests {
                         "name": "active_customers_view",
                         "viewVersion": 1,
                         "acceptedViewVersion": 1,
-                        "acceptedReceiptHash": "sha256:view-receipt",
-                        "acceptedReceiptChainHash": "sha256:view-receipt-chain",
+                        "acceptedReceiptHash": qglake_fixture_hash("view-receipt"),
+                        "acceptedReceiptChainHash": qglake_fixture_hash("view-receipt-chain"),
                         "eventType": "view.upserted",
                         "expectedViewVersion": null,
                         "graphEvents": 1,
-                        "replayEventHashes": ["sha256:view-replay"],
-                        "openLineageHashes": ["sha256:view-openlineage"]
+                        "replayEventHashes": [qglake_fixture_hash("view-replay")],
+                        "openLineageHashes": [qglake_fixture_hash("view-openlineage")]
                     }],
                     "tombstoneReceipts": [{
                         "stableId": "lakecat:view:local:default:active_customers_view",
                         "expectedViewVersion": 1,
-                        "receiptHashes": ["sha256:tombstone"],
-                        "replayEventHashes": ["sha256:tombstone-replay"],
-                        "openLineageHashes": ["sha256:tombstone-openlineage"]
+                        "receiptHashes": [qglake_fixture_hash("tombstone")],
+                        "replayEventHashes": [qglake_fixture_hash("tombstone-replay")],
+                        "openLineageHashes": [qglake_fixture_hash("tombstone-openlineage")]
                     }],
                     "receiptChains": [{
                         "warehouse": "local",
                         "namespace": ["default"],
                         "verifiedChainCount": 1,
-                        "receiptHashes": ["sha256:chain-receipt", "sha256:tombstone"],
-                        "chainHashes": ["sha256:view-receipt-chain"],
-                        "replayEventHashes": ["sha256:chain-replay"],
-                        "openLineageHashes": ["sha256:chain-openlineage"]
+                        "receiptHashes": [qglake_fixture_hash("chain-receipt"), qglake_fixture_hash("tombstone")],
+                        "chainHashes": [qglake_fixture_hash("view-receipt-chain")],
+                        "replayEventHashes": [qglake_fixture_hash("chain-replay")],
+                        "openLineageHashes": [qglake_fixture_hash("chain-openlineage")]
                     }]
                 },
                 "storageProfileUpsertProof": {
@@ -8845,7 +8845,7 @@ mod tests {
                     "agentSummarySignatureHash": "sha256:summary",
                     "typedidEnvelopeHash": null,
                     "typedidProofHash": null,
-                    "viewVersionReceiptHashes": ["sha256:view-receipt"],
+                    "viewVersionReceiptHashes": [qglake_fixture_hash("view-receipt")],
                     "replayEventHashes": [qglake_fixture_hash("bootstrap-replay")],
                     "openLineageHashes": [qglake_fixture_hash("bootstrap-openlineage")]
                 },
@@ -8934,29 +8934,29 @@ mod tests {
                         "name": "active_customers_view",
                         "viewVersion": 1,
                         "acceptedViewVersion": 1,
-                        "acceptedReceiptHash": "sha256:view-receipt",
-                        "acceptedReceiptChainHash": "sha256:view-receipt-chain",
+                        "acceptedReceiptHash": qglake_fixture_hash("view-receipt"),
+                        "acceptedReceiptChainHash": qglake_fixture_hash("view-receipt-chain"),
                         "eventType": "view.upserted",
                         "expectedViewVersion": null,
                         "graphEvents": 1,
-                        "replayEventHashes": ["sha256:view-replay"],
-                        "openLineageHashes": ["sha256:view-openlineage"]
+                        "replayEventHashes": [qglake_fixture_hash("view-replay")],
+                        "openLineageHashes": [qglake_fixture_hash("view-openlineage")]
                     }],
                     "tombstoneReceipts": [{
                         "stableId": "lakecat:view:local:default:active_customers_view",
                         "expectedViewVersion": 1,
-                        "receiptHashes": ["sha256:tombstone"],
-                        "replayEventHashes": ["sha256:tombstone-replay"],
-                        "openLineageHashes": ["sha256:tombstone-openlineage"]
+                        "receiptHashes": [qglake_fixture_hash("tombstone")],
+                        "replayEventHashes": [qglake_fixture_hash("tombstone-replay")],
+                        "openLineageHashes": [qglake_fixture_hash("tombstone-openlineage")]
                     }],
                     "receiptChains": [{
                         "warehouse": "local",
                         "namespace": ["default"],
                         "verifiedChainCount": 1,
-                        "receiptHashes": ["sha256:chain-receipt", "sha256:tombstone"],
-                        "chainHashes": ["sha256:view-receipt-chain"],
-                        "replayEventHashes": ["sha256:chain-replay"],
-                        "openLineageHashes": ["sha256:chain-openlineage"]
+                        "receiptHashes": [qglake_fixture_hash("chain-receipt"), qglake_fixture_hash("tombstone")],
+                        "chainHashes": [qglake_fixture_hash("view-receipt-chain")],
+                        "replayEventHashes": [qglake_fixture_hash("chain-replay")],
+                        "openLineageHashes": [qglake_fixture_hash("chain-openlineage")]
                     }]
                 },
                 "credentials": {
@@ -10926,6 +10926,20 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_short_view_receipt_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"][0]["acceptedReceiptHash"] =
+            json!("sha256:view-receipt");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short view receipt hashes");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("acceptedReceiptHash"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_view_tombstone_version_mismatch() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["tombstoneReceipts"][0]["expectedViewVersion"] =
@@ -10950,14 +10964,14 @@ mod tests {
 
         assert!(err.to_string().contains("viewReceiptChainProof"));
         assert!(err.to_string().contains("acceptedReceiptHash"));
-        assert!(err.to_string().contains("sha256"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
     fn qglake_handoff_summary_verifier_rejects_bootstrap_view_receipt_hash_drift() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["viewVersionReceiptHashes"] =
-            json!(["sha256:other-view-receipt"]);
+            json!([qglake_fixture_hash("other-view-receipt")]);
 
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject spliced bootstrap view receipt hashes");
@@ -10994,14 +11008,14 @@ mod tests {
 
         assert!(err.to_string().contains("viewReceiptChainProof"));
         assert!(err.to_string().contains("acceptedReceiptChainHash"));
-        assert!(err.to_string().contains("sha256"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
     fn qglake_handoff_summary_verifier_rejects_uncovered_view_receipt_chain_hash() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"][0]["acceptedReceiptChainHash"] =
-            json!("sha256:uncovered-view-receipt-chain");
+            json!(qglake_fixture_hash("uncovered-view-receipt-chain"));
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["tombstoneReceipts"] =
             json!([]);
 
@@ -11016,8 +11030,9 @@ mod tests {
     #[test]
     fn qglake_handoff_summary_verifier_rejects_tombstoned_uncovered_view_receipt_chain_hash() {
         let mut summary = qglake_handoff_summary_json();
-        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"][0]["acceptedReceiptChainHash"] =
-            json!("sha256:uncovered-tombstoned-view-receipt-chain");
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"][0]["acceptedReceiptChainHash"] = json!(
+            qglake_fixture_hash("uncovered-tombstoned-view-receipt-chain")
+        );
 
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject tombstoned accepted views whose accepted chain hash is not covered by namespace chain evidence");
@@ -11129,9 +11144,9 @@ mod tests {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chainHashes"] =
             json!([
-                "sha256:view-receipt-chain",
-                "sha256:chain-a",
-                "sha256:chain-b"
+                qglake_fixture_hash("view-receipt-chain"),
+                qglake_fixture_hash("chain-a"),
+                qglake_fixture_hash("chain-b")
             ]);
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["verifiedChainCount"] =
             json!(3);
@@ -11148,7 +11163,7 @@ mod tests {
     fn qglake_handoff_summary_verifier_rejects_uncovered_view_tombstone_receipts() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["tombstoneReceipts"][0]["receiptHashes"] =
-            json!(["sha256:uncovered-tombstone"]);
+            json!([qglake_fixture_hash("uncovered-tombstone")]);
 
         let err = verify_qglake_handoff_summary_value(&summary).expect_err(
             "handoff summary should reject tombstone receipts outside the namespace chain",

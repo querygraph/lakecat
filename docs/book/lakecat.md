@@ -1761,7 +1761,11 @@ tombstone receipt hashes, positive verified-chain counts, receipt-chain
 warehouse/namespace identity, namespace chain hashes, and replay/OpenLineage
 hashes. The verifier also checks that each namespace receipt-chain summary's
 `verifiedChainCount` equals the number of chain hashes and that the receipt
-hashes cover those chains. It also requires
+hashes cover those chains. In the compact verifier, accepted-view receipt
+hashes, accepted receipt-chain hashes, tombstone receipts, namespace
+receipt/chain hashes, and view replay/OpenLineage hashes must all be full
+`sha256:`-prefixed 64-hex digests, so a saved handoff cannot use readable
+placeholder strings as view acceptance evidence. It also requires
 `queryGraphBootstrapProof.viewVersionReceiptHashes` to match the accepted view
 receipt hashes exactly, so the compact summary cannot combine bootstrap view
 receipt evidence from one run with accepted-view proof from another. For both
@@ -2000,7 +2004,8 @@ receipt-chain, and commit-history receipt arrays must also be SHA-256-shaped
 before compact proof generation can consume them. The same shape
 check applies to accepted-view receipt evidence: bootstrap view-version receipt
 hashes, tombstone receipt hashes, and namespace receipt-chain hashes must be
-SHA-256-shaped before accepted-view proof feeds the compact handoff summary.
+full SHA-256 digest evidence before accepted-view proof feeds the compact
+handoff summary.
 Dropped and active accepted-view source replay also compares the bootstrap
 view-version receipt hashes with the accepted QueryGraph verification set, so a
 valid-looking receipt array cannot be spliced from another bootstrap proof.
