@@ -1571,7 +1571,11 @@ the paired envelope hash. As with authorization receipts, the request and
 bootstrap TypeDID hash slots are independently shaped replay evidence because
 they may come from different requests in the captured workflow. That keeps the
 compact handoff self-describing without moving TypeDID trust semantics out of
-TypeSec. It compares captured
+TypeSec. The JSON output from `lakecat-cli qglake-verify-handoff` also carries
+the accepted lineage-drain identity source, identity state, and TypeDID
+envelope/proof hash slots in `lineageDrainArtifactSemantics`, so QueryGraph can
+index the verified drain boundary without reparsing the raw drain artifact. It
+compares captured
 `replay-evidence.scan` with `governedScanProof`, requiring positive plan task,
 scan-plan graph event, file task, delete file, and child plan task counts plus
 the planned and fetched read-restriction objects and the fetch-side required

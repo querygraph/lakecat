@@ -1468,7 +1468,10 @@ fn verify_qglake_handoff_lineage_drain_artifact_semantics(
         "principalSubject": drain.principal_subject,
         "principalKind": drain.principal_kind,
         "authorizationReceiptHash": drain.authorization_receipt_hash,
+        "requestIdentitySource": drain.request_identity_source,
         "requestIdentityState": drain.request_identity_state,
+        "typedidEnvelopeHash": drain.typedid_envelope_hash,
+        "typedidProofHash": drain.typedid_proof_hash,
         "tableCount": verification.table_count,
         "viewCount": verification.view_count,
         "verifiedTables": verification.verified_tables,
@@ -8900,6 +8903,31 @@ mod tests {
                 "graphEdges": 7
             },
             "lineageDrainArtifactSemantics": {
+                "delivered": 12,
+                "eventTypes": [
+                    "table.scan-planned",
+                    "table.scan-tasks-fetched",
+                    "credentials.vend-attempted",
+                    "credentials.vend-attempted",
+                    "view.upserted",
+                    "policy-binding.listed",
+                    "storage-profile.listed",
+                    "storage-profile.upserted",
+                    "server.listed",
+                    "project.listed",
+                    "warehouse.listed",
+                    "table.commits-listed",
+                    "querygraph.bootstrap"
+                ],
+                "graphEvents": 8,
+                "lineageEvents": 13,
+                "principalSubject": summary["lakecatReplayVerification"]["requestIdentityProof"]["principalSubject"].clone(),
+                "principalKind": summary["lakecatReplayVerification"]["requestIdentityProof"]["principalKind"].clone(),
+                "authorizationReceiptHash": summary["lakecatReplayVerification"]["requestIdentityProof"]["authorizationReceiptHash"].clone(),
+                "requestIdentitySource": summary["lakecatReplayVerification"]["requestIdentityProof"]["requestIdentitySource"].clone(),
+                "requestIdentityState": summary["lakecatReplayVerification"]["requestIdentityProof"]["requestIdentityState"].clone(),
+                "typedidEnvelopeHash": summary["lakecatReplayVerification"]["requestIdentityProof"]["typedidEnvelopeHash"].clone(),
+                "typedidProofHash": summary["lakecatReplayVerification"]["requestIdentityProof"]["typedidProofHash"].clone(),
                 "tableCount": summary["querygraphVerification"]["tableCount"].clone(),
                 "viewCount": summary["querygraphVerification"]["viewCount"].clone(),
                 "verifiedTables": summary["querygraphVerification"]["verifiedTables"].clone(),
@@ -11164,6 +11192,13 @@ mod tests {
             semantics["queryGraphImportHash"],
             json!("sha256:querygraph-import")
         );
+        assert_eq!(
+            semantics["requestIdentitySource"],
+            json!("x-lakecat-agent-did")
+        );
+        assert_eq!(semantics["requestIdentityState"], json!("unverified"));
+        assert_eq!(semantics["typedidEnvelopeHash"], Value::Null);
+        assert_eq!(semantics["typedidProofHash"], Value::Null);
     }
 
     #[test]

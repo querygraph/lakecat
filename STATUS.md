@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Expose handoff drain identity semantics`.
+  `lakecat-cli qglake-verify-handoff --json` now carries the
+  lineage-drain request identity source/state and TypeDID envelope/proof hash
+  slots in `lineageDrainArtifactSemantics`, so QueryGraph consumers can inspect
+  the accepted drain identity boundary without reopening the raw drain artifact.
+- Local verification for this handoff semantics slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_lineage_drain_artifact_semantics_accept_matching_drain -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_accepts_handoff_verify_output_hash -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reconcile live QGLake handoff replay proofs`.
   The full local QGLake handoff harness is green again. LakeCat now preserves
   failed `qglake-fixture --drain-output` artifacts before replay verification,

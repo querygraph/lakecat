@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made QGLake handoff verifier output preserve lineage-drain request identity
+  semantics: `lineageDrainArtifactSemantics` now reports the accepted
+  request-identity source/state and TypeDID envelope/proof hash slots alongside
+  the already verified principal, authorization receipt, and QueryGraph hashes.
 - Reconciled live QGLake handoff verification with replay semantics: preserved
   failed drain artifacts for diagnosis, suppressed restricted-agent raw
   credential exception reasons in lineage-drain summaries, kept request and
