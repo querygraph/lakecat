@@ -559,10 +559,10 @@ restriction, including malformed JSON-LD allowed-column lists, fails before
 Sail planning and before `table.scan-planned` replay evidence is emitted. A
 `fetchScanTasks` call with the same malformed JSON-LD active policy fails
 before Sail fetch execution and before `table.scan-tasks-fetched` replay
-evidence is emitted, and a credential request
-fails before issuer dispatch and before `credentials.vend-attempted` replay
-evidence is emitted. Purpose is composed the same way: every purpose source in
-the active policy material must agree. If
+evidence is emitted, and a credential request with the same malformed JSON-LD
+active policy fails before issuer dispatch and before
+`credentials.vend-attempted` replay evidence is emitted. Purpose is composed the
+same way: every purpose source in the active policy material must agree. If
 one binding says a read is for
 `resilience-demo` and another says `training`, LakeCat rejects the restriction
 instead of guessing which purpose should follow the agent into Sail planning,

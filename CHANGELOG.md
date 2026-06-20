@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added REST credential-vending coverage proving malformed JSON-LD ODRL
+  allowed-column lists fail before credential issuer dispatch and before
+  `credentials.vend-attempted` replay evidence is emitted.
 - Added REST `fetchScanTasks` coverage proving malformed JSON-LD ODRL
   allowed-column lists fail before Sail fetch execution and before
   `table.scan-tasks-fetched` replay evidence is emitted.

@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Route-prove malformed JSON-LD ODRL blocks credentials`.
+  The REST credential-vending route now has focused regression coverage proving
+  a malformed JSON-LD ODRL allowed-column `@list` fails before credential issuer
+  dispatch and before `credentials.vend-attempted` replay evidence is emitted.
+- Local verification for this route-level ODRL credential slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service credential_vend_rejects_malformed_jsonld_odrl_before_issuer -- --nocapture`;
+  `cargo test -p lakecat-service credential_vend_rejects_malformed_odrl_before_issuer -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Route-prove malformed JSON-LD ODRL blocks fetch`.
   The REST `fetchScanTasks` route now has focused regression coverage proving a
   malformed JSON-LD ODRL allowed-column `@list` fails before Sail fetch
