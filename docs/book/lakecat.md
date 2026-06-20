@@ -1638,6 +1638,10 @@ LakeCat now checks that storage-scope hash at lineage-drain replay time, before
 the compact handoff summary is accepted, and the operator-readable credential
 replay line prints the same hash so captured terminal output cannot look
 complete while omitting the credential-root boundary.
+Source replay validates secret-reference shape on the credential branches
+themselves: if a credential-root proof says a secret reference is present, it
+must carry a non-empty provider and SHA-256 `secretRefHash`; if it says no
+secret reference is present, provider and hash evidence must be absent.
 Source replay and compact handoff verification both reserve
 `rawCredentialExceptionReason` for the audited trusted-human path; a restricted
 agent proof must be blocked with `blockReason` and cannot carry a raw

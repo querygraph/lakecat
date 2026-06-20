@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened QGLake source replay credential-root validation so each credential
+  replay branch rejects malformed secret-reference provider/hash evidence
+  directly instead of relying on later storage-profile mismatch checks.
 - Tightened QGLake source replay verification to reject restricted-agent
   credential replay events that carry a raw credential exception reason.
 - Tightened compact QGLake `credentialVendingProof` verification to reject a

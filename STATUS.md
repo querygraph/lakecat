@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate QGLake credential source secret refs`.
+  QGLake source replay verification now validates credential-branch
+  secret-reference shape directly: secret refs marked present must carry a
+  non-empty provider and SHA-256 hash, and branches marked absent cannot carry
+  provider or hash evidence.
+- Local verification for this source credential-root slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject restricted QGLake source exception reasons`.
   QGLake source replay verification now rejects restricted-agent credential
   replay events that carry a `rawCredentialExceptionReason`, keeping the
