@@ -839,7 +839,7 @@ impl StorageProfile {
                 "short-lived-secret-ref issuance mode requires a secret reference".to_string(),
             ));
         }
-        validate_public_config(&public_config)?;
+        validate_storage_profile_public_config(&public_config)?;
         Ok(Self {
             profile_id,
             warehouse,
@@ -867,7 +867,7 @@ impl StorageProfile {
                 "short-lived-secret-ref issuance mode requires a secret reference".to_string(),
             ));
         }
-        validate_public_config(&self.public_config)?;
+        validate_storage_profile_public_config(&self.public_config)?;
         Ok(())
     }
 
@@ -2127,6 +2127,29 @@ fn validate_public_config(config: &BTreeMap<String, String>) -> LakeCatResult<()
     }
     Ok(())
 }
+
+fn validate_storage_profile_public_config(config: &BTreeMap<String, String>) -> LakeCatResult<()> {
+    validate_public_config(config)?;
+    for key in config.keys() {
+        let normalized = key.to_ascii_lowercase();
+        if RESERVED_STORAGE_PROFILE_PUBLIC_CONFIG_KEYS.contains(&normalized.as_str()) {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "storage profile public config key is reserved for LakeCat credential evidence: {key}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+const RESERVED_STORAGE_PROFILE_PUBLIC_CONFIG_KEYS: &[&str] = &[
+    "lakecat.storage-profile-id",
+    "lakecat.storage-provider",
+    "lakecat.credential-mode",
+    "lakecat.governed-read-required",
+    "lakecat.authorization-principal",
+    "lakecat.max-credential-ttl-seconds",
+    "lakecat.credential-kind",
+];
 
 fn embeds_raw_secret_material(value: &str) -> bool {
     let normalized = value.to_ascii_lowercase();
@@ -6311,6 +6334,29 @@ pub mod turso_store {
             );
         }
 
+        #[test]
+        fn storage_profiles_reject_reserved_public_config_keys() {
+            let err = StorageProfile::new(
+                "reserved-public-config",
+                WarehouseName::new("local").unwrap(),
+                "file:///tmp/events",
+                StorageProvider::File,
+                CredentialIssuanceMode::LocalFileNoSecret,
+                None,
+                BTreeMap::from([(
+                    "lakecat.storage-profile-id".to_string(),
+                    "shadow-profile".to_string(),
+                )]),
+            )
+            .unwrap_err();
+
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            assert!(
+                err.to_string()
+                    .contains("reserved for LakeCat credential evidence")
+            );
+        }
+
         #[tokio::test]
         async fn storage_profile_upsert_rejects_deserialized_public_config_secrets() {
             let warehouse = WarehouseName::new("local").unwrap();
@@ -6345,6 +6391,47 @@ pub mod turso_store {
                 turso_err
                     .to_string()
                     .contains("public config value for key 'lakecat.endpoint'")
+            );
+            assert_eq!(
+                turso.list_storage_profiles(&warehouse).await.unwrap(),
+                vec![]
+            );
+        }
+
+        #[tokio::test]
+        async fn storage_profile_upsert_rejects_reserved_public_config_keys() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            let profile = StorageProfile {
+                profile_id: "reserved-public-config".to_string(),
+                warehouse: warehouse.clone(),
+                location_prefix: "file:///tmp/events".to_string(),
+                provider: StorageProvider::File,
+                issuance_mode: CredentialIssuanceMode::LocalFileNoSecret,
+                secret_ref: None,
+                public_config: BTreeMap::from([(
+                    "lakecat.storage-profile-id".to_string(),
+                    "shadow-profile".to_string(),
+                )]),
+            };
+
+            let memory_err = MemoryCatalogStore::new()
+                .upsert_storage_profile(profile.clone())
+                .await
+                .unwrap_err();
+            assert!(matches!(memory_err, LakeCatError::InvalidArgument(_)));
+            assert!(
+                memory_err
+                    .to_string()
+                    .contains("reserved for LakeCat credential evidence")
+            );
+
+            let turso = TursoCatalogStore::in_memory().await.unwrap();
+            let turso_err = turso.upsert_storage_profile(profile).await.unwrap_err();
+            assert!(matches!(turso_err, LakeCatError::InvalidArgument(_)));
+            assert!(
+                turso_err
+                    .to_string()
+                    .contains("reserved for LakeCat credential evidence")
             );
             assert_eq!(
                 turso.list_storage_profiles(&warehouse).await.unwrap(),

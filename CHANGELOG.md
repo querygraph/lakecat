@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected reserved storage-profile `public-config` keys such as
+  `lakecat.storage-profile-id`, so operator-supplied routing hints cannot
+  shadow LakeCat-owned credential evidence in memory, Turso, or management API
+  paths.
 - Added REST-level credential-vending coverage proving the public
   `loadCredentials` response collapses duplicate backend TTL config entries to
   one effective `lakecat.max-credential-ttl-seconds` value.

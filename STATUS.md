@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject reserved storage-profile public config keys`.
+  Storage profiles now reject user-supplied `public-config` keys reserved for
+  LakeCat credential evidence, including `lakecat.storage-profile-id`, before
+  memory or Turso persistence. The management API returns a bad request for the
+  same shadowing attempt while preserving allowed non-secret routing hints such
+  as `lakecat.endpoint`.
+- Local verification for this reserved public-config slice is green:
+  `cargo fmt -p lakecat-store -p lakecat-service -- --check`;
+  `cargo test -p lakecat-store --features turso-local reserved_public_config -- --nocapture`;
+  `cargo test -p lakecat-service management_storage_profile_rejects_reserved_public_config_keys -- --nocapture`;
+  `cargo test -p lakecat-service management_storage_profile_overrides_inferred_credentials_by_prefix -- --nocapture`.
+- Latest completed implementation slice:
   `Pin REST credential TTL normalization`.
   The public credential-vending path now has a service-level regression proving
   a backend that returns duplicate, wider, or malformed

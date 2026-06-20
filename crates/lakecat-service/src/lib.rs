@@ -12213,6 +12213,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn management_storage_profile_rejects_reserved_public_config_keys() {
+        let app = test_app();
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/storage-profiles/reserved-public-config")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "location-prefix": "file:///tmp/events",
+                    "provider": "file",
+                    "issuance-mode": "local-file-no-secret",
+                    "public-config": {
+                        "lakecat.storage-profile-id": "shadow-profile"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(message.contains("reserved for LakeCat credential evidence"));
+    }
+
+    #[tokio::test]
     async fn remote_storage_profile_accepts_secret_ref_without_vending_raw_secrets() {
         let app = test_app();
         let upsert = Request::builder()

@@ -875,7 +875,12 @@ query parameters must move behind `secret-ref` and the TypeSec-authorized
 resolver path. That rule is enforced both when a profile is built from a
 management request and when a storage profile is revalidated before memory or
 Turso persistence, so deserialized control-plane records cannot bypass the
-public-config guard. The `secret-ref` field itself must remain a clean external
+public-config guard. LakeCat also reserves credential-evidence keys such as
+`lakecat.storage-profile-id`, `lakecat.storage-provider`,
+`lakecat.credential-mode`, and `lakecat.max-credential-ttl-seconds`; operators
+may still publish non-secret hints such as `lakecat.endpoint`, but they cannot
+shadow catalog-owned proof in the eventual credential response. The
+`secret-ref` field itself must remain a clean external
 secret-store locator: LakeCat rejects query strings, URI fragments, and
 userinfo before persisting a storage profile, so token-like material cannot hide
 inside a decorated secret URI. It also rejects literal and percent-encoded dot
