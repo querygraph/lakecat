@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Refreshed the live QGLake handoff after warehouse-root hardening, proving the
+  local harness still verifies 1 table, 1 view, 26 drained replay events,
+  QueryGraph verify/import, and compact handoff self-checks with redacted
+  management and storage-profile evidence.
 - Rejected decorated and traversal-shaped warehouse storage roots before memory
   or Turso persistence, returning `warehouse-storage-root-hash` evidence instead
   of raw local paths, bucket roots, query tokens, or URI userinfo.

@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Refresh live QGLake handoff after warehouse-root hardening`.
+  The local QGLake handoff harness is green after warehouse-root replay
+  redaction and validation hardening: it generated one table and one view,
+  drained 26 replay events, verified saved LakeCat replay, ran QueryGraph
+  verify/import, and self-verified the compact handoff summary while preserving
+  hash-only management and storage-profile evidence.
+- Local verification for this live handoff refresh is green:
+  `scripts/qglake-handoff-local.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject unsafe warehouse storage roots`.
   Warehouse storage roots now reject query strings, fragments, URI userinfo, and
   literal or percent-encoded dot path segments before memory or Turso
