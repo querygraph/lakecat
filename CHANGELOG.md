@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Accepted compact JSON-LD `@id` term objects for bounded ODRL constraint
+  `leftOperand` and `operator` values, keeping LakeCat compatible with common
+  ODRL encodings without broadening catalog-local policy semantics.
 - Accepted prefixed JSON-LD ODRL constraint operand keys
   (`odrl:leftOperand`, `odrl:rightOperand`) for the enforceable read-restriction
   subset while preserving the same fail-closed missing-right-operand checks.

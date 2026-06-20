@@ -351,9 +351,10 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
   constraint-form operators and right operands now fail closed when they are
   missing or do not mean "use this value as the allowed/narrowing restriction."
   The parser accepts camel, kebab, and prefixed JSON-LD operand keys for this
-  bounded subset without growing LakeCat into a full ODRL reasoner. Purpose
-  composition also fails closed unless all enforced policy material agrees on
-  the same purpose.
+  bounded subset, plus compact JSON-LD `@id` term objects for constraint
+  operands and operators, without growing LakeCat into a full ODRL reasoner.
+  Purpose composition also fails closed unless all enforced policy material
+  agrees on the same purpose.
 - Graph and lineage side effects are moving through bounded catalog events and
   replayable outbox evidence. Drains fail rather than reporting partial
   acknowledgement success when the store does not mark the whole projected
@@ -373,7 +374,7 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
 | Finding | Status | Current meaning |
 | --- | --- | --- |
 | F1 governed reads gate but must narrow | Started | Restrictions now flow through governed planning/fetch proof, but Sail should own more read execution. |
-| F2 ODRL transported but not fully interpreted | Started | Enforceable ODRL subset is becoming restriction input; unsupported constraint operators and missing right operands now fail closed across camel, kebab, and prefixed JSON-LD operand keys; broader composition stays in TypeSec/QueryGraph. |
+| F2 ODRL transported but not fully interpreted | Started | Enforceable ODRL subset is becoming restriction input; unsupported constraint operators and missing right operands now fail closed across camel, kebab, prefixed JSON-LD operand keys, and compact `@id` term objects; broader composition stays in TypeSec/QueryGraph. |
 | F3 REST commit idempotency | Started | Store support exists; REST-visible behavior needs continued hardening. |
 | F4 metadata write before CAS orphan handling | Started | Commit hardening exists; cleanup and proof paths still matter. |
 | F5 scans bypass in-process provider | Started | Plan/fetch paths are guarded; reusable Sail planner integration remains the target. |

@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Accept JSON-LD ODRL term objects`.
+  `lakecat-security` now accepts compact JSON-LD `@id` term objects for
+  bounded ODRL constraint `leftOperand` and `operator` values, including
+  prefixed operand-key forms. This keeps common JSON-LD ODRL encodings on the
+  same governed read-restriction path without moving broader ODRL reasoning into
+  LakeCat.
+- Local verification for this JSON-LD term-object slice is green:
+  `cargo fmt -p lakecat-security -- --check`;
+  `cargo test -p lakecat-security read_restriction_accepts_jsonld_term_objects_for_constraint_terms -- --nocapture`;
+  `cargo test -p lakecat-security read_restriction_accepts_prefixed_odrl_constraint_operands -- --nocapture`;
+  `cargo test -p lakecat-security read_restriction -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Accept prefixed ODRL constraint operands`.
   `lakecat-security` now treats prefixed JSON-LD ODRL constraint operand keys
   (`odrl:leftOperand`, `odrl:rightOperand`) as equivalent to the already

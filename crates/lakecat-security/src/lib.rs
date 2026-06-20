@@ -405,7 +405,7 @@ fn constraint_operator(constraint: &Value) -> Option<&str> {
     constraint
         .get("operator")
         .or_else(|| constraint.get("odrl:operator"))
-        .and_then(Value::as_str)
+        .and_then(jsonld_term)
 }
 
 fn constraint_left_operand(constraint: &Value) -> Option<&str> {
@@ -413,7 +413,13 @@ fn constraint_left_operand(constraint: &Value) -> Option<&str> {
         .get("leftOperand")
         .or_else(|| constraint.get("left-operand"))
         .or_else(|| constraint.get("odrl:leftOperand"))
-        .and_then(Value::as_str)
+        .and_then(jsonld_term)
+}
+
+fn jsonld_term(value: &Value) -> Option<&str> {
+    value
+        .as_str()
+        .or_else(|| value.get("@id").and_then(Value::as_str))
 }
 
 fn constraint_right_operand<'a>(constraint: &'a Value, label: &str) -> LakeCatResult<&'a Value> {
@@ -1035,6 +1041,46 @@ mod tests {
         );
         assert_eq!(restriction.purpose.as_deref(), Some("resilience-demo"));
         assert_eq!(restriction.max_credential_ttl_seconds, Some(300));
+    }
+
+    #[test]
+    fn read_restriction_accepts_jsonld_term_objects_for_constraint_terms() {
+        let policy = serde_json::json!({
+            "uid": "policy-a",
+            "permission": [{
+                "constraint": [
+                    {
+                        "leftOperand": { "@id": "lakecat:allowed-columns" },
+                        "operator": { "@id": "odrl:eq" },
+                        "rightOperand": ["event_id"]
+                    },
+                    {
+                        "odrl:leftOperand": { "@id": "lakecat:row-predicate" },
+                        "odrl:operator": { "@id": "http://www.w3.org/ns/odrl/2/eq" },
+                        "odrl:rightOperand": {
+                            "type": "equal",
+                            "term": "region",
+                            "value": "west"
+                        }
+                    }
+                ]
+            }]
+        });
+
+        let restriction = ReadRestriction::from_odrl_policies([&policy]).unwrap();
+
+        assert_eq!(
+            restriction.allowed_columns,
+            Some(vec!["event_id".to_string()])
+        );
+        assert_eq!(
+            restriction.row_predicate,
+            Some(serde_json::json!({
+                "type": "equal",
+                "term": "region",
+                "value": "west"
+            }))
+        );
     }
 
     #[test]

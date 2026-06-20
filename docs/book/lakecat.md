@@ -543,7 +543,9 @@ operators that actually mean "use this as the allowed or narrowing value";
 missing or deny-shaped operators fail closed instead of being treated as
 governed read permission. The bounded parser accepts camel-case, kebab-case,
 and prefixed JSON-LD operand keys such as `odrl:leftOperand` and
-`odrl:rightOperand`, but it does not turn LakeCat into a full ODRL reasoner.
+`odrl:rightOperand`. It also accepts compact JSON-LD term objects such as
+`{"@id":"odrl:eq"}` for constraint operands and operators, but it does not
+turn LakeCat into a full ODRL reasoner.
 Recognized constraint operands must also include a right operand; otherwise
 LakeCat rejects the policy material instead of silently dropping an
 allowed-column, row-predicate, purpose, or credential-TTL restriction. The
