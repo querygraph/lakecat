@@ -9891,6 +9891,24 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_unrequested_effective_scan_stats_field() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedRequestedStatsFields"] =
+            json!(["event_id", "occurred_at", "severity", "raw_payload"]);
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedEffectiveStatsFields"] =
+            json!(["event_id", "occurred_at", "tenant_id"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject effective stats fields that were never requested",
+        );
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("plannedEffectiveStatsFields"));
+        assert!(err.to_string().contains("tenant_id"));
+        assert!(err.to_string().contains("not requested"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_scan_restriction_drift() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["governedScanProof"]["fetchedReadRestriction"]["allowed-columns"] =

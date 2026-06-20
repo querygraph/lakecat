@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject unrequested QGLake handoff stats proof`.
+  The compact QGLake handoff verifier now rejects
+  `plannedEffectiveStatsFields` entries that were not present in
+  `plannedRequestedStatsFields`, proving effective stats evidence is a true
+  narrowing rather than an unrelated replacement list.
+- Local verification for this handoff stats narrowing slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_unrequested_effective_scan_stats_field -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_scan_stats_field_widening -- --nocapture`.
+- Latest completed implementation slice:
   `Require QGLake handoff effective stats proof`.
   The compact QGLake handoff verifier now rejects governed scan proofs that
   omit `plannedEffectiveStatsFields`, complementing the existing missing
