@@ -2518,8 +2518,8 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
             "queryGraphBootstrapProof",
         )?;
     }
-    require_hash_array(bootstrap, "replayEventHashes", "queryGraphBootstrapProof")?;
-    require_hash_array(bootstrap, "openLineageHashes", "queryGraphBootstrapProof")?;
+    require_full_hash_array(bootstrap, "replayEventHashes", "queryGraphBootstrapProof")?;
+    require_full_hash_array(bootstrap, "openLineageHashes", "queryGraphBootstrapProof")?;
 
     let governed_scan = required_object(lakecat, "governedScanProof", "lakecatReplayVerification")?;
     require_positive_u64(governed_scan, "planTaskCount", "governedScanProof")?;
@@ -2816,9 +2816,9 @@ fn require_core_querygraph_hash_evidence(
     label: &str,
 ) -> lakecat_core::LakeCatResult<()> {
     for field in ["bundleHash", "graphHash", "openLineageHash"] {
-        require_hash_str(value, field, label)?;
+        require_full_hash_str(value, field, label)?;
     }
-    require_hash_str(value, import_hash_field, label)?;
+    require_full_hash_str(value, import_hash_field, label)?;
     Ok(())
 }
 
@@ -8539,10 +8539,10 @@ mod tests {
                 "verifiedViews": [
                     "lakecat:view:local:default:active_customers_view"
                 ],
-                "bundleHash": "sha256:bundle",
-                "graphHash": "sha256:graph",
-                "openLineageHash": "sha256:openlineage",
-                "querygraphImportHash": "sha256:querygraph-import",
+                "bundleHash": qglake_fixture_hash("bundle"),
+                "graphHash": qglake_fixture_hash("graph"),
+                "openLineageHash": qglake_fixture_hash("openlineage"),
+                "querygraphImportHash": qglake_fixture_hash("querygraph-import"),
                 "standards": [
                     "Iceberg REST",
                     "Croissant",
@@ -8563,10 +8563,10 @@ mod tests {
                 "verifiedViews": [
                     "lakecat:view:local:default:active_customers_view"
                 ],
-                "bundleHash": "sha256:bundle",
-                "graphHash": "sha256:graph",
-                "openLineageHash": "sha256:openlineage",
-                "querygraphImportHash": "sha256:querygraph-import",
+                "bundleHash": qglake_fixture_hash("bundle"),
+                "graphHash": qglake_fixture_hash("graph"),
+                "openLineageHash": qglake_fixture_hash("openlineage"),
+                "querygraphImportHash": qglake_fixture_hash("querygraph-import"),
                 "standards": [
                     "Iceberg REST",
                     "Croissant",
@@ -8591,10 +8591,10 @@ mod tests {
                     "typedidProofHash": null
                 },
                 "queryGraphBootstrapProof": {
-                    "bundleHash": "sha256:bundle",
-                    "graphHash": "sha256:graph",
-                    "openLineageHash": "sha256:openlineage",
-                    "queryGraphImportHash": "sha256:querygraph-import",
+                    "bundleHash": qglake_fixture_hash("bundle"),
+                    "graphHash": qglake_fixture_hash("graph"),
+                    "openLineageHash": qglake_fixture_hash("openlineage"),
+                    "queryGraphImportHash": qglake_fixture_hash("querygraph-import"),
                     "tableArtifactCount": 1,
                     "viewArtifactCount": 1,
                     "policyBindingCount": 1,
@@ -8617,8 +8617,8 @@ mod tests {
                     "typedidEnvelopeHash": null,
                     "typedidProofHash": null,
                     "viewVersionReceiptHashes": ["sha256:view-receipt"],
-                    "replayEventHashes": ["sha256:bootstrap-replay"],
-                    "openLineageHashes": ["sha256:bootstrap-openlineage"]
+                    "replayEventHashes": [qglake_fixture_hash("bootstrap-replay")],
+                    "openLineageHashes": [qglake_fixture_hash("bootstrap-openlineage")]
                 },
                 "governedScanProof": {
                     "planTaskCount": 1,
@@ -8796,10 +8796,10 @@ mod tests {
             "status": "verified",
             "table-count": 1,
             "view-count": 1,
-            "bundle-hash": "sha256:bundle",
-            "graph-hash": "sha256:graph",
-            "open-lineage-hash": "sha256:openlineage",
-            "querygraph-import-hash": "sha256:querygraph-import",
+            "bundle-hash": qglake_fixture_hash("bundle"),
+            "graph-hash": qglake_fixture_hash("graph"),
+            "open-lineage-hash": qglake_fixture_hash("openlineage"),
+            "querygraph-import-hash": qglake_fixture_hash("querygraph-import"),
             "standards": [
                 "Iceberg REST",
                 "Croissant",
@@ -8820,10 +8820,10 @@ mod tests {
                     "typedidProofHash": null
                 },
                 "queryGraphBootstrap": {
-                    "bundleHash": "sha256:bundle",
-                    "graphHash": "sha256:graph",
-                    "openLineageHash": "sha256:openlineage",
-                    "queryGraphImportHash": "sha256:querygraph-import",
+                    "bundleHash": qglake_fixture_hash("bundle"),
+                    "graphHash": qglake_fixture_hash("graph"),
+                    "openLineageHash": qglake_fixture_hash("openlineage"),
+                    "queryGraphImportHash": qglake_fixture_hash("querygraph-import"),
                     "tableArtifactCount": 1,
                     "viewArtifactCount": 1,
                     "policyBindingCount": 1,
@@ -8846,8 +8846,8 @@ mod tests {
                     "typedidEnvelopeHash": null,
                     "typedidProofHash": null,
                     "viewVersionReceiptHashes": ["sha256:view-receipt"],
-                    "replayEventHashes": ["sha256:bootstrap-replay"],
-                    "openLineageHashes": ["sha256:bootstrap-openlineage"]
+                    "replayEventHashes": [qglake_fixture_hash("bootstrap-replay")],
+                    "openLineageHashes": [qglake_fixture_hash("bootstrap-openlineage")]
                 },
                 "scan": {
                     "planTaskCount": 1,
@@ -9017,10 +9017,10 @@ mod tests {
             "verified-views": [
                 "lakecat:view:local:default:active_customers_view"
             ],
-            "bundle-hash": "sha256:bundle",
-            "graph-hash": "sha256:graph",
-            "open-lineage-hash": "sha256:openlineage",
-            "querygraph-import-hash": "sha256:querygraph-import",
+            "bundle-hash": qglake_fixture_hash("bundle"),
+            "graph-hash": qglake_fixture_hash("graph"),
+            "open-lineage-hash": qglake_fixture_hash("openlineage"),
+            "querygraph-import-hash": qglake_fixture_hash("querygraph-import"),
             "standards": [
                 "Iceberg REST",
                 "Croissant",
@@ -9635,7 +9635,7 @@ mod tests {
         );
         assert_eq!(
             verification["queryGraphBootstrapProof"]["bundleHash"],
-            json!("sha256:bundle")
+            json!(qglake_fixture_hash("bundle"))
         );
     }
 
@@ -9781,7 +9781,7 @@ mod tests {
     fn qglake_handoff_summary_verifier_rejects_import_hash_drift() {
         let mut summary = qglake_handoff_summary_json();
         summary["querygraphImportVerification"]["querygraphImportHash"] =
-            json!("sha256:other-querygraph-import");
+            json!(qglake_fixture_hash("other-querygraph-import"));
 
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject import hash drift");
@@ -9803,7 +9803,7 @@ mod tests {
 
         assert!(err.to_string().contains("querygraphVerification"));
         assert!(err.to_string().contains("bundleHash"));
-        assert!(err.to_string().contains("sha256"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
@@ -9820,7 +9820,21 @@ mod tests {
 
         assert!(err.to_string().contains("querygraphVerification"));
         assert!(err.to_string().contains("querygraphImportHash"));
-        assert!(err.to_string().contains("sha256"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_short_bootstrap_replay_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["replayEventHashes"] =
+            json!(["sha256:bootstrap-replay"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short bootstrap replay hashes");
+
+        assert!(err.to_string().contains("queryGraphBootstrapProof"));
+        assert!(err.to_string().contains("replayEventHashes"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
@@ -9849,7 +9863,7 @@ mod tests {
     fn qglake_handoff_summary_verifier_rejects_bootstrap_hash_mismatch() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["bundleHash"] =
-            json!("sha256:other");
+            json!(qglake_fixture_hash("other-bundle"));
 
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject mismatched bootstrap hash");

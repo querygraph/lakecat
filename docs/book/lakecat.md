@@ -1651,7 +1651,11 @@ bundle, graph, OpenLineage, and QueryGraph import hashes, the table and view
 artifact counts, standards, policy-binding count, agent delegation and summary
 signature hashes, view-version receipt hashes, and replay/OpenLineage sink
 hashes. Those core bootstrap hash anchors must also be SHA-256-shaped before
-the verifier compares them with QueryGraph's verify/import proof. The scan
+the verifier compares them with QueryGraph's verify/import proof. In the
+compact handoff verifier, the QueryGraph bundle, graph, OpenLineage, import,
+bootstrap replay, and bootstrap OpenLineage anchors must be full
+`sha256:`-prefixed 64-hex digests, so saved summaries cannot use prefix-shaped
+placeholders as QueryGraph acceptance evidence. The scan
 proof shows LakeCat planned and fetched scan tasks through the
 governed path, including file, delete-file, and child plan-task counts with
 replay and OpenLineage hashes. The

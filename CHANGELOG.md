@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required compact QGLake QueryGraph bootstrap core and replay/OpenLineage
+  hashes to contain full `sha256:`-prefixed 64-hex digests, rejecting short
+  placeholder bundle/import/replay anchors in saved handoff summaries.
 - Required compact QGLake table commit-history proof commit/replay/OpenLineage
   hash arrays to contain full `sha256:`-prefixed 64-hex digests, rejecting
   short placeholder pointer-history receipt hashes in saved handoff summaries.
