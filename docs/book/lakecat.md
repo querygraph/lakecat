@@ -1789,11 +1789,13 @@ claim that agents were blocked onto Sail-planned reads or that humans used an
 audited exception unless the captured LakeCat replay proves the same decision.
 Each credential branch carries the same redacted storage-scope anchor as the
 storage-profile upsert proof: `locationPrefixHash` binds the credential-vend
-attempt to the configured storage root without replaying the raw prefix.
-LakeCat now checks that storage-scope hash at lineage-drain replay time, before
-the compact handoff summary is accepted, and the operator-readable credential
-replay line prints the same hash so captured terminal output cannot look
-complete while omitting the credential-root boundary.
+attempt to the configured storage root without replaying the raw prefix. That
+anchor must be a full `sha256:`-prefixed 64-hex digest in both the
+storage-profile proof and each credential branch. LakeCat checks the
+storage-scope hash at lineage-drain replay time before the compact handoff
+summary is accepted, and the operator-readable credential replay line prints
+the same hash so captured terminal output cannot look complete while omitting
+the credential-root boundary.
 Source replay validates secret-reference shape on the credential branches
 themselves: if a credential-root proof says a secret reference is present, it
 must carry a non-empty provider and SHA-256 `secretRefHash`; if it says no
@@ -2002,8 +2004,8 @@ control-plane lines such as:
 
 ```text
 scan replay plan_tasks=1 plan_graph_events=1 planned_ttl=300 planned_purpose=qglake-agent-demo file_tasks=1 delete_files=1 child_plan_tasks=1 fetched_ttl=300 fetched_purpose=qglake-agent-demo
-management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none
-credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2
+management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none
+credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none:graph_events=2
 table commit history commits=1 sequences=1 hashes=sha256:... graph_events=1
 ```
 

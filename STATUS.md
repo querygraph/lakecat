@@ -6,6 +6,21 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full QGLake storage-scope hashes`.
+  QGLake compact handoff summaries, management replay lines, credential replay
+  lines, and storage-profile upsert lineage replay now require
+  `locationPrefixHash` storage-scope evidence to be full `sha256:`-prefixed
+  64-hex digests instead of placeholder hash labels.
+- Local verification for this QGLake storage-scope hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_storage_profile_location_hash_shape -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_credential_location_prefix_hash -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_storage_profile_upsert_replay_rejects_short_location_prefix_hash -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin QueryGraph tenant hash producer evidence`.
   QueryGraph tenant projection and the service bootstrap route now have focused
   coverage proving durable tenant roots are emitted as full SHA-256 hash

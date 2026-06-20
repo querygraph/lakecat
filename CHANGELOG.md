@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake storage-profile and credential storage-scope
+  `locationPrefixHash` evidence to be full `sha256:`-prefixed 64-hex digests
+  in compact handoff summaries and lineage-drain replay checks.
 - Pinned QueryGraph bootstrap producer coverage so durable tenant root evidence
   emitted by `lakecat-querygraph` and the service route is proven to be full
   SHA-256 hash evidence, not merely prefix-shaped redaction text.

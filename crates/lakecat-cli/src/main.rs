@@ -2867,7 +2867,7 @@ fn require_storage_profile_upsert_evidence(
     require_non_empty_str(storage_profile, "profileId", "storageProfileUpsertProof")?;
     require_non_empty_str(storage_profile, "provider", "storageProfileUpsertProof")?;
     require_non_empty_str(storage_profile, "issuanceMode", "storageProfileUpsertProof")?;
-    require_hash_str(
+    require_full_hash_str(
         storage_profile,
         "locationPrefixHash",
         "storageProfileUpsertProof",
@@ -3213,7 +3213,7 @@ fn require_credential_storage_profile_evidence(
     require_non_empty_str(storage_profile, "profileId", storage_label.as_str())?;
     require_non_empty_str(storage_profile, "provider", storage_label.as_str())?;
     require_non_empty_str(storage_profile, "issuanceMode", storage_label.as_str())?;
-    require_hash_str(
+    require_full_hash_str(
         storage_profile,
         "locationPrefixHash",
         storage_label.as_str(),
@@ -3614,7 +3614,7 @@ fn qglake_storage_profile_upsert_line(event: &LineageDrainEventSummary) -> Optio
     if profile_id.is_empty()
         || provider.is_empty()
         || issuance_mode.is_empty()
-        || !is_sha256_hash(location_prefix_hash)
+        || !is_full_sha256_hash(location_prefix_hash)
     {
         return None;
     }
@@ -4016,7 +4016,7 @@ fn qglake_credential_storage_profile_line(event: &LineageDrainEventSummary) -> O
     if profile_id.is_empty()
         || provider.is_empty()
         || issuance_mode.is_empty()
-        || !is_sha256_hash(location_prefix_hash)
+        || !is_full_sha256_hash(location_prefix_hash)
         || graph_events == 0
     {
         return None;
@@ -6960,7 +6960,7 @@ fn verify_qglake_credential_storage_profile_projection(
         || event
             .storage_profile_location_prefix_hash
             .as_deref()
-            .map_or(true, |hash| !is_sha256_hash(hash))
+            .map_or(true, |hash| !is_full_sha256_hash(hash))
         || event.storage_profile_secret_ref_present.is_none()
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -7256,7 +7256,7 @@ fn verify_qglake_storage_profile_upsert_replay(
         || event
             .storage_profile_location_prefix_hash
             .as_deref()
-            .map_or(true, |hash| !is_sha256_hash(hash))
+            .map_or(true, |hash| !is_full_sha256_hash(hash))
         || event.storage_profile_secret_ref_present.is_none()
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
@@ -8337,6 +8337,20 @@ fn require_hash_str<'a>(
     Ok(string)
 }
 
+fn require_full_hash_str<'a>(
+    value: &'a serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<&'a str> {
+    let string = require_non_empty_str(value, field, label)?;
+    if !is_full_sha256_hash(string) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must be a full SHA-256 hash"
+        )));
+    }
+    Ok(string)
+}
+
 fn is_sha256_hash(string: &str) -> bool {
     string.starts_with("sha256:")
 }
@@ -8688,7 +8702,7 @@ mod tests {
                     "profileId": "events-local",
                     "provider": "file",
                     "issuanceMode": "local-file-no-secret",
-                    "locationPrefixHash": "sha256:storage-location-prefix",
+                    "locationPrefixHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
                     "secretRefPresent": false,
                     "secretRefProvider": null,
                             "secretRefHash": null,
@@ -8708,7 +8722,7 @@ mod tests {
                             "profileId": "events-local",
                             "provider": "file",
                             "issuanceMode": "local-file-no-secret",
-                            "locationPrefixHash": "sha256:storage-location-prefix",
+                            "locationPrefixHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
                             "secretRefPresent": false,
                             "secretRefProvider": null,
                             "secretRefHash": null,
@@ -8729,7 +8743,7 @@ mod tests {
                             "profileId": "events-local",
                             "provider": "file",
                             "issuanceMode": "local-file-no-secret",
-                            "locationPrefixHash": "sha256:storage-location-prefix",
+                            "locationPrefixHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
                             "secretRefPresent": false,
                             "secretRefProvider": null,
                             "secretRefHash": null,
@@ -8882,7 +8896,7 @@ mod tests {
                         "profileId": "events-local",
                         "provider": "file",
                         "issuanceMode": "local-file-no-secret",
-                        "locationPrefixHash": "sha256:storage-location-prefix",
+                        "locationPrefixHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
                         "secretRefPresent": false,
                         "secretRefProvider": null,
                         "secretRefHash": null,
@@ -8937,7 +8951,7 @@ mod tests {
                             "profileId": "events-local",
                             "provider": "file",
                             "issuanceMode": "local-file-no-secret",
-                            "locationPrefixHash": "sha256:storage-location-prefix",
+                            "locationPrefixHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
                             "secretRefPresent": false,
                             "secretRefProvider": null,
                             "secretRefHash": null,
@@ -8958,7 +8972,7 @@ mod tests {
                             "profileId": "events-local",
                             "provider": "file",
                             "issuanceMode": "local-file-no-secret",
-                            "locationPrefixHash": "sha256:storage-location-prefix",
+                            "locationPrefixHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
                             "secretRefPresent": false,
                             "secretRefProvider": null,
                             "secretRefHash": null,
@@ -10024,7 +10038,18 @@ mod tests {
 
         assert!(err.to_string().contains("storageProfileUpsertProof"));
         assert!(err.to_string().contains("locationPrefixHash"));
-        assert!(err.to_string().contains("sha256"));
+        assert!(err.to_string().contains("full SHA-256"));
+
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["locationPrefixHash"] =
+            json!("sha256:storage-location-prefix");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short location-prefix hash evidence");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("locationPrefixHash"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
@@ -10623,6 +10648,18 @@ mod tests {
 
         assert!(err.to_string().contains("credentialVendingProof"));
         assert!(err.to_string().contains("locationPrefixHash"));
+
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]["storageProfile"]
+            ["locationPrefixHash"] = json!("sha256:storage-location-prefix");
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject short credential storage-scope hash evidence",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("locationPrefixHash"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
@@ -11346,7 +11383,7 @@ mod tests {
         );
         assert_eq!(
             semantics["lakecatReplay"]["storageProfileUpsertProof"]["locationPrefixHash"],
-            json!("sha256:storage-location-prefix")
+            json!("sha256:2222222222222222222222222222222222222222222222222222222222222222")
         );
         assert_eq!(
             semantics["lakecatReplay"]["requestIdentityProof"]["principalSubject"],
@@ -12963,7 +13000,7 @@ mod tests {
         );
         assert_eq!(
             replay_json["replay-evidence"]["management"]["storageProfileUpsert"]["locationPrefixHash"],
-            json!("sha256:storage-location-prefix")
+            json!("sha256:2222222222222222222222222222222222222222222222222222222222222222")
         );
         assert_eq!(
             replay_json["replay-evidence"]["management"]["storageProfileUpsert"]["secretRefPresent"],
@@ -14793,7 +14830,7 @@ mod tests {
 
         assert_eq!(
             line,
-            "management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none"
+            "management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none"
         );
 
         let mut upsert_without_location_hash = qglake_storage_profile_upsert_lineage_summary();
@@ -14868,6 +14905,24 @@ mod tests {
     }
 
     #[test]
+    fn qglake_storage_profile_upsert_replay_rejects_short_location_prefix_hash() {
+        let mut event = qglake_storage_profile_upsert_lineage_summary();
+        event.storage_profile_location_prefix_hash =
+            Some("sha256:storage-location-prefix".to_string());
+
+        let err = verify_qglake_storage_profile_upsert_replay(&event)
+            .expect_err("storage-profile replay should reject short location-prefix hash evidence");
+
+        let err = err.to_string();
+        assert!(
+            err.contains(
+                "qglake lineage drain storage profile upsert replay did not expose redacted credential-root evidence"
+            ) || err.contains("storage-profile evidence does not match storage profile upsert replay"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_credential_replay_line_summarizes_verified_evidence() {
         let line = qglake_credential_replay_line(
             &LineageDrainResponse {
@@ -14896,7 +14951,7 @@ mod tests {
 
         assert_eq!(
             line,
-            "credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:storage-location-prefix:secret_ref=none:graph_events=2"
+            "credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none:graph_events=2"
         );
     }
 
@@ -17313,9 +17368,65 @@ mod tests {
             1,
         )
         .expect_err("QGLake lineage drain should reject malformed storage-profile upsert hash");
-        assert!(err.to_string().contains(
-            "qglake lineage drain storage profile upsert replay did not expose redacted credential-root evidence"
-        ));
+        let err = err.to_string();
+        assert!(
+            err.contains(
+                "qglake lineage drain storage profile upsert replay did not expose redacted credential-root evidence"
+            ) || err.contains("storage-profile evidence does not match storage profile upsert replay"),
+            "{err}"
+        );
+
+        let mut short_storage_profile_upsert = qglake_storage_profile_upsert_lineage_summary();
+        short_storage_profile_upsert.storage_profile_location_prefix_hash =
+            Some("sha256:storage-location-prefix".to_string());
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 7,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "storage-profile.upserted".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 7,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    short_storage_profile_upsert,
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err(
+            "QGLake lineage drain should reject short storage-profile upsert hash evidence",
+        );
+        let err = err.to_string();
+        assert!(
+            err.contains(
+                "qglake lineage drain storage profile upsert replay did not expose redacted credential-root evidence"
+            ) || err.contains("storage-profile evidence does not match storage profile upsert replay"),
+            "{err}"
+        );
 
         let mut contradictory_storage_profile_upsert =
             qglake_storage_profile_upsert_lineage_summary();
@@ -19328,7 +19439,8 @@ mod tests {
             storage_profile_provider: Some("file".to_string()),
             storage_profile_issuance_mode: Some("local-file-no-secret".to_string()),
             storage_profile_location_prefix_hash: Some(
-                "sha256:storage-location-prefix".to_string(),
+                "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+                    .to_string(),
             ),
             storage_profile_secret_ref_present: Some(false),
             storage_profile_secret_ref_provider: None,
@@ -19604,7 +19716,8 @@ mod tests {
             storage_profile_provider: Some("file".to_string()),
             storage_profile_issuance_mode: Some("local-file-no-secret".to_string()),
             storage_profile_location_prefix_hash: Some(
-                "sha256:storage-location-prefix".to_string(),
+                "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+                    .to_string(),
             ),
             storage_profile_secret_ref_present: Some(false),
             storage_profile_secret_ref_provider: None,
@@ -19676,7 +19789,8 @@ mod tests {
             storage_profile_provider: Some("file".to_string()),
             storage_profile_issuance_mode: Some("local-file-no-secret".to_string()),
             storage_profile_location_prefix_hash: Some(
-                "sha256:storage-location-prefix".to_string(),
+                "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+                    .to_string(),
             ),
             storage_profile_secret_ref_present: Some(false),
             storage_profile_secret_ref_provider: None,
