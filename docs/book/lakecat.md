@@ -1662,7 +1662,10 @@ receives a hash-only `typedid-proof-hash` rejection, and a caller that sends
 agent delegation or agent summary proof headers without an agent-shaped
 identity receives only the matching proof hash. Those failures happen before
 governance or capability receipt creation, so raw proof material cannot become
-either policy context or operator-facing diagnostics. The JSON output from
+either policy context or operator-facing diagnostics. TypeDID verifier failures
+follow the same rule: malformed or rejected envelopes report only the envelope
+hash and error-detail hash, and a verified-subject mismatch reports only hashes
+of the verified and supplied principals before governance dispatch. The JSON output from
 `lakecat-cli qglake-verify-handoff` also carries
 the accepted lineage-drain identity source, identity state, and TypeDID
 envelope/proof hash slots in `lineageDrainArtifactSemantics`, so QueryGraph can

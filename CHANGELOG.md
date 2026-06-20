@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted live TypeDID verifier failure boundaries so malformed/rejected
+  envelopes and verified-subject mismatches expose only envelope, error-detail,
+  and principal hash evidence before governance dispatch.
 - Redacted unsupported TypeSec credential resolver provider-scheme
   diagnostics so provider detection returns only `secret-ref-hash` evidence.
 - Redacted configured TypeSec environment and Vault credential resolver

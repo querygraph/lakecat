@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact TypeDID verifier failures`.
+  Live TypeDID envelope verification now reports malformed/rejected envelopes
+  with `typedid-envelope-hash` plus `error-detail-hash`, and subject mismatch
+  failures expose only verified/supplied principal hashes before governance
+  dispatch.
+- Local verification for this TypeDID verifier redaction slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service config_endpoint_redacts_typedid_subject_mismatch_before_governance -- --nocapture`;
+  `cargo test -p lakecat-service --features typesec-local typesec_typedid_envelope_verification_updates_authorization_context -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact unsupported credential provider schemes`.
   TypeSec credential resolver provider detection now rejects unsupported
   secret-reference schemes with only `secret-ref-hash` evidence, keeping both

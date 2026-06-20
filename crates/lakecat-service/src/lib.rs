@@ -756,10 +756,10 @@ pub mod typesec_typedid {
     use std::sync::Arc;
 
     use async_trait::async_trait;
-    use lakecat_core::{LakeCatError, LakeCatResult, Principal, PrincipalKind};
+    use lakecat_core::{LakeCatError, LakeCatResult, Principal, PrincipalKind, content_hash_bytes};
     use typesec::{DidEnvelope, TypeDidGateway};
 
-    use crate::{TypeDidVerification, TypeDidVerifier};
+    use crate::{TypeDidVerification, TypeDidVerifier, error_detail_hash_context};
 
     pub struct TypeSecTypeDidVerifier {
         gateway: Arc<TypeDidGateway>,
@@ -775,10 +775,18 @@ pub mod typesec_typedid {
     impl TypeDidVerifier for TypeSecTypeDidVerifier {
         async fn verify(&self, envelope_json: &str) -> LakeCatResult<TypeDidVerification> {
             let envelope: DidEnvelope = serde_json::from_str(envelope_json).map_err(|err| {
-                LakeCatError::InvalidArgument(format!("invalid TypeDID envelope JSON: {err}"))
+                LakeCatError::InvalidArgument(format!(
+                    "invalid TypeDID envelope JSON; typedid-envelope-hash={}; {}",
+                    content_hash_bytes(envelope_json.as_bytes()),
+                    error_detail_hash_context(err),
+                ))
             })?;
             let verified = self.gateway.open_message(&envelope).map_err(|err| {
-                LakeCatError::Conflict(format!("TypeSec rejected TypeDID envelope: {err}"))
+                LakeCatError::Conflict(format!(
+                    "TypeSec rejected TypeDID envelope; typedid-envelope-hash={}; {}",
+                    content_hash_bytes(envelope_json.as_bytes()),
+                    error_detail_hash_context(err),
+                ))
             })?;
             let attestation = verified.attestation();
             Ok(TypeDidVerification {
@@ -5568,8 +5576,10 @@ async fn verify_typedid_identity(
         && identity.principal != verification.principal
     {
         return Err(LakeCatError::Conflict(format!(
-            "TypeDID verified subject {} does not match supplied principal {}",
-            verification.principal.subject, identity.principal.subject
+            "TypeDID verified subject does not match supplied principal; \
+             verified-principal-hash={}; supplied-principal-hash={}",
+            content_hash_bytes(verification.principal.subject.as_bytes()),
+            content_hash_bytes(identity.principal.subject.as_bytes()),
         ))
         .into());
     }
@@ -5924,6 +5934,21 @@ mod tests {
     struct RecordingGovernance {
         principals: Mutex<Vec<Principal>>,
         contexts: Mutex<Vec<serde_json::Value>>,
+    }
+
+    #[derive(Debug)]
+    struct StaticTypeDidVerifier {
+        verification: TypeDidVerification,
+    }
+
+    #[async_trait]
+    impl TypeDidVerifier for StaticTypeDidVerifier {
+        async fn verify(
+            &self,
+            _envelope_json: &str,
+        ) -> lakecat_core::LakeCatResult<TypeDidVerification> {
+            Ok(self.verification.clone())
+        }
     }
 
     #[derive(Debug, Default)]
@@ -6795,6 +6820,62 @@ mod tests {
         assert!(message.contains("x-lakecat-typedid-proof requires x-lakecat-typedid-envelope"));
         assert!(message.contains("typedid-proof-hash=sha256:"));
         assert!(!message.contains("raw-proof-secret"));
+        assert!(governance.principals.lock().await.is_empty());
+        assert!(governance.contexts.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn config_endpoint_redacts_typedid_subject_mismatch_before_governance() {
+        let governance = Arc::new(RecordingGovernance::default());
+        let verifier = Arc::new(StaticTypeDidVerifier {
+            verification: TypeDidVerification {
+                principal: Principal::new("did:example:verified-secret", PrincipalKind::Agent)
+                    .unwrap(),
+                attestation: serde_json::json!({
+                    "subject": "did:example:verified-secret",
+                    "resource": "lakecat:catalog:config"
+                }),
+            },
+        });
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_integrations(
+            default_sail_engine(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        )
+        .with_typedid_verifier(verifier));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/config")
+                    .header("x-lakecat-agent-did", "did:example:supplied-secret")
+                    .header(
+                        "x-lakecat-typedid-envelope",
+                        r#"{"protected":"typedid-envelope","payload":"secret"}"#,
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let message = String::from_utf8(body.to_vec()).unwrap();
+        assert!(message.contains("TypeDID verified subject does not match supplied principal"));
+        assert!(message.contains("verified-principal-hash=sha256:"));
+        assert!(message.contains("supplied-principal-hash=sha256:"));
+        assert!(!message.contains("did:example:verified-secret"));
+        assert!(!message.contains("did:example:supplied-secret"));
+        assert!(!message.contains("typedid-envelope"));
         assert!(governance.principals.lock().await.is_empty());
         assert!(governance.contexts.lock().await.is_empty());
     }
