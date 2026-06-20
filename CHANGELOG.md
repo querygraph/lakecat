@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound QGLake dropped-view tombstone receipts to namespace receipt-chain
+  evidence in both live lineage-drain replay and compact handoff verification,
+  rejecting handoffs whose tombstone hashes are not covered by the chain read.
 - Pinned route-level stale view mutation guards so rejected guarded view upserts
   and drops do not emit new replay outbox events or extend QueryGraph receipt
   evidence.

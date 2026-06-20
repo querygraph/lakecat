@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake tombstones to receipt chains`.
+  QGLake live replay and compact handoff verification now reject dropped-view
+  proofs unless the tombstone receipt hashes are covered by the namespace
+  receipt-chain read, tightening QueryGraph view tombstone evidence without
+  adding non-standard Iceberg access paths.
+- Local verification for this QGLake tombstone receipt-chain slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_uncovered_view_tombstone_receipts -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin stale view guard replay boundary`.
   Route-level coverage now proves stale guarded view upserts and drops fail
   without emitting new replay outbox events or extending view-version receipt

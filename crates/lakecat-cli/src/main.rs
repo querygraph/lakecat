@@ -3433,6 +3433,7 @@ fn require_view_receipt_chain_evidence(
     }
 
     let mut tombstoned_views = std::collections::HashSet::new();
+    let mut tombstone_receipt_hashes = BTreeSet::new();
     for (index, receipt) in required_array(views, "tombstoneReceipts", "viewReceiptChainProof")?
         .iter()
         .enumerate()
@@ -3447,6 +3448,15 @@ fn require_view_receipt_chain_evidence(
             "receiptHashes",
             "viewReceiptChainProof.tombstoneReceipts[]",
         )?;
+        for hash in required_array(
+            receipt,
+            "receiptHashes",
+            "viewReceiptChainProof.tombstoneReceipts[]",
+        )? {
+            if let Some(hash) = hash.as_str() {
+                tombstone_receipt_hashes.insert(hash.to_string());
+            }
+        }
         require_hash_array(
             receipt,
             "replayEventHashes",
@@ -3473,6 +3483,7 @@ fn require_view_receipt_chain_evidence(
         ));
     }
     let mut verified_chain_hashes = std::collections::HashSet::new();
+    let mut chain_receipt_hashes = BTreeSet::new();
     for (index, chain) in receipt_chains.iter().enumerate() {
         let chain = chain.as_object().ok_or_else(|| {
             lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -3507,6 +3518,11 @@ fn require_view_receipt_chain_evidence(
             "receiptHashes",
             "viewReceiptChainProof.receiptChains[]",
         )?;
+        for receipt_hash in receipt_hashes {
+            if let Some(receipt_hash) = receipt_hash.as_str() {
+                chain_receipt_hashes.insert(receipt_hash.to_string());
+            }
+        }
         let chain_hashes = required_array(
             chain,
             "chainHashes",
@@ -3553,6 +3569,12 @@ fn require_view_receipt_chain_evidence(
                 "viewReceiptChainProof.views[].acceptedReceiptChainHash {accepted_chain_hash} is not covered by receiptChains[].chainHashes"
             )));
         }
+    }
+    if !tombstone_receipt_hashes.is_subset(&chain_receipt_hashes) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "viewReceiptChainProof.tombstoneReceipts[].receiptHashes must be covered by receiptChains[].receiptHashes"
+                .to_string(),
+        ));
     }
 
     Ok(())
@@ -6729,6 +6751,19 @@ fn verify_qglake_view_replay(
                     "qglake lineage drain namespace receipt-chain replay for {view_stable_id} receipt hashes do not cover verified chain hashes"
                 )));
             }
+            let tombstone_hashes = tombstone_receipts
+                .view_version_receipt_hashes
+                .iter()
+                .collect::<BTreeSet<_>>();
+            let receipt_chain_hashes = receipt_chain_read
+                .view_version_receipt_hashes
+                .iter()
+                .collect::<BTreeSet<_>>();
+            if !tombstone_hashes.is_subset(&receipt_chain_hashes) {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "qglake lineage drain view drop replay for {view_stable_id} tombstone receipt hashes are not covered by namespace receipt-chain evidence"
+                )));
+            }
             if receipt_chain_read.lineage_events == 0
                 || !qglake_has_sha256_hashes(&receipt_chain_read.replay_event_hashes)
                 || !qglake_has_sha256_hashes(&receipt_chain_read.replay_open_lineage_hashes)
@@ -8604,7 +8639,7 @@ mod tests {
                         "warehouse": "local",
                         "namespace": ["default"],
                         "verifiedChainCount": 1,
-                        "receiptHashes": ["sha256:chain-receipt"],
+                        "receiptHashes": ["sha256:chain-receipt", "sha256:tombstone"],
                         "chainHashes": ["sha256:view-receipt-chain"],
                         "replayEventHashes": ["sha256:chain-replay"],
                         "openLineageHashes": ["sha256:chain-openlineage"]
@@ -8845,7 +8880,7 @@ mod tests {
                         "warehouse": "local",
                         "namespace": ["default"],
                         "verifiedChainCount": 1,
-                        "receiptHashes": ["sha256:chain-receipt"],
+                        "receiptHashes": ["sha256:chain-receipt", "sha256:tombstone"],
                         "chainHashes": ["sha256:view-receipt-chain"],
                         "replayEventHashes": ["sha256:chain-replay"],
                         "openLineageHashes": ["sha256:chain-openlineage"]
@@ -10903,6 +10938,21 @@ mod tests {
         assert!(err.to_string().contains("viewReceiptChainProof"));
         assert!(err.to_string().contains("receiptHashes"));
         assert!(err.to_string().contains("cover"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_uncovered_view_tombstone_receipts() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["tombstoneReceipts"][0]["receiptHashes"] =
+            json!(["sha256:uncovered-tombstone"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject tombstone receipts outside the namespace chain",
+        );
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("tombstoneReceipts"));
+        assert!(err.to_string().contains("receiptChains"));
     }
 
     #[test]
@@ -17560,6 +17610,64 @@ mod tests {
         .expect_err("QGLake lineage drain should reject receipt-chain count drift");
         assert!(err.to_string().contains(
             "qglake lineage drain namespace receipt-chain replay for lakecat:view:local:default:active_customers verified-chain count does not match chain hash evidence"
+        ));
+
+        let mut uncovered_tombstone_chain = qglake_view_receipt_chain_lineage_summary();
+        uncovered_tombstone_chain.view_version_receipt_hashes =
+            vec!["sha256:other-view-receipt".to_string()];
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 12,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "view.dropped".to_string(),
+                    "view.version-receipts-listed".to_string(),
+                    "view.version-receipt-chains-listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 4,
+                lineage_events: 13,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    bootstrap_with_view.clone(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_view_drop_lineage_summary(),
+                    qglake_view_tombstone_receipt_lineage_summary(),
+                    uncovered_tombstone_chain,
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_storage_profile_upsert_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err(
+            "QGLake lineage drain should reject tombstone receipts outside the namespace chain",
+        );
+        assert!(err.to_string().contains(
+            "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers tombstone receipt hashes are not covered by namespace receipt-chain evidence"
         ));
 
         let mut unguarded_drop_replay = qglake_view_drop_lineage_summary();
