@@ -1944,8 +1944,10 @@ typed drain summary carries scan-plan task counts, scan-plan graph event
 evidence, fetched file-scan, delete-file, and child-plan task counts, along with
 planned and fetched OpenLineage receipt hashes. Source replay validation now
 also requires planned/fetched replay and OpenLineage receipt arrays to be full
-SHA-256 digests, requires planned and fetched read restrictions to match before
-compact proof generation, requires both requested/effective projection and
+SHA-256 digests, and the compact handoff verifier repeats that full-digest
+check for the saved `governedScanProof` arrays. The verifier also requires
+planned and fetched read restrictions to match before compact proof generation,
+requires both requested/effective projection and
 requested/effective stats-field evidence, requires effective projection to be a
 narrowed subset of the requested projection and to match the planned allowed
 columns, and requires effective stats fields to be a narrowed subset of the

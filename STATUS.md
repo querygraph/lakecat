@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full compact governed scan hashes`.
+  Compact QGLake handoff verification now rejects `governedScanProof`
+  planned/fetched replay and OpenLineage arrays unless every entry is a full
+  `sha256:`-prefixed 64-hex digest, closing the remaining short placeholder
+  scan receipt path in saved handoff summaries.
+- Local verification for this compact governed scan hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_short_scan_replay_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`.
+- Latest completed implementation slice:
   `Require full governed scan replay hashes`.
   QGLake lineage-drain verification now rejects governed scan replay and
   OpenLineage receipt arrays unless they contain full `sha256:`-prefixed

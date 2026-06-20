@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required compact QGLake governed scan proof replay/OpenLineage hash arrays
+  to contain full `sha256:`-prefixed 64-hex digests, rejecting short
+  placeholder scan receipt hashes in saved handoff summaries.
 - Required governed scan replay receipt arrays in QGLake lineage-drain
   verification to contain full `sha256:`-prefixed 64-hex digests, rejecting
   short placeholder scan replay and OpenLineage hashes.

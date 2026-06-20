@@ -2627,22 +2627,22 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
             Value::Array(fetched_required_filters.clone())
         )));
     }
-    require_hash_array(
+    require_full_hash_array(
         governed_scan,
         "plannedReplayEventHashes",
         "governedScanProof",
     )?;
-    require_hash_array(
+    require_full_hash_array(
         governed_scan,
         "fetchedReplayEventHashes",
         "governedScanProof",
     )?;
-    require_hash_array(
+    require_full_hash_array(
         governed_scan,
         "plannedOpenLineageHashes",
         "governedScanProof",
     )?;
-    require_hash_array(
+    require_full_hash_array(
         governed_scan,
         "fetchedOpenLineageHashes",
         "governedScanProof",
@@ -8388,6 +8388,24 @@ fn require_hash_array(
     Ok(())
 }
 
+fn require_full_hash_array(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let array = required_array(value, field, label)?;
+    if array.is_empty()
+        || array
+            .iter()
+            .any(|item| !item.as_str().is_some_and(is_full_sha256_hash))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must contain full SHA-256 hashes"
+        )));
+    }
+    Ok(())
+}
+
 fn require_string_eq(
     value: &serde_json::Map<String, Value>,
     field: &str,
@@ -8633,10 +8651,10 @@ mod tests {
                         "term": "severity",
                         "value": "debug"
                     }],
-                    "plannedReplayEventHashes": ["sha256:scan-plan-replay"],
-                    "fetchedReplayEventHashes": ["sha256:scan-fetch-replay"],
-                    "plannedOpenLineageHashes": ["sha256:scan-plan-openlineage"],
-                    "fetchedOpenLineageHashes": ["sha256:scan-fetch-openlineage"]
+                    "plannedReplayEventHashes": [qglake_fixture_hash("scan-plan-replay")],
+                    "fetchedReplayEventHashes": [qglake_fixture_hash("scan-fetch-replay")],
+                    "plannedOpenLineageHashes": [qglake_fixture_hash("scan-plan-openlineage")],
+                    "fetchedOpenLineageHashes": [qglake_fixture_hash("scan-fetch-openlineage")]
                 },
                 "tableCommitHistoryProof": {
                     "commitCount": 1,
@@ -8862,10 +8880,10 @@ mod tests {
                         "term": "severity",
                         "value": "debug"
                     }],
-                    "plannedReplayEventHashes": ["sha256:scan-plan-replay"],
-                    "fetchedReplayEventHashes": ["sha256:scan-fetch-replay"],
-                    "plannedOpenLineageHashes": ["sha256:scan-plan-openlineage"],
-                    "fetchedOpenLineageHashes": ["sha256:scan-fetch-openlineage"]
+                    "plannedReplayEventHashes": [qglake_fixture_hash("scan-plan-replay")],
+                    "fetchedReplayEventHashes": [qglake_fixture_hash("scan-fetch-replay")],
+                    "plannedOpenLineageHashes": [qglake_fixture_hash("scan-plan-openlineage")],
+                    "fetchedOpenLineageHashes": [qglake_fixture_hash("scan-fetch-openlineage")]
                 },
                 "tableCommitHistory": {
                     "commitCount": 1,
@@ -10448,7 +10466,21 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("fetchedOpenLineageHashes"));
-        assert!(err.to_string().contains("sha256"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_short_scan_replay_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedReplayEventHashes"] =
+            json!(["sha256:scan-plan-replay"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short governed scan replay hashes");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("plannedReplayEventHashes"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
