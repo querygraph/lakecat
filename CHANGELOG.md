@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned the REST stale-commit cleanup contract: a metadata-object commit that
+  loses compare-and-swap still removes its uncommitted object and returns
+  hashed expected/actual metadata-pointer evidence without raw metadata paths.
 - Tightened the local dependency-contract audit to prove `grust-cypher` 0.9.0
   resolves from crates.io under `--all-features`, covering the Grust Cypher
   graph-boundary used by `grust-local` tests instead of only checking

@@ -6,6 +6,15 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin REST stale-commit cleanup evidence`.
+  The service-level stale metadata commit regression now proves the HTTP
+  conflict response carries hashed expected/actual metadata-pointer evidence,
+  does not expose raw committed or rejected metadata object paths, and still
+  removes the uncommitted metadata object after compare-and-swap rejection.
+- Local verification for this stale-commit cleanup evidence slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features sail-local cleans_up_uncommitted_metadata_file -- --nocapture`.
+- Latest completed implementation slice:
   `Verify Grust Cypher dependency contract`.
   The local dependency-contract audit now checks that `grust-cypher` 0.9.0 is
   locked and resolves from crates.io through `cargo metadata --all-features`,

@@ -6023,6 +6023,143 @@ mod tests {
         }
     }
 
+    struct CasRaceStore {
+        inner: Arc<dyn CatalogStore>,
+        racing_metadata_location: String,
+        raced: Mutex<bool>,
+    }
+
+    impl CasRaceStore {
+        fn new(inner: Arc<dyn CatalogStore>, racing_metadata_location: String) -> Arc<Self> {
+            Arc::new(Self {
+                inner,
+                racing_metadata_location,
+                raced: Mutex::new(false),
+            })
+        }
+    }
+
+    #[async_trait]
+    impl CatalogStore for CasRaceStore {
+        async fn create_namespace(
+            &self,
+            warehouse: &WarehouseName,
+            namespace: Namespace,
+        ) -> lakecat_core::LakeCatResult<()> {
+            self.inner.create_namespace(warehouse, namespace).await
+        }
+
+        async fn list_namespaces(
+            &self,
+            warehouse: &WarehouseName,
+        ) -> lakecat_core::LakeCatResult<Vec<Namespace>> {
+            self.inner.list_namespaces(warehouse).await
+        }
+
+        async fn list_tables(
+            &self,
+            warehouse: &WarehouseName,
+        ) -> lakecat_core::LakeCatResult<Vec<TableRecord>> {
+            self.inner.list_tables(warehouse).await
+        }
+
+        async fn create_table(
+            &self,
+            table: TableRecord,
+        ) -> lakecat_core::LakeCatResult<TableRecord> {
+            self.inner.create_table(table).await
+        }
+
+        async fn load_table(&self, ident: &TableIdent) -> lakecat_core::LakeCatResult<TableRecord> {
+            self.inner.load_table(ident).await
+        }
+
+        async fn commit_table(
+            &self,
+            ident: &TableIdent,
+            commit: TableCommit,
+        ) -> lakecat_core::LakeCatResult<TableRecord> {
+            let mut raced = self.raced.lock().await;
+            if !*raced {
+                *raced = true;
+                self.inner
+                    .commit_table(
+                        ident,
+                        TableCommit {
+                            requirements: Vec::new(),
+                            updates: Vec::new(),
+                            expected_previous_metadata_location: commit
+                                .expected_previous_metadata_location
+                                .clone(),
+                            new_metadata_location: Some(self.racing_metadata_location.clone()),
+                            new_metadata: None,
+                            idempotency_key: None,
+                            idempotency_request_hash: None,
+                            principal: commit.principal.clone(),
+                            authorization_receipt: commit.authorization_receipt.clone(),
+                        },
+                    )
+                    .await?;
+            }
+            drop(raced);
+            self.inner.commit_table(ident, commit).await
+        }
+
+        async fn table_commit_records(
+            &self,
+            ident: &TableIdent,
+            start_version: u64,
+            end_version: Option<u64>,
+        ) -> lakecat_core::LakeCatResult<Vec<TableCommitRecord>> {
+            self.inner
+                .table_commit_records(ident, start_version, end_version)
+                .await
+        }
+
+        async fn soft_delete_table(
+            &self,
+            ident: &TableIdent,
+            principal: Principal,
+            authorization_receipt: Option<serde_json::Value>,
+        ) -> lakecat_core::LakeCatResult<TableRecord> {
+            self.inner
+                .soft_delete_table(ident, principal, authorization_receipt)
+                .await
+        }
+
+        async fn restore_table(
+            &self,
+            ident: &TableIdent,
+            principal: Principal,
+            authorization_receipt: Option<serde_json::Value>,
+        ) -> lakecat_core::LakeCatResult<TableRecord> {
+            self.inner
+                .restore_table(ident, principal, authorization_receipt)
+                .await
+        }
+
+        async fn upsert_storage_profile(
+            &self,
+            profile: StorageProfile,
+        ) -> lakecat_core::LakeCatResult<StorageProfile> {
+            self.inner.upsert_storage_profile(profile).await
+        }
+
+        async fn list_storage_profiles(
+            &self,
+            warehouse: &WarehouseName,
+        ) -> lakecat_core::LakeCatResult<Vec<StorageProfile>> {
+            self.inner.list_storage_profiles(warehouse).await
+        }
+
+        async fn storage_profile_for_table(
+            &self,
+            table: &TableRecord,
+        ) -> lakecat_core::LakeCatResult<StorageProfile> {
+            self.inner.storage_profile_for_table(table).await
+        }
+    }
+
     #[async_trait]
     impl GovernanceEngine for RecordingGovernance {
         async fn authorize(
@@ -13781,7 +13918,137 @@ mod tests {
             .unwrap();
         let response = app.oneshot(commit).await.unwrap();
         assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = payload["error"]["message"].as_str().unwrap();
+        assert!(!message.contains(&initial_metadata_location));
+        assert!(!message.contains(&rejected_metadata_location));
+        assert!(!message.contains("00000.json"));
+        assert!(!message.contains("00001.json"));
         assert!(!rejected_metadata_path.exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(feature = "sail-local")]
+    #[tokio::test]
+    async fn cas_race_cleans_up_uncommitted_metadata_file_with_redacted_conflict() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lakecat-cas-cleanup-{unique}"));
+        let table_dir = root.join("events");
+        let metadata_dir = table_dir.join("metadata");
+        std::fs::create_dir_all(&metadata_dir).unwrap();
+        let table_location = url::Url::from_directory_path(&table_dir)
+            .expect("table dir URL")
+            .to_string();
+        let initial_metadata_location = url::Url::from_file_path(metadata_dir.join("00000.json"))
+            .unwrap()
+            .to_string();
+        let racing_metadata_location =
+            url::Url::from_file_path(metadata_dir.join("00001-race.json"))
+                .unwrap()
+                .to_string();
+        let rejected_metadata_path = metadata_dir.join("00002-rejected.json");
+        let rejected_metadata_location = url::Url::from_file_path(&rejected_metadata_path)
+            .unwrap()
+            .to_string();
+        let store = CasRaceStore::new(MemoryCatalogStore::new(), racing_metadata_location.clone());
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            store.clone(),
+        ));
+        let base_metadata = serde_json::json!({
+            "format-version": 3,
+            "table-uuid": "11111111-1111-1111-1111-111111111111",
+            "location": table_location,
+            "last-sequence-number": 7,
+            "last-updated-ms": 1710000000000_i64,
+            "last-column-id": 1,
+            "schemas": [{
+                "type": "struct",
+                "schema-id": 1,
+                "fields": [{
+                    "id": 1,
+                    "name": "id",
+                    "type": "string",
+                    "required": true
+                }]
+            }],
+            "current-schema-id": 1,
+            "partition-specs": [{"spec-id": 0, "fields": []}],
+            "default-spec-id": 0,
+            "current-snapshot-id": 42,
+            "snapshots": [{
+                "snapshot-id": 42,
+                "sequence-number": 7,
+                "timestamp-ms": 1710000000000_i64,
+                "summary": {"operation": "append"},
+                "schema-id": 1
+            }],
+            "snapshot-log": [{"timestamp-ms": 1710000000000_i64, "snapshot-id": 42}]
+        });
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "name": "events",
+                    "location": table_location,
+                    "metadata-location": initial_metadata_location,
+                    "metadata": base_metadata,
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let mut rejected_metadata = base_metadata;
+        rejected_metadata["last-sequence-number"] = serde_json::json!(8);
+        rejected_metadata["last-updated-ms"] = serde_json::json!(1710000000100_i64);
+        let commit = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/commit")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "requirements": [],
+                    "updates": [],
+                    "metadata-location": rejected_metadata_location,
+                    "metadata": rejected_metadata,
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(commit).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = payload["error"]["message"].as_str().unwrap();
+        assert!(message.contains("metadata pointer changed"));
+        assert!(message.contains("expected-metadata-location-hash=sha256:"));
+        assert!(message.contains("actual-metadata-location-hash=sha256:"));
+        assert!(!message.contains(&initial_metadata_location));
+        assert!(!message.contains(&racing_metadata_location));
+        assert!(!message.contains(&rejected_metadata_location));
+        assert!(!message.contains("00000.json"));
+        assert!(!message.contains("00001-race.json"));
+        assert!(!message.contains("00002-rejected.json"));
+        assert!(!rejected_metadata_path.exists());
+
+        let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+        let table = store.load_table(&ident).await.unwrap();
+        assert_eq!(
+            table.metadata_location.as_deref(),
+            Some(racing_metadata_location.as_str())
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 
