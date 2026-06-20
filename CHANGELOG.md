@@ -4,7 +4,9 @@
 
 - Made recognized ODRL read-restriction constraints fail closed when
   `rightOperand`/`right-operand` is missing, so allowed-column, row-predicate,
-  purpose, and credential-TTL constraints cannot be silently ignored.
+  purpose, and credential-TTL constraints cannot be silently ignored. The scan
+  route now proves malformed active policy fails before Sail planning or
+  scan-planned outbox emission.
 - Pinned metadata cleanup safety so rejected-commit cleanup skips the previous
   committed metadata pointer instead of deleting the table's current metadata
   object when a future plan accidentally reports that location as a staged

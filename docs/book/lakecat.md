@@ -544,8 +544,11 @@ missing or deny-shaped operators fail closed instead of being treated as
 governed read permission. Recognized constraint operands must also include a
 right operand; otherwise LakeCat rejects the policy material instead of
 silently dropping an allowed-column, row-predicate, purpose, or credential-TTL
-restriction. Purpose is composed the same way: every purpose source in the
-active policy material must agree. If one binding says a read is for
+restriction. The service route pins this behavior too: a table scan with a
+malformed active ODRL restriction fails before Sail planning and before
+`table.scan-planned` replay evidence is emitted. Purpose is composed the same
+way: every purpose source in the active policy material must agree. If one
+binding says a read is for
 `resilience-demo` and another says `training`, LakeCat rejects the restriction
 instead of guessing which purpose should follow the agent into Sail planning,
 credential TTL proof, and QueryGraph handoff evidence.
