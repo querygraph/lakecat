@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for malformed `table.scan-planned` and
+  `table.scan-tasks-fetched` evidence whose table identity, projection/stat
+  arrays, task counts, fetched filters, or governed read-restriction projection
+  constraints are missing, widened, or contradictory, so invalid scan replay
+  fails before graph/lineage projection acknowledgement.
 - Rejected outbox delivery for `table.commit` events whose commit object,
   sequence number, table identity, or commit-table identity evidence is missing
   or contradictory, so invalid commit replay fails before graph/lineage

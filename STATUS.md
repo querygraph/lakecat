@@ -6,6 +6,30 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject malformed outbox scan evidence`.
+  Outbox draining now rejects malformed `table.scan-planned` and
+  `table.scan-tasks-fetched` pending events when their table identity,
+  projection/stat arrays, task counts, required filters, or governed
+  read-restriction projection constraints are missing, widened, or
+  contradictory. Unsafe scan replay evidence stays pending and reaches neither
+  graph projection nor lineage acknowledgement.
+- Local verification for this outbox scan evidence slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_scan_planned_evidence -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_scan_fetch_evidence -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain -- --nocapture`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --nocapture --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --nocapture --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import, and
+  ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Reject malformed outbox table commit evidence`.
   Outbox draining now rejects `table.commit` pending events when the commit
   object, unsigned sequence number, root table identity, or optional

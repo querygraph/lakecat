@@ -2042,7 +2042,16 @@ self-consistent handoff cannot smuggle placeholder policy names through a field
 that later readers treat as integrity evidence. The outbox drain checks the
 same digest shape before acknowledging any pending event that carries
 `read-restriction.policy-hashes`, so malformed source evidence is stopped
-before it becomes delivered replay material. View receipt replay follows the
+before it becomes delivered replay material. Scan replay now gets the same
+drain-side admission check before Grust or OpenLineage projection: planned-scan
+events must carry matching table identity, unsigned task counts,
+requested/effective projection arrays, and requested/effective stats-field
+arrays; fetched-task events must carry matching table identity, fetched
+file/delete/child-plan counts, required filters, and required/effective
+projection arrays. When a governed read restriction is present, the effective
+projection must remain inside the allowed columns, and explicit effective
+projection or stats evidence cannot widen beyond the caller-requested or
+server-required evidence it claims to preserve. View receipt replay follows the
 same fail-closed rule at the drain boundary. A
 `view.version-receipts-listed` event is not acknowledged unless its
 `receipt-count` matches full SHA-256 receipt hashes and every drop receipt hash
