@@ -4844,13 +4844,19 @@ fn secret_ref_provider_label(secret_ref: &str) -> Option<&str> {
 }
 
 fn storage_profile_response(profile: &StorageProfile) -> StorageProfileResponse {
+    let secret_ref = profile.secret_ref.as_deref();
     StorageProfileResponse {
         profile_id: profile.profile_id.clone(),
         warehouse: profile.warehouse.as_str().to_string(),
         location_prefix: profile.location_prefix.clone(),
         provider: profile.provider.as_str().to_string(),
         issuance_mode: profile.issuance_mode.as_str().to_string(),
-        secret_ref: profile.secret_ref.clone(),
+        secret_ref: None,
+        secret_ref_present: secret_ref.is_some(),
+        secret_ref_provider: secret_ref
+            .and_then(secret_ref_provider_label)
+            .map(str::to_string),
+        secret_ref_hash: secret_ref.map(|secret_ref| content_hash_bytes(secret_ref.as_bytes())),
         public_config: profile.public_config.clone(),
     }
 }
@@ -11912,11 +11918,44 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .unwrap();
-        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(
-            body["secret-ref"],
-            serde_json::json!("typesec://lakecat/local/s3-events")
+        let body_text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(
+            !body_text.contains("typesec://lakecat/local/s3-events"),
+            "management storage-profile response must not expose raw secret-ref"
         );
+        let body: serde_json::Value = serde_json::from_str(&body_text).unwrap();
+        assert!(body.get("secret-ref").is_none());
+        assert_eq!(body["secret-ref-present"], serde_json::json!(true));
+        assert_eq!(body["secret-ref-provider"], serde_json::json!("typesec"));
+        assert!(
+            body["secret-ref-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        let upsert_secret_ref_hash = body["secret-ref-hash"].clone();
+
+        let list = Request::builder()
+            .method(Method::GET)
+            .uri("/management/v1/warehouses/local/storage-profiles")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(list).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(
+            !body_text.contains("typesec://lakecat/local/s3-events"),
+            "management storage-profile list response must not expose raw secret-ref"
+        );
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let listed = &body["storage-profiles"][0];
+        assert!(listed.get("secret-ref").is_none());
+        assert_eq!(listed["secret-ref-present"], serde_json::json!(true));
+        assert_eq!(listed["secret-ref-provider"], serde_json::json!("typesec"));
+        assert_eq!(listed["secret-ref-hash"], upsert_secret_ref_hash);
 
         let create = Request::builder()
             .method(Method::POST)

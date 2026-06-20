@@ -867,6 +867,11 @@ path segments, so a credential root cannot rely on traversal-like spelling
 before a resolver sees it. Unsupported credential-root schemes and malformed
 secret-root paths are rejected with `secret-ref-hash=sha256:...` evidence
 instead of echoing the submitted secret reference.
+Management upsert and list responses follow the same redaction rule. They do
+not echo the raw `secret-ref`; they return `secret-ref-present`,
+`secret-ref-provider`, and `secret-ref-hash` so operators and QueryGraph can
+verify that a credential root exists and correlate it without learning the
+secret-store path.
 When LakeCat selects the storage profile for a table, the location prefix is
 also matched on a storage-root boundary. A profile for
 `s3://lakecat/events` applies to that exact root and to children such as

@@ -249,7 +249,13 @@ pub struct StorageProfileResponse {
     pub location_prefix: String,
     pub provider: String,
     pub issuance_mode: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub secret_ref: Option<String>,
+    pub secret_ref_present: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_ref_provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_ref_hash: Option<String>,
     pub public_config: BTreeMap<String, String>,
 }
 

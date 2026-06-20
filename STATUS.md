@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact storage-profile management secret refs`.
+  Storage-profile upsert/list responses no longer echo raw `secret-ref`
+  locators. They return `secret-ref-present`, `secret-ref-provider`, and
+  `secret-ref-hash` evidence instead, matching the existing graph/lineage and
+  resolver-error redaction discipline while leaving the management request
+  shape unchanged.
+- Local verification for this management-response redaction slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service remote_storage_profile_accepts_secret_ref_without_vending_raw_secrets -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject storage-profile dot-segment prefixes`.
   Storage-profile validation now rejects `location-prefix` values containing
   literal or percent-encoded `.`/`..` path segments before memory/Turso

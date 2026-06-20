@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted storage-profile management responses: upsert/list responses now
+  return secret-reference presence, provider, and hash evidence instead of the
+  raw `secret-ref` locator.
 - Rejected storage-profile location prefixes containing literal or
   percent-encoded dot path segments before memory/Turso persistence, reporting
   only a storage-profile-prefix hash for traversal-shaped credential roots.
