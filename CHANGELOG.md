@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Re-audited OPUS consolidation: `DESIGN.md` now records the current archive
+  invariant, `docs/completed/README.md` records the latest audit, and the
+  active tree keeps all OPUS files frozen under `docs/completed/`.
 - Rejected storage-profile secret references containing literal or
   percent-encoded dot path segments before persistence or resolver dispatch,
   keeping credential roots as clean external secret-store locators with

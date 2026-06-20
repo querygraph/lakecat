@@ -60,6 +60,11 @@ Current audited shape:
 | Active OPUS-numbered design plans | none |
 | Active OPUS guidance | consolidated into `../../DESIGN.md` |
 
+Latest audit: 2026-06-20. The root tree has no tracked or untracked active
+`OPUS*.md` files, and the archive contains exactly the four completed review
+files listed above. Each file starts with an archive banner pointing future work
+back to `../../DESIGN.md`.
+
 ## Consolidation Ledger
 
 | Archived file | Durable material now lives in |

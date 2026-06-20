@@ -111,6 +111,20 @@ archived OPUS files. A future review should update the canonical document that
 owns the decision and may add a completed-review artifact under `docs/completed/`
 only after the durable guidance has landed in the active docs.
 
+### Consolidation Audit
+
+The OPUS archive was rechecked on 2026-06-20. The active tree has no
+root-level `OPUS*.md` files, and the completed-review archive contains exactly
+the four historical OPUS files listed above. Each archived file has an archive
+banner pointing back to this design document.
+
+Treat that shape as the invariant:
+
+- `git ls-files 'OPUS*.md'` should return no files.
+- `rg --files -g 'OPUS*.md' -g '!docs/completed/**'` should return no files.
+- `git ls-files 'docs/completed/OPUS*.md'` should return only
+  `OPUS1.md`, `OPUS1-DESIGN.md`, `OPUS2.md`, and `OPUS2-DESIGN.md`.
+
 ### Consolidated OPUS Digest
 
 The durable OPUS guidance now collapses to these operating rules:

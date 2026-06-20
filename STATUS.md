@@ -5,6 +5,18 @@ Updated: 2026-06-20
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Re-audit OPUS consolidation`.
+  The OPUS review/design corpus is consolidated into `DESIGN.md` and adjacent
+  canonical docs. The active tree has no root-level `OPUS*.md` files, and
+  `docs/completed/` contains exactly `OPUS1.md`, `OPUS1-DESIGN.md`,
+  `OPUS2.md`, and `OPUS2-DESIGN.md`, each with an archive banner pointing back
+  to the living design.
+- Local verification for this OPUS consolidation audit is documentation-only:
+  `git ls-files 'OPUS*.md'`;
+  `git ls-files 'docs/completed/OPUS*.md'`;
+  `rg --files -g 'OPUS*.md' -g '!docs/completed/**'`;
+  `rg --files docs/completed -g 'OPUS*.md'`.
 - Latest completed implementation slice:
   `Reject secret-ref dot-segment roots`.
   Storage-profile validation now rejects `secret-ref` URIs containing literal
