@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Expose fetch effective projection evidence`.
+  `fetchScanTasks` responses and `table.scan-tasks-fetched` audit/outbox
+  payloads now carry `effective-projection` alongside the required projection
+  and filters, so replay can use the same server-derived projection vocabulary
+  as scan planning without inventing a fetch-time client projection.
+- Local verification for this fetch projection-evidence slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service scan_tasks_fetched_audit_payload_surfaces_policy_context -- --nocapture`;
+  `cargo test -p lakecat-service fetch_scan_tasks_route_sends_required_policy_scope_to_sail -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact custom TypeDID verifier errors`.
   The live request-identity path now wraps every configured TypeDID verifier
   failure before HTTP response or governance dispatch, preserving the original

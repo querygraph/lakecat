@@ -2249,7 +2249,8 @@ fn table_scan_tasks_fetched_audit_payload(
 fn append_read_restriction_requirements(audit_payload: &mut Value, restriction: &Value) {
     if let Ok(restriction) = serde_json::from_value::<ReadRestriction>(restriction.clone()) {
         if let Ok(required_projection) = restriction.effective_projection(&[]) {
-            audit_payload["required-projection"] = json!(required_projection);
+            audit_payload["required-projection"] = json!(required_projection.clone());
+            audit_payload["effective-projection"] = json!(required_projection);
             audit_payload["required-filters"] = json!(restriction.mandatory_filters());
         }
     }
@@ -3750,7 +3751,8 @@ fn fetch_scan_tasks_extensions(
     let required_filters = restriction.mandatory_filters();
     Ok(json!({
         "read-restriction": restriction,
-        "required-projection": required_projection,
+        "required-projection": required_projection.clone(),
+        "effective-projection": required_projection,
         "required-filters": required_filters,
     }))
 }
@@ -15946,6 +15948,10 @@ mod tests {
             serde_json::json!(["event_id"])
         );
         assert_eq!(
+            payload["effective-projection"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
             payload["required-filters"][0],
             serde_json::json!({
                 "type": "eq",
@@ -16400,6 +16406,10 @@ mod tests {
             serde_json::json!(["event_id"])
         );
         assert_eq!(
+            body["residual-filter"]["lakecat:fetch-scan-tasks"]["effective-projection"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
             body["residual-filter"]["lakecat:fetch-scan-tasks"]["required-filters"][0],
             serde_json::json!({
                 "type": "eq",
@@ -16436,6 +16446,10 @@ mod tests {
         assert_eq!(event.payload["payload"]["table"], serde_json::json!(ident));
         assert_eq!(
             event.payload["payload"]["required-projection"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            event.payload["payload"]["effective-projection"],
             serde_json::json!(["event_id"])
         );
         assert_eq!(

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added explicit `effective-projection` evidence to `fetchScanTasks` response
+  extensions and scan-task-fetched audit/outbox payloads, mirroring the
+  server-derived required projection for replay.
 - Redacted the TypeDID verifier trait boundary so custom verifier failures
   preserve the HTTP error class while exposing only envelope and error-detail
   hash evidence before governance dispatch.
