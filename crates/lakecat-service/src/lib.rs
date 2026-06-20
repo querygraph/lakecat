@@ -573,8 +573,11 @@ pub mod typesec_credential_issuer {
     }
 
     pub(crate) fn secret_ref_provider(secret_ref: &str) -> LakeCatResult<SecretRefProvider> {
-        let url = Url::parse(secret_ref).map_err(|err| {
-            LakeCatError::InvalidArgument(format!("invalid credential secret ref URI: {err}"))
+        let url = Url::parse(secret_ref).map_err(|_err| {
+            LakeCatError::InvalidArgument(format!(
+                "invalid credential secret ref URI; {}",
+                secret_ref_hash_context(secret_ref)
+            ))
         })?;
         match url.scheme() {
             "typesec" if url.host_str() == Some("env") => Ok(SecretRefProvider::TypeSecEnv),
@@ -599,8 +602,12 @@ pub mod typesec_credential_issuer {
     }
 
     pub(crate) fn vault_secret_path(secret_ref: &str) -> LakeCatResult<String> {
-        let url = Url::parse(secret_ref)
-            .map_err(|err| LakeCatError::InvalidArgument(format!("invalid Vault URI: {err}")))?;
+        let url = Url::parse(secret_ref).map_err(|_err| {
+            LakeCatError::InvalidArgument(format!(
+                "invalid Vault URI; {}",
+                secret_ref_hash_context(secret_ref)
+            ))
+        })?;
         if url.scheme() != "vault" {
             return Err(LakeCatError::InvalidArgument(format!(
                 "Vault resolver requires vault:// secret refs; {}",
@@ -653,8 +660,11 @@ pub mod typesec_credential_issuer {
     }
 
     pub(crate) fn env_secret_variable(secret_ref: &str) -> LakeCatResult<String> {
-        let url = Url::parse(secret_ref).map_err(|err| {
-            LakeCatError::InvalidArgument(format!("invalid TypeSec secret ref URI: {err}"))
+        let url = Url::parse(secret_ref).map_err(|_err| {
+            LakeCatError::InvalidArgument(format!(
+                "invalid TypeSec secret ref URI; {}",
+                secret_ref_hash_context(secret_ref)
+            ))
         })?;
         if url.scheme() != "typesec" || url.host_str() != Some("env") {
             return Err(LakeCatError::InvalidArgument(format!(
@@ -13439,12 +13449,14 @@ mod tests {
             "typesec://vault/path",
             "vault://",
             "typesec://env/",
+            "not a typesec uri with secret=abc",
         ] {
-            let err = if secret_ref.starts_with("vault://") {
-                vault_secret_path(secret_ref).unwrap_err()
-            } else {
-                env_secret_variable(secret_ref).unwrap_err()
-            };
+            let err =
+                if secret_ref.starts_with("vault://") || secret_ref.starts_with("not a typesec") {
+                    vault_secret_path(secret_ref).unwrap_err()
+                } else {
+                    env_secret_variable(secret_ref).unwrap_err()
+                };
             let message = err.to_string();
             assert!(message.contains("secret-ref-hash=sha256:"));
             assert!(
@@ -13452,6 +13464,22 @@ mod tests {
                 "resolver validation errors must not expose raw secret refs"
             );
         }
+        let malformed_provider_ref = "not a credential ref token=abc";
+        let err = secret_ref_provider(malformed_provider_ref).unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("secret-ref-hash=sha256:"));
+        assert!(
+            !message.contains(malformed_provider_ref),
+            "provider validation errors must not expose raw secret refs"
+        );
+        let malformed_env_ref = "not a typesec env ref token=abc";
+        let err = env_secret_variable(malformed_env_ref).unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("secret-ref-hash=sha256:"));
+        assert!(
+            !message.contains(malformed_env_ref),
+            "environment resolver parse errors must not expose raw secret refs"
+        );
         assert_eq!(
             secret_ref_provider("typesec://env/LAKECAT_S3_EVENTS").unwrap(),
             SecretRefProvider::TypeSecEnv

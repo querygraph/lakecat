@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Redacted production resolver secret-ref parse failures for TypeSec-gated
+  credential issuance, so provider detection plus Vault and TypeSec environment
+  resolver parsing return `secret-ref-hash` evidence without echoing malformed
+  credential-root strings.
 - Made storage-profile secret-ref validation consistently hash-only for invalid
   URI, decorated URI, and embedded-secret failures, returning
   `secret-ref-hash` evidence without echoing the submitted credential-root URI.

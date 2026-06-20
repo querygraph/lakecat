@@ -1028,7 +1028,9 @@ correlate configuration without leaking the credential root. Resolver validation
 errors for malformed Vault and TypeSec
 environment references follow the same rule: wrong schemes, missing Vault
 mounts or paths, and invalid environment-variable names produce hash evidence
-instead of echoing the malformed secret reference.
+instead of echoing the malformed secret reference. Generic provider detection
+and resolver URI parsing follow that rule too, so malformed credential-root
+strings cannot leak through production resolver diagnostics.
 When storage-profile changes replay into lineage/OpenLineage evidence, LakeCat
 does not forward the full secret-store URI. The replay payload keeps
 `secret-ref-present` and `secret-ref-provider` so QueryGraph can verify that a

@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact resolver secret-ref parse failures`.
+  TypeSec-gated credential provider detection plus Vault and TypeSec
+  environment resolver parsing now return `secret-ref-hash` evidence for
+  malformed credential-root strings without echoing the submitted secret ref.
+- Local verification for this resolver parse redaction slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features typesec-local environment_secret_resolver_parses_supported_secret_shapes -- --nocapture`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_gates_production_secret_refs_before_dispatch -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact all storage-profile secret-ref validation roots`.
   Storage-profile secret-reference validation now returns `secret-ref-hash`
   evidence for invalid URI, decorated URI, and embedded-secret failures without
