@@ -215,9 +215,9 @@ The current working plan is:
    scan/fetch proof, credential proof, view receipt chains, graph/import hashes,
    OpenLineage replay, captured output hashes, or QueryGraph import compatibility
    must update the local handoff verifier and the book in the same unit. View
-   receipt-chain checks must reject forged previous-receipt links, unsupported
-   operations, skipped versions, and tombstones that advance the durable view
-   version.
+   receipt-chain checks must reject invalid chain heads, forged
+   previous-receipt links, unsupported operations, skipped versions, and
+   tombstones that advance the durable view version.
 3. Keep commit hardening focused on REST-visible correctness: idempotency
    replay, metadata object create-only writes, CAS conflict evidence, orphan
    cleanup, object-store portability, and redacted operator-facing errors.
@@ -465,9 +465,11 @@ policy-derived TTL cap in both captured LakeCat replay text and compact handoff
 proof. Credential replay must preserve the policy-derived TTL cap and redacted
 storage-scope hash in both the captured LakeCat replay evidence and compact
 handoff summary.
+
 View receipt-chain proof must remain a structural proof, not just a bag of
-hashes: each link must point at the previous receipt hash, use a supported
-operation, and preserve the expected version transition.
+hashes: the first receipt must be a version-1 upsert without previous-link
+fields, and each later link must point at the previous receipt hash, use a
+supported operation, and preserve the expected version transition.
 
 ### P3 Commit Hardening
 
@@ -479,8 +481,7 @@ evidence stays hash-only for both the submitted metadata location and storage
 profile root. Metadata object-store setup failures should likewise expose only
 metadata-location and backend-error hashes, not raw URI parse text, schemes, or
 backend diagnostics. Catalog state changes should not lose outbox side effects.
-Pending outbox replay should
-stay deterministic across embedded and Turso stores, ordered by
+Pending outbox replay should stay deterministic across embedded and Turso stores, ordered by
 `created_at,event_id`, with duplicate-safe delivery accounting. Draining should
 acknowledge delivery only after every projection in the batch succeeds, leaving
 events pending for retry when graph or lineage projection fails.
@@ -498,6 +499,7 @@ credential vending remains an audited exception behind TypeSec authorization;
 restricted Sail-planned reads are the safer default. Any configured
 secret-manager or credential issuer backend must return credentials scoped no
 broader than the LakeCat storage profile that selected it.
+
 View mutation guards must remain positive, store-assigned version checks so
 QueryGraph receipt chains cannot be extended by invalid guarded requests.
 

@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin view receipt-chain head invariants`.
+  View receipt-chain verifier coverage now directly proves a chain must begin
+  with a version-1 upsert that has no previous version or previous receipt hash.
+  Zero-version chains, first-receipt tombstones, and first receipts with forged
+  previous-link fields fail the compact QueryGraph/QGLake chain check.
+- Local verification for this view receipt-chain head-invariant slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service view_receipt_chain_verifier_requires_version_transitions -- --nocapture`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin forged view receipt-chain rejection`.
   View receipt-chain verifier coverage now directly proves forged
   `previous-receipt-hash` links and unsupported operations fail the compact

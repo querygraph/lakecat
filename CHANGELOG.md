@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened view receipt-chain verifier coverage for chain-head invariants:
+  chains must start with a version-1 upsert, no previous-link fields, and no
+  zero-version or first-receipt tombstone.
 - Tightened view receipt-chain verifier coverage so forged previous-receipt
   hashes and unsupported operations fail the compact QueryGraph/QGLake chain
   check.

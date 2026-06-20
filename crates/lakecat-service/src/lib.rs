@@ -6112,6 +6112,23 @@ mod tests {
         ];
         assert!(view_version_receipt_chain_verified(&receipts));
 
+        let zero_version = vec![test_view_receipt(0, None, None, "upsert", "sha256:r0")];
+        assert!(!view_version_receipt_chain_verified(&zero_version));
+
+        let first_receipt_drop = vec![test_view_receipt(1, None, None, "drop", "sha256:r1")];
+        assert!(!view_version_receipt_chain_verified(&first_receipt_drop));
+
+        let first_receipt_with_previous_link = vec![test_view_receipt(
+            1,
+            Some(1),
+            Some("sha256:previous"),
+            "upsert",
+            "sha256:r1",
+        )];
+        assert!(!view_version_receipt_chain_verified(
+            &first_receipt_with_previous_link
+        ));
+
         let skipped_version = vec![
             test_view_receipt(1, None, None, "upsert", "sha256:r1"),
             test_view_receipt(3, Some(1), Some("sha256:r1"), "upsert", "sha256:r3"),
