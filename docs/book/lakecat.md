@@ -929,6 +929,11 @@ outbox events. When the outbox drains, server, project, warehouse, and
 storage-profile changes become catalog graph events; the same management
 changes also become OpenLineage receipts. QueryGraph can later learn the
 management shape without requiring every Iceberg client to understand it.
+Server endpoint URLs are operator-visible management metadata, so LakeCat keeps
+them deliberately plain: they must be absolute `http` or `https` URLs, and they
+cannot include query strings, fragments, or URI userinfo. Rejected submissions
+return `server-endpoint-url-hash=sha256:...` evidence rather than echoing the
+submitted endpoint.
 Warehouse replay does not forward the raw storage root to graph or lineage
 consumers. The drained payload replaces `storage-root` with
 `storage-root-hash`, so QueryGraph can bind tenant evidence to a configured

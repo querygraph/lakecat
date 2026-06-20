@@ -2110,6 +2110,18 @@ fn validate_warehouse_storage_root_path(storage_root: &str) -> LakeCatResult<()>
 }
 
 fn validate_server_endpoint_url(endpoint_url: &str) -> LakeCatResult<()> {
+    let url = Url::parse(endpoint_url).map_err(|_| {
+        LakeCatError::InvalidArgument(format!(
+            "server endpoint URL must be an absolute http or https URL; {}",
+            server_endpoint_url_hash_context(endpoint_url)
+        ))
+    })?;
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "server endpoint URL must use http or https scheme; {}",
+            server_endpoint_url_hash_context(endpoint_url)
+        )));
+    }
     if location_has_query_fragment_or_userinfo(endpoint_url) {
         return Err(LakeCatError::InvalidArgument(format!(
             "server endpoint URL must not include query strings, fragments, or userinfo; {}",
@@ -6422,6 +6434,65 @@ pub mod turso_store {
                 assert!(!message.contains("token=abc"));
                 assert!(!message.contains("user:secret"));
             }
+        }
+
+        #[test]
+        fn servers_reject_invalid_endpoint_urls() {
+            for (endpoint_url, expected) in [
+                ("lakecat.example.com/catalog", "absolute http or https URL"),
+                ("not a url", "absolute http or https URL"),
+                ("file:///tmp/lakecat", "http or https scheme"),
+                ("s3://lakecat-demo/catalog", "http or https scheme"),
+            ] {
+                let err = ServerRecord::new(
+                    "prod",
+                    Some("Production".to_string()),
+                    Some(endpoint_url.to_string()),
+                    BTreeMap::new(),
+                    Principal::anonymous(),
+                )
+                .unwrap_err();
+
+                let message = err.to_string();
+                assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+                assert!(message.contains(expected));
+                assert!(message.contains("server-endpoint-url-hash=sha256:"));
+                assert!(
+                    !message.contains(endpoint_url),
+                    "server endpoint validation must not expose raw endpoint URLs"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn server_upsert_rejects_deserialized_invalid_endpoint_urls() {
+            let record = ServerRecord {
+                server_id: "prod".to_string(),
+                display_name: Some("Production".to_string()),
+                endpoint_url: Some("s3://lakecat-demo/catalog".to_string()),
+                properties: BTreeMap::new(),
+                created: AuditStamp::now(Principal::anonymous()),
+                updated_at: Utc::now(),
+            };
+
+            let memory_err = MemoryCatalogStore::new()
+                .upsert_server(record.clone())
+                .await
+                .unwrap_err();
+            let message = memory_err.to_string();
+            assert!(matches!(memory_err, LakeCatError::InvalidArgument(_)));
+            assert!(message.contains("http or https scheme"));
+            assert!(message.contains("server-endpoint-url-hash=sha256:"));
+            assert!(!message.contains("s3://lakecat-demo/catalog"));
+
+            let turso = TursoCatalogStore::in_memory().await.unwrap();
+            let turso_err = turso.upsert_server(record).await.unwrap_err();
+            let message = turso_err.to_string();
+            assert!(matches!(turso_err, LakeCatError::InvalidArgument(_)));
+            assert!(message.contains("http or https scheme"));
+            assert!(message.contains("server-endpoint-url-hash=sha256:"));
+            assert!(!message.contains("s3://lakecat-demo/catalog"));
+            assert_eq!(turso.list_servers().await.unwrap(), vec![]);
         }
 
         #[tokio::test]

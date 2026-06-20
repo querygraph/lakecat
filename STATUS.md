@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require HTTP server endpoint URLs`.
+  Server endpoint URLs now must parse as absolute `http` or `https` URLs before
+  memory or Turso persistence. Invalid strings and non-HTTP schemes fail with
+  `server-endpoint-url-hash` evidence only, matching the existing decorated
+  endpoint rejection and keeping tenant management roots clean before
+  QueryGraph handoff.
+- Local verification for this server endpoint scheme slice is green:
+  `cargo fmt -p lakecat-store -p lakecat-service -- --check`;
+  `cargo test -p lakecat-store --features turso-local endpoint_urls -- --nocapture`;
+  `cargo test -p lakecat-service management_server_rejects_invalid_endpoint_urls -- --nocapture`;
+  `cargo test -p lakecat-service management_server_rejects_decorated_endpoint_urls -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject raw tenant roots in QGLake bootstrap verification`.
   QGLake bootstrap verification now rejects otherwise self-consistent bundles
   whose tenant `Server` or `Warehouse` graph nodes expose raw `endpointUrl` or

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required server endpoint URLs to be absolute `http` or `https` URLs before
+  memory or Turso persistence, returning only `server-endpoint-url-hash`
+  evidence for invalid or non-HTTP endpoint submissions.
 - Tightened QGLake bootstrap verification so self-consistent bundles are
   rejected if tenant `Server` or `Warehouse` graph nodes expose raw
   `endpointUrl` or `storageRoot` values instead of hash-only evidence.

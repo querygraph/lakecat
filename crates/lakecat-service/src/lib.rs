@@ -13038,6 +13038,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn management_server_rejects_invalid_endpoint_urls() {
+        let app = test_app();
+        let endpoint_url = "s3://lakecat-demo/catalog";
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/servers/prod")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "display-name": "Production",
+                    "endpoint-url": endpoint_url,
+                    "properties": {
+                        "deployment": "prod"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(message.contains("http or https scheme"));
+        assert!(message.contains("server-endpoint-url-hash=sha256:"));
+        assert!(
+            !message.contains(endpoint_url),
+            "server endpoint validation must not expose raw endpoint URLs"
+        );
+    }
+
+    #[tokio::test]
     async fn management_warehouses_are_durable_management_entities() {
         let app = test_app();
         let upsert_project = Request::builder()
