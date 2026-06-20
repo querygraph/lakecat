@@ -5618,6 +5618,23 @@ fn verify_qglake_lineage_drain(
                 .to_string(),
         ));
     }
+    if !verification.verified_views.is_empty() {
+        let accepted_view_receipt_hashes = verification
+            .verified_view_receipt_hashes
+            .values()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        let replayed_view_receipt_hashes = bootstrap
+            .view_version_receipt_hashes
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        if accepted_view_receipt_hashes != replayed_view_receipt_hashes {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain replay evidence view version receipt hashes do not match the accepted QueryGraph bundle".to_string(),
+            ));
+        }
+    }
     if standards_set(&bootstrap.standards) != standards_set(&verification.standards) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain replay standards do not match the accepted QueryGraph bundle"
@@ -14480,6 +14497,56 @@ mod tests {
         .expect_err("QGLake lineage drain should reject malformed view version receipt hashes");
         assert!(err.to_string().contains(
             "qglake lineage drain replay evidence is missing SHA-256 view version receipt hashes"
+        ));
+
+        let mut bootstrap_drifted_view_receipt = bootstrap_with_view.clone();
+        bootstrap_drifted_view_receipt.view_version_receipt_hashes =
+            vec!["sha256:other-view-version-receipt".to_string()];
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 9,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "view.upserted".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 3,
+                lineage_events: 10,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    bootstrap_drifted_view_receipt,
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_view_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_storage_profile_upsert_lineage_summary(),
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                ],
+            },
+            &view_verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject view receipt hash drift");
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay evidence view version receipt hashes do not match the accepted QueryGraph bundle"
         ));
 
         let mut mismatched_view_replay = qglake_view_lineage_summary();

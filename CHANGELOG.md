@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake lineage-drain bootstrap source replay to match accepted
+  QueryGraph view-version receipt hashes exactly, rejecting receipt-hash drift
+  before view proof can feed compact handoff verification.
 - Required QGLake lineage-drain dropped-view source replay to bind namespace
   receipt-chain evidence to the accepted view's warehouse/namespace and reject
   verified-chain count or coverage drift before compact handoff proof.

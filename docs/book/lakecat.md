@@ -1648,6 +1648,9 @@ before compact proof generation can consume them. The same shape
 check applies to accepted-view receipt evidence: bootstrap view-version receipt
 hashes, tombstone receipt hashes, and namespace receipt-chain hashes must be
 SHA-256-shaped before accepted-view proof feeds the compact handoff summary.
+Dropped and active accepted-view source replay also compares the bootstrap
+view-version receipt hashes with the accepted QueryGraph verification set, so a
+valid-looking receipt array cannot be spliced from another bootstrap proof.
 Dropped accepted-view source replay also binds the namespace receipt-chain read
 back to the accepted view warehouse/namespace and rejects verified-chain count
 or receipt-hash coverage drift before compact handoff proof is generated. The
