@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact QueryGraph tenant graph roots`.
+  QueryGraph bootstrap tenant graph nodes now emit `endpointUrlHash` and
+  `storageRootHash` instead of raw server endpoint URLs or warehouse storage
+  roots, preserving tenant IDs, display names, and spine edges while keeping
+  handoff graph artifacts hash-only for operator-managed roots.
+- Local verification for this QueryGraph tenant graph slice is green:
+  `cargo fmt -p lakecat-querygraph -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service querygraph_bootstrap_projects_catalog_tables -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_bootstrap_verifier_requires_graph_tenant_spine -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject decorated server endpoint URLs`.
   Server endpoint URLs now reject query strings, fragments, and URI userinfo
   before memory or Turso persistence. `server.upserted` replay also redacts

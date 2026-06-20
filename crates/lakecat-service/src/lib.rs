@@ -12563,6 +12563,15 @@ mod tests {
             server_node["properties"]["source"],
             serde_json::json!("lakecat-management-records")
         );
+        assert_eq!(
+            server_node["properties"]["endpointUrl"],
+            serde_json::Value::Null
+        );
+        assert!(
+            server_node["properties"]["endpointUrlHash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
         let project_node = graph_nodes
             .iter()
             .find(|node| node["id"] == serde_json::json!("lakecat:project:analytics"))
@@ -12583,7 +12592,21 @@ mod tests {
         );
         assert_eq!(
             warehouse_node["properties"]["storageRoot"],
-            serde_json::json!("file:///tmp/lakecat-analytics")
+            serde_json::Value::Null
+        );
+        assert!(
+            warehouse_node["properties"]["storageRootHash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        let graph_json = serde_json::to_string(&body["graph"]).unwrap();
+        assert!(
+            !graph_json.contains("https://lakecat.example.com"),
+            "bootstrap graph must not expose raw server endpoint URLs"
+        );
+        assert!(
+            !graph_json.contains("file:///tmp/lakecat-analytics"),
+            "bootstrap graph must not expose raw warehouse storage roots"
         );
         let graph_edges = body["graph"]["edges"].as_array().unwrap();
         assert!(graph_edges.iter().any(|edge| edge

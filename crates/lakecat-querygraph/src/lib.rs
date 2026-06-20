@@ -1,5 +1,7 @@
 use chrono::{DateTime, Utc};
-use lakecat_core::{LakeCatResult, TableIdent, WarehouseName, content_hash_json};
+use lakecat_core::{
+    LakeCatResult, TableIdent, WarehouseName, content_hash_bytes, content_hash_json,
+};
 use lakecat_store::{
     PolicyBinding, ProjectRecord, ServerRecord, TableRecord, ViewRecord, WarehouseRecord,
 };
@@ -345,12 +347,12 @@ impl QueryGraphBootstrap {
 pub struct QueryGraphTenantProjection {
     pub server_id: String,
     pub server_display_name: Option<String>,
-    pub server_endpoint_url: Option<String>,
+    pub server_endpoint_url_hash: Option<String>,
     pub project_id: String,
     pub project_display_name: Option<String>,
     pub warehouse: Option<String>,
     pub warehouse_project_id: Option<String>,
-    pub warehouse_storage_root: Option<String>,
+    pub warehouse_storage_root_hash: Option<String>,
     pub source: String,
 }
 
@@ -372,7 +374,9 @@ impl QueryGraphTenantProjection {
         Self {
             server_id,
             server_display_name: server_record.and_then(|record| record.display_name.clone()),
-            server_endpoint_url: server_record.and_then(|record| record.endpoint_url.clone()),
+            server_endpoint_url_hash: server_record
+                .and_then(|record| record.endpoint_url.as_deref())
+                .map(server_endpoint_url_hash),
             project_id,
             project_display_name: project_record.and_then(|record| record.display_name.clone()),
             warehouse: Some(
@@ -381,7 +385,9 @@ impl QueryGraphTenantProjection {
                     .unwrap_or_else(|| warehouse.as_str().to_string()),
             ),
             warehouse_project_id: warehouse_record.map(|record| record.project_id.clone()),
-            warehouse_storage_root: warehouse_record.and_then(|record| record.storage_root.clone()),
+            warehouse_storage_root_hash: warehouse_record
+                .and_then(|record| record.storage_root.as_deref())
+                .map(warehouse_storage_root_hash),
             source: if warehouse_record.is_some()
                 || project_record.is_some()
                 || server_record.is_some()
@@ -399,15 +405,25 @@ impl Default for QueryGraphTenantProjection {
         Self {
             server_id: "default".to_string(),
             server_display_name: None,
-            server_endpoint_url: None,
+            server_endpoint_url_hash: None,
             project_id: "default".to_string(),
             project_display_name: None,
             warehouse: None,
             warehouse_project_id: None,
-            warehouse_storage_root: None,
+            warehouse_storage_root_hash: None,
             source: "lakecat-querygraph-bootstrap".to_string(),
         }
     }
+}
+
+fn server_endpoint_url_hash(endpoint_url: &str) -> String {
+    content_hash_json(&json!({"endpoint-url": endpoint_url}))
+        .unwrap_or_else(|_| content_hash_bytes(endpoint_url.as_bytes()))
+}
+
+fn warehouse_storage_root_hash(storage_root: &str) -> String {
+    content_hash_json(&json!({"storage-root": storage_root}))
+        .unwrap_or_else(|_| content_hash_bytes(storage_root.as_bytes()))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1024,7 +1040,7 @@ fn insert_tenant_spine(
             properties: json!({
                 "serverId": tenant.server_id,
                 "displayName": tenant.server_display_name,
-                "endpointUrl": tenant.server_endpoint_url,
+                "endpointUrlHash": tenant.server_endpoint_url_hash,
                 "source": tenant.source
             }),
         },
@@ -1056,7 +1072,7 @@ fn insert_tenant_spine(
                     .warehouse_project_id
                     .as_deref()
                     .unwrap_or_else(|| tenant.project_id.as_str()),
-                "storageRoot": tenant.warehouse_storage_root,
+                "storageRootHash": tenant.warehouse_storage_root_hash,
                 "source": tenant.source
             }),
         },

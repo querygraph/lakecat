@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted QueryGraph bootstrap tenant graph roots so durable management
+  `Server` and `Warehouse` nodes emit `endpointUrlHash` and `storageRootHash`
+  rather than raw endpoint URLs or warehouse storage roots.
 - Rejected decorated server endpoint URLs before memory or Turso persistence and
   redacted legacy/imported endpoint URLs during `server.upserted` replay,
   emitting only `server-endpoint-url-hash` or `endpoint-url-hash` evidence
