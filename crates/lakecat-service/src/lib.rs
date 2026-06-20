@@ -12699,6 +12699,14 @@ mod tests {
             .unwrap();
         let response = app.oneshot(upsert).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+        assert!(!message.contains("s3://lakecat-demo/events"));
+        assert!(!message.contains("lakecat-demo"));
     }
 
     #[tokio::test]

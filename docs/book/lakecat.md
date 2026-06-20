@@ -900,7 +900,9 @@ remote profile should usually reference a secret store and require TypeSec to
 authorize issuance before any resolver sees the secret reference.
 LakeCat rejects profiles whose declared provider conflicts with the URI scheme
 of the location prefix, so a credential root cannot claim to be local while
-pointing at an S3 prefix.
+pointing at an S3 prefix. Those provider/location mismatch errors follow the
+same redaction rule as replay: they name provider labels and a
+`storage-profile-prefix-hash=sha256:...`, not the raw storage root.
 When multiple profiles in the same warehouse could match a table, LakeCat uses
 the longest matching location prefix. If two profiles tie on that longest
 prefix, LakeCat fails closed rather than guessing which credential root or

@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact storage-profile provider mismatch roots`.
+  Storage-profile provider/location-prefix validation now reports provider
+  labels and `storage-profile-prefix-hash` evidence without echoing the raw
+  storage root when a configured provider conflicts with or cannot support the
+  submitted location prefix.
+- Local verification for this storage-profile redaction slice is green:
+  `cargo fmt -p lakecat-store -p lakecat-service -- --check`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_reject_provider_location_mismatch -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_redact_unsupported_provider_location_prefixes -- --nocapture`;
+  `cargo test -p lakecat-service management_storage_profile_rejects_provider_prefix_mismatch -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject partial outbox drain acknowledgements`.
   `drain_outbox_once` now treats graph/lineage projection followed by a short
   store acknowledgement as a conflict instead of returning a successful drain

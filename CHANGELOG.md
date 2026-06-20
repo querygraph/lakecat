@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted storage-profile provider/location mismatch errors so unsupported or
+  contradictory credential roots report provider labels and
+  `storage-profile-prefix-hash` evidence without echoing raw storage prefixes.
 - Made outbox draining reject partial acknowledgement mismatches after
   successful graph/lineage projection, so a drain cannot silently report success
   when fewer events were marked delivered than the projected batch.

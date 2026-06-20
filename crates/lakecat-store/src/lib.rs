@@ -2055,16 +2055,17 @@ fn validate_location_prefix_provider(
     let detected = StorageProvider::from_location(location_prefix);
     if detected != StorageProvider::Unknown && detected != provider {
         return Err(LakeCatError::InvalidArgument(format!(
-            "storage profile provider '{}' does not match location prefix '{}' provider '{}'",
+            "storage profile provider '{}' does not match location prefix provider '{}'; {}",
             provider.as_str(),
-            location_prefix,
-            detected.as_str()
+            detected.as_str(),
+            storage_profile_prefix_hash_context(location_prefix)
         )));
     }
     if detected == StorageProvider::Unknown && provider != StorageProvider::Unknown {
         return Err(LakeCatError::InvalidArgument(format!(
-            "storage profile location prefix '{location_prefix}' is not supported by provider '{}'",
-            provider.as_str()
+            "storage profile location prefix is not supported by provider '{}'; {}",
+            provider.as_str(),
+            storage_profile_prefix_hash_context(location_prefix)
         )));
     }
     Ok(())
@@ -6357,7 +6358,33 @@ pub mod turso_store {
             .unwrap_err();
 
             assert!(matches!(err, LakeCatError::InvalidArgument(_)));
-            assert!(err.to_string().contains("does not match location prefix"));
+            let message = err.to_string();
+            assert!(message.contains("does not match location prefix provider"));
+            assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+            assert!(!message.contains("s3://lakecat-demo/events"));
+            assert!(!message.contains("lakecat-demo"));
+        }
+
+        #[test]
+        fn storage_profiles_redact_unsupported_provider_location_prefixes() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            let err = StorageProfile::new(
+                "unsupported-prefix",
+                warehouse,
+                "https://lakecat-demo.example/events",
+                StorageProvider::S3,
+                CredentialIssuanceMode::ShortLivedSecretRef,
+                Some("vault://kv/lakecat/events".to_string()),
+                BTreeMap::new(),
+            )
+            .unwrap_err();
+
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            let message = err.to_string();
+            assert!(message.contains("is not supported by provider 's3'"));
+            assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+            assert!(!message.contains("https://lakecat-demo.example/events"));
+            assert!(!message.contains("lakecat-demo"));
         }
 
         #[test]

@@ -228,7 +228,8 @@ The current working plan is:
    namespace, view, policy, storage-profile, and credential-root changes should
    create audit/outbox evidence. Secret references and storage roots must stay
    redacted in replay, represented by provider labels, presence flags, and
-   content hashes such as `location-prefix-hash`.
+   content hashes such as `location-prefix-hash`; validation failures should
+   follow the same hash-only rule for storage roots.
 6. Keep reproducibility ahead of integration claims. Run local gates before
    commit, keep cloud CI manual/disabled until it is known green, use published
    Grust/TypeSec crates when available, and keep any Sail path/patch bridge
