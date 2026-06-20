@@ -223,11 +223,7 @@ fn allowed_columns_from_odrl(odrl: &Value) -> LakeCatResult<Option<Vec<String>>>
 
     let mut columns = Vec::new();
     for constraint in odrl_constraints(odrl) {
-        let left = constraint
-            .get("leftOperand")
-            .or_else(|| constraint.get("left-operand"))
-            .and_then(Value::as_str)
-            .unwrap_or_default();
+        let left = constraint_left_operand(constraint).unwrap_or_default();
         if matches!(
             left,
             "column" | "columns" | "allowed-columns" | "allowedColumns" | "lakecat:allowed-columns"
@@ -270,11 +266,7 @@ fn row_predicate_from_odrl(odrl: &Value) -> LakeCatResult<Option<Value>> {
 
     let mut predicate = None;
     for constraint in odrl_constraints(odrl) {
-        let left = constraint
-            .get("leftOperand")
-            .or_else(|| constraint.get("left-operand"))
-            .and_then(Value::as_str)
-            .unwrap_or_default();
+        let left = constraint_left_operand(constraint).unwrap_or_default();
         if matches!(
             left,
             "row-predicate" | "rowPredicate" | "lakecat:row-predicate"
@@ -315,11 +307,7 @@ fn purpose_from_odrl(odrl: &Value) -> LakeCatResult<Option<String>> {
         .map(str::to_string);
 
     for constraint in odrl_constraints(odrl) {
-        let left = constraint
-            .get("leftOperand")
-            .or_else(|| constraint.get("left-operand"))
-            .and_then(Value::as_str)
-            .unwrap_or_default();
+        let left = constraint_left_operand(constraint).unwrap_or_default();
         if left == "purpose" {
             require_constraint_operator(constraint, "purpose", &["eq"])?;
             let next = constraint_right_operand(constraint, "purpose")?
@@ -365,11 +353,7 @@ fn ttl_from_odrl(odrl: &Value) -> LakeCatResult<Option<u64>> {
     }
 
     for constraint in odrl_constraints(odrl) {
-        let left = constraint
-            .get("leftOperand")
-            .or_else(|| constraint.get("left-operand"))
-            .and_then(Value::as_str)
-            .unwrap_or_default();
+        let left = constraint_left_operand(constraint).unwrap_or_default();
         if matches!(
             left,
             "max-credential-ttl-seconds"
@@ -424,10 +408,19 @@ fn constraint_operator(constraint: &Value) -> Option<&str> {
         .and_then(Value::as_str)
 }
 
+fn constraint_left_operand(constraint: &Value) -> Option<&str> {
+    constraint
+        .get("leftOperand")
+        .or_else(|| constraint.get("left-operand"))
+        .or_else(|| constraint.get("odrl:leftOperand"))
+        .and_then(Value::as_str)
+}
+
 fn constraint_right_operand<'a>(constraint: &'a Value, label: &str) -> LakeCatResult<&'a Value> {
     constraint
         .get("rightOperand")
         .or_else(|| constraint.get("right-operand"))
+        .or_else(|| constraint.get("odrl:rightOperand"))
         .ok_or_else(|| {
             LakeCatError::InvalidArgument(format!(
                 "ODRL {label} constraint must include a right operand"
@@ -993,6 +986,58 @@ mod tests {
     }
 
     #[test]
+    fn read_restriction_accepts_prefixed_odrl_constraint_operands() {
+        let policy = serde_json::json!({
+            "uid": "policy-a",
+            "permission": [{
+                "constraint": [
+                    {
+                        "odrl:leftOperand": "allowed-columns",
+                        "odrl:operator": "odrl:eq",
+                        "odrl:rightOperand": ["event_id", "severity"]
+                    },
+                    {
+                        "odrl:leftOperand": "row-predicate",
+                        "odrl:operator": "http://www.w3.org/ns/odrl/2/eq",
+                        "odrl:rightOperand": {
+                            "type": "equal",
+                            "term": "region",
+                            "value": "west"
+                        }
+                    },
+                    {
+                        "odrl:leftOperand": "purpose",
+                        "odrl:operator": "odrl:eq",
+                        "odrl:rightOperand": "resilience-demo"
+                    },
+                    {
+                        "odrl:leftOperand": "credential-ttl",
+                        "odrl:operator": "odrl:lteq",
+                        "odrl:rightOperand": 300
+                    }
+                ]
+            }]
+        });
+
+        let restriction = ReadRestriction::from_odrl_policies([&policy]).unwrap();
+
+        assert_eq!(
+            restriction.allowed_columns,
+            Some(vec!["event_id".to_string(), "severity".to_string()])
+        );
+        assert_eq!(
+            restriction.row_predicate,
+            Some(serde_json::json!({
+                "type": "equal",
+                "term": "region",
+                "value": "west"
+            }))
+        );
+        assert_eq!(restriction.purpose.as_deref(), Some("resilience-demo"));
+        assert_eq!(restriction.max_credential_ttl_seconds, Some(300));
+    }
+
+    #[test]
     fn read_restriction_rejects_unsupported_odrl_constraint_operators() {
         let policy = serde_json::json!({
             "permission": [{
@@ -1037,18 +1082,25 @@ mod tests {
 
     #[test]
     fn read_restriction_rejects_missing_odrl_constraint_right_operands() {
-        for (left_operand, label) in [
-            ("allowed-columns", "allowed columns"),
-            ("row-predicate", "row predicate"),
-            ("purpose", "purpose"),
-            ("credential-ttl", "max credential TTL"),
+        for (left_operand_key, left_operand, label) in [
+            ("leftOperand", "allowed-columns", "allowed columns"),
+            ("leftOperand", "row-predicate", "row predicate"),
+            ("leftOperand", "purpose", "purpose"),
+            ("leftOperand", "credential-ttl", "max credential TTL"),
+            ("odrl:leftOperand", "allowed-columns", "allowed columns"),
         ] {
+            let mut constraint = serde_json::Map::new();
+            constraint.insert(
+                left_operand_key.to_string(),
+                serde_json::Value::String(left_operand.to_string()),
+            );
+            constraint.insert(
+                "operator".to_string(),
+                serde_json::Value::String("eq".to_string()),
+            );
             let policy = serde_json::json!({
                 "permission": [{
-                    "constraint": {
-                        "leftOperand": left_operand,
-                        "operator": "eq"
-                    }
+                    "constraint": constraint
                 }]
             });
 

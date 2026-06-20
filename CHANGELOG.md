@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Accepted prefixed JSON-LD ODRL constraint operand keys
+  (`odrl:leftOperand`, `odrl:rightOperand`) for the enforceable read-restriction
+  subset while preserving the same fail-closed missing-right-operand checks.
 - Made recognized ODRL read-restriction constraints fail closed when
   `rightOperand`/`right-operand` is missing, so allowed-column, row-predicate,
   purpose, and credential-TTL constraints cannot be silently ignored. The scan

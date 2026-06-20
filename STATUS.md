@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Accept prefixed ODRL constraint operands`.
+  `lakecat-security` now treats prefixed JSON-LD ODRL constraint operand keys
+  (`odrl:leftOperand`, `odrl:rightOperand`) as equivalent to the already
+  supported camel/kebab forms for LakeCat's enforceable read-restriction subset.
+  Prefixed operands still inherit the same fail-closed right-operand rule, so
+  compatibility does not silently weaken governed reads.
+- Local verification for this prefixed ODRL operand slice is green:
+  `cargo fmt -p lakecat-security -- --check`;
+  `cargo test -p lakecat-security read_restriction_accepts_prefixed_odrl_constraint_operands -- --nocapture`;
+  `cargo test -p lakecat-security read_restriction_rejects_missing_odrl_constraint_right_operands -- --nocapture`;
+  `cargo test -p lakecat-security read_restriction -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Route-prove missing ODRL right operands fail closed`.
   `lakecat-security` now rejects recognized ODRL read-restriction constraints
   for allowed columns, row predicates, purpose, and credential TTL when the
