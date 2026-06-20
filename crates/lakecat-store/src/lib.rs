@@ -1780,7 +1780,7 @@ impl CatalogStore for MemoryCatalogStore {
     ) -> LakeCatResult<StorageProfile> {
         let state = self.state.read().await;
         Ok(
-            storage_profile_match(state.storage_profiles.values(), table)
+            storage_profile_match(state.storage_profiles.values(), table)?
                 .unwrap_or_else(|| StorageProfile::inferred_for_table(table)),
         )
     }
@@ -1985,15 +1985,38 @@ fn namespace_not_empty(namespace: &Namespace, reason: &str) -> LakeCatError {
 fn storage_profile_match<'a>(
     profiles: impl IntoIterator<Item = &'a StorageProfile>,
     table: &TableRecord,
-) -> Option<StorageProfile> {
-    profiles
+) -> LakeCatResult<Option<StorageProfile>> {
+    let mut best: Option<&StorageProfile> = None;
+    for profile in profiles
         .into_iter()
         .filter(|profile| profile.warehouse == table.ident.warehouse)
         .filter(|profile| {
             location_matches_storage_profile_prefix(&table.location, &profile.location_prefix)
         })
-        .max_by_key(|profile| profile.location_prefix.len())
-        .cloned()
+    {
+        let Some(current) = best else {
+            best = Some(profile);
+            continue;
+        };
+        match profile
+            .location_prefix
+            .len()
+            .cmp(&current.location_prefix.len())
+        {
+            std::cmp::Ordering::Greater => best = Some(profile),
+            std::cmp::Ordering::Equal => {
+                return Err(LakeCatError::InvalidArgument(format!(
+                    "ambiguous storage profile match for {}; location-prefix-hash={}; profile-ids={},{}",
+                    table.ident.stable_id(),
+                    content_hash_bytes(profile.location_prefix.as_bytes()),
+                    current.profile_id,
+                    profile.profile_id
+                )));
+            }
+            std::cmp::Ordering::Less => {}
+        }
+    }
+    Ok(best.cloned())
 }
 
 fn location_matches_storage_profile_prefix(location: &str, prefix: &str) -> bool {
@@ -4430,7 +4453,7 @@ pub mod turso_store {
             table: &TableRecord,
         ) -> LakeCatResult<StorageProfile> {
             let profiles = self.list_storage_profiles(&table.ident.warehouse).await?;
-            Ok(storage_profile_match(profiles.iter(), table)
+            Ok(storage_profile_match(profiles.iter(), table)?
                 .unwrap_or_else(|| StorageProfile::inferred_for_table(table)))
         }
 
@@ -5917,6 +5940,94 @@ pub mod turso_store {
                 matched.public_config["lakecat.endpoint"],
                 narrow.public_config["lakecat.endpoint"]
             );
+        }
+
+        #[tokio::test]
+        async fn storage_profile_matching_rejects_ambiguous_same_prefix_profiles() {
+            let store = MemoryCatalogStore::new();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let table = TableRecord::new(
+                TableIdent::new(
+                    warehouse.clone(),
+                    namespace,
+                    TableName::new("events").unwrap(),
+                ),
+                "s3://lakecat-demo/events/tenant-a/table".to_string(),
+                None,
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            );
+            for profile_id in ["events-a", "events-b"] {
+                store
+                    .upsert_storage_profile(
+                        StorageProfile::new(
+                            profile_id,
+                            warehouse.clone(),
+                            "s3://lakecat-demo/events",
+                            StorageProvider::S3,
+                            CredentialIssuanceMode::GovernedReadRequired,
+                            None,
+                            BTreeMap::new(),
+                        )
+                        .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+            }
+
+            let err = store.storage_profile_for_table(&table).await.unwrap_err();
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            let message = err.to_string();
+            assert!(message.contains("ambiguous storage profile match"));
+            assert!(message.contains("location-prefix-hash=sha256:"));
+            assert!(message.contains("events-a"));
+            assert!(message.contains("events-b"));
+            assert!(!message.contains("s3://lakecat-demo/events"));
+        }
+
+        #[tokio::test]
+        async fn turso_storage_profile_matching_rejects_ambiguous_same_prefix_profiles() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let table = TableRecord::new(
+                TableIdent::new(
+                    warehouse.clone(),
+                    namespace,
+                    TableName::new("events").unwrap(),
+                ),
+                "s3://lakecat-demo/events/tenant-a/table".to_string(),
+                None,
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            );
+            for profile_id in ["events-a", "events-b"] {
+                store
+                    .upsert_storage_profile(
+                        StorageProfile::new(
+                            profile_id,
+                            warehouse.clone(),
+                            "s3://lakecat-demo/events",
+                            StorageProvider::S3,
+                            CredentialIssuanceMode::GovernedReadRequired,
+                            None,
+                            BTreeMap::new(),
+                        )
+                        .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+            }
+
+            let err = store.storage_profile_for_table(&table).await.unwrap_err();
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            let message = err.to_string();
+            assert!(message.contains("ambiguous storage profile match"));
+            assert!(message.contains("location-prefix-hash=sha256:"));
+            assert!(message.contains("events-a"));
+            assert!(message.contains("events-b"));
+            assert!(!message.contains("s3://lakecat-demo/events"));
         }
 
         #[tokio::test]

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made storage-profile selection fail closed when multiple profiles in the same
+  warehouse match a table with the same longest location prefix, returning only
+  profile ids and a redacted location-prefix hash instead of choosing an
+  arbitrary credential/metadata root.
 - Bound saved QGLake handoff-verifier lineage-drain identity semantics back to
   the compact request-identity proof, rejecting rehashed verifier artifacts
   whose saved drain principal, authorization receipt, source/state, or TypeDID

@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject ambiguous storage profile roots`.
+  Storage-profile selection now fails closed if multiple profiles
+  in one warehouse match a table with the same longest location prefix, so
+  credential issuance and metadata-object validation cannot silently depend on
+  profile iteration order. The error reports profile ids plus a
+  `location-prefix-hash` without echoing the raw storage root.
+- Local verification for this storage-profile selection slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local storage_profile_matching -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind saved handoff drain identity semantics`.
   Saved `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics`
   sections are now checked against the compact `requestIdentityProof`, so a

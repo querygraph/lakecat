@@ -886,6 +886,12 @@ authorize issuance before any resolver sees the secret reference.
 LakeCat rejects profiles whose declared provider conflicts with the URI scheme
 of the location prefix, so a credential root cannot claim to be local while
 pointing at an S3 prefix.
+When multiple profiles in the same warehouse could match a table, LakeCat uses
+the longest matching location prefix. If two profiles tie on that longest
+prefix, LakeCat fails closed rather than guessing which credential root or
+metadata-object boundary should apply. The ambiguity error reports the
+competing profile ids and `location-prefix-hash=sha256:...` evidence, not the
+raw storage root.
 The location prefix itself must be plainly addressed: LakeCat rejects literal
 and percent-encoded dot path segments before the profile can reach memory or
 Turso persistence. Traversal-shaped storage roots fail with
