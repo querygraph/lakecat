@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject invalid REST idempotency keys`.
+  REST table commits now have service-level coverage proving illegal or
+  overlong `x-lakecat-idempotency-key` values fail with `400 Bad Request`
+  before authorization, Sail validation, table loading, or metadata-object
+  writes.
+- Local verification for this idempotency-key validation slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service commit_rejects_invalid_rest_idempotency_keys -- --nocapture`;
+  `cargo test -p lakecat-service commit_replays_rest_idempotency_key -- --nocapture`;
+  `cargo test -p lakecat-service`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require HTTP QGLake handoff catalog URLs`.
   Compact QGLake handoff verification now rejects malformed or non-HTTP(S)
   `catalogUrl` values, so saved handoff summaries bind replay/import evidence

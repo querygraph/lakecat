@@ -8934,6 +8934,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn commit_rejects_invalid_rest_idempotency_keys() {
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        ));
+        let cases = [
+            (
+                "commit events 0001".to_string(),
+                "x-lakecat-idempotency-key may only contain",
+            ),
+            (
+                "x".repeat(129),
+                "x-lakecat-idempotency-key must be 1..=128 ASCII characters",
+            ),
+        ];
+
+        for (key, expected_message) in cases {
+            let commit = Request::builder()
+                .method(Method::POST)
+                .uri("/catalog/v1/namespaces/default/tables/events/commit")
+                .header("content-type", "application/json")
+                .header("x-lakecat-idempotency-key", key.as_str())
+                .body(Body::from(r#"{"requirements":[],"updates":[]}"#))
+                .unwrap();
+            let response = app.clone().oneshot(commit).await.unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let message = String::from_utf8_lossy(&body);
+            assert!(message.contains(expected_message), "{message}");
+        }
+    }
+
+    #[tokio::test]
     async fn management_table_commits_lists_pointer_log_evidence() {
         let store = MemoryCatalogStore::new();
         let graph = Arc::new(RecordingGraph::default());

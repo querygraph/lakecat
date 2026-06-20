@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added service-level coverage for invalid REST commit idempotency keys,
+  proving illegal or overlong `x-lakecat-idempotency-key` values fail before
+  catalog commit work begins.
 - Required compact QGLake handoff summaries to bind `catalogUrl` to an
   absolute HTTP(S) endpoint instead of accepting any non-empty string.
 - Required QGLake handoff summaries to carry and verify a SHA-256 service log

@@ -332,7 +332,11 @@ Idempotency is part of correctness. Reusing the same key for the same commit can
 return the stored response even after the table has advanced beyond the
 original commit requirements. Reusing the same key for a different body must
 conflict. LakeCat persists a normalized request hash and stores only audit-safe
-evidence, not raw secrets or raw idempotency keys.
+evidence, not raw secrets or raw idempotency keys. REST idempotency keys are
+intentionally narrow: `x-lakecat-idempotency-key` must be 1 to 128 ASCII
+characters and may use only letters, digits, `-`, `_`, `.`, or `:`. Invalid
+keys fail before LakeCat performs authorization, Sail validation, table loading,
+or metadata-object writes.
 The service regression for this path proves the replay happens before
 metadata-object writes: an exact retry returns the stored response without
 touching the already committed metadata object.
