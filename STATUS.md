@@ -6,6 +6,24 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full QGLake commit record hashes`.
+  QGLake table commit-history verification now rejects compact pointer-log
+  records whose request, response, idempotency-key, commit, or optional policy
+  hash evidence is not a full `sha256:`-prefixed 64-hex digest, closing the
+  readable-placeholder path before commit-history evidence feeds QGLake
+  handoff acceptance.
+- Local verification for this QGLake commit record hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_commit_history_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, and ended with `QGLake handoff verified`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject short outbox commit hashes`.
   Outbox draining now rejects `table.commit` pending events whose
   `request_hash`, `response_hash`, `idempotency_key_sha256`, or present

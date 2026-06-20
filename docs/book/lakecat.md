@@ -440,8 +440,10 @@ pointer-log inspection trail without requiring direct access to the Turso
 catalog database or making LakeCat a graph query engine. QGLake acceptance now
 exercises this path directly: the fixture issues an idempotent no-op commit
 probe, reads the compact commit-history endpoint, verifies that the record
-preserves the table's Iceberg format-version and current snapshot summary, and
-then requires the lineage drain to replay `table.commits-listed` receipt hashes
+preserves the table's Iceberg format-version and current snapshot summary,
+requires the compact request, response, idempotency-key, commit, and optional
+policy hashes to be full `sha256:`-prefixed 64-hex digests, and then requires
+the lineage drain to replay `table.commits-listed` receipt hashes
 plus compact commit count, sequence-number, and commit-hash summary fields
 before the QueryGraph handoff is accepted.
 
@@ -2028,7 +2030,10 @@ SHA-256-shaped before pointer-history evidence can enter the compact handoff
 proof. Service route coverage pins the producer side too: request hashes,
 response hashes, idempotency-key hashes, and commit hashes are full SHA-256
 digests across the route response, pointer-log outbox payload, lineage-drain
-summary, and graph projection. QueryGraph can therefore verify the governed
+summary, and graph projection. The QGLake fixture verifier also checks the
+management commit-history response itself, so short readable placeholders are
+rejected before the later lineage-drain and compact handoff checks run.
+QueryGraph can therefore verify the governed
 Sail-planned read and pointer-history inspection without parsing the full
 lineage payload. The
 core QueryGraph bundle, graph, OpenLineage, and import anchors must be

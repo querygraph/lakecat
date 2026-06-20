@@ -5683,6 +5683,22 @@ fn verify_qglake_table_commit_record_evidence(
             "qglake table commit history for {warehouse}.{namespace_path}.{table} is missing compact pointer-log evidence"
         )));
     }
+    if !is_full_sha256_hash(&record.request_hash)
+        || !is_full_sha256_hash(&record.response_hash)
+        || !is_full_sha256_hash(&record.commit_hash)
+        || !record
+            .idempotency_key_sha256
+            .as_deref()
+            .is_some_and(is_full_sha256_hash)
+        || record
+            .policy_hash
+            .as_deref()
+            .is_some_and(|hash| !is_full_sha256_hash(hash))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake table commit history for {warehouse}.{namespace_path}.{table} must expose full SHA-256 pointer-log hash evidence"
+        )));
+    }
     if record.format_version != Some(3) || record.snapshot_id.is_none() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake table commit history for {warehouse}.{namespace_path}.{table} is missing Iceberg format/snapshot summary evidence"
@@ -13442,6 +13458,19 @@ mod tests {
     }
 
     #[test]
+    fn qglake_commit_history_verifier_rejects_short_pointer_hashes() {
+        let mut record = qglake_table_commit_record_summary();
+        record.request_hash = "sha256:request".to_string();
+
+        let err = verify_qglake_table_commit_record_evidence(&record, "local", "default", "events")
+            .expect_err("QGLake commit history should reject short pointer-log hashes");
+
+        assert!(err.to_string().contains(
+            "qglake table commit history for local.default.events must expose full SHA-256 pointer-log hash evidence"
+        ));
+    }
+
+    #[test]
     fn qglake_fixture_policy_installs_read_restriction() {
         let policy = qglake_odrl_policy("events");
         assert_eq!(
@@ -19246,10 +19275,10 @@ mod tests {
             format_version: Some(3),
             snapshot_id: Some(42),
             policy_hash: None,
-            request_hash: "sha256:request".to_string(),
-            response_hash: "sha256:response".to_string(),
-            idempotency_key_sha256: Some("sha256:idempotency".to_string()),
-            commit_hash: "sha256:commit".to_string(),
+            request_hash: qglake_fixture_hash("commit-request"),
+            response_hash: qglake_fixture_hash("commit-response"),
+            idempotency_key_sha256: Some(qglake_fixture_hash("commit-idempotency")),
+            commit_hash: qglake_fixture_hash("commit-record"),
             principal_subject: "did:example:agent".to_string(),
             principal_kind: "agent".to_string(),
             committed_at: "2026-06-19T00:00:00Z".to_string(),

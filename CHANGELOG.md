@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake table commit-history record verification to reject compact
+  pointer-log request, response, idempotency-key, commit, and optional policy
+  hashes unless they are full `sha256:`-prefixed 64-hex digests.
 - Rejected outbox delivery for `table.commit` events whose request, response,
   idempotency-key, or policy hash evidence is not a full `sha256:`-prefixed
   64-hex digest, so malformed REST commit receipts fail before projection.
