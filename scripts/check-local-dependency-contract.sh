@@ -37,6 +37,12 @@ require_pattern 'grust-graph = \{ package = "grust-graph", version = "0\.9\.0",'
   "grust-graph must use the published 0.9.0 crate"
 require_pattern 'typesec = \{ version = "0\.8\.0",' Cargo.toml \
   "typesec must use the published 0.8.0 crate"
+require_pattern 'grust-cypher' Cargo.lock \
+  "Cargo.lock must include the published Grust Cypher facade used by grust-local graph tests"
+require_pattern 'name = "grust-cypher"' Cargo.lock \
+  "Cargo.lock must include grust-cypher"
+require_pattern 'version = "0\.9\.0"' Cargo.lock \
+  "Cargo.lock must keep grust-cypher on the published 0.9.0 crate"
 require_pattern 'sail-catalog = \{ path = "../sail/crates/sail-catalog" \}' Cargo.toml \
   "sail-catalog must stay an explicit local Sail path until the needed Sail API is published"
 require_pattern 'sail-common-datafusion = \{ path = "../sail/crates/sail-common-datafusion" \}' Cargo.toml \
@@ -99,5 +105,9 @@ require_pattern '"name":"grust-graph".*"source":"registry\+https://github.com/ru
   "cargo metadata must resolve grust-graph to crates.io with version requirement ^0.9.0"
 require_pattern '"name":"typesec".*"source":"registry\+https://github.com/rust-lang/crates.io-index".*"req":"\^0\.8\.0"' /tmp/lakecat-dependency-contract-metadata.json \
   "cargo metadata must resolve typesec to crates.io with version requirement ^0.8.0"
+cargo metadata --format-version 1 --all-features > /tmp/lakecat-dependency-contract-full-metadata.json
+tr '{' '\n' < /tmp/lakecat-dependency-contract-full-metadata.json > /tmp/lakecat-dependency-contract-full-metadata-lines.json
+require_pattern '"name":"grust-cypher","version":"0\.9\.0".*"source":"registry\+https://github.com/rust-lang/crates.io-index"' /tmp/lakecat-dependency-contract-full-metadata-lines.json \
+  "full cargo metadata must resolve grust-cypher 0.9.0 from crates.io through grust-graph"
 
 echo "LakeCat local dependency contract is intact."

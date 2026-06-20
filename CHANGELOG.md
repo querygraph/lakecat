@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened the local dependency-contract audit to prove `grust-cypher` 0.9.0
+  resolves from crates.io under `--all-features`, covering the Grust Cypher
+  graph-boundary used by `grust-local` tests instead of only checking
+  `grust-graph` directly.
 - Redacted metadata-object backend error details: object-store setup, write,
   and cleanup failures now expose `error-detail-hash=sha256:...` evidence
   instead of raw backend error text that may contain paths or configuration.

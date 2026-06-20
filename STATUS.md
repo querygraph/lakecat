@@ -6,6 +6,15 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify Grust Cypher dependency contract`.
+  The local dependency-contract audit now checks that `grust-cypher` 0.9.0 is
+  locked and resolves from crates.io through `cargo metadata --all-features`,
+  so the `grust-local` graph/Cypher boundary is covered by the same published
+  Grust crate proof as `grust-graph`.
+- Local verification for this dependency-contract slice is green:
+  `bash -n scripts/check-local-dependency-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`.
+- Latest completed implementation slice:
   `Redact metadata backend error details`.
   Metadata-object object-store setup, create-only write, and cleanup failures
   now expose `error-detail-hash=sha256:...` evidence instead of raw backend
