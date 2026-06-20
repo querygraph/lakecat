@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required storage-profile selection to respect location-prefix boundaries, so
+  a profile for `s3://bucket/events` can match that root or child paths but not
+  a sibling such as `s3://bucket/events-shadow`.
 - Re-audited OPUS consolidation: `DESIGN.md` now records the current archive
   invariant, `docs/completed/README.md` records the latest audit, and the
   active tree keeps all OPUS files frozen under `docs/completed/`.

@@ -1982,9 +1982,23 @@ fn storage_profile_match<'a>(
     profiles
         .into_iter()
         .filter(|profile| profile.warehouse == table.ident.warehouse)
-        .filter(|profile| table.location.starts_with(&profile.location_prefix))
+        .filter(|profile| {
+            location_matches_storage_profile_prefix(&table.location, &profile.location_prefix)
+        })
         .max_by_key(|profile| profile.location_prefix.len())
         .cloned()
+}
+
+fn location_matches_storage_profile_prefix(location: &str, prefix: &str) -> bool {
+    if location == prefix {
+        return true;
+    }
+    if prefix.ends_with('/') {
+        return location.starts_with(prefix);
+    }
+    location
+        .strip_prefix(prefix)
+        .is_some_and(|suffix| suffix.starts_with('/'))
 }
 
 fn validate_profile_id(profile_id: &str) -> LakeCatResult<()> {
@@ -5741,6 +5755,99 @@ pub mod turso_store {
                 matched.public_config["lakecat.endpoint"],
                 narrow.public_config["lakecat.endpoint"]
             );
+        }
+
+        #[tokio::test]
+        async fn storage_profile_matching_respects_location_boundaries() {
+            let store = MemoryCatalogStore::new();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let profile = StorageProfile::new(
+                "events-root",
+                warehouse.clone(),
+                "s3://lakecat-demo/events",
+                StorageProvider::S3,
+                CredentialIssuanceMode::GovernedReadRequired,
+                None,
+                BTreeMap::from([("lakecat.scope".to_string(), "events".to_string())]),
+            )
+            .unwrap();
+            store.upsert_storage_profile(profile.clone()).await.unwrap();
+
+            for (table_name, location, expected_profile_id) in [
+                ("events-exact", "s3://lakecat-demo/events", "events-root"),
+                (
+                    "events-child",
+                    "s3://lakecat-demo/events/tenant-a/table",
+                    "events-root",
+                ),
+                (
+                    "events-sibling",
+                    "s3://lakecat-demo/events-shadow/table",
+                    "local:s3",
+                ),
+            ] {
+                let table = TableRecord::new(
+                    TableIdent::new(
+                        warehouse.clone(),
+                        namespace.clone(),
+                        TableName::new(table_name).unwrap(),
+                    ),
+                    location.to_string(),
+                    None,
+                    serde_json::json!({"format-version": 3}),
+                    Principal::anonymous(),
+                );
+
+                let matched = store.storage_profile_for_table(&table).await.unwrap();
+                assert_eq!(matched.profile_id, expected_profile_id, "{location}");
+            }
+        }
+
+        #[tokio::test]
+        async fn turso_storage_profile_matching_respects_trailing_slash_boundaries() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let profile = StorageProfile::new(
+                "events-root",
+                warehouse.clone(),
+                "s3://lakecat-demo/events/",
+                StorageProvider::S3,
+                CredentialIssuanceMode::GovernedReadRequired,
+                None,
+                BTreeMap::from([("lakecat.scope".to_string(), "events".to_string())]),
+            )
+            .unwrap();
+            store.upsert_storage_profile(profile.clone()).await.unwrap();
+
+            for (table_name, location, expected_profile_id) in [
+                (
+                    "events-child",
+                    "s3://lakecat-demo/events/tenant-a/table",
+                    "events-root",
+                ),
+                (
+                    "events-sibling",
+                    "s3://lakecat-demo/events-shadow/table",
+                    "local:s3",
+                ),
+            ] {
+                let table = TableRecord::new(
+                    TableIdent::new(
+                        warehouse.clone(),
+                        namespace.clone(),
+                        TableName::new(table_name).unwrap(),
+                    ),
+                    location.to_string(),
+                    None,
+                    serde_json::json!({"format-version": 3}),
+                    Principal::anonymous(),
+                );
+
+                let matched = store.storage_profile_for_table(&table).await.unwrap();
+                assert_eq!(matched.profile_id, expected_profile_id, "{location}");
+            }
         }
 
         #[tokio::test]

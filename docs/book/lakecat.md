@@ -862,6 +862,14 @@ path segments, so a credential root cannot rely on traversal-like spelling
 before a resolver sees it. Unsupported credential-root schemes and malformed
 secret-root paths are rejected with `secret-ref-hash=sha256:...` evidence
 instead of echoing the submitted secret reference.
+When LakeCat selects the storage profile for a table, the location prefix is
+also matched on a storage-root boundary. A profile for
+`s3://lakecat/events` applies to that exact root and to children such as
+`s3://lakecat/events/tenant-a/table`, but it does not apply to a sibling path
+such as `s3://lakecat/events-shadow/table`. That keeps credential roots from
+accidentally governing more storage than their configured prefix describes; if
+no stored profile matches, LakeCat falls back to an inferred governed-read
+profile for the table location.
 
 ```sh
 curl -s -X PUT \

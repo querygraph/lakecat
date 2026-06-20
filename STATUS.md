@@ -5,6 +5,20 @@ Updated: 2026-06-20
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Reject sibling storage-profile prefix matches`.
+  Storage-profile selection now treats the stored `location-prefix` as an exact
+  root or path-boundary parent, not a raw string prefix. A credential root such
+  as `s3://lakecat-demo/events` can select `s3://lakecat-demo/events` and child
+  locations, but not sibling paths such as
+  `s3://lakecat-demo/events-shadow/table`; unmatched tables fall back to the
+  inferred governed-read profile.
+- Local verification for this storage-profile boundary slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local storage_profile_matching_respects_location_boundaries -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local turso_storage_profile_matching_respects_trailing_slash_boundaries -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Re-audit OPUS consolidation`.
   The OPUS review/design corpus is consolidated into `DESIGN.md` and adjacent
