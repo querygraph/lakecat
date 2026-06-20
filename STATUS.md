@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Route-prove malformed JSON-LD ODRL blocks scan`.
+  The REST scan-planning route now has focused regression coverage proving a
+  malformed JSON-LD ODRL allowed-column `@list` fails before Sail planning and
+  before `table.scan-planned` replay evidence is emitted.
+- Local verification for this route-level ODRL slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service scan_planning_rejects_malformed_jsonld_odrl_before_sail -- --nocapture`;
+  `cargo test -p lakecat-service scan_planning_rejects_malformed_odrl_before_sail -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Accept JSON-LD ODRL right operand values`.
   `lakecat-security` now accepts compact JSON-LD `@value` and `@list` right
   operands for the bounded allowed-column, purpose, and credential-TTL ODRL

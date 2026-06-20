@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added REST scan-planning coverage proving malformed JSON-LD ODRL allowed-column
+  lists fail before Sail planning and before `table.scan-planned` replay
+  evidence is emitted.
 - Accepted compact JSON-LD `@value` and `@list` right operands for bounded
   ODRL allowed-column, purpose, and credential-TTL constraints while keeping
   malformed JSON-LD allowed-column lists fail-closed.
