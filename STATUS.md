@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject non-agent proof headers`.
+  Live request-identity parsing now rejects agent delegation and agent summary
+  proof headers unless the request uses an agent-shaped identity path. The
+  rejection returns only `agent-delegation-hash` or
+  `agent-summary-signature-hash` evidence, and config-route coverage proves the
+  request fails before governance dispatch.
+- Local verification for this agent request-boundary slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service request_identity_rejects_agent_proof_headers_without_agent_identity -- --nocapture`;
+  `cargo test -p lakecat-service config_endpoint_rejects_agent_summary_without_agent_before_governance -- --nocapture`;
+  `cargo test -p lakecat-service request_identity_hashes_typedid_envelope_material -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject unpaired TypeDID proof headers`.
   Live request-identity parsing now rejects `x-lakecat-typedid-proof` unless
   `x-lakecat-typedid-envelope` is present, returns only

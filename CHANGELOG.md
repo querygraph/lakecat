@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected live agent delegation and agent summary proof headers unless the
+  request carries an agent-shaped identity, returning only hash evidence and
+  proving catalog config reads fail before governance dispatch.
 - Rejected live request-identity TypeDID proof headers without a matching
   TypeDID envelope header, returning only `typedid-proof-hash` evidence and
   proving catalog config reads fail before governance dispatch.

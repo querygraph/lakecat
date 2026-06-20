@@ -5448,6 +5448,26 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
         (Principal::anonymous(), "anonymous", None)
     };
 
+    let agent_proof_allowed = principal.kind == PrincipalKind::Agent || typedid_envelope.is_some();
+    if !agent_proof_allowed {
+        if let Some(delegation) = delegation {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "x-lakecat-agent-delegation requires an agent identity; \
+                 agent-delegation-hash={}",
+                content_hash_bytes(delegation.as_bytes())
+            ))
+            .into());
+        }
+        if let Some(signature) = signed_summary {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "x-lakecat-agent-summary-signature requires an agent identity; \
+                 agent-summary-signature-hash={}",
+                content_hash_bytes(signature.as_bytes())
+            ))
+            .into());
+        }
+    }
+
     let envelope = json!({
         "type": "lakecat.request-identity.v1",
         "principal": principal,
@@ -6699,6 +6719,69 @@ mod tests {
         assert!(message.contains("x-lakecat-typedid-proof requires x-lakecat-typedid-envelope"));
         assert!(message.contains("typedid-proof-hash=sha256:"));
         assert!(!message.contains("raw-proof-secret"));
+        assert!(governance.principals.lock().await.is_empty());
+        assert!(governance.contexts.lock().await.is_empty());
+    }
+
+    #[test]
+    fn request_identity_rejects_agent_proof_headers_without_agent_identity() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-lakecat-principal", "alice@example.com".parse().unwrap());
+        headers.insert("x-lakecat-principal-kind", "human".parse().unwrap());
+        headers.insert(
+            "x-lakecat-agent-delegation",
+            "raw-delegation-secret".parse().unwrap(),
+        );
+        headers.insert(
+            "x-lakecat-agent-summary-signature",
+            "raw-summary-secret".parse().unwrap(),
+        );
+
+        let err = request_identity(&headers).expect_err("agent proof should require an agent");
+        let LakeCatHttpError(inner) = err;
+        let message = inner.to_string();
+        assert!(message.contains("x-lakecat-agent-delegation requires an agent identity"));
+        assert!(message.contains("agent-delegation-hash=sha256:"));
+        assert!(!message.contains("raw-delegation-secret"));
+        assert!(!message.contains("raw-summary-secret"));
+    }
+
+    #[tokio::test]
+    async fn config_endpoint_rejects_agent_summary_without_agent_before_governance() {
+        let governance = Arc::new(RecordingGovernance::default());
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_integrations(
+            default_sail_engine(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        ));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/config")
+                    .header("x-lakecat-principal", "alice@example.com")
+                    .header("x-lakecat-principal-kind", "human")
+                    .header("x-lakecat-agent-summary-signature", "raw-summary-secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let message = String::from_utf8(body.to_vec()).unwrap();
+        assert!(message.contains("x-lakecat-agent-summary-signature requires an agent identity"));
+        assert!(message.contains("agent-summary-signature-hash=sha256:"));
+        assert!(!message.contains("raw-summary-secret"));
         assert!(governance.principals.lock().await.is_empty());
         assert!(governance.contexts.lock().await.is_empty());
     }
