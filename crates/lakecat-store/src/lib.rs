@@ -2145,12 +2145,70 @@ fn validate_secret_ref(secret_ref: &str) -> LakeCatResult<()> {
                 .to_string(),
         ));
     }
+    if secret_ref_has_dot_path_segment(trimmed) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "storage profile secret reference must not include dot path segments; {}",
+            secret_ref_hash_context(trimmed)
+        )));
+    }
     if embeds_raw_secret_material(trimmed) {
         return Err(LakeCatError::InvalidArgument(
             "storage profile secret reference must not embed raw secret material".to_string(),
         ));
     }
     Ok(())
+}
+
+fn secret_ref_has_dot_path_segment(secret_ref: &str) -> bool {
+    let path = secret_ref
+        .split_once(['?', '#'])
+        .map_or(secret_ref, |(path, _)| path);
+    path.split('/').any(is_dot_path_segment)
+}
+
+fn is_dot_path_segment(segment: &str) -> bool {
+    let Some(decoded) = percent_decode_segment(segment) else {
+        return segment == "." || segment == "..";
+    };
+    decoded.as_slice() == b"." || decoded.as_slice() == b".."
+}
+
+fn percent_decode_segment(segment: &str) -> Option<Vec<u8>> {
+    if !segment.as_bytes().contains(&b'%') {
+        return None;
+    }
+    let mut decoded = Vec::with_capacity(segment.len());
+    let bytes = segment.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            let Some(high) = hex_value(bytes[index + 1]) else {
+                decoded.push(bytes[index]);
+                index += 1;
+                continue;
+            };
+            let Some(low) = hex_value(bytes[index + 2]) else {
+                decoded.push(bytes[index]);
+                index += 1;
+                continue;
+            };
+            decoded.push((high << 4) | low);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    Some(decoded)
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn secret_ref_hash_context(secret_ref: &str) -> String {
@@ -5776,6 +5834,49 @@ pub mod turso_store {
                     "storage profile validation errors must not expose raw secret refs"
                 );
             }
+        }
+
+        #[test]
+        fn storage_profiles_reject_dot_segment_secret_refs() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            for secret_ref in [
+                "vault://secret/data/lakecat/../s3-events",
+                "aws-sm://lakecat/%2e%2e/s3-events",
+                "gcp-sm://lakecat/%2E/s3-events",
+            ] {
+                let err = StorageProfile::new(
+                    "dot-secret-ref",
+                    warehouse.clone(),
+                    "s3://lakecat-demo/events",
+                    StorageProvider::S3,
+                    CredentialIssuanceMode::ShortLivedSecretRef,
+                    Some(secret_ref.to_string()),
+                    BTreeMap::new(),
+                )
+                .unwrap_err();
+
+                let message = err.to_string();
+                assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+                assert!(message.contains("dot path segments"));
+                assert!(message.contains("secret-ref-hash=sha256:"));
+                assert!(
+                    !message.contains(secret_ref),
+                    "dot-segment secret-ref validation must not expose raw secret refs"
+                );
+            }
+        }
+
+        #[test]
+        fn secret_ref_dot_segment_detection_allows_ordinary_dotted_names() {
+            assert!(crate::secret_ref_has_dot_path_segment(
+                "vault://secret/data/lakecat/../s3-events"
+            ));
+            assert!(crate::secret_ref_has_dot_path_segment(
+                "vault://secret/data/lakecat/%2e%2e/s3-events"
+            ));
+            assert!(!crate::secret_ref_has_dot_path_segment(
+                "vault://secret/data/lakecat/service.v1/s3-events"
+            ));
         }
 
         #[test]

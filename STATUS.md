@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject secret-ref dot-segment roots`.
+  Storage-profile validation now rejects `secret-ref` URIs containing literal
+  or percent-encoded `.`/`..` path segments before memory/Turso persistence or
+  resolver dispatch. The validation error reports only
+  `secret-ref-hash=sha256:...`, keeping credential-root paths redacted.
+- Local verification for this secret-ref hardening slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_reject_dot_segment_secret_refs -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local secret_ref_dot_segment_detection_allows_ordinary_dotted_names -- --nocapture`.
+- Latest completed implementation slice:
   `Reject metadata dot-segment commit locations`.
   Metadata-object commit validation now rejects planned new metadata locations
   containing literal or percent-encoded `.`/`..` path segments before object

@@ -857,9 +857,11 @@ Turso persistence, so deserialized control-plane records cannot bypass the
 public-config guard. The `secret-ref` field itself must remain a clean external
 secret-store locator: LakeCat rejects query strings, URI fragments, and
 userinfo before persisting a storage profile, so token-like material cannot hide
-inside a decorated secret URI. Unsupported credential-root schemes are rejected
-with `secret-ref-hash=sha256:...` evidence instead of echoing the submitted
-secret reference.
+inside a decorated secret URI. It also rejects literal and percent-encoded dot
+path segments, so a credential root cannot rely on traversal-like spelling
+before a resolver sees it. Unsupported credential-root schemes and malformed
+secret-root paths are rejected with `secret-ref-hash=sha256:...` evidence
+instead of echoing the submitted secret reference.
 
 ```sh
 curl -s -X PUT \

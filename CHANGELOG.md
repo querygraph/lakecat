@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected storage-profile secret references containing literal or
+  percent-encoded dot path segments before persistence or resolver dispatch,
+  keeping credential roots as clean external secret-store locators with
+  hash-only error evidence.
 - Rejected metadata-object commit locations containing literal or
   percent-encoded dot path segments before object-store writes, keeping
   create-only metadata writes constrained to plainly addressed child objects
