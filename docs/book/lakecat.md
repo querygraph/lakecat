@@ -1385,8 +1385,9 @@ being replayed against the wrong catalog tenant, table, or view. The
 `querygraphImportVerification` object is also a compact proof, not only a
 boolean: it repeats the QueryGraph import table/view ids, counts, bundle hash,
 graph hash, OpenLineage hash, QueryGraph import hash, and standards, and LakeCat
-rejects a summary unless those fields match both `querygraphVerification` and
-the captured `lakecat-import` output. It also records structured
+rejects a summary unless those fields are SHA-256-shaped and match both
+`querygraphVerification` and the captured `lakecat-import` output. It also
+records structured
 request-identity, scan, management,
 credential, table-commit, and view replay evidence, plus compact
 `requestIdentityProof`, `queryGraphBootstrapProof`, `governedScanProof`,
@@ -1405,7 +1406,9 @@ changing the handoff schema. The QueryGraph bootstrap proof shows the accepted
 bundle, graph, OpenLineage, and QueryGraph import hashes, the table and view
 artifact counts, standards, policy-binding count, agent delegation and summary
 signature hashes, view-version receipt hashes, and replay/OpenLineage sink
-hashes. The scan proof shows LakeCat planned and fetched scan tasks through the
+hashes. Those core bootstrap hash anchors must also be SHA-256-shaped before
+the verifier compares them with QueryGraph's verify/import proof. The scan
+proof shows LakeCat planned and fetched scan tasks through the
 governed path, including file, delete-file, and child plan-task counts with
 replay and OpenLineage hashes. The
 commit-history proof shows the catalog
@@ -1659,7 +1662,10 @@ must be positive and strictly increasing, and commit hashes must be
 SHA-256-shaped before pointer-history evidence can enter the compact handoff
 proof. QueryGraph can therefore verify the governed Sail-planned read and
 pointer-history inspection without parsing the full lineage payload. The
-bootstrap, scan, credential, view,
+core QueryGraph bundle, graph, OpenLineage, and import anchors must be
+SHA-256-shaped in compact verify/import/bootstrap proof before a matching
+summary can pass; matching strings are not enough. The bootstrap, scan,
+credential, view,
 receipt-chain, and commit-history receipt arrays must also be SHA-256-shaped
 before compact proof generation can consume them. The same shape
 check applies to accepted-view receipt evidence: bootstrap view-version receipt

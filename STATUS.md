@@ -6,6 +6,21 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject malformed core QueryGraph hashes`.
+  Compact QGLake handoff verification now requires SHA-256-shaped bundle,
+  graph, OpenLineage, and QueryGraph import hashes before accepting the matched
+  `querygraphVerification`, `querygraphImportVerification`, and
+  `queryGraphBootstrapProof` sections.
+- Local verification for this compact QueryGraph hash-shape slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_core_ -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind bootstrap view receipt hashes`.
   Compact QGLake handoff verification now requires
   `queryGraphBootstrapProof.viewVersionReceiptHashes` to match

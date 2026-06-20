@@ -1892,6 +1892,16 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         ));
     }
     require_querygraph_import_matches_verify(import, querygraph)?;
+    require_core_querygraph_hash_evidence(
+        querygraph,
+        "querygraphImportHash",
+        "querygraphVerification",
+    )?;
+    require_core_querygraph_hash_evidence(
+        import,
+        "querygraphImportHash",
+        "querygraphImportVerification",
+    )?;
     require_qglake_standards_value(
         required_value(querygraph, "standards", "querygraphVerification")?,
         "querygraphVerification.standards",
@@ -1944,6 +1954,11 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         lakecat,
         "queryGraphBootstrapProof",
         "lakecatReplayVerification",
+    )?;
+    require_core_querygraph_hash_evidence(
+        bootstrap,
+        "queryGraphImportHash",
+        "queryGraphBootstrapProof",
     )?;
     require_string_match(
         bootstrap,
@@ -2302,6 +2317,18 @@ fn require_querygraph_import_matches_verify(
             "querygraphImportVerification",
         )?;
     }
+    Ok(())
+}
+
+fn require_core_querygraph_hash_evidence(
+    value: &serde_json::Map<String, Value>,
+    import_hash_field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    for field in ["bundleHash", "graphHash", "openLineageHash"] {
+        require_hash_str(value, field, label)?;
+    }
+    require_hash_str(value, import_hash_field, label)?;
     Ok(())
 }
 
@@ -8733,6 +8760,39 @@ mod tests {
 
         assert!(err.to_string().contains("querygraphImportVerification"));
         assert!(err.to_string().contains("querygraphImportHash mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_core_bundle_hash_shape() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["querygraphVerification"]["bundleHash"] = json!("not-a-sha256-hash");
+        summary["querygraphImportVerification"]["bundleHash"] = json!("not-a-sha256-hash");
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["bundleHash"] =
+            json!("not-a-sha256-hash");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject malformed bundle proof anchors");
+
+        assert!(err.to_string().contains("querygraphVerification"));
+        assert!(err.to_string().contains("bundleHash"));
+        assert!(err.to_string().contains("sha256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_core_import_hash_shape() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["querygraphVerification"]["querygraphImportHash"] = json!("not-a-sha256-hash");
+        summary["querygraphImportVerification"]["querygraphImportHash"] =
+            json!("not-a-sha256-hash");
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["queryGraphImportHash"] =
+            json!("not-a-sha256-hash");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject malformed QueryGraph import proof anchors");
+
+        assert!(err.to_string().contains("querygraphVerification"));
+        assert!(err.to_string().contains("querygraphImportHash"));
+        assert!(err.to_string().contains("sha256"));
     }
 
     #[test]

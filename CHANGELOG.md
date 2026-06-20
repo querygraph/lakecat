@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required compact QGLake handoff summaries to carry SHA-256-shaped core
+  QueryGraph bundle, graph, OpenLineage, and import proof anchors before
+  accepting matching verify/import/bootstrap sections.
 - Required compact QGLake handoff summaries to bind
   `queryGraphBootstrapProof.viewVersionReceiptHashes` exactly to
   `viewReceiptChainProof.views[].acceptedReceiptHash`, rejecting spliced view
