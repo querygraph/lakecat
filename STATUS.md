@@ -6,6 +6,26 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind handoff self-verifier semantic sections`.
+  When a QGLake handoff summary carries `lakecatHandoffVerifyOutputHash`, the
+  saved `lakecat-handoff-verify.json` artifact must now preserve the compact
+  summary's captured replay semantics, bootstrap-bundle semantics, QueryGraph
+  import-plan semantics, lineage-drain semantics, and bundle/import graph
+  counts, so a self-verifier capture cannot carry correct top-level proof while
+  embedding drifted semantic reconstructions.
+- Local verification for this self-verifier semantic-section slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_accepts_handoff_verify_output_hash -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_captured_semantic_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_graph_count_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_semantic_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_artifact_hash_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_capture_hash_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier -- --nocapture`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind handoff self-verifier artifact hashes`.
   When a QGLake handoff summary carries `lakecatHandoffVerifyOutputHash`, the
   saved `lakecat-handoff-verify.json` artifact must now match the compact

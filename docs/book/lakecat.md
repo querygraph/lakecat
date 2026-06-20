@@ -1790,7 +1790,13 @@ stable ids, standards, request-identity proof, and QueryGraph bootstrap proof
 still match the compact handoff summary. It also checks the saved
 self-verifier output's bundle, lineage-drain, QueryGraph import-plan,
 captured-output, and service-log hashes against the summary's artifact
-manifest. Then it parses those captured
+manifest. It also checks the saved self-verifier output's own semantic
+sections: captured replay semantics must match the compact LakeCat and
+QueryGraph proof, bundle artifact semantics must match QueryGraph
+verification, import-plan semantics must match QueryGraph import verification,
+lineage-drain semantics must match the accepted replay proof, and saved
+import-plan graph counts must still match the saved bundle graph counts. Then
+it parses those captured
 JSON files and checks that the replay schema/status,
 table/view counts, semantic hashes, standards, request-identity proof,
 QueryGraph bootstrap proof, governed scan proof, storage-profile upsert proof,

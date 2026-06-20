@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound saved QGLake handoff-verifier semantic sections back to the compact
+  summary, rejecting self-verifier output whose captured replay semantics,
+  bootstrap-bundle semantics, QueryGraph import-plan semantics, lineage-drain
+  semantics, or saved graph counts drift from the accepted handoff.
 - Bound saved QGLake handoff-verifier artifact hashes back to the compact
   summary, rejecting self-verifier output whose bundle, lineage-drain,
   QueryGraph import-plan, captured-output, or service-log hashes drift from the

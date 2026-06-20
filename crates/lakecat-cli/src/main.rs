@@ -632,6 +632,128 @@ fn require_qglake_handoff_verify_output_matches_summary(
         )?;
     }
     require_qglake_handoff_verify_output_artifact_hashes_match_summary(output, summary)?;
+    require_qglake_handoff_verify_output_semantic_sections_match_summary(output, summary)?;
+    Ok(())
+}
+
+fn require_qglake_handoff_verify_output_semantic_sections_match_summary(
+    output: &serde_json::Map<String, Value>,
+    summary: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let querygraph = required_object(summary, "querygraphVerification", "handoff summary")?;
+    let import = required_object(summary, "querygraphImportVerification", "handoff summary")?;
+    let lakecat = required_object(summary, "lakecatReplayVerification", "handoff summary")?;
+
+    let captured = required_object(
+        output,
+        "capturedOutputSemantics",
+        "lakecatHandoffVerifyOutput",
+    )?;
+    let captured_lakecat = required_object(
+        captured,
+        "lakecatReplay",
+        "lakecatHandoffVerifyOutput.capturedOutputSemantics",
+    )?;
+    for field in ["requestIdentityProof", "queryGraphBootstrapProof"] {
+        require_value_match(
+            captured_lakecat,
+            field,
+            required_value(lakecat, field, "lakecatReplayVerification")?,
+            "lakecatHandoffVerifyOutput.capturedOutputSemantics.lakecatReplay",
+        )?;
+    }
+    require_qglake_handoff_verify_output_querygraph_semantics_match_summary(
+        required_object(
+            captured,
+            "querygraphVerify",
+            "lakecatHandoffVerifyOutput.capturedOutputSemantics",
+        )?,
+        querygraph,
+        "lakecatHandoffVerifyOutput.capturedOutputSemantics.querygraphVerify",
+    )?;
+    require_qglake_handoff_verify_output_querygraph_semantics_match_summary(
+        required_object(
+            captured,
+            "querygraphImport",
+            "lakecatHandoffVerifyOutput.capturedOutputSemantics",
+        )?,
+        import,
+        "lakecatHandoffVerifyOutput.capturedOutputSemantics.querygraphImport",
+    )?;
+
+    let bundle = required_object(
+        output,
+        "bundleArtifactSemantics",
+        "lakecatHandoffVerifyOutput",
+    )?;
+    require_qglake_handoff_verify_output_querygraph_semantics_match_summary(
+        bundle,
+        querygraph,
+        "lakecatHandoffVerifyOutput.bundleArtifactSemantics",
+    )?;
+    let import_plan = required_object(
+        output,
+        "querygraphImportPlanSemantics",
+        "lakecatHandoffVerifyOutput",
+    )?;
+    require_qglake_handoff_verify_output_querygraph_semantics_match_summary(
+        import_plan,
+        import,
+        "lakecatHandoffVerifyOutput.querygraphImportPlanSemantics",
+    )?;
+    for field in ["graphNodes", "graphEdges"] {
+        require_value_match(
+            import_plan,
+            field,
+            required_value(
+                bundle,
+                field,
+                "lakecatHandoffVerifyOutput.bundleArtifactSemantics",
+            )?,
+            "lakecatHandoffVerifyOutput.querygraphImportPlanSemantics",
+        )?;
+    }
+
+    require_qglake_handoff_verify_output_querygraph_semantics_match_summary(
+        required_object(
+            output,
+            "lineageDrainArtifactSemantics",
+            "lakecatHandoffVerifyOutput",
+        )?,
+        querygraph,
+        "lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics",
+    )?;
+    Ok(())
+}
+
+fn require_qglake_handoff_verify_output_querygraph_semantics_match_summary(
+    semantics: &serde_json::Map<String, Value>,
+    expected: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    for field in [
+        "tableCount",
+        "viewCount",
+        "verifiedTables",
+        "verifiedViews",
+        "bundleHash",
+        "graphHash",
+        "openLineageHash",
+        "standards",
+    ] {
+        require_value_match(
+            semantics,
+            field,
+            required_value(expected, field, label)?,
+            label,
+        )?;
+    }
+    require_value_match(
+        semantics,
+        "queryGraphImportHash",
+        required_value(expected, "querygraphImportHash", label)?,
+        label,
+    )?;
     Ok(())
 }
 
@@ -8492,6 +8614,71 @@ mod tests {
                 },
                 "serviceLogHash": summary["artifacts"]["serviceLogHash"].clone()
             },
+            "capturedOutputSemantics": {
+                "lakecatReplay": {
+                    "requestIdentityProof": summary["lakecatReplayVerification"]["requestIdentityProof"].clone(),
+                    "queryGraphBootstrapProof": summary["lakecatReplayVerification"]["queryGraphBootstrapProof"].clone()
+                },
+                "querygraphVerify": {
+                    "tableCount": summary["querygraphVerification"]["tableCount"].clone(),
+                    "viewCount": summary["querygraphVerification"]["viewCount"].clone(),
+                    "verifiedTables": summary["querygraphVerification"]["verifiedTables"].clone(),
+                    "verifiedViews": summary["querygraphVerification"]["verifiedViews"].clone(),
+                    "bundleHash": summary["querygraphVerification"]["bundleHash"].clone(),
+                    "graphHash": summary["querygraphVerification"]["graphHash"].clone(),
+                    "openLineageHash": summary["querygraphVerification"]["openLineageHash"].clone(),
+                    "queryGraphImportHash": summary["querygraphVerification"]["querygraphImportHash"].clone(),
+                    "standards": summary["querygraphVerification"]["standards"].clone()
+                },
+                "querygraphImport": {
+                    "tableCount": summary["querygraphImportVerification"]["tableCount"].clone(),
+                    "viewCount": summary["querygraphImportVerification"]["viewCount"].clone(),
+                    "verifiedTables": summary["querygraphImportVerification"]["verifiedTables"].clone(),
+                    "verifiedViews": summary["querygraphImportVerification"]["verifiedViews"].clone(),
+                    "bundleHash": summary["querygraphImportVerification"]["bundleHash"].clone(),
+                    "graphHash": summary["querygraphImportVerification"]["graphHash"].clone(),
+                    "openLineageHash": summary["querygraphImportVerification"]["openLineageHash"].clone(),
+                    "queryGraphImportHash": summary["querygraphImportVerification"]["querygraphImportHash"].clone(),
+                    "standards": summary["querygraphImportVerification"]["standards"].clone()
+                }
+            },
+            "bundleArtifactSemantics": {
+                "tableCount": summary["querygraphVerification"]["tableCount"].clone(),
+                "viewCount": summary["querygraphVerification"]["viewCount"].clone(),
+                "verifiedTables": summary["querygraphVerification"]["verifiedTables"].clone(),
+                "verifiedViews": summary["querygraphVerification"]["verifiedViews"].clone(),
+                "bundleHash": summary["querygraphVerification"]["bundleHash"].clone(),
+                "graphHash": summary["querygraphVerification"]["graphHash"].clone(),
+                "openLineageHash": summary["querygraphVerification"]["openLineageHash"].clone(),
+                "queryGraphImportHash": summary["querygraphVerification"]["querygraphImportHash"].clone(),
+                "standards": summary["querygraphVerification"]["standards"].clone(),
+                "graphNodes": 6,
+                "graphEdges": 7
+            },
+            "querygraphImportPlanSemantics": {
+                "tableCount": summary["querygraphImportVerification"]["tableCount"].clone(),
+                "viewCount": summary["querygraphImportVerification"]["viewCount"].clone(),
+                "verifiedTables": summary["querygraphImportVerification"]["verifiedTables"].clone(),
+                "verifiedViews": summary["querygraphImportVerification"]["verifiedViews"].clone(),
+                "bundleHash": summary["querygraphImportVerification"]["bundleHash"].clone(),
+                "graphHash": summary["querygraphImportVerification"]["graphHash"].clone(),
+                "openLineageHash": summary["querygraphImportVerification"]["openLineageHash"].clone(),
+                "queryGraphImportHash": summary["querygraphImportVerification"]["querygraphImportHash"].clone(),
+                "standards": summary["querygraphImportVerification"]["standards"].clone(),
+                "graphNodes": 6,
+                "graphEdges": 7
+            },
+            "lineageDrainArtifactSemantics": {
+                "tableCount": summary["querygraphVerification"]["tableCount"].clone(),
+                "viewCount": summary["querygraphVerification"]["viewCount"].clone(),
+                "verifiedTables": summary["querygraphVerification"]["verifiedTables"].clone(),
+                "verifiedViews": summary["querygraphVerification"]["verifiedViews"].clone(),
+                "bundleHash": summary["querygraphVerification"]["bundleHash"].clone(),
+                "graphHash": summary["querygraphVerification"]["graphHash"].clone(),
+                "openLineageHash": summary["querygraphVerification"]["openLineageHash"].clone(),
+                "queryGraphImportHash": summary["querygraphVerification"]["querygraphImportHash"].clone(),
+                "standards": summary["querygraphVerification"]["standards"].clone()
+            },
         });
         let bytes = serde_json::to_vec_pretty(&output).expect("handoff verify JSON bytes");
         fs::write(dir.join("lakecat-handoff-verify.json"), &bytes)
@@ -10177,6 +10364,57 @@ mod tests {
         assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
         assert!(err.to_string().contains("capturedOutputs"));
         assert!(err.to_string().contains("sha256 mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_captured_semantic_drift() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-captured-semantic-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["capturedOutputSemantics"]["querygraphVerify"]["graphHash"] =
+            json!("sha256:other-graph");
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject handoff verifier captured semantic drift");
+
+        assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
+        assert!(err.to_string().contains("capturedOutputSemantics"));
+        assert!(err.to_string().contains("graphHash mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_graph_count_drift() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-graph-count-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["querygraphImportPlanSemantics"]["graphNodes"] = json!(5);
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject handoff verifier graph count drift");
+
+        assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
+        assert!(err.to_string().contains("querygraphImportPlanSemantics"));
+        assert!(err.to_string().contains("graphNodes mismatch"));
     }
 
     #[test]
