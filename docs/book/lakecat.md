@@ -1999,7 +1999,15 @@ self-consistent handoff cannot smuggle placeholder policy names through a field
 that later readers treat as integrity evidence. The outbox drain checks the
 same digest shape before acknowledging any pending event that carries
 `read-restriction.policy-hashes`, so malformed source evidence is stopped
-before it becomes delivered replay material. The verifier also requires
+before it becomes delivered replay material. View receipt-chain replay follows
+the same fail-closed rule at the drain boundary. A verified
+`view.version-receipt-chains-listed` event is not acknowledged unless its
+verified-chain count matches the chains marked verified, each verified chain and
+receipt carries full SHA-256 digest evidence, the first receipt is a version 1
+upsert without previous links, and every later upsert or drop links to the
+previous receipt with the expected view-version transition. That keeps
+malformed view-history evidence out of both graph projection and OpenLineage
+replay before QueryGraph ever sees a compact handoff. The verifier also requires
 planned and fetched read restrictions to match before compact proof generation,
 requires both requested/effective projection and
 requested/effective stats-field evidence, requires effective projection to be a

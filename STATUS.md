@@ -6,6 +6,26 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject malformed outbox view receipt chains`.
+  Outbox draining now rejects verified `view.version-receipt-chains-listed`
+  pending events when chain hashes, receipt hashes, verified-chain counts,
+  first receipt shape, previous links, or upsert/drop version transitions are
+  malformed. Invalid view receipt-chain evidence stays pending and reaches
+  neither graph projection nor lineage acknowledgement.
+- Local verification for this outbox view receipt-chain slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_view_receipt_chain_evidence -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_view_events_to_graph_and_lineage -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain -- --nocapture`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import, and
+  ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Require full QGLake commit record hashes`.
   QGLake table commit-history verification now rejects compact pointer-log
   records whose request, response, idempotency-key, commit, or optional policy

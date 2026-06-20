@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for verified
+  `view.version-receipt-chains-listed` chains whose chain hash, receipt hashes,
+  verified-chain count, first receipt, previous links, or upsert/drop version
+  transitions are malformed, so invalid view receipt-chain evidence fails
+  before graph/lineage projection acknowledgement.
 - Required QGLake table commit-history record verification to reject compact
   pointer-log request, response, idempotency-key, commit, and optional policy
   hashes unless they are full `sha256:`-prefixed 64-hex digests.

@@ -1106,6 +1106,9 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     if event.event_type == "table.commit" {
         validate_table_commit_hash_evidence(event)?;
     }
+    if event.event_type == "view.version-receipt-chains-listed" {
+        validate_view_receipt_chain_event_evidence(event, payload)?;
+    }
     Ok(())
 }
 
@@ -1148,6 +1151,225 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
         "policy_hash",
     ] {
         validate_optional_full_hash_field(event, commit, field)?;
+    }
+    Ok(())
+}
+
+fn validate_view_receipt_chain_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(chains) = payload
+        .get("view-version-receipt-chains")
+        .and_then(Value::as_array)
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            "view receipt-chain evidence must contain view-version-receipt-chains",
+        ));
+    };
+    let Some(expected_verified_count) = payload.get("chain-verified-count").and_then(Value::as_u64)
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            "view receipt-chain evidence must contain chain-verified-count",
+        ));
+    };
+
+    let mut verified_count = 0u64;
+    for chain in chains {
+        let chain_verified = chain
+            .get("chain-verified")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if !chain_verified {
+            continue;
+        }
+        verified_count = verified_count.saturating_add(1);
+        validate_view_receipt_chain_hash_evidence(event, chain)?;
+        validate_view_receipt_chain_structure_evidence(event, chain)?;
+    }
+
+    if verified_count != expected_verified_count {
+        return Err(outbox_evidence_error(
+            event,
+            "view receipt-chain verified count does not match verified chains",
+        ));
+    }
+
+    validate_optional_full_hash_array_field(event, payload, "chain-hashes")?;
+    validate_optional_full_hash_array_field(event, payload, "receipt-hashes")?;
+    validate_optional_full_hash_array_field(event, payload, "drop-receipt-hashes")?;
+    Ok(())
+}
+
+fn validate_view_receipt_chain_hash_evidence(
+    event: &OutboxEvent,
+    chain: &Value,
+) -> Result<(), LakeCatError> {
+    validate_required_full_hash_field(event, chain, "chain-hash")?;
+    let Some(receipts) = chain.get("receipts").and_then(Value::as_array) else {
+        return Err(outbox_evidence_error(
+            event,
+            "verified view receipt-chain must contain receipts",
+        ));
+    };
+    for receipt in receipts {
+        validate_required_full_hash_field(event, receipt, "receipt-hash")?;
+    }
+    Ok(())
+}
+
+fn validate_view_receipt_chain_structure_evidence(
+    event: &OutboxEvent,
+    chain: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(receipts) = chain.get("receipts").and_then(Value::as_array) else {
+        return Err(outbox_evidence_error(
+            event,
+            "verified view receipt-chain must contain receipts",
+        ));
+    };
+    if receipts.is_empty() {
+        return Err(outbox_evidence_error(
+            event,
+            "verified view receipt-chain must contain at least one receipt",
+        ));
+    }
+
+    for (index, receipt) in receipts.iter().enumerate() {
+        let Some(view_version) = receipt.get("view-version").and_then(Value::as_u64) else {
+            return Err(outbox_evidence_error(
+                event,
+                "verified view receipt-chain receipt must contain view-version",
+            ));
+        };
+        if view_version == 0 {
+            return Err(outbox_evidence_error(
+                event,
+                "verified view receipt-chain receipt version must be positive",
+            ));
+        }
+        let Some(operation) = receipt.get("operation").and_then(Value::as_str) else {
+            return Err(outbox_evidence_error(
+                event,
+                "verified view receipt-chain receipt must contain operation",
+            ));
+        };
+        let Some(receipt_hash) = receipt.get("receipt-hash").and_then(Value::as_str) else {
+            return Err(outbox_evidence_error(
+                event,
+                "verified view receipt-chain receipt must contain receipt-hash",
+            ));
+        };
+
+        let Some(previous) = index.checked_sub(1).and_then(|index| receipts.get(index)) else {
+            if operation == "upsert"
+                && view_version == 1
+                && receipt
+                    .get("previous-view-version")
+                    .is_none_or(Value::is_null)
+                && receipt
+                    .get("previous-receipt-hash")
+                    .is_none_or(Value::is_null)
+            {
+                continue;
+            }
+            return Err(outbox_evidence_error(
+                event,
+                "verified view receipt-chain first receipt must be a version 1 upsert without previous links",
+            ));
+        };
+
+        let previous_version = previous
+            .get("view-version")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| {
+                outbox_evidence_error(
+                    event,
+                    "verified view receipt-chain previous receipt must contain view-version",
+                )
+            })?;
+        let previous_receipt_hash = previous
+            .get("receipt-hash")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                outbox_evidence_error(
+                    event,
+                    "verified view receipt-chain previous receipt must contain receipt-hash",
+                )
+            })?;
+        if receipt.get("previous-view-version").and_then(Value::as_u64) != Some(previous_version)
+            || receipt.get("previous-receipt-hash").and_then(Value::as_str)
+                != Some(previous_receipt_hash)
+        {
+            return Err(outbox_evidence_error(
+                event,
+                "verified view receipt-chain receipt previous links must match the prior receipt",
+            ));
+        }
+
+        match operation {
+            "upsert" if view_version == previous_version.saturating_add(1) => {}
+            "drop" if view_version == previous_version => {}
+            _ => {
+                return Err(outbox_evidence_error(
+                    event,
+                    "verified view receipt-chain receipt transition is invalid",
+                ));
+            }
+        }
+
+        if !is_full_sha256_digest_evidence(receipt_hash) {
+            return Err(outbox_evidence_error(
+                event,
+                "verified view receipt-chain receipt-hash must contain full SHA-256 digest evidence",
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_required_full_hash_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+) -> Result<(), LakeCatError> {
+    if object
+        .get(field)
+        .and_then(Value::as_str)
+        .is_some_and(is_full_sha256_digest_evidence)
+    {
+        return Ok(());
+    }
+    Err(outbox_evidence_error(
+        event,
+        &format!("{field} must contain full SHA-256 digest evidence"),
+    ))
+}
+
+fn validate_optional_full_hash_array_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+) -> Result<(), LakeCatError> {
+    let Some(values) = object.get(field) else {
+        return Ok(());
+    };
+    let Some(values) = values.as_array() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{field} must be an array"),
+        ));
+    };
+    for value in values {
+        if !value.as_str().is_some_and(is_full_sha256_digest_evidence) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{field} must contain full SHA-256 digest evidence"),
+            ));
+        }
     }
     Ok(())
 }
@@ -9959,6 +10181,45 @@ mod tests {
         });
         let mut guarded_view_payload = view_payload.clone();
         guarded_view_payload["expected-view-version"] = json!(1);
+        let view_upsert_hash = content_hash_json(&json!({
+            "view": "events_view",
+            "version": 1,
+            "operation": "upsert"
+        }))
+        .unwrap();
+        let view_drop_hash = content_hash_json(&json!({
+            "view": "events_view",
+            "version": 1,
+            "operation": "drop"
+        }))
+        .unwrap();
+        let view_upsert_receipt_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "view-version": 1,
+            "operation": "upsert",
+            "view-hash": view_upsert_hash
+        }))
+        .unwrap();
+        let view_drop_receipt_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "view-version": 1,
+            "previous-view-version": 1,
+            "previous-receipt-hash": view_upsert_receipt_hash,
+            "operation": "drop",
+            "view-hash": view_drop_hash
+        }))
+        .unwrap();
+        let view_receipt_chain_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "warehouse": "local",
+            "namespace": ["default"],
+            "name": "events_view",
+            "latest-view-version": 1,
+            "latest-operation": "drop",
+            "tombstoned": true,
+            "receipt-hashes": [view_upsert_receipt_hash, view_drop_receipt_hash],
+        }))
+        .unwrap();
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![
                 OutboxEvent {
@@ -10033,8 +10294,8 @@ mod tests {
                             "namespace": ["default"],
                             "view": "events_view",
                             "receipt-count": 2,
-                            "receipt-hashes": ["sha256:view-upsert-receipt", "sha256:view-drop-receipt"],
-                            "drop-receipt-hashes": ["sha256:view-drop-receipt"],
+                            "receipt-hashes": [&view_upsert_receipt_hash, &view_drop_receipt_hash],
+                            "drop-receipt-hashes": [&view_drop_receipt_hash],
                             "authorization-receipt": {
                                 "principal": principal,
                                 "action": "view-load",
@@ -10067,7 +10328,7 @@ mod tests {
                                 "warehouse": "local",
                                 "namespace": ["default"],
                                 "name": "events_view",
-                                "chain-hash": "sha256:view-receipt-chain",
+                                "chain-hash": view_receipt_chain_hash,
                                 "chain-verified": true,
                                 "latest-view-version": 1,
                                 "latest-operation": "drop",
@@ -10082,8 +10343,8 @@ mod tests {
                                         "view-version": 1,
                                         "previous-view-version": null,
                                         "operation": "upsert",
-                                        "view-hash": "sha256:view-upsert",
-                                        "receipt-hash": "sha256:view-upsert-receipt",
+                                        "view-hash": view_upsert_hash,
+                                        "receipt-hash": view_upsert_receipt_hash,
                                         "principal-subject": "agent:operator",
                                         "principal-kind": "agent",
                                         "recorded-at": "2026-06-20T00:00:00Z"
@@ -10095,19 +10356,19 @@ mod tests {
                                         "name": "events_view",
                                         "view-version": 1,
                                         "previous-view-version": 1,
-                                        "previous-receipt-hash": "sha256:view-upsert-receipt",
+                                        "previous-receipt-hash": view_upsert_receipt_hash,
                                         "operation": "drop",
-                                        "view-hash": "sha256:view-drop",
-                                        "receipt-hash": "sha256:view-drop-receipt",
+                                        "view-hash": view_drop_hash,
+                                        "receipt-hash": view_drop_receipt_hash,
                                         "principal-subject": "agent:operator",
                                         "principal-kind": "agent",
                                         "recorded-at": "2026-06-20T00:00:01Z"
                                     }
                                 ]
                             }],
-                            "chain-hashes": ["sha256:view-receipt-chain"],
-                            "receipt-hashes": ["sha256:view-upsert-receipt", "sha256:view-drop-receipt"],
-                            "drop-receipt-hashes": ["sha256:view-drop-receipt"],
+                            "chain-hashes": [view_receipt_chain_hash],
+                            "receipt-hashes": [&view_upsert_receipt_hash, &view_drop_receipt_hash],
+                            "drop-receipt-hashes": [&view_drop_receipt_hash],
                             "authorization-receipt": {
                                 "principal": principal,
                                 "action": "view-load",
@@ -10179,20 +10440,20 @@ mod tests {
         assert_eq!(
             drain.events[4].view_version_receipt_hashes,
             vec![
-                "sha256:view-upsert-receipt".to_string(),
-                "sha256:view-drop-receipt".to_string()
+                view_upsert_receipt_hash.clone(),
+                view_drop_receipt_hash.clone()
             ]
         );
         assert_eq!(
             drain.events[5].view_version_receipt_hashes,
             vec![
-                "sha256:view-upsert-receipt".to_string(),
-                "sha256:view-drop-receipt".to_string()
+                view_upsert_receipt_hash.clone(),
+                view_drop_receipt_hash.clone()
             ]
         );
         assert_eq!(
             drain.events[5].view_version_receipt_chain_hashes,
-            vec!["sha256:view-receipt-chain".to_string()]
+            vec![view_receipt_chain_hash.clone()]
         );
         assert_eq!(drain.events[5].view_version_receipt_chain_verified_count, 1);
 
@@ -10235,6 +10496,121 @@ mod tests {
             lineage_events[1].payload["view"]["name"],
             serde_json::json!("events_view")
         );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_view_receipt_chain_evidence() {
+        let receipt_hash_1 = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "view-version": 1,
+            "operation": "upsert"
+        }))
+        .unwrap();
+        let receipt_hash_2 = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "view-version": 2,
+            "operation": "upsert"
+        }))
+        .unwrap();
+        let wrong_previous_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:other_view",
+            "view-version": 1,
+            "operation": "upsert"
+        }))
+        .unwrap();
+        let chain_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "receipt-hashes": [&receipt_hash_1, &receipt_hash_2]
+        }))
+        .unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-view-chain-malformed".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "view.version-receipt-chains-listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-view-chain-malformed",
+                    "event-type": "view.version-receipt-chains-listed",
+                    "payload": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "chain-count": 1,
+                        "receipt-count": 2,
+                        "tombstone-count": 0,
+                        "chain-verified-count": 1,
+                        "view-version-receipt-chains": [{
+                            "stable-id": "lakecat:view:local:default:events_view",
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "name": "events_view",
+                            "chain-hash": chain_hash,
+                            "chain-verified": true,
+                            "latest-view-version": 2,
+                            "latest-operation": "upsert",
+                            "tombstoned": false,
+                            "receipt-count": 2,
+                            "receipts": [
+                                {
+                                    "stable-id": "lakecat:view:local:default:events_view",
+                                    "warehouse": "local",
+                                    "namespace": ["default"],
+                                    "name": "events_view",
+                                    "view-version": 1,
+                                    "previous-view-version": null,
+                                    "previous-receipt-hash": null,
+                                    "operation": "upsert",
+                                    "view-hash": content_hash_json(&json!({"view": "events_view", "version": 1})).unwrap(),
+                                    "receipt-hash": receipt_hash_1,
+                                    "principal-subject": "agent:operator",
+                                    "principal-kind": "agent",
+                                    "recorded-at": "2026-06-20T00:00:00Z"
+                                },
+                                {
+                                    "stable-id": "lakecat:view:local:default:events_view",
+                                    "warehouse": "local",
+                                    "namespace": ["default"],
+                                    "name": "events_view",
+                                    "view-version": 2,
+                                    "previous-view-version": 1,
+                                    "previous-receipt-hash": wrong_previous_hash,
+                                    "operation": "upsert",
+                                    "view-hash": content_hash_json(&json!({"view": "events_view", "version": 2})).unwrap(),
+                                    "receipt-hash": receipt_hash_2,
+                                    "principal-subject": "agent:operator",
+                                    "principal-kind": "agent",
+                                    "recorded-at": "2026-06-20T00:00:01Z"
+                                }
+                            ]
+                        }],
+                        "chain-hashes": [chain_hash],
+                        "receipt-hashes": [&receipt_hash_1, &receipt_hash_2],
+                        "drop-receipt-hashes": [],
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10).await.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("previous links must match the prior receipt"),
+            "{err}"
+        );
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
     }
 
     #[tokio::test]
