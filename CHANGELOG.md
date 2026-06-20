@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected storage-profile location prefixes with query strings, fragments, or
+  URI userinfo before memory or Turso persistence, returning only
+  `storage-profile-prefix-hash` evidence.
 - Pinned Turso idempotency mismatch redaction so durable-store reused-key
   conflicts and replay probes do not echo raw idempotency keys, mismatched
   request hashes, or mismatched metadata object locations.

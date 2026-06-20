@@ -938,10 +938,11 @@ metadata-object boundary should apply. The ambiguity error reports the
 competing profile ids and `location-prefix-hash=sha256:...` evidence, not the
 raw storage root.
 The location prefix itself must be plainly addressed: LakeCat rejects literal
-and percent-encoded dot path segments before the profile can reach memory or
-Turso persistence. Traversal-shaped storage roots fail with
+and percent-encoded dot path segments, query strings, fragments, and URI
+userinfo before the profile can reach memory or Turso persistence.
+Traversal-shaped or decorated storage roots fail with
 `storage-profile-prefix-hash=sha256:...` evidence rather than echoing the raw
-prefix.
+prefix, token-like query value, or embedded userinfo.
 It also rejects unsafe issuance-mode combinations: `local-file-no-secret` is
 for file storage only, while `short-lived-secret-ref` is for configured remote
 providers such as S3, GCS, and Azure.

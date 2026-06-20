@@ -2072,6 +2072,12 @@ fn validate_location_prefix_provider(
 }
 
 fn validate_location_prefix_path(location_prefix: &str) -> LakeCatResult<()> {
+    if location_prefix_has_query_fragment_or_userinfo(location_prefix) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "storage profile location prefix must not include query strings, fragments, or userinfo; {}",
+            storage_profile_prefix_hash_context(location_prefix)
+        )));
+    }
     if location_prefix_has_dot_path_segment(location_prefix) {
         return Err(LakeCatError::InvalidArgument(format!(
             "storage profile location prefix must not include dot path segments; {}",
@@ -2079,6 +2085,15 @@ fn validate_location_prefix_path(location_prefix: &str) -> LakeCatResult<()> {
         )));
     }
     Ok(())
+}
+
+fn location_prefix_has_query_fragment_or_userinfo(location_prefix: &str) -> bool {
+    Url::parse(location_prefix).is_ok_and(|url| {
+        url.query().is_some()
+            || url.fragment().is_some()
+            || !url.username().is_empty()
+            || url.password().is_some()
+    })
 }
 
 fn location_prefix_has_dot_path_segment(location_prefix: &str) -> bool {
@@ -6177,6 +6192,80 @@ pub mod turso_store {
             assert!(!crate::location_prefix_has_dot_path_segment(
                 "s3://lakecat-demo/events/service.v1/table"
             ));
+        }
+
+        #[test]
+        fn storage_profiles_reject_decorated_location_prefixes() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            for (location_prefix, provider) in [
+                ("s3://lakecat-demo/events?token=abc", StorageProvider::S3),
+                ("s3://lakecat-demo/events#current", StorageProvider::S3),
+                ("s3://user:secret@lakecat-demo/events", StorageProvider::S3),
+                (
+                    "file:///tmp/lakecat/events?debug=true",
+                    StorageProvider::File,
+                ),
+            ] {
+                let err = StorageProfile::new(
+                    "decorated-prefix",
+                    warehouse.clone(),
+                    location_prefix,
+                    provider,
+                    CredentialIssuanceMode::GovernedReadRequired,
+                    None,
+                    BTreeMap::new(),
+                )
+                .unwrap_err();
+
+                let message = err.to_string();
+                assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+                assert!(message.contains("query strings, fragments, or userinfo"));
+                assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+                assert!(
+                    !message.contains(location_prefix),
+                    "decorated location-prefix validation must not expose raw storage roots"
+                );
+                assert!(!message.contains("token=abc"));
+                assert!(!message.contains("user:secret"));
+            }
+        }
+
+        #[tokio::test]
+        async fn storage_profile_upsert_rejects_deserialized_decorated_location_prefixes() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            let profile = StorageProfile {
+                profile_id: "decorated-prefix".to_string(),
+                warehouse: warehouse.clone(),
+                location_prefix: "s3://lakecat-demo/events?token=abc".to_string(),
+                provider: StorageProvider::S3,
+                issuance_mode: CredentialIssuanceMode::GovernedReadRequired,
+                secret_ref: None,
+                public_config: BTreeMap::new(),
+            };
+
+            let memory_err = MemoryCatalogStore::new()
+                .upsert_storage_profile(profile.clone())
+                .await
+                .unwrap_err();
+            let message = memory_err.to_string();
+            assert!(matches!(memory_err, LakeCatError::InvalidArgument(_)));
+            assert!(message.contains("query strings, fragments, or userinfo"));
+            assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+            assert!(!message.contains("s3://lakecat-demo/events?token=abc"));
+            assert!(!message.contains("token=abc"));
+
+            let turso = TursoCatalogStore::in_memory().await.unwrap();
+            let turso_err = turso.upsert_storage_profile(profile).await.unwrap_err();
+            let message = turso_err.to_string();
+            assert!(matches!(turso_err, LakeCatError::InvalidArgument(_)));
+            assert!(message.contains("query strings, fragments, or userinfo"));
+            assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+            assert!(!message.contains("s3://lakecat-demo/events?token=abc"));
+            assert!(!message.contains("token=abc"));
+            assert_eq!(
+                turso.list_storage_profiles(&warehouse).await.unwrap(),
+                vec![]
+            );
         }
 
         #[tokio::test]

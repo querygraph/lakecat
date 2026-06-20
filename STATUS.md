@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject decorated storage profile prefixes`.
+  Storage-profile validation now rejects location prefixes with query strings,
+  fragments, or URI userinfo before memory or Turso persistence and returns only
+  `storage-profile-prefix-hash` evidence, so storage roots remain plain
+  catalog-controlled boundaries.
+- Local verification for this storage-profile slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_reject_decorated_location_prefixes -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local storage_profile_upsert_rejects_deserialized_decorated_location_prefixes -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin Turso idempotency mismatch redaction`.
   Turso store coverage now proves reused-key commit conflicts and explicit
   replay probes return the generic idempotency mismatch conflict without
