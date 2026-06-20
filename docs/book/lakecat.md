@@ -671,7 +671,11 @@ OpenLineage fits the catalog outbox. A committed table create, scan plan,
 commit, soft delete, restore, or maintenance action can become a lineage event.
 Because the event is drained from a durable outbox after the catalog transaction,
 lineage reflects committed state rather than a handler's best-effort side
-effect.
+effect. Drains process pending events in `created_at,event_id` order before
+projection, response summarization, and delivery acknowledgement. That stable
+order is part of the replay contract QueryGraph and OpenLineage consume, and it
+holds even when a custom store implementation returns a pending batch in another
+order.
 
 ## QueryGraph.ai When LakeCat Is Done
 

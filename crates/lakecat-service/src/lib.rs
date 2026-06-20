@@ -996,10 +996,15 @@ pub async fn drain_outbox_once(
     state: &LakeCatState,
     limit: usize,
 ) -> Result<LineageDrainResponse, LakeCatError> {
-    let events = state
+    let mut events = state
         .store
         .pending_outbox_events(Some("lakecat.lineage-and-graph"), limit)
         .await?;
+    events.sort_by(|left, right| {
+        left.created_at
+            .cmp(&right.created_at)
+            .then_with(|| left.event_id.cmp(&right.event_id))
+    });
     let mut seen_event_ids = BTreeSet::new();
     for event in &events {
         if !seen_event_ids.insert(event.event_id.as_str()) {
@@ -8050,6 +8055,76 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "duplicate pending ids must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_orders_pending_batch_before_projection() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let created_at = "2026-01-01T00:00:00Z".parse().unwrap();
+        let make_event = |event_id: &str, warehouse: &str| OutboxEvent {
+            event_id: event_id.to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "catalog.config-read".to_string(),
+            payload: json!({
+                "audit-event-id": format!("audit-{event_id}"),
+                "event-type": "catalog.config-read",
+                "payload": {
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "catalog-config",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": warehouse,
+                }
+            }),
+            created_at,
+            delivered_at: None,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![
+                make_event("evt-sort-b", "analytics-b"),
+                make_event("evt-sort-a", "analytics-a"),
+            ]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let drain = drain_outbox_once(&state, 10).await.unwrap();
+
+        assert_eq!(drain.delivered, 2);
+        assert_eq!(
+            drain
+                .events
+                .iter()
+                .map(|event| event.event_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["evt-sort-a", "evt-sort-b"]
+        );
+        assert_eq!(
+            store.delivered.lock().await.as_slice(),
+            &["evt-sort-a".to_string(), "evt-sort-b".to_string()]
+        );
+        let lineage_events = lineage.events.lock().await;
+        assert_eq!(lineage_events.len(), 2);
+        assert_eq!(
+            lineage_events[0].payload["warehouse"],
+            serde_json::json!("analytics-a")
+        );
+        assert_eq!(
+            lineage_events[1].payload["warehouse"],
+            serde_json::json!("analytics-b")
         );
     }
 

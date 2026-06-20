@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made outbox draining defensively order pending batches by `created_at,event_id`
+  before projection and acknowledgement, keeping QueryGraph/OpenLineage replay
+  deterministic even if a store implementation returns an unsorted batch.
 - Pinned storage-profile issuance/provider mismatch diagnostics so local-vs-
   remote credential-mode errors carry `storage-profile-prefix-hash` evidence and
   management routes do not echo raw prefixes or secret references.

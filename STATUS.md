@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Order outbox drain batches before projection`.
+  Outbox drains now defensively order pending batches by `created_at,event_id`
+  before graph/lineage projection, response summarization, and delivery
+  acknowledgement, so QueryGraph/OpenLineage replay stays deterministic even if
+  a custom store returns an unsorted batch.
+- Local verification for this outbox determinism slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_orders_pending_batch_before_projection -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_rejects_duplicate_pending_event_ids_before_projection -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_rejects_partial_acknowledgement -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin storage-profile issuance mismatch redaction`.
   Storage-profile issuance/provider mismatch errors now carry
   `storage-profile-prefix-hash` evidence, and management-route coverage proves
