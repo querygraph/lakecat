@@ -84,6 +84,25 @@ should not reopen archived OPUS files just to find the current plan.
 | `OPUS2.md` second review | Current catalog-spine assessment after Turso/CAS/auth/outbox/Sail-provider work, OPUS1 closure state, and successor findings F1-F10. | `OPUS2 Review Baseline`, `Current State`, `Finding Status`, `OPUS Closure Map` |
 | `OPUS2-DESIGN.md` restriction-first plan | The restriction as the binding governed-read object, ODRL-to-restriction path, Sail-planned enforcement, QueryGraph/QGLake acceptance, repo division of labor, and anti-pattern updates. | `Critical Path: The Restriction`, `Current Dev-Manager View`, `Priority Plan`, `OPUS Decisions Kept Permanent` |
 
+### Adjacent Document Merge Ledger
+
+Some OPUS material intentionally belongs outside this file because it is either
+operational, architectural, narrative, or historical. Treat the table below as
+the canonical merge record for those pieces.
+
+| OPUS material | Active home | Why it lives there |
+| --- | --- | --- |
+| Repo division of labor, Sail/Grust/TypeSec ownership, and high-level system shape | `ARCHITECTURE.md` | It is target architecture, not review history. |
+| Durable goal, source-of-truth order, local-first/cloud policy, book workflow, and pinned agent guidance | `GOAL.md` | It controls how the ongoing goal resumes after context loss. |
+| Agent commit discipline, feature-gate expectations, graph/Sail/TypeSec placement rules, and Turso preference | `AGENTS.md` | It is executable guidance for future agents working in this repo. |
+| Latest completed slices, verification evidence, blockers, and next recommended work | `STATUS.md` | It changes after each logical unit and should not be buried in design prose. |
+| Public/operator explanation, examples, and QGLake workflow narrative | `docs/book/lakecat.md` | It is the reader-facing book and must evolve with user workflows. |
+| Historical verification tables, original line references, and review provenance | `docs/completed/OPUS*.md` | It is audit history; it is not the active backlog. |
+
+When old OPUS wording is useful again, merge the durable rule into the active
+home above and leave the archived source frozen. Do not add a second summary doc
+beside this ledger.
+
 ### Archive Lock
 
 The root tree should contain no active `OPUS*.md` files. Do not create

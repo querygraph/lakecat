@@ -69,6 +69,11 @@ Current audited shape:
 | `OPUS2.md` | `../../DESIGN.md` `Review Log And Working Plan`, `Current State`, `Finding Status`, `OPUS Closure Map`; `../../STATUS.md` latest verified slices |
 | `OPUS2-DESIGN.md` | `../../DESIGN.md` `Review Log And Working Plan`, `Critical Path: The Restriction`, `Priority Plan`, `Review Gate`; `../../GOAL.md` durable operating objective |
 
+`../../DESIGN.md` now also contains an adjacent document merge ledger that maps
+OPUS-derived operating guidance into `../../ARCHITECTURE.md`, `../../GOAL.md`,
+`../../AGENTS.md`, `../../STATUS.md`, and `../book/lakecat.md`. Use that ledger
+before reading the archived OPUS files for anything other than audit context.
+
 ## Archive Rules
 
 - Treat the files in this directory as completed review artifacts.

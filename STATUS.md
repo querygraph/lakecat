@@ -5,6 +5,19 @@ Updated: 2026-06-20
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Complete OPUS consolidation routing`.
+  `DESIGN.md` now records not only which OPUS review/design sections were
+  absorbed into the design, but also where adjacent OPUS-derived guidance lives:
+  `ARCHITECTURE.md`, `GOAL.md`, `AGENTS.md`, `STATUS.md`, and the book. The
+  completed-review archive README points future readers at that routing ledger,
+  and the four archived OPUS files remain provenance-only.
+- Local verification for this OPUS routing slice is documentation-only:
+  `git ls-files 'OPUS*.md'`;
+  `git ls-files 'docs/completed/OPUS*.md'`;
+  `rg --files -g 'OPUS*.md' -g '!docs/completed/**'`;
+  `rg --files docs/completed -g 'OPUS*.md'`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Reject non-ASCII idempotency keys early`.
   REST table commits now validate `x-lakecat-idempotency-key` from raw header

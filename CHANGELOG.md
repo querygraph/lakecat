@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Completed the OPUS consolidation routing by adding an adjacent-document merge
+  ledger to `DESIGN.md` and pointing the completed-review archive README at
+  that ledger, so OPUS-derived guidance now has one active home across design,
+  architecture, goal, agent, status, and book docs.
 - Tightened REST commit idempotency-key validation so non-ASCII and invalid
   header bytes fail under the documented ASCII key contract before
   authorization, Sail commit preparation, table loading, or metadata-object
