@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Tightened QGLake source replay verification to reject restricted-agent
+  credential replay events that carry a raw credential exception reason.
 - Tightened compact QGLake `credentialVendingProof` verification to reject a
   restricted-agent proof that carries a raw credential exception reason; only
   the trusted-human audited exception path may carry that reason.

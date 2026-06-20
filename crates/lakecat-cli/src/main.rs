@@ -6600,6 +6600,7 @@ fn verify_qglake_credential_replay(
         || restricted_probe.raw_credential_exception_allowed != Some(false)
         || restricted_probe.credential_block_reason.as_deref()
             != Some(QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON)
+        || restricted_probe.raw_credential_exception_reason.is_some()
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain restricted credential replay did not prove raw credentials were blocked"
@@ -15674,6 +15675,43 @@ mod tests {
             "qglake lineage drain trusted human credential replay did not prove audited standard credential vending"
         ));
 
+        let mut restricted_with_exception_reason = qglake_restricted_credential_summary();
+        restricted_with_exception_reason.raw_credential_exception_reason =
+            Some("trusted-human-override".to_string());
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 4,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 4,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    restricted_with_exception_reason,
+                    qglake_human_credential_summary(),
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject restricted raw exception reasons");
+        assert!(err.to_string().contains(
+            "qglake lineage drain restricted credential replay did not prove raw credentials were blocked"
+        ));
+
         let mut human_without_ttl = qglake_human_credential_summary();
         human_without_ttl.read_restriction = None;
         let err = verify_qglake_lineage_drain(
@@ -18538,9 +18576,7 @@ mod tests {
             credential_count: Some(0),
             credential_block_reason: Some(QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON.to_string()),
             raw_credential_exception_allowed: Some(false),
-            raw_credential_exception_reason: Some(
-                QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON.to_string(),
-            ),
+            raw_credential_exception_reason: None,
             replay_event_hashes: vec!["sha256:restricted-credential-replay".to_string()],
             replay_open_lineage_hashes: vec![
                 "sha256:restricted-credential-openlineage".to_string(),

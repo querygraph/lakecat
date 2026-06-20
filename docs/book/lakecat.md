@@ -1638,6 +1638,10 @@ LakeCat now checks that storage-scope hash at lineage-drain replay time, before
 the compact handoff summary is accepted, and the operator-readable credential
 replay line prints the same hash so captured terminal output cannot look
 complete while omitting the credential-root boundary.
+Source replay and compact handoff verification both reserve
+`rawCredentialExceptionReason` for the audited trusted-human path; a restricted
+agent proof must be blocked with `blockReason` and cannot carry a raw
+exception reason.
 The compact handoff verifier also validates that credential proof directly:
 the restricted branch must name the accepted agent principal, carry the
 Sail-planned-read block reason, prove zero credentials, carry the
