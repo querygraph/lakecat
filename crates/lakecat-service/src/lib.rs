@@ -1118,6 +1118,12 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     if event.event_type == "policy-binding.upserted" {
         validate_policy_binding_upsert_event_evidence(event, payload)?;
     }
+    if event.event_type == "server.upserted" {
+        validate_server_upsert_event_evidence(event, payload)?;
+    }
+    if event.event_type == "warehouse.upserted" {
+        validate_warehouse_upsert_event_evidence(event, payload)?;
+    }
     if event.event_type == "view.version-receipts-listed" {
         validate_view_receipt_list_event_evidence(event, payload)?;
     }
@@ -1364,6 +1370,120 @@ fn validate_policy_binding_upsert_event_evidence(
         outbox_evidence_error(
             event,
             "policy-binding upsert evidence has invalid scope or identifier",
+        )
+    })?;
+    Ok(())
+}
+
+fn validate_server_upsert_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(server_record) = payload.get("server-record") else {
+        return Err(outbox_evidence_error(
+            event,
+            "server upsert evidence must contain server-record",
+        ));
+    };
+    let Some(server_id) = server_record
+        .get("server-id")
+        .and_then(Value::as_str)
+        .filter(|server_id| !server_id.is_empty())
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            "server upsert evidence must contain server-id",
+        ));
+    };
+    if let Some(payload_server_id) = payload.get("server-id").and_then(Value::as_str) {
+        if payload_server_id != server_id {
+            return Err(outbox_evidence_error(
+                event,
+                "server upsert server-id must match server-record",
+            ));
+        }
+    }
+    let endpoint_url =
+        optional_string_field(event, server_record, "endpoint-url", "server upsert")?;
+    validate_optional_full_hash_field(event, server_record, "endpoint-url-hash")?;
+    let display_name =
+        optional_string_field(event, server_record, "display-name", "server upsert")?;
+    let properties =
+        optional_string_map_field(event, server_record, "properties", "server upsert")?;
+    ServerRecord::new(
+        server_id,
+        display_name,
+        endpoint_url,
+        properties,
+        Principal::anonymous(),
+    )
+    .map_err(|_| {
+        outbox_evidence_error(
+            event,
+            "server upsert evidence has invalid endpoint, properties, or identifier",
+        )
+    })?;
+    Ok(())
+}
+
+fn validate_warehouse_upsert_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(warehouse_record) = payload.get("warehouse-record") else {
+        return Err(outbox_evidence_error(
+            event,
+            "warehouse upsert evidence must contain warehouse-record",
+        ));
+    };
+    let Some(warehouse_name) = warehouse_record
+        .get("warehouse")
+        .or_else(|| payload.get("warehouse"))
+        .and_then(Value::as_str)
+        .filter(|warehouse| !warehouse.is_empty())
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            "warehouse upsert evidence must contain warehouse",
+        ));
+    };
+    if let Some(payload_warehouse) = payload.get("warehouse").and_then(Value::as_str) {
+        if warehouse_record.get("warehouse").and_then(Value::as_str) != Some(payload_warehouse) {
+            return Err(outbox_evidence_error(
+                event,
+                "warehouse upsert warehouse must match warehouse-record",
+            ));
+        }
+    }
+    let warehouse = WarehouseName::new(warehouse_name).map_err(|_| {
+        outbox_evidence_error(event, "warehouse upsert evidence has invalid warehouse")
+    })?;
+    let Some(project_id) = warehouse_record
+        .get("project-id")
+        .and_then(Value::as_str)
+        .filter(|project_id| !project_id.is_empty())
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            "warehouse upsert evidence must contain project-id",
+        ));
+    };
+    let storage_root =
+        optional_string_field(event, warehouse_record, "storage-root", "warehouse upsert")?;
+    validate_optional_full_hash_field(event, warehouse_record, "storage-root-hash")?;
+    let properties =
+        optional_string_map_field(event, warehouse_record, "properties", "warehouse upsert")?;
+    WarehouseRecord::new(
+        warehouse,
+        project_id,
+        storage_root,
+        properties,
+        Principal::anonymous(),
+    )
+    .map_err(|_| {
+        outbox_evidence_error(
+            event,
+            "warehouse upsert evidence has invalid storage root, properties, or scope",
         )
     })?;
     Ok(())
@@ -1752,6 +1872,42 @@ fn validate_optional_full_hash_field(
         event,
         &format!("{field} must contain full SHA-256 digest evidence"),
     ))
+}
+
+fn optional_string_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+    label: &str,
+) -> Result<Option<String>, LakeCatError> {
+    match object.get(field) {
+        Some(Value::String(value)) => Ok(Some(value.clone())),
+        Some(Value::Null) | None => Ok(None),
+        _ => Err(outbox_evidence_error(
+            event,
+            &format!("{label} {field} must be a string when present"),
+        )),
+    }
+}
+
+fn optional_string_map_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+    label: &str,
+) -> Result<BTreeMap<String, String>, LakeCatError> {
+    let Some(value) = object.get(field) else {
+        return Ok(BTreeMap::new());
+    };
+    if value.is_null() {
+        return Ok(BTreeMap::new());
+    }
+    serde_json::from_value(value.clone()).map_err(|_| {
+        outbox_evidence_error(
+            event,
+            &format!("{label} {field} must be a string map when present"),
+        )
+    })
 }
 
 fn outbox_evidence_error(event: &OutboxEvent, message: &str) -> LakeCatError {
@@ -9349,6 +9505,120 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_malformed_server_upsert_endpoint_evidence() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-server-decorated-endpoint".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "server.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-server-decorated-endpoint",
+                    "event-type": "server.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "server-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "server-id": "prod",
+                        "server-record": {
+                            "server-id": "prod",
+                            "display-name": "Production",
+                            "endpoint-url": "https://lakecat.example?token=raw-secret",
+                            "properties": {"region": "global"}
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("decorated server endpoint evidence should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("server.upserted"));
+        assert!(message.contains("invalid endpoint"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("raw-secret"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_warehouse_upsert_storage_root_evidence() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-warehouse-decorated-root".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "warehouse.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-warehouse-decorated-root",
+                    "event-type": "warehouse.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "warehouse-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "warehouse-record": {
+                            "warehouse": "local",
+                            "project-id": "default",
+                            "storage-root": "file:///tmp/lakecat?token=raw-secret",
+                            "properties": {"region": "local"}
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("decorated warehouse storage-root evidence should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("warehouse.upserted"));
+        assert!(message.contains("invalid storage root"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("raw-secret"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_short_table_commit_hash_evidence() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),
@@ -10404,7 +10674,7 @@ mod tests {
                         "server-record": {
                             "server-id": "prod",
                             "display-name": "Production",
-                            "endpoint-url": "https://lakecat.example?token=raw-secret",
+                            "endpoint-url": "https://lakecat.example",
                             "properties": {"region": "global"}
                         }
                     }

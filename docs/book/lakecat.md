@@ -942,14 +942,19 @@ curl -s -X PUT http://127.0.0.1:3000/management/v1/projects/resilience/warehouse
 These writes are not Iceberg table metadata. They are catalog control-plane
 state. LakeCat persists them durably, records authorization receipts, and writes
 outbox events. When the outbox drains, server, project, warehouse, and
-storage-profile, and policy-binding changes become catalog graph events; the
+storage-profile and policy-binding changes become catalog graph events; the
 same management changes also become OpenLineage receipts. QueryGraph can later
 learn the management shape without requiring every Iceberg client to understand
-it. Policy-binding upsert replay is checked before projection: the evidence
-must carry a valid policy id, warehouse, optional namespace/table scope, an
-enforcement flag, and the captured ODRL material. LakeCat does not reason over
-that ODRL during replay, but malformed binding shape fails closed before the
-policy anchor can be delivered to graph or lineage sinks.
+it. Server and warehouse tenant-root replay is checked before projection:
+server evidence must carry a valid server id, optional valid endpoint URL or
+full `endpoint-url-hash`, and string-map properties; warehouse evidence must
+carry a valid warehouse, project id, optional valid storage root or full
+`storage-root-hash`, and string-map properties. Policy-binding upsert replay is
+checked before projection too: the evidence must carry a valid policy id,
+warehouse, optional namespace/table scope, an enforcement flag, and the captured
+ODRL material. LakeCat does not reason over that ODRL during replay, but
+malformed binding shape fails closed before the policy anchor can be delivered
+to graph or lineage sinks.
 Server endpoint URLs are operator-visible management metadata, so LakeCat keeps
 them deliberately plain: they must be absolute `http` or `https` URLs, and they
 cannot include query strings, fragments, or URI userinfo. Rejected submissions
@@ -2040,7 +2045,9 @@ must likewise reject raw secret references and contradictory
 secret-reference-state evidence before delivery. Policy-binding upsert replay
 must carry valid catalog scope evidence before delivery, including policy id,
 warehouse, optional namespace/table scope, enforcement state, and captured ODRL
-material. It also requires
+material. Server and warehouse upsert replay must carry valid tenant-root
+evidence too: endpoint URLs, storage roots, identifiers, properties, and
+pre-redacted hash anchors are checked before delivery. It also requires
 planned and fetched read restrictions to match before compact proof generation,
 requires both requested/effective projection and
 requested/effective stats-field evidence, requires effective projection to be a

@@ -6,6 +6,29 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject malformed outbox tenant roots`.
+  Outbox draining now rejects `server.upserted` and `warehouse.upserted`
+  pending events when tenant-root evidence has malformed endpoint URLs,
+  storage roots, identifiers, properties, or redacted hash anchors. Unsafe
+  server/warehouse replay evidence stays pending and reaches neither graph
+  projection nor lineage acknowledgement.
+- Local verification for this outbox tenant-root evidence slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_server_upsert_endpoint_evidence -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_warehouse_upsert_storage_root_evidence -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_server_upserts_to_lineage -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_warehouse_upserts_to_graph -- --nocapture`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain -- --nocapture`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import, and
+  ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Reject malformed outbox policy-binding evidence`.
   Outbox draining now rejects `policy-binding.upserted` pending events when
   policy-binding evidence has malformed identifiers, warehouse scope,

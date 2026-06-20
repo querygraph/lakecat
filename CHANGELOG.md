@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for `server.upserted` and `warehouse.upserted`
+  events whose tenant-root evidence has malformed endpoint URLs, storage roots,
+  identifiers, properties, or redacted hash anchors, so invalid server and
+  warehouse replay fails before graph/lineage projection acknowledgement.
 - Rejected outbox delivery for `policy-binding.upserted` events whose
   policy-binding evidence has malformed identifiers, warehouse scope,
   namespace/table scope, or missing enforcement/ODRL fields, so invalid policy
