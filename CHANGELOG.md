@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned QueryGraph bootstrap producer coverage so durable tenant root evidence
+  emitted by `lakecat-querygraph` and the service route is proven to be full
+  SHA-256 hash evidence, not merely prefix-shaped redaction text.
 - Required QGLake bootstrap tenant-root hash evidence to be full
   `sha256:`-prefixed 64-hex digests for `endpointUrlHash` and
   `storageRootHash`, rejecting short placeholder hashes even when the bundle

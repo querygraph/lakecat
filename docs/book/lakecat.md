@@ -1496,11 +1496,14 @@ endpoint URLs into hashes, so QueryGraph can prove which management state was
 observed without inheriting local paths, bucket roots, query tokens, URI
 fragments, or userinfo. In the bootstrap graph, `Server` nodes carry
 `endpointUrlHash` and `Warehouse` nodes carry `storageRootHash`; they do not
-carry the raw endpoint URL or storage root. Authorized management responses can
-still show the configured endpoint URL or storage root to an operator; graph
-and lineage replay receive hash-only evidence. When those records do not exist
-yet, LakeCat falls back to the old deterministic default anchors so bootstrap
-remains compatible with minimal embedded tests and older import flows.
+carry the raw endpoint URL or storage root. The projection code and service
+route tests both pin those emitted fields as full SHA-256 digest evidence, so
+the producer and verifier agree on the shape before QueryGraph import.
+Authorized management responses can still show the configured endpoint URL or
+storage root to an operator; graph and lineage replay receive hash-only
+evidence. When those records do not exist yet, LakeCat falls back to the old
+deterministic default anchors so bootstrap remains compatible with minimal
+embedded tests and older import flows.
 
 LakeCat also keeps the older `Catalog HAS_NAMESPACE Namespace` edge in the
 bundle so existing QueryGraph importers can keep working while newer flows read

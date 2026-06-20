@@ -6018,6 +6018,13 @@ mod tests {
     use tokio::sync::Mutex;
     use tower::ServiceExt;
 
+    fn is_full_sha256_hash(value: &str) -> bool {
+        let Some(digest) = value.strip_prefix("sha256:") else {
+            return false;
+        };
+        digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }
+
     #[derive(Debug, Default)]
     struct RecordingGovernance {
         principals: Mutex<Vec<Principal>>,
@@ -12570,7 +12577,7 @@ mod tests {
         assert!(
             server_node["properties"]["endpointUrlHash"]
                 .as_str()
-                .is_some_and(|hash| hash.starts_with("sha256:"))
+                .is_some_and(is_full_sha256_hash)
         );
         let project_node = graph_nodes
             .iter()
@@ -12597,7 +12604,7 @@ mod tests {
         assert!(
             warehouse_node["properties"]["storageRootHash"]
                 .as_str()
-                .is_some_and(|hash| hash.starts_with("sha256:"))
+                .is_some_and(is_full_sha256_hash)
         );
         let graph_json = serde_json::to_string(&body["graph"]).unwrap();
         assert!(

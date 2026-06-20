@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin QueryGraph tenant hash producer evidence`.
+  QueryGraph tenant projection and the service bootstrap route now have focused
+  coverage proving durable tenant roots are emitted as full SHA-256 hash
+  evidence, with raw server endpoint URLs and warehouse storage roots absent
+  from the produced graph.
+- Local verification for this QueryGraph tenant hash producer slice is green:
+  `cargo fmt -p lakecat-querygraph -p lakecat-service -- --check`;
+  `cargo test -p lakecat-querygraph tenant_records_project_full_hash_evidence_without_raw_roots -- --nocapture`;
+  `cargo test -p lakecat-service querygraph_bootstrap_projects_catalog_tables -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_bootstrap_verifier_rejects_short -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require full tenant-root hashes in QGLake bootstrap verification`.
   QGLake bootstrap verification now rejects tenant `Server.endpointUrlHash` and
   `Warehouse.storageRootHash` values unless they are full `sha256:`-prefixed

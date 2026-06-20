@@ -1543,6 +1543,13 @@ mod tests {
 
     use lakecat_core::{Namespace, Principal, TableName};
 
+    fn is_full_sha256_hash(value: &str) -> bool {
+        let Some(digest) = value.strip_prefix("sha256:") else {
+            return false;
+        };
+        digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }
+
     #[test]
     fn projects_iceberg_table_into_querygraph_bundle() {
         let ident = TableIdent::new(
@@ -1939,6 +1946,96 @@ mod tests {
                 .as_deref(),
             Some(expected_evidence_hash.as_str())
         );
+    }
+
+    #[test]
+    fn tenant_records_project_full_hash_evidence_without_raw_roots() {
+        let warehouse = WarehouseName::new("local").unwrap();
+        let server = ServerRecord::new(
+            "prod-server",
+            Some("Production LakeCat".to_string()),
+            Some("https://lakecat.example.com".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        let project = ProjectRecord::new(
+            "analytics",
+            Some("prod-server".to_string()),
+            Some("Analytics".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        let warehouse_record = WarehouseRecord::new(
+            warehouse.clone(),
+            "analytics",
+            Some("file:///tmp/lakecat-analytics".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        let tenant = QueryGraphTenantProjection::from_records(
+            &warehouse,
+            Some(&warehouse_record),
+            Some(&project),
+            Some(&server),
+        );
+
+        assert!(
+            tenant
+                .server_endpoint_url_hash
+                .as_deref()
+                .is_some_and(is_full_sha256_hash)
+        );
+        assert!(
+            tenant
+                .warehouse_storage_root_hash
+                .as_deref()
+                .is_some_and(is_full_sha256_hash)
+        );
+
+        let graph = QueryGraphCatalogGraph::from_tables_and_views_for_warehouse(
+            &warehouse,
+            &[],
+            &[],
+            &tenant,
+        );
+        let server_node = graph
+            .nodes
+            .iter()
+            .find(|node| node.id == "lakecat:server:prod-server")
+            .expect("tenant graph should include durable server node");
+        assert_eq!(server_node.label, "Server");
+        assert!(
+            server_node.properties.get("endpointUrl").is_none()
+                || server_node.properties["endpointUrl"].is_null()
+        );
+        assert!(
+            server_node.properties["endpointUrlHash"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
+        );
+
+        let warehouse_node = graph
+            .nodes
+            .iter()
+            .find(|node| node.id == "lakecat:warehouse:local")
+            .expect("tenant graph should include durable warehouse node");
+        assert_eq!(warehouse_node.label, "Warehouse");
+        assert!(
+            warehouse_node.properties.get("storageRoot").is_none()
+                || warehouse_node.properties["storageRoot"].is_null()
+        );
+        assert!(
+            warehouse_node.properties["storageRootHash"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
+        );
+
+        let graph_json = serde_json::to_string(&graph).unwrap();
+        assert!(!graph_json.contains("https://lakecat.example.com"));
+        assert!(!graph_json.contains("file:///tmp/lakecat-analytics"));
     }
 
     #[test]
