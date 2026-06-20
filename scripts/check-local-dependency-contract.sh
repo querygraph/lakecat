@@ -32,6 +32,9 @@ require_pattern 'workflow_dispatch:' .github/workflows/ci.yml \
 if rg -q '(^|[[:space:]])(push|pull_request):' .github/workflows/ci.yml; then
   fail "CI must not run on push or pull_request until the local gates are proven stable"
 fi
+if rg -q '(^|[[:space:]])(schedule|workflow_run):' .github/workflows/ci.yml; then
+  fail "CI must not run on schedule or workflow_run until the local gates are proven stable"
+fi
 
 require_pattern 'grust-graph = \{ package = "grust-graph", version = "0\.9\.0",' Cargo.toml \
   "grust-graph must use the published 0.9.0 crate"

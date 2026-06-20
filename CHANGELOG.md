@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Tightened the local dependency-contract audit so manual-only CI also rejects
+  scheduled and workflow-chained GitHub Actions triggers.
 - Pinned REST idempotency side-effect behavior so exact replay and mismatched
   reused-key conflicts do not enqueue extra table-commit outbox events.
 - Pinned REST idempotency mismatch redaction so reused-key conflicts do not

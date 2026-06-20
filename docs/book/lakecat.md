@@ -750,10 +750,12 @@ generated Iceberg REST models, typed metadata inputs, planning result helpers,
 fetchScanTasks result helpers, and table-status conversion. It also checks the
 local QueryGraph Rust importer for the LakeCat view receipt-chain contract:
 `receipt-chain-hash` must be preserved in view receipt evidence and missing
-receipt-chain evidence must fail closed. It is not a substitute for upstreaming
-the Sail helper APIs or re-enabling automatic CI; it is a guard that makes drift
-visible while LakeCat still depends on unpublished Sail helper work and a local
-QueryGraph acceptance target.
+receipt-chain evidence must fail closed. Manual-only means no automatic push,
+pull-request, scheduled, or workflow-chained cloud runs; the local audit fails
+if any of those triggers appear before the local gates are proven stable. It is
+not a substitute for upstreaming the Sail helper APIs or re-enabling automatic
+CI; it is a guard that makes drift visible while LakeCat still depends on
+unpublished Sail helper work and a local QueryGraph acceptance target.
 
 As of the current local reconciliation, the Sail helper work is not an
 anonymous dirty tree. `/Users/alexy/src/sail` has scoped local commits on
