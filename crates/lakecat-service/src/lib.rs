@@ -1135,6 +1135,16 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     }
     if matches!(
         event.event_type.as_str(),
+        "policy-binding.listed"
+            | "project.listed"
+            | "server.listed"
+            | "storage-profile.listed"
+            | "warehouse.listed"
+    ) {
+        validate_management_list_event_evidence(event, payload)?;
+    }
+    if matches!(
+        event.event_type.as_str(),
         "namespace.created" | "namespace.dropped" | "namespace.loaded"
     ) {
         validate_namespace_lifecycle_event_evidence(event, payload)?;
@@ -1594,6 +1604,54 @@ fn validate_namespace_list_event_evidence(
     Ok(())
 }
 
+fn validate_management_list_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    match event.event_type.as_str() {
+        "policy-binding.listed" => {
+            validate_required_warehouse_field(event, payload, "policy-binding list")?;
+            validate_required_unsigned_count_field(
+                event,
+                payload,
+                "policy-count",
+                "policy-binding list",
+            )?;
+        }
+        "project.listed" => {
+            validate_required_unsigned_count_field(
+                event,
+                payload,
+                "project-count",
+                "project list",
+            )?;
+        }
+        "server.listed" => {
+            validate_required_unsigned_count_field(event, payload, "server-count", "server list")?;
+        }
+        "storage-profile.listed" => {
+            validate_required_warehouse_field(event, payload, "storage-profile list")?;
+            validate_required_unsigned_count_field(
+                event,
+                payload,
+                "storage-profile-count",
+                "storage-profile list",
+            )?;
+        }
+        "warehouse.listed" => {
+            validate_required_unsigned_count_field(
+                event,
+                payload,
+                "warehouse-count",
+                "warehouse list",
+            )?;
+            optional_string_field(event, payload, "project-id", "warehouse list")?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 fn validate_required_warehouse_field(
     event: &OutboxEvent,
     payload: &Value,
@@ -1611,6 +1669,20 @@ fn validate_required_warehouse_field(
     };
     WarehouseName::new(warehouse_name).map_err(|_| {
         outbox_evidence_error(event, &format!("{label} evidence has invalid warehouse"))
+    })
+}
+
+fn validate_required_unsigned_count_field(
+    event: &OutboxEvent,
+    payload: &Value,
+    field: &str,
+    label: &str,
+) -> Result<u64, LakeCatError> {
+    payload.get(field).and_then(Value::as_u64).ok_or_else(|| {
+        outbox_evidence_error(
+            event,
+            &format!("{label} evidence must contain unsigned {field}"),
+        )
     })
 }
 
@@ -10300,6 +10372,121 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "malformed namespace-list evidence must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_management_list_count_evidence() {
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-secret-storage-profile-list-token".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-corrupt-storage-profile-list",
+                    "event-type": "storage-profile.listed",
+                    "payload": {
+                        "warehouse": "local",
+                        "storage-profile-count": -1,
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("malformed management-list count evidence should fail");
+
+        let message = err.to_string();
+        assert!(message.contains(
+            "outbox event storage-profile.listed (lakecat.lineage-and-graph) has invalid"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(
+            message.contains(
+                "storage-profile list evidence must contain unsigned storage-profile-count"
+            )
+        );
+        assert!(!message.contains("evt-secret-storage-profile-list-token"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "malformed management-list evidence must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "malformed management-list evidence must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "malformed management-list evidence must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_management_list_scope_evidence() {
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-secret-warehouse-list-token".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "warehouse.listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-corrupt-warehouse-list",
+                    "event-type": "warehouse.listed",
+                    "payload": {
+                        "project-id": 42,
+                        "warehouse-count": 1,
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("malformed management-list scope evidence should fail");
+
+        let message = err.to_string();
+        assert!(
+            message
+                .contains("outbox event warehouse.listed (lakecat.lineage-and-graph) has invalid")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("warehouse list project-id must be a string when present"));
+        assert!(!message.contains("evt-secret-warehouse-list-token"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "malformed management-list evidence must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "malformed management-list evidence must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "malformed management-list evidence must fail before lineage projection"
         );
     }
 

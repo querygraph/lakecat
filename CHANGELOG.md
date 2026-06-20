@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for management-list read events whose count or scope
+  evidence is malformed, so invalid server/project/warehouse/policy/profile
+  list replay fails before lineage acknowledgement.
 - Rejected outbox delivery for catalog read events whose warehouse or namespace
   list-count evidence is malformed, so invalid config-read and namespace-list
   replay fails before graph/lineage projection acknowledgement.

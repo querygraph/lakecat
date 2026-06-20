@@ -964,6 +964,10 @@ Catalog read replay has the same fail-closed shape: `catalog.config-read`
 events must carry a valid warehouse, and `namespace.listed` events must carry
 both a valid warehouse and an unsigned namespace count before the read evidence
 can be projected.
+Management-list replay is checked before delivery too: policy-binding,
+project, server, storage-profile, and warehouse list events must carry unsigned
+counts, warehouse-scoped lists must carry a valid warehouse, and optional
+project scope must be a string before those reads can become replay evidence.
 Server endpoint URLs are operator-visible management metadata, so LakeCat keeps
 them deliberately plain: they must be absolute `http` or `https` URLs, and they
 cannot include query strings, fragments, or URI userinfo. Rejected submissions
@@ -2060,6 +2064,10 @@ Catalog config and namespace-list read replay must likewise carry a valid
 warehouse, and namespace listing must preserve an unsigned namespace count,
 before those standard catalog reads become delivered graph/OpenLineage
 evidence.
+Management-list read replay applies the same rule to operational discovery:
+policy, project, server, storage-profile, and warehouse list events must carry
+unsigned counts, valid warehouse scope when warehouse-scoped, and valid optional
+project scope before delivery.
 Project, server, and warehouse upsert replay must carry valid
 tenant-root evidence too: project ids, server scopes, endpoint URLs, storage
 roots, identifiers, properties, and pre-redacted hash anchors are checked
