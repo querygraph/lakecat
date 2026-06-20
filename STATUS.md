@@ -6,6 +6,27 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Harden management-list outbox ID evidence`.
+  Management-list audit/outbox reads now carry redacted stable ID arrays beside
+  their counts for policies, projects, servers, storage profiles, and
+  warehouses. Outbox draining rejects malformed or count-drifted optional ID
+  arrays before graph projection, OpenLineage emission, or delivery
+  acknowledgement.
+- Local verification for this management-list ID evidence slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service management_list -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain -- --nocapture`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --nocapture --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --nocapture --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import,
+  verified the handoff summary, and ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Reject malformed outbox QueryGraph bootstrap evidence`.
   Outbox draining now rejects malformed `querygraph.bootstrap` pending events
   when their warehouse, table/view counts, verified ids, manifest hashes,

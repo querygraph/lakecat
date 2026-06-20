@@ -2176,44 +2176,148 @@ fn validate_management_list_event_evidence(
 ) -> Result<(), LakeCatError> {
     match event.event_type.as_str() {
         "policy-binding.listed" => {
-            validate_required_warehouse_field(event, payload, "policy-binding list")?;
-            validate_required_unsigned_count_field(
+            let warehouse =
+                validate_required_warehouse_field(event, payload, "policy-binding list")?;
+            let count = validate_required_unsigned_count_field(
                 event,
                 payload,
                 "policy-count",
                 "policy-binding list",
             )?;
+            validate_optional_management_id_array(
+                event,
+                payload,
+                "policy-ids",
+                count,
+                "policy-binding list",
+                |id| PolicyBinding::new(id, warehouse.clone(), None, None, true, json!({})).is_ok(),
+            )?;
         }
         "project.listed" => {
-            validate_required_unsigned_count_field(
+            let count = validate_required_unsigned_count_field(
                 event,
                 payload,
                 "project-count",
                 "project list",
             )?;
+            validate_optional_management_id_array(
+                event,
+                payload,
+                "project-ids",
+                count,
+                "project list",
+                |id| {
+                    ProjectRecord::new(id, None, None, BTreeMap::new(), Principal::anonymous())
+                        .is_ok()
+                },
+            )?;
         }
         "server.listed" => {
-            validate_required_unsigned_count_field(event, payload, "server-count", "server list")?;
+            let count = validate_required_unsigned_count_field(
+                event,
+                payload,
+                "server-count",
+                "server list",
+            )?;
+            validate_optional_management_id_array(
+                event,
+                payload,
+                "server-ids",
+                count,
+                "server list",
+                |id| {
+                    ServerRecord::new(id, None, None, BTreeMap::new(), Principal::anonymous())
+                        .is_ok()
+                },
+            )?;
         }
         "storage-profile.listed" => {
-            validate_required_warehouse_field(event, payload, "storage-profile list")?;
-            validate_required_unsigned_count_field(
+            let warehouse =
+                validate_required_warehouse_field(event, payload, "storage-profile list")?;
+            let count = validate_required_unsigned_count_field(
                 event,
                 payload,
                 "storage-profile-count",
                 "storage-profile list",
             )?;
+            validate_optional_management_id_array(
+                event,
+                payload,
+                "storage-profile-ids",
+                count,
+                "storage-profile list",
+                |id| {
+                    StorageProfile::new(
+                        id,
+                        warehouse.clone(),
+                        "file:///tmp/lakecat-evidence",
+                        StorageProvider::File,
+                        CredentialIssuanceMode::LocalFileNoSecret,
+                        None,
+                        BTreeMap::new(),
+                    )
+                    .is_ok()
+                },
+            )?;
         }
         "warehouse.listed" => {
-            validate_required_unsigned_count_field(
+            let count = validate_required_unsigned_count_field(
                 event,
                 payload,
                 "warehouse-count",
                 "warehouse list",
             )?;
             optional_string_field(event, payload, "project-id", "warehouse list")?;
+            validate_optional_management_id_array(
+                event,
+                payload,
+                "warehouse-names",
+                count,
+                "warehouse list",
+                |id| WarehouseName::new(id).is_ok(),
+            )?;
         }
         _ => {}
+    }
+    Ok(())
+}
+
+fn validate_optional_management_id_array(
+    event: &OutboxEvent,
+    payload: &Value,
+    field: &str,
+    expected_count: u64,
+    label: &str,
+    is_valid_id: impl Fn(&str) -> bool,
+) -> Result<(), LakeCatError> {
+    let Some(ids) = payload.get(field) else {
+        return Ok(());
+    };
+    let Some(ids) = ids.as_array() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} {field} must be an array when present"),
+        ));
+    };
+    if ids.len() as u64 != expected_count {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} {field} count must match {label} count"),
+        ));
+    }
+    for id in ids {
+        let Some(id) = id.as_str().filter(|id| !id.is_empty()) else {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} {field} must contain non-empty strings"),
+            ));
+        };
+        if !is_valid_id(id) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} {field} contains an invalid identifier"),
+            ));
+        }
     }
     Ok(())
 }
@@ -4248,6 +4352,10 @@ async fn list_storage_profiles(
                 "warehouse": warehouse.as_str(),
                 "authorization-receipt": capability.receipt(),
                 "storage-profile-count": profiles.len(),
+                "storage-profile-ids": profiles
+                    .iter()
+                    .map(|profile| profile.profile_id.as_str())
+                    .collect::<Vec<_>>(),
             }),
         )?)
         .await?;
@@ -4271,6 +4379,10 @@ async fn list_warehouses(
             json!({
                 "event-type": "warehouse.listed",
                 "warehouse-count": warehouses.len(),
+                "warehouse-names": warehouses
+                    .iter()
+                    .map(|warehouse| warehouse.warehouse.as_str())
+                    .collect::<Vec<_>>(),
                 "authorization-receipt": capability.receipt(),
             }),
         )?)
@@ -4297,6 +4409,10 @@ async fn list_project_warehouses(
                 "event-type": "warehouse.listed",
                 "project-id": project.as_str(),
                 "warehouse-count": warehouses.len(),
+                "warehouse-names": warehouses
+                    .iter()
+                    .map(|warehouse| warehouse.warehouse.as_str())
+                    .collect::<Vec<_>>(),
                 "authorization-receipt": capability.receipt(),
             }),
         )?)
@@ -4321,6 +4437,10 @@ async fn list_projects(
             json!({
                 "event-type": "project.listed",
                 "project-count": projects.len(),
+                "project-ids": projects
+                    .iter()
+                    .map(|project| project.project_id.as_str())
+                    .collect::<Vec<_>>(),
                 "authorization-receipt": capability.receipt(),
             }),
         )?)
@@ -4345,6 +4465,10 @@ async fn list_servers(
             json!({
                 "event-type": "server.listed",
                 "server-count": servers.len(),
+                "server-ids": servers
+                    .iter()
+                    .map(|server| server.server_id.as_str())
+                    .collect::<Vec<_>>(),
                 "authorization-receipt": capability.receipt(),
             }),
         )?)
@@ -4924,6 +5048,10 @@ async fn list_policy_bindings(
                 "warehouse": warehouse.as_str(),
                 "authorization-receipt": capability.receipt(),
                 "policy-count": policies.len(),
+                "policy-ids": policies
+                    .iter()
+                    .map(|policy| policy.policy_id.as_str())
+                    .collect::<Vec<_>>(),
             }),
         )?)
         .await?;
@@ -11509,6 +11637,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_malformed_management_list_id_evidence() {
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-secret-project-list-token".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "project.listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-corrupt-project-list",
+                    "event-type": "project.listed",
+                    "payload": {
+                        "project-count": 1,
+                        "project-ids": ["analytics/../../secret"],
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("malformed management-list ID evidence should fail");
+
+        let message = err.to_string();
+        assert!(
+            message.contains("outbox event project.listed (lakecat.lineage-and-graph) has invalid")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("project list project-ids contains an invalid identifier"));
+        assert!(!message.contains("evt-secret-project-list-token"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "malformed management-list ID evidence must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "malformed management-list ID evidence must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "malformed management-list ID evidence must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_view_list_evidence() {
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {
@@ -12427,6 +12610,7 @@ mod tests {
                             "authorization-receipt": authorization_receipt,
                             "warehouse": "local",
                             "policy-count": 2,
+                            "policy-ids": ["agent-read", "human.raw"],
                         }
                     }),
                     created_at: chrono::Utc::now(),
@@ -12442,6 +12626,7 @@ mod tests {
                         "payload": {
                             "authorization-receipt": authorization_receipt,
                             "project-count": 1,
+                            "project-ids": ["analytics"],
                         }
                     }),
                     created_at: chrono::Utc::now(),
@@ -12457,6 +12642,7 @@ mod tests {
                         "payload": {
                             "authorization-receipt": authorization_receipt,
                             "server-count": 1,
+                            "server-ids": ["prod-us"],
                         }
                     }),
                     created_at: chrono::Utc::now(),
@@ -12473,6 +12659,7 @@ mod tests {
                             "authorization-receipt": authorization_receipt,
                             "warehouse": "local",
                             "storage-profile-count": 2,
+                            "storage-profile-ids": ["events-local", "audit-local"],
                         }
                     }),
                     created_at: chrono::Utc::now(),
@@ -12489,6 +12676,7 @@ mod tests {
                             "authorization-receipt": authorization_receipt,
                             "project-id": "analytics",
                             "warehouse-count": 3,
+                            "warehouse-names": ["local", "sandbox", "prod"],
                         }
                     }),
                     created_at: chrono::Utc::now(),
@@ -12580,12 +12768,32 @@ mod tests {
             serde_json::json!(2)
         );
         assert_eq!(
+            lineage_events[0].payload["policy-ids"],
+            serde_json::json!(["agent-read", "human.raw"])
+        );
+        assert_eq!(
+            lineage_events[1].payload["project-ids"],
+            serde_json::json!(["analytics"])
+        );
+        assert_eq!(
+            lineage_events[2].payload["server-ids"],
+            serde_json::json!(["prod-us"])
+        );
+        assert_eq!(
             lineage_events[3].payload["storage-profile-count"],
             serde_json::json!(2)
         );
         assert_eq!(
+            lineage_events[3].payload["storage-profile-ids"],
+            serde_json::json!(["events-local", "audit-local"])
+        );
+        assert_eq!(
             lineage_events[4].payload["project-id"],
             serde_json::json!("analytics")
+        );
+        assert_eq!(
+            lineage_events[4].payload["warehouse-names"],
+            serde_json::json!(["local", "sandbox", "prod"])
         );
     }
 
