@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require QGLake fetch effective projection proof`.
+  QGLake CLI replay and compact handoff verification now reject missing or
+  drifted fetched `effective-projection` evidence, tying fetch replay to the
+  same server-derived read restriction emitted by `fetchScanTasks`.
+- Local verification for this QGLake fetch proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Expose fetch effective projection evidence`.
   `fetchScanTasks` responses and `table.scan-tasks-fetched` audit/outbox
   payloads now carry `effective-projection` alongside the required projection

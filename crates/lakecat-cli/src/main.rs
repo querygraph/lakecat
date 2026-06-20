@@ -1828,6 +1828,7 @@ fn verify_lakecat_replay_scan_matches_summary(
         "plannedRequestedStatsFields",
         "plannedEffectiveStatsFields",
         "fetchedRequiredProjection",
+        "fetchedEffectiveProjection",
         "fetchedRequiredFilters",
         "plannedReplayEventHashes",
         "fetchedReplayEventHashes",
@@ -2594,6 +2595,16 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         required_value(
             governed_scan,
             "fetchedRequiredProjection",
+            "governedScanProof",
+        )?,
+        "governedScanProof.fetchedReadRestriction",
+    )?;
+    require_value_match(
+        fetched_restriction,
+        "allowed-columns",
+        required_value(
+            governed_scan,
+            "fetchedEffectiveProjection",
             "governedScanProof",
         )?,
         "governedScanProof.fetchedReadRestriction",
@@ -3708,6 +3719,7 @@ fn qglake_scan_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Valu
         "plannedRequestedStatsFields": &planned.requested_stats_fields,
         "plannedEffectiveStatsFields": &planned.effective_stats_fields,
         "fetchedRequiredProjection": &fetched.required_projection,
+        "fetchedEffectiveProjection": &fetched.effective_projection,
         "fetchedRequiredFilters": &fetched.required_filters,
         "plannedReplayEventHashes": &planned.replay_event_hashes,
         "fetchedReplayEventHashes": &fetched.replay_event_hashes,
@@ -5955,6 +5967,12 @@ fn verify_qglake_fetch_restriction(
             extension["required-projection"].clone()
         )));
     }
+    if extension["effective-projection"] != json!(["event_id", "occurred_at", "severity"]) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake governed fetchScanTasks effective projection did not prove re-applied narrowing: {}",
+            extension["effective-projection"].clone()
+        )));
+    }
     if extension["required-filters"]
         .as_array()
         .and_then(|filters| filters.first())
@@ -6463,6 +6481,20 @@ fn verify_qglake_scan_restriction_replay(
     if &fetched_projection != fetched_allowed_columns {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain scan task fetch replay required projection does not match fetched read restriction"
+                .to_string(),
+        ));
+    }
+    let fetched_effective_projection = Value::Array(
+        fetched
+            .effective_projection
+            .iter()
+            .cloned()
+            .map(Value::String)
+            .collect(),
+    );
+    if &fetched_effective_projection != fetched_allowed_columns {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain scan task fetch replay effective projection does not match fetched read restriction"
                 .to_string(),
         ));
     }
@@ -8508,9 +8540,12 @@ mod tests {
                         "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
+                    "plannedRequestedProjection": ["event_id", "occurred_at", "severity", "raw_payload"],
+                    "plannedEffectiveProjection": ["event_id", "occurred_at", "severity"],
                     "plannedRequestedStatsFields": ["event_id", "occurred_at", "severity", "raw_payload"],
                     "plannedEffectiveStatsFields": ["event_id", "occurred_at", "severity"],
                     "fetchedRequiredProjection": ["event_id", "occurred_at", "severity"],
+                    "fetchedEffectiveProjection": ["event_id", "occurred_at", "severity"],
                     "fetchedRequiredFilters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -8734,9 +8769,12 @@ mod tests {
                         "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
+                    "plannedRequestedProjection": ["event_id", "occurred_at", "severity", "raw_payload"],
+                    "plannedEffectiveProjection": ["event_id", "occurred_at", "severity"],
                     "plannedRequestedStatsFields": ["event_id", "occurred_at", "severity", "raw_payload"],
                     "plannedEffectiveStatsFields": ["event_id", "occurred_at", "severity"],
                     "fetchedRequiredProjection": ["event_id", "occurred_at", "severity"],
+                    "fetchedEffectiveProjection": ["event_id", "occurred_at", "severity"],
                     "fetchedRequiredFilters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -10254,6 +10292,22 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("fetchedRequiredProjection"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_fetch_effective_projection_evidence() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("fetchedEffectiveProjection");
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject missing fetch effective projection evidence",
+        );
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("fetchedEffectiveProjection"));
     }
 
     #[test]
@@ -12913,6 +12967,9 @@ mod tests {
                         "raw_payload"
                     ],
                     "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "requested-stats-fields": ["event_id", "occurred_at", "severity", "raw_payload"],
+                    "effective-stats-fields": ["event_id", "occurred_at", "severity"],
+                    "stats-fields": ["event_id", "occurred_at", "severity"],
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
@@ -12955,6 +13012,9 @@ mod tests {
                         "raw_payload"
                     ],
                     "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "requested-stats-fields": ["event_id", "occurred_at", "severity", "raw_payload"],
+                    "effective-stats-fields": ["event_id", "occurred_at", "severity"],
+                    "stats-fields": ["event_id", "occurred_at", "severity"],
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
@@ -12999,6 +13059,9 @@ mod tests {
                         "raw_payload"
                     ],
                     "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "requested-stats-fields": ["event_id", "occurred_at", "severity", "raw_payload"],
+                    "effective-stats-fields": ["event_id", "occurred_at", "severity"],
+                    "stats-fields": ["event_id", "occurred_at", "severity"],
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
@@ -13043,6 +13106,9 @@ mod tests {
                         "raw_payload"
                     ],
                     "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "requested-stats-fields": ["event_id", "occurred_at", "severity", "raw_payload"],
+                    "effective-stats-fields": ["event_id", "occurred_at", "severity"],
+                    "stats-fields": ["event_id", "occurred_at", "severity"],
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
@@ -13086,6 +13152,9 @@ mod tests {
                         "raw_payload"
                     ],
                     "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "requested-stats-fields": ["event_id", "occurred_at", "severity", "raw_payload"],
+                    "effective-stats-fields": ["event_id", "occurred_at", "severity"],
+                    "stats-fields": ["event_id", "occurred_at", "severity"],
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
@@ -13132,6 +13201,9 @@ mod tests {
                         "raw_payload"
                     ],
                     "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "requested-stats-fields": ["event_id", "occurred_at", "severity", "raw_payload"],
+                    "effective-stats-fields": ["event_id", "occurred_at", "severity"],
+                    "stats-fields": ["event_id", "occurred_at", "severity"],
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
@@ -13174,6 +13246,9 @@ mod tests {
                         "raw_payload"
                     ],
                     "effective-projection": ["event_id", "occurred_at", "severity"],
+                    "requested-stats-fields": ["event_id", "occurred_at", "severity", "raw_payload"],
+                    "effective-stats-fields": ["event_id", "occurred_at", "severity"],
+                    "stats-fields": ["event_id", "occurred_at", "severity"],
                     "read-restriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
                         "row-predicate": {
@@ -13258,6 +13333,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13304,6 +13380,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13347,6 +13424,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13392,6 +13470,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13438,6 +13517,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13448,6 +13528,49 @@ mod tests {
         };
 
         verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION).unwrap();
+    }
+
+    #[test]
+    fn qglake_fetch_scan_tasks_verifier_requires_effective_projection() {
+        let expected_policy_hash = qglake_policy_hash("events").unwrap();
+        let fetched = FetchScanTasksResponse {
+            table: lakecat_api::TableIdentifier {
+                namespace: vec!["default".to_string()],
+                name: "events".to_string(),
+            },
+            planned_by: "sail-rest-models".to_string(),
+            plan_task: "lakecat:sail-json-hmac:test".to_string(),
+            snapshot_id: Some(42),
+            file_scan_tasks: vec![qglake_file_scan_task_with_delete_ref()],
+            delete_files: qglake_delete_files(),
+            plan_tasks: vec!["lakecat:sail-json-hmac:manifest".to_string()],
+            lakecat_plan_tasks: qglake_manifest_child_plan_tasks(),
+            residual_filter: Some(serde_json::json!({
+                "lakecat:fetch-scan-tasks": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id", "occurred_at", "severity"],
+                        "row-predicate": {
+                            "type": "not-eq",
+                            "term": "severity",
+                            "value": "debug"
+                        },
+                        "purpose": "qglake-agent-demo",
+                        "max-credential-ttl-seconds": 300,
+                        "policy-hashes": [expected_policy_hash]
+                    },
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
+                }
+            })),
+        };
+
+        let err = verify_qglake_scan_tasks(&fetched, QGLAKE_TEST_LOCATION)
+            .expect_err("QGLake governed fetch should require effective projection proof");
+        assert!(err.to_string().contains("effective projection"));
     }
 
     #[test]
@@ -13483,6 +13606,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13526,6 +13650,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13585,6 +13710,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13631,6 +13757,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13681,6 +13808,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13728,6 +13856,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13771,6 +13900,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13814,6 +13944,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13861,6 +13992,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13913,6 +14045,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -13958,6 +14091,7 @@ mod tests {
                         "max-credential-ttl-seconds": 300
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -14002,6 +14136,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -14044,6 +14179,7 @@ mod tests {
                         "policy-hashes": [expected_policy_hash]
                     },
                     "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -14128,7 +14264,8 @@ mod tests {
                         "max-credential-ttl-seconds": 300,
                         "policy-hashes": [expected_policy_hash]
                     },
-                    "required-projection": ["event_id", "occurred_at", "severity"]
+                    "required-projection": ["event_id", "occurred_at", "severity"],
+                    "effective-projection": ["event_id", "occurred_at", "severity"]
                 }
             })),
         };
@@ -14337,6 +14474,40 @@ mod tests {
 
         assert!(err.to_string().contains("tenant_id"));
         assert!(err.to_string().contains("was not requested"));
+    }
+
+    #[test]
+    fn qglake_scan_replay_rejects_missing_fetched_effective_projection() {
+        let mut fetched = qglake_scan_tasks_fetched_lineage_summary();
+        fetched.effective_projection = Vec::new();
+
+        let err =
+            verify_qglake_scan_restriction_replay(&qglake_scan_planned_lineage_summary(), &fetched)
+                .expect_err("scan replay should reject missing fetched effective projection");
+
+        assert!(
+            err.to_string()
+                .contains("fetch replay effective projection does not match")
+        );
+    }
+
+    #[test]
+    fn qglake_scan_replay_rejects_drifted_fetched_effective_projection() {
+        let mut fetched = qglake_scan_tasks_fetched_lineage_summary();
+        fetched.effective_projection = vec![
+            "event_id".to_string(),
+            "occurred_at".to_string(),
+            "raw_payload".to_string(),
+        ];
+
+        let err =
+            verify_qglake_scan_restriction_replay(&qglake_scan_planned_lineage_summary(), &fetched)
+                .expect_err("scan replay should reject drifted fetched effective projection");
+
+        assert!(
+            err.to_string()
+                .contains("fetch replay effective projection does not match")
+        );
     }
 
     #[test]
@@ -18694,7 +18865,11 @@ mod tests {
                 "severity".to_string(),
             ],
             requested_projection: Vec::new(),
-            effective_projection: Vec::new(),
+            effective_projection: vec![
+                "event_id".to_string(),
+                "occurred_at".to_string(),
+                "severity".to_string(),
+            ],
             required_filters: vec![json!({
                 "type": "not-eq",
                 "term": "severity",

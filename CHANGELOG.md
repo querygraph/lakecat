@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake fetch replay and compact handoff verification to include
+  fetched `effective-projection` evidence matching the server-derived read
+  restriction.
 - Added explicit `effective-projection` evidence to `fetchScanTasks` response
   extensions and scan-task-fetched audit/outbox payloads, mirroring the
   server-derived required projection for replay.

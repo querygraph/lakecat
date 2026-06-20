@@ -1978,7 +1978,10 @@ planned and fetched credential TTL caps visible beside the task counts, while
 JSON mode carries the full read-restriction evidence tree. Scan planning records
 both requested and effective projection evidence; scan-task fetch records the
 server-derived required projection and mirrors it as `effective-projection`, so
-replay can compare both stages with the same policy-narrowed vocabulary.
+replay can compare both stages with the same policy-narrowed vocabulary. QGLake
+acceptance now rejects handoffs where the fetched effective projection is missing
+or drifts away from the fetched read restriction, which means a compact replay
+summary cannot quietly widen what the server actually planned.
 
 After the full local handoff writes `handoff-summary.json`, LakeCat can also
 verify the compact summary itself:
