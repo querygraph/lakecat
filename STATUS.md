@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject zero expected view versions`.
+  View mutation routes now have focused regression coverage proving
+  `expected-view-version=0` is rejected before LakeCat updates the active view
+  or appends any view-version receipt. The active view remains at version 1 and
+  the receipt chain remains a single version-1 upsert after invalid guarded
+  update and drop attempts.
+- Local verification for this view guard slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service view_mutations_reject_zero_expected_version_without_receipts -- --nocapture`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Route-prove malformed ODRL blocks fetchScanTasks`.
   The default REST `fetchScanTasks` route now has focused regression coverage
   proving a malformed active ODRL read restriction fails before Sail fetch

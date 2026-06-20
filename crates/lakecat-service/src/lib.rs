@@ -12712,6 +12712,108 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn view_mutations_reject_zero_expected_version_without_receipts() {
+        let app = test_app();
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/guarded_view")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "sql": "select id from customers",
+                    "dialect": "sql",
+                    "schema-version": 1
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let invalid_update = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/guarded_view")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "sql": "select email from customers",
+                    "dialect": "sql",
+                    "schema-version": 2,
+                    "expected-view-version": 0
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(invalid_update).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(
+            body["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("expected view version must be greater than zero")
+        );
+
+        let invalid_drop = Request::builder()
+            .method(Method::DELETE)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/guarded_view?expected-view-version=0")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(invalid_drop).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(
+            body["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("expected view version must be greater than zero")
+        );
+
+        let load = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/local/namespaces/default/views/guarded_view")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(load).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["view-version"], serde_json::json!(1));
+        assert_eq!(body["schema-version"], serde_json::json!(1));
+
+        let receipts = Request::builder()
+            .method(Method::GET)
+            .uri(
+                "/management/v1/warehouses/local/namespaces/default/views/guarded_view/version-receipts",
+            )
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(receipts).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let receipts = body["receipts"].as_array().unwrap();
+        assert_eq!(receipts.len(), 1);
+        assert_eq!(receipts[0]["operation"], serde_json::json!("upsert"));
+        assert_eq!(receipts[0]["view-version"], serde_json::json!(1));
+    }
+
+    #[tokio::test]
     async fn management_storage_profile_overrides_inferred_credentials_by_prefix() {
         let app = test_app();
         let upsert = Request::builder()

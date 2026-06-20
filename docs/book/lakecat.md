@@ -1250,8 +1250,10 @@ curl -s -X PUT \
 
 If another writer has already advanced the view, LakeCat returns a conflict
 before it replaces the current view or appends a receipt. Omitting the field
-keeps the compatibility behavior: the store assigns the next version. The same
-guard can protect deletion:
+keeps the compatibility behavior: the store assigns the next version. The guard
+must be a positive store-assigned version. `expected-view-version=0` is rejected
+as a bad request before LakeCat changes the active view or appends any
+view-version receipt. The same guard can protect deletion:
 
 ```sh
 curl -s -X DELETE \

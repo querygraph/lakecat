@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added service coverage proving view mutations reject
+  `expected-view-version=0` before changing the active view or appending
+  version receipts.
 - Added route-level `fetchScanTasks` coverage proving malformed active ODRL
   restrictions fail before Sail fetch execution and before scan-task fetch
   replay evidence is emitted.

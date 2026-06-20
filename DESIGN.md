@@ -235,7 +235,9 @@ The current working plan is:
    redacted in replay, represented by provider labels, presence flags, and
    content hashes such as `location-prefix-hash`; validation failures should
    follow the same hash-only rule for storage roots, secret references,
-   public-config keys, and production resolver parse failures.
+   public-config keys, and production resolver parse failures. Guarded view
+   mutations must reject invalid expected-version values before changing active
+   view state or appending view-version receipts.
 6. Keep reproducibility ahead of integration claims. Run local gates before
    commit, keep cloud CI manual/disabled until it is known green, use published
    Grust/TypeSec crates when available, and keep any Sail path/patch bridge
@@ -490,6 +492,8 @@ credential vending remains an audited exception behind TypeSec authorization;
 restricted Sail-planned reads are the safer default. Any configured
 secret-manager or credential issuer backend must return credentials scoped no
 broader than the LakeCat storage profile that selected it.
+View mutation guards must remain positive, store-assigned version checks so
+QueryGraph receipt chains cannot be extended by invalid guarded requests.
 
 ### P6 Reproducibility And V4
 
