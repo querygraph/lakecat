@@ -10966,6 +10966,47 @@ mod tests {
         assert!(message.contains("failed to clean up object"));
     }
 
+    #[test]
+    fn metadata_object_location_must_be_child_of_storage_profile_root() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lakecat-metadata-root-guard-{unique}"));
+        std::fs::create_dir_all(&root).unwrap();
+        let storage_root = url::Url::from_directory_path(&root)
+            .expect("storage root URL")
+            .to_string();
+        let profile = StorageProfile::new(
+            "local-files",
+            WarehouseName::new("local").unwrap(),
+            storage_root.clone(),
+            StorageProvider::File,
+            CredentialIssuanceMode::LocalFileNoSecret,
+            None,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let plan = lakecat_sail::CommitPlan {
+            prepared_by: "test".to_string(),
+            requirements: Vec::new(),
+            updates: Vec::new(),
+            new_metadata_location: Some(storage_root.clone()),
+            new_metadata: serde_json::json!({"format-version": 3}),
+            metadata_write_required: true,
+            metadata_patch: serde_json::json!({}),
+        };
+
+        let err = validate_planned_metadata_location(&plan, None, &profile).unwrap_err();
+
+        let message = err.to_string();
+        assert!(message.contains("metadata-location-hash=sha256:"));
+        assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+        assert!(!message.contains(&storage_root));
+        assert!(!message.contains(root.to_string_lossy().as_ref()));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
     #[tokio::test]
     async fn metadata_cleanup_treats_missing_uncommitted_object_as_clean() {
         let unique = std::time::SystemTime::now()

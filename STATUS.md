@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin metadata root child-object guard`.
+  Metadata-object commit validation now has direct regression coverage proving a
+  planned metadata write cannot target the selected storage profile root itself.
+  The rejection reports only `metadata-location-hash` and
+  `storage-profile-prefix-hash` evidence, preserving the create-only child
+  object invariant without echoing the raw local path or storage root.
+- Local verification for this metadata-root guard slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_object_location_must_be_child_of_storage_profile_root -- --nocapture`;
+  `cargo test -p lakecat-service metadata_cleanup -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Accept JSON-LD ODRL term objects`.
   `lakecat-security` now accepts compact JSON-LD `@id` term objects for
   bounded ODRL constraint `leftOperand` and `operator` values, including

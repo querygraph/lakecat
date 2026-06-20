@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Pinned metadata-object storage-root protection so planned metadata writes must
+  target child objects under the selected storage profile root, returning only
+  metadata-location and storage-profile-prefix hashes when the root itself is
+  submitted.
 - Accepted compact JSON-LD `@id` term objects for bounded ODRL constraint
   `leftOperand` and `operator` values, keeping LakeCat compatible with common
   ODRL encodings without broadening catalog-local policy semantics.

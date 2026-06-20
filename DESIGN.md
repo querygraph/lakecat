@@ -218,7 +218,9 @@ The current working plan is:
    replay, metadata object create-only writes, CAS conflict evidence, orphan
    cleanup, object-store portability, and redacted operator-facing errors.
    Backend object-store error details should be represented by hash evidence,
-   not raw paths, bucket/object names, or configuration text.
+   not raw paths, bucket/object names, or configuration text. Metadata object
+   writes must target child objects under the selected storage profile root, not
+   the root itself.
 4. Keep the graph bounded. LakeCat should emit stable catalog-domain facts for
    Server, Project, Warehouse, Namespace, Table, View, Column, Snapshot, Policy,
    StorageProfile, Principal, ScanPlan, Commit, and lineage runs. Traversal,
@@ -461,8 +463,10 @@ handoff summary.
 Continue hardening REST-visible idempotency, metadata object orphan cleanup, CAS
 conflict receipts, and recovery behavior. Metadata-object writes must be
 create-only child objects under the selected storage profile, never overwrites
-of the current pointer, existing objects, or the storage root itself. Catalog
-state changes should not lose outbox side effects. Pending outbox replay should
+of the current pointer, existing objects, or the storage root itself; rejection
+evidence stays hash-only for both the submitted metadata location and storage
+profile root. Catalog state changes should not lose outbox side effects.
+Pending outbox replay should
 stay deterministic across embedded and Turso stores, ordered by
 `created_at,event_id`, with duplicate-safe delivery accounting. Draining should
 acknowledge delivery only after every projection in the batch succeeds, leaving
