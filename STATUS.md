@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Deterministic outbox replay ordering`.
+  Embedded memory and Turso stores now share the same pending-outbox contract:
+  undelivered events are selected by `created_at,event_id`, and duplicate event
+  IDs in a delivery acknowledgement count at most once. This keeps local tests,
+  replay tooling, and durable Turso-backed deployments aligned on catalog
+  side-effect ordering.
+- Local verification for this outbox replay slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_orders_pending_outbox_events_deterministically -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local turso_store_orders_pending_outbox_events_deterministically -- --nocapture`.
+- Latest completed implementation slice:
   `Bind storage-profile secret-ref hash proof`.
   Storage-profile upsert replay now carries a redacted secret-reference hash
   when `secret-ref-present` is true. Lineage-drain summaries, QGLake replay

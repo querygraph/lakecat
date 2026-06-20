@@ -451,7 +451,9 @@ Continue hardening REST-visible idempotency, metadata object orphan cleanup, CAS
 conflict receipts, and recovery behavior. Metadata-object writes must be
 create-only child objects under the selected storage profile, never overwrites
 of the current pointer, existing objects, or the storage root itself. Catalog
-state changes should not lose outbox side effects.
+state changes should not lose outbox side effects. Pending outbox replay should
+stay deterministic across embedded and Turso stores, ordered by
+`created_at,event_id`, with duplicate-safe delivery accounting.
 
 ### P4 Semantic Catalog Graph
 

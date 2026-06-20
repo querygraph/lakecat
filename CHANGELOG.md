@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Made pending outbox replay deterministic across embedded memory and Turso
+  stores by ordering undelivered events by `created_at,event_id`, and made
+  delivery marking duplicate-safe so repeated event IDs cannot inflate receipt
+  counts.
 - Bound storage-profile secret-reference hashes into lineage-drain and QGLake
   replay proof: storage-profile upsert evidence now carries `secretRefHash`
   when a secret reference is present, and compact handoff verification rejects

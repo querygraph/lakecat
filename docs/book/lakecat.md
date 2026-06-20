@@ -1869,6 +1869,13 @@ If graph or lineage sinks are down, catalog state should not be lost or rolled
 back accidentally. The outbox lets LakeCat retry projection from committed
 state.
 
+Replay order is part of that contract. LakeCat selects undelivered outbox events
+by `created_at,event_id` in both embedded memory tests and the durable Turso
+store, so a QGLake replay does not depend on writer interleaving or database
+row-return quirks. Delivery acknowledgement is duplicate-safe as well: if a
+drainer accidentally reports the same event id twice, LakeCat marks the event
+once and the receipt count remains tied to committed catalog facts.
+
 ### An Agentic QGLake Flow
 
 The agentic path is the reason LakeCat has to be more than a passive catalog.

@@ -1836,27 +1836,32 @@ impl CatalogStore for MemoryCatalogStore {
         limit: usize,
     ) -> LakeCatResult<Vec<OutboxEvent>> {
         let state = self.state.read().await;
-        Ok(state
+        let mut events = state
             .outbox_events
             .iter()
             .filter(|event| event.delivered_at.is_none())
             .filter(|event| sink.is_none_or(|sink| event.sink == sink))
-            .take(limit)
             .cloned()
-            .collect())
+            .collect::<Vec<_>>();
+        events.sort_by(|left, right| {
+            left.created_at
+                .cmp(&right.created_at)
+                .then_with(|| left.event_id.cmp(&right.event_id))
+        });
+        events.truncate(limit);
+        Ok(events)
     }
 
     async fn mark_outbox_delivered(&self, event_ids: &[String]) -> LakeCatResult<usize> {
         if event_ids.is_empty() {
             return Ok(0);
         }
+        let event_ids = event_ids.iter().collect::<BTreeSet<_>>();
         let mut state = self.state.write().await;
         let delivered_at = Utc::now();
         let mut delivered = 0usize;
         for event in &mut state.outbox_events {
-            if event.delivered_at.is_none()
-                && event_ids.iter().any(|event_id| event_id == &event.event_id)
-            {
+            if event.delivered_at.is_none() && event_ids.contains(&event.event_id) {
                 event.delivered_at = Some(delivered_at);
                 delivered += 1;
             }
@@ -2816,6 +2821,59 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_orders_pending_outbox_events_deterministically() {
+        let store = MemoryCatalogStore::new();
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let mut events = Vec::new();
+        for event_type in ["querygraph.bootstrap.b", "querygraph.bootstrap.a"] {
+            let mut event = CatalogAuditEvent::new(
+                event_type,
+                Some(ident.clone()),
+                Principal::anonymous(),
+                serde_json::json!({
+                    "event-type": event_type,
+                    "table": ident.clone(),
+                    "sequence": event_type,
+                }),
+            )
+            .unwrap();
+            event.created_at = "2026-01-01T00:00:00Z".parse().unwrap();
+            let audit_event_id = audit_event_id(&event).unwrap();
+            let outbox_payload = audit_outbox_payload(&audit_event_id, &event);
+            let outbox_event = outbox_event_from_payload(&outbox_payload, event.created_at)
+                .expect("test event should produce an outbox event");
+            events.push((outbox_event.event_id, event));
+        }
+        events.sort_by(|left, right| right.0.cmp(&left.0));
+        for (_, event) in events {
+            store.record_audit_event(event).await.unwrap();
+        }
+
+        let pending = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        let event_ids = pending
+            .iter()
+            .map(|event| event.event_id.clone())
+            .collect::<Vec<_>>();
+        let mut sorted_event_ids = event_ids.clone();
+        sorted_event_ids.sort();
+        assert_eq!(event_ids, sorted_event_ids);
+        assert_eq!(
+            store
+                .mark_outbox_delivered(&[event_ids[0].clone(), event_ids[0].clone()])
+                .await
+                .unwrap(),
+            1
+        );
+    }
+
+    #[tokio::test]
     async fn memory_store_commit_records_table_commit_outbox_event() {
         let store = MemoryCatalogStore::new();
         let warehouse = WarehouseName::new("local").unwrap();
@@ -2929,7 +2987,7 @@ mod memory_tests {
 
 #[cfg(feature = "turso-local")]
 pub mod turso_store {
-    use std::sync::Arc;
+    use std::{collections::BTreeSet, sync::Arc};
 
     use async_trait::async_trait;
     use chrono::Utc;
@@ -4268,6 +4326,7 @@ pub mod turso_store {
             if event_ids.is_empty() {
                 return Ok(0);
             }
+            let event_ids = event_ids.iter().collect::<BTreeSet<_>>();
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
             let delivered_at = Utc::now().to_rfc3339();
@@ -5283,6 +5342,60 @@ pub mod turso_store {
                     .is_empty()
             );
             assert_eq!(store.mark_outbox_delivered(&event_ids).await.unwrap(), 0);
+        }
+
+        #[tokio::test]
+        async fn turso_store_orders_pending_outbox_events_deterministically() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let mut events = Vec::new();
+            for event_type in ["querygraph.bootstrap.b", "querygraph.bootstrap.a"] {
+                let mut event = CatalogAuditEvent::new(
+                    event_type,
+                    Some(ident.clone()),
+                    Principal::anonymous(),
+                    serde_json::json!({
+                        "event-type": event_type,
+                        "table": ident.clone(),
+                        "sequence": event_type,
+                    }),
+                )
+                .unwrap();
+                event.created_at = "2026-01-01T00:00:00Z".parse().unwrap();
+                let audit_event_id = crate::audit_event_id(&event).unwrap();
+                let outbox_payload = crate::audit_outbox_payload(&audit_event_id, &event);
+                let outbox_event =
+                    crate::outbox_event_from_payload(&outbox_payload, event.created_at)
+                        .expect("test event should produce an outbox event");
+                events.push((outbox_event.event_id, event));
+            }
+            events.sort_by(|left, right| right.0.cmp(&left.0));
+            for (_, event) in events {
+                store.record_audit_event(event).await.unwrap();
+            }
+
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            let event_ids = pending
+                .iter()
+                .map(|event| event.event_id.clone())
+                .collect::<Vec<_>>();
+            let mut sorted_event_ids = event_ids.clone();
+            sorted_event_ids.sort();
+            assert_eq!(event_ids, sorted_event_ids);
+            assert_eq!(
+                store
+                    .mark_outbox_delivered(&[event_ids[0].clone(), event_ids[0].clone()])
+                    .await
+                    .unwrap(),
+                1
+            );
         }
 
         #[tokio::test]
