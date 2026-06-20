@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required QGLake handoff artifact manifest hashes, service-log hashes, and
+  optional self-verifier output hashes to contain full `sha256:`-prefixed
+  64-hex digests before file content comparison, rejecting short placeholder
+  artifact integrity anchors.
 - Required compact QGLake storage-profile and credential-vending
   `secretRefHash` evidence to contain full `sha256:`-prefixed 64-hex digests
   when a secret reference is present, rejecting short placeholder credential

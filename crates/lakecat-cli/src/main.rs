@@ -555,10 +555,10 @@ fn verify_qglake_handoff_verify_output_artifact(
     }
     let Some(expected_sha256) = expected_sha256
         .as_str()
-        .filter(|value| is_sha256_hash(value))
+        .filter(|value| is_full_sha256_hash(value))
     else {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "handoff summary artifacts.lakecatHandoffVerifyOutputHash must be null or a sha256 hash"
+            "handoff summary artifacts.lakecatHandoffVerifyOutputHash must be null or a full SHA-256 hash"
                 .to_string(),
         ));
     };
@@ -861,7 +861,7 @@ fn verify_qglake_handoff_service_log(
 ) -> lakecat_core::LakeCatResult<PathBuf> {
     let service_log = required_resolved_artifact_path(artifacts, "serviceLog", base_dir)?;
     let expected_sha256 =
-        require_hash_str(artifacts, "serviceLogHash", "handoff summary artifacts")?;
+        require_full_hash_str(artifacts, "serviceLogHash", "handoff summary artifacts")?;
     let bytes = fs::read(&service_log).map_err(|err| {
         lakecat_core::LakeCatError::InvalidArgument(format!(
             "failed to read handoff artifact serviceLog at {}: {err}",
@@ -922,7 +922,7 @@ fn verify_qglake_handoff_artifact_file(
     base_dir: &Path,
 ) -> lakecat_core::LakeCatResult<Value> {
     let artifact = required_object(artifacts, field, "handoff summary artifacts")?;
-    let expected_sha256 = require_hash_str(artifact, "sha256", field)?;
+    let expected_sha256 = require_full_hash_str(artifact, "sha256", field)?;
     let resolved_path = required_resolved_artifact_path(artifact, "path", base_dir)?;
     let bytes = fs::read(&resolved_path).map_err(|err| {
         lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -11274,6 +11274,35 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_artifact_verifier_rejects_short_artifact_hashes() {
+        let temp = qglake_temp_dir("handoff-artifacts-short-hash");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        summary["artifacts"]["bundle"]["sha256"] = json!("sha256:bundle");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject short artifact hashes");
+
+        assert!(err.to_string().contains("bundle"));
+        assert!(err.to_string().contains("sha256"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_short_service_log_hash() {
+        let temp = qglake_temp_dir("handoff-artifacts-short-service-log-hash");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        summary["artifacts"]["serviceLogHash"] = json!("sha256:service-log");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject short service-log hashes");
+
+        assert!(err.to_string().contains("serviceLogHash"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_accepts_handoff_verify_output_hash() {
         let temp = qglake_temp_dir("handoff-artifacts-self-verify-ok");
         let summary_path = temp.join("handoff-summary.json");
@@ -11292,6 +11321,22 @@ mod tests {
             verification["pathAliases"]["lakecatHandoffVerifyOutputHash"],
             summary["artifacts"]["lakecatHandoffVerifyOutputHash"]
         );
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_short_handoff_verify_output_hash() {
+        let temp = qglake_temp_dir("handoff-artifacts-short-self-verify-hash");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] =
+            json!("sha256:handoff-verify-output");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject short handoff verifier hashes");
+
+        assert!(err.to_string().contains("lakecatHandoffVerifyOutputHash"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]

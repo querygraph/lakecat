@@ -6,6 +6,23 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full handoff artifact hashes`.
+  QGLake handoff artifact verification now rejects bundle, lineage-drain,
+  QueryGraph import-plan, captured-output, service-log, and optional
+  self-verifier output hash declarations unless each present artifact integrity
+  anchor is a full `sha256:`-prefixed 64-hex digest before file content
+  comparison.
+- Local verification for this handoff artifact hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_short_artifact_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_short_service_log_hash -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_short_handoff_verify_output_hash -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require full compact secret-ref hashes`.
   Compact QGLake handoff verification now rejects storage-profile upsert and
   credential-vending `secretRefHash` proof anchors unless every present hash is

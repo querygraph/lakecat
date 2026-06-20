@@ -2084,7 +2084,10 @@ proof objects for request identity, QueryGraph bootstrap, governed scan,
 pointer history, view receipt chains, storage-profile upsert, and credential
 vending. It also recomputes the raw file hashes for the bundle, lineage-drain
 response, and QueryGraph import plan named in the summary, rejecting stale or
-tampered artifact files before automation consumes them. It parses the saved
+tampered artifact files before automation consumes them. Those declared
+artifact hashes must be full `sha256:`-prefixed 64-hex digests, so a handoff
+cannot present readable placeholder hashes as structurally valid integrity
+anchors before the byte comparison runs. It parses the saved
 bootstrap bundle and reruns the tenant graph and semantic hash verifier. It
 also parses the saved QueryGraph import plan and requires its embedded
 verification, table/view stable ids, semantic hashes, standards, and graph
@@ -2118,11 +2121,12 @@ captured LakeCat replay and QueryGraph verify/import output hashes, so terminal
 captures cannot drift from the compact summary. It compares the legacy string
 path aliases for the LakeCat replay, QueryGraph verify, and QueryGraph import
 captures with the hashed `capturedOutputs` paths they duplicate. It also hashes
-the service log through `serviceLogHash`, so archived operational logs cannot
-drift behind a stable path. The final local summary also binds the first
-LakeCat handoff-verifier capture with `lakecatHandoffVerifyOutputHash`. Because
-that output can only exist after a successful verifier run, the harness performs
-a second sidecar self-check: first it writes
+the service log through a full-digest `serviceLogHash`, so archived operational
+logs cannot drift behind a stable path or a short placeholder hash. The final
+local summary also binds the first LakeCat handoff-verifier capture with a
+full-digest `lakecatHandoffVerifyOutputHash`. Because that output can only
+exist after a successful verifier run, the harness performs a second sidecar
+self-check: first it writes
 `target/qglake-handoff/lakecat-handoff-verify.json`, then it records the file's
 hash in the summary, then it verifies the summary again without overwriting the
 declared artifact. The verifier checks that saved JSON is a
