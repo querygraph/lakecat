@@ -111,6 +111,20 @@ Current archive inventory:
 | `docs/completed/OPUS2.md` | Historical second review after the durable catalog spine landed. |
 | `docs/completed/OPUS2-DESIGN.md` | Historical restriction-first working plan and priority reset. |
 
+### Final OPUS Archive Reconciliation
+
+The OPUS corpus is no longer a parallel design system. Every durable OPUS
+finding, review verdict, architectural rule, and working-plan priority has been
+merged into this file or routed to the canonical document map above. The
+archived files under `docs/completed/` may be opened for provenance, but active
+work must proceed from `DESIGN.md`, `ARCHITECTURE.md`, `GOAL.md`, `STATUS.md`,
+`AGENTS.md`, `CHANGELOG.md`, the book, and the live code.
+
+Do not create `OPUS3.md`, revive root-level OPUS notes, or append new working
+plans to archived OPUS files. A future review should update the canonical
+document that owns the decision and can add a small completed-review artifact
+only after the durable guidance has already landed in the active docs.
+
 ### Consolidated Source Ledger
 
 The durable OPUS sections have been absorbed into the active docs as follows.

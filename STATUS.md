@@ -5,6 +5,20 @@ Updated: 2026-06-20
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Finalize OPUS archive consolidation`.
+  `DESIGN.md` now explicitly records that the OPUS corpus is no longer a
+  parallel design system, and `docs/completed/README.md` keeps the archived
+  OPUS files provenance-only with future review guidance routed back through
+  canonical docs first.
+- Local verification for this OPUS archive consolidation slice is
+  documentation-only:
+  `git ls-files 'OPUS*.md'` returned no active root OPUS files;
+  `git ls-files 'docs/completed/OPUS*.md'` returned exactly the four archived
+  OPUS files;
+  `rg --files -g 'OPUS*.md' -g '!docs/completed/**'` returned no active OPUS
+  files;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Reject malformed core QueryGraph hashes`.
   Compact QGLake handoff verification now requires SHA-256-shaped bundle,

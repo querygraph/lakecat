@@ -7,6 +7,11 @@ here for audit and provenance only; do not use them as live instructions unless
 you first reconcile the relevant point back into the root design, status, goal,
 architecture, or agent guidance documents.
 
+Final archive reconciliation was recorded on 2026-06-20. The OPUS corpus is
+fully superseded by the active document set, and this directory should not grow
+new OPUS-numbered plans. Future review artifacts belong here only after their
+durable guidance has already been merged into the canonical docs.
+
 Consolidation was audited on 2026-06-19 and re-audited on 2026-06-20. The
 durable OPUS findings, design decisions, and working-plan entries are
 represented in `../../DESIGN.md`, especially its consolidation note, source

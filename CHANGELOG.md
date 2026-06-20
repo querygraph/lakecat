@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Recorded the final OPUS archive reconciliation in `DESIGN.md` and
+  `docs/completed/README.md`, making the root design the sole active synthesis
+  and keeping `docs/completed/OPUS*.md` as provenance-only artifacts.
 - Required compact QGLake handoff summaries to carry SHA-256-shaped core
   QueryGraph bundle, graph, OpenLineage, and import proof anchors before
   accepting matching verify/import/bootstrap sections.
