@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact unsupported credential provider schemes`.
+  TypeSec credential resolver provider detection now rejects unsupported
+  secret-reference schemes with only `secret-ref-hash` evidence, keeping both
+  the raw secret ref and scheme/path fragments out of operator-facing errors.
+- Local verification for this credential provider redaction slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features typesec-local environment_secret_resolver_parses_supported_secret_shapes -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact credential resolver failure details`.
   Configured TypeSec environment and Vault credential resolvers now report
   lookup and secret payload parse failures with `secret-ref-hash` plus

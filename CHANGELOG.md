@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Redacted unsupported TypeSec credential resolver provider-scheme
+  diagnostics so provider detection returns only `secret-ref-hash` evidence.
 - Redacted configured TypeSec environment and Vault credential resolver
   failures so backend lookup and secret payload parse errors expose only
   `secret-ref-hash` and `error-detail-hash` evidence.

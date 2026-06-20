@@ -607,8 +607,9 @@ pub mod typesec_credential_issuer {
             "aws-sm" => Ok(SecretRefProvider::AwsSecretsManager),
             "gcp-sm" => Ok(SecretRefProvider::GcpSecretManager),
             "azure-kv" => Ok(SecretRefProvider::AzureKeyVault),
-            scheme => Err(LakeCatError::InvalidArgument(format!(
-                "unsupported credential secret-ref scheme for TypeSec-gated issuance: {scheme}"
+            _scheme => Err(LakeCatError::InvalidArgument(format!(
+                "unsupported credential secret-ref scheme for TypeSec-gated issuance; {}",
+                secret_ref_hash_context(secret_ref)
             ))),
         }
     }
@@ -14469,7 +14470,16 @@ mod tests {
             secret_ref_provider("azure-kv://lakecat/s3-events").unwrap(),
             SecretRefProvider::AzureKeyVault
         );
-        assert!(secret_ref_provider("file:///tmp/raw-secret").is_err());
+        let unsupported_provider_ref = "file:///tmp/raw-secret";
+        let err = secret_ref_provider(unsupported_provider_ref).unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("secret-ref-hash=sha256:"));
+        for forbidden in [unsupported_provider_ref, "file", "raw-secret"] {
+            assert!(
+                !message.contains(forbidden),
+                "unsupported provider errors must not expose {forbidden}"
+            );
+        }
 
         let object_entries = config_entries_from_secret_json(
             r#"{"aws.session-token":"temporary-token","aws.region":"us-west-2"}"#,
