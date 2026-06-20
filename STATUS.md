@@ -6,6 +6,23 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify saved handoff replay sections`.
+  Saved `lakecat-handoff-verify.json` artifacts now have to preserve every
+  compact `capturedOutputSemantics.lakecatReplay` proof section, including
+  request identity, QueryGraph bootstrap, governed scans, table commit history,
+  view receipt chains, management ID arrays, storage-profile upsert evidence,
+  and credential-vending proof. The verifier normalizes management proof
+  semantics to the declared QGLake proof fields while checking storage-profile
+  upsert evidence as its own section, so raw replay duplication cannot create a
+  false mismatch and real proof drift is still rejected.
+- Local verification for this saved handoff replay sections slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import,
+  re-verified the handoff summary with the saved verifier-output artifact hash
+  and replay proof sections, and ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Reject captured management ID drift`.
   Captured LakeCat replay output must now match compact QGLake
   `managementProof` ID arrays for servers, projects, warehouses, policies, and

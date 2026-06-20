@@ -654,7 +654,16 @@ fn require_qglake_handoff_verify_output_semantic_sections_match_summary(
         "lakecatReplay",
         "lakecatHandoffVerifyOutput.capturedOutputSemantics",
     )?;
-    for field in ["requestIdentityProof", "queryGraphBootstrapProof"] {
+    for field in [
+        "requestIdentityProof",
+        "queryGraphBootstrapProof",
+        "governedScanProof",
+        "tableCommitHistoryProof",
+        "viewReceiptChainProof",
+        "managementProof",
+        "storageProfileUpsertProof",
+        "credentialVendingProof",
+    ] {
         require_value_match(
             captured_lakecat,
             field,
@@ -1007,7 +1016,7 @@ fn verify_qglake_handoff_captured_output_semantics(
     let table_commit_history =
         Value::Object(lakecat_replay_table_commit_history(lakecat_replay)?.clone());
     let view_receipt_chain = Value::Object(lakecat_replay_views(lakecat_replay)?.clone());
-    let management = Value::Object(lakecat_replay_management(lakecat_replay)?.clone());
+    let management = lakecat_replay_management_proof_value(lakecat_replay)?;
     let storage_profile_upsert =
         Value::Object(lakecat_replay_storage_profile_upsert(lakecat_replay)?.clone());
     let credential_vending = Value::Object(lakecat_replay_credentials(lakecat_replay)?.clone());
@@ -2017,6 +2026,51 @@ fn verify_lakecat_replay_management_matches_summary(
     }
 
     Ok(())
+}
+
+fn lakecat_replay_management_proof_value(
+    capture: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<Value> {
+    let management = lakecat_replay_management(capture)?;
+    let mut proof = serde_json::Map::new();
+    for field in [
+        "serverCount",
+        "serverIds",
+        "serverGraphEvents",
+        "projectCount",
+        "projectIds",
+        "projectGraphEvents",
+        "warehouseCount",
+        "warehouseNames",
+        "warehouseGraphEvents",
+        "policyBindingCount",
+        "policyIds",
+        "policyGraphEvents",
+        "storageProfileCount",
+        "storageProfileIds",
+        "storageProfileGraphEvents",
+        "serverReplayEventHashes",
+        "serverOpenLineageHashes",
+        "projectReplayEventHashes",
+        "projectOpenLineageHashes",
+        "warehouseReplayEventHashes",
+        "warehouseOpenLineageHashes",
+        "policyReplayEventHashes",
+        "policyOpenLineageHashes",
+        "storageProfileReplayEventHashes",
+        "storageProfileOpenLineageHashes",
+    ] {
+        proof.insert(
+            field.to_string(),
+            required_value(
+                management,
+                field,
+                "captured LakeCat replay output.replay-evidence.management",
+            )?
+            .clone(),
+        );
+    }
+    Ok(Value::Object(proof))
 }
 
 fn lakecat_replay_management(
@@ -9274,7 +9328,13 @@ mod tests {
             "capturedOutputSemantics": {
                 "lakecatReplay": {
                     "requestIdentityProof": summary["lakecatReplayVerification"]["requestIdentityProof"].clone(),
-                    "queryGraphBootstrapProof": summary["lakecatReplayVerification"]["queryGraphBootstrapProof"].clone()
+                    "queryGraphBootstrapProof": summary["lakecatReplayVerification"]["queryGraphBootstrapProof"].clone(),
+                    "governedScanProof": summary["lakecatReplayVerification"]["governedScanProof"].clone(),
+                    "tableCommitHistoryProof": summary["lakecatReplayVerification"]["tableCommitHistoryProof"].clone(),
+                    "viewReceiptChainProof": summary["lakecatReplayVerification"]["viewReceiptChainProof"].clone(),
+                    "managementProof": summary["lakecatReplayVerification"]["managementProof"].clone(),
+                    "storageProfileUpsertProof": summary["lakecatReplayVerification"]["storageProfileUpsertProof"].clone(),
+                    "credentialVendingProof": summary["lakecatReplayVerification"]["credentialVendingProof"].clone()
                 },
                 "querygraphVerify": {
                     "tableCount": summary["querygraphVerification"]["tableCount"].clone(),
@@ -11689,6 +11749,32 @@ mod tests {
         assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
         assert!(err.to_string().contains("capturedOutputSemantics"));
         assert!(err.to_string().contains("graphHash mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_management_id_drift() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-management-id-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["capturedOutputSemantics"]["lakecatReplay"]["managementProof"]["serverIds"] =
+            json!(["other-server"]);
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject handoff verifier management ID drift");
+
+        assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
+        assert!(err.to_string().contains("capturedOutputSemantics"));
+        assert!(err.to_string().contains("managementProof mismatch"));
     }
 
     #[test]

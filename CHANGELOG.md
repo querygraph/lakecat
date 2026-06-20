@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required saved `lakecat-handoff-verify.json` artifacts to preserve every
+  captured LakeCat replay proof section, including management ID arrays,
+  governed scan proof, table commit history, view receipt chains, storage
+  profile evidence, and credential-vending proof.
 - Required captured LakeCat replay output to match compact QGLake
   `managementProof` ID arrays for servers, projects, warehouses, policies, and
   storage profiles, so saved handoff summaries cannot drift from the captured
