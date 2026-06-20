@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refreshed the live QGLake handoff verification after tombstone receipt-chain
+  binding, proving the local harness still verifies 1 table, 1 view, 26 drained
+  replay events, QueryGraph verify/import, and compact handoff self-checks.
 - Bound QGLake dropped-view tombstone receipts to namespace receipt-chain
   evidence in both live lineage-drain replay and compact handoff verification,
   rejecting handoffs whose tombstone hashes are not covered by the chain read.

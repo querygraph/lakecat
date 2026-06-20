@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Refresh live QGLake handoff verification`.
+  The local QGLake handoff harness is green after the tombstone receipt-chain
+  binding change: it generated one table and one view, drained 26 replay events,
+  verified saved LakeCat replay, ran QueryGraph verify/import, and self-verified
+  the compact handoff summary with tombstone receipt hashes covered by namespace
+  receipt-chain evidence.
+- Local verification for this live handoff refresh is green:
+  `scripts/qglake-handoff-local.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind QGLake tombstones to receipt chains`.
   QGLake live replay and compact handoff verification now reject dropped-view
   proofs unless the tombstone receipt hashes are covered by the namespace
