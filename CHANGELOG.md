@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned service outbox-drain coverage for `table.scan-tasks-fetched`
+  summaries so fetched `effective-projection` survives before QGLake replay and
+  handoff verification consume it.
 - Made `scripts/qglake-handoff-local.sh` require and embed governed-scan
   planned/fetched projection evidence, including fetched `effectiveProjection`,
   before writing the compact QGLake handoff summary.

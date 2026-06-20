@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin fetch projection drain summary`.
+  Service outbox-drain coverage now asserts `table.scan-tasks-fetched` replay
+  summaries preserve fetched `effective_projection`, keeping the source
+  lineage summary aligned with the stricter QGLake replay and handoff checks.
+- Local verification for this fetched projection drain-summary slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require live handoff projection proof`.
   The local QGLake handoff harness now requires the same governed-scan
   planned/fetched projection evidence as the CLI verifier before it writes the

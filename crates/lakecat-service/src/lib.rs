@@ -7583,6 +7583,7 @@ mod tests {
                                 "policy-hashes": ["sha256:policy"]
                             },
                             "required-projection": ["event_id"],
+                            "effective-projection": ["event_id"],
                             "required-filters": [{
                                 "type": "not-eq",
                                 "term": "severity",
@@ -7858,6 +7859,10 @@ mod tests {
         );
         assert_eq!(
             scan_fetch_summary.required_projection,
+            vec!["event_id".to_string()]
+        );
+        assert_eq!(
+            scan_fetch_summary.effective_projection,
             vec!["event_id".to_string()]
         );
         assert_eq!(
