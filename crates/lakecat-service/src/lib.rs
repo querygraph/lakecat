@@ -1127,6 +1127,12 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     if event.event_type == "warehouse.upserted" {
         validate_warehouse_upsert_event_evidence(event, payload)?;
     }
+    if event.event_type == "catalog.config-read" {
+        validate_catalog_config_read_event_evidence(event, payload)?;
+    }
+    if event.event_type == "namespace.listed" {
+        validate_namespace_list_event_evidence(event, payload)?;
+    }
     if matches!(
         event.event_type.as_str(),
         "namespace.created" | "namespace.dropped" | "namespace.loaded"
@@ -1551,19 +1557,7 @@ fn validate_namespace_lifecycle_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
-    let Some(warehouse_name) = payload
-        .get("warehouse")
-        .and_then(Value::as_str)
-        .filter(|warehouse| !warehouse.is_empty())
-    else {
-        return Err(outbox_evidence_error(
-            event,
-            "namespace lifecycle evidence must contain warehouse",
-        ));
-    };
-    WarehouseName::new(warehouse_name).map_err(|_| {
-        outbox_evidence_error(event, "namespace lifecycle evidence has invalid warehouse")
-    })?;
+    validate_required_warehouse_field(event, payload, "namespace lifecycle")?;
     let Some(namespace) = payload.get("namespace") else {
         return Err(outbox_evidence_error(
             event,
@@ -1572,6 +1566,52 @@ fn validate_namespace_lifecycle_event_evidence(
     };
     validate_namespace_lifecycle_value(event, namespace)?;
     Ok(())
+}
+
+fn validate_catalog_config_read_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    validate_required_warehouse_field(event, payload, "catalog config-read")?;
+    Ok(())
+}
+
+fn validate_namespace_list_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    validate_required_warehouse_field(event, payload, "namespace list")?;
+    if payload
+        .get("namespace-count")
+        .and_then(Value::as_u64)
+        .is_none()
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "namespace list evidence must contain unsigned namespace-count",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_required_warehouse_field(
+    event: &OutboxEvent,
+    payload: &Value,
+    label: &str,
+) -> Result<WarehouseName, LakeCatError> {
+    let Some(warehouse_name) = payload
+        .get("warehouse")
+        .and_then(Value::as_str)
+        .filter(|warehouse| !warehouse.is_empty())
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} evidence must contain warehouse"),
+        ));
+    };
+    WarehouseName::new(warehouse_name).map_err(|_| {
+        outbox_evidence_error(event, &format!("{label} evidence has invalid warehouse"))
+    })
 }
 
 fn validate_namespace_lifecycle_value(
@@ -10148,6 +10188,118 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "corrupt pending event must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_catalog_read_evidence() {
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-secret-config-token".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-corrupt-config",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "warehouse": "",
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("malformed catalog read evidence should fail");
+
+        let message = err.to_string();
+        assert!(
+            message.contains(
+                "outbox event catalog.config-read (lakecat.lineage-and-graph) has invalid"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("catalog config-read evidence must contain warehouse"));
+        assert!(!message.contains("evt-secret-config-token"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "malformed catalog read evidence must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "malformed catalog read evidence must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "malformed catalog read evidence must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_namespace_list_evidence() {
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-secret-namespace-list-token".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "namespace.listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-corrupt-namespace-list",
+                    "event-type": "namespace.listed",
+                    "payload": {
+                        "warehouse": "local",
+                        "namespace-count": "two",
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("malformed namespace-list evidence should fail");
+
+        let message = err.to_string();
+        assert!(
+            message
+                .contains("outbox event namespace.listed (lakecat.lineage-and-graph) has invalid")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("namespace list evidence must contain unsigned namespace-count"));
+        assert!(!message.contains("evt-secret-namespace-list-token"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "malformed namespace-list evidence must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "malformed namespace-list evidence must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "malformed namespace-list evidence must fail before lineage projection"
         );
     }
 

@@ -960,6 +960,10 @@ Namespace lifecycle replay is checked before projection as well: create, load,
 and drop events must carry a valid warehouse and either a valid namespace path
 or non-empty namespace component array. A malformed namespace lifecycle event
 stays pending and reaches neither the Grust-facing graph sink nor OpenLineage.
+Catalog read replay has the same fail-closed shape: `catalog.config-read`
+events must carry a valid warehouse, and `namespace.listed` events must carry
+both a valid warehouse and an unsigned namespace count before the read evidence
+can be projected.
 Server endpoint URLs are operator-visible management metadata, so LakeCat keeps
 them deliberately plain: they must be absolute `http` or `https` URLs, and they
 cannot include query strings, fragments, or URI userinfo. Rejected submissions
@@ -2052,6 +2056,10 @@ must carry valid catalog scope evidence before delivery, including policy id,
 warehouse, optional namespace/table scope, enforcement state, and captured ODRL
 material. Namespace lifecycle replay must carry a valid warehouse and namespace
 path or component array before create/load/drop events can be delivered.
+Catalog config and namespace-list read replay must likewise carry a valid
+warehouse, and namespace listing must preserve an unsigned namespace count,
+before those standard catalog reads become delivered graph/OpenLineage
+evidence.
 Project, server, and warehouse upsert replay must carry valid
 tenant-root evidence too: project ids, server scopes, endpoint URLs, storage
 roots, identifiers, properties, and pre-redacted hash anchors are checked

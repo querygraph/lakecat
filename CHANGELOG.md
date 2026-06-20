@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for catalog read events whose warehouse or namespace
+  list-count evidence is malformed, so invalid config-read and namespace-list
+  replay fails before graph/lineage projection acknowledgement.
 - Rejected outbox delivery for namespace lifecycle events whose warehouse or
   namespace evidence is malformed, so invalid namespace create/load/drop replay
   fails before graph/lineage projection acknowledgement.
