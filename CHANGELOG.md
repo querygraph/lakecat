@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned service replay-summary coverage for `table.scan-planned` so requested
+  and effective projection/statistics evidence survives outbox drain before
+  QGLake handoff verification consumes it.
 - Pinned service outbox-drain coverage for `table.scan-tasks-fetched`
   summaries so fetched `effective-projection` survives before QGLake replay and
   handoff verification consume it.

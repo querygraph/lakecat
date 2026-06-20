@@ -15889,6 +15889,78 @@ mod tests {
     }
 
     #[test]
+    fn scan_planned_drain_summary_preserves_projection_evidence() {
+        let principal = Principal::new("did:example:agent", PrincipalKind::Agent).unwrap();
+        let event = OutboxEvent {
+            event_id: "evt-plan".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-planned".to_string(),
+            payload: json!({
+                "audit-event-id": "audit-plan",
+                "event-type": "table.scan-planned",
+                "payload": {
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": "sha256:policy",
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "read-restriction": {
+                        "allowed-columns": ["event_id"],
+                        "row-predicate": {
+                            "type": "eq",
+                            "term": "event_id",
+                            "value": "evt-1"
+                        },
+                        "policy-hashes": ["sha256:policy"]
+                    },
+                    "requested-projection": ["event_id", "payload"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id", "payload"],
+                    "effective-stats-fields": ["event_id"],
+                    "scan-task-count": 1
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let receipt = OutboxProjectionReceipt {
+            graph_events: 3,
+            lineage_events: 1,
+            lineage_event_hashes: vec!["recorded".to_string()],
+            open_lineage_hashes: vec!["recorded-openlineage".to_string()],
+        };
+
+        let summary = lineage_drain_event_summary(&event, &receipt);
+
+        assert_eq!(summary.event_type, "table.scan-planned");
+        assert_eq!(summary.scan_task_count, Some(1));
+        assert_eq!(summary.graph_events, 3);
+        assert_eq!(summary.lineage_events, 1);
+        assert_eq!(
+            summary.read_restriction.as_ref().unwrap()["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            summary.requested_projection,
+            vec!["event_id".to_string(), "payload".to_string()]
+        );
+        assert_eq!(summary.effective_projection, vec!["event_id".to_string()]);
+        assert_eq!(
+            summary.requested_stats_fields,
+            vec!["event_id".to_string(), "payload".to_string()]
+        );
+        assert_eq!(summary.effective_stats_fields, vec!["event_id".to_string()]);
+        assert_eq!(summary.replay_event_hashes, vec!["recorded".to_string()]);
+        assert_eq!(
+            summary.replay_open_lineage_hashes,
+            vec!["recorded-openlineage".to_string()]
+        );
+    }
+
+    #[test]
     fn scan_tasks_fetched_audit_payload_surfaces_policy_context() {
         let ident = TableIdent::new(
             WarehouseName::new("local").unwrap(),

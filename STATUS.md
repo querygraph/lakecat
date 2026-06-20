@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin planned projection drain summary`.
+  Service replay-summary coverage now asserts `table.scan-planned` outbox drain
+  summaries preserve requested/effective projection and statistics-field
+  evidence, keeping planned scan replay aligned with the QGLake handoff proof
+  contract.
+- Local verification for this planned projection drain-summary slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service scan_planned_drain_summary_preserves_projection_evidence -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin fetch projection drain summary`.
   Service outbox-drain coverage now asserts `table.scan-tasks-fetched` replay
   summaries preserve fetched `effective_projection`, keeping the source
