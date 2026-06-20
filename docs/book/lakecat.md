@@ -364,7 +364,10 @@ also stays redacted: it does not echo the raw key or the mismatched metadata
 object location.
 The service regression for this path proves the replay happens before
 metadata-object writes: an exact retry returns the stored response without
-touching the already committed metadata object.
+touching the already committed metadata object. The same regression pins the
+outbox side effect: exact replay and mismatched reused-key conflicts leave only
+the original `table.commit` outbox event, so QueryGraph and OpenLineage replay
+do not see duplicate commit work from retry traffic.
 Another regression sends a commit whose requested metadata location is the
 table's current pointer and verifies that LakeCat returns a bad request without
 touching the existing metadata file.

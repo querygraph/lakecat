@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin REST idempotency outbox singularity`.
+  REST commit idempotency coverage now proves exact replay and reused-key
+  mismatch conflicts leave only the original `table.commit` outbox event,
+  preventing retry paths from creating duplicate graph/lineage work.
+- Local verification for this idempotency side-effect slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service commit_replays_rest_idempotency_key -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact REST idempotency mismatch conflicts`.
   REST commit idempotency coverage now proves a reused-key mismatch returns a
   conflict without echoing the raw `x-lakecat-idempotency-key` value or the

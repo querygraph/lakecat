@@ -9753,6 +9753,18 @@ mod tests {
             records[0].idempotency_key_sha256.as_deref(),
             Some(content_hash_bytes("commit:events:0001".as_bytes()).as_str())
         );
+        let pending = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        let commit_outbox_count = pending
+            .iter()
+            .filter(|event| event.event_type == "table.commit")
+            .count();
+        assert_eq!(
+            commit_outbox_count, 1,
+            "idempotent replay and mismatch conflicts must not enqueue extra commit outbox events"
+        );
         assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
     }
 

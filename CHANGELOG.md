@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pinned REST idempotency side-effect behavior so exact replay and mismatched
+  reused-key conflicts do not enqueue extra table-commit outbox events.
 - Pinned REST idempotency mismatch redaction so reused-key conflicts do not
   echo the raw idempotency key or mismatched metadata object location.
 - Pinned outbox drain retryability for graph projection failures: a failing
