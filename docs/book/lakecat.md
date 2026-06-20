@@ -940,6 +940,10 @@ Storage profiles bind a warehouse to physical storage roots and credential
 issuance policy. A local profile can return scoped local file configuration. A
 remote profile should usually reference a secret store and require TypeSec to
 authorize issuance before any resolver sees the secret reference.
+Warehouse storage roots are validated before memory or Turso persistence:
+query strings, fragments, URI userinfo, and literal or percent-encoded dot path
+segments fail with `warehouse-storage-root-hash=sha256:...` evidence rather
+than echoing the submitted root.
 LakeCat rejects profiles whose declared provider conflicts with the URI scheme
 of the location prefix, so a credential root cannot claim to be local while
 pointing at an S3 prefix. Those provider/location mismatch errors follow the
@@ -954,7 +958,7 @@ raw storage root.
 The location prefix itself must be plainly addressed: LakeCat rejects literal
 and percent-encoded dot path segments, query strings, fragments, and URI
 userinfo before the profile can reach memory or Turso persistence.
-Traversal-shaped or decorated storage roots fail with
+Traversal-shaped or decorated storage-profile prefixes fail with
 `storage-profile-prefix-hash=sha256:...` evidence rather than echoing the raw
 prefix, token-like query value, or embedded userinfo. The management route pins
 the same operator-facing behavior, so a rejected storage-profile upsert does

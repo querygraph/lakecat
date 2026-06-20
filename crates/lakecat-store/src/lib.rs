@@ -514,6 +514,9 @@ impl WarehouseRecord {
                 "warehouse storage root must not be empty".to_string(),
             ));
         }
+        if let Some(storage_root) = self.storage_root.as_deref() {
+            validate_warehouse_storage_root_path(storage_root)?;
+        }
         validate_public_config(&self.properties)?;
         Ok(())
     }
@@ -2087,19 +2090,43 @@ fn validate_location_prefix_path(location_prefix: &str) -> LakeCatResult<()> {
     Ok(())
 }
 
+fn validate_warehouse_storage_root_path(storage_root: &str) -> LakeCatResult<()> {
+    if location_has_query_fragment_or_userinfo(storage_root) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "warehouse storage root must not include query strings, fragments, or userinfo; {}",
+            warehouse_storage_root_hash_context(storage_root)
+        )));
+    }
+    if location_has_dot_path_segment(storage_root) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "warehouse storage root must not include dot path segments; {}",
+            warehouse_storage_root_hash_context(storage_root)
+        )));
+    }
+    Ok(())
+}
+
 fn location_prefix_has_query_fragment_or_userinfo(location_prefix: &str) -> bool {
-    Url::parse(location_prefix).is_ok_and(|url| {
+    location_has_query_fragment_or_userinfo(location_prefix)
+}
+
+fn location_has_query_fragment_or_userinfo(location: &str) -> bool {
+    Url::parse(location).is_ok_and(|url| {
         url.query().is_some()
             || url.fragment().is_some()
             || !url.username().is_empty()
             || url.password().is_some()
-    })
+    }) || location.contains(['?', '#'])
 }
 
 fn location_prefix_has_dot_path_segment(location_prefix: &str) -> bool {
-    let path = location_prefix
+    location_has_dot_path_segment(location_prefix)
+}
+
+fn location_has_dot_path_segment(location: &str) -> bool {
+    let path = location
         .split_once(['?', '#'])
-        .map_or(location_prefix, |(path, _)| path);
+        .map_or(location, |(path, _)| path);
     path.split('/').any(is_dot_path_segment)
 }
 
@@ -2337,6 +2364,13 @@ fn storage_profile_prefix_hash_context(location_prefix: &str) -> String {
     format!(
         "storage-profile-prefix-hash={}",
         content_hash_bytes(location_prefix.as_bytes())
+    )
+}
+
+fn warehouse_storage_root_hash_context(storage_root: &str) -> String {
+    format!(
+        "warehouse-storage-root-hash={}",
+        content_hash_bytes(storage_root.as_bytes())
     )
 }
 
@@ -4850,7 +4884,7 @@ pub mod turso_store {
     mod tests {
         use std::collections::BTreeMap;
 
-        use lakecat_core::{Principal, TableName};
+        use lakecat_core::{AuditStamp, Principal, TableName};
 
         use crate::{
             CredentialIssuanceMode, MemoryCatalogStore, PolicyBinding, ServerRecord,
@@ -6309,6 +6343,142 @@ pub mod turso_store {
                 turso.list_storage_profiles(&warehouse).await.unwrap(),
                 vec![]
             );
+        }
+
+        #[test]
+        fn warehouses_reject_decorated_storage_roots() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            for storage_root in [
+                "file:///tmp/lakecat?token=abc",
+                "s3://lakecat-demo/root#current",
+                "s3://user:secret@lakecat-demo/root",
+            ] {
+                let err = WarehouseRecord::new(
+                    warehouse.clone(),
+                    "default",
+                    Some(storage_root.to_string()),
+                    BTreeMap::new(),
+                    Principal::anonymous(),
+                )
+                .unwrap_err();
+
+                let message = err.to_string();
+                assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+                assert!(message.contains("query strings, fragments, or userinfo"));
+                assert!(message.contains("warehouse-storage-root-hash=sha256:"));
+                assert!(
+                    !message.contains(storage_root),
+                    "warehouse storage-root validation must not expose raw storage roots"
+                );
+                assert!(!message.contains("token=abc"));
+                assert!(!message.contains("user:secret"));
+            }
+        }
+
+        #[test]
+        fn warehouses_reject_dot_segment_storage_roots() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            for storage_root in [
+                "file:///tmp/lakecat/../private",
+                "file:///tmp/lakecat/%2e%2e/private",
+                "s3://lakecat-demo/root/%2E/private",
+            ] {
+                let err = WarehouseRecord::new(
+                    warehouse.clone(),
+                    "default",
+                    Some(storage_root.to_string()),
+                    BTreeMap::new(),
+                    Principal::anonymous(),
+                )
+                .unwrap_err();
+
+                let message = err.to_string();
+                assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+                assert!(message.contains("dot path segments"));
+                assert!(message.contains("warehouse-storage-root-hash=sha256:"));
+                assert!(
+                    !message.contains(storage_root),
+                    "warehouse dot-segment storage-root validation must not expose raw storage roots"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn warehouse_upsert_rejects_deserialized_decorated_storage_roots() {
+            let warehouse = WarehouseName::new("decorated_root").unwrap();
+            let record = WarehouseRecord {
+                warehouse: warehouse.clone(),
+                project_id: "default".to_string(),
+                storage_root: Some("file:///tmp/lakecat?token=abc".to_string()),
+                properties: BTreeMap::new(),
+                created: AuditStamp::now(Principal::anonymous()),
+                updated_at: Utc::now(),
+            };
+
+            let memory_err = MemoryCatalogStore::new()
+                .upsert_warehouse(record.clone())
+                .await
+                .unwrap_err();
+            let message = memory_err.to_string();
+            assert!(matches!(memory_err, LakeCatError::InvalidArgument(_)));
+            assert!(message.contains("query strings, fragments, or userinfo"));
+            assert!(message.contains("warehouse-storage-root-hash=sha256:"));
+            assert!(!message.contains("file:///tmp/lakecat?token=abc"));
+            assert!(!message.contains("token=abc"));
+
+            let turso = TursoCatalogStore::in_memory().await.unwrap();
+            let turso_err = turso.upsert_warehouse(record).await.unwrap_err();
+            let message = turso_err.to_string();
+            assert!(matches!(turso_err, LakeCatError::InvalidArgument(_)));
+            assert!(message.contains("query strings, fragments, or userinfo"));
+            assert!(message.contains("warehouse-storage-root-hash=sha256:"));
+            assert!(!message.contains("file:///tmp/lakecat?token=abc"));
+            assert!(!message.contains("token=abc"));
+            assert!(matches!(
+                turso.load_warehouse(&warehouse).await,
+                Err(LakeCatError::NotFound { object, name })
+                    if object == "warehouse" && name == "decorated_root"
+            ));
+        }
+
+        #[tokio::test]
+        async fn warehouse_upsert_rejects_deserialized_dot_segment_storage_roots() {
+            let warehouse = WarehouseName::new("dot_root").unwrap();
+            let record = WarehouseRecord {
+                warehouse: warehouse.clone(),
+                project_id: "default".to_string(),
+                storage_root: Some("file:///tmp/lakecat/../private".to_string()),
+                properties: BTreeMap::new(),
+                created: AuditStamp::now(Principal::anonymous()),
+                updated_at: Utc::now(),
+            };
+
+            let memory_err = MemoryCatalogStore::new()
+                .upsert_warehouse(record.clone())
+                .await
+                .unwrap_err();
+            assert!(matches!(memory_err, LakeCatError::InvalidArgument(_)));
+            assert!(memory_err.to_string().contains("dot path segments"));
+            assert!(
+                memory_err
+                    .to_string()
+                    .contains("warehouse-storage-root-hash=sha256:")
+            );
+
+            let turso = TursoCatalogStore::in_memory().await.unwrap();
+            let turso_err = turso.upsert_warehouse(record).await.unwrap_err();
+            assert!(matches!(turso_err, LakeCatError::InvalidArgument(_)));
+            assert!(turso_err.to_string().contains("dot path segments"));
+            assert!(
+                turso_err
+                    .to_string()
+                    .contains("warehouse-storage-root-hash=sha256:")
+            );
+            assert!(matches!(
+                turso.load_warehouse(&warehouse).await,
+                Err(LakeCatError::NotFound { object, name })
+                    if object == "warehouse" && name == "dot_root"
+            ));
         }
 
         #[tokio::test]

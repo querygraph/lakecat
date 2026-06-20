@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected decorated and traversal-shaped warehouse storage roots before memory
+  or Turso persistence, returning `warehouse-storage-root-hash` evidence instead
+  of raw local paths, bucket roots, query tokens, or URI userinfo.
 - Applied warehouse storage-root replay redaction to catalog config-read
   projections as well, so any warehouse record attached to config replay emits
   only `storage-root-hash` evidence to graph and lineage sinks.

@@ -13120,6 +13120,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn management_warehouse_rejects_decorated_storage_roots() {
+        let app = test_app();
+        let storage_root = "file:///tmp/lakecat?token=raw-secret";
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/decorated_root")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "project-id": "default",
+                    "storage-root": storage_root
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(message.contains("query strings, fragments, or userinfo"));
+        assert!(message.contains("warehouse-storage-root-hash=sha256:"));
+        assert!(!message.contains(storage_root));
+        assert!(!message.contains("raw-secret"));
+    }
+
+    #[tokio::test]
+    async fn management_warehouse_rejects_dot_segment_storage_roots() {
+        let app = test_app();
+        let storage_root = "file:///tmp/lakecat/../private";
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/dot_root")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "project-id": "default",
+                    "storage-root": storage_root
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(message.contains("dot path segments"));
+        assert!(message.contains("warehouse-storage-root-hash=sha256:"));
+        assert!(!message.contains(storage_root));
+        assert!(!message.contains("../private"));
+    }
+
+    #[tokio::test]
     async fn management_projects_are_durable_management_entities() {
         let app = test_app();
         let upsert_server = Request::builder()

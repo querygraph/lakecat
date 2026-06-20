@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject unsafe warehouse storage roots`.
+  Warehouse storage roots now reject query strings, fragments, URI userinfo, and
+  literal or percent-encoded dot path segments before memory or Turso
+  persistence, returning only `warehouse-storage-root-hash` evidence for the
+  submitted root.
+- Local verification for this warehouse-root validation slice is green:
+  `cargo fmt -p lakecat-store -p lakecat-service -- --check`;
+  `cargo test -p lakecat-store --features turso-local storage_roots -- --nocapture`;
+  `cargo test -p lakecat-service storage_roots -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact config-read warehouse roots`.
   Catalog config-read replay now applies the same warehouse-record redaction as
   warehouse upserts, so any attached `storage-root` is replaced with
