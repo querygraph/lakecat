@@ -6,6 +6,26 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject malformed outbox commit-history evidence`.
+  Outbox draining now rejects `table.commits-listed` pending events when
+  `commit-count` does not match `commit-hashes` or `sequence-numbers`, commit
+  hashes are not full `sha256:`-prefixed 64-hex digests, or sequence numbers
+  are not unsigned integers. Invalid pointer-log replay evidence stays pending
+  and reaches neither graph projection nor lineage acknowledgement.
+- Local verification for this outbox commit-history slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_table_commit_history_evidence -- --nocapture`;
+  `cargo test -p lakecat-service management_table_commits_lists_pointer_log_evidence -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain -- --nocapture`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import, and
+  ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Reject malformed outbox view receipt lists`.
   Outbox draining now rejects `view.version-receipts-listed` pending events
   when `receipt-count` does not match `receipt-hashes`, receipt arrays are not

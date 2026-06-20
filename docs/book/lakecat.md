@@ -2011,6 +2011,10 @@ upsert without previous links, and every later upsert or drop links to the
 previous receipt with the expected view-version transition. That keeps
 malformed view-history evidence out of both graph projection and OpenLineage
 replay before QueryGraph ever sees a compact handoff. The verifier also requires
+commit-history replay to be internally consistent before delivery: a
+`table.commits-listed` event must carry a `commit-count` that matches both
+full SHA-256 commit hashes and unsigned sequence numbers, so malformed
+pointer-log summaries cannot become delivered replay evidence. It also requires
 planned and fetched read restrictions to match before compact proof generation,
 requires both requested/effective projection and
 requested/effective stats-field evidence, requires effective projection to be a

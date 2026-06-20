@@ -1106,6 +1106,9 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     if event.event_type == "table.commit" {
         validate_table_commit_hash_evidence(event)?;
     }
+    if event.event_type == "table.commits-listed" {
+        validate_table_commit_history_event_evidence(event, payload)?;
+    }
     if event.event_type == "view.version-receipts-listed" {
         validate_view_receipt_list_event_evidence(event, payload)?;
     }
@@ -1154,6 +1157,49 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
         "policy_hash",
     ] {
         validate_optional_full_hash_field(event, commit, field)?;
+    }
+    Ok(())
+}
+
+fn validate_table_commit_history_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let commit_hashes = validate_required_full_hash_array_field(event, payload, "commit-hashes")?;
+    let sequence_numbers = payload
+        .get("sequence-numbers")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            outbox_evidence_error(
+                event,
+                "table commit-history evidence must contain sequence-numbers",
+            )
+        })?;
+    for sequence_number in sequence_numbers {
+        if sequence_number.as_u64().is_none() {
+            return Err(outbox_evidence_error(
+                event,
+                "table commit-history sequence-numbers must be unsigned integers",
+            ));
+        }
+    }
+    let Some(expected_commit_count) = payload.get("commit-count").and_then(Value::as_u64) else {
+        return Err(outbox_evidence_error(
+            event,
+            "table commit-history evidence must contain commit-count",
+        ));
+    };
+    if commit_hashes.len() as u64 != expected_commit_count {
+        return Err(outbox_evidence_error(
+            event,
+            "table commit-history commit-count does not match commit-hashes",
+        ));
+    }
+    if sequence_numbers.len() as u64 != expected_commit_count {
+        return Err(outbox_evidence_error(
+            event,
+            "table commit-history commit-count does not match sequence-numbers",
+        ));
     }
     Ok(())
 }
@@ -9056,6 +9102,73 @@ mod tests {
         assert!(message.contains("table.commit"));
         assert!(message.contains("request_hash"));
         assert!(message.contains("full SHA-256"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_table_commit_history_evidence() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-malformed-commit-history".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commits-listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-malformed-commit-history",
+                    "event-type": "table.commits-listed",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "table": "events",
+                        "commit-count": 2,
+                        "commit-hashes": [
+                            content_hash_json(&json!({"commit": 1})).unwrap()
+                        ],
+                        "sequence-numbers": [1, 2],
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("malformed commit history evidence should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commits-listed"));
+        assert!(message.contains("commit-count does not match commit-hashes"));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());

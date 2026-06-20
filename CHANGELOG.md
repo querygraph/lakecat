@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for `table.commits-listed` events whose commit
+  count, commit hashes, or sequence-number arrays are malformed, so invalid
+  pointer-log replay evidence fails before graph/lineage projection
+  acknowledgement.
 - Rejected outbox delivery for `view.version-receipts-listed` events whose
   receipt count, receipt hashes, or drop receipt hashes are malformed, so
   invalid view receipt-list evidence fails before graph/lineage projection
