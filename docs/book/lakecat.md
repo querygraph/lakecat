@@ -281,14 +281,17 @@ governed Sail plan.
 The important detail is that the policy restriction becomes part of planning,
 not a note beside it. An empty client projection under a column restriction
 means the allowed columns. A client projection can narrow further, but cannot
-widen. The same rule applies to stats-field requests: LakeCat records both the
-client's requested stats fields and the effective stats fields that survived
-the server-derived column restriction, while the compatibility `stats-fields`
-extension remains the narrowed effective set. The default REST path is tested
-at the Sail boundary: Sail receives only the effective projection and mandatory
-policy filters, while LakeCat keeps the broader request and narrowed result as
-replay evidence. During `fetchScanTasks`, LakeCat recomputes the current
-restriction and sends Sail the required projection and mandatory filters again;
+widen. LakeCat records both the client's requested projection and the effective
+projection that survived the server-derived column restriction in the durable
+scan-planned replay evidence. The same rule applies to stats-field requests:
+LakeCat records both the client's requested stats fields and the effective
+stats fields that survived the restriction, while the compatibility
+`stats-fields` extension remains the narrowed effective set. The default REST
+path is tested at the Sail boundary: Sail receives only the effective
+projection and mandatory policy filters, while LakeCat keeps the broader
+request and narrowed result as replay evidence. During `fetchScanTasks`,
+LakeCat recomputes the current restriction and sends Sail the required
+projection and mandatory filters again;
 the response extension and audit outbox record the same proof. A stale or
 legacy token cannot silently expand back to all columns.
 
@@ -1874,11 +1877,13 @@ typed drain summary carries scan-plan task counts, scan-plan graph event
 evidence, fetched file-scan, delete-file, and child-plan task counts, along with
 planned and fetched OpenLineage receipt hashes. Source replay validation now
 also requires planned and fetched read restrictions to match before compact
-proof generation, requires both requested and effective stats-field evidence,
-requires effective stats fields to be a narrowed subset of the requested
-stats fields in both source replay and compact handoff proof, and requires the
-fetched projection and filter requirements to exactly preserve the fetched
-allowed columns and row predicate. A fetched
+proof generation, requires both requested/effective projection and
+requested/effective stats-field evidence, requires effective projection to be a
+narrowed subset of the requested projection and to match the planned allowed
+columns, and requires effective stats fields to be a narrowed subset of the
+requested stats fields in both source replay and compact handoff proof. It also
+requires the fetched projection and filter requirements to exactly preserve the
+fetched allowed columns and row predicate. A fetched
 response that omits required-filter proof is rejected just like one that widens
 or changes that proof, and the compact handoff summary applies the same
 missing-proof check before accepting governed scan evidence. Credential

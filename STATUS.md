@@ -6,6 +6,24 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin scan replay projection proof`.
+  Scan-planned audit/outbox payloads and drain summaries now preserve
+  requested/effective projection evidence, and QGLake source replay plus compact
+  handoff verification reject missing, widened, or unrequested effective
+  projection proof.
+- Local verification for this scan replay projection-proof slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service scan_planned_audit_payload_surfaces_policy_context -- --nocapture`;
+  `cargo test -p lakecat-service scan_planning_route_sends_effective_policy_scope_to_sail -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_scan_replay_rejects_missing_projection_evidence -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_scan_replay_rejects_widened_effective_projection -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_scan_replay_rejects_unrequested_effective_projection -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_scan_projection_widening -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_unrequested_effective_scan_projection -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_scan_replay_line_summarizes_verified_evidence -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Order outbox drain batches before projection`.
   Outbox drains now defensively order pending batches by `created_at,event_id`
   before graph/lineage projection, response summarization, and delivery

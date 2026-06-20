@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added requested/effective scan projection evidence to scan-planned replay
+  summaries and QGLake handoff verification, so durable replay proves policy
+  narrowing instead of relying only on the HTTP plan response.
 - Made outbox draining defensively order pending batches by `created_at,event_id`
   before projection and acknowledgement, keeping QueryGraph/OpenLineage replay
   deterministic even if a store implementation returns an unsorted batch.

@@ -1418,6 +1418,28 @@ fn lineage_drain_event_summary(
                     .collect()
             })
             .unwrap_or_default(),
+        requested_projection: payload
+            .get("requested-projection")
+            .and_then(Value::as_array)
+            .map(|columns| {
+                columns
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
+        effective_projection: payload
+            .get("effective-projection")
+            .and_then(Value::as_array)
+            .map(|columns| {
+                columns
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
         required_filters: payload
             .get("required-filters")
             .and_then(Value::as_array)
@@ -2155,7 +2177,12 @@ fn table_scan_planned_audit_payload(
         audit_payload["read-restriction"] = restriction.clone();
         append_read_restriction_requirements(&mut audit_payload, restriction);
     }
-    for field in ["requested-stats-fields", "effective-stats-fields"] {
+    for field in [
+        "requested-projection",
+        "effective-projection",
+        "requested-stats-fields",
+        "effective-stats-fields",
+    ] {
         if let Some(value) = scan_request_extensions.get(field) {
             audit_payload[field] = value.clone();
         }
@@ -15152,6 +15179,8 @@ mod tests {
         };
 
         let scan_request_extensions = serde_json::json!({
+            "requested-projection": ["event_id", "payload"],
+            "effective-projection": ["event_id"],
             "requested-stats-fields": ["event_id", "payload"],
             "effective-stats-fields": ["event_id"]
         });
@@ -15179,6 +15208,14 @@ mod tests {
             payload["read-restriction"]
         );
         assert_eq!(payload["scan-task-count"], serde_json::json!(1));
+        assert_eq!(
+            payload["requested-projection"],
+            serde_json::json!(["event_id", "payload"])
+        );
+        assert_eq!(
+            payload["effective-projection"],
+            serde_json::json!(["event_id"])
+        );
         assert_eq!(
             payload["requested-stats-fields"],
             serde_json::json!(["event_id", "payload"])
@@ -15423,6 +15460,14 @@ mod tests {
         );
         assert_eq!(
             event.payload["payload"]["effective-stats-fields"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            event.payload["payload"]["requested-projection"],
+            serde_json::json!(["event_id", "payload"])
+        );
+        assert_eq!(
+            event.payload["payload"]["effective-projection"],
             serde_json::json!(["event_id"])
         );
         assert_eq!(

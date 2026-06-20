@@ -1418,6 +1418,54 @@ fn require_governed_scan_stats_field_evidence(
     Ok(())
 }
 
+fn require_governed_scan_projection_evidence(
+    governed_scan: &serde_json::Map<String, Value>,
+    planned_restriction: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let requested = required_string_array(
+        governed_scan,
+        "plannedRequestedProjection",
+        "governedScanProof",
+    )?;
+    let effective = required_string_array(
+        governed_scan,
+        "plannedEffectiveProjection",
+        "governedScanProof",
+    )?;
+    if requested.is_empty() || effective.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "governedScanProof missing requested/effective projection evidence".to_string(),
+        ));
+    }
+    if requested.len() <= effective.len() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "governedScanProof plannedRequestedProjection does not prove projection narrowing versus plannedEffectiveProjection".to_string(),
+        ));
+    }
+    let requested_set = requested
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    for field in &effective {
+        if !requested_set.contains(field.as_str()) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "governedScanProof plannedEffectiveProjection contains {field} that was not requested"
+            )));
+        }
+    }
+    require_value_match(
+        planned_restriction,
+        "allowed-columns",
+        required_value(
+            governed_scan,
+            "plannedEffectiveProjection",
+            "governedScanProof",
+        )?,
+        "governedScanProof.plannedReadRestriction",
+    )?;
+    Ok(())
+}
+
 fn require_import_plan_list_covers_verified_ids(
     records: &[Value],
     verified_ids: &[Value],
@@ -1775,6 +1823,8 @@ fn verify_lakecat_replay_scan_matches_summary(
         "planGraphEvents",
         "plannedReadRestriction",
         "fetchedReadRestriction",
+        "plannedRequestedProjection",
+        "plannedEffectiveProjection",
         "plannedRequestedStatsFields",
         "plannedEffectiveStatsFields",
         "fetchedRequiredProjection",
@@ -2548,6 +2598,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         )?,
         "governedScanProof.fetchedReadRestriction",
     )?;
+    require_governed_scan_projection_evidence(governed_scan, planned_restriction)?;
     require_governed_scan_stats_field_evidence(governed_scan, planned_restriction)?;
     let fetched_required_filters =
         required_array(governed_scan, "fetchedRequiredFilters", "governedScanProof")?;
@@ -3652,6 +3703,8 @@ fn qglake_scan_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Valu
         "childPlanTaskCount": fetched.child_plan_task_count.unwrap_or_default(),
         "plannedReadRestriction": planned.read_restriction.as_ref(),
         "fetchedReadRestriction": fetched.read_restriction.as_ref(),
+        "plannedRequestedProjection": &planned.requested_projection,
+        "plannedEffectiveProjection": &planned.effective_projection,
         "plannedRequestedStatsFields": &planned.requested_stats_fields,
         "plannedEffectiveStatsFields": &planned.effective_stats_fields,
         "fetchedRequiredProjection": &fetched.required_projection,
@@ -6423,6 +6476,49 @@ fn verify_qglake_scan_restriction_replay(
     if fetched.required_filters.as_slice() != expected_filters.as_slice() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain scan task fetch replay required filters do not exactly preserve fetched row predicate"
+                .to_string(),
+        ));
+    }
+    if planned.requested_projection.is_empty() || planned.effective_projection.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain scan planning replay is missing requested/effective projection evidence"
+                .to_string(),
+        ));
+    }
+    if planned.requested_projection.len() <= planned.effective_projection.len() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain scan planning replay does not prove projection narrowing"
+                .to_string(),
+        ));
+    }
+    let requested_projection = planned
+        .requested_projection
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    for field in &planned.effective_projection {
+        if !requested_projection.contains(field.as_str()) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain scan planning replay effective projection field {field} was not requested"
+            )));
+        }
+    }
+    let effective_projection = Value::Array(
+        planned
+            .effective_projection
+            .iter()
+            .cloned()
+            .map(Value::String)
+            .collect(),
+    );
+    let planned_allowed_columns = required_value(
+        planned_restriction,
+        "allowed-columns",
+        "qglake lineage drain scan planning read restriction",
+    )?;
+    if &effective_projection != planned_allowed_columns {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain scan planning replay effective projection does not match planned read restriction"
                 .to_string(),
         ));
     }
@@ -9992,6 +10088,51 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("plannedRequestedStatsFields"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_scan_projection_evidence() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("plannedRequestedProjection");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing scan projection evidence");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("plannedRequestedProjection"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_scan_projection_widening() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedEffectiveProjection"] =
+            json!(["event_id", "occurred_at", "severity", "raw_payload"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject widened scan projection");
+
+        assert!(err.to_string().contains("governedScanProof"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_unrequested_effective_scan_projection() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedRequestedProjection"] =
+            json!(["event_id", "occurred_at", "severity", "raw_payload"]);
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedEffectiveProjection"] =
+            json!(["event_id", "occurred_at", "tenant_id"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject effective projection fields that were never requested",
+        );
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("plannedEffectiveProjection"));
+        assert!(err.to_string().contains("tenant_id"));
+        assert!(err.to_string().contains("not requested"));
     }
 
     #[test]
@@ -14133,6 +14274,72 @@ mod tests {
     }
 
     #[test]
+    fn qglake_scan_replay_rejects_missing_projection_evidence() {
+        let mut planned = qglake_scan_planned_lineage_summary();
+        planned.requested_projection = Vec::new();
+
+        let err = verify_qglake_scan_restriction_replay(
+            &planned,
+            &qglake_scan_tasks_fetched_lineage_summary(),
+        )
+        .expect_err("scan replay should reject missing projection evidence");
+
+        assert!(
+            err.to_string()
+                .contains("missing requested/effective projection evidence")
+        );
+    }
+
+    #[test]
+    fn qglake_scan_replay_rejects_widened_effective_projection() {
+        let mut planned = qglake_scan_planned_lineage_summary();
+        planned.effective_projection = vec![
+            "event_id".to_string(),
+            "occurred_at".to_string(),
+            "severity".to_string(),
+            "raw_payload".to_string(),
+        ];
+
+        let err = verify_qglake_scan_restriction_replay(
+            &planned,
+            &qglake_scan_tasks_fetched_lineage_summary(),
+        )
+        .expect_err("scan replay should reject widened effective projection");
+
+        assert!(
+            err.to_string()
+                .contains("does not prove projection narrowing")
+        );
+    }
+
+    #[test]
+    fn qglake_scan_replay_rejects_unrequested_effective_projection() {
+        let mut planned = qglake_scan_planned_lineage_summary();
+        planned.requested_projection = vec![
+            "event_id".to_string(),
+            "occurred_at".to_string(),
+            "severity".to_string(),
+            "raw_payload".to_string(),
+        ];
+        planned.effective_projection = vec![
+            "event_id".to_string(),
+            "occurred_at".to_string(),
+            "tenant_id".to_string(),
+        ];
+
+        let err = verify_qglake_scan_restriction_replay(
+            &planned,
+            &qglake_scan_tasks_fetched_lineage_summary(),
+        )
+        .expect_err(
+            "scan replay should reject effective projection fields that were never requested",
+        );
+
+        assert!(err.to_string().contains("tenant_id"));
+        assert!(err.to_string().contains("was not requested"));
+    }
+
+    #[test]
     fn qglake_scan_replay_rejects_widened_effective_stats_fields() {
         let mut planned = qglake_scan_planned_lineage_summary();
         planned.effective_stats_fields = vec![
@@ -14563,6 +14770,8 @@ mod tests {
                     child_plan_task_count: None,
                     read_restriction: None,
                     required_projection: Vec::new(),
+                    requested_projection: Vec::new(),
+                    effective_projection: Vec::new(),
                     required_filters: Vec::new(),
                     requested_stats_fields: Vec::new(),
                     effective_stats_fields: Vec::new(),
@@ -14649,6 +14858,8 @@ mod tests {
                     child_plan_task_count: None,
                     read_restriction: None,
                     required_projection: Vec::new(),
+                    requested_projection: Vec::new(),
+                    effective_projection: Vec::new(),
                     required_filters: Vec::new(),
                     requested_stats_fields: Vec::new(),
                     effective_stats_fields: Vec::new(),
@@ -14737,6 +14948,8 @@ mod tests {
                     child_plan_task_count: None,
                     read_restriction: None,
                     required_projection: Vec::new(),
+                    requested_projection: Vec::new(),
+                    effective_projection: Vec::new(),
                     required_filters: Vec::new(),
                     requested_stats_fields: Vec::new(),
                     effective_stats_fields: Vec::new(),
@@ -14823,6 +15036,8 @@ mod tests {
                     child_plan_task_count: None,
                     read_restriction: None,
                     required_projection: Vec::new(),
+                    requested_projection: Vec::new(),
+                    effective_projection: Vec::new(),
                     required_filters: Vec::new(),
                     requested_stats_fields: Vec::new(),
                     effective_stats_fields: Vec::new(),
@@ -14909,6 +15124,8 @@ mod tests {
                     child_plan_task_count: None,
                     read_restriction: None,
                     required_projection: Vec::new(),
+                    requested_projection: Vec::new(),
+                    effective_projection: Vec::new(),
                     required_filters: Vec::new(),
                     requested_stats_fields: Vec::new(),
                     effective_stats_fields: Vec::new(),
@@ -14995,6 +15212,8 @@ mod tests {
                     child_plan_task_count: None,
                     read_restriction: None,
                     required_projection: Vec::new(),
+                    requested_projection: Vec::new(),
+                    effective_projection: Vec::new(),
                     required_filters: Vec::new(),
                     requested_stats_fields: Vec::new(),
                     effective_stats_fields: Vec::new(),
@@ -15081,6 +15300,8 @@ mod tests {
                     child_plan_task_count: None,
                     read_restriction: None,
                     required_projection: Vec::new(),
+                    requested_projection: Vec::new(),
+                    effective_projection: Vec::new(),
                     required_filters: Vec::new(),
                     requested_stats_fields: Vec::new(),
                     effective_stats_fields: Vec::new(),
@@ -15167,6 +15388,8 @@ mod tests {
                     child_plan_task_count: None,
                     read_restriction: None,
                     required_projection: Vec::new(),
+                    requested_projection: Vec::new(),
+                    effective_projection: Vec::new(),
                     required_filters: Vec::new(),
                     requested_stats_fields: Vec::new(),
                     effective_stats_fields: Vec::new(),
@@ -15253,6 +15476,8 @@ mod tests {
                     child_plan_task_count: None,
                     read_restriction: None,
                     required_projection: Vec::new(),
+                    requested_projection: Vec::new(),
+                    effective_projection: Vec::new(),
                     required_filters: Vec::new(),
                     requested_stats_fields: Vec::new(),
                     effective_stats_fields: Vec::new(),
@@ -15339,6 +15564,8 @@ mod tests {
                     child_plan_task_count: None,
                     read_restriction: None,
                     required_projection: Vec::new(),
+                    requested_projection: Vec::new(),
+                    effective_projection: Vec::new(),
                     required_filters: Vec::new(),
                     requested_stats_fields: Vec::new(),
                     effective_stats_fields: Vec::new(),
@@ -15425,6 +15652,8 @@ mod tests {
                     child_plan_task_count: None,
                     read_restriction: None,
                     required_projection: Vec::new(),
+                    requested_projection: Vec::new(),
+                    effective_projection: Vec::new(),
                     required_filters: Vec::new(),
                     requested_stats_fields: Vec::new(),
                     effective_stats_fields: Vec::new(),
@@ -15511,6 +15740,8 @@ mod tests {
                     child_plan_task_count: None,
                     read_restriction: None,
                     required_projection: Vec::new(),
+                    requested_projection: Vec::new(),
+                    effective_projection: Vec::new(),
                     required_filters: Vec::new(),
                     requested_stats_fields: Vec::new(),
                     effective_stats_fields: Vec::new(),
@@ -15597,6 +15828,8 @@ mod tests {
                     child_plan_task_count: None,
                     read_restriction: None,
                     required_projection: Vec::new(),
+                    requested_projection: Vec::new(),
+                    effective_projection: Vec::new(),
                     required_filters: Vec::new(),
                     requested_stats_fields: Vec::new(),
                     effective_stats_fields: Vec::new(),
@@ -18085,6 +18318,8 @@ mod tests {
             child_plan_task_count: None,
             read_restriction: None,
             required_projection: Vec::new(),
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
             required_filters: Vec::new(),
             requested_stats_fields: Vec::new(),
             effective_stats_fields: Vec::new(),
@@ -18172,6 +18407,8 @@ mod tests {
             child_plan_task_count: None,
             read_restriction: None,
             required_projection: Vec::new(),
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
             required_filters: Vec::new(),
             requested_stats_fields: Vec::new(),
             effective_stats_fields: Vec::new(),
@@ -18284,6 +18521,8 @@ mod tests {
             child_plan_task_count: None,
             read_restriction: None,
             required_projection: Vec::new(),
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
             required_filters: Vec::new(),
             requested_stats_fields: Vec::new(),
             effective_stats_fields: Vec::new(),
@@ -18364,6 +18603,17 @@ mod tests {
             child_plan_task_count: None,
             read_restriction: Some(qglake_read_restriction_summary()),
             required_projection: Vec::new(),
+            requested_projection: vec![
+                "event_id".to_string(),
+                "occurred_at".to_string(),
+                "severity".to_string(),
+                "raw_payload".to_string(),
+            ],
+            effective_projection: vec![
+                "event_id".to_string(),
+                "occurred_at".to_string(),
+                "severity".to_string(),
+            ],
             required_filters: Vec::new(),
             requested_stats_fields: vec![
                 "event_id".to_string(),
@@ -18443,6 +18693,8 @@ mod tests {
                 "occurred_at".to_string(),
                 "severity".to_string(),
             ],
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
             required_filters: vec![json!({
                 "type": "not-eq",
                 "term": "severity",
@@ -18513,6 +18765,8 @@ mod tests {
             child_plan_task_count: None,
             read_restriction: None,
             required_projection: Vec::new(),
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
             required_filters: Vec::new(),
             requested_stats_fields: Vec::new(),
             effective_stats_fields: Vec::new(),
@@ -18581,6 +18835,8 @@ mod tests {
             child_plan_task_count: None,
             read_restriction: None,
             required_projection: Vec::new(),
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
             required_filters: Vec::new(),
             requested_stats_fields: Vec::new(),
             effective_stats_fields: Vec::new(),
@@ -18651,6 +18907,8 @@ mod tests {
             child_plan_task_count: None,
             read_restriction: None,
             required_projection: Vec::new(),
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
             required_filters: Vec::new(),
             requested_stats_fields: Vec::new(),
             effective_stats_fields: Vec::new(),
@@ -18719,6 +18977,8 @@ mod tests {
             child_plan_task_count: None,
             read_restriction: None,
             required_projection: Vec::new(),
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
             required_filters: Vec::new(),
             requested_stats_fields: Vec::new(),
             effective_stats_fields: Vec::new(),
@@ -18785,6 +19045,8 @@ mod tests {
             child_plan_task_count: None,
             read_restriction: None,
             required_projection: Vec::new(),
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
             required_filters: Vec::new(),
             requested_stats_fields: Vec::new(),
             effective_stats_fields: Vec::new(),
@@ -18851,6 +19113,8 @@ mod tests {
             child_plan_task_count: None,
             read_restriction: None,
             required_projection: Vec::new(),
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
             required_filters: Vec::new(),
             requested_stats_fields: Vec::new(),
             effective_stats_fields: Vec::new(),
@@ -18919,6 +19183,8 @@ mod tests {
             child_plan_task_count: None,
             read_restriction: Some(qglake_read_restriction_summary()),
             required_projection: Vec::new(),
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
             required_filters: Vec::new(),
             requested_stats_fields: Vec::new(),
             effective_stats_fields: Vec::new(),
@@ -18989,6 +19255,8 @@ mod tests {
             child_plan_task_count: None,
             read_restriction: Some(qglake_read_restriction_summary()),
             required_projection: Vec::new(),
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
             required_filters: Vec::new(),
             requested_stats_fields: Vec::new(),
             effective_stats_fields: Vec::new(),
