@@ -362,7 +362,9 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
   missing or do not mean "use this value as the allowed/narrowing restriction."
   The parser accepts camel, kebab, and prefixed JSON-LD operand keys for this
   bounded subset, plus compact JSON-LD `@id` term objects for constraint
-  operands and operators, without growing LakeCat into a full ODRL reasoner.
+  operands/operators and `@value`/`@list` right operands for bounded
+  allowed-column, purpose, and credential-TTL values, without growing LakeCat
+  into a full ODRL reasoner.
   Purpose composition also fails closed unless all enforced policy material
   agrees on the same purpose.
 - Graph and lineage side effects are moving through bounded catalog events and

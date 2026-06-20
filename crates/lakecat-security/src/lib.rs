@@ -303,15 +303,14 @@ fn and_row_predicates(left: Value, right: Value) -> Value {
 fn purpose_from_odrl(odrl: &Value) -> LakeCatResult<Option<String>> {
     let mut purpose = odrl
         .get("purpose")
-        .and_then(Value::as_str)
+        .and_then(jsonld_string_value)
         .map(str::to_string);
 
     for constraint in odrl_constraints(odrl) {
         let left = constraint_left_operand(constraint).unwrap_or_default();
-        if left == "purpose" {
+        if matches!(left, "purpose" | "lakecat:purpose") {
             require_constraint_operator(constraint, "purpose", &["eq"])?;
-            let next = constraint_right_operand(constraint, "purpose")?
-                .as_str()
+            let next = jsonld_string_value(constraint_right_operand(constraint, "purpose")?)
                 .ok_or_else(|| {
                     LakeCatError::InvalidArgument(
                         "ODRL purpose constraint must use a string right operand".to_string(),
@@ -361,6 +360,7 @@ fn ttl_from_odrl(odrl: &Value) -> LakeCatResult<Option<u64>> {
                 | "credential-ttl"
                 | "credentialTtl"
                 | "lakecat:max-credential-ttl-seconds"
+                | "lakecat:credential-ttl"
         ) {
             let value = constraint_right_operand(constraint, "max credential TTL")?;
             require_constraint_operator(constraint, "max credential TTL", &["eq", "lteq", "lt"])?;
@@ -435,7 +435,7 @@ fn constraint_right_operand<'a>(constraint: &'a Value, label: &str) -> LakeCatRe
 }
 
 fn ttl_value(value: &Value) -> LakeCatResult<Option<u64>> {
-    value.as_u64().map(Some).ok_or_else(|| {
+    jsonld_u64_value(value).map(Some).ok_or_else(|| {
         LakeCatError::InvalidArgument(
             "ODRL max credential TTL must be an unsigned integer number of seconds".to_string(),
         )
@@ -464,12 +464,31 @@ fn string_list(value: &Value, label: &str) -> LakeCatResult<Vec<String>> {
         Value::Array(values) => values
             .iter()
             .map(|item| {
-                item.as_str().map(ToString::to_string).ok_or_else(|| {
-                    LakeCatError::InvalidArgument(format!("{label} must be strings"))
-                })
+                jsonld_string_value(item)
+                    .map(ToString::to_string)
+                    .ok_or_else(|| {
+                        LakeCatError::InvalidArgument(format!("{label} must be strings"))
+                    })
             })
             .collect::<Result<Vec<_>, _>>()?,
-        Value::String(value) => vec![value.clone()],
+        Value::Object(object) if object.contains_key("@list") => object
+            .get("@list")
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                LakeCatError::InvalidArgument(format!("{label} @list must be an array"))
+            })?
+            .iter()
+            .map(|item| {
+                jsonld_string_value(item)
+                    .map(ToString::to_string)
+                    .ok_or_else(|| {
+                        LakeCatError::InvalidArgument(format!("{label} must be strings"))
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        value if jsonld_string_value(value).is_some() => {
+            vec![jsonld_string_value(value).unwrap().to_string()]
+        }
         _ => {
             return Err(LakeCatError::InvalidArgument(format!(
                 "{label} must be a string or string array"
@@ -477,6 +496,22 @@ fn string_list(value: &Value, label: &str) -> LakeCatResult<Vec<String>> {
         }
     };
     Ok(dedup_columns(raw))
+}
+
+fn jsonld_string_value(value: &Value) -> Option<&str> {
+    value
+        .as_str()
+        .or_else(|| value.get("@value").and_then(Value::as_str))
+}
+
+fn jsonld_u64_value(value: &Value) -> Option<u64> {
+    value.as_u64().or_else(|| {
+        value.get("@value").and_then(|value| {
+            value
+                .as_u64()
+                .or_else(|| value.as_str().and_then(|value| value.parse::<u64>().ok()))
+        })
+    })
 }
 
 fn dedup_columns(columns: Vec<String>) -> Vec<String> {
@@ -1080,6 +1115,77 @@ mod tests {
                 "term": "region",
                 "value": "west"
             }))
+        );
+    }
+
+    #[test]
+    fn read_restriction_accepts_jsonld_value_objects_for_right_operands() {
+        let policy = serde_json::json!({
+            "uid": "policy-a",
+            "purpose": { "@value": "resilience-demo" },
+            "permission": [{
+                "constraint": [
+                    {
+                        "leftOperand": { "@id": "lakecat:allowed-columns" },
+                        "operator": { "@id": "odrl:isAnyOf" },
+                        "rightOperand": {
+                            "@list": [
+                                { "@value": "event_id" },
+                                { "@value": "severity" },
+                                { "@value": "event_id" }
+                            ]
+                        }
+                    },
+                    {
+                        "leftOperand": { "@id": "lakecat:purpose" },
+                        "operator": { "@id": "odrl:eq" },
+                        "rightOperand": { "@value": "resilience-demo" }
+                    },
+                    {
+                        "leftOperand": { "@id": "lakecat:credential-ttl" },
+                        "operator": { "@id": "odrl:lteq" },
+                        "rightOperand": {
+                            "@value": "300",
+                            "@type": "http://www.w3.org/2001/XMLSchema#unsignedLong"
+                        }
+                    }
+                ]
+            }]
+        });
+
+        let restriction = ReadRestriction::from_odrl_policies([&policy]).unwrap();
+
+        assert_eq!(
+            restriction.allowed_columns,
+            Some(vec!["event_id".to_string(), "severity".to_string()])
+        );
+        assert_eq!(restriction.purpose.as_deref(), Some("resilience-demo"));
+        assert_eq!(restriction.max_credential_ttl_seconds, Some(300));
+    }
+
+    #[test]
+    fn read_restriction_rejects_malformed_jsonld_allowed_column_lists() {
+        let policy = serde_json::json!({
+            "uid": "policy-a",
+            "permission": [{
+                "constraint": {
+                    "leftOperand": { "@id": "lakecat:allowed-columns" },
+                    "operator": { "@id": "odrl:isAnyOf" },
+                    "rightOperand": {
+                        "@list": [
+                            { "@value": "event_id" },
+                            { "@id": "lakecat:not-a-column-value" }
+                        ]
+                    }
+                }
+            }]
+        });
+
+        let err = ReadRestriction::from_odrl_policies([&policy]).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("ODRL allowed columns must be strings")
         );
     }
 

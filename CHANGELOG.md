@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Accepted compact JSON-LD `@value` and `@list` right operands for bounded
+  ODRL allowed-column, purpose, and credential-TTL constraints while keeping
+  malformed JSON-LD allowed-column lists fail-closed.
 - Rejected duplicate pending outbox event IDs before graph or lineage
   projection, returning only a duplicate event-id hash so a corrupted pending
   batch cannot duplicate downstream side effects.

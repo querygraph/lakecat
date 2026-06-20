@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Accept JSON-LD ODRL right operand values`.
+  `lakecat-security` now accepts compact JSON-LD `@value` and `@list` right
+  operands for the bounded allowed-column, purpose, and credential-TTL ODRL
+  constraint subset, including `lakecat:purpose` and `lakecat:credential-ttl`
+  operand aliases. Malformed JSON-LD allowed-column lists still fail closed.
+- Local verification for this ODRL compatibility slice is green:
+  `cargo fmt -p lakecat-security -- --check`;
+  `cargo test -p lakecat-security read_restriction_accepts_jsonld_value_objects_for_right_operands -- --nocapture`;
+  `cargo test -p lakecat-security read_restriction_rejects_malformed_jsonld_allowed_column_lists -- --nocapture`;
+  `cargo test -p lakecat-security read_restriction -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject duplicate pending outbox ids`.
   Outbox drains now validate the pending batch before projection and fail on
   duplicate event IDs with only a duplicate event-id hash. The regression proves
