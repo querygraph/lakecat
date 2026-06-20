@@ -1109,6 +1109,9 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     if event.event_type == "table.commits-listed" {
         validate_table_commit_history_event_evidence(event, payload)?;
     }
+    if event.event_type == "credentials.vend-attempted" {
+        validate_credential_vend_event_evidence(event, payload)?;
+    }
     if event.event_type == "view.version-receipts-listed" {
         validate_view_receipt_list_event_evidence(event, payload)?;
     }
@@ -1199,6 +1202,84 @@ fn validate_table_commit_history_event_evidence(
         return Err(outbox_evidence_error(
             event,
             "table commit-history commit-count does not match sequence-numbers",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_credential_vend_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(credential_count) = payload.get("credential-count").and_then(Value::as_u64) else {
+        return Err(outbox_evidence_error(
+            event,
+            "credential-vend evidence must contain credential-count",
+        ));
+    };
+    let evidence = payload
+        .get("credential-response-evidence")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            outbox_evidence_error(
+                event,
+                "credential-vend evidence must contain credential-response-evidence",
+            )
+        })?;
+    if evidence.len() as u64 != credential_count {
+        return Err(outbox_evidence_error(
+            event,
+            "credential-vend credential-count does not match credential-response-evidence",
+        ));
+    }
+    for entry in evidence {
+        validate_required_full_hash_field(event, entry, "prefix-hash")?;
+        validate_required_full_hash_field(event, entry, "issuer-config-hash")?;
+    }
+
+    let Some(storage_profile) = payload.get("storage-profile") else {
+        return Err(outbox_evidence_error(
+            event,
+            "credential-vend evidence must contain storage-profile",
+        ));
+    };
+    validate_required_full_hash_field(event, storage_profile, "location-prefix-hash")?;
+    validate_secret_ref_evidence(event, storage_profile, "credential-vend storage-profile")?;
+    Ok(())
+}
+
+fn validate_secret_ref_evidence(
+    event: &OutboxEvent,
+    object: &Value,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let secret_ref_present = object
+        .get("secret-ref-present")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let secret_ref_provider = object
+        .get("secret-ref-provider")
+        .and_then(Value::as_str)
+        .filter(|provider| !provider.is_empty());
+    let secret_ref_hash = object.get("secret-ref-hash").and_then(Value::as_str);
+
+    if secret_ref_present {
+        if secret_ref_provider.is_none() {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} secret-ref-present requires secret-ref-provider"),
+            ));
+        }
+        if !secret_ref_hash.is_some_and(is_full_sha256_digest_evidence) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} secret-ref-hash must contain full SHA-256 digest evidence"),
+            ));
+        }
+    } else if secret_ref_provider.is_some() || secret_ref_hash.is_some() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} cannot carry secret-ref evidence when secret-ref-present is false"),
         ));
     }
     Ok(())
@@ -8200,8 +8281,12 @@ mod tests {
                                 "warehouse": "local",
                                 "provider": "file",
                                 "issuance-mode": "local-file-no-secret",
-                                "secret-ref-present": false
+                                "secret-ref-present": false,
+                                "location-prefix-hash": content_hash_json(&json!({
+                                    "location-prefix": "file:///tmp/events"
+                                })).unwrap()
                             },
+                            "credential-response-evidence": [],
                             "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
                             "lakecat:raw-credential-exception": {
                                 "requested": true,
@@ -9169,6 +9254,77 @@ mod tests {
         let message = err.to_string();
         assert!(message.contains("table.commits-listed"));
         assert!(message.contains("commit-count does not match commit-hashes"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_credential_vend_evidence() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-malformed-credential-vend".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-malformed-credential-vend",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "storage-profile-id": "events-local",
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": "sha256:location"
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("malformed credential-vend evidence should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains("location-prefix-hash"));
+        assert!(message.contains("full SHA-256"));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());

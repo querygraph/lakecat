@@ -6,6 +6,28 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject malformed outbox credential evidence`.
+  Outbox draining now rejects `credentials.vend-attempted` pending events when
+  `credential-count` does not match `credential-response-evidence`,
+  credential prefix or issuer-config evidence is not full `sha256:`-prefixed
+  64-hex digest evidence, storage-profile `location-prefix-hash` is malformed,
+  or secret-reference provider/hash state contradicts `secret-ref-present`.
+  Invalid credential replay evidence stays pending and reaches neither graph
+  projection nor lineage acknowledgement.
+- Local verification for this outbox credential-evidence slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_credential_vend_evidence -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain -- --nocapture`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import, and
+  ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Reject malformed outbox commit-history evidence`.
   Outbox draining now rejects `table.commits-listed` pending events when
   `commit-count` does not match `commit-hashes` or `sequence-numbers`, commit

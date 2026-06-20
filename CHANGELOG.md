@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for `credentials.vend-attempted` events whose
+  credential count, response-evidence hashes, storage-profile
+  `location-prefix-hash`, or secret-reference state are malformed, so invalid
+  credential replay evidence fails before graph/lineage projection
+  acknowledgement.
 - Rejected outbox delivery for `table.commits-listed` events whose commit
   count, commit hashes, or sequence-number arrays are malformed, so invalid
   pointer-log replay evidence fails before graph/lineage projection

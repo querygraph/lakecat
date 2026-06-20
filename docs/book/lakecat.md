@@ -1842,6 +1842,12 @@ themselves: if a credential-root proof says a secret reference is present, it
 must carry a non-empty provider and full `sha256:`-prefixed 64-hex
 `secretRefHash`; if it says no secret reference is present, provider and hash
 evidence must be absent.
+LakeCat now applies the same discipline before the outbox event is delivered:
+`credentials.vend-attempted` must carry a `credential-count` that matches its
+credential-response evidence, full SHA-256 prefix and issuer-config hashes for
+each returned credential, a full storage-profile `location-prefix-hash`, and
+non-contradictory secret-reference state. A malformed credential replay event
+therefore remains pending instead of becoming graph or OpenLineage evidence.
 Source replay and compact handoff verification both reserve
 `rawCredentialExceptionReason` for the audited trusted-human path; a restricted
 agent proof must be blocked with `blockReason` and cannot carry a raw
@@ -2014,7 +2020,11 @@ replay before QueryGraph ever sees a compact handoff. The verifier also requires
 commit-history replay to be internally consistent before delivery: a
 `table.commits-listed` event must carry a `commit-count` that matches both
 full SHA-256 commit hashes and unsigned sequence numbers, so malformed
-pointer-log summaries cannot become delivered replay evidence. It also requires
+pointer-log summaries cannot become delivered replay evidence. Credential-vend
+replay gets the same treatment: `credentials.vend-attempted` must carry a
+matching credential count, full credential-response hashes, a full redacted
+storage-profile location hash, and internally consistent secret-reference
+presence/provider/hash fields before delivery. It also requires
 planned and fetched read restrictions to match before compact proof generation,
 requires both requested/effective projection and
 requested/effective stats-field evidence, requires effective projection to be a
