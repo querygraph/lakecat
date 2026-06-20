@@ -23,6 +23,7 @@ LAKECAT_REPLAY_OUTPUT="$RUN_DIR/lakecat-replay.txt"
 QUERYGRAPH_VERIFY_OUTPUT="$RUN_DIR/querygraph-verify.json"
 QUERYGRAPH_IMPORT_OUTPUT="$RUN_DIR/querygraph-import.json"
 LAKECAT_HANDOFF_VERIFY_OUTPUT="$RUN_DIR/lakecat-handoff-verify.json"
+LAKECAT_HANDOFF_SELF_VERIFY_OUTPUT="$RUN_DIR/lakecat-handoff-self-verify.json"
 TURSO_PATH="$RUN_DIR/lakecat.turso"
 SERVICE_LOG="$RUN_DIR/lakecat-service.log"
 LOCATION="file://$RUN_DIR/events"
@@ -1074,6 +1075,22 @@ write_summary() {
 JSON
 }
 
+bind_handoff_verify_output_hash() {
+  local handoff_verify_sha
+  handoff_verify_sha="$(sha256_file "$LAKECAT_HANDOFF_VERIFY_OUTPUT")"
+  node -e '
+const fs = require("fs");
+const [summaryFile, hash] = process.argv.slice(1);
+const summary = JSON.parse(fs.readFileSync(summaryFile, "utf8"));
+if (!summary.artifacts || typeof summary.artifacts !== "object") {
+  console.error("Handoff summary is missing artifacts before binding verifier output hash");
+  process.exit(1);
+}
+summary.artifacts.lakecatHandoffVerifyOutputHash = hash;
+fs.writeFileSync(summaryFile, `${JSON.stringify(summary, null, 2)}\n`);
+' "$SUMMARY" "sha256:$handoff_verify_sha"
+}
+
 if [[ ! -f "$QUERYGRAPH_RUST_DIR/Cargo.toml" ]]; then
   echo "QueryGraph Rust crate not found at $QUERYGRAPH_RUST_DIR" >&2
   exit 1
@@ -1081,7 +1098,7 @@ fi
 
 mkdir -p "$RUN_DIR"
 rm -f "$BUNDLE" "$DRAIN" "$IMPORT_PLAN" "$SUMMARY" \
-  "$LAKECAT_REPLAY_OUTPUT" "$LAKECAT_HANDOFF_VERIFY_OUTPUT" "$QUERYGRAPH_VERIFY_OUTPUT" "$QUERYGRAPH_IMPORT_OUTPUT" \
+  "$LAKECAT_REPLAY_OUTPUT" "$LAKECAT_HANDOFF_VERIFY_OUTPUT" "$LAKECAT_HANDOFF_SELF_VERIFY_OUTPUT" "$QUERYGRAPH_VERIFY_OUTPUT" "$QUERYGRAPH_IMPORT_OUTPUT" \
   "$TURSO_PATH" "$SERVICE_LOG"
 
 echo "Starting LakeCat at $CATALOG_URL"
@@ -1135,6 +1152,14 @@ cargo run -p lakecat-cli -- qglake-verify-handoff \
   --summary "$SUMMARY" \
   --json \
   | tee "$LAKECAT_HANDOFF_VERIFY_OUTPUT"
+
+bind_handoff_verify_output_hash
+
+echo "Re-verifying LakeCat handoff summary with verifier-output artifact hash"
+cargo run -p lakecat-cli -- qglake-verify-handoff \
+  --summary "$SUMMARY" \
+  --json \
+  | tee "$LAKECAT_HANDOFF_SELF_VERIFY_OUTPUT"
 
 echo "QGLake handoff verified"
 echo "  bundle:      $BUNDLE"

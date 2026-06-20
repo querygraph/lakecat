@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound saved QGLake handoff-verifier output as a compact summary artifact:
+  final local handoff summaries now carry `lakecatHandoffVerifyOutputHash`, and
+  the verifier checks that JSON artifact is a verified result for the same
+  catalog scope.
 - Preserved live QGLake replay evidence in the local handoff summary bridge,
   carrying governed scan graph/restriction proof, management graph proof,
   storage-profile graph proof, credential exception/blocking proof, and table

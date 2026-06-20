@@ -472,7 +472,7 @@ fn verify_qglake_handoff_artifact_files(
         verify_qglake_handoff_artifact_file(artifacts, "querygraphImportPlan", base_dir)?;
     let captured_outputs =
         verify_qglake_handoff_captured_outputs(artifacts, "capturedOutputs", base_dir)?;
-    let path_aliases = verify_qglake_handoff_artifact_path_aliases(artifacts, base_dir)?;
+    let path_aliases = verify_qglake_handoff_artifact_path_aliases(artifacts, summary, base_dir)?;
     Ok(json!({
         "bundle": bundle,
         "lineageDrain": lineage_drain,
@@ -497,6 +497,7 @@ fn verify_qglake_handoff_captured_outputs(
 
 fn verify_qglake_handoff_artifact_path_aliases(
     artifacts: &serde_json::Map<String, Value>,
+    summary: &serde_json::Map<String, Value>,
     base_dir: &Path,
 ) -> lakecat_core::LakeCatResult<Value> {
     let outputs = required_object(artifacts, "capturedOutputs", "handoff summary artifacts")?;
@@ -523,14 +524,77 @@ fn verify_qglake_handoff_artifact_path_aliases(
     )?;
     let handoff_verify_output =
         required_resolved_artifact_path(artifacts, "lakecatHandoffVerifyOutput", base_dir)?;
+    let handoff_verify_output_hash =
+        verify_qglake_handoff_verify_output_artifact(artifacts, summary, &handoff_verify_output)?;
     let service_log = verify_qglake_handoff_service_log(artifacts, base_dir)?;
     Ok(json!({
         "lakecatReplayOutput": lakecat_replay.display().to_string(),
         "querygraphVerifyOutput": querygraph_verify.display().to_string(),
         "querygraphImportOutput": querygraph_import.display().to_string(),
         "lakecatHandoffVerifyOutput": handoff_verify_output.display().to_string(),
+        "lakecatHandoffVerifyOutputHash": handoff_verify_output_hash,
         "serviceLog": service_log.display().to_string(),
     }))
+}
+
+fn verify_qglake_handoff_verify_output_artifact(
+    artifacts: &serde_json::Map<String, Value>,
+    summary: &serde_json::Map<String, Value>,
+    output_path: &Path,
+) -> lakecat_core::LakeCatResult<Value> {
+    let Some(expected_sha256) = artifacts.get("lakecatHandoffVerifyOutputHash") else {
+        return Ok(Value::Null);
+    };
+    if expected_sha256.is_null() {
+        return Ok(Value::Null);
+    }
+    let Some(expected_sha256) = expected_sha256
+        .as_str()
+        .filter(|value| is_sha256_hash(value))
+    else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "handoff summary artifacts.lakecatHandoffVerifyOutputHash must be null or a sha256 hash"
+                .to_string(),
+        ));
+    };
+    let bytes = fs::read(output_path).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "failed to read handoff artifact lakecatHandoffVerifyOutput at {}: {err}",
+            output_path.display()
+        ))
+    })?;
+    let actual_sha256 = content_hash_bytes(&bytes);
+    if actual_sha256 != expected_sha256 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff artifact lakecatHandoffVerifyOutput hash mismatch: expected={expected_sha256} actual={actual_sha256}"
+        )));
+    }
+    let output: Value = serde_json::from_slice(&bytes).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff artifact lakecatHandoffVerifyOutput is not JSON: {err}"
+        ))
+    })?;
+    let output = output.as_object().ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "handoff artifact lakecatHandoffVerifyOutput must be a JSON object".to_string(),
+        )
+    })?;
+    require_string_eq(
+        output,
+        "schemaVersion",
+        "lakecat.qglake.handoff-verification.v1",
+        "lakecatHandoffVerifyOutput",
+    )?;
+    require_string_eq(output, "status", "verified", "lakecatHandoffVerifyOutput")?;
+    for field in ["principal", "catalogUrl", "warehouse", "namespace", "table"] {
+        require_value_match(
+            output,
+            field,
+            required_value(summary, field, "handoff summary")?,
+            "lakecatHandoffVerifyOutput",
+        )?;
+    }
+    Ok(Value::String(actual_sha256))
 }
 
 fn verify_qglake_handoff_service_log(
@@ -8250,6 +8314,28 @@ mod tests {
         summary
     }
 
+    fn qglake_bind_handoff_verify_output_artifact(dir: &Path, summary: &mut Value) -> Value {
+        let output = json!({
+            "schemaVersion": "lakecat.qglake.handoff-verification.v1",
+            "status": "verified",
+            "principal": summary["principal"].clone(),
+            "catalogUrl": summary["catalogUrl"].clone(),
+            "warehouse": summary["warehouse"].clone(),
+            "namespace": summary["namespace"].clone(),
+            "table": summary["table"].clone(),
+            "tableCount": summary["querygraphVerification"]["tableCount"].clone(),
+            "viewCount": summary["querygraphVerification"]["viewCount"].clone(),
+            "verifiedTables": summary["querygraphVerification"]["verifiedTables"].clone(),
+            "verifiedViews": summary["querygraphVerification"]["verifiedViews"].clone(),
+            "standards": summary["querygraphVerification"]["standards"].clone(),
+        });
+        let bytes = serde_json::to_vec_pretty(&output).expect("handoff verify JSON bytes");
+        fs::write(dir.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        output
+    }
+
     fn qglake_handoff_summary_json_with_verified_bundle(
         dir: &Path,
     ) -> (Value, QueryGraphBootstrap) {
@@ -9730,6 +9816,75 @@ mod tests {
             verification["pathAliases"]["serviceLog"],
             summary["artifacts"]["serviceLog"]
         );
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_accepts_handoff_verify_output_hash() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-ok");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let verification = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect("artifact hashes should verify with handoff verifier output");
+
+        assert_eq!(
+            verification["pathAliases"]["lakecatHandoffVerifyOutputHash"],
+            summary["artifacts"]["lakecatHandoffVerifyOutputHash"]
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_hash_drift() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-hash-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        fs::write(
+            temp.join("lakecat-handoff-verify.json"),
+            b"tampered verification",
+        )
+        .expect("tamper handoff verify output");
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject handoff verifier output hash drift");
+
+        assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
+        assert!(err.to_string().contains("hash mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_scope_drift() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-scope-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["table"] = json!("other_events");
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject handoff verifier output scope drift");
+
+        assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
+        assert!(err.to_string().contains("table mismatch"));
     }
 
     #[test]

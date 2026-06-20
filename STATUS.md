@@ -6,6 +6,24 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake handoff verifier output`.
+  Compact handoff artifact verification now accepts
+  `lakecatHandoffVerifyOutputHash` and, when present, reads the saved
+  `lakecat-handoff-verify.json` artifact, verifies the SHA-256 hash, and checks
+  that it is a `lakecat.qglake.handoff-verification.v1` success for the same
+  principal, catalog URL, warehouse, namespace, and table. The local handoff
+  harness now writes the verifier output, binds its hash into the summary, and
+  performs a second sidecar self-check without overwriting the declared
+  artifact.
+- Local verification for this handoff verifier-output artifact slice is green:
+  `cargo fmt -p lakecat-cli`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Preserve live QGLake replay evidence in handoff summaries`.
   The local handoff harness now carries governed scan graph events, fetched
   projection/filter requirements, management graph proof, storage-profile graph

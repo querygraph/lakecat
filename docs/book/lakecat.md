@@ -1768,10 +1768,16 @@ captures cannot drift from the compact summary. It compares the legacy string
 path aliases for the LakeCat replay, QueryGraph verify, and QueryGraph import
 captures with the hashed `capturedOutputs` paths they duplicate. It also hashes
 the service log through `serviceLogHash`, so archived operational logs cannot
-drift behind a stable path. It still treats
-`lakecatHandoffVerifyOutput` as a declared output path because the local harness
-writes that verifier capture after the verifier accepts the summary. Then it
-parses those captured JSON files and checks that the replay schema/status,
+drift behind a stable path. The final local summary also binds the first
+LakeCat handoff-verifier capture with `lakecatHandoffVerifyOutputHash`. Because
+that output can only exist after a successful verifier run, the harness performs
+a second sidecar self-check: first it writes
+`target/qglake-handoff/lakecat-handoff-verify.json`, then it records the file's
+hash in the summary, then it verifies the summary again without overwriting the
+declared artifact. The verifier checks that saved JSON is a
+`lakecat.qglake.handoff-verification.v1` success for the same principal,
+catalog URL, warehouse, namespace, and table. Then it parses those captured
+JSON files and checks that the replay schema/status,
 table/view counts, semantic hashes, standards, request-identity proof,
 QueryGraph bootstrap proof, governed scan proof, storage-profile upsert proof,
 and credential-vending proof inside the captures still match the summary. It
