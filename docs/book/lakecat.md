@@ -1999,8 +1999,11 @@ self-consistent handoff cannot smuggle placeholder policy names through a field
 that later readers treat as integrity evidence. The outbox drain checks the
 same digest shape before acknowledging any pending event that carries
 `read-restriction.policy-hashes`, so malformed source evidence is stopped
-before it becomes delivered replay material. View receipt-chain replay follows
-the same fail-closed rule at the drain boundary. A verified
+before it becomes delivered replay material. View receipt replay follows the
+same fail-closed rule at the drain boundary. A
+`view.version-receipts-listed` event is not acknowledged unless its
+`receipt-count` matches full SHA-256 receipt hashes and every drop receipt hash
+is included in the listed receipts. A verified
 `view.version-receipt-chains-listed` event is not acknowledged unless its
 verified-chain count matches the chains marked verified, each verified chain and
 receipt carries full SHA-256 digest evidence, the first receipt is a version 1

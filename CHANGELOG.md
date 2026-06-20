@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for `view.version-receipts-listed` events whose
+  receipt count, receipt hashes, or drop receipt hashes are malformed, so
+  invalid view receipt-list evidence fails before graph/lineage projection
+  acknowledgement.
 - Rejected outbox delivery for verified
   `view.version-receipt-chains-listed` chains whose chain hash, receipt hashes,
   verified-chain count, first receipt, previous links, or upsert/drop version

@@ -1106,6 +1106,9 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     if event.event_type == "table.commit" {
         validate_table_commit_hash_evidence(event)?;
     }
+    if event.event_type == "view.version-receipts-listed" {
+        validate_view_receipt_list_event_evidence(event, payload)?;
+    }
     if event.event_type == "view.version-receipt-chains-listed" {
         validate_view_receipt_chain_event_evidence(event, payload)?;
     }
@@ -1151,6 +1154,38 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
         "policy_hash",
     ] {
         validate_optional_full_hash_field(event, commit, field)?;
+    }
+    Ok(())
+}
+
+fn validate_view_receipt_list_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let receipt_hashes = validate_required_full_hash_array_field(event, payload, "receipt-hashes")?;
+    let drop_receipt_hashes =
+        validate_required_full_hash_array_field(event, payload, "drop-receipt-hashes")?;
+    let Some(expected_receipt_count) = payload.get("receipt-count").and_then(Value::as_u64) else {
+        return Err(outbox_evidence_error(
+            event,
+            "view receipt-list evidence must contain receipt-count",
+        ));
+    };
+    if receipt_hashes.len() as u64 != expected_receipt_count {
+        return Err(outbox_evidence_error(
+            event,
+            "view receipt-list receipt-count does not match receipt-hashes",
+        ));
+    }
+
+    let receipt_hashes = receipt_hashes.into_iter().collect::<BTreeSet<_>>();
+    for drop_receipt_hash in drop_receipt_hashes {
+        if !receipt_hashes.contains(drop_receipt_hash) {
+            return Err(outbox_evidence_error(
+                event,
+                "view receipt-list drop-receipt-hashes must be included in receipt-hashes",
+            ));
+        }
     }
     Ok(())
 }
@@ -1347,6 +1382,42 @@ fn validate_required_full_hash_field(
         event,
         &format!("{field} must contain full SHA-256 digest evidence"),
     ))
+}
+
+fn validate_required_full_hash_array_field<'a>(
+    event: &OutboxEvent,
+    object: &'a Value,
+    field: &str,
+) -> Result<Vec<&'a str>, LakeCatError> {
+    let Some(values) = object.get(field) else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{field} must be present"),
+        ));
+    };
+    let Some(values) = values.as_array() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{field} must be an array"),
+        ));
+    };
+    let mut hashes = Vec::with_capacity(values.len());
+    for value in values {
+        let Some(hash) = value.as_str() else {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{field} must contain full SHA-256 digest evidence"),
+            ));
+        };
+        if !is_full_sha256_digest_evidence(hash) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{field} must contain full SHA-256 digest evidence"),
+            ));
+        }
+        hashes.push(hash);
+    }
+    Ok(hashes)
 }
 
 fn validate_optional_full_hash_array_field(
@@ -10606,6 +10677,63 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("previous links must match the prior receipt"),
+            "{err}"
+        );
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_view_receipt_list_evidence() {
+        let receipt_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "view-version": 1,
+            "operation": "upsert"
+        }))
+        .unwrap();
+        let unrelated_drop_receipt_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:other_view",
+            "view-version": 1,
+            "operation": "drop"
+        }))
+        .unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-view-receipts-malformed".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "view.version-receipts-listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-view-receipts-malformed",
+                    "event-type": "view.version-receipts-listed",
+                    "payload": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "view": "events_view",
+                        "receipt-count": 1,
+                        "receipt-hashes": [receipt_hash],
+                        "drop-receipt-hashes": [unrelated_drop_receipt_hash],
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10).await.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("drop-receipt-hashes must be included"),
             "{err}"
         );
         assert!(store.delivered.lock().await.is_empty());
