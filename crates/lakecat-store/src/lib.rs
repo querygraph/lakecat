@@ -421,6 +421,9 @@ impl ServerRecord {
                 "server endpoint URL must not be empty".to_string(),
             ));
         }
+        if let Some(endpoint_url) = self.endpoint_url.as_deref() {
+            validate_server_endpoint_url(endpoint_url)?;
+        }
         validate_public_config(&self.properties)?;
         Ok(())
     }
@@ -2106,6 +2109,16 @@ fn validate_warehouse_storage_root_path(storage_root: &str) -> LakeCatResult<()>
     Ok(())
 }
 
+fn validate_server_endpoint_url(endpoint_url: &str) -> LakeCatResult<()> {
+    if location_has_query_fragment_or_userinfo(endpoint_url) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "server endpoint URL must not include query strings, fragments, or userinfo; {}",
+            server_endpoint_url_hash_context(endpoint_url)
+        )));
+    }
+    Ok(())
+}
+
 fn location_prefix_has_query_fragment_or_userinfo(location_prefix: &str) -> bool {
     location_has_query_fragment_or_userinfo(location_prefix)
 }
@@ -2371,6 +2384,13 @@ fn warehouse_storage_root_hash_context(storage_root: &str) -> String {
     format!(
         "warehouse-storage-root-hash={}",
         content_hash_bytes(storage_root.as_bytes())
+    )
+}
+
+fn server_endpoint_url_hash_context(endpoint_url: &str) -> String {
+    format!(
+        "server-endpoint-url-hash={}",
+        content_hash_bytes(endpoint_url.as_bytes())
     )
 }
 
@@ -6373,6 +6393,68 @@ pub mod turso_store {
                 assert!(!message.contains("token=abc"));
                 assert!(!message.contains("user:secret"));
             }
+        }
+
+        #[test]
+        fn servers_reject_decorated_endpoint_urls() {
+            for endpoint_url in [
+                "https://lakecat.example.com?token=abc",
+                "https://lakecat.example.com/catalog#frag",
+                "https://user:secret@lakecat.example.com/catalog",
+            ] {
+                let err = ServerRecord::new(
+                    "prod",
+                    Some("Production".to_string()),
+                    Some(endpoint_url.to_string()),
+                    BTreeMap::new(),
+                    Principal::anonymous(),
+                )
+                .unwrap_err();
+
+                let message = err.to_string();
+                assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+                assert!(message.contains("query strings, fragments, or userinfo"));
+                assert!(message.contains("server-endpoint-url-hash=sha256:"));
+                assert!(
+                    !message.contains(endpoint_url),
+                    "server endpoint validation must not expose raw endpoint URLs"
+                );
+                assert!(!message.contains("token=abc"));
+                assert!(!message.contains("user:secret"));
+            }
+        }
+
+        #[tokio::test]
+        async fn server_upsert_rejects_deserialized_decorated_endpoint_urls() {
+            let record = ServerRecord {
+                server_id: "prod".to_string(),
+                display_name: Some("Production".to_string()),
+                endpoint_url: Some("https://lakecat.example.com?token=abc".to_string()),
+                properties: BTreeMap::new(),
+                created: AuditStamp::now(Principal::anonymous()),
+                updated_at: Utc::now(),
+            };
+
+            let memory_err = MemoryCatalogStore::new()
+                .upsert_server(record.clone())
+                .await
+                .unwrap_err();
+            let message = memory_err.to_string();
+            assert!(matches!(memory_err, LakeCatError::InvalidArgument(_)));
+            assert!(message.contains("query strings, fragments, or userinfo"));
+            assert!(message.contains("server-endpoint-url-hash=sha256:"));
+            assert!(!message.contains("https://lakecat.example.com?token=abc"));
+            assert!(!message.contains("token=abc"));
+
+            let turso = TursoCatalogStore::in_memory().await.unwrap();
+            let turso_err = turso.upsert_server(record).await.unwrap_err();
+            let message = turso_err.to_string();
+            assert!(matches!(turso_err, LakeCatError::InvalidArgument(_)));
+            assert!(message.contains("query strings, fragments, or userinfo"));
+            assert!(message.contains("server-endpoint-url-hash=sha256:"));
+            assert!(!message.contains("https://lakecat.example.com?token=abc"));
+            assert!(!message.contains("token=abc"));
+            assert_eq!(turso.list_servers().await.unwrap(), vec![]);
         }
 
         #[test]

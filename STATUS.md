@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject decorated server endpoint URLs`.
+  Server endpoint URLs now reject query strings, fragments, and URI userinfo
+  before memory or Turso persistence. `server.upserted` replay also redacts
+  legacy/imported endpoint URLs before graph or lineage projection, replacing
+  them with hash-only endpoint evidence.
+- Local verification for this server endpoint hardening slice is green:
+  `cargo fmt -p lakecat-store -p lakecat-service -- --check`;
+  `cargo test -p lakecat-store --features turso-local endpoint_urls -- --nocapture`;
+  `cargo test -p lakecat-service server_upserts_to_lineage -- --nocapture`;
+  `cargo test -p lakecat-service management_server_rejects_decorated_endpoint_urls -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Refresh live QGLake handoff after warehouse-root hardening`.
   The local QGLake handoff harness is green after warehouse-root replay
   redaction and validation hardening: it generated one table and one view,

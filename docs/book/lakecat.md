@@ -1485,10 +1485,15 @@ Warehouse HAS_NAMESPACE Namespace
 When LakeCat has durable management rows, those graph nodes come from the
 stored `ServerRecord`, `ProjectRecord`, and `WarehouseRecord`. That means a
 QueryGraph import can see the real server id, project id, warehouse id, display
-names, endpoint URL, and storage root that operators manage through LakeCat's
-management API. When those records do not exist yet, LakeCat falls back to the
-old deterministic default anchors so bootstrap remains compatible with minimal
-embedded tests and older import flows.
+names, and tenant relationships that operators manage through LakeCat's
+management API. Replay evidence deliberately redacts storage roots and server
+endpoint URLs into hashes, so QueryGraph can prove which management state was
+observed without inheriting local paths, bucket roots, query tokens, URI
+fragments, or userinfo. Authorized management responses can still show the
+configured endpoint URL or storage root to an operator; graph and lineage replay
+receive hash-only evidence. When those records do not exist yet, LakeCat falls
+back to the old deterministic default anchors so bootstrap remains compatible
+with minimal embedded tests and older import flows.
 
 LakeCat also keeps the older `Catalog HAS_NAMESPACE Namespace` edge in the
 bundle so existing QueryGraph importers can keep working while newer flows read

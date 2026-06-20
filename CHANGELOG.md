@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected decorated server endpoint URLs before memory or Turso persistence and
+  redacted legacy/imported endpoint URLs during `server.upserted` replay,
+  emitting only `server-endpoint-url-hash` or `endpoint-url-hash` evidence
+  instead of query tokens, fragments, or URI userinfo.
 - Refreshed the live QGLake handoff after warehouse-root hardening, proving the
   local harness still verifies 1 table, 1 view, 26 drained replay events,
   QueryGraph verify/import, and compact handoff self-checks with redacted

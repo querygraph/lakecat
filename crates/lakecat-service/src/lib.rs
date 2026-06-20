@@ -4267,6 +4267,7 @@ async fn project_outbox_event(
         receipt.record_lineage(lineage_receipt);
     } else if event.event_type == "server.upserted" {
         let server_id = outbox_server(event)?;
+        let event_payload = redact_server_event_payload(event_payload);
         state
             .graph
             .emit(
@@ -5178,6 +5179,28 @@ fn redact_warehouse_event_payload(mut payload: Value) -> Value {
             json!(
                 content_hash_json(&json!({"storage-root": storage_root}))
                     .unwrap_or_else(|_| content_hash_bytes(storage_root.as_bytes()))
+            ),
+        );
+    }
+    payload
+}
+
+fn redact_server_event_payload(mut payload: Value) -> Value {
+    let Some(server) = payload
+        .get_mut("server-record")
+        .and_then(Value::as_object_mut)
+    else {
+        return payload;
+    };
+    if let Some(endpoint_url) = server
+        .remove("endpoint-url")
+        .and_then(|value| value.as_str().map(str::to_string))
+    {
+        server.insert(
+            "endpoint-url-hash".to_string(),
+            json!(
+                content_hash_json(&json!({"endpoint-url": endpoint_url}))
+                    .unwrap_or_else(|_| content_hash_bytes(endpoint_url.as_bytes()))
             ),
         );
     }
@@ -9310,7 +9333,7 @@ mod tests {
                         "server-record": {
                             "server-id": "prod",
                             "display-name": "Production",
-                            "endpoint-url": "https://lakecat.example",
+                            "endpoint-url": "https://lakecat.example?token=raw-secret",
                             "properties": {"region": "global"}
                         }
                     }
@@ -9350,6 +9373,22 @@ mod tests {
             graph_events[1].properties["server-record"]["server-id"],
             serde_json::json!("prod")
         );
+        assert_eq!(
+            graph_events[1].properties["server-record"]["endpoint-url"],
+            serde_json::Value::Null
+        );
+        assert!(
+            graph_events[1].properties["server-record"]["endpoint-url-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert!(
+            !graph_events[1]
+                .properties
+                .to_string()
+                .contains("raw-secret"),
+            "server endpoint replay must not expose decorated endpoint URLs to graph sinks"
+        );
         drop(graph_events);
 
         let lineage_events = lineage.events.lock().await;
@@ -9361,6 +9400,19 @@ mod tests {
         assert_eq!(
             lineage_events[0].payload["server-record"]["display-name"],
             serde_json::json!("Production")
+        );
+        assert_eq!(
+            lineage_events[0].payload["server-record"]["endpoint-url"],
+            serde_json::Value::Null
+        );
+        assert!(
+            lineage_events[0].payload["server-record"]["endpoint-url-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert!(
+            !lineage_events[0].payload.to_string().contains("raw-secret"),
+            "server endpoint replay must not expose decorated endpoint URLs to lineage sinks"
         );
     }
 
@@ -12924,6 +12976,42 @@ mod tests {
             body["servers"][0]["server-id"],
             serde_json::json!("lakecat-local")
         );
+    }
+
+    #[tokio::test]
+    async fn management_server_rejects_decorated_endpoint_urls() {
+        let app = test_app();
+        let endpoint_url = "https://lakecat.example.com?token=raw-secret";
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/servers/prod")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "display-name": "Production",
+                    "endpoint-url": endpoint_url,
+                    "properties": {
+                        "deployment": "prod"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(message.contains("query strings, fragments, or userinfo"));
+        assert!(message.contains("server-endpoint-url-hash=sha256:"));
+        assert!(
+            !message.contains(endpoint_url),
+            "server endpoint validation must not expose raw endpoint URLs"
+        );
+        assert!(!message.contains("raw-secret"));
     }
 
     #[tokio::test]
