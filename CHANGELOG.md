@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Tightened compact QGLake handoff verification so the QueryGraph bootstrap
+  proof must carry the same optional TypeDID envelope/proof hashes as the
+  request-identity proof.
+- Tightened compact QGLake handoff verification so the QueryGraph bootstrap
   proof must carry the same authorization receipt hash as the request-identity
   proof, rejecting cross-receipt handoff splices.
 - Tightened the local dependency-contract audit so manual-only CI also rejects

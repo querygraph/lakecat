@@ -2429,6 +2429,14 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "queryGraphBootstrapProof",
     )?;
     require_typedid_hash_pair(bootstrap, "queryGraphBootstrapProof")?;
+    for field in ["typedidEnvelopeHash", "typedidProofHash"] {
+        require_value_match(
+            bootstrap,
+            field,
+            required_value(request_identity, field, "requestIdentityProof")?,
+            "queryGraphBootstrapProof",
+        )?;
+    }
     if required_u64(querygraph, "viewCount", "querygraphVerification")? > 0 {
         require_hash_array(
             bootstrap,
@@ -9658,6 +9666,40 @@ mod tests {
         assert!(err.to_string().contains("queryGraphBootstrapProof"));
         assert!(err.to_string().contains("typedidProofHash"));
         assert!(err.to_string().contains("typedidEnvelopeHash"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_bootstrap_typedid_envelope_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["requestIdentityProof"]["typedidEnvelopeHash"] =
+            json!("sha256:typedid-envelope");
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["typedidEnvelopeHash"] =
+            json!("sha256:other-typedid-envelope");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject bootstrap TypeDID envelope drift");
+
+        assert!(err.to_string().contains("queryGraphBootstrapProof"));
+        assert!(err.to_string().contains("typedidEnvelopeHash mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_bootstrap_typedid_proof_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["requestIdentityProof"]["typedidEnvelopeHash"] =
+            json!("sha256:typedid-envelope");
+        summary["lakecatReplayVerification"]["requestIdentityProof"]["typedidProofHash"] =
+            json!("sha256:typedid-proof");
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["typedidEnvelopeHash"] =
+            json!("sha256:typedid-envelope");
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["typedidProofHash"] =
+            json!("sha256:other-typedid-proof");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject bootstrap TypeDID proof drift");
+
+        assert!(err.to_string().contains("queryGraphBootstrapProof"));
+        assert!(err.to_string().contains("typedidProofHash mismatch"));
     }
 
     #[test]

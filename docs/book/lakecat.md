@@ -1566,8 +1566,12 @@ authorization receipt into the same agent summary.
 The compact verifier
 also validates the TypeDID hash-slot shape directly: envelope and proof slots
 must be null or SHA-256 hashes, and a TypeDID proof hash cannot appear without
-the paired envelope hash. That keeps the compact handoff self-describing
-without moving TypeDID trust semantics out of TypeSec. It compares captured
+the paired envelope hash. The bootstrap proof must carry the same optional
+TypeDID envelope and proof hashes as `requestIdentityProof`, so a
+TypeDID-backed handoff cannot splice a bootstrap generated under a different
+identity envelope into the same summary. That keeps the compact handoff
+self-describing without moving TypeDID trust semantics out of TypeSec. It
+compares captured
 `replay-evidence.scan` with `governedScanProof`, requiring positive plan task,
 scan-plan graph event, file task, delete file, and child plan task counts plus
 the planned and fetched read-restriction objects and the fetch-side required

@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake bootstrap TypeDID hashes`.
+  Compact QGLake handoff verification now requires the optional
+  `queryGraphBootstrapProof.typedidEnvelopeHash` and `typedidProofHash` values
+  to match `requestIdentityProof`, so a TypeDID-backed handoff cannot combine a
+  valid-looking bootstrap proof with a different identity envelope or proof.
+- Local verification for this handoff TypeDID-binding slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_bootstrap_typedid_envelope_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_bootstrap_typedid_proof_drift -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind QGLake bootstrap authorization receipt`.
   Compact QGLake handoff verification now requires
   `queryGraphBootstrapProof.authorizationReceiptHash` to match
