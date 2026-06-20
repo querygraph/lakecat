@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound storage-profile secret-reference hashes into lineage-drain and QGLake
+  replay proof: storage-profile upsert evidence now carries `secretRefHash`
+  when a secret reference is present, and compact handoff verification rejects
+  missing, malformed, or contradictory secret-ref hash evidence.
 - Redacted storage-profile management responses: upsert/list responses now
   return secret-reference presence, provider, and hash evidence instead of the
   raw `secret-ref` locator.

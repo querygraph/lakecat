@@ -1871,6 +1871,7 @@ fn verify_lakecat_replay_storage_profile_matches_summary(
     for field in [
         "secretRefPresent",
         "secretRefProvider",
+        "secretRefHash",
         "graphEvents",
         "replayEventHashes",
         "openLineageHashes",
@@ -2784,6 +2785,11 @@ fn require_storage_profile_upsert_evidence(
             "secretRefProvider",
             "storageProfileUpsertProof",
         )?;
+        require_hash_str(
+            storage_profile,
+            "secretRefHash",
+            "storageProfileUpsertProof",
+        )?;
     } else if !matches!(
         required_value(
             storage_profile,
@@ -2794,6 +2800,18 @@ fn require_storage_profile_upsert_evidence(
     ) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "storageProfileUpsertProof.secretRefProvider must be null when secretRefPresent is false"
+                .to_string(),
+        ));
+    } else if !matches!(
+        required_value(
+            storage_profile,
+            "secretRefHash",
+            "storageProfileUpsertProof"
+        )?,
+        Value::Null
+    ) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "storageProfileUpsertProof.secretRefHash must be null when secretRefPresent is false"
                 .to_string(),
         ));
     }
@@ -3069,6 +3087,7 @@ fn require_credential_storage_profile_matches_upsert(
         "locationPrefixHash",
         "secretRefPresent",
         "secretRefProvider",
+        "secretRefHash",
     ] {
         require_value_match(
             storage_profile,
@@ -3096,12 +3115,20 @@ fn require_credential_storage_profile_evidence(
     )?;
     if required_bool(storage_profile, "secretRefPresent", storage_label.as_str())? {
         require_non_empty_str(storage_profile, "secretRefProvider", storage_label.as_str())?;
+        require_hash_str(storage_profile, "secretRefHash", storage_label.as_str())?;
     } else if !matches!(
         required_value(storage_profile, "secretRefProvider", storage_label.as_str())?,
         Value::Null
     ) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "{storage_label}.secretRefProvider must be null when secretRefPresent is false"
+        )));
+    } else if !matches!(
+        required_value(storage_profile, "secretRefHash", storage_label.as_str())?,
+        Value::Null
+    ) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{storage_label}.secretRefHash must be null when secretRefPresent is false"
         )));
     }
     require_positive_u64(storage_profile, "graphEvents", storage_label.as_str())?;
@@ -3465,16 +3492,24 @@ fn qglake_storage_profile_upsert_line(event: &LineageDrainEventSummary) -> Optio
         return None;
     }
     let secret_ref = if event.storage_profile_secret_ref_present? {
-        event
+        let provider = event
             .storage_profile_secret_ref_provider
             .as_deref()
             .filter(|provider| !provider.trim().is_empty())
-            .unwrap_or("unknown")
+            .unwrap_or("unknown");
+        let hash = event
+            .storage_profile_secret_ref_hash
+            .as_deref()
+            .filter(|hash| is_sha256_hash(hash))
+            .unwrap_or("missing");
+        format!("{provider}:secret_ref_hash={hash}")
     } else {
-        if event.storage_profile_secret_ref_provider.is_some() {
+        if event.storage_profile_secret_ref_provider.is_some()
+            || event.storage_profile_secret_ref_hash.is_some()
+        {
             return None;
         }
-        "none"
+        "none".to_string()
     };
     Some(format!(
         "{profile_id}:{provider}:{issuance_mode}:location_prefix_hash={location_prefix_hash}:secret_ref={secret_ref}"
@@ -3620,6 +3655,7 @@ fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Optio
             "locationPrefixHash": storage_profile_upsert.storage_profile_location_prefix_hash.as_deref(),
             "secretRefPresent": storage_profile_upsert.storage_profile_secret_ref_present.unwrap_or_default(),
             "secretRefProvider": storage_profile_upsert.storage_profile_secret_ref_provider.as_deref(),
+            "secretRefHash": storage_profile_upsert.storage_profile_secret_ref_hash.as_deref(),
             "graphEvents": storage_profile_upsert.graph_events,
             "replayEventHashes": &storage_profile_upsert.replay_event_hashes,
             "openLineageHashes": &storage_profile_upsert.replay_open_lineage_hashes,
@@ -3691,6 +3727,7 @@ fn qglake_credential_storage_profile_evidence_json(event: &LineageDrainEventSumm
         "locationPrefixHash": event.storage_profile_location_prefix_hash.as_deref(),
         "secretRefPresent": event.storage_profile_secret_ref_present.unwrap_or_default(),
         "secretRefProvider": event.storage_profile_secret_ref_provider.as_deref(),
+        "secretRefHash": event.storage_profile_secret_ref_hash.as_deref(),
         "graphEvents": event.graph_events,
     })
 }
@@ -3855,16 +3892,24 @@ fn qglake_credential_storage_profile_line(event: &LineageDrainEventSummary) -> O
         return None;
     }
     let secret_ref = if event.storage_profile_secret_ref_present? {
-        event
+        let provider = event
             .storage_profile_secret_ref_provider
             .as_deref()
             .filter(|provider| !provider.trim().is_empty())
-            .unwrap_or("unknown")
+            .unwrap_or("unknown");
+        let hash = event
+            .storage_profile_secret_ref_hash
+            .as_deref()
+            .filter(|hash| is_sha256_hash(hash))
+            .unwrap_or("missing");
+        format!("{provider}:secret_ref_hash={hash}")
     } else {
-        if event.storage_profile_secret_ref_provider.is_some() {
+        if event.storage_profile_secret_ref_provider.is_some()
+            || event.storage_profile_secret_ref_hash.is_some()
+        {
             return None;
         }
-        "none"
+        "none".to_string()
     };
     Some(format!(
         "{}:{}:{}:location_prefix_hash={}:secret_ref={}:graph_events={}",
@@ -6752,6 +6797,8 @@ fn verify_qglake_credential_storage_profile_matches_upsert(
             != storage_profile_upsert.storage_profile_secret_ref_present
         || credential.storage_profile_secret_ref_provider
             != storage_profile_upsert.storage_profile_secret_ref_provider
+        || credential.storage_profile_secret_ref_hash
+            != storage_profile_upsert.storage_profile_secret_ref_hash
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain {label} credential replay storage-profile evidence does not match storage profile upsert replay"
@@ -6962,11 +7009,23 @@ fn verify_qglake_storage_profile_upsert_replay(
                 .to_string(),
         ));
     }
-    if event.storage_profile_secret_ref_present == Some(false)
-        && event.storage_profile_secret_ref_provider.is_some()
+    if event.storage_profile_secret_ref_present == Some(true)
+        && event
+            .storage_profile_secret_ref_hash
+            .as_deref()
+            .map_or(true, |hash| !is_sha256_hash(hash))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain storage profile upsert replay carried a secret-ref provider without secret-ref presence"
+            "qglake lineage drain storage profile upsert replay is missing secret-ref hash evidence"
+                .to_string(),
+        ));
+    }
+    if event.storage_profile_secret_ref_present == Some(false)
+        && (event.storage_profile_secret_ref_provider.is_some()
+            || event.storage_profile_secret_ref_hash.is_some())
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain storage profile upsert replay carried secret-ref evidence without secret-ref presence"
                 .to_string(),
         ));
     }
@@ -8299,7 +8358,7 @@ mod tests {
                     "commitCount": 1,
                     "sequenceNumbers": [1],
                     "commitHashes": ["sha256:commit"],
-                    "graphEvents": 1,
+                        "graphEvents": 1,
                     "replayEventHashes": ["sha256:commit-replay"],
                     "openLineageHashes": ["sha256:commit-openlineage"]
                 },
@@ -8356,7 +8415,8 @@ mod tests {
                     "locationPrefixHash": "sha256:storage-location-prefix",
                     "secretRefPresent": false,
                     "secretRefProvider": null,
-                    "graphEvents": 1,
+                            "secretRefHash": null,
+                        "graphEvents": 1,
                     "replayEventHashes": ["sha256:storage-replay"],
                     "openLineageHashes": ["sha256:storage-openlineage"]
                 },
@@ -8375,6 +8435,7 @@ mod tests {
                             "locationPrefixHash": "sha256:storage-location-prefix",
                             "secretRefPresent": false,
                             "secretRefProvider": null,
+                            "secretRefHash": null,
                             "graphEvents": 2
                         },
                         "replayEventHashes": ["sha256:restricted-replay"],
@@ -8395,6 +8456,7 @@ mod tests {
                             "locationPrefixHash": "sha256:storage-location-prefix",
                             "secretRefPresent": false,
                             "secretRefProvider": null,
+                            "secretRefHash": null,
                             "graphEvents": 2
                         },
                         "replayEventHashes": ["sha256:human-replay"],
@@ -8522,7 +8584,7 @@ mod tests {
                     "commitCount": 1,
                     "sequenceNumbers": [1],
                     "commitHashes": ["sha256:commit"],
-                    "graphEvents": 1,
+                        "graphEvents": 1,
                     "replayEventHashes": ["sha256:commit-replay"],
                     "openLineageHashes": ["sha256:commit-openlineage"]
                 },
@@ -8544,6 +8606,7 @@ mod tests {
                         "locationPrefixHash": "sha256:storage-location-prefix",
                         "secretRefPresent": false,
                         "secretRefProvider": null,
+                        "secretRefHash": null,
                         "graphEvents": 1,
                         "replayEventHashes": ["sha256:storage-replay"],
                         "openLineageHashes": ["sha256:storage-openlineage"]
@@ -8598,6 +8661,7 @@ mod tests {
                             "locationPrefixHash": "sha256:storage-location-prefix",
                             "secretRefPresent": false,
                             "secretRefProvider": null,
+                            "secretRefHash": null,
                             "graphEvents": 2
                         },
                         "replayEventHashes": ["sha256:restricted-replay"],
@@ -8618,6 +8682,7 @@ mod tests {
                             "locationPrefixHash": "sha256:storage-location-prefix",
                             "secretRefPresent": false,
                             "secretRefProvider": null,
+                            "secretRefHash": null,
                             "graphEvents": 2
                         },
                         "replayEventHashes": ["sha256:human-replay"],
@@ -9660,6 +9725,38 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_requires_secret_ref_hash_when_present() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefPresent"] =
+            json!(true);
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefProvider"] =
+            json!("vault");
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefHash"] =
+            Value::Null;
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject secret-ref evidence without hash");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("secretRefHash"));
+
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefPresent"] =
+            json!(true);
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefProvider"] =
+            json!("vault");
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefHash"] =
+            json!("not-a-sha256-hash");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject malformed secret-ref hash");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("secretRefHash"));
+        assert!(err.to_string().contains("sha256"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_secret_ref_provider_when_absent() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefPresent"] =
@@ -9672,6 +9769,22 @@ mod tests {
 
         assert!(err.to_string().contains("storageProfileUpsertProof"));
         assert!(err.to_string().contains("secretRefProvider"));
+        assert!(err.to_string().contains("null"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_secret_ref_hash_when_absent() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefPresent"] =
+            json!(false);
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefHash"] =
+            json!("sha256:storage-secret-ref");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject a hash when no secret ref is present");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("secretRefHash"));
         assert!(err.to_string().contains("null"));
     }
 
@@ -10065,6 +10178,8 @@ mod tests {
             json!(true);
         summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefProvider"] =
             json!("vault");
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefHash"] =
+            json!("sha256:storage-secret-ref");
 
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject credential secret-ref state drift");
@@ -14071,6 +14186,7 @@ mod tests {
                     storage_profile_location_prefix_hash: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
+                    storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
@@ -14156,6 +14272,7 @@ mod tests {
                     storage_profile_location_prefix_hash: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
+                    storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
@@ -14243,6 +14360,7 @@ mod tests {
                     storage_profile_location_prefix_hash: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
+                    storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
@@ -14328,6 +14446,7 @@ mod tests {
                     storage_profile_location_prefix_hash: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
+                    storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
@@ -14413,6 +14532,7 @@ mod tests {
                     storage_profile_location_prefix_hash: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
+                    storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
@@ -14498,6 +14618,7 @@ mod tests {
                     storage_profile_location_prefix_hash: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
+                    storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
@@ -14583,6 +14704,7 @@ mod tests {
                     storage_profile_location_prefix_hash: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
+                    storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
@@ -14668,6 +14790,7 @@ mod tests {
                     storage_profile_location_prefix_hash: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
+                    storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
@@ -14753,6 +14876,7 @@ mod tests {
                     storage_profile_location_prefix_hash: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
+                    storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
@@ -14838,6 +14962,7 @@ mod tests {
                     storage_profile_location_prefix_hash: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
+                    storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
@@ -14923,6 +15048,7 @@ mod tests {
                     storage_profile_location_prefix_hash: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
+                    storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
@@ -15008,6 +15134,7 @@ mod tests {
                     storage_profile_location_prefix_hash: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
+                    storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
@@ -15093,6 +15220,7 @@ mod tests {
                     storage_profile_location_prefix_hash: None,
                     storage_profile_secret_ref_present: None,
                     storage_profile_secret_ref_provider: None,
+                    storage_profile_secret_ref_hash: None,
                     warehouse_count: None,
                     table_commit_count: None,
                     table_commit_sequence_numbers: Vec::new(),
@@ -16102,7 +16230,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should reject contradictory secret-ref evidence");
         assert!(err.to_string().contains(
-            "qglake lineage drain storage profile upsert replay carried a secret-ref provider without secret-ref presence"
+            "qglake lineage drain storage profile upsert replay carried secret-ref evidence without secret-ref presence"
         ));
 
         let mut restricted_profile_drift = qglake_restricted_credential_summary();
@@ -16160,6 +16288,8 @@ mod tests {
         let mut upsert_secret_ref_drift = qglake_storage_profile_upsert_lineage_summary();
         upsert_secret_ref_drift.storage_profile_secret_ref_present = Some(true);
         upsert_secret_ref_drift.storage_profile_secret_ref_provider = Some("vault".to_string());
+        upsert_secret_ref_drift.storage_profile_secret_ref_hash =
+            Some("sha256:storage-secret-ref".to_string());
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 7,
@@ -17420,6 +17550,7 @@ mod tests {
             storage_profile_location_prefix_hash: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
             warehouse_count: None,
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
@@ -17506,6 +17637,7 @@ mod tests {
             storage_profile_location_prefix_hash: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
             warehouse_count: None,
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
@@ -17617,6 +17749,7 @@ mod tests {
             storage_profile_location_prefix_hash: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
             warehouse_count: None,
             table_commit_count: Some(1),
             table_commit_sequence_numbers: vec![1],
@@ -17696,6 +17829,7 @@ mod tests {
             storage_profile_location_prefix_hash: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
             warehouse_count: None,
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
@@ -17770,6 +17904,7 @@ mod tests {
             storage_profile_location_prefix_hash: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
             warehouse_count: None,
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
@@ -17843,6 +17978,7 @@ mod tests {
             storage_profile_location_prefix_hash: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
             warehouse_count: None,
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
@@ -17910,6 +18046,7 @@ mod tests {
             storage_profile_location_prefix_hash: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
             warehouse_count: None,
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
@@ -17979,6 +18116,7 @@ mod tests {
             ),
             storage_profile_secret_ref_present: Some(false),
             storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
             warehouse_count: None,
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
@@ -18046,6 +18184,7 @@ mod tests {
             storage_profile_location_prefix_hash: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
             warehouse_count: None,
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
@@ -18111,6 +18250,7 @@ mod tests {
             storage_profile_location_prefix_hash: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
             warehouse_count: None,
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
@@ -18176,6 +18316,7 @@ mod tests {
             storage_profile_location_prefix_hash: None,
             storage_profile_secret_ref_present: None,
             storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
             warehouse_count: Some(1),
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
@@ -18243,6 +18384,7 @@ mod tests {
             ),
             storage_profile_secret_ref_present: Some(false),
             storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
             warehouse_count: None,
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),
@@ -18314,6 +18456,7 @@ mod tests {
             ),
             storage_profile_secret_ref_present: Some(false),
             storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
             warehouse_count: None,
             table_commit_count: None,
             table_commit_sequence_numbers: Vec::new(),

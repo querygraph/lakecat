@@ -1562,11 +1562,11 @@ It also compares the captured LakeCat replay
 `replay-evidence.management.storageProfileUpsert` object with the compact
 `lakecatReplayVerification.storageProfileUpsertProof`, including the
 profile id, provider, issuance mode, location-prefix hash, secret-reference
-presence/provider, replay hashes, and OpenLineage hashes. The compact verifier
+presence/provider/hash, replay hashes, and OpenLineage hashes. The compact verifier
 also requires that location-prefix value to be a SHA-256 hash and requires a
-redacted secret-reference provider whenever the proof says a secret reference is
-present. If the proof says no secret reference is present, the provider must be
-null. It also compares
+redacted secret-reference provider and `secretRefHash` whenever the proof says a
+secret reference is present. If the proof says no secret reference is present,
+the provider and hash must both be null. It also compares
 the captured `replay-evidence.credentials` restricted-agent and trusted-human
 branches with the compact `credentialVendingProof`, so a saved handoff cannot
 claim that agents were blocked onto Sail-planned reads or that humans used an
@@ -1605,8 +1605,9 @@ contains redacted `storageProfileUpsert` evidence with replay and OpenLineage
 hashes, and the accepted summary repeats that evidence as
 `lakecatReplayVerification.storageProfileUpsertProof`. QueryGraph gets proof
 that the credential root was configured, including the provider, issuance mode,
-and a hash of the configured location prefix, without receiving the underlying
-secret-store URI or full storage prefix in the compact proof. The
+the configured location-prefix hash, and a redacted hash of the secret
+reference, without receiving the underlying secret-store URI or full storage
+prefix in the compact proof. The
 operator-readable management replay line now prints the same storage-scope hash
 and redacted secret-reference state, so a captured transcript cannot describe
 the credential root only by provider while omitting its redacted storage scope or

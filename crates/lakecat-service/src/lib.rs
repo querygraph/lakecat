@@ -1175,6 +1175,16 @@ fn lineage_drain_event_summary(
     let storage_profile_secret_ref = storage_profile
         .and_then(|profile| profile.get("secret-ref"))
         .and_then(Value::as_str);
+    let storage_profile_secret_ref_hash = storage_profile.and_then(|profile| {
+        profile
+            .get("secret-ref-hash")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .or_else(|| {
+                storage_profile_secret_ref
+                    .map(|secret_ref| content_hash_bytes(secret_ref.as_bytes()))
+            })
+    });
     let storage_profile_location_prefix_hash = storage_profile.and_then(|profile| {
         profile
             .get("location-prefix-hash")
@@ -1312,6 +1322,7 @@ fn lineage_drain_event_summary(
             .and_then(Value::as_str)
             .or_else(|| storage_profile_secret_ref.and_then(secret_ref_provider_label))
             .map(str::to_string),
+        storage_profile_secret_ref_hash,
         warehouse_count: payload
             .get("warehouse-count")
             .and_then(Value::as_u64)
@@ -4804,6 +4815,9 @@ fn storage_profile_event_payload(profile: &StorageProfile) -> Value {
     {
         payload["secret-ref-provider"] = json!(provider);
     }
+    if let Some(secret_ref) = profile.secret_ref.as_deref() {
+        payload["secret-ref-hash"] = json!(content_hash_bytes(secret_ref.as_bytes()));
+    }
     payload
 }
 
@@ -4822,12 +4836,20 @@ fn redact_storage_profile_event_payload(mut payload: Value) -> Value {
     {
         profile.insert("location-prefix-hash".to_string(), json!(hash));
     }
-    let provider = profile
-        .get("secret-ref")
-        .and_then(Value::as_str)
+    let raw_secret_ref = profile
+        .remove("secret-ref")
+        .and_then(|value| value.as_str().map(str::to_string));
+    let provider = raw_secret_ref
+        .as_deref()
         .and_then(secret_ref_provider_label)
         .map(str::to_string);
-    let secret_ref_present = profile.remove("secret-ref").is_some()
+    if let Some(secret_ref) = raw_secret_ref.as_deref() {
+        profile.insert(
+            "secret-ref-hash".to_string(),
+            json!(content_hash_bytes(secret_ref.as_bytes())),
+        );
+    }
+    let secret_ref_present = raw_secret_ref.is_some()
         || profile
             .get("secret-ref-present")
             .and_then(Value::as_bool)
@@ -7876,6 +7898,10 @@ mod tests {
             Some("vault")
         );
         assert_eq!(
+            drain.events[0].storage_profile_secret_ref_hash.as_deref(),
+            Some(content_hash_bytes("vault://kv/lakecat/events".as_bytes()).as_str())
+        );
+        assert_eq!(
             store.delivered.lock().await.as_slice(),
             &["evt-storage-profile".to_string()]
         );
@@ -7896,6 +7922,10 @@ mod tests {
         assert_eq!(
             graph_events[1].properties["storage-profile"]["secret-ref-provider"],
             serde_json::json!("vault")
+        );
+        assert_eq!(
+            graph_events[1].properties["storage-profile"]["secret-ref-hash"],
+            serde_json::json!(content_hash_bytes("vault://kv/lakecat/events".as_bytes()))
         );
         assert!(
             graph_events[1].properties["storage-profile"]
@@ -7943,6 +7973,10 @@ mod tests {
             lineage_events[0].payload["storage-profile"]["secret-ref-provider"],
             serde_json::json!("vault")
         );
+        assert_eq!(
+            lineage_events[0].payload["storage-profile"]["secret-ref-hash"],
+            serde_json::json!(content_hash_bytes("vault://kv/lakecat/events".as_bytes()))
+        );
         assert!(
             lineage_events[0].payload["storage-profile"]
                 .get("location-prefix")
@@ -7979,6 +8013,12 @@ mod tests {
         assert_eq!(payload["profile-id"], serde_json::json!("s3-events"));
         assert_eq!(payload["secret-ref-present"], serde_json::json!(true));
         assert_eq!(payload["secret-ref-provider"], serde_json::json!("typesec"));
+        assert_eq!(
+            payload["secret-ref-hash"],
+            serde_json::json!(content_hash_bytes(
+                "typesec://env/LAKECAT_S3_EVENTS".as_bytes()
+            ))
+        );
         assert!(payload.get("secret-ref").is_none());
     }
 

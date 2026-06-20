@@ -6,6 +6,22 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind storage-profile secret-ref hash proof`.
+  Storage-profile upsert replay now carries a redacted secret-reference hash
+  when `secret-ref-present` is true. Lineage-drain summaries, QGLake replay
+  JSON, credential storage-profile evidence, and compact handoff verification
+  now require the hash to be SHA-256-shaped and reject hash evidence when the
+  proof says no secret reference exists.
+- Local verification for this storage-profile proof slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo check -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-service outbox_drain_projects_storage_profile_upserts_to_lineage -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_secret_ref_hash_when_present -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_secret_ref_hash_when_absent -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact storage-profile management secret refs`.
   Storage-profile upsert/list responses no longer echo raw `secret-ref`
   locators. They return `secret-ref-present`, `secret-ref-provider`, and
