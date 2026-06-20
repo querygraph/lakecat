@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject raw tenant roots in QGLake bootstrap verification`.
+  QGLake bootstrap verification now rejects otherwise self-consistent bundles
+  whose tenant `Server` or `Warehouse` graph nodes expose raw `endpointUrl` or
+  `storageRoot` values, and checks any present `endpointUrlHash` or
+  `storageRootHash` fields are shaped as SHA-256 evidence.
+- Local verification for this QGLake bootstrap verifier slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_bootstrap_verifier_rejects_raw -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_bootstrap_verifier_requires_graph_tenant_spine -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact QueryGraph tenant graph roots`.
   QueryGraph bootstrap tenant graph nodes now emit `endpointUrlHash` and
   `storageRootHash` instead of raw server endpoint URLs or warehouse storage

@@ -5365,7 +5365,8 @@ fn verify_qglake_bootstrap_graph(
                     .to_string(),
             )
         })?;
-    require_qglake_graph_node_label(bundle, server_id, "Server")?;
+    let server_node = require_qglake_graph_node_label(bundle, server_id, "Server")?;
+    verify_qglake_tenant_root_redaction(server_node, "endpointUrl", "endpointUrlHash", "Server")?;
 
     let project_id = bundle
         .graph
@@ -5386,7 +5387,13 @@ fn verify_qglake_bootstrap_graph(
             projection.ident.warehouse
         )));
     }
-    require_qglake_graph_node_label(bundle, &warehouse_id, "Warehouse")?;
+    let warehouse_node = require_qglake_graph_node_label(bundle, &warehouse_id, "Warehouse")?;
+    verify_qglake_tenant_root_redaction(
+        warehouse_node,
+        "storageRoot",
+        "storageRootHash",
+        "Warehouse",
+    )?;
     require_qglake_graph_node_label(bundle, &namespace_id, "Namespace")?;
 
     if !qglake_graph_has_edge(bundle, &warehouse_id, &namespace_id, "HAS_NAMESPACE") {
@@ -5410,23 +5417,50 @@ fn verify_qglake_bootstrap_graph(
     Ok(())
 }
 
-fn require_qglake_graph_node_label(
-    bundle: &QueryGraphBootstrap,
+fn require_qglake_graph_node_label<'a>(
+    bundle: &'a QueryGraphBootstrap,
     node_id: &str,
     label: &str,
-) -> lakecat_core::LakeCatResult<()> {
-    let has_node = bundle
+) -> lakecat_core::LakeCatResult<&'a lakecat_querygraph::QueryGraphNode> {
+    bundle
         .graph
         .nodes
         .iter()
-        .any(|node| node.id == node_id && node.label == label);
-    if has_node {
-        Ok(())
-    } else {
-        Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "QGLake bootstrap graph did not include {label} node {node_id}"
-        )))
+        .find(|node| node.id == node_id && node.label == label)
+        .ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "QGLake bootstrap graph did not include {label} node {node_id}"
+            ))
+        })
+}
+
+fn verify_qglake_tenant_root_redaction(
+    node: &lakecat_querygraph::QueryGraphNode,
+    raw_field: &str,
+    hash_field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    if !node
+        .properties
+        .get(raw_field)
+        .unwrap_or(&Value::Null)
+        .is_null()
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap graph {label} node must not expose raw {raw_field}; use {hash_field}"
+        )));
     }
+    if let Some(hash) = node.properties.get(hash_field)
+        && !hash.is_null()
+        && !hash
+            .as_str()
+            .is_some_and(|value| value.starts_with("sha256:"))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "QGLake bootstrap graph {label} node {hash_field} must be sha256 hash evidence"
+        )));
+    }
+    Ok(())
 }
 
 fn qglake_graph_has_edge(bundle: &QueryGraphBootstrap, from: &str, to: &str, label: &str) -> bool {
@@ -12572,6 +12606,62 @@ mod tests {
         let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
             .expect_err("QGLake bootstrap should reject a missing tenant spine");
         assert!(err.to_string().contains("Catalog to a Server"));
+    }
+
+    #[test]
+    fn qglake_bootstrap_verifier_rejects_raw_server_endpoint_url() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let mut bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        let server = bundle
+            .graph
+            .nodes
+            .iter_mut()
+            .find(|node| node.label == "Server")
+            .expect("fixture should include Server node");
+        server.properties["endpointUrl"] = json!("https://lakecat.example.com?token=raw");
+        server.properties["endpointUrlHash"] = json!("sha256:endpoint-url");
+        qglake_resync_bundle_hashes(&mut bundle);
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect_err("QGLake bootstrap should reject raw tenant server endpoint URLs");
+        assert!(err.to_string().contains("raw endpointUrl"));
+    }
+
+    #[test]
+    fn qglake_bootstrap_verifier_rejects_raw_warehouse_storage_root() {
+        let projection = qglake_querygraph_projection(qglake_odrl_policy("events"));
+        let output = serde_json::json!({
+            "name": "events",
+            "facets": {
+                "queryGraph_catalog": {
+                    "stableId": projection.stable_id.clone(),
+                    "metadataLocation": projection.metadata_location.clone()
+                }
+            }
+        });
+        let mut bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
+        let warehouse = bundle
+            .graph
+            .nodes
+            .iter_mut()
+            .find(|node| node.label == "Warehouse")
+            .expect("fixture should include Warehouse node");
+        warehouse.properties["storageRoot"] = json!("file:///tmp/lakecat?token=raw");
+        warehouse.properties["storageRootHash"] = json!("sha256:storage-root");
+        qglake_resync_bundle_hashes(&mut bundle);
+
+        let err = verify_qglake_bootstrap_bundle(&bundle, &["default".to_string()], "events")
+            .expect_err("QGLake bootstrap should reject raw tenant warehouse storage roots");
+        assert!(err.to_string().contains("raw storageRoot"));
     }
 
     #[test]

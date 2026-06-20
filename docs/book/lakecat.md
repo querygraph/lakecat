@@ -1505,7 +1505,11 @@ reject a bundle whose namespace is silently detached from the warehouse or
 rebound to a different durable tenant chain.
 The local QGLake verifier enforces that shape: an accepted bootstrap must prove
 `Catalog -> Server -> Project -> Warehouse -> Namespace -> Table`, not merely
-that a table node exists somewhere in the graph.
+that a table node exists somewhere in the graph. It also rejects bundles whose
+tenant graph nodes expose raw `endpointUrl` or `storageRoot` properties, even
+if the graph hash and bundle hash have been recomputed around those raw values.
+Accepted handoffs must use hash-only `endpointUrlHash` and `storageRootHash`
+evidence for those roots.
 The saved handoff verifier repeats that check against the archived
 `lakecat-bootstrap.json` artifact, so a later replay cannot pass with a compact
 summary whose bundle file has lost the tenant path or drifted from the summary

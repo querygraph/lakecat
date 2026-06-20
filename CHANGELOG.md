@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened QGLake bootstrap verification so self-consistent bundles are
+  rejected if tenant `Server` or `Warehouse` graph nodes expose raw
+  `endpointUrl` or `storageRoot` values instead of hash-only evidence.
 - Redacted QueryGraph bootstrap tenant graph roots so durable management
   `Server` and `Warehouse` nodes emit `endpointUrlHash` and `storageRootHash`
   rather than raw endpoint URLs or warehouse storage roots.
