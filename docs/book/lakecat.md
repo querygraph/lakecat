@@ -1156,11 +1156,14 @@ compact receipt hashes:
 QGLake acceptance requires one non-empty receipt hash for each accepted view
 artifact. That keeps normal Iceberg view access standard, but gives the
 QueryGraph handoff a durable proof that the exported view version came from
-LakeCat's catalog spine. The fixture also exercises the deletion side of the
-same workflow: it creates a transient view, accepts a QueryGraph bootstrap that
-contains that view, drops the view, reads the receipt chain through the governed
-management endpoints by view name and namespace, and then requires
-lineage-drain replay to include `view.dropped`,
+LakeCat's catalog spine. Compact handoff verification also binds those
+bootstrap receipt hashes to `viewReceiptChainProof.views[].acceptedReceiptHash`
+exactly, so a saved summary cannot splice a valid-looking QueryGraph bootstrap
+receipt array from another accepted view proof. The fixture also exercises the
+deletion side of the same workflow: it creates a transient view, accepts a
+QueryGraph bootstrap that contains that view, drops the view, reads the receipt
+chain through the governed management endpoints by view name and namespace, and
+then requires lineage-drain replay to include `view.dropped`,
 `view.version-receipts-listed`, and `view.version-receipt-chains-listed`
 evidence with non-empty tombstone receipt hashes and namespace chain hashes.
 LakeCat also validates the ordered `previous-receipt-hash` links before marking
@@ -1476,7 +1479,11 @@ tombstone receipt hashes, positive verified-chain counts, receipt-chain
 warehouse/namespace identity, namespace chain hashes, and replay/OpenLineage
 hashes. The verifier also checks that each namespace receipt-chain summary's
 `verifiedChainCount` equals the number of chain hashes and that the receipt
-hashes cover those chains. For active accepted views, it additionally requires
+hashes cover those chains. It also requires
+`queryGraphBootstrapProof.viewVersionReceiptHashes` to match the accepted view
+receipt hashes exactly, so the compact summary cannot combine bootstrap view
+receipt evidence from one run with accepted-view proof from another. For active
+accepted views, it additionally requires
 `acceptedReceiptChainHash` to appear in the namespace `chainHashes` evidence, so
 a compact summary cannot pair a valid-looking accepted view receipt with an
 unrelated namespace receipt-chain proof. For tombstoned accepted views, the
@@ -1661,6 +1668,9 @@ SHA-256-shaped before accepted-view proof feeds the compact handoff summary.
 Dropped and active accepted-view source replay also compares the bootstrap
 view-version receipt hashes with the accepted QueryGraph verification set, so a
 valid-looking receipt array cannot be spliced from another bootstrap proof.
+The compact handoff verifier repeats the same binding against
+`viewReceiptChainProof.views[].acceptedReceiptHash`, catching drift even when an
+operator validates only the saved summary.
 Dropped accepted-view source replay also binds the namespace receipt-chain read
 back to the accepted view warehouse/namespace and rejects verified-chain count
 or receipt-hash coverage drift before compact handoff proof is generated. The

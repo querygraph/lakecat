@@ -2185,6 +2185,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     required_array(views, "views", "viewReceiptChainProof")?;
     required_array(views, "tombstoneReceipts", "viewReceiptChainProof")?;
     required_array(views, "receiptChains", "viewReceiptChainProof")?;
+    require_bootstrap_view_receipt_hashes_match_views(bootstrap, views)?;
     require_view_tombstone_expected_versions(views)?;
     require_view_receipt_chain_evidence(views)?;
 
@@ -2736,6 +2737,67 @@ fn require_view_tombstone_expected_versions(
                 "viewReceiptChainProof.tombstoneReceipts[{index}].expectedViewVersion mismatch: expected={accepted_view_version} actual={expected_view_version}"
             )));
         }
+    }
+
+    Ok(())
+}
+
+fn require_bootstrap_view_receipt_hashes_match_views(
+    bootstrap: &serde_json::Map<String, Value>,
+    views: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let bootstrap_hashes = required_array(
+        bootstrap,
+        "viewVersionReceiptHashes",
+        "queryGraphBootstrapProof",
+    )?;
+    let view_count = required_u64(views, "viewCount", "viewReceiptChainProof")?;
+    if view_count == 0 {
+        if bootstrap_hashes.is_empty() {
+            return Ok(());
+        }
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "queryGraphBootstrapProof.viewVersionReceiptHashes must be empty when viewReceiptChainProof.viewCount is 0"
+                .to_string(),
+        ));
+    }
+
+    require_hash_array(
+        bootstrap,
+        "viewVersionReceiptHashes",
+        "queryGraphBootstrapProof",
+    )?;
+    let accepted_views = required_array(views, "views", "viewReceiptChainProof")?;
+    if bootstrap_hashes.len() != accepted_views.len() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "queryGraphBootstrapProof.viewVersionReceiptHashes length mismatch with viewReceiptChainProof.views[].acceptedReceiptHash: expected={} actual={}",
+            accepted_views.len(),
+            bootstrap_hashes.len()
+        )));
+    }
+
+    let bootstrap_hashes = bootstrap_hashes
+        .iter()
+        .filter_map(Value::as_str)
+        .collect::<BTreeSet<_>>();
+    let mut accepted_hashes = BTreeSet::new();
+    for (index, view) in accepted_views.iter().enumerate() {
+        let view = view.as_object().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.views[{index}] must be an object"
+            ))
+        })?;
+        accepted_hashes.insert(require_hash_str(
+            view,
+            "acceptedReceiptHash",
+            "viewReceiptChainProof.views[]",
+        )?);
+    }
+    if bootstrap_hashes != accepted_hashes {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "queryGraphBootstrapProof.viewVersionReceiptHashes must match viewReceiptChainProof.views[].acceptedReceiptHash exactly"
+                .to_string(),
+        ));
     }
 
     Ok(())
@@ -9351,6 +9413,22 @@ mod tests {
         assert!(err.to_string().contains("viewReceiptChainProof"));
         assert!(err.to_string().contains("acceptedReceiptHash"));
         assert!(err.to_string().contains("sha256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_bootstrap_view_receipt_hash_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["viewVersionReceiptHashes"] =
+            json!(["sha256:other-view-receipt"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject spliced bootstrap view receipt hashes");
+
+        assert!(
+            err.to_string()
+                .contains("queryGraphBootstrapProof.viewVersionReceiptHashes")
+        );
+        assert!(err.to_string().contains("acceptedReceiptHash"));
     }
 
     #[test]

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required compact QGLake handoff summaries to bind
+  `queryGraphBootstrapProof.viewVersionReceiptHashes` exactly to
+  `viewReceiptChainProof.views[].acceptedReceiptHash`, rejecting spliced view
+  receipt evidence without needing the full replay tree.
 - Re-audited the OPUS review/design consolidation, refreshed `DESIGN.md` and
   `docs/completed/README.md`, and marked each archived OPUS file as historical
   provenance rather than a live backlog.
