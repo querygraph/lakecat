@@ -453,7 +453,9 @@ create-only child objects under the selected storage profile, never overwrites
 of the current pointer, existing objects, or the storage root itself. Catalog
 state changes should not lose outbox side effects. Pending outbox replay should
 stay deterministic across embedded and Turso stores, ordered by
-`created_at,event_id`, with duplicate-safe delivery accounting.
+`created_at,event_id`, with duplicate-safe delivery accounting. Draining should
+acknowledge delivery only after every projection in the batch succeeds, leaving
+events pending for retry when graph or lineage projection fails.
 
 ### P4 Semantic Catalog Graph
 

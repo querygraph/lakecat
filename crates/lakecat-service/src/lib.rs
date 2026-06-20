@@ -1003,6 +1003,8 @@ pub async fn drain_outbox_once(
         event_types.push(event.event_type.clone());
         delivered.push(event.event_id.clone());
     }
+    // Acknowledgement is all-or-retry: if any projection fails above, no pending
+    // event is marked delivered and the outbox remains the recovery source.
     let delivered = state.store.mark_outbox_delivered(&delivered).await?;
     Ok(LineageDrainResponse {
         delivered,
@@ -5655,6 +5657,21 @@ mod tests {
     }
 
     #[derive(Debug, Default)]
+    struct FailingLineage {
+        events: Mutex<Vec<LineageEvent>>,
+    }
+
+    #[async_trait]
+    impl LineageSink for FailingLineage {
+        async fn emit(&self, event: LineageEvent) -> lakecat_core::LakeCatResult<LineageReceipt> {
+            self.events.lock().await.push(event);
+            Err(LakeCatError::Internal(
+                "intentional lineage projection failure".to_string(),
+            ))
+        }
+    }
+
+    #[derive(Debug, Default)]
     struct RecordingCredentialIssuer {
         requests: Mutex<Vec<CredentialIssuanceRequest>>,
     }
@@ -7229,6 +7246,68 @@ mod tests {
                 "evt-3".to_string(),
                 "evt-namespace-drop".to_string()
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_does_not_acknowledge_projection_failures() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-lineage-fails".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.created".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-lineage-fails",
+                    "event-type": "table.created",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-create",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(FailingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("lineage projection failure must fail the drain");
+        assert!(err.to_string().contains("lineage projection failure"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "failed projection must leave the event pending for retry"
+        );
+        assert_eq!(lineage.events.lock().await.len(), 1);
+        assert!(
+            !graph.events.lock().await.is_empty(),
+            "graph projection may already be emitted, so retryability depends on outbox ack"
         );
     }
 

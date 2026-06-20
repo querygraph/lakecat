@@ -6,6 +6,15 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin outbox drain all-or-retry acknowledgement`.
+  Lineage/graph draining now has an explicit regression for the recovery
+  contract: if a projection fails, `drain_outbox_once` returns the projection
+  error before acknowledging delivery, leaving the pending outbox event retryable
+  even if an earlier sink already emitted a side effect.
+- Local verification for this outbox acknowledgement slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_does_not_acknowledge_projection_failures -- --nocapture`.
+- Latest completed implementation slice:
   `Deterministic outbox replay ordering`.
   Embedded memory and Turso stores now share the same pending-outbox contract:
   undelivered events are selected by `created_at,event_id`, and duplicate event

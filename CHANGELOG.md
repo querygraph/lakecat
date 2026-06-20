@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned lineage/graph outbox draining to an all-or-retry acknowledgement
+  contract: if projection fails, the drain fails before marking any event
+  delivered, leaving committed catalog events pending for retry.
 - Made pending outbox replay deterministic across embedded memory and Turso
   stores by ordering undelivered events by `created_at,event_id`, and made
   delivery marking duplicate-safe so repeated event IDs cannot inflate receipt
