@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added redacted credential response evidence to credential-vend audit/outbox
+  payloads, hashing credential prefixes and issuer-owned config so replay can
+  prove LakeCat's canonical `loadCredentials` evidence without leaking raw
+  session credentials.
 - Canonicalized LakeCat-owned credential response evidence so an issuer cannot
   shadow `lakecat.storage-profile-id`, provider, mode, principal, governed-read
   requirement, or TTL proof in the public `loadCredentials` response.

@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Audit canonical credential response evidence`.
+  Credential-vend audit/outbox payloads now include redacted
+  `credential-response-evidence` for each returned credential. The proof carries
+  LakeCat-owned canonical evidence values, hashes the credential prefix, hashes
+  issuer-owned config, and avoids raw session credential material while keeping
+  replay able to prove what `loadCredentials` exposed.
+- Local verification for this credential audit evidence slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service credentials_vend_audit_payload_surfaces_policy_context -- --nocapture`;
+  `cargo test -p lakecat-service credential_vend_response_replaces_shadowed_lakecat_evidence -- --nocapture`.
+- Latest completed implementation slice:
   `Canonicalize credential response evidence`.
   The public credential-vending path now strips issuer-supplied values for
   LakeCat-owned evidence keys and appends canonical catalog values for storage

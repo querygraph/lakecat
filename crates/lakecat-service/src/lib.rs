@@ -1963,7 +1963,7 @@ async fn load_credentials_in_warehouse(
         &ident,
         &table,
         &storage_profile,
-        storage_credentials.len(),
+        &storage_credentials,
         capability.receipt(),
     )?;
     if let Some(reason) = credential_block_reason {
@@ -1987,7 +1987,7 @@ fn credentials_vend_audit_payload(
     ident: &TableIdent,
     table: &TableRecord,
     storage_profile: &StorageProfile,
-    credential_count: usize,
+    storage_credentials: &[StorageCredential],
     receipt: &AuthorizationReceipt,
 ) -> LakeCatResult<Value> {
     let mut audit_payload = json!({
@@ -2007,7 +2007,12 @@ fn credentials_vend_audit_payload(
             }))?,
         },
         "secret-ref-present": storage_profile.secret_ref.is_some(),
-        "credential-count": credential_count,
+        "credential-count": storage_credentials.len(),
+        "credential-response-evidence": credential_response_evidence(
+            storage_credentials,
+            storage_profile,
+            receipt
+        )?,
         "mode": storage_profile.issuance_mode.as_str(),
     });
     if let Some(restriction) = receipt.context.get("read-restriction") {
@@ -2017,6 +2022,76 @@ fn credentials_vend_audit_payload(
         audit_payload["lakecat:raw-credential-exception"] = exception.clone();
     }
     Ok(audit_payload)
+}
+
+fn credential_response_evidence(
+    storage_credentials: &[StorageCredential],
+    storage_profile: &StorageProfile,
+    receipt: &AuthorizationReceipt,
+) -> LakeCatResult<Value> {
+    Ok(Value::Array(
+        storage_credentials
+            .iter()
+            .map(|credential| {
+                let non_lakecat_config = credential
+                    .config
+                    .iter()
+                    .filter(|entry| !entry.key.to_ascii_lowercase().starts_with("lakecat."))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let non_lakecat_config =
+                    serde_json::to_value(non_lakecat_config).map_err(|err| {
+                        LakeCatError::Internal(format!(
+                            "failed to serialize credential response evidence: {err}"
+                        ))
+                    })?;
+                Ok(json!({
+                    "prefix-hash": content_hash_json(&json!({
+                        "credential-prefix": &credential.prefix
+                    }))?,
+                    "storage-profile-id": single_config_value(
+                        &credential.config,
+                        "lakecat.storage-profile-id"
+                    ),
+                    "storage-provider": single_config_value(
+                        &credential.config,
+                        "lakecat.storage-provider"
+                    ),
+                    "credential-mode": single_config_value(
+                        &credential.config,
+                        "lakecat.credential-mode"
+                    ),
+                    "authorization-principal": single_config_value(
+                        &credential.config,
+                        "lakecat.authorization-principal"
+                    ),
+                    "governed-read-required": single_config_value(
+                        &credential.config,
+                        "lakecat.governed-read-required"
+                    ),
+                    "max-credential-ttl-seconds": single_config_value(
+                        &credential.config,
+                        "lakecat.max-credential-ttl-seconds"
+                    ),
+                    "issuer-config-entry-count": non_lakecat_config
+                        .as_array()
+                        .map_or(0, Vec::len),
+                    "issuer-config-hash": content_hash_json(&non_lakecat_config)?,
+                    "catalog-profile-id": &storage_profile.profile_id,
+                    "receipt-principal": &receipt.principal.subject,
+                }))
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?,
+    ))
+}
+
+fn single_config_value(config: &[ConfigEntry], key: &str) -> Option<String> {
+    let mut values = config
+        .iter()
+        .filter(|entry| entry.key == key)
+        .map(|entry| entry.value.clone());
+    let first = values.next()?;
+    values.next().is_none().then_some(first)
 }
 
 fn table_scan_planned_audit_payload(
@@ -13725,8 +13800,24 @@ mod tests {
             checked_at: chrono::Utc::now(),
         };
 
+        let credentials = canonicalize_credential_response_evidence(
+            vec![StorageCredential {
+                prefix: "file:///tmp/events".to_string(),
+                config: vec![
+                    ConfigEntry::new("lakecat.storage-profile-id", "shadow"),
+                    ConfigEntry::new("aws.session-token", "temporary-test-token"),
+                    ConfigEntry::new("lakecat.max-credential-ttl-seconds", "120"),
+                ],
+            }],
+            &profile,
+            &receipt,
+            true,
+            Some(300),
+        );
+
         let payload =
-            credentials_vend_audit_payload(&ident, &table, &profile, 1, &receipt).unwrap();
+            credentials_vend_audit_payload(&ident, &table, &profile, &credentials, &receipt)
+                .unwrap();
         assert_eq!(
             payload["lakecat:raw-credential-exception"]["allowed"],
             serde_json::json!(false)
@@ -13761,6 +13852,47 @@ mod tests {
             payload["storage-profile"].get("location-prefix").is_none(),
             "credential-vend audit payload must not expose raw storage-profile location prefixes"
         );
+        let response_evidence = payload["credential-response-evidence"]
+            .as_array()
+            .expect("credential response evidence should be an array");
+        assert_eq!(response_evidence.len(), 1);
+        assert_eq!(
+            response_evidence[0]["storage-profile-id"],
+            serde_json::json!("local:file")
+        );
+        assert_eq!(
+            response_evidence[0]["storage-provider"],
+            serde_json::json!("file")
+        );
+        assert_eq!(
+            response_evidence[0]["credential-mode"],
+            serde_json::json!("local-file-no-secret")
+        );
+        assert_eq!(
+            response_evidence[0]["authorization-principal"],
+            serde_json::json!("did:example:agent")
+        );
+        assert_eq!(
+            response_evidence[0]["governed-read-required"],
+            serde_json::json!("true")
+        );
+        assert_eq!(
+            response_evidence[0]["max-credential-ttl-seconds"],
+            serde_json::json!("120")
+        );
+        assert!(
+            response_evidence[0]["prefix-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        assert!(
+            response_evidence[0]["issuer-config-hash"]
+                .as_str()
+                .is_some_and(|hash| hash.starts_with("sha256:"))
+        );
+        let evidence_text = serde_json::to_string(&response_evidence).unwrap();
+        assert!(!evidence_text.contains("temporary-test-token"));
+        assert!(!evidence_text.contains("file:///tmp/events"));
     }
 
     #[test]

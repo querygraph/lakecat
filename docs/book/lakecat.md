@@ -538,7 +538,10 @@ returned. The REST credential-vending regressions exercise this at the public
 response boundary: a backend can return multiple TTL entries or forged catalog
 evidence, but `loadCredentials` exposes one canonical proof while preserving
 issuer-owned credential details such as credential kind and provider session
-tokens.
+tokens. LakeCat records the same decision shape in audit/outbox evidence without
+copying raw credentials: each vended credential gets a hashed prefix, canonical
+LakeCat evidence values, and a hash of issuer-owned config. Replay can prove
+the response posture, but it does not inherit cloud session tokens.
 
 ## Rust-First Engines And The V3 To V4 Path
 
@@ -963,6 +966,11 @@ through helper functions. The issuer also rejects any credential whose returned
 prefix is outside the storage profile's `location-prefix`, so a misconfigured
 cloud secret backend cannot widen a table's storage scope after TypeSec has
 authorized the secret reference.
+The audit event for the credential attempt records redacted
+`credential-response-evidence`: the response prefix is hashed, LakeCat-owned
+proof fields are kept as canonical values, and issuer-owned config is hashed
+rather than copied. That keeps OpenLineage and QueryGraph replay useful without
+turning lineage into a credential leak.
 A not-configured resolver error reports the provider label and a
 `secret-ref-hash=sha256:...` value, not the raw secret URI, so the operator can
 correlate configuration without leaking the credential root. Resolver validation
