@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned service table commit-history coverage so produced request, response,
+  idempotency-key, and commit hashes are full SHA-256 digests across the route,
+  outbox, lineage-drain summary, and graph projection.
 - Pinned service view receipt route coverage so produced receipt hashes,
   view-content hashes, and namespace chain hashes are full SHA-256 digests
   before QGLake consumes view receipt-chain evidence.

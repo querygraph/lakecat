@@ -1966,8 +1966,12 @@ pointer-history discipline before compact proof generation: the table commit
 count must match the sequence-number and commit-hash arrays, commit sequences
 must be positive and strictly increasing, and commit hashes must be
 SHA-256-shaped before pointer-history evidence can enter the compact handoff
-proof. QueryGraph can therefore verify the governed Sail-planned read and
-pointer-history inspection without parsing the full lineage payload. The
+proof. Service route coverage pins the producer side too: request hashes,
+response hashes, idempotency-key hashes, and commit hashes are full SHA-256
+digests across the route response, pointer-log outbox payload, lineage-drain
+summary, and graph projection. QueryGraph can therefore verify the governed
+Sail-planned read and pointer-history inspection without parsing the full
+lineage payload. The
 core QueryGraph bundle, graph, OpenLineage, and import anchors must be
 SHA-256-shaped in compact verify/import/bootstrap proof before a matching
 summary can pass; matching strings are not enough. The bootstrap, scan,

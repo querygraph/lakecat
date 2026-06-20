@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin service commit hash producer evidence`.
+  Service table commit-history coverage now explicitly proves produced
+  request, response, idempotency-key, and commit hashes are full SHA-256
+  digests across the management route, pointer-log outbox payload, lineage-drain
+  summary, and graph projection that QGLake consumes.
+- Local verification for this service commit-hash producer slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service management_table_commits_lists_pointer_log_evidence -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin service view receipt hash producer evidence`.
   Service view workflow coverage now explicitly proves produced
   `receipt-hash`, `view-hash`, and namespace `chain-hash` values are full

@@ -11027,21 +11027,26 @@ mod tests {
         assert!(
             commits[0]["request-hash"]
                 .as_str()
-                .is_some_and(|hash| hash.starts_with("sha256:"))
+                .is_some_and(is_full_sha256_hash)
         );
         assert!(
             commits[0]["response-hash"]
                 .as_str()
-                .is_some_and(|hash| hash.starts_with("sha256:"))
+                .is_some_and(is_full_sha256_hash)
         );
         assert!(
             commits[0]["commit-hash"]
                 .as_str()
-                .is_some_and(|hash| hash.starts_with("sha256:"))
+                .is_some_and(is_full_sha256_hash)
         );
         assert_eq!(
             commits[0]["idempotency-key-sha256"],
             serde_json::json!(content_hash_bytes("commit:events:history".as_bytes()))
+        );
+        assert!(
+            commits[0]["idempotency-key-sha256"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
         );
         assert_eq!(
             commits[0]["principal-subject"],
@@ -11061,6 +11066,11 @@ mod tests {
         assert_eq!(
             commit_read_payload["commit-hashes"][0],
             commits[0]["commit-hash"]
+        );
+        assert!(
+            commit_read_payload["commit-hashes"][0]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
         );
         assert_eq!(
             commit_read_payload["sequence-numbers"],
@@ -11106,6 +11116,11 @@ mod tests {
             commit_read_summary["table-commit-hashes"],
             serde_json::json!([commits[0]["commit-hash"].clone()])
         );
+        assert!(
+            commit_read_summary["table-commit-hashes"][0]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
+        );
         let graph_events = graph.events.lock().await;
         assert!(
             graph_events.iter().any(|event| {
@@ -11131,6 +11146,11 @@ mod tests {
         assert_eq!(
             commit_graph_event.properties["commit-hash"],
             commits[0]["commit-hash"]
+        );
+        assert!(
+            commit_graph_event.properties["commit-hash"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
         );
         let _ = std::fs::remove_dir_all(root);
     }
