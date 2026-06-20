@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pinned REST idempotency mismatch redaction so reused-key conflicts do not
+  echo the raw idempotency key or mismatched metadata object location.
 - Pinned outbox drain retryability for graph projection failures: a failing
   graph sink now has focused coverage proving lineage is not emitted and the
   pending outbox event is not acknowledged.

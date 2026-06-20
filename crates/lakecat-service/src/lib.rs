@@ -9735,6 +9735,15 @@ mod tests {
             .unwrap();
         let response = app.clone().oneshot(mismatched_commit).await.unwrap();
         assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = payload["error"]["message"].as_str().unwrap();
+        assert!(message.contains("idempotency key reused with different commit request"));
+        assert!(!message.contains("commit:events:0001"));
+        assert!(!message.contains("00001.json"));
+        assert!(!message.contains("file:///tmp/events/metadata/00001.json"));
 
         let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
         let records = store.table_commit_records(&ident, 0, None).await.unwrap();

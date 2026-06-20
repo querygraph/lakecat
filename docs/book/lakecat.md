@@ -359,6 +359,9 @@ intentionally narrow: `x-lakecat-idempotency-key` must be 1 to 128 ASCII
 characters and may use only letters, digits, `-`, `_`, `.`, or `:`. Invalid
 keys, including non-ASCII or invalid header bytes, fail before LakeCat performs
 authorization, Sail validation, table loading, or metadata-object writes.
+When a reused key is attached to a different commit body, the conflict response
+also stays redacted: it does not echo the raw key or the mismatched metadata
+object location.
 The service regression for this path proves the replay happens before
 metadata-object writes: an exact retry returns the stored response without
 touching the already committed metadata object.

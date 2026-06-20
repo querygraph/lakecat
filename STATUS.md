@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact REST idempotency mismatch conflicts`.
+  REST commit idempotency coverage now proves a reused-key mismatch returns a
+  conflict without echoing the raw `x-lakecat-idempotency-key` value or the
+  mismatched metadata object location.
+- Local verification for this idempotency redaction slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service commit_replays_rest_idempotency_key -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin graph-failure outbox retryability`.
   Service outbox coverage now proves a graph projection failure makes
   `drain_outbox_once` fail before lineage emission and before delivery
