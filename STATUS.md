@@ -6,6 +6,20 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full compact commit-history hashes`.
+  Compact QGLake handoff verification now rejects table commit-history
+  `commitHashes`, `replayEventHashes`, and `openLineageHashes` unless every
+  entry is a full `sha256:`-prefixed 64-hex digest, closing the short
+  placeholder hash path for pointer-history receipts in saved handoff
+  summaries.
+- Local verification for this compact commit-history hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_short_commit_history_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require full compact management hashes`.
   Compact QGLake handoff verification now rejects management proof
   server/project/warehouse/policy/storage-profile replay and OpenLineage arrays

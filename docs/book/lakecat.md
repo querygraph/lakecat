@@ -1970,7 +1970,9 @@ typed drain summary carries the commit count,
 committed sequence numbers, commit hashes, replay hashes, and OpenLineage
 hashes. The handoff verifier rejects compact scan proofs without those
 OpenLineage hashes and compact commit-history proofs whose counts, sequences,
-or hash arrays do not align. Source replay validation applies the same
+or hash arrays do not align. It also requires the compact commit, replay, and
+OpenLineage arrays to contain full `sha256:`-prefixed 64-hex digests, not
+prefix-shaped placeholders. Source replay validation applies the same
 pointer-history discipline before compact proof generation: the table commit
 count must match the sequence-number and commit-hash arrays, commit sequences
 must be positive and strictly increasing, and commit hashes must be

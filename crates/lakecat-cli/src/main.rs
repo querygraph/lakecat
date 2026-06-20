@@ -3016,14 +3016,14 @@ fn require_table_commit_history_evidence(
             commit_hashes.len()
         )));
     }
-    require_hash_array(commit_history, "commitHashes", "tableCommitHistoryProof")?;
+    require_full_hash_array(commit_history, "commitHashes", "tableCommitHistoryProof")?;
     require_positive_u64(commit_history, "graphEvents", "tableCommitHistoryProof")?;
-    require_hash_array(
+    require_full_hash_array(
         commit_history,
         "replayEventHashes",
         "tableCommitHistoryProof",
     )?;
-    require_hash_array(
+    require_full_hash_array(
         commit_history,
         "openLineageHashes",
         "tableCommitHistoryProof",
@@ -8667,10 +8667,10 @@ mod tests {
                 "tableCommitHistoryProof": {
                     "commitCount": 1,
                     "sequenceNumbers": [1],
-                    "commitHashes": ["sha256:commit"],
-                        "graphEvents": 1,
-                    "replayEventHashes": ["sha256:commit-replay"],
-                    "openLineageHashes": ["sha256:commit-openlineage"]
+                    "commitHashes": [qglake_fixture_hash("commit")],
+                    "graphEvents": 1,
+                    "replayEventHashes": [qglake_fixture_hash("commit-replay")],
+                    "openLineageHashes": [qglake_fixture_hash("commit-openlineage")]
                 },
                 "managementProof": {
                     "serverCount": 1,
@@ -8896,10 +8896,10 @@ mod tests {
                 "tableCommitHistory": {
                     "commitCount": 1,
                     "sequenceNumbers": [1],
-                    "commitHashes": ["sha256:commit"],
-                        "graphEvents": 1,
-                    "replayEventHashes": ["sha256:commit-replay"],
-                    "openLineageHashes": ["sha256:commit-openlineage"]
+                    "commitHashes": [qglake_fixture_hash("commit")],
+                    "graphEvents": 1,
+                    "replayEventHashes": [qglake_fixture_hash("commit-replay")],
+                    "openLineageHashes": [qglake_fixture_hash("commit-openlineage")]
                 },
                 "management": {
                     "serverCount": 1,
@@ -10560,7 +10560,21 @@ mod tests {
 
         assert!(err.to_string().contains("tableCommitHistoryProof"));
         assert!(err.to_string().contains("replayEventHashes"));
-        assert!(err.to_string().contains("sha256"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_short_commit_history_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["commitHashes"] =
+            json!(["sha256:commit"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short commit-history hashes");
+
+        assert!(err.to_string().contains("tableCommitHistoryProof"));
+        assert!(err.to_string().contains("commitHashes"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
