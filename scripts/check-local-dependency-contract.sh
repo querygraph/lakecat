@@ -48,6 +48,36 @@ require_manual_only_workflows() {
     if rg -q "^[[:space:]]*on:[[:space:]]*\\{[^}]*\\b(${automatic_events})\\b[[:space:]]*:" "$workflow"; then
       fail "$workflow must not use inline automatic GitHub event maps until the local gates are proven stable"
     fi
+    if awk -v events="$automatic_events" '
+      BEGIN {
+        split(events, event_names, "|")
+        for (event_index in event_names) {
+          automatic[event_names[event_index]] = 1
+        }
+      }
+      /^[^[:space:]#][^:]*:/ {
+        key = $0
+        sub(/:.*/, "", key)
+        in_on_block = key == "on"
+        next
+      }
+      in_on_block {
+        line = $0
+        sub(/[[:space:]]*#.*/, "", line)
+        if (line ~ /^[[:space:]]*-[[:space:]]*/) {
+          item = line
+          sub(/^[[:space:]]*-[[:space:]]*/, "", item)
+          sub(/[[:space:]:].*/, "", item)
+          if (item in automatic) {
+            exit 42
+          }
+        }
+      }
+    ' "$workflow"; then
+      :
+    else
+      fail "$workflow must not use block-list automatic GitHub event syntax until the local gates are proven stable"
+    fi
   done
 }
 

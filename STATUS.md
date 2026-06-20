@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject block-list workflow triggers`.
+  The local dependency-contract audit now also rejects YAML block-list trigger
+  syntax under top-level `on:`, such as `on:\n  - push`, so manual-only cloud
+  CI cannot be bypassed through GitHub Actions list syntax.
+- Local verification for this block-list workflow-contract slice is green:
+  `bash -n scripts/check-local-dependency-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  block-list trigger smoke checks against temporary workflow files;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject compact automatic workflow triggers`.
   The local dependency-contract audit now rejects compact GitHub Actions
   trigger forms such as `on: push`, inline event lists, and inline event maps,

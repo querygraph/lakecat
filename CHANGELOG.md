@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Extended the manual-only workflow audit to reject YAML block-list event
+  triggers such as `on:\n  - push`, closing another compact GitHub Actions
+  syntax path around the local-first CI policy.
 - Hardened the local dependency-contract workflow audit so manual-only CI checks
   reject compact GitHub trigger forms such as `on: push`,
   `on: [push, pull_request]`, and inline event maps, not only mapping-style
