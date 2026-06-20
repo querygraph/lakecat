@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin metadata cleanup current-pointer skip`.
+  Rejected-commit metadata cleanup now has direct regression coverage proving
+  that a staged write equal to the previous committed metadata pointer is skipped
+  and the current metadata object remains intact.
+- Local verification for this metadata cleanup safety slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_cleanup_skips_previous_metadata_pointer -- --nocapture`;
+  `cargo test -p lakecat-service metadata_cleanup_treats_missing_uncommitted_object_as_clean -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact storage-profile public-config validation`.
   Storage-profile public-config validation now returns
   `public-config-key-hash` evidence for secret-looking keys, rejected values,

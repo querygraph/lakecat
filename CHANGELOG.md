@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Pinned metadata cleanup safety so rejected-commit cleanup skips the previous
+  committed metadata pointer instead of deleting the table's current metadata
+  object when a future plan accidentally reports that location as a staged
+  write.
 - Redacted storage-profile public-config validation failures so secret-looking,
   reserved, or value-rejected public config entries report
   `public-config-key-hash` evidence without echoing submitted keys or values.

@@ -336,7 +336,10 @@ failures use the same redaction discipline: the cleanup context identifies the
 uncommitted metadata object by `metadata-location-hash=sha256:...`, not by the
 raw object path. If cleanup discovers the uncommitted object is already absent,
 LakeCat treats that as successful cleanup rather than turning a resolved orphan
-into an internal error. The same audit-safe shape applies before the write:
+into an internal error. Cleanup also refuses to delete the previous committed
+metadata pointer if a future plan accidentally reports it as the staged write;
+the committed metadata object remains the table's current state, not an orphan.
+The same audit-safe shape applies before the write:
 current-pointer overwrite, existing-object overwrite, unsupported object-store
 configuration, and storage-profile-prefix failures report metadata-location
 hashes, and prefix mismatches also report a storage-profile-prefix hash rather

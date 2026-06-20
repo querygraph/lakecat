@@ -10989,6 +10989,38 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
+    #[tokio::test]
+    async fn metadata_cleanup_skips_previous_metadata_pointer() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lakecat-current-cleanup-{unique}"));
+        let metadata_dir = root.join("events").join("metadata");
+        std::fs::create_dir_all(&metadata_dir).unwrap();
+        let current_metadata = metadata_dir.join("00000.json");
+        let sentinel = "{\n  \"sentinel\": \"committed metadata must survive cleanup\"\n}\n";
+        std::fs::write(&current_metadata, sentinel).unwrap();
+        let current_metadata_location = url::Url::from_file_path(&current_metadata)
+            .unwrap()
+            .to_string();
+
+        cleanup_planned_metadata(
+            Some(PlannedMetadataWrite {
+                location: current_metadata_location.clone(),
+            }),
+            Some(&current_metadata_location),
+        )
+        .await
+        .expect("cleanup should skip the previous committed metadata pointer");
+
+        assert_eq!(
+            std::fs::read_to_string(&current_metadata).unwrap(),
+            sentinel
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
     #[cfg(feature = "sail-local")]
     #[tokio::test]
     async fn idempotent_commit_replay_skips_stale_sail_revalidation() {
