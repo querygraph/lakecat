@@ -1760,17 +1760,16 @@ hashes. The verifier also checks that each namespace receipt-chain summary's
 hashes cover those chains. It also requires
 `queryGraphBootstrapProof.viewVersionReceiptHashes` to match the accepted view
 receipt hashes exactly, so the compact summary cannot combine bootstrap view
-receipt evidence from one run with accepted-view proof from another. For active
-accepted views, it additionally requires
+receipt evidence from one run with accepted-view proof from another. For both
+active and tombstoned accepted views, it additionally requires
 `acceptedReceiptChainHash` to appear in the namespace `chainHashes` evidence, so
-a compact summary cannot pair a valid-looking accepted view receipt with an
-unrelated namespace receipt-chain proof. For tombstoned accepted views, the
-accepted chain can be a prefix of the later tombstone chain, but the compact
-proof must include tombstone receipt evidence whose `expectedViewVersion`
-preserves the accepted view version. A consumer can reject a handoff whose view
-history claim lacks identity, accepted-version, count-aligned hash-chain
-evidence, active-chain coverage or tombstone guard evidence, or replay evidence
-before parsing the full replay tree. It compares captured LakeCat replay
+a compact summary cannot pair a valid-looking accepted view receipt or deletion
+receipt with an unrelated namespace receipt-chain proof. Tombstoned views must
+also include tombstone receipt evidence whose `expectedViewVersion` preserves
+the accepted view version. A consumer can reject a handoff whose view history
+claim lacks identity, accepted-version, count-aligned hash-chain evidence,
+accepted-chain coverage, tombstone guard evidence, or replay evidence before
+parsing the full replay tree. It compares captured LakeCat replay
 `replay-evidence.management` list counts with compact
 `lakecatReplayVerification.managementProof`, requiring positive server,
 project, warehouse, and storage-profile counts, positive graph event counts for
@@ -1985,8 +1984,10 @@ Dropped and active accepted-view source replay also compares the bootstrap
 view-version receipt hashes with the accepted QueryGraph verification set, so a
 valid-looking receipt array cannot be spliced from another bootstrap proof.
 The compact handoff verifier repeats the same binding against
-`viewReceiptChainProof.views[].acceptedReceiptHash`, catching drift even when an
-operator validates only the saved summary.
+`viewReceiptChainProof.views[].acceptedReceiptHash` and
+`viewReceiptChainProof.views[].acceptedReceiptChainHash`, including tombstoned
+accepted views, catching drift even when an operator validates only the saved
+summary.
 Dropped accepted-view source replay also binds the namespace receipt-chain read
 back to the accepted view warehouse/namespace and rejects verified-chain count
 or receipt-hash coverage drift before compact handoff proof is generated. The

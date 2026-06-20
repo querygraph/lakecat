@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind tombstoned view chains in compact QGLake handoff`.
+  Compact QGLake handoff verification now rejects tombstoned accepted views
+  whose `acceptedReceiptChainHash` is not covered by namespace
+  `receiptChains[].chainHashes`, so deletion evidence cannot stand apart from
+  the accepted view receipt-chain proof.
+- Local verification for this tombstoned view-chain binding slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_tombstoned_uncovered_view_receipt_chain_hash -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin service commit hash producer evidence`.
   Service table commit-history coverage now explicitly proves produced
   request, response, idempotency-key, and commit hashes are full SHA-256

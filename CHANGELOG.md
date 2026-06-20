@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened compact QGLake handoff verification so tombstoned accepted views
+  must still have their `acceptedReceiptChainHash` covered by namespace
+  `receiptChains[].chainHashes`, binding deletion evidence to the accepted
+  view's receipt chain rather than a tombstone-only proof.
 - Pinned service table commit-history coverage so produced request, response,
   idempotency-key, and commit hashes are full SHA-256 digests across the route,
   outbox, lineage-drain summary, and graph projection.

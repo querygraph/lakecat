@@ -3432,7 +3432,6 @@ fn require_view_receipt_chain_evidence(
         require_hash_array(view, "openLineageHashes", "viewReceiptChainProof.views[]")?;
     }
 
-    let mut tombstoned_views = std::collections::HashSet::new();
     let mut tombstone_receipt_hashes = BTreeSet::new();
     for (index, receipt) in required_array(views, "tombstoneReceipts", "viewReceiptChainProof")?
         .iter()
@@ -3467,12 +3466,6 @@ fn require_view_receipt_chain_evidence(
             "openLineageHashes",
             "viewReceiptChainProof.tombstoneReceipts[]",
         )?;
-        if let (Some(stable_id), Some(expected_version)) = (
-            receipt.get("stableId").and_then(Value::as_str),
-            receipt.get("expectedViewVersion").and_then(Value::as_u64),
-        ) {
-            tombstoned_views.insert((stable_id.to_string(), expected_version));
-        }
     }
 
     let receipt_chains = required_array(views, "receiptChains", "viewReceiptChainProof")?;
@@ -3562,11 +3555,8 @@ fn require_view_receipt_chain_evidence(
     }
     for (stable_id, accepted_view_version, accepted_chain_hash) in accepted_receipt_chain_hashes {
         if !verified_chain_hashes.contains(&accepted_chain_hash) {
-            if tombstoned_views.contains(&(stable_id.clone(), accepted_view_version)) {
-                continue;
-            }
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-                "viewReceiptChainProof.views[].acceptedReceiptChainHash {accepted_chain_hash} is not covered by receiptChains[].chainHashes"
+                "viewReceiptChainProof.views[] accepted view {stable_id} version {accepted_view_version} acceptedReceiptChainHash {accepted_chain_hash} is not covered by receiptChains[].chainHashes"
             )));
         }
     }
@@ -10909,6 +10899,25 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_tombstoned_uncovered_view_receipt_chain_hash() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"][0]["acceptedReceiptChainHash"] =
+            json!("sha256:uncovered-tombstoned-view-receipt-chain");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject tombstoned accepted views whose accepted chain hash is not covered by namespace chain evidence");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("acceptedReceiptChainHash"));
+        assert!(err.to_string().contains("receiptChains"));
+        assert!(
+            err.to_string()
+                .contains("lakecat:view:local:default:active_customers_view")
+        );
+        assert!(err.to_string().contains("version 1"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_view_count_mismatch() {
         let mut summary = qglake_handoff_summary_json();
         summary["querygraphVerification"]["viewCount"] = json!(2);
@@ -11004,9 +11013,13 @@ mod tests {
     fn qglake_handoff_summary_verifier_rejects_view_receipt_hash_undercoverage() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chainHashes"] =
-            json!(["sha256:chain-a", "sha256:chain-b"]);
+            json!([
+                "sha256:view-receipt-chain",
+                "sha256:chain-a",
+                "sha256:chain-b"
+            ]);
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["verifiedChainCount"] =
-            json!(2);
+            json!(3);
 
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject receipt hashes that under-cover chains");
