@@ -936,7 +936,9 @@ inside a decorated secret URI. It also rejects literal and percent-encoded dot
 path segments, so a credential root cannot rely on traversal-like spelling
 before a resolver sees it. Unsupported credential-root schemes and malformed
 secret-root paths are rejected with `secret-ref-hash=sha256:...` evidence
-instead of echoing the submitted secret reference.
+instead of echoing the submitted secret reference. The same hash-only rule
+applies to invalid secret-ref URI syntax, decorated URI forms, and embedded
+secret-like material such as password or token assignments.
 Management upsert and list responses follow the same redaction rule. They do
 not echo the raw `secret-ref`; they return `secret-ref-present`,
 `secret-ref-provider`, and `secret-ref-hash` so operators and QueryGraph can

@@ -2204,9 +2204,10 @@ fn validate_secret_ref(secret_ref: &str) -> LakeCatResult<()> {
             "storage profile secret reference must not be empty".to_string(),
         ));
     }
-    let parsed = Url::parse(trimmed).map_err(|err| {
+    let parsed = Url::parse(trimmed).map_err(|_err| {
         LakeCatError::InvalidArgument(format!(
-            "storage profile secret reference must be a valid external secret-store URI: {err}"
+            "storage profile secret reference must be a valid external secret-store URI; {}",
+            secret_ref_hash_context(trimmed)
         ))
     })?;
     if !matches!(
@@ -2219,16 +2220,16 @@ fn validate_secret_ref(secret_ref: &str) -> LakeCatResult<()> {
         )));
     }
     if parsed.query().is_some() || parsed.fragment().is_some() || !parsed.username().is_empty() {
-        return Err(LakeCatError::InvalidArgument(
-            "storage profile secret reference must not include query strings, fragments, or userinfo"
-                .to_string(),
-        ));
+        return Err(LakeCatError::InvalidArgument(format!(
+            "storage profile secret reference must not include query strings, fragments, or userinfo; {}",
+            secret_ref_hash_context(trimmed)
+        )));
     }
     if parsed.password().is_some() {
-        return Err(LakeCatError::InvalidArgument(
-            "storage profile secret reference must not include query strings, fragments, or userinfo"
-                .to_string(),
-        ));
+        return Err(LakeCatError::InvalidArgument(format!(
+            "storage profile secret reference must not include query strings, fragments, or userinfo; {}",
+            secret_ref_hash_context(trimmed)
+        )));
     }
     if secret_ref_has_dot_path_segment(trimmed) {
         return Err(LakeCatError::InvalidArgument(format!(
@@ -2237,9 +2238,10 @@ fn validate_secret_ref(secret_ref: &str) -> LakeCatResult<()> {
         )));
     }
     if embeds_raw_secret_material(trimmed) {
-        return Err(LakeCatError::InvalidArgument(
-            "storage profile secret reference must not embed raw secret material".to_string(),
-        ));
+        return Err(LakeCatError::InvalidArgument(format!(
+            "storage profile secret reference must not embed raw secret material; {}",
+            secret_ref_hash_context(trimmed)
+        )));
     }
     Ok(())
 }
@@ -6265,9 +6267,15 @@ pub mod turso_store {
                 .unwrap_err();
 
                 assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+                let message = err.to_string();
                 assert!(
-                    err.to_string().contains(expected),
+                    message.contains(expected),
                     "expected {secret_ref} to reject {expected}, got {err}"
+                );
+                assert!(message.contains("secret-ref-hash=sha256:"));
+                assert!(
+                    !message.contains(secret_ref),
+                    "decorated secret-ref validation must not expose raw secret refs"
                 );
             }
         }
@@ -6276,6 +6284,7 @@ pub mod turso_store {
         fn storage_profiles_redact_invalid_secret_ref_uris() {
             let warehouse = WarehouseName::new("local").unwrap();
             for secret_ref in [
+                "not a uri with secret=abc",
                 "file:///tmp/raw-secret",
                 "postgres://user:secret@example.test/credentials",
             ] {
@@ -6328,6 +6337,32 @@ pub mod turso_store {
                     "dot-segment secret-ref validation must not expose raw secret refs"
                 );
             }
+        }
+
+        #[test]
+        fn storage_profiles_redact_embedded_secret_ref_material() {
+            let warehouse = WarehouseName::new("local").unwrap();
+            let secret_ref = "vault://secret/data/lakecat/s3-events/password=abc";
+            let err = StorageProfile::new(
+                "embedded-secret-ref",
+                warehouse,
+                "s3://lakecat-demo/events",
+                StorageProvider::S3,
+                CredentialIssuanceMode::ShortLivedSecretRef,
+                Some(secret_ref.to_string()),
+                BTreeMap::new(),
+            )
+            .unwrap_err();
+
+            let message = err.to_string();
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            assert!(message.contains("must not embed raw secret material"));
+            assert!(message.contains("secret-ref-hash=sha256:"));
+            assert!(
+                !message.contains(secret_ref),
+                "embedded secret-ref validation must not expose raw secret refs"
+            );
+            assert!(!message.contains("password=abc"));
         }
 
         #[test]

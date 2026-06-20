@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact all storage-profile secret-ref validation roots`.
+  Storage-profile secret-reference validation now returns `secret-ref-hash`
+  evidence for invalid URI, decorated URI, and embedded-secret failures without
+  echoing the submitted credential-root URI or token-like material.
+- Local verification for this secret-ref redaction slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_reject_decorated_secret_ref_uris -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_redact_invalid_secret_ref_uris -- --nocapture`;
+  `cargo test -p lakecat-store --features turso-local storage_profiles_redact_embedded_secret_ref_material -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact storage-profile provider mismatch roots`.
   Storage-profile provider/location-prefix validation now reports provider
   labels and `storage-profile-prefix-hash` evidence without echoing the raw

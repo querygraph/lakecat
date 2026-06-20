@@ -229,7 +229,7 @@ The current working plan is:
    create audit/outbox evidence. Secret references and storage roots must stay
    redacted in replay, represented by provider labels, presence flags, and
    content hashes such as `location-prefix-hash`; validation failures should
-   follow the same hash-only rule for storage roots.
+   follow the same hash-only rule for storage roots and secret references.
 6. Keep reproducibility ahead of integration claims. Run local gates before
    commit, keep cloud CI manual/disabled until it is known green, use published
    Grust/TypeSec crates when available, and keep any Sail path/patch bridge

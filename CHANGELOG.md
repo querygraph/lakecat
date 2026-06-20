@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made storage-profile secret-ref validation consistently hash-only for invalid
+  URI, decorated URI, and embedded-secret failures, returning
+  `secret-ref-hash` evidence without echoing the submitted credential-root URI.
 - Redacted storage-profile provider/location mismatch errors so unsupported or
   contradictory credential roots report provider labels and
   `storage-profile-prefix-hash` evidence without echoing raw storage prefixes.
