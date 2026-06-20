@@ -1118,6 +1118,9 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     if event.event_type == "policy-binding.upserted" {
         validate_policy_binding_upsert_event_evidence(event, payload)?;
     }
+    if event.event_type == "project.upserted" {
+        validate_project_upsert_event_evidence(event, payload)?;
+    }
     if event.event_type == "server.upserted" {
         validate_server_upsert_event_evidence(event, payload)?;
     }
@@ -1370,6 +1373,55 @@ fn validate_policy_binding_upsert_event_evidence(
         outbox_evidence_error(
             event,
             "policy-binding upsert evidence has invalid scope or identifier",
+        )
+    })?;
+    Ok(())
+}
+
+fn validate_project_upsert_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(project_record) = payload.get("project-record") else {
+        return Err(outbox_evidence_error(
+            event,
+            "project upsert evidence must contain project-record",
+        ));
+    };
+    let Some(project_id) = project_record
+        .get("project-id")
+        .and_then(Value::as_str)
+        .filter(|project_id| !project_id.is_empty())
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            "project upsert evidence must contain project-id",
+        ));
+    };
+    if let Some(payload_project_id) = payload.get("project-id").and_then(Value::as_str) {
+        if payload_project_id != project_id {
+            return Err(outbox_evidence_error(
+                event,
+                "project upsert project-id must match project-record",
+            ));
+        }
+    }
+    let server_id = optional_string_field(event, project_record, "server-id", "project upsert")?;
+    let display_name =
+        optional_string_field(event, project_record, "display-name", "project upsert")?;
+    let properties =
+        optional_string_map_field(event, project_record, "properties", "project upsert")?;
+    ProjectRecord::new(
+        project_id,
+        server_id,
+        display_name,
+        properties,
+        Principal::anonymous(),
+    )
+    .map_err(|_| {
+        outbox_evidence_error(
+            event,
+            "project upsert evidence has invalid identifier, server scope, or properties",
         )
     })?;
     Ok(())
@@ -9498,6 +9550,61 @@ mod tests {
         let message = err.to_string();
         assert!(message.contains("policy-binding.upserted"));
         assert!(message.contains("invalid scope or identifier"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_project_upsert_evidence() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-project-mismatched-id".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "project.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-project-mismatched-id",
+                    "event-type": "project.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "project-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "project-id": "default",
+                        "project-record": {
+                            "project-id": "shadow",
+                            "display-name": "Default Project",
+                            "properties": {"owner": "querygraph"}
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("mismatched project replay evidence should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("project.upserted"));
+        assert!(message.contains("project-id must match"));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());

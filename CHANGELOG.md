@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for `project.upserted` events whose project evidence
+  has mismatched project ids, malformed server scope, invalid public
+  properties, or malformed identifiers, so invalid project replay fails before
+  graph/lineage projection acknowledgement.
 - Rejected outbox delivery for `server.upserted` and `warehouse.upserted`
   events whose tenant-root evidence has malformed endpoint URLs, storage roots,
   identifiers, properties, or redacted hash anchors, so invalid server and
