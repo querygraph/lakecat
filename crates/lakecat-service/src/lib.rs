@@ -13922,6 +13922,91 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn credential_vend_rejects_malformed_odrl_before_issuer() {
+        let store = MemoryCatalogStore::new();
+        let issuer = Arc::new(RecordingCredentialIssuer::default());
+        let app = app(
+            LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_credential_issuer(issuer.clone()),
+        );
+        let table = TableRecord::new(
+            TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            ),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({
+                "format-version": 3,
+                "current-schema-id": 1,
+                "schemas": [{
+                    "schema-id": 1,
+                    "fields": [
+                        {"id": 1, "name": "event_id", "type": "string", "required": true},
+                        {"id": 2, "name": "payload", "type": "string", "required": false}
+                    ]
+                }]
+            }),
+            Principal::anonymous(),
+        );
+        let ident = table.ident.clone();
+        store.create_table(table).await.unwrap();
+        store
+            .upsert_policy_binding(
+                PolicyBinding::new(
+                    "agent-credential-columns",
+                    WarehouseName::new("local").unwrap(),
+                    Some(ident.namespace.clone()),
+                    Some(ident.name.clone()),
+                    true,
+                    serde_json::json!({
+                        "uid": "policy:agent-credential-columns",
+                        "permission": [{
+                            "action": "read",
+                            "constraint": [{
+                                "leftOperand": "allowed-columns",
+                                "operator": "eq"
+                            }]
+                        }]
+                    }),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let credentials = Request::builder()
+            .method(Method::GET)
+            .uri("/catalog/v1/namespaces/default/tables/events/credentials")
+            .header("x-lakecat-agent-did", "did:example:agent")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(credentials).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(message.contains("ODRL allowed columns constraint must include a right operand"));
+        assert!(
+            issuer.requests.lock().await.is_empty(),
+            "malformed active ODRL must fail before credential issuer dispatch"
+        );
+        let outbox = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        assert!(
+            outbox
+                .iter()
+                .all(|event| event.event_type != "credentials.vend-attempted"),
+            "malformed active ODRL must not emit credential-vend replay evidence"
+        );
+    }
+
+    #[tokio::test]
     async fn credential_vend_rejects_issuer_credentials_outside_profile_scope() {
         let store = MemoryCatalogStore::new();
         let issuer = Arc::new(BroadCredentialIssuer::default());

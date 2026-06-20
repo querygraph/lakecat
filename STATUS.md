@@ -10,13 +10,15 @@ Updated: 2026-06-20
   `lakecat-security` now rejects recognized ODRL read-restriction constraints
   for allowed columns, row predicates, purpose, and credential TTL when the
   constraint omits `rightOperand`/`right-operand`; the scan-planning route now
-  proves malformed active policy fails before Sail planning or scan-planned
-  outbox emission.
+  proves malformed active policy fails before Sail planning, and the credential
+  route proves it fails before issuer dispatch or credential-vend outbox
+  emission.
 - Local verification for this ODRL right-operand slice is green:
   `cargo fmt -p lakecat-security -p lakecat-service -- --check`;
   `cargo test -p lakecat-security read_restriction_rejects_missing_odrl_constraint_right_operands -- --nocapture`;
   `cargo test -p lakecat-security read_restriction -- --nocapture`;
   `cargo test -p lakecat-service scan_planning_rejects_malformed_odrl_before_sail -- --nocapture`;
+  `cargo test -p lakecat-service credential_vend_rejects_malformed_odrl_before_issuer -- --nocapture`;
   `docs/book/build.sh`;
   `git diff --check`.
 - Latest completed implementation slice:
