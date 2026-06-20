@@ -6,6 +6,20 @@ Updated: 2026-06-19
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject management graph replay gaps`.
+  QGLake lineage-drain management-list source replay now requires catalog graph
+  projection evidence for server, project, warehouse, policy-binding,
+  storage-profile, and storage-profile-upsert replay before management proof can
+  feed compact handoff verification.
+- Local verification for this management graph source-replay slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject view receipt hash drift`.
   QGLake lineage-drain QueryGraph bootstrap source replay now compares replayed
   view-version receipt hashes with the accepted QueryGraph verification hash

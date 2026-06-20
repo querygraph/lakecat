@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake lineage-drain management-list source replay to carry catalog
+  graph projection evidence before server, project, warehouse, policy, or
+  storage-profile list proof can feed compact handoff verification.
 - Required QGLake lineage-drain bootstrap source replay to match accepted
   QueryGraph view-version receipt hashes exactly, rejecting receipt-hash drift
   before view proof can feed compact handoff verification.

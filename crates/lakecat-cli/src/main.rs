@@ -6390,6 +6390,11 @@ fn verify_qglake_management_list_receipts(
             "qglake lineage drain {label} replay emitted no lineage projection"
         )));
     }
+    if event.graph_events == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} replay emitted no catalog graph projection"
+        )));
+    }
     if require_warehouse_scope
         && event
             .management_scope_warehouse
@@ -14981,6 +14986,54 @@ mod tests {
             err.to_string()
                 .contains("qglake lineage drain did not replay server list evidence")
         );
+
+        let mut server_list_without_graph = qglake_server_list_lineage_summary();
+        server_list_without_graph.graph_events = 0;
+        let err = verify_qglake_lineage_drain(
+            &LineageDrainResponse {
+                delivered: 10,
+                event_types: vec![
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                    "storage-profile.upserted".to_string(),
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "querygraph.bootstrap".to_string(),
+                ],
+                graph_events: 1,
+                lineage_events: 10,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    qglake_bootstrap_lineage_summary(),
+                    qglake_restricted_credential_summary(),
+                    qglake_human_credential_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    qglake_storage_profile_upsert_lineage_summary(),
+                    server_list_without_graph,
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                ],
+            },
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should require management graph projection");
+        assert!(err.to_string().contains(
+            "qglake lineage drain server list replay emitted no catalog graph projection"
+        ));
 
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {

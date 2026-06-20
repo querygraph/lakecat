@@ -1609,7 +1609,10 @@ only that the right number of management records existed while losing the
 receipt evidence for the reads. The lineage-drain verifier rejects those source
 replay events when the receipt arrays are empty or not SHA-256-shaped, so the
 compact `managementProof` starts from verified replay evidence rather than
-normalizing malformed hashes later. The QGLake acceptance workflow now
+normalizing malformed hashes later. It also rejects management-list source
+replay without catalog graph projection evidence, keeping the durable
+server/project/warehouse, policy, and storage-profile facts visible to
+QueryGraph through Grust-facing graph events. The QGLake acceptance workflow now
 establishes its server/project/warehouse tenant spine, performs governed
 server, project, warehouse, policy-list, storage-profile-list, scan-planning,
 scan-task-fetch, and table commit-history reads before bootstrap, and rejects a
