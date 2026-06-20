@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bound requested/effective scan stats-field evidence into QGLake replay and
+  handoff verification: scan-planned audit summaries now carry both arrays,
+  `qglake-verify-replay` rejects loss or widening, the local handoff bridge
+  preserves the proof, and compact handoff verification compares captured
+  replay against the accepted summary.
 - Preserved requested and effective scan stats-field evidence in governed scan
   plan extensions, so replay can prove policy narrowed metadata/stat requests
   without losing what the client originally asked for.

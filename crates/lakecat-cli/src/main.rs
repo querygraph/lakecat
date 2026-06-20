@@ -1338,6 +1338,54 @@ fn verify_querygraph_import_plan_artifact_lists(
     Ok(())
 }
 
+fn require_governed_scan_stats_field_evidence(
+    governed_scan: &serde_json::Map<String, Value>,
+    planned_restriction: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let requested = required_string_array(
+        governed_scan,
+        "plannedRequestedStatsFields",
+        "governedScanProof",
+    )?;
+    let effective = required_string_array(
+        governed_scan,
+        "plannedEffectiveStatsFields",
+        "governedScanProof",
+    )?;
+    if requested.is_empty() || effective.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "governedScanProof stats-field evidence must preserve non-empty requested and effective fields".to_string(),
+        ));
+    }
+    if requested.len() <= effective.len() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "governedScanProof plannedRequestedStatsFields must prove a wider request than plannedEffectiveStatsFields".to_string(),
+        ));
+    }
+    let requested_set = requested
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    for field in &effective {
+        if !requested_set.contains(field.as_str()) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "governedScanProof plannedEffectiveStatsFields contains {field} that was not requested"
+            )));
+        }
+    }
+    require_value_match(
+        planned_restriction,
+        "allowed-columns",
+        required_value(
+            governed_scan,
+            "plannedEffectiveStatsFields",
+            "governedScanProof",
+        )?,
+        "governedScanProof.plannedReadRestriction",
+    )?;
+    Ok(())
+}
+
 fn require_import_plan_list_covers_verified_ids(
     records: &[Value],
     verified_ids: &[Value],
@@ -1692,6 +1740,8 @@ fn verify_lakecat_replay_scan_matches_summary(
         "planGraphEvents",
         "plannedReadRestriction",
         "fetchedReadRestriction",
+        "plannedRequestedStatsFields",
+        "plannedEffectiveStatsFields",
         "fetchedRequiredProjection",
         "fetchedRequiredFilters",
         "plannedReplayEventHashes",
@@ -2462,6 +2512,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         )?,
         "governedScanProof.fetchedReadRestriction",
     )?;
+    require_governed_scan_stats_field_evidence(governed_scan, planned_restriction)?;
     let fetched_required_filters =
         required_array(governed_scan, "fetchedRequiredFilters", "governedScanProof")?;
     let expected_fetched_filters = vec![
@@ -3523,6 +3574,8 @@ fn qglake_scan_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Valu
         "childPlanTaskCount": fetched.child_plan_task_count.unwrap_or_default(),
         "plannedReadRestriction": planned.read_restriction.as_ref(),
         "fetchedReadRestriction": fetched.read_restriction.as_ref(),
+        "plannedRequestedStatsFields": &planned.requested_stats_fields,
+        "plannedEffectiveStatsFields": &planned.effective_stats_fields,
         "fetchedRequiredProjection": &fetched.required_projection,
         "fetchedRequiredFilters": &fetched.required_filters,
         "plannedReplayEventHashes": &planned.replay_event_hashes,
@@ -5434,6 +5487,12 @@ async fn verify_qglake_governed_scan(
                 "severity".to_string(),
                 "raw_payload".to_string(),
             ],
+            stats_fields: vec![
+                "event_id".to_string(),
+                "occurred_at".to_string(),
+                "severity".to_string(),
+                "raw_payload".to_string(),
+            ],
             case_sensitive: Some(true),
             ..empty_scan_request()
         },
@@ -5503,6 +5562,30 @@ fn verify_qglake_scan_plan(plan: &PlanTableScanResponse) -> lakecat_core::LakeCa
                 .cloned()
                 .unwrap_or(Value::Null)
         )));
+    }
+    if extension.get("requested-stats-fields")
+        != Some(&json!([
+            "event_id",
+            "occurred_at",
+            "severity",
+            "raw_payload"
+        ]))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake governed scan requested stats fields were not preserved as expected: {}",
+            extension
+                .get("requested-stats-fields")
+                .cloned()
+                .unwrap_or(Value::Null)
+        )));
+    }
+    for field in ["effective-stats-fields", "stats-fields"] {
+        if extension.get(field) != Some(&json!(["event_id", "occurred_at", "severity"])) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake governed scan {field} were not narrowed as expected: {}",
+                extension.get(field).cloned().unwrap_or(Value::Null)
+            )));
+        }
     }
     verify_qglake_plan_or_fetch_read_restriction(
         &extension["read-restriction"],
@@ -6252,6 +6335,49 @@ fn verify_qglake_scan_restriction_replay(
     if fetched.required_filters.as_slice() != expected_filters.as_slice() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain scan task fetch replay required filters do not exactly preserve fetched row predicate"
+                .to_string(),
+        ));
+    }
+    if planned.requested_stats_fields.is_empty() || planned.effective_stats_fields.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain scan planning replay is missing requested/effective stats-field evidence"
+                .to_string(),
+        ));
+    }
+    if planned.requested_stats_fields.len() <= planned.effective_stats_fields.len() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain scan planning replay does not prove stats-field narrowing"
+                .to_string(),
+        ));
+    }
+    let requested_stats = planned
+        .requested_stats_fields
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    for field in &planned.effective_stats_fields {
+        if !requested_stats.contains(field.as_str()) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain scan planning replay effective stats field {field} was not requested"
+            )));
+        }
+    }
+    let effective_stats = Value::Array(
+        planned
+            .effective_stats_fields
+            .iter()
+            .cloned()
+            .map(Value::String)
+            .collect(),
+    );
+    let planned_allowed_columns = required_value(
+        planned_restriction,
+        "allowed-columns",
+        "qglake lineage drain scan planning read restriction",
+    )?;
+    if &effective_stats != planned_allowed_columns {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain scan planning replay effective stats fields do not match planned read restriction"
                 .to_string(),
         ));
     }
@@ -8156,6 +8282,8 @@ mod tests {
                         "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
+                    "plannedRequestedStatsFields": ["event_id", "occurred_at", "severity", "raw_payload"],
+                    "plannedEffectiveStatsFields": ["event_id", "occurred_at", "severity"],
                     "fetchedRequiredProjection": ["event_id", "occurred_at", "severity"],
                     "fetchedRequiredFilters": [{
                         "type": "not-eq",
@@ -8377,6 +8505,8 @@ mod tests {
                         "max-credential-ttl-seconds": 300,
                         "policy-hashes": ["sha256:scan-policy"]
                     },
+                    "plannedRequestedStatsFields": ["event_id", "occurred_at", "severity", "raw_payload"],
+                    "plannedEffectiveStatsFields": ["event_id", "occurred_at", "severity"],
                     "fetchedRequiredProjection": ["event_id", "occurred_at", "severity"],
                     "fetchedRequiredFilters": [{
                         "type": "not-eq",
@@ -9599,6 +9729,37 @@ mod tests {
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("childPlanTaskCount"));
         assert!(err.to_string().contains("positive"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_scan_stats_field_evidence() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("plannedRequestedStatsFields");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing scan stats-field evidence");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("plannedRequestedStatsFields"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_scan_stats_field_widening() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedEffectiveStatsFields"] =
+            json!(["event_id", "occurred_at", "severity", "raw_payload"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject widened scan stats fields");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(
+            err.to_string()
+                .contains("must prove a wider request than plannedEffectiveStatsFields")
+        );
     }
 
     #[test]
@@ -10996,6 +11157,28 @@ mod tests {
             .expect_err("captured replay scan projection proof drift should be rejected");
         assert!(err.to_string().contains(
             "captured LakeCat replay output.replay-evidence.scan.fetchedRequiredProjection mismatch"
+        ));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_scan_stats_field_drift() {
+        let temp = qglake_temp_dir("handoff-captured-scan-stats-field-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["scan"]["plannedEffectiveStatsFields"] =
+            json!(["event_id", "occurred_at", "severity", "raw_payload"]);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay scan stats-field proof drift should be rejected");
+        assert!(err.to_string().contains(
+            "captured LakeCat replay output.replay-evidence.scan.plannedEffectiveStatsFields mismatch"
         ));
     }
 
@@ -13477,6 +13660,45 @@ mod tests {
     }
 
     #[test]
+    fn qglake_scan_replay_rejects_missing_stats_field_evidence() {
+        let mut planned = qglake_scan_planned_lineage_summary();
+        planned.requested_stats_fields = Vec::new();
+
+        let err = verify_qglake_scan_restriction_replay(
+            &planned,
+            &qglake_scan_tasks_fetched_lineage_summary(),
+        )
+        .expect_err("scan replay should reject missing stats-field evidence");
+
+        assert!(
+            err.to_string()
+                .contains("missing requested/effective stats-field evidence")
+        );
+    }
+
+    #[test]
+    fn qglake_scan_replay_rejects_widened_effective_stats_fields() {
+        let mut planned = qglake_scan_planned_lineage_summary();
+        planned.effective_stats_fields = vec![
+            "event_id".to_string(),
+            "occurred_at".to_string(),
+            "severity".to_string(),
+            "raw_payload".to_string(),
+        ];
+
+        let err = verify_qglake_scan_restriction_replay(
+            &planned,
+            &qglake_scan_tasks_fetched_lineage_summary(),
+        )
+        .expect_err("scan replay should reject widened effective stats fields");
+
+        assert!(
+            err.to_string()
+                .contains("does not prove stats-field narrowing")
+        );
+    }
+
+    #[test]
     fn qglake_management_replay_line_summarizes_verified_evidence() {
         let line = qglake_management_replay_line(&LineageDrainResponse {
             delivered: 5,
@@ -13860,6 +14082,8 @@ mod tests {
                     read_restriction: None,
                     required_projection: Vec::new(),
                     required_filters: Vec::new(),
+                    requested_stats_fields: Vec::new(),
+                    effective_stats_fields: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -13943,6 +14167,8 @@ mod tests {
                     read_restriction: None,
                     required_projection: Vec::new(),
                     required_filters: Vec::new(),
+                    requested_stats_fields: Vec::new(),
+                    effective_stats_fields: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -14028,6 +14254,8 @@ mod tests {
                     read_restriction: None,
                     required_projection: Vec::new(),
                     required_filters: Vec::new(),
+                    requested_stats_fields: Vec::new(),
+                    effective_stats_fields: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -14111,6 +14339,8 @@ mod tests {
                     read_restriction: None,
                     required_projection: Vec::new(),
                     required_filters: Vec::new(),
+                    requested_stats_fields: Vec::new(),
+                    effective_stats_fields: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -14194,6 +14424,8 @@ mod tests {
                     read_restriction: None,
                     required_projection: Vec::new(),
                     required_filters: Vec::new(),
+                    requested_stats_fields: Vec::new(),
+                    effective_stats_fields: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -14277,6 +14509,8 @@ mod tests {
                     read_restriction: None,
                     required_projection: Vec::new(),
                     required_filters: Vec::new(),
+                    requested_stats_fields: Vec::new(),
+                    effective_stats_fields: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -14360,6 +14594,8 @@ mod tests {
                     read_restriction: None,
                     required_projection: Vec::new(),
                     required_filters: Vec::new(),
+                    requested_stats_fields: Vec::new(),
+                    effective_stats_fields: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -14443,6 +14679,8 @@ mod tests {
                     read_restriction: None,
                     required_projection: Vec::new(),
                     required_filters: Vec::new(),
+                    requested_stats_fields: Vec::new(),
+                    effective_stats_fields: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -14526,6 +14764,8 @@ mod tests {
                     read_restriction: None,
                     required_projection: Vec::new(),
                     required_filters: Vec::new(),
+                    requested_stats_fields: Vec::new(),
+                    effective_stats_fields: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -14609,6 +14849,8 @@ mod tests {
                     read_restriction: None,
                     required_projection: Vec::new(),
                     required_filters: Vec::new(),
+                    requested_stats_fields: Vec::new(),
+                    effective_stats_fields: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -14692,6 +14934,8 @@ mod tests {
                     read_restriction: None,
                     required_projection: Vec::new(),
                     required_filters: Vec::new(),
+                    requested_stats_fields: Vec::new(),
+                    effective_stats_fields: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: vec!["OpenLineage".to_string()],
@@ -14775,6 +15019,8 @@ mod tests {
                     read_restriction: None,
                     required_projection: Vec::new(),
                     required_filters: Vec::new(),
+                    requested_stats_fields: Vec::new(),
+                    effective_stats_fields: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -14858,6 +15104,8 @@ mod tests {
                     read_restriction: None,
                     required_projection: Vec::new(),
                     required_filters: Vec::new(),
+                    requested_stats_fields: Vec::new(),
+                    effective_stats_fields: Vec::new(),
                     management_scope_project_id: None,
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
@@ -17183,6 +17431,8 @@ mod tests {
             read_restriction: None,
             required_projection: Vec::new(),
             required_filters: Vec::new(),
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: qglake_lineage_standards(),
@@ -17267,6 +17517,8 @@ mod tests {
             read_restriction: None,
             required_projection: Vec::new(),
             required_filters: Vec::new(),
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -17376,6 +17628,8 @@ mod tests {
             read_restriction: None,
             required_projection: Vec::new(),
             required_filters: Vec::new(),
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -17453,6 +17707,17 @@ mod tests {
             read_restriction: Some(qglake_read_restriction_summary()),
             required_projection: Vec::new(),
             required_filters: Vec::new(),
+            requested_stats_fields: vec![
+                "event_id".to_string(),
+                "occurred_at".to_string(),
+                "severity".to_string(),
+                "raw_payload".to_string(),
+            ],
+            effective_stats_fields: vec![
+                "event_id".to_string(),
+                "occurred_at".to_string(),
+                "severity".to_string(),
+            ],
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -17524,6 +17789,8 @@ mod tests {
                 "term": "severity",
                 "value": "debug"
             })],
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -17587,6 +17854,8 @@ mod tests {
             read_restriction: None,
             required_projection: Vec::new(),
             required_filters: Vec::new(),
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -17652,6 +17921,8 @@ mod tests {
             read_restriction: None,
             required_projection: Vec::new(),
             required_filters: Vec::new(),
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -17719,6 +17990,8 @@ mod tests {
             read_restriction: None,
             required_projection: Vec::new(),
             required_filters: Vec::new(),
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
@@ -17784,6 +18057,8 @@ mod tests {
             read_restriction: None,
             required_projection: Vec::new(),
             required_filters: Vec::new(),
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -17847,6 +18122,8 @@ mod tests {
             read_restriction: None,
             required_projection: Vec::new(),
             required_filters: Vec::new(),
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -17910,6 +18187,8 @@ mod tests {
             read_restriction: None,
             required_projection: Vec::new(),
             required_filters: Vec::new(),
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -17975,6 +18254,8 @@ mod tests {
             read_restriction: Some(qglake_read_restriction_summary()),
             required_projection: Vec::new(),
             required_filters: Vec::new(),
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),
@@ -18044,6 +18325,8 @@ mod tests {
             read_restriction: Some(qglake_read_restriction_summary()),
             required_projection: Vec::new(),
             required_filters: Vec::new(),
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
             management_scope_project_id: None,
             management_scope_warehouse: None,
             standards: Vec::new(),

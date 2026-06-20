@@ -977,6 +977,12 @@ projection or the mandatory row predicate proof. The same verifier now checks
 that the exported policy binding, scan planning extension, and fetch extension
 all preserve the server-derived purpose and policy-derived
 `max-credential-ttl-seconds` cap before compact replay proof can be accepted.
+The scan-planned replay proof also carries
+`plannedRequestedStatsFields` and `plannedEffectiveStatsFields`, so QGLake can
+prove a broader stats request, the server-derived narrowing, and the final
+effective stats fields that match the allowed columns. Saved handoff summaries
+and captured replay output are rejected if those fields disappear, widen, or
+drift apart.
 It also cross-checks the embedded ODRL policy projection against the structured
 binding so QueryGraph cannot import a stale copy while LakeCat verifies a
 different one.
@@ -1771,7 +1777,11 @@ regenerates the LakeCat replay evidence that proves request identity,
 QueryGraph bootstrap replay, governed scan replay, pointer history, view
 receipt chains, storage-profile replay, and credential-vending decisions. It
 then compares that regenerated replay evidence to the compact
-`lakecatReplayVerification` proof. Credential-vending proof is not just a count:
+`lakecatReplayVerification` proof. The governed scan proof includes both the
+requested and effective stats-field arrays from the scan-planned replay, and the
+verifier rejects handoffs where the effective fields no longer match the
+allowed columns or no longer prove policy narrowing. Credential-vending proof
+is not just a count:
 each restricted-agent and trusted-human branch carries the redacted
 `storageProfile` graph anchor and `maxCredentialTtlSeconds`, including profile
 id, provider, issuance mode, secret-reference presence, and the graph event
@@ -1879,6 +1889,7 @@ cat target/qglake-handoff/handoff-summary.json
 
 That fixture creates the sample table shape, installs a restricted policy,
 verifies governed scan planning, verifies fetch-scan-task reapplication,
+checks requested/effective stats-field narrowing in replay and handoff proof,
 exercises delete manifest handling, probes credential-vend behavior for agents
 and trusted humans, verifies compact table commit-history evidence, exports
 QueryGraph bootstrap artifacts, drains the outbox, and proves the resulting

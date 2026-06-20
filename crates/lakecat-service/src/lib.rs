@@ -1369,6 +1369,28 @@ fn lineage_drain_event_summary(
             .and_then(Value::as_array)
             .cloned()
             .unwrap_or_default(),
+        requested_stats_fields: payload
+            .get("requested-stats-fields")
+            .and_then(Value::as_array)
+            .map(|fields| {
+                fields
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
+        effective_stats_fields: payload
+            .get("effective-stats-fields")
+            .and_then(Value::as_array)
+            .map(|fields| {
+                fields
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default(),
         management_scope_project_id: payload
             .get("project-id")
             .and_then(Value::as_str)
@@ -1986,6 +2008,7 @@ fn table_scan_planned_audit_payload(
     table: &TableRecord,
     receipt: &AuthorizationReceipt,
     scan: &lakecat_sail::ScanPlan,
+    scan_request_extensions: &Value,
 ) -> Value {
     let mut audit_payload = json!({
         "event-type": "table.scan-planned",
@@ -2000,6 +2023,11 @@ fn table_scan_planned_audit_payload(
     if let Some(restriction) = receipt.context.get("read-restriction") {
         audit_payload["read-restriction"] = restriction.clone();
         append_read_restriction_requirements(&mut audit_payload, restriction);
+    }
+    for field in ["requested-stats-fields", "effective-stats-fields"] {
+        if let Some(value) = scan_request_extensions.get(field) {
+            audit_payload[field] = value.clone();
+        }
     }
     audit_payload
 }
@@ -3166,8 +3194,13 @@ async fn plan_table_scan_in_warehouse(
         plan_scan_with_capability(&state, &capability, &table, request).await?;
     let ident = capability.table().clone();
     let principal = capability.receipt().principal.clone();
-    let audit_payload =
-        table_scan_planned_audit_payload(&ident, &table, capability.receipt(), &scan);
+    let audit_payload = table_scan_planned_audit_payload(
+        &ident,
+        &table,
+        capability.receipt(),
+        &scan,
+        &scan_request_extensions,
+    );
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -13032,7 +13065,17 @@ mod tests {
             residual_filter: None,
         };
 
-        let payload = table_scan_planned_audit_payload(&ident, &table, &receipt, &scan);
+        let scan_request_extensions = serde_json::json!({
+            "requested-stats-fields": ["event_id", "payload"],
+            "effective-stats-fields": ["event_id"]
+        });
+        let payload = table_scan_planned_audit_payload(
+            &ident,
+            &table,
+            &receipt,
+            &scan,
+            &scan_request_extensions,
+        );
         assert_eq!(
             payload["storage-location"],
             serde_json::json!("file:///tmp/events")
@@ -13050,6 +13093,14 @@ mod tests {
             payload["read-restriction"]
         );
         assert_eq!(payload["scan-task-count"], serde_json::json!(1));
+        assert_eq!(
+            payload["requested-stats-fields"],
+            serde_json::json!(["event_id", "payload"])
+        );
+        assert_eq!(
+            payload["effective-stats-fields"],
+            serde_json::json!(["event_id"])
+        );
     }
 
     #[test]

@@ -586,6 +586,26 @@ if (!Array.isArray(evidence.fetchedRequiredProjection) || evidence.fetchedRequir
   console.error("LakeCat scan replay evidence is missing fetchedRequiredProjection");
   process.exit(1);
 }
+if (!Array.isArray(evidence.plannedRequestedStatsFields) || evidence.plannedRequestedStatsFields.length === 0) {
+  console.error("LakeCat scan replay evidence is missing plannedRequestedStatsFields");
+  process.exit(1);
+}
+if (!Array.isArray(evidence.plannedEffectiveStatsFields) || evidence.plannedEffectiveStatsFields.length === 0) {
+  console.error("LakeCat scan replay evidence is missing plannedEffectiveStatsFields");
+  process.exit(1);
+}
+if (evidence.plannedRequestedStatsFields.some((item) => typeof item !== "string" || item.length === 0)) {
+  console.error("LakeCat scan replay evidence has invalid plannedRequestedStatsFields");
+  process.exit(1);
+}
+if (evidence.plannedEffectiveStatsFields.some((item) => typeof item !== "string" || item.length === 0)) {
+  console.error("LakeCat scan replay evidence has invalid plannedEffectiveStatsFields");
+  process.exit(1);
+}
+if (evidence.plannedRequestedStatsFields.length <= evidence.plannedEffectiveStatsFields.length) {
+  console.error("LakeCat scan replay evidence does not prove stats-field narrowing");
+  process.exit(1);
+}
 if (!Array.isArray(evidence.fetchedRequiredFilters) || evidence.fetchedRequiredFilters.length === 0) {
   console.error("LakeCat scan replay evidence is missing fetchedRequiredFilters");
   process.exit(1);
@@ -611,6 +631,17 @@ if (JSON.stringify(evidence.plannedReadRestriction) !== JSON.stringify(evidence.
   console.error("LakeCat scan replay evidence planned/fetched read restrictions do not match");
   process.exit(1);
 }
+if (JSON.stringify(evidence.plannedEffectiveStatsFields) !== JSON.stringify(evidence.plannedReadRestriction["allowed-columns"])) {
+  console.error("LakeCat scan replay evidence plannedEffectiveStatsFields do not match allowed columns");
+  process.exit(1);
+}
+const requestedStats = new Set(evidence.plannedRequestedStatsFields);
+for (const field of evidence.plannedEffectiveStatsFields) {
+  if (!requestedStats.has(field)) {
+    console.error("LakeCat scan replay evidence has an effective stats field that was not requested");
+    process.exit(1);
+  }
+}
 process.stdout.write(JSON.stringify({
   planTaskCount: evidence.planTaskCount,
   planGraphEvents: evidence.planGraphEvents,
@@ -619,6 +650,8 @@ process.stdout.write(JSON.stringify({
   childPlanTaskCount: evidence.childPlanTaskCount,
   plannedReadRestriction: evidence.plannedReadRestriction,
   fetchedReadRestriction: evidence.fetchedReadRestriction,
+  plannedRequestedStatsFields: evidence.plannedRequestedStatsFields,
+  plannedEffectiveStatsFields: evidence.plannedEffectiveStatsFields,
   fetchedRequiredProjection: evidence.fetchedRequiredProjection,
   fetchedRequiredFilters: evidence.fetchedRequiredFilters,
   plannedReplayEventHashes: evidence.plannedReplayEventHashes,

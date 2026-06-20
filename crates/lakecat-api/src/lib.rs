@@ -518,6 +518,10 @@ pub struct LineageDrainEventSummary {
     pub required_projection: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub required_filters: Vec<Value>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requested_stats_fields: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effective_stats_fields: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub management_scope_project_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

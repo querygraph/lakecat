@@ -6,6 +6,22 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake stats-field replay proof`.
+  Scan-planned audit/outbox summaries now carry both
+  `requested-stats-fields` and `effective-stats-fields`; QGLake replay JSON
+  exposes them as `plannedRequestedStatsFields` and
+  `plannedEffectiveStatsFields`; the replay verifier, local handoff bridge,
+  compact handoff verifier, and captured-output semantic checks now reject loss,
+  widening, or drift of that proof.
+- Local verification for this QGLake stats-field replay slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service scan_planned_audit_payload_surfaces_policy_context -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_scan_replay_rejects_missing_stats_field_evidence -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_scan_replay_rejects_widened_effective_stats_fields -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`.
+- Latest completed implementation slice:
   `Record requested scan stats-field evidence`.
   Governed scan planning now records both `requested-stats-fields` and
   `effective-stats-fields` in the LakeCat scan-request extension while
