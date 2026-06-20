@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pinned compact QGLake `credentialVendingProof` validation with negative
+  coverage for credential-branch secret-reference provider/hash evidence.
 - Tightened QGLake source replay credential-root validation so each credential
   replay branch rejects malformed secret-reference provider/hash evidence
   directly instead of relying on later storage-profile mismatch checks.

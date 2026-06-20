@@ -10258,6 +10258,78 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_requires_credential_secret_ref_provider_when_present() {
+        let mut summary = qglake_handoff_summary_json();
+        let storage_profile = summary["lakecatReplayVerification"]["credentialVendingProof"]
+            ["restricted"]["storageProfile"]
+            .as_object_mut()
+            .unwrap();
+        storage_profile.insert("secretRefPresent".to_string(), json!(true));
+        storage_profile.insert("secretRefProvider".to_string(), Value::Null);
+        storage_profile.insert(
+            "secretRefHash".to_string(),
+            json!("sha256:credential-secret-ref"),
+        );
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject credential secret-ref presence without provider",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("secretRefProvider"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_credential_secret_ref_hash_when_present() {
+        let mut summary = qglake_handoff_summary_json();
+        let storage_profile = summary["lakecatReplayVerification"]["credentialVendingProof"]
+            ["trustedHuman"]["storageProfile"]
+            .as_object_mut()
+            .unwrap();
+        storage_profile.insert("secretRefPresent".to_string(), json!(true));
+        storage_profile.insert("secretRefProvider".to_string(), json!("vault"));
+        storage_profile.insert("secretRefHash".to_string(), Value::Null);
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject credential secret-ref presence without hash",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("secretRefHash"));
+
+        let mut summary = qglake_handoff_summary_json();
+        let storage_profile = summary["lakecatReplayVerification"]["credentialVendingProof"]
+            ["trustedHuman"]["storageProfile"]
+            .as_object_mut()
+            .unwrap();
+        storage_profile.insert("secretRefPresent".to_string(), json!(true));
+        storage_profile.insert("secretRefProvider".to_string(), json!("vault"));
+        storage_profile.insert("secretRefHash".to_string(), json!("not-a-sha256-hash"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject malformed credential secret-ref hash");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("secretRefHash"));
+        assert!(err.to_string().contains("sha256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_credential_secret_ref_hash_when_absent() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["storageProfile"]
+            ["secretRefHash"] = json!("sha256:credential-secret-ref");
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject credential secret-ref hash without presence",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("secretRefHash"));
+        assert!(err.to_string().contains("null"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_credential_storage_profile_drift() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["storageProfile"]

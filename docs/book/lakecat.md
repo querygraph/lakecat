@@ -1656,6 +1656,9 @@ the trusted-human branch must name a human principal, prove a positive
 credential count, carry the same policy-derived TTL cap, carry the exact
 audited raw-credential exception reason, prove `blockReason` is null, and
 include replay/OpenLineage hashes.
+The compact verifier has direct negative coverage for the credential-branch
+secret-reference rules too, so a handoff cannot hide malformed provider or hash
+evidence behind an otherwise matching storage-profile upsert proof.
 The local handoff harness now preserves those replay fields while building the
 compact summary, rather than relying on the nested raw replay blob alone: scan
 graph events and fetch-side projection/filter requirements, management graph

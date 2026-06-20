@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin compact QGLake credential secret refs`.
+  Compact QGLake handoff tests now directly prove that each
+  `credentialVendingProof` storage-profile branch rejects malformed
+  secret-reference evidence: present secret refs require provider and SHA-256
+  hash proof, and absent secret refs cannot carry hash evidence.
+- Local verification for this compact credential-root slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_credential_secret_ref_provider_when_present -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_credential_secret_ref_hash_when_present -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_credential_secret_ref_hash_when_absent -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate QGLake credential source secret refs`.
   QGLake source replay verification now validates credential-branch
   secret-reference shape directly: secret refs marked present must carry a
