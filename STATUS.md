@@ -6,6 +6,15 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject decorated resolver secret refs`.
+  Credential resolver provider detection, Vault path construction, and
+  TypeSec environment secret resolution now fail closed on secret refs with
+  query strings, fragments, or URI userinfo, returning only `secret-ref-hash`
+  evidence even if a legacy/imported profile bypasses storage-profile
+  constructor validation.
+- Local verification for this resolver secret-ref slice is green:
+  `cargo test -p lakecat-service --features typesec-local environment_secret_resolver_parses_supported_secret_shapes -- --nocapture`.
+- Latest completed implementation slice:
   `Refresh live QGLake handoff verification`.
   The local QGLake handoff harness is green after the tombstone receipt-chain
   binding change: it generated one table and one view, drained 26 replay events,

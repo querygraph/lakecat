@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected decorated credential resolver secret refs at the resolver boundary
+  itself, so query strings, fragments, and URI userinfo fail with only
+  `secret-ref-hash` evidence even for legacy/imported profiles that bypass
+  storage-profile constructor validation.
 - Refreshed the live QGLake handoff verification after tombstone receipt-chain
   binding, proving the local harness still verifies 1 table, 1 view, 26 drained
   replay events, QueryGraph verify/import, and compact handoff self-checks.

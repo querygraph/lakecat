@@ -600,6 +600,7 @@ pub mod typesec_credential_issuer {
                 secret_ref_hash_context(secret_ref)
             ))
         })?;
+        reject_decorated_secret_ref_uri(&url, secret_ref)?;
         match url.scheme() {
             "typesec" if url.host_str() == Some("env") => Ok(SecretRefProvider::TypeSecEnv),
             "typesec" => Ok(SecretRefProvider::TypeSec),
@@ -630,6 +631,7 @@ pub mod typesec_credential_issuer {
                 secret_ref_hash_context(secret_ref)
             ))
         })?;
+        reject_decorated_secret_ref_uri(&url, secret_ref)?;
         if url.scheme() != "vault" {
             return Err(LakeCatError::InvalidArgument(format!(
                 "Vault resolver requires vault:// secret refs; {}",
@@ -688,6 +690,7 @@ pub mod typesec_credential_issuer {
                 secret_ref_hash_context(secret_ref)
             ))
         })?;
+        reject_decorated_secret_ref_uri(&url, secret_ref)?;
         if url.scheme() != "typesec" || url.host_str() != Some("env") {
             return Err(LakeCatError::InvalidArgument(format!(
                 "environment resolver requires secret refs like typesec://env/VARIABLE; {}",
@@ -706,6 +709,20 @@ pub mod typesec_credential_issuer {
             )));
         }
         Ok(variable.to_string())
+    }
+
+    fn reject_decorated_secret_ref_uri(url: &Url, secret_ref: &str) -> LakeCatResult<()> {
+        if url.query().is_some()
+            || url.fragment().is_some()
+            || !url.username().is_empty()
+            || url.password().is_some()
+        {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "credential secret ref must not include query strings, fragments, or userinfo; {}",
+                secret_ref_hash_context(secret_ref)
+            )));
+        }
+        Ok(())
     }
 
     fn secret_ref_hash_context(secret_ref: &str) -> String {
@@ -14797,6 +14814,30 @@ mod tests {
                 !message.contains(forbidden),
                 "unsupported provider errors must not expose {forbidden}"
             );
+        }
+        for (secret_ref, resolver) in [
+            (
+                "typesec://env/LAKECAT_S3_EVENTS?token=raw-secret",
+                "environment",
+            ),
+            ("vault://token@secret/data/lakecat/s3-events", "vault"),
+            ("aws-sm://lakecat/s3-events#raw-secret", "provider"),
+        ] {
+            let err = match resolver {
+                "environment" => env_secret_variable(secret_ref).unwrap_err(),
+                "vault" => vault_secret_path(secret_ref).unwrap_err(),
+                "provider" => secret_ref_provider(secret_ref).unwrap_err(),
+                _ => unreachable!(),
+            };
+            let message = err.to_string();
+            assert!(message.contains("query strings, fragments, or userinfo"));
+            assert!(message.contains("secret-ref-hash=sha256:"));
+            for forbidden in [secret_ref, "raw-secret", "token@secret", "s3-events"] {
+                assert!(
+                    !message.contains(forbidden),
+                    "decorated {resolver} secret-ref errors must not expose {forbidden}"
+                );
+            }
         }
 
         let object_entries = config_entries_from_secret_json(
