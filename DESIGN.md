@@ -208,8 +208,9 @@ The current working plan is:
 1. Keep closing the restriction loop. The route, provider, credential, and
    handoff paths already carry ODRL-derived allowed columns, row predicates,
    purpose, credential TTL, policy hashes, and re-applied fetch evidence. The
-   next reusable read-execution work should move upstream to Sail instead of
-   growing LakeCat-local planning code.
+   default plan/fetch/credential routes fail closed on malformed active ODRL
+   before Sail or issuer side effects. The next reusable read-execution work
+   should move upstream to Sail instead of growing LakeCat-local planning code.
 2. Keep QGLake handoff as the acceptance gate. A change that affects bootstrap,
    scan/fetch proof, credential proof, view receipt chains, graph/import hashes,
    OpenLineage replay, captured output hashes, or QueryGraph import compatibility

@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Route-prove malformed ODRL blocks fetchScanTasks`.
+  The default REST `fetchScanTasks` route now has focused regression coverage
+  proving a malformed active ODRL read restriction fails before Sail fetch
+  execution and before `table.scan-tasks-fetched` replay evidence is emitted.
+  This closes the same route-level fail-closed loop already pinned for scan
+  planning and credential vending.
+- Local verification for this fetch-route ODRL fail-closed slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service fetch_scan_tasks_rejects_malformed_odrl_before_sail -- --nocapture`;
+  `cargo test -p lakecat-service scan_planning_rejects_malformed_odrl_before_sail -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin metadata object-store setup redaction`.
   Metadata-object store setup now has direct regression coverage proving invalid
   metadata URI parsing and unsupported backend setup failures return only

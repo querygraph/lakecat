@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added route-level `fetchScanTasks` coverage proving malformed active ODRL
+  restrictions fail before Sail fetch execution and before scan-task fetch
+  replay evidence is emitted.
 - Pinned metadata-object store setup redaction so invalid metadata URI parsing
   and unsupported backend setup failures return only metadata-location and
   backend-error hashes, not raw paths, object names, schemes, or backend text.

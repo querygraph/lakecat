@@ -15198,6 +15198,91 @@ mod tests {
         );
     }
 
+    #[cfg(not(feature = "sail-local"))]
+    #[tokio::test]
+    async fn fetch_scan_tasks_rejects_malformed_odrl_before_sail() {
+        let store = MemoryCatalogStore::new();
+        let sail = Arc::new(CapturingSailEngine::default());
+        let app = app(
+            LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    sail.clone(),
+                    AllowAllGovernanceEngine::new(),
+                    NoopCatalogGraphSink::new(),
+                    HashOnlyLineageSink::new(),
+                ),
+        );
+
+        let upsert = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/policies/agent-columns")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "namespace": ["default"],
+                    "table": "events",
+                    "enforced": true,
+                    "odrl": {
+                        "uid": "policy:agent-columns",
+                        "permission": [{
+                            "action": "read",
+                            "constraint": [{
+                                "leftOperand": "allowed-columns",
+                                "operator": "eq"
+                            }]
+                        }]
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(upsert).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"current-schema-id":1,"schemas":[{"schema-id":1,"fields":[{"id":1,"name":"event_id","type":"string","required":true},{"id":2,"name":"payload","type":"string","required":false}]}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let fetch = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/tasks")
+            .header("content-type", "application/json")
+            .header("x-lakecat-agent-did", "did:example:agent")
+            .body(Body::from(
+                serde_json::json!({"plan-task": "lakecat:plan:captured"}).to_string(),
+            ))
+            .unwrap();
+        let response = app.oneshot(fetch).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let message = body["error"]["message"].as_str().unwrap();
+        assert!(message.contains("ODRL allowed columns constraint must include a right operand"));
+        assert!(
+            sail.last_fetch.lock().await.is_none(),
+            "malformed active ODRL must fail before Sail fetch"
+        );
+        let outbox = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        assert!(
+            outbox
+                .iter()
+                .all(|event| event.event_type != "table.scan-tasks-fetched"),
+            "malformed active ODRL must not emit scan-task fetch replay evidence"
+        );
+    }
+
     #[cfg(feature = "sail-local")]
     #[tokio::test]
     async fn scan_planning_applies_policy_column_restriction_before_sail() {
