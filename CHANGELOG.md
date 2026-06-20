@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required governed scan read-restriction `policy-hashes` in QGLake source
+  replay and compact handoff proof to contain full `sha256:`-prefixed 64-hex
+  digests, rejecting short placeholder policy anchors.
 - Required QGLake lineage-drain source replay for storage-profile upsert and
   credential-vending `secretRefHash` evidence to contain full
   `sha256:`-prefixed 64-hex digests before compact handoff proof generation.

@@ -3252,7 +3252,7 @@ fn require_read_restriction_evidence(
     }
     required_object(restriction, "row-predicate", label)?;
     require_non_empty_str(restriction, "purpose", label)?;
-    require_hash_array(restriction, "policy-hashes", label)?;
+    require_full_hash_array(restriction, "policy-hashes", label)?;
     require_positive_u64(restriction, "max-credential-ttl-seconds", label)?;
     Ok(())
 }
@@ -8663,7 +8663,7 @@ mod tests {
                         },
                         "purpose": "qglake-agent-demo",
                         "max-credential-ttl-seconds": 300,
-                        "policy-hashes": ["sha256:scan-policy"]
+                        "policy-hashes": [qglake_fixture_hash("scan-policy")]
                     },
                     "fetchedReadRestriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
@@ -8674,7 +8674,7 @@ mod tests {
                         },
                         "purpose": "qglake-agent-demo",
                         "max-credential-ttl-seconds": 300,
-                        "policy-hashes": ["sha256:scan-policy"]
+                        "policy-hashes": [qglake_fixture_hash("scan-policy")]
                     },
                     "plannedRequestedProjection": ["event_id", "occurred_at", "severity", "raw_payload"],
                     "plannedEffectiveProjection": ["event_id", "occurred_at", "severity"],
@@ -8892,7 +8892,7 @@ mod tests {
                         },
                         "purpose": "qglake-agent-demo",
                         "max-credential-ttl-seconds": 300,
-                        "policy-hashes": ["sha256:scan-policy"]
+                        "policy-hashes": [qglake_fixture_hash("scan-policy")]
                     },
                     "fetchedReadRestriction": {
                         "allowed-columns": ["event_id", "occurred_at", "severity"],
@@ -8903,7 +8903,7 @@ mod tests {
                         },
                         "purpose": "qglake-agent-demo",
                         "max-credential-ttl-seconds": 300,
-                        "policy-hashes": ["sha256:scan-policy"]
+                        "policy-hashes": [qglake_fixture_hash("scan-policy")]
                     },
                     "plannedRequestedProjection": ["event_id", "occurred_at", "severity", "raw_payload"],
                     "plannedEffectiveProjection": ["event_id", "occurred_at", "severity"],
@@ -10512,6 +10512,20 @@ mod tests {
             err.to_string()
                 .contains("max-credential-ttl-seconds mismatch")
         );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_short_scan_policy_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedReadRestriction"]["policy-hashes"] =
+            json!(["sha256:scan-policy"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short scan policy hashes");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("policy-hashes"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
@@ -16943,7 +16957,7 @@ mod tests {
             },
             "purpose": "qglake-agent-demo",
             "max-credential-ttl-seconds": 60,
-            "policy-hashes": ["sha256:scan-policy"]
+            "policy-hashes": [qglake_fixture_hash("scan-policy")]
         }));
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
@@ -16989,7 +17003,7 @@ mod tests {
                 "value": "debug"
             },
             "max-credential-ttl-seconds": 300,
-            "policy-hashes": ["sha256:scan-policy"]
+            "policy-hashes": [qglake_fixture_hash("scan-policy")]
         }));
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
@@ -17035,7 +17049,7 @@ mod tests {
             },
             "purpose": "other-purpose",
             "max-credential-ttl-seconds": 300,
-            "policy-hashes": ["sha256:scan-policy"]
+            "policy-hashes": [qglake_fixture_hash("scan-policy")]
         }));
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
@@ -18793,7 +18807,7 @@ mod tests {
             },
             "purpose": "qglake-agent-demo",
             "max-credential-ttl-seconds": 300,
-            "policy-hashes": ["sha256:scan-policy"]
+            "policy-hashes": [qglake_fixture_hash("scan-policy")]
         }));
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
@@ -19120,6 +19134,38 @@ mod tests {
         assert!(err
             .to_string()
             .contains("qglake lineage drain scan task fetch replay is missing compact file/delete task or SHA-256 receipt evidence"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_short_scan_policy_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let scan_plan = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.scan-planned")
+            .expect("scan plan replay fixture");
+        scan_plan.read_restriction = Some(json!({
+            "allowed-columns": ["event_id", "occurred_at", "severity"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": ["sha256:scan-policy"]
+        }));
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short scan policy hashes");
+
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain scan planning read restriction")
+        );
+        assert!(err.to_string().contains("policy-hashes"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
@@ -19491,7 +19537,7 @@ mod tests {
             },
             "purpose": "qglake-agent-demo",
             "max-credential-ttl-seconds": 300,
-            "policy-hashes": ["sha256:scan-policy"]
+            "policy-hashes": [qglake_fixture_hash("scan-policy")]
         })
     }
 

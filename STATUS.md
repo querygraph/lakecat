@@ -6,6 +6,24 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full governed policy hashes`.
+  QGLake source replay and compact handoff verification now reject governed
+  scan read-restriction `policy-hashes` unless each value is a full
+  `sha256:`-prefixed 64-hex digest, closing the short placeholder policy-anchor
+  path before replay evidence feeds QueryGraph handoff acceptance.
+- Local verification for this governed policy hash slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_short_scan_policy_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_short_scan_policy_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, and ended with `QGLake handoff verified`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require full source secret-ref hashes and covered view chains`.
   QGLake lineage-drain source replay now rejects storage-profile upsert and
   credential-vending `secretRefHash` evidence unless each present hash is a

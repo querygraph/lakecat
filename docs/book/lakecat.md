@@ -1880,8 +1880,11 @@ For reads, the summary similarly refuses to omit proof that scan planning and
 scan-task fetch both replayed with full digest-shaped sink receipt hashes. The
 compact scan proof must preserve the server-derived read restriction as a full
 restriction, not only as columns and filters: allowed columns, row predicate,
-purpose, policy-hash evidence, and `max-credential-ttl-seconds` must be
-present, and the planned and fetched restrictions must agree. The fetched
+purpose, full `sha256:`-prefixed policy-hash evidence, and
+`max-credential-ttl-seconds` must be present, and the planned and fetched
+restrictions must agree. Short readable policy anchors such as
+`sha256:policy-name` are rejected before QueryGraph receives the compact
+handoff proof. The fetched
 required filters must also be exactly the mandatory row predicate evidence, not
 a prefix with extra unverified filters appended. For catalog state, it refuses to omit proof
 that the table commit-history read replayed with sequence-number and
@@ -1972,7 +1975,12 @@ evidence, fetched file-scan, delete-file, and child-plan task counts, along with
 planned and fetched OpenLineage receipt hashes. Source replay validation now
 also requires planned/fetched replay and OpenLineage receipt arrays to be full
 SHA-256 digests, and the compact handoff verifier repeats that full-digest
-check for the saved `governedScanProof` arrays. The verifier also requires
+check for the saved `governedScanProof` arrays. The scan read restriction
+itself is part of that proof: both source replay and compact
+`plannedReadRestriction`/`fetchedReadRestriction` evidence require
+`policy-hashes` to be full `sha256:`-prefixed 64-hex digests, so a
+self-consistent handoff cannot smuggle placeholder policy names through a field
+that later readers treat as integrity evidence. The verifier also requires
 planned and fetched read restrictions to match before compact proof generation,
 requires both requested/effective projection and
 requested/effective stats-field evidence, requires effective projection to be a
