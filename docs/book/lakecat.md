@@ -892,13 +892,16 @@ operator-readable not-configured error, and denied TypeSec decisions do not call
 the backend at all. Configured provider backends receive the same
 policy-derived `max-credential-ttl-seconds` cap that LakeCat records in the
 read restriction, and returned credentials must preserve that cap in
-`lakecat.max-credential-ttl-seconds`. A not-configured resolver error reports
-the provider label and a `secret-ref-hash=sha256:...` value, not the raw secret
-URI, so the operator can correlate configuration without leaking the credential
-root. Resolver validation errors for malformed Vault and TypeSec environment
-references follow the same rule: wrong schemes, missing Vault mounts or paths,
-and invalid environment-variable names produce hash evidence instead of echoing
-the malformed secret reference.
+`lakecat.max-credential-ttl-seconds`. The issuer also rejects any credential
+whose returned prefix is outside the storage profile's `location-prefix`, so a
+misconfigured cloud secret backend cannot widen a table's storage scope after
+TypeSec has authorized the secret reference. A not-configured resolver error
+reports the provider label and a `secret-ref-hash=sha256:...` value, not the raw
+secret URI, so the operator can correlate configuration without leaking the
+credential root. Resolver validation errors for malformed Vault and TypeSec
+environment references follow the same rule: wrong schemes, missing Vault
+mounts or paths, and invalid environment-variable names produce hash evidence
+instead of echoing the malformed secret reference.
 When storage-profile changes replay into lineage/OpenLineage evidence, LakeCat
 does not forward the full secret-store URI. The replay payload keeps
 `secret-ref-present` and `secret-ref-provider` so QueryGraph can verify that a

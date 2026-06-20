@@ -5,6 +5,22 @@ Updated: 2026-06-20
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Reject overbroad secret-manager credential prefixes`.
+  TypeSec-authorized production secret-manager backends may now issue
+  credentials only when every returned credential prefix is within the selected
+  LakeCat storage-profile `location-prefix`. Overbroad backend responses fail
+  closed with redacted prefix hashes before credentials are returned to Iceberg
+  clients, preserving LakeCat's catalog-owned storage scope even when a
+  configured external secret backend misbehaves.
+- Local verification for this credential-scope slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_rejects_backend_credentials_outside_profile_scope -- --nocapture`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_dispatches_configured_production_secret_backends_after_authorization -- --nocapture`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service --features typesec-local`;
+  `docs/book/build.sh`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Complete OPUS consolidation routing`.
   `DESIGN.md` now records not only which OPUS review/design sections were

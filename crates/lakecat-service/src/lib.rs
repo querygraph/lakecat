@@ -145,10 +145,11 @@ impl CredentialIssuer for ConservativeCredentialIssuer {
         request: CredentialIssuanceRequest,
     ) -> Result<Vec<StorageCredential>, LakeCatError> {
         if request.profile.can_return_public_credential() {
-            return Ok(apply_credential_ttl_cap(
+            return issued_credentials_for_profile(
                 public_storage_credentials_for_profile(&request.profile),
+                &request.profile,
                 request.max_credential_ttl_seconds,
-            ));
+            );
         }
         Ok(Vec::new())
     }
@@ -213,10 +214,11 @@ pub mod typesec_credential_issuer {
             request: CredentialIssuanceRequest,
         ) -> LakeCatResult<Vec<StorageCredential>> {
             if request.profile.can_return_public_credential() {
-                return Ok(crate::apply_credential_ttl_cap(
+                return crate::issued_credentials_for_profile(
                     crate::public_storage_credentials_for_profile(&request.profile),
+                    &request.profile,
                     request.max_credential_ttl_seconds,
-                ));
+                );
             }
             if request.profile.issuance_mode != CredentialIssuanceMode::ShortLivedSecretRef {
                 return Ok(Vec::new());
@@ -231,10 +233,11 @@ pub mod typesec_credential_issuer {
             let resource = ResourceId::from(secret_ref.to_string());
             let decision = self.engine.check(&subject, "credentials.issue", &resource);
             match decision {
-                PolicyResult::Allow => Ok(crate::apply_credential_ttl_cap(
+                PolicyResult::Allow => crate::issued_credentials_for_profile(
                     self.resolver.resolve(&request).await?,
+                    &request.profile,
                     request.max_credential_ttl_seconds,
-                )),
+                ),
                 PolicyResult::Deny(reason) => Err(LakeCatError::Conflict(format!(
                     "TypeSec denied credential issuance: {reason}"
                 ))),
@@ -4661,6 +4664,29 @@ fn apply_credential_ttl_cap(
     credentials
 }
 
+fn issued_credentials_for_profile(
+    credentials: Vec<StorageCredential>,
+    profile: &StorageProfile,
+    max_credential_ttl_seconds: Option<u64>,
+) -> LakeCatResult<Vec<StorageCredential>> {
+    for credential in &credentials {
+        if !location_is_within_prefix(&credential.prefix, &profile.location_prefix) {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "issued credential prefix is outside storage profile scope; \
+                 credential-prefix-hash={}; storage-profile-prefix-hash={}; \
+                 storage-profile='{}'",
+                content_hash_json(&json!({"credential-prefix": &credential.prefix}))?,
+                content_hash_json(&json!({"location-prefix": &profile.location_prefix}))?,
+                profile.profile_id
+            )));
+        }
+    }
+    Ok(apply_credential_ttl_cap(
+        credentials,
+        max_credential_ttl_seconds,
+    ))
+}
+
 fn storage_profile_event_payload(profile: &StorageProfile) -> Value {
     let mut payload = json!({
         "profile-id": profile.profile_id.clone(),
@@ -5679,6 +5705,7 @@ mod tests {
     #[derive(Debug)]
     struct MockProductionSecretRefResolver {
         provider_label: &'static str,
+        credential_prefix: Option<&'static str>,
         requests: Mutex<Vec<(String, Option<u64>)>>,
     }
 
@@ -5701,7 +5728,10 @@ mod tests {
                 .await
                 .push((secret_ref, request.max_credential_ttl_seconds));
             Ok(vec![StorageCredential {
-                prefix: request.profile.location_prefix.clone(),
+                prefix: self
+                    .credential_prefix
+                    .unwrap_or(request.profile.location_prefix.as_str())
+                    .to_string(),
                 config: vec![ConfigEntry::new(
                     "lakecat.credential-kind",
                     format!("{}-short-lived", self.provider_label),
@@ -12059,6 +12089,7 @@ mod tests {
         ] {
             let backend = Arc::new(MockProductionSecretRefResolver {
                 provider_label,
+                credential_prefix: None,
                 requests: Mutex::new(Vec::new()),
             });
             let mut backends: BTreeMap<SecretRefProvider, Arc<dyn SecretRefCredentialResolver>> =
@@ -12111,6 +12142,77 @@ mod tests {
                 "denied TypeSec decisions must not dispatch to the production backend"
             );
         }
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_rejects_backend_credentials_outside_profile_scope() {
+        use crate::typesec_credential_issuer::{
+            ExternalSecretRefCredentialResolver, SecretRefCredentialResolver, SecretRefProvider,
+            TypeSecCredentialIssuer,
+        };
+
+        let principal = Principal::new("did:example:agent", PrincipalKind::Agent).unwrap();
+        let table = TableRecord::new(
+            table_ident("local", "default", "events").unwrap(),
+            "s3://lakecat-demo/events/tenant-a".to_string(),
+            Some("s3://lakecat-demo/events/tenant-a/metadata/00000.json".to_string()),
+            serde_json::json!({"format-version":3}),
+            principal.clone(),
+        );
+        let profile = StorageProfile::new(
+            "s3-events",
+            WarehouseName::new("local").unwrap(),
+            "s3://lakecat-demo/events",
+            StorageProvider::S3,
+            CredentialIssuanceMode::ShortLivedSecretRef,
+            Some("aws-sm://lakecat/s3-events".to_string()),
+            Default::default(),
+        )
+        .unwrap();
+        let request = CredentialIssuanceRequest {
+            table,
+            profile,
+            authorization_receipt: AuthorizationReceipt {
+                principal,
+                action: CatalogAction::CredentialsVend,
+                table: Some(table_ident("local", "default", "events").unwrap()),
+                allowed: true,
+                engine: "test".to_string(),
+                policy_hash: None,
+                context: serde_json::json!({}),
+                checked_at: chrono::Utc::now(),
+            },
+            max_credential_ttl_seconds: Some(300),
+        };
+        let backend = Arc::new(MockProductionSecretRefResolver {
+            provider_label: "aws-secrets-manager",
+            credential_prefix: Some("s3://lakecat-demo"),
+            requests: Mutex::new(Vec::new()),
+        });
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:agent".to_string(),
+                resource: "aws-sm://lakecat/s3-events".to_string(),
+            }),
+            ExternalSecretRefCredentialResolver::with_provider_backends(BTreeMap::from([(
+                SecretRefProvider::AwsSecretsManager,
+                backend.clone() as Arc<dyn SecretRefCredentialResolver>,
+            )])),
+        );
+
+        let err = issuer.issue(request).await.unwrap_err();
+        assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+        let message = err.to_string();
+        assert!(message.contains("issued credential prefix is outside storage profile scope"));
+        assert!(message.contains("credential-prefix-hash=sha256:"));
+        assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+        assert!(!message.contains("s3://lakecat-demo"));
+        assert_eq!(
+            *backend.requests.lock().await,
+            vec![("aws-sm://lakecat/s3-events".to_string(), Some(300))],
+            "authorized backend dispatch is allowed, but returned credentials must stay scoped"
+        );
     }
 
     #[cfg(feature = "typesec-local")]

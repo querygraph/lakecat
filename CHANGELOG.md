@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected TypeSec-authorized secret-manager credentials whose returned prefix
+  falls outside the selected LakeCat storage-profile prefix, keeping production
+  credential backends from widening catalog-owned storage scope after
+  authorization.
 - Completed the OPUS consolidation routing by adding an adjacent-document merge
   ledger to `DESIGN.md` and pointing the completed-review archive README at
   that ledger, so OPUS-derived guidance now has one active home across design,

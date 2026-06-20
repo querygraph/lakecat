@@ -445,7 +445,9 @@ behavior to LakeCat.
 
 Keep management hierarchy and credential roots durable and replayable. Raw
 credential vending remains an audited exception behind TypeSec authorization;
-restricted Sail-planned reads are the safer default.
+restricted Sail-planned reads are the safer default. Any configured
+secret-manager or credential issuer backend must return credentials scoped no
+broader than the LakeCat storage profile that selected it.
 
 ### P6 Reproducibility And V4
 
