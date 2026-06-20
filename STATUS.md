@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact corrupt outbox event ids`.
+  Outbox projection helper diagnostics now report malformed/corrupt pending
+  records with `outbox event hash sha256:...` instead of echoing raw event IDs.
+  Regression coverage proves a corrupt namespace event fails before graph,
+  lineage, or acknowledgement side effects.
+- Local verification for this outbox diagnostic slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_redacts_corrupt_pending_event_ids -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_rejects_duplicate_pending_event_ids_before_projection -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject non-agent proof headers`.
   Live request-identity parsing now rejects agent delegation and agent summary
   proof headers unless the request uses an agent-shaped identity path. The

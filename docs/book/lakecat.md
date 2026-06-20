@@ -2072,7 +2072,10 @@ once and the receipt count remains tied to committed catalog facts. Pending
 batch validation happens before projection: if a store returns duplicate event
 IDs in the same drain batch, LakeCat fails the drain with only the duplicate
 event-id hash and does not emit graph, OpenLineage, or acknowledgement side
-effects for that batch.
+effects for that batch. The same redaction rule applies to malformed pending
+records. If a custom or corrupted store hands the drain an event whose payload
+cannot be projected, LakeCat reports only the outbox event-id hash and stops
+before graph emission, lineage emission, or delivery acknowledgement.
 
 ### An Agentic QGLake Flow
 

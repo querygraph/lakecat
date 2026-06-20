@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted corrupt pending outbox event diagnostics so malformed projection
+  payloads report only an outbox event-id hash and fail before graph, lineage,
+  or acknowledgement side effects.
 - Rejected live agent delegation and agent summary proof headers unless the
   request carries an agent-shaped identity, returning only hash evidence and
   proving catalog config reads fail before governance dispatch.

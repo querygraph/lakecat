@@ -4510,6 +4510,10 @@ fn value_to_stable_part(value: &Value) -> Option<String> {
         .or_else(|| value.as_str().map(ToString::to_string))
 }
 
+fn outbox_event_hash(event: &OutboxEvent) -> String {
+    content_hash_bytes(event.event_id.as_bytes())
+}
+
 fn outbox_table(event: &OutboxEvent) -> Result<Option<TableIdent>, LakeCatError> {
     event
         .payload
@@ -4543,8 +4547,8 @@ fn outbox_namespace(
         .or_else(|| event.payload.get("namespace"))
         .ok_or_else(|| {
             LakeCatError::Internal(format!(
-                "outbox event {} is missing namespace payload",
-                event.event_id
+                "outbox event hash {} is missing namespace payload",
+                outbox_event_hash(event)
             ))
         })?;
     let namespace = match namespace {
@@ -4554,8 +4558,8 @@ fn outbox_namespace(
                 .map(|part| {
                     part.as_str().map(ToString::to_string).ok_or_else(|| {
                         LakeCatError::Internal(format!(
-                            "outbox event {} namespace components must be strings",
-                            event.event_id
+                            "outbox event hash {} namespace components must be strings",
+                            outbox_event_hash(event)
                         ))
                     })
                 })
@@ -4564,8 +4568,8 @@ fn outbox_namespace(
         serde_json::Value::String(path) => path.parse::<Namespace>()?,
         _ => {
             return Err(LakeCatError::Internal(format!(
-                "outbox event {} namespace payload must be an array or string",
-                event.event_id
+                "outbox event hash {} namespace payload must be an array or string",
+                outbox_event_hash(event)
             )));
         }
     };
@@ -4579,8 +4583,8 @@ fn outbox_policy_binding(
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
     let policy = payload.get("policy").ok_or_else(|| {
         LakeCatError::Internal(format!(
-            "outbox event {} is missing policy payload",
-            event.event_id
+            "outbox event hash {} is missing policy payload",
+            outbox_event_hash(event)
         ))
     })?;
     let warehouse = policy
@@ -4596,8 +4600,8 @@ fn outbox_policy_binding(
         .filter(|policy_id| !policy_id.is_empty())
         .ok_or_else(|| {
             LakeCatError::Internal(format!(
-                "outbox event {} policy payload is missing policy-id",
-                event.event_id
+                "outbox event hash {} policy payload is missing policy-id",
+                outbox_event_hash(event)
             ))
         })?
         .to_string();
@@ -4618,8 +4622,8 @@ fn outbox_project(event: &OutboxEvent) -> Result<String, LakeCatError> {
         .map(ToString::to_string)
         .ok_or_else(|| {
             LakeCatError::Internal(format!(
-                "outbox event {} is missing project payload",
-                event.event_id
+                "outbox event hash {} is missing project payload",
+                outbox_event_hash(event)
             ))
         })
 }
@@ -4638,8 +4642,8 @@ fn outbox_server(event: &OutboxEvent) -> Result<String, LakeCatError> {
         .map(ToString::to_string)
         .ok_or_else(|| {
             LakeCatError::Internal(format!(
-                "outbox event {} is missing server payload",
-                event.event_id
+                "outbox event hash {} is missing server payload",
+                outbox_event_hash(event)
             ))
         })
 }
@@ -4651,8 +4655,8 @@ fn outbox_storage_profile(
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
     let storage_profile = payload.get("storage-profile").ok_or_else(|| {
         LakeCatError::Internal(format!(
-            "outbox event {} is missing storage profile payload",
-            event.event_id
+            "outbox event hash {} is missing storage profile payload",
+            outbox_event_hash(event)
         ))
     })?;
     let warehouse = storage_profile
@@ -4669,8 +4673,8 @@ fn outbox_storage_profile(
         .map(ToString::to_string)
         .ok_or_else(|| {
             LakeCatError::Internal(format!(
-                "outbox event {} is missing storage profile payload",
-                event.event_id
+                "outbox event hash {} is missing storage profile payload",
+                outbox_event_hash(event)
             ))
         })?;
     Ok((warehouse, profile_id))
@@ -4713,8 +4717,8 @@ fn outbox_view(
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
     let view = payload.get("view").ok_or_else(|| {
         LakeCatError::Internal(format!(
-            "outbox event {} is missing view payload",
-            event.event_id
+            "outbox event hash {} is missing view payload",
+            outbox_event_hash(event)
         ))
     })?;
     let warehouse = view
@@ -4729,8 +4733,8 @@ fn outbox_view(
         .or_else(|| payload.get("namespace"))
         .ok_or_else(|| {
             LakeCatError::Internal(format!(
-                "outbox event {} view payload is missing namespace",
-                event.event_id
+                "outbox event hash {} view payload is missing namespace",
+                outbox_event_hash(event)
             ))
         })?;
     let namespace = match namespace_value {
@@ -4740,8 +4744,8 @@ fn outbox_view(
                 .map(|part| {
                     part.as_str().map(ToString::to_string).ok_or_else(|| {
                         LakeCatError::Internal(format!(
-                            "outbox event {} view namespace components must be strings",
-                            event.event_id
+                            "outbox event hash {} view namespace components must be strings",
+                            outbox_event_hash(event)
                         ))
                     })
                 })
@@ -4750,8 +4754,8 @@ fn outbox_view(
         Value::String(path) => path.parse::<Namespace>()?,
         _ => {
             return Err(LakeCatError::Internal(format!(
-                "outbox event {} view namespace must be an array or string",
-                event.event_id
+                "outbox event hash {} view namespace must be an array or string",
+                outbox_event_hash(event)
             )));
         }
     };
@@ -4761,8 +4765,8 @@ fn outbox_view(
         .filter(|name| !name.is_empty())
         .ok_or_else(|| {
             LakeCatError::Internal(format!(
-                "outbox event {} view payload is missing name",
-                event.event_id
+                "outbox event hash {} view payload is missing name",
+                outbox_event_hash(event)
             ))
         })?
         .to_string();
@@ -4792,8 +4796,8 @@ fn outbox_commit_sequence_number(event: &OutboxEvent) -> Result<u64, LakeCatErro
         .or_else(|| event.payload.get("commit"))
         .ok_or_else(|| {
             LakeCatError::Internal(format!(
-                "outbox event {} is missing commit payload",
-                event.event_id
+                "outbox event hash {} is missing commit payload",
+                outbox_event_hash(event)
             ))
         })?;
     commit
@@ -4802,8 +4806,8 @@ fn outbox_commit_sequence_number(event: &OutboxEvent) -> Result<u64, LakeCatErro
         .and_then(serde_json::Value::as_u64)
         .ok_or_else(|| {
             LakeCatError::Internal(format!(
-                "outbox event {} commit payload is missing sequence number",
-                event.event_id
+                "outbox event hash {} commit payload is missing sequence number",
+                outbox_event_hash(event)
             ))
         })
 }
@@ -4817,8 +4821,8 @@ fn outbox_commit_history_entries(
         .and_then(Value::as_array)
         .ok_or_else(|| {
             LakeCatError::Internal(format!(
-                "outbox event {} commit history payload is missing sequence numbers",
-                event.event_id
+                "outbox event hash {} commit history payload is missing sequence numbers",
+                outbox_event_hash(event)
             ))
         })?;
     let commit_hashes = payload
@@ -4832,8 +4836,8 @@ fn outbox_commit_history_entries(
         .map(|(index, sequence_number)| {
             let sequence_number = sequence_number.as_u64().ok_or_else(|| {
                 LakeCatError::Internal(format!(
-                    "outbox event {} commit history payload has a non-numeric sequence number",
-                    event.event_id
+                    "outbox event hash {} commit history payload has a non-numeric sequence number",
+                    outbox_event_hash(event)
                 ))
             })?;
             let commit_hash = commit_hashes
@@ -8231,6 +8235,60 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "duplicate pending ids must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_redacts_corrupt_pending_event_ids() {
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-secret-tenant-token".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "namespace.created".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-corrupt-namespace",
+                    "event-type": "namespace.created",
+                    "payload": {
+                        "warehouse": "local",
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("corrupt pending outbox event should fail");
+
+        let message = err.to_string();
+        assert!(message.contains("outbox event hash sha256:"));
+        assert!(message.contains("is missing namespace payload"));
+        assert!(
+            !message.contains("evt-secret-tenant-token"),
+            "corrupt event id should be redacted from the operator-facing error"
+        );
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "corrupt pending event must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "corrupt pending event must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "corrupt pending event must fail before lineage projection"
         );
     }
 
