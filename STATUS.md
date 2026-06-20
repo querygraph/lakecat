@@ -6,6 +6,27 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject malformed outbox view evidence`.
+  Outbox draining now rejects `view.listed`, `view.upserted`, `view.loaded`,
+  and `view.dropped` pending events when view evidence has malformed warehouse,
+  namespace, view name, or view-count fields. Unsafe view replay evidence stays
+  pending and reaches neither graph projection nor lineage acknowledgement.
+- Local verification for this outbox view evidence slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_view_list_evidence -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_view_lifecycle_evidence -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_projects_view_events_to_graph_and_lineage -- --nocapture`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain -- --nocapture`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --nocapture --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import, and
+  ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Reject malformed outbox management-list evidence`.
   Outbox draining now rejects `policy-binding.listed`, `project.listed`,
   `server.listed`, `storage-profile.listed`, and `warehouse.listed` pending

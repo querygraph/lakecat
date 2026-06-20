@@ -968,6 +968,10 @@ Management-list replay is checked before delivery too: policy-binding,
 project, server, storage-profile, and warehouse list events must carry unsigned
 counts, warehouse-scoped lists must carry a valid warehouse, and optional
 project scope must be a string before those reads can become replay evidence.
+View replay is checked at the same boundary: view list events must carry valid
+warehouse, namespace, and count evidence, while view create/load/drop evidence
+must carry a valid warehouse, namespace, and non-empty view name before graph or
+OpenLineage projection.
 Server endpoint URLs are operator-visible management metadata, so LakeCat keeps
 them deliberately plain: they must be absolute `http` or `https` URLs, and they
 cannot include query strings, fragments, or URI userinfo. Rejected submissions
@@ -2068,6 +2072,9 @@ Management-list read replay applies the same rule to operational discovery:
 policy, project, server, storage-profile, and warehouse list events must carry
 unsigned counts, valid warehouse scope when warehouse-scoped, and valid optional
 project scope before delivery.
+View list and lifecycle replay must carry valid warehouse, namespace, view
+name, and count evidence before those view events become graph/OpenLineage
+material for QueryGraph.
 Project, server, and warehouse upsert replay must carry valid
 tenant-root evidence too: project ids, server scopes, endpoint URLs, storage
 roots, identifiers, properties, and pre-redacted hash anchors are checked

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected outbox delivery for view list and lifecycle events whose warehouse,
+  namespace, name, or count evidence is malformed, so invalid view replay fails
+  before graph/lineage projection acknowledgement.
 - Rejected outbox delivery for management-list read events whose count or scope
   evidence is malformed, so invalid server/project/warehouse/policy/profile
   list replay fails before lineage acknowledgement.
