@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected live request-identity TypeDID proof headers without a matching
+  TypeDID envelope header, returning only `typedid-proof-hash` evidence and
+  proving catalog config reads fail before governance dispatch.
 - Added requested/effective scan projection evidence to scan-planned replay
   summaries and QGLake handoff verification, so durable replay proves policy
   narrowing instead of relying only on the HTTP plan response.

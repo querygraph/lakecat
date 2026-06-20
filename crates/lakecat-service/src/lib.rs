@@ -5398,6 +5398,16 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
     let typedid = explicit_typedid.or(agent_did);
     let typedid_proof = header("x-lakecat-typedid-proof")?;
     let typedid_envelope = header("x-lakecat-typedid-envelope")?;
+    if typedid_envelope.is_none() {
+        if let Some(proof) = typedid_proof {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "x-lakecat-typedid-proof requires x-lakecat-typedid-envelope; \
+                 typedid-proof-hash={}",
+                content_hash_bytes(proof.as_bytes())
+            ))
+            .into());
+        }
+    }
     let delegation = header("x-lakecat-agent-delegation")?;
     let signed_summary = header("x-lakecat-agent-summary-signature")?;
     let authorization = header("authorization")?;
@@ -6635,6 +6645,62 @@ mod tests {
         assert!(!envelope.contains("protected"));
         assert!(!envelope.contains("delegation-token"));
         assert!(!envelope.contains("summary-secret"));
+    }
+
+    #[test]
+    fn request_identity_rejects_unpaired_typedid_proof() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-lakecat-agent-did", "did:example:agent".parse().unwrap());
+        headers.insert(
+            "x-lakecat-typedid-proof",
+            "raw-proof-secret".parse().unwrap(),
+        );
+
+        let err = request_identity(&headers).expect_err("unpaired proof should fail closed");
+        let LakeCatHttpError(inner) = err;
+        let message = inner.to_string();
+        assert!(message.contains("x-lakecat-typedid-proof requires x-lakecat-typedid-envelope"));
+        assert!(message.contains("typedid-proof-hash=sha256:"));
+        assert!(!message.contains("raw-proof-secret"));
+    }
+
+    #[tokio::test]
+    async fn config_endpoint_rejects_unpaired_typedid_proof_before_governance() {
+        let governance = Arc::new(RecordingGovernance::default());
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_integrations(
+            default_sail_engine(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        ));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/config")
+                    .header("x-lakecat-agent-did", "did:example:agent")
+                    .header("x-lakecat-typedid-proof", "raw-proof-secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let message = String::from_utf8(body.to_vec()).unwrap();
+        assert!(message.contains("x-lakecat-typedid-proof requires x-lakecat-typedid-envelope"));
+        assert!(message.contains("typedid-proof-hash=sha256:"));
+        assert!(!message.contains("raw-proof-secret"));
+        assert!(governance.principals.lock().await.is_empty());
+        assert!(governance.contexts.lock().await.is_empty());
     }
 
     #[cfg(feature = "typesec-local")]

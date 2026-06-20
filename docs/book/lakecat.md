@@ -1648,7 +1648,12 @@ the paired envelope hash. As with authorization receipts, the request and
 bootstrap TypeDID hash slots are independently shaped replay evidence because
 they may come from different requests in the captured workflow. That keeps the
 compact handoff self-describing without moving TypeDID trust semantics out of
-TypeSec. The JSON output from `lakecat-cli qglake-verify-handoff` also carries
+TypeSec. Live request parsing now enforces the same boundary earlier: a caller that
+sends `x-lakecat-typedid-proof` without `x-lakecat-typedid-envelope` receives a
+hash-only `typedid-proof-hash` rejection before governance or capability
+receipt creation, so raw proof material cannot become either policy context or
+operator-facing diagnostics. The JSON output from
+`lakecat-cli qglake-verify-handoff` also carries
 the accepted lineage-drain identity source, identity state, and TypeDID
 envelope/proof hash slots in `lineageDrainArtifactSemantics`, so QueryGraph can
 index the verified drain boundary without reparsing the raw drain artifact. If

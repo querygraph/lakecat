@@ -6,6 +6,18 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject unpaired TypeDID proof headers`.
+  Live request-identity parsing now rejects `x-lakecat-typedid-proof` unless
+  `x-lakecat-typedid-envelope` is present, returns only
+  `typedid-proof-hash` evidence, and config-route coverage proves the request
+  fails before governance dispatch.
+- Local verification for this TypeDID request-boundary slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service request_identity_rejects_unpaired_typedid_proof -- --nocapture`;
+  `cargo test -p lakecat-service config_endpoint_rejects_unpaired_typedid_proof_before_governance -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin scan replay projection proof`.
   Scan-planned audit/outbox payloads and drain summaries now preserve
   requested/effective projection evidence, and QGLake source replay plus compact
