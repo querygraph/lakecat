@@ -6,6 +6,17 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin graph-failure outbox retryability`.
+  Service outbox coverage now proves a graph projection failure makes
+  `drain_outbox_once` fail before lineage emission and before delivery
+  acknowledgement, leaving the durable outbox event pending for retry.
+- Local verification for this outbox retryability slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_does_not_acknowledge_graph_projection_failures -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_does_not_acknowledge_projection_failures -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin compact QGLake credential secret refs`.
   Compact QGLake handoff tests now directly prove that each
   `credentialVendingProof` storage-profile branch rejects malformed

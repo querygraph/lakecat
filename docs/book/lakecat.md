@@ -1948,7 +1948,10 @@ back accidentally. The outbox lets LakeCat retry projection from committed
 state. A drain acknowledges delivery only after every projection in the batch
 succeeds. If OpenLineage fails after a graph event has already been emitted, the
 drain fails and the catalog event remains pending, so recovery starts from the
-committed outbox rather than from guesswork.
+committed outbox rather than from guesswork. If the graph sink fails first,
+LakeCat fails the drain before emitting lineage and still leaves the outbox
+event pending, so graph and lineage consumers recover from the same committed
+catalog fact instead of diverging.
 
 Replay order is part of that contract. LakeCat selects undelivered outbox events
 by `created_at,event_id` in both embedded memory tests and the durable Turso

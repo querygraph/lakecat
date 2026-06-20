@@ -5812,6 +5812,21 @@ mod tests {
     }
 
     #[derive(Debug, Default)]
+    struct FailingGraph {
+        events: Mutex<Vec<GraphEvent>>,
+    }
+
+    #[async_trait]
+    impl CatalogGraphSink for FailingGraph {
+        async fn emit(&self, event: GraphEvent) -> lakecat_core::LakeCatResult<()> {
+            self.events.lock().await.push(event);
+            Err(LakeCatError::Internal(
+                "intentional graph projection failure".to_string(),
+            ))
+        }
+    }
+
+    #[derive(Debug, Default)]
     struct RecordingLineage {
         events: Mutex<Vec<LineageEvent>>,
     }
@@ -7753,6 +7768,68 @@ mod tests {
         assert!(
             !graph.events.lock().await.is_empty(),
             "graph projection may already be emitted, so retryability depends on outbox ack"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_does_not_acknowledge_graph_projection_failures() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-graph-fails".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.created".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-graph-fails",
+                    "event-type": "table.created",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-create",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(FailingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("graph projection failure must fail the drain");
+        assert!(err.to_string().contains("graph projection failure"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "failed graph projection must leave the event pending for retry"
+        );
+        assert_eq!(graph.events.lock().await.len(), 1);
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "lineage projection must not run after graph projection failure"
         );
     }
 

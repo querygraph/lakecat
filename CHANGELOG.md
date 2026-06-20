@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned outbox drain retryability for graph projection failures: a failing
+  graph sink now has focused coverage proving lineage is not emitted and the
+  pending outbox event is not acknowledged.
 - Pinned compact QGLake `credentialVendingProof` validation with negative
   coverage for credential-branch secret-reference provider/hash evidence.
 - Tightened QGLake source replay credential-root validation so each credential
