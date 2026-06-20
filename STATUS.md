@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind bootstrap request identity state`.
+  Compact QGLake handoff verification now requires
+  `queryGraphBootstrapProof.requestIdentitySource` and
+  `queryGraphBootstrapProof.requestIdentityState` to match
+  `requestIdentityProof`, preventing a summary from combining bootstrap
+  evidence with a different identity path or verification state.
+- Local verification for this bootstrap identity consistency slice is green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`.
+- Latest completed implementation slice:
   `Bind QGLake handoff verifier output`.
   Compact handoff artifact verification now accepts
   `lakecatHandoffVerifyOutputHash` and, when present, reads the saved

@@ -2095,6 +2095,14 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "agent",
         "queryGraphBootstrapProof",
     )?;
+    for field in ["requestIdentitySource", "requestIdentityState"] {
+        require_string_match(
+            bootstrap,
+            field,
+            required_str(request_identity, field, "requestIdentityProof")?,
+            "queryGraphBootstrapProof",
+        )?;
+    }
     require_hash_str(
         bootstrap,
         "authorizationReceiptHash",
@@ -9066,6 +9074,32 @@ mod tests {
         assert!(err.to_string().contains("queryGraphBootstrapProof"));
         assert!(err.to_string().contains("typedidProofHash"));
         assert!(err.to_string().contains("typedidEnvelopeHash"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_bootstrap_identity_source_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["requestIdentitySource"] =
+            json!("authorization-bearer");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject bootstrap identity source drift");
+
+        assert!(err.to_string().contains("queryGraphBootstrapProof"));
+        assert!(err.to_string().contains("requestIdentitySource mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_bootstrap_identity_state_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["requestIdentityState"] =
+            json!("verified");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject bootstrap identity state drift");
+
+        assert!(err.to_string().contains("queryGraphBootstrapProof"));
+        assert!(err.to_string().contains("requestIdentityState mismatch"));
     }
 
     #[test]

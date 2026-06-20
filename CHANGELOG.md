@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required compact QGLake bootstrap proof to preserve the same request identity
+  source and verification state as `requestIdentityProof`, rejecting summaries
+  that splice bootstrap evidence across identity paths.
 - Bound saved QGLake handoff-verifier output as a compact summary artifact:
   final local handoff summaries now carry `lakecatHandoffVerifyOutputHash`, and
   the verifier checks that JSON artifact is a verified result for the same
