@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Required compact QGLake handoff summaries to bind `catalogUrl` to an
+  absolute HTTP(S) endpoint instead of accepting any non-empty string.
 - Required QGLake handoff summaries to carry and verify a SHA-256 service log
   hash so saved operational logs cannot drift from the compact artifact
   manifest.

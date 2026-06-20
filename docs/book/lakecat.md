@@ -1371,9 +1371,10 @@ URL, principal, table scope, LakeCat replay status from
 `lakecat.qglake.replay-verification.v1`, QueryGraph-verified table/view
 counts, and semantic bundle/graph/OpenLineage/import hashes plus standards
 accepted only after LakeCat replay, `lakecat-verify`, and `lakecat-import`
-agree. The compact verifier requires the catalog URL, warehouse, namespace, and
-table scope to be present before accepting the summary, and it rejects captured
-QueryGraph verify/import output whose warehouse no longer matches the summary.
+agree. The compact verifier requires the catalog URL to be an absolute HTTP(S)
+endpoint and requires warehouse, namespace, and table scope to be present before
+accepting the summary. It rejects captured QueryGraph verify/import output
+whose warehouse no longer matches the summary.
 It also embeds `querygraphVerification.verifiedTables` and `verifiedViews`
 directly in the compact summary. `verifiedTables` must include the stable LakeCat
 table id derived from that scope, such as `lakecat:table:local:default:events`;

@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require HTTP QGLake handoff catalog URLs`.
+  Compact QGLake handoff verification now rejects malformed or non-HTTP(S)
+  `catalogUrl` values, so saved handoff summaries bind replay/import evidence
+  to an operator-reachable catalog endpoint rather than an arbitrary string.
+- Local verification for this catalog URL slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_malformed_catalog_url -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_non_http_catalog_url -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --nocapture`;
+  `cargo test -p lakecat-cli --quiet`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Hash QGLake handoff service logs`.
   QGLake handoff summaries now carry `serviceLogHash`, and
   `qglake-verify-handoff` recomputes the service log bytes so an archived

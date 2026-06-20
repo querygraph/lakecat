@@ -2358,7 +2358,7 @@ struct HandoffScope<'a> {
 fn require_handoff_scope<'a>(
     summary: &'a serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<HandoffScope<'a>> {
-    let catalog_url = require_non_empty_str(summary, "catalogUrl", "handoff summary")?;
+    let catalog_url = require_handoff_catalog_url(summary)?;
     let warehouse = require_non_empty_str(summary, "warehouse", "handoff summary")?;
     let namespace = require_non_empty_str(summary, "namespace", "handoff summary")?;
     let table = require_non_empty_str(summary, "table", "handoff summary")?;
@@ -2368,6 +2368,23 @@ fn require_handoff_scope<'a>(
         namespace,
         table,
     })
+}
+
+fn require_handoff_catalog_url<'a>(
+    summary: &'a serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<&'a str> {
+    let catalog_url = require_non_empty_str(summary, "catalogUrl", "handoff summary")?;
+    let parsed = Url::parse(catalog_url).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff summary catalogUrl must be an absolute HTTP(S) URL: {err}"
+        ))
+    })?;
+    if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff summary catalogUrl must be an absolute HTTP(S) URL with a host: {catalog_url}"
+        )));
+    }
+    Ok(catalog_url)
 }
 
 fn require_storage_profile_upsert_evidence(
@@ -8675,6 +8692,30 @@ mod tests {
         assert!(err.to_string().contains("handoff summary"));
         assert!(err.to_string().contains("namespace"));
         assert!(err.to_string().contains("must not be empty"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_malformed_catalog_url() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["catalogUrl"] = json!("not a url");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject malformed catalog URLs");
+
+        assert!(err.to_string().contains("catalogUrl"));
+        assert!(err.to_string().contains("HTTP(S) URL"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_non_http_catalog_url() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["catalogUrl"] = json!("file:///tmp/lakecat");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject non-HTTP catalog URLs");
+
+        assert!(err.to_string().contains("catalogUrl"));
+        assert!(err.to_string().contains("HTTP(S) URL"));
     }
 
     #[test]
