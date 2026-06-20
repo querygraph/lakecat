@@ -3050,6 +3050,12 @@ fn validate_planned_metadata_location(
             metadata_location_hash_context(new_metadata_location)
         )));
     }
+    if location_has_dot_path_segment(new_metadata_location) {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "metadata object location {} must not contain dot path segments",
+            metadata_location_hash_context(new_metadata_location)
+        )));
+    }
     if !location_is_strictly_within_prefix(
         new_metadata_location,
         storage_profile.location_prefix.as_str(),
@@ -3062,6 +3068,58 @@ fn validate_planned_metadata_location(
         )));
     }
     Ok(())
+}
+
+fn location_has_dot_path_segment(location: &str) -> bool {
+    let path = location
+        .split_once(['?', '#'])
+        .map_or(location, |(path, _)| path);
+    path.split('/').any(is_dot_path_segment)
+}
+
+fn is_dot_path_segment(segment: &str) -> bool {
+    let Some(decoded) = percent_decode_segment(segment) else {
+        return segment == "." || segment == "..";
+    };
+    decoded.as_slice() == b"." || decoded.as_slice() == b".."
+}
+
+fn percent_decode_segment(segment: &str) -> Option<Vec<u8>> {
+    if !segment.as_bytes().contains(&b'%') {
+        return None;
+    }
+    let mut decoded = Vec::with_capacity(segment.len());
+    let bytes = segment.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            let Some(high) = hex_value(bytes[index + 1]) else {
+                decoded.push(bytes[index]);
+                index += 1;
+                continue;
+            };
+            let Some(low) = hex_value(bytes[index + 2]) else {
+                decoded.push(bytes[index]);
+                index += 1;
+                continue;
+            };
+            decoded.push((high << 4) | low);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    Some(decoded)
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn location_is_within_prefix(location: &str, prefix: &str) -> bool {
@@ -9955,6 +10013,58 @@ mod tests {
         assert!(message.contains("metadata-location-hash=sha256:"));
         assert!(message.contains("storage-profile-prefix-hash=sha256:"));
         assert!(!message.contains("file:///tmp/events"));
+    }
+
+    #[test]
+    fn metadata_write_plan_rejects_dot_segment_locations() {
+        let table = TableRecord::new(
+            table_ident("local", "default", "events").unwrap(),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        );
+        let storage_profile = StorageProfile::inferred_for_table(&table);
+        for location in [
+            "file:///tmp/events/metadata/../00001.json",
+            "file:///tmp/events/metadata/%2e%2e/00001.json",
+        ] {
+            let plan = lakecat_sail::CommitPlan {
+                prepared_by: "test".to_string(),
+                requirements: Vec::new(),
+                updates: Vec::new(),
+                new_metadata_location: Some(location.to_string()),
+                new_metadata: serde_json::json!({"format-version": 3}),
+                metadata_write_required: true,
+                metadata_patch: serde_json::json!({}),
+            };
+
+            let err = validate_planned_metadata_location(
+                &plan,
+                table.metadata_location.as_deref(),
+                &storage_profile,
+            )
+            .unwrap_err();
+            assert!(matches!(err, LakeCatError::InvalidArgument(_)));
+            let message = err.to_string();
+            assert!(message.contains("dot path segments"));
+            assert!(message.contains("metadata-location-hash=sha256:"));
+            assert!(!message.contains(location));
+            assert!(!message.contains("00001.json"));
+        }
+    }
+
+    #[test]
+    fn location_dot_segment_detection_decodes_percent_encoded_segments() {
+        assert!(location_has_dot_path_segment(
+            "s3://lakecat/events/metadata/../00001.json"
+        ));
+        assert!(location_has_dot_path_segment(
+            "s3://lakecat/events/metadata/%2E%2e/00001.json"
+        ));
+        assert!(!location_has_dot_path_segment(
+            "s3://lakecat/events/metadata/v1.2/00001.json"
+        ));
     }
 
     #[test]

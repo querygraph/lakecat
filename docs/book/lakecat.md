@@ -308,13 +308,16 @@ Sail owns reusable Iceberg validation and metadata preparation.
 9. LakeCat rejects metadata-object locations outside the table's matched
    storage profile prefix, and also rejects the storage-profile root itself
    because metadata commits must create a child object.
-10. LakeCat writes the new metadata object through the warehouse storage
+10. LakeCat rejects literal or percent-encoded dot path segments in metadata
+    object locations, so commit plans cannot rely on traversal-like spelling to
+    address anything other than a plain child object.
+11. LakeCat writes the new metadata object through the warehouse storage
     profile with create-only object-store semantics.
-11. LakeCat advances the table pointer with compare-and-swap.
-12. LakeCat persists idempotency, audit, pointer-log, and outbox records.
-13. If the store rejects the commit after a local metadata write, LakeCat cleans
+12. LakeCat advances the table pointer with compare-and-swap.
+13. LakeCat persists idempotency, audit, pointer-log, and outbox records.
+14. If the store rejects the commit after a local metadata write, LakeCat cleans
    up the uncommitted metadata object when it can do so safely.
-14. Outbox draining projects the committed event to graph and lineage sinks.
+15. Outbox draining projects the committed event to graph and lineage sinks.
 
 The cleanup path is deliberately secondary to the commit result. If metadata
 cleanup fails after the store rejects a commit, LakeCat preserves the original
@@ -332,7 +335,9 @@ configuration, and storage-profile-prefix failures report metadata-location
 hashes, and prefix mismatches also report a storage-profile-prefix hash rather
 than raw object paths. A root-targeted metadata write uses the same redacted
 error shape: the operator sees that the plan did not name a child metadata
-object without receiving the raw table or storage root.
+object without receiving the raw table or storage root. Dot-segment failures
+use the same style: literal `..` and percent-encoded `%2e%2e` paths fail before
+object-store writes and expose only the metadata-location hash.
 
 Idempotency is part of correctness. Reusing the same key for the same commit can
 return the stored response even after the table has advanced beyond the
@@ -354,7 +359,8 @@ verifies that LakeCat returns a conflict without overwriting that non-current
 object.
 The same guard fails closed if a future Sail plan asks LakeCat to write metadata
 but does not provide a new object location, or if it tries to use the storage
-profile root as the new metadata object.
+profile root as the new metadata object. A companion regression rejects both
+literal and percent-encoded dot path segments in a planned metadata location.
 
 The embedded in-memory store follows the same commit evidence contract as the
 Turso path. A successful commit emits one `table.commit` audit/outbox event

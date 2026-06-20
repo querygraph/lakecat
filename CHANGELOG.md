@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected metadata-object commit locations containing literal or
+  percent-encoded dot path segments before object-store writes, keeping
+  create-only metadata writes constrained to plainly addressed child objects
+  under the selected storage profile.
 - Bound requested/effective scan stats-field evidence into QGLake replay and
   handoff verification: scan-planned audit summaries now carry both arrays,
   `qglake-verify-replay` rejects loss or widening, the local handoff bridge

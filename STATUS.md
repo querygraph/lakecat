@@ -6,6 +6,16 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject metadata dot-segment commit locations`.
+  Metadata-object commit validation now rejects planned new metadata locations
+  containing literal or percent-encoded `.`/`..` path segments before object
+  store parsing or create-only writes. The error stays audit-safe by reporting
+  a `metadata-location-hash=sha256:...` instead of the raw path.
+- Local verification for this metadata-location hardening slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_write_plan_rejects_dot_segment_locations -- --nocapture`;
+  `cargo test -p lakecat-service location_dot_segment_detection_decodes_percent_encoded_segments -- --nocapture`.
+- Latest completed implementation slice:
   `Bind QGLake stats-field replay proof`.
   Scan-planned audit/outbox summaries now carry both
   `requested-stats-fields` and `effective-stats-fields`; QGLake replay JSON
