@@ -4772,25 +4772,22 @@ fn apply_credential_ttl_cap(
     let Some(max_credential_ttl_seconds) = max_credential_ttl_seconds else {
         return credentials;
     };
-    let value = max_credential_ttl_seconds.to_string();
     for credential in &mut credentials {
-        if let Some(entry) = credential
-            .config
-            .iter_mut()
-            .find(|entry| entry.key == "lakecat.max-credential-ttl-seconds")
-        {
-            let effective = entry
-                .value
-                .parse::<u64>()
-                .map(|existing| existing.min(max_credential_ttl_seconds))
-                .unwrap_or(max_credential_ttl_seconds);
-            entry.value = effective.to_string();
-        } else {
-            credential.config.push(ConfigEntry::new(
-                "lakecat.max-credential-ttl-seconds",
-                value.clone(),
-            ));
-        }
+        let mut effective = max_credential_ttl_seconds;
+        credential.config.retain(|entry| {
+            if entry.key == "lakecat.max-credential-ttl-seconds" {
+                if let Ok(existing) = entry.value.parse::<u64>() {
+                    effective = effective.min(existing);
+                }
+                false
+            } else {
+                true
+            }
+        });
+        credential.config.push(ConfigEntry::new(
+            "lakecat.max-credential-ttl-seconds",
+            effective.to_string(),
+        ));
     }
     credentials
 }
@@ -6023,12 +6020,14 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "sail-local")]
     struct CasRaceStore {
         inner: Arc<dyn CatalogStore>,
         racing_metadata_location: String,
         raced: Mutex<bool>,
     }
 
+    #[cfg(feature = "sail-local")]
     impl CasRaceStore {
         fn new(inner: Arc<dyn CatalogStore>, racing_metadata_location: String) -> Arc<Self> {
             Arc::new(Self {
@@ -6039,6 +6038,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "sail-local")]
     #[async_trait]
     impl CatalogStore for CasRaceStore {
         async fn create_namespace(
@@ -13458,14 +13458,53 @@ mod tests {
         let credentials = apply_credential_ttl_cap(
             vec![StorageCredential {
                 prefix: "s3://lakecat-demo/events".to_string(),
-                config: vec![ConfigEntry::new("lakecat.max-credential-ttl-seconds", "60")],
+                config: vec![
+                    ConfigEntry::new("lakecat.credential-kind", "issuer-short-lived"),
+                    ConfigEntry::new("lakecat.max-credential-ttl-seconds", "60"),
+                ],
             }],
             Some(300),
         );
 
+        let ttl_entries = credentials[0]
+            .config
+            .iter()
+            .filter(|entry| entry.key == "lakecat.max-credential-ttl-seconds")
+            .collect::<Vec<_>>();
+        assert_eq!(ttl_entries.len(), 1);
         assert_eq!(
-            credentials[0].config[0].value, "60",
+            ttl_entries[0].value, "60",
             "issuer TTLs stricter than policy maximum must not be widened"
+        );
+    }
+
+    #[test]
+    fn credential_ttl_cap_collapses_duplicate_issuer_ttl_entries() {
+        let credentials = apply_credential_ttl_cap(
+            vec![StorageCredential {
+                prefix: "s3://lakecat-demo/events".to_string(),
+                config: vec![
+                    ConfigEntry::new("lakecat.max-credential-ttl-seconds", "600"),
+                    ConfigEntry::new("aws.session-token", "temporary"),
+                    ConfigEntry::new("lakecat.max-credential-ttl-seconds", "120"),
+                    ConfigEntry::new("lakecat.max-credential-ttl-seconds", "not-a-number"),
+                ],
+            }],
+            Some(300),
+        );
+
+        let ttl_entries = credentials[0]
+            .config
+            .iter()
+            .filter(|entry| entry.key == "lakecat.max-credential-ttl-seconds")
+            .collect::<Vec<_>>();
+        assert_eq!(ttl_entries.len(), 1);
+        assert_eq!(ttl_entries[0].value, "120");
+        assert!(
+            credentials[0]
+                .config
+                .iter()
+                .any(|entry| { entry.key == "aws.session-token" && entry.value == "temporary" })
         );
     }
 

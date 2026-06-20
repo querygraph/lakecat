@@ -526,7 +526,10 @@ returns only scoped, short-lived credential configuration. If policy carries a
 `max-credential-ttl-seconds` restriction, LakeCat passes that cap to the
 credential issuer and annotates each returned credential with
 `lakecat.max-credential-ttl-seconds`, so the exception path has an auditable
-duration bound.
+duration bound. If an issuer returns that LakeCat TTL key itself, LakeCat
+normalizes the response to one TTL entry per credential and keeps the stricter
+valid TTL, so duplicate backend-supplied entries cannot widen or confuse the
+policy cap.
 
 ## Rust-First Engines And The V3 To V4 Path
 
@@ -935,13 +938,16 @@ operator-readable not-configured error, and denied TypeSec decisions do not call
 the backend at all. Configured provider backends receive the same
 policy-derived `max-credential-ttl-seconds` cap that LakeCat records in the
 read restriction, and returned credentials must preserve that cap in
-`lakecat.max-credential-ttl-seconds`. The issuer also rejects any credential
-whose returned prefix is outside the storage profile's `location-prefix`, so a
-misconfigured cloud secret backend cannot widen a table's storage scope after
-TypeSec has authorized the secret reference. A not-configured resolver error
-reports the provider label and a `secret-ref-hash=sha256:...` value, not the raw
-secret URI, so the operator can correlate configuration without leaking the
-credential root. Resolver validation errors for malformed Vault and TypeSec
+`lakecat.max-credential-ttl-seconds`. LakeCat rewrites duplicate TTL config
+entries into one effective value before returning credentials, preserving a
+stricter issuer TTL when it is valid and otherwise falling back to the policy
+cap. The issuer also rejects any credential whose returned prefix is outside the
+storage profile's `location-prefix`, so a misconfigured cloud secret backend
+cannot widen a table's storage scope after TypeSec has authorized the secret
+reference. A not-configured resolver error reports the provider label and a
+`secret-ref-hash=sha256:...` value, not the raw secret URI, so the operator can
+correlate configuration without leaking the credential root. Resolver
+validation errors for malformed Vault and TypeSec
 environment references follow the same rule: wrong schemes, missing Vault
 mounts or paths, and invalid environment-variable names produce hash evidence
 instead of echoing the malformed secret reference.

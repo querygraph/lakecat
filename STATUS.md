@@ -6,6 +6,15 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Normalize credential TTL evidence`.
+  Credential-vending responses now collapse duplicate
+  `lakecat.max-credential-ttl-seconds` config entries into one effective value,
+  preserving stricter valid issuer TTLs while preventing wider or malformed
+  duplicate backend entries from leaving ambiguous policy-cap evidence.
+- Local verification for this credential TTL normalization slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service credential_ttl_cap -- --nocapture`.
+- Latest completed implementation slice:
   `Pin REST stale-commit cleanup evidence`.
   The service-level stale metadata commit regression now proves the HTTP
   conflict response carries hashed expected/actual metadata-pointer evidence,

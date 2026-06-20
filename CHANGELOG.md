@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Normalized credential-vending TTL evidence so every returned credential has
+  exactly one `lakecat.max-credential-ttl-seconds` entry, preserving stricter
+  issuer TTLs while removing duplicate or wider backend-supplied TTL entries.
 - Pinned the REST stale-commit cleanup contract: a metadata-object commit that
   loses compare-and-swap still removes its uncommitted object and returns
   hashed expected/actual metadata-pointer evidence without raw metadata paths.
