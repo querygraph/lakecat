@@ -4521,7 +4521,10 @@ fn outbox_table(event: &OutboxEvent) -> Result<Option<TableIdent>, LakeCatError>
         .filter(|table| !table.is_null())
         .map(|table| {
             serde_json::from_value(table.clone()).map_err(|err| {
-                LakeCatError::Internal(format!("failed to decode outbox table: {err}"))
+                LakeCatError::Internal(format!(
+                    "failed to decode outbox table for event hash {}: {err}",
+                    outbox_event_hash(event)
+                ))
             })
         })
         .transpose()
@@ -4857,7 +4860,10 @@ fn outbox_principal(event: &OutboxEvent) -> Result<Principal, LakeCatError> {
     ] {
         if let Some(principal) = event.payload.pointer(pointer) {
             return serde_json::from_value(principal.clone()).map_err(|err| {
-                LakeCatError::Internal(format!("failed to decode outbox principal: {err}"))
+                LakeCatError::Internal(format!(
+                    "failed to decode outbox principal for event hash {}: {err}",
+                    outbox_event_hash(event)
+                ))
             });
         }
     }
@@ -8290,6 +8296,87 @@ mod tests {
             lineage.events.lock().await.is_empty(),
             "corrupt pending event must fail before lineage projection"
         );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_hashes_malformed_table_decode_errors() {
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-secret-table-token".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.created".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-corrupt-table",
+                    "event-type": "table.created",
+                    "table": "not-a-table-identity",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": {
+                                "subject": "agent:writer",
+                                "kind": "agent"
+                            },
+                            "action": "table-create",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone());
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("malformed table identity should fail the drain");
+
+        let message = err.to_string();
+        assert!(message.contains("failed to decode outbox table for event hash sha256:"));
+        assert!(!message.contains("evt-secret-table-token"));
+        assert!(store.delivered.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_hashes_malformed_principal_decode_errors() {
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-secret-principal-token".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-corrupt-principal",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "warehouse": "local",
+                        "authorization-receipt": {
+                            "principal": "not-a-principal",
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone());
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("malformed principal identity should fail the drain");
+
+        let message = err.to_string();
+        assert!(message.contains("failed to decode outbox principal for event hash sha256:"));
+        assert!(!message.contains("evt-secret-principal-token"));
+        assert!(store.delivered.lock().await.is_empty());
     }
 
     #[tokio::test]

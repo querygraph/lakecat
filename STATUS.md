@@ -6,6 +6,19 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Hash malformed outbox decode diagnostics`.
+  Malformed outbox table/principal JSON decode failures now include outbox
+  event-hash evidence without echoing raw event IDs, and focused drain
+  regressions prove both corrupt table identity and corrupt principal identity
+  records fail before acknowledgement.
+- Local verification for this outbox decode diagnostic slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_hashes_malformed_table_decode_errors -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_hashes_malformed_principal_decode_errors -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_redacts_corrupt_pending_event_ids -- --nocapture`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact corrupt outbox event ids`.
   Outbox projection helper diagnostics now report malformed/corrupt pending
   records with `outbox event hash sha256:...` instead of echoing raw event IDs.
