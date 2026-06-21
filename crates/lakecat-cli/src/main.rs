@@ -7557,7 +7557,26 @@ fn require_qglake_lineage_event_types_cover_summaries(
             )));
         }
     }
+    let declared_counts = qglake_event_type_counts(drain.event_types.iter().map(String::as_str));
+    let summary_counts =
+        qglake_event_type_counts(drain.events.iter().map(|event| event.event_type.as_str()));
+    if declared_counts != summary_counts {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain eventTypes multiset does not match replay summary event types"
+                .to_string(),
+        ));
+    }
     Ok(())
+}
+
+fn qglake_event_type_counts<'a>(
+    event_types: impl IntoIterator<Item = &'a str>,
+) -> BTreeMap<&'a str, usize> {
+    let mut counts = BTreeMap::new();
+    for event_type in event_types {
+        *counts.entry(event_type).or_default() += 1;
+    }
+    counts
 }
 
 fn verify_qglake_scan_replay(drain: &LineageDrainResponse) -> lakecat_core::LakeCatResult<()> {
@@ -21283,6 +21302,24 @@ mod tests {
         assert!(err.to_string().contains("qglake lineage drain"));
         assert!(err.to_string().contains("delivered count"));
         assert!(err.to_string().contains("eventTypes count"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_event_type_multiplicity_drift() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let credential_event_type = drain
+            .event_types
+            .iter_mut()
+            .find(|event_type| event_type.as_str() == "credentials.vend-attempted")
+            .expect("credential replay event type fixture");
+        *credential_event_type = "view.upserted".to_string();
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject event type multiplicity drift");
+
+        assert!(err.to_string().contains("qglake lineage drain"));
+        assert!(err.to_string().contains("eventTypes multiset"));
     }
 
     #[test]

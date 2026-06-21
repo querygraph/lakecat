@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake lineage-drain `eventTypes` to match replay summary event
+  types as a multiset, so repeated valid event types such as credential or
+  scan-task replay cannot hide missing or extra replay summaries.
 - Required QGLake `verifiedTables` and `verifiedViews` manifests to be
   duplicate-free in compact handoff summaries, so table/view counts cannot be
   inflated by repeating already accepted stable IDs.

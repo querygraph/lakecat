@@ -500,7 +500,8 @@ before projection so later compact QGLake proof cannot inherit inflated
 view-history evidence.
 Lineage-drain replay summaries must also stay bound to the drain-level event
 type manifest: a compact QGLake handoff cannot include a replay summary for an
-event type that the drain did not declare as delivered.
+event type that the drain did not declare as delivered, and repeated event
+types must match replay summary multiplicity rather than only set membership.
 Accepted lineage-drain artifacts must also reconcile their top-level
 `delivered`, `eventTypes`, `graphEvents`, and `lineageEvents` totals with the
 actual replay summary array before the handoff can be treated as verified.

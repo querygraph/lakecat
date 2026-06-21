@@ -6,6 +6,22 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake drain eventTypes by multiplicity`.
+  QGLake lineage-drain verification now compares the top-level `eventTypes`
+  list with replay summary event types as a multiset. Archived drains can no
+  longer keep the same total count and set of event type names while shifting
+  repeated event multiplicities away from the actual replay summaries.
+- Local verification for this QGLake event-type multiset slice is green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_event_type_multiplicity_drift -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake -- --test-threads=1`;
+  `scripts/qglake-handoff-local.sh`
+  (green, ending with `QGLake handoff verified`);
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject duplicate QGLake verified manifests`.
   QGLake handoff summary verification now rejects duplicate `verifiedTables`
   and `verifiedViews` stable IDs. Archived QueryGraph handoff artifacts can no
