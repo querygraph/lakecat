@@ -2263,6 +2263,31 @@ fn validate_catalog_config_defaults(
             "catalog config-read defaults must be an array",
         ));
     };
+    let mut default_keys = BTreeSet::new();
+    for entry in defaults {
+        let Some(key) = entry
+            .get("key")
+            .and_then(Value::as_str)
+            .filter(|key| !key.is_empty())
+        else {
+            return Err(outbox_evidence_error(
+                event,
+                "catalog config-read defaults must contain non-empty string keys",
+            ));
+        };
+        if entry.get("value").and_then(Value::as_str).is_none() {
+            return Err(outbox_evidence_error(
+                event,
+                "catalog config-read defaults must contain string values",
+            ));
+        }
+        if !default_keys.insert(key) {
+            return Err(outbox_evidence_error(
+                event,
+                "catalog config-read defaults must not contain duplicate keys",
+            ));
+        }
+    }
     let required = [
         ("lakecat.compatibility", "iceberg-rest"),
         ("lakecat.format.baseline", "iceberg-v1-v3"),
@@ -13043,6 +13068,125 @@ mod tests {
         );
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-config-missing-v4-bridge"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_catalog_config_default_entries() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-config-malformed-default-entry".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-config-malformed-default-entry",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": [
+                            {"key": "lakecat.compatibility", "value": "iceberg-rest"},
+                            {"key": "lakecat.format.baseline", "value": "iceberg-v1-v3"},
+                            {"key": "lakecat.format.v4", "value": "extension-ready"},
+                            {"key": "lakecat.format.v4.bridge", "value": "json-passthrough"},
+                            {"key": "lakecat.format.v4.typed-sail", "value": 42}
+                        ]
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("catalog config replay defaults must be structured key/value entries");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(message.contains("catalog config-read defaults must contain string values"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-config-malformed-default-entry"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_duplicate_catalog_config_default_keys() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-config-duplicate-default-key".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-config-duplicate-default-key",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": [
+                            {"key": "lakecat.compatibility", "value": "iceberg-rest"},
+                            {"key": "lakecat.format.baseline", "value": "iceberg-v1-v3"},
+                            {"key": "lakecat.format.v4", "value": "extension-ready"},
+                            {"key": "lakecat.format.v4.bridge", "value": "json-passthrough"},
+                            {"key": "lakecat.format.v4.typed-sail", "value": "unavailable"},
+                            {"key": "lakecat.format.v4.typed-sail", "value": "available"}
+                        ]
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("catalog config replay defaults must not carry contradictory keys");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(message.contains("catalog config-read defaults must not contain duplicate keys"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-config-duplicate-default-key"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

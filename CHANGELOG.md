@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required catalog config-read replay defaults to be structured string
+  key/value entries with duplicate-free keys before graph/OpenLineage
+  projection, so v4 bridge posture cannot be replayed with contradictory
+  config claims.
 - Added explicit catalog config defaults for the Iceberg v4 JSON bridge:
   `lakecat.format.v4.bridge=json-passthrough` and
   `lakecat.format.v4.typed-sail=unavailable`, and required catalog config

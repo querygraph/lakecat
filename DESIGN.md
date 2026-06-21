@@ -541,6 +541,9 @@ Catalog config should advertise the current bridge honestly:
 `lakecat.format.v4=extension-ready`,
 `lakecat.format.v4.bridge=json-passthrough`, and
 `lakecat.format.v4.typed-sail=unavailable` until typed Sail v4 support exists.
+Replay evidence for those defaults must stay unambiguous: defaults are
+structured string key/value entries, duplicate keys are rejected, and stale or
+contradictory v4 bridge claims fail before graph or OpenLineage projection.
 The local dependency contract is the guardrail while cloud CI is manual-only:
 it must reject automatic triggers across every GitHub workflow file, not just
 the primary CI workflow, including compact, block-list, inline-map, and quoted
