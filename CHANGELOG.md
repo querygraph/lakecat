@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required scan-planned and scan-tasks-fetched outbox admission to reject empty
+  projection/stat proof arrays before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Required `credentials.vend-attempted` outbox admission to enforce the nested
   storage-profile provider/issuance-mode and secret-ref/mode compatibility
   proof even when credential count is zero.

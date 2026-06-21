@@ -469,7 +469,9 @@ Governed `row-predicate` evidence must also remain structurally meaningful:
 compact and raw replay should reject empty predicate objects, blank predicate
 types, and term-based predicates that omit the narrowed term/value evidence.
 Requested/effective projection and stats-field evidence should likewise stay
-non-empty, non-blank, and duplicate-free before narrowing proof is accepted.
+non-empty, non-blank, and duplicate-free before narrowing proof is accepted;
+present-but-empty scan proof arrays are malformed, not an implicit unrestricted
+projection.
 Service outbox admission must enforce the same field-array shape before graph
 or OpenLineage projection, not only in later CLI replay verification.
 Scan-planned and scan-tasks-fetched outbox admission must also reject missing

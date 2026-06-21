@@ -6,6 +6,21 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject empty scan proof arrays`.
+  Service `table.scan-planned` and `table.scan-tasks-fetched` outbox admission
+  now rejects empty projection/stat proof arrays before acknowledgement, graph
+  projection, or OpenLineage projection, so replay cannot satisfy scan proof
+  shape with present-but-empty arrays.
+- Local verification for this empty scan proof array slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service empty_effective_stats_fields -- --test-threads=1`;
+  `cargo test -p lakecat-service empty_required_projection -- --test-threads=1`;
+  `cargo test -p lakecat-service scan_planned -- --test-threads=1`;
+  `cargo test -p lakecat-service scan_fetch -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate credential storage-profile modes`.
   Service `credentials.vend-attempted` outbox admission now reuses the
   storage-profile provider/issuance-mode replay proof for nested credential

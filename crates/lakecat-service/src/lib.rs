@@ -1607,13 +1607,13 @@ fn validate_scan_planned_event_evidence(
     validate_required_payload_table_hint(event, payload, &table, "scan-planned")?;
     validate_required_unsigned_count_field(event, payload, "scan-task-count", "scan-planned")?;
 
-    let requested_projection = validate_required_string_array_field(
+    let requested_projection = validate_required_non_empty_string_array_field(
         event,
         payload,
         "requested-projection",
         "scan-planned",
     )?;
-    let effective_projection = validate_required_string_array_field(
+    let effective_projection = validate_required_non_empty_string_array_field(
         event,
         payload,
         "effective-projection",
@@ -1636,13 +1636,13 @@ fn validate_scan_planned_event_evidence(
     validate_read_restriction_receipt_match(event, payload, "scan-planned")?;
     validate_scan_read_restriction_row_predicate(event, payload, "scan-planned")?;
 
-    let requested_stats = validate_required_string_array_field(
+    let requested_stats = validate_required_non_empty_string_array_field(
         event,
         payload,
         "requested-stats-fields",
         "scan-planned",
     )?;
-    let effective_stats = validate_required_string_array_field(
+    let effective_stats = validate_required_non_empty_string_array_field(
         event,
         payload,
         "effective-stats-fields",
@@ -1679,13 +1679,13 @@ fn validate_scan_tasks_fetched_event_evidence(
         validate_required_unsigned_count_field(event, payload, field, "scan-tasks-fetched")?;
     }
 
-    let required_projection = validate_required_string_array_field(
+    let required_projection = validate_required_non_empty_string_array_field(
         event,
         payload,
         "required-projection",
         "scan-tasks-fetched",
     )?;
-    let effective_projection = validate_required_string_array_field(
+    let effective_projection = validate_required_non_empty_string_array_field(
         event,
         payload,
         "effective-projection",
@@ -1885,6 +1885,22 @@ fn validate_required_string_array_field(
         return Err(outbox_evidence_error(
             event,
             &format!("{label} {field} must be duplicate-free"),
+        ));
+    }
+    Ok(values)
+}
+
+fn validate_required_non_empty_string_array_field(
+    event: &OutboxEvent,
+    payload: &Value,
+    field: &str,
+    label: &str,
+) -> Result<Vec<String>, LakeCatError> {
+    let values = validate_required_string_array_field(event, payload, field, label)?;
+    if values.is_empty() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} {field} must not be empty"),
         ));
     }
     Ok(values)
@@ -15427,6 +15443,94 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_scan_planned_empty_effective_stats_fields() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ]
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-plan-empty-effective-stats".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-planned".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-plan-empty-effective-stats",
+                    "event-type": "table.scan-planned",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "context": {
+                                "read-restriction": read_restriction
+                            },
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": read_restriction,
+                        "requested-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": [],
+                        "scan-task-count": 1
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("empty effective stats-field scan replay evidence should fail closed");
+
+        let message = err.to_string();
+        assert!(
+            message.contains(
+                "outbox event table.scan-planned (lakecat.lineage-and-graph) has invalid"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("scan-planned effective-stats-fields must not be empty"));
+        assert!(!message.contains("evt-scan-plan-empty-effective-stats"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "empty stats-field scan replay must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "empty stats-field scan replay must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "empty stats-field scan replay must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_scan_planned_missing_row_predicate() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let ident = table_ident("local", "default", "events").unwrap();
@@ -15853,6 +15957,96 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "malformed scan-task fetch evidence must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_scan_fetch_empty_required_projection() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ]
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-fetch-empty-required-projection".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-tasks-fetched".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-fetch-empty-required-projection",
+                    "event-type": "table.scan-tasks-fetched",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "context": {
+                                "read-restriction": read_restriction
+                            },
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": read_restriction,
+                        "required-projection": [],
+                        "effective-projection": [],
+                        "required-filters": [],
+                        "file-scan-task-count": 1,
+                        "delete-file-count": 0,
+                        "child-plan-task-count": 0
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("empty fetched required projection evidence should fail closed");
+
+        let message = err.to_string();
+        assert!(message.contains(
+            "outbox event table.scan-tasks-fetched (lakecat.lineage-and-graph) has invalid"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(
+            message.contains("scan-tasks-fetched required-projection must not be empty"),
+            "{message}"
+        );
+        assert!(!message.contains("evt-scan-fetch-empty-required-projection"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "empty fetched projection replay must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "empty fetched projection replay must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "empty fetched projection replay must fail before lineage projection"
         );
     }
 
