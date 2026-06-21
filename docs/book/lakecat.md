@@ -613,7 +613,10 @@ does not turn LakeCat into a full ODRL reasoner.
 Recognized constraint operands must also include a right operand; otherwise
 LakeCat rejects the policy material instead of silently dropping an
 allowed-column, row-predicate, purpose, or credential-TTL restriction. The
-service route pins this behavior too: a table scan with a malformed active ODRL
+derived restriction also rejects empty or blank allowed-column lists and blank
+purposes before they can reach credential issuance or governed Sail planning and
+fetch paths. The service route pins this behavior too: a table scan with a
+malformed active ODRL
 restriction, including malformed JSON-LD allowed-column lists, fails before
 Sail planning and before `table.scan-planned` replay evidence is emitted. A
 `fetchScanTasks` call with the same malformed JSON-LD active policy fails

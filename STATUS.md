@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject blank ODRL restrictions`.
+  `lakecat-security` now rejects empty or blank ODRL allowed-column lists and
+  blank ODRL purposes while composing `ReadRestriction`, so malformed policy
+  material fails before credential issuance or governed Sail planning/fetch
+  paths can consume it.
+- Local verification for this ODRL restriction slice is green:
+  `cargo fmt -p lakecat-security -p lakecat-service -- --check`;
+  `cargo test -p lakecat-security read_restriction_rejects -- --test-threads=1`;
+  `cargo test -p lakecat-security -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject blank secret credential keys`.
   TypeSec environment and Vault secret-ref credential resolvers now reject
   blank credential config keys while parsing secret payloads, before

@@ -303,19 +303,22 @@ fn and_row_predicates(left: Value, right: Value) -> Value {
 fn purpose_from_odrl(odrl: &Value) -> LakeCatResult<Option<String>> {
     let mut purpose = odrl
         .get("purpose")
-        .and_then(jsonld_string_value)
+        .map(|value| nonblank_jsonld_string(value, "ODRL purpose"))
+        .transpose()?
         .map(str::to_string);
 
     for constraint in odrl_constraints(odrl) {
         let left = constraint_left_operand(constraint).unwrap_or_default();
         if matches!(left, "purpose" | "lakecat:purpose") {
             require_constraint_operator(constraint, "purpose", &["eq"])?;
-            let next = jsonld_string_value(constraint_right_operand(constraint, "purpose")?)
+            let right_operand = constraint_right_operand(constraint, "purpose")?;
+            let next = jsonld_string_value(right_operand)
                 .ok_or_else(|| {
                     LakeCatError::InvalidArgument(
                         "ODRL purpose constraint must use a string right operand".to_string(),
                     )
-                })?
+                })
+                .and_then(|value| require_nonblank_string(value, "ODRL purpose constraint"))?
                 .to_string();
             purpose = Some(match purpose.take() {
                 Some(existing) if existing == next => existing,
@@ -463,13 +466,7 @@ fn string_list(value: &Value, label: &str) -> LakeCatResult<Vec<String>> {
     let raw = match value {
         Value::Array(values) => values
             .iter()
-            .map(|item| {
-                jsonld_string_value(item)
-                    .map(ToString::to_string)
-                    .ok_or_else(|| {
-                        LakeCatError::InvalidArgument(format!("{label} must be strings"))
-                    })
-            })
+            .map(|item| nonblank_jsonld_string(item, label).map(ToString::to_string))
             .collect::<Result<Vec<_>, _>>()?,
         Value::Object(object) if object.contains_key("@list") => object
             .get("@list")
@@ -478,16 +475,10 @@ fn string_list(value: &Value, label: &str) -> LakeCatResult<Vec<String>> {
                 LakeCatError::InvalidArgument(format!("{label} @list must be an array"))
             })?
             .iter()
-            .map(|item| {
-                jsonld_string_value(item)
-                    .map(ToString::to_string)
-                    .ok_or_else(|| {
-                        LakeCatError::InvalidArgument(format!("{label} must be strings"))
-                    })
-            })
+            .map(|item| nonblank_jsonld_string(item, label).map(ToString::to_string))
             .collect::<Result<Vec<_>, _>>()?,
         value if jsonld_string_value(value).is_some() => {
-            vec![jsonld_string_value(value).unwrap().to_string()]
+            vec![nonblank_jsonld_string(value, label)?.to_string()]
         }
         _ => {
             return Err(LakeCatError::InvalidArgument(format!(
@@ -495,7 +486,27 @@ fn string_list(value: &Value, label: &str) -> LakeCatResult<Vec<String>> {
             )));
         }
     };
+    if raw.is_empty() {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "{label} must not be empty"
+        )));
+    }
     Ok(dedup_columns(raw))
+}
+
+fn nonblank_jsonld_string<'a>(value: &'a Value, label: &str) -> LakeCatResult<&'a str> {
+    let value = jsonld_string_value(value)
+        .ok_or_else(|| LakeCatError::InvalidArgument(format!("{label} must be strings")))?;
+    require_nonblank_string(value, label)
+}
+
+fn require_nonblank_string<'a>(value: &'a str, label: &str) -> LakeCatResult<&'a str> {
+    if value.trim().is_empty() {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "{label} must not be blank"
+        )));
+    }
+    Ok(value)
 }
 
 fn jsonld_string_value(value: &Value) -> Option<&str> {
@@ -1190,6 +1201,46 @@ mod tests {
     }
 
     #[test]
+    fn read_restriction_rejects_empty_or_blank_allowed_column_lists() {
+        for policy in [
+            serde_json::json!({
+                "uid": "policy-a",
+                "lakecat:read-restriction": {
+                    "allowed-columns": []
+                }
+            }),
+            serde_json::json!({
+                "uid": "policy-b",
+                "lakecat:read-restriction": {
+                    "allowed-columns": ["event_id", " "]
+                }
+            }),
+            serde_json::json!({
+                "uid": "policy-c",
+                "permission": [{
+                    "constraint": {
+                        "leftOperand": { "@id": "lakecat:allowed-columns" },
+                        "operator": { "@id": "odrl:isAnyOf" },
+                        "rightOperand": {
+                            "@list": [
+                                { "@value": "event_id" },
+                                { "@value": "" }
+                            ]
+                        }
+                    }
+                }]
+            }),
+        ] {
+            let err = ReadRestriction::from_odrl_policies([&policy]).unwrap_err();
+
+            assert!(
+                err.to_string().contains("ODRL allowed columns must not be"),
+                "unexpected error: {err}"
+            );
+        }
+    }
+
+    #[test]
     fn read_restriction_rejects_unsupported_odrl_constraint_operators() {
         let policy = serde_json::json!({
             "permission": [{
@@ -1285,6 +1336,34 @@ mod tests {
             err.to_string()
                 .contains("ODRL purpose constraint uses unsupported operator")
         );
+    }
+
+    #[test]
+    fn read_restriction_rejects_blank_odrl_purposes() {
+        for policy in [
+            serde_json::json!({
+                "uid": "policy-a",
+                "purpose": " "
+            }),
+            serde_json::json!({
+                "uid": "policy-b",
+                "permission": [{
+                    "constraint": {
+                        "leftOperand": "purpose",
+                        "operator": "eq",
+                        "rightOperand": { "@value": "" }
+                    }
+                }]
+            }),
+        ] {
+            let err = ReadRestriction::from_odrl_policies([&policy]).unwrap_err();
+
+            assert!(
+                err.to_string().contains("ODRL purpose")
+                    && err.to_string().contains("must not be blank"),
+                "unexpected error: {err}"
+            );
+        }
     }
 
     #[test]

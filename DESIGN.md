@@ -365,7 +365,9 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
   bounded subset, plus compact JSON-LD `@id` term objects for constraint
   operands/operators and `@value`/`@list` right operands for bounded
   allowed-column, purpose, and credential-TTL values, without growing LakeCat
-  into a full ODRL reasoner.
+  into a full ODRL reasoner. Allowed-column lists must be non-empty and
+  nonblank, and purposes must be nonblank before the derived `ReadRestriction`
+  can reach credential issuance or governed Sail planning/fetch paths.
   Purpose composition also fails closed unless all enforced policy material
   agrees on the same purpose.
 - Graph and lineage side effects are moving through bounded catalog events and
@@ -389,7 +391,7 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
 | Finding | Status | Current meaning |
 | --- | --- | --- |
 | F1 governed reads gate but must narrow | Started | Restrictions now flow through governed planning/fetch proof, but Sail should own more read execution. |
-| F2 ODRL transported but not fully interpreted | Started | Enforceable ODRL subset is becoming restriction input; unsupported constraint operators and missing right operands now fail closed across camel, kebab, prefixed JSON-LD operand keys, and compact `@id` term objects; broader composition stays in TypeSec/QueryGraph. |
+| F2 ODRL transported but not fully interpreted | Started | Enforceable ODRL subset is becoming restriction input; unsupported constraint operators, missing right operands, blank purposes, and empty/blank allowed-column lists now fail closed across camel, kebab, prefixed JSON-LD operand keys, and compact JSON-LD terms; broader composition stays in TypeSec/QueryGraph. |
 | F3 REST commit idempotency | Started | Store support exists; REST-visible behavior needs continued hardening. |
 | F4 metadata write before CAS orphan handling | Started | Commit hardening exists; cleanup and proof paths still matter. |
 | F5 scans bypass in-process provider | Started | Plan/fetch paths are guarded; reusable Sail planner integration remains the target. |
