@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added explicit service regression coverage proving both planned and fetched
+  governed scan replay reject top-level `read-restriction` evidence that drifts
+  from `authorization-receipt.context.read-restriction` before graph,
+  OpenLineage, or delivery acknowledgement.
 - Required QGLake lineage-drain artifacts to reconcile `delivered`,
   `eventTypes`, replay summary count, `graphEvents`, and `lineageEvents` before
   acceptance, and corrected accepted fixtures to carry honest aggregate drain

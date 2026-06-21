@@ -458,13 +458,13 @@ Keep tightening the read path so the effective restriction is derived by the
 server, carried by capability, applied by Sail plan/fetch paths, and captured in
 receipts. Scan evidence should preserve both requested and effective
 projection/stat metadata so replay can prove what policy narrowed. Outbox
-admission should keep top-level scan read restrictions and authorization
-receipt read-restriction contexts at the same policy-hash evidence strength,
-and governed scan replay should fail when those two restriction objects drift
-or when effective projection/stat evidence drifts outside allowed columns.
-Empty governed `allowed-columns` evidence should fail closed for planned and
-fetched replay like live scan planning instead of becoming replay-time
-unrestricted access.
+admission now requires top-level scan read restrictions and authorization
+receipt read-restriction contexts to match, with explicit planned and fetched
+scan drift coverage at the same policy-hash evidence strength. Governed scan
+replay should continue failing when effective projection/stat evidence drifts
+outside allowed columns. Empty governed `allowed-columns` evidence should fail
+closed for planned and fetched replay like live scan planning instead of
+becoming replay-time unrestricted access.
 Prefer upstream Sail APIs for any reusable planner or manifest work.
 
 ### P2 QGLake Acceptance

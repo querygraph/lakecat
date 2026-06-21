@@ -6,6 +6,26 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin scan restriction receipt drift`.
+  Outbox admission coverage now explicitly exercises both `table.scan-planned`
+  and `table.scan-tasks-fetched` events whose top-level
+  `read-restriction` differs from
+  `authorization-receipt.context.read-restriction`. Both fail before graph
+  projection, OpenLineage projection, or delivery acknowledgement, keeping
+  governed scan replay bound to the durable TypeSec receipt context.
+- Local verification for this scan restriction receipt-drift slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan_restriction_receipt_context_drift -- --test-threads=1`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reconcile QGLake drain aggregate counts`.
   The QGLake lineage-drain verifier now requires accepted drain artifacts to
   reconcile `delivered`, `eventTypes`, replay summary count, `graphEvents`, and

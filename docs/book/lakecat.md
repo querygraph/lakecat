@@ -507,7 +507,11 @@ retry or operator repair instead of promoting it into a QGLake handoff. LakeCat
 now applies that same admission rule to
 `authorization-receipt.context.read-restriction.policy-hashes`, so the receipt
 kept for later proof cannot preserve an empty or placeholder policy anchor
-while the top-level scan event looks valid. Table
+while the top-level scan event looks valid. LakeCat also rejects both planned
+and fetched scan replay when the top-level `read-restriction` differs from
+`authorization-receipt.context.read-restriction`, so graph and OpenLineage
+evidence cannot drift from the TypeSec receipt that authorized the narrowed
+read. Table
 commit events receive the same treatment for compact
 commit receipt evidence: `request_hash`, `response_hash`,
 `idempotency_key_sha256`, and any present `policy_hash` must be full digests
