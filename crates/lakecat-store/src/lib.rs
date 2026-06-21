@@ -1660,20 +1660,25 @@ impl CatalogStore for MemoryCatalogStore {
 
     async fn load_warehouse(&self, warehouse: &WarehouseName) -> LakeCatResult<WarehouseRecord> {
         let state = self.state.read().await;
-        state
+        let warehouse = state
             .warehouses
             .get(warehouse.as_str())
             .cloned()
             .ok_or_else(|| LakeCatError::NotFound {
                 object: "warehouse",
                 name: warehouse.as_str().to_string(),
-            })
+            })?;
+        warehouse.validate()?;
+        Ok(warehouse)
     }
 
     async fn list_warehouses(&self) -> LakeCatResult<Vec<WarehouseRecord>> {
         let state = self.state.read().await;
         let mut warehouses = state.warehouses.values().cloned().collect::<Vec<_>>();
         warehouses.sort_by(|left, right| left.warehouse.as_str().cmp(right.warehouse.as_str()));
+        for warehouse in &warehouses {
+            warehouse.validate()?;
+        }
         Ok(warehouses)
     }
 
@@ -1696,6 +1701,9 @@ impl CatalogStore for MemoryCatalogStore {
             .cloned()
             .collect::<Vec<_>>();
         warehouses.sort_by(|left, right| left.warehouse.as_str().cmp(right.warehouse.as_str()));
+        for warehouse in &warehouses {
+            warehouse.validate()?;
+        }
         Ok(warehouses)
     }
 
@@ -2758,6 +2766,55 @@ mod memory_tests {
             Err(LakeCatError::NotFound { object, name })
                 if object == "project" && name == "missing-project"
         ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_corrupt_warehouse_records_on_read() {
+        let store = MemoryCatalogStore::new();
+        let project = ProjectRecord::new(
+            "default",
+            None,
+            Some("Default Project".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_project(project).await.unwrap();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let record = WarehouseRecord::new(
+            warehouse.clone(),
+            "default",
+            Some("file:///tmp/lakecat".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_warehouse(record).await.unwrap();
+
+        store
+            .state
+            .write()
+            .await
+            .warehouses
+            .get_mut("local")
+            .unwrap()
+            .storage_root = Some("file:///tmp/lakecat?token=secret".to_string());
+
+        let err = store.load_warehouse(&warehouse).await.unwrap_err();
+        let message = err.to_string();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("warehouse storage root")
+                    || message.contains("warehouse-storage-root-hash=sha256:")
+        ));
+        assert!(!message.contains("token=secret"));
+
+        let err = store.list_warehouses().await.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("warehouse-storage-root-hash=sha256:")
+        );
     }
 
     #[tokio::test]
@@ -4662,7 +4719,11 @@ pub mod turso_store {
             rows.next()
                 .await
                 .map_err(turso_error)?
-                .map(|row| decode_json(row_string(&row, 0)?))
+                .map(|row| {
+                    let warehouse: WarehouseRecord = decode_json(row_string(&row, 0)?)?;
+                    warehouse.validate()?;
+                    Ok(warehouse)
+                })
                 .transpose()?
                 .ok_or_else(|| LakeCatError::NotFound {
                     object: "warehouse",
@@ -4682,7 +4743,9 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut warehouses = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                warehouses.push(decode_json(row_string(&row, 0)?)?);
+                let warehouse: WarehouseRecord = decode_json(row_string(&row, 0)?)?;
+                warehouse.validate()?;
+                warehouses.push(warehouse);
             }
             Ok(warehouses)
         }
@@ -4720,7 +4783,9 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut warehouses = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                warehouses.push(decode_json(row_string(&row, 0)?)?);
+                let warehouse: WarehouseRecord = decode_json(row_string(&row, 0)?)?;
+                warehouse.validate()?;
+                warehouses.push(warehouse);
             }
             Ok(warehouses)
         }
@@ -5716,6 +5781,55 @@ pub mod turso_store {
                 Err(LakeCatError::NotFound { object, name })
                     if object == "project" && name == "missing-project"
             ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_corrupt_warehouse_records_on_read() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let project = ProjectRecord::new(
+                "default",
+                None,
+                Some("Default Project".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_project(project).await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let mut record = WarehouseRecord::new(
+                warehouse.clone(),
+                "default",
+                Some("file:///tmp/lakecat".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_warehouse(record.clone()).await.unwrap();
+            record.storage_root = Some("file:///tmp/lakecat?token=secret".to_string());
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update warehouses set record_json = ?2 where warehouse = ?1",
+                ("local", encode_json(&record).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store.load_warehouse(&warehouse).await.unwrap_err();
+            let message = err.to_string();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("warehouse storage root")
+                        || message.contains("warehouse-storage-root-hash=sha256:")
+            ));
+            assert!(!message.contains("token=secret"));
+
+            let err = store.list_warehouses().await.unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("warehouse-storage-root-hash=sha256:")
+            );
         }
 
         #[tokio::test]

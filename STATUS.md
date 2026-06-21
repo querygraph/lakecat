@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate warehouse record reads`.
+  Memory and Turso `load_warehouse`, `list_warehouses`, and
+  `list_project_warehouses` now revalidate decoded/stored `WarehouseRecord`
+  values before management replay can observe them, rejecting corrupted
+  storage roots without leaking decorated URI material.
+- Local verification for this warehouse read validation slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_corrupt_warehouse_records_on_read -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_corrupt_warehouse_records_on_read -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate project record reads`.
   Memory and Turso `list_projects` now revalidate decoded/stored
   `ProjectRecord` values before management replay can observe them, and
