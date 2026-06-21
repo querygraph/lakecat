@@ -1268,6 +1268,17 @@ fn validate_read_restriction_policy_hashes(
             ));
         }
     }
+    let mut seen = BTreeSet::new();
+    if policy_hashes
+        .iter()
+        .filter_map(Value::as_str)
+        .any(|policy_hash| !seen.insert(policy_hash))
+    {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{evidence_label} policy-hashes must be duplicate-free"),
+        ));
+    }
     Ok(())
 }
 
@@ -11741,6 +11752,81 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_duplicate_read_restriction_policy_hashes() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let policy_hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-duplicate-policy-hashes".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-planned".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-duplicate-policy-hashes",
+                    "event-type": "table.scan-planned",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": {
+                            "allowed-columns": ["event_id"],
+                            "row-predicate": {
+                                "type": "not-eq",
+                                "term": "severity",
+                                "value": "debug"
+                            },
+                            "policy-hashes": [policy_hash, policy_hash]
+                        },
+                        "requested-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
+                        "scan-task-count": 1,
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("duplicate read restriction policy hashes should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.scan-planned"));
+        assert!(message.contains("read restriction policy-hashes must be duplicate-free"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-duplicate-policy-hashes"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_empty_authorization_receipt_policy_hashes() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),
@@ -11825,6 +11911,97 @@ mod tests {
         );
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-empty-receipt-policy-hashes"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_duplicate_authorization_receipt_policy_hashes() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let policy_hash = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "policy-hashes": [policy_hash, policy_hash]
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-duplicate-receipt-policy-hashes".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-planned".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-duplicate-receipt-policy-hashes",
+                    "event-type": "table.scan-planned",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                            "context": {
+                                "read-restriction": read_restriction
+                            }
+                        },
+                        "read-restriction": {
+                            "allowed-columns": ["event_id"],
+                            "row-predicate": {
+                                "type": "not-eq",
+                                "term": "severity",
+                                "value": "debug"
+                            },
+                            "policy-hashes": [
+                                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            ]
+                        },
+                        "requested-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
+                        "scan-task-count": 1,
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("duplicate receipt policy hashes should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.scan-planned"));
+        assert!(message.contains(
+            "authorization receipt read restriction policy-hashes must be duplicate-free"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-duplicate-receipt-policy-hashes"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

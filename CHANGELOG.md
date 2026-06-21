@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required service outbox admission to reject duplicate governed
+  read-restriction `policy-hashes` for both top-level scan evidence and
+  authorization-receipt contexts before graph or OpenLineage projection.
 - Required service scan-planned and scan-tasks-fetched outbox admission to
   reject missing or malformed governed read-restriction `row-predicate`
   evidence before graph or OpenLineage projection.

@@ -475,6 +475,8 @@ or OpenLineage projection, not only in later CLI replay verification.
 Scan-planned and scan-tasks-fetched outbox admission must also reject missing
 or malformed `row-predicate` proof whenever governed read-restriction evidence
 is present.
+Read-restriction `policy-hashes` must remain non-empty, full SHA-256-shaped,
+and duplicate-free at outbox admission as well as in later replay artifacts.
 Prefer upstream Sail APIs for any reusable planner or manifest work.
 
 ### P2 QGLake Acceptance

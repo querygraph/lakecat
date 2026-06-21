@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate service read-restriction policy hashes`.
+  Service outbox admission now rejects duplicate governed read-restriction
+  `policy-hashes` in both top-level scan evidence and authorization-receipt
+  contexts before graph or OpenLineage projection, so live scan replay cannot
+  inflate policy proof by repeating the same digest.
+- Local verification for this service read-restriction policy-hash slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service duplicate_read_restriction_policy_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-service duplicate_authorization_receipt_policy_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-service read_restriction_policy_hashes -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate service scan row predicates`.
   Service outbox admission now rejects scan-planned and scan-tasks-fetched
   replay events whose governed read-restriction proof omits `row-predicate` or
