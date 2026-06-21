@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+chrono = { workspace = true }
 lakecat-api = { workspace = true }
 lakecat-core = { workspace = true }
 lakecat-querygraph = { workspace = true }
@@ -17,5 +18,4 @@ tokio = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
-chrono = { workspace = true }
 lakecat-security = { workspace = true }

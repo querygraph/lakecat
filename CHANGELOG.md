@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound compact QGLake structural `receiptHash` values to the same
+  content-derived view-version receipt digest that LakeCat service emits by
+  carrying view hash, principal identity, principal kind, and recorded timestamp
+  in compact receipt bodies.
 - Bound compact QGLake structural `chainHash` values to the same
   content-derived receipt-chain digest that LakeCat service emits, so saved
   handoff summaries cannot pair valid-looking ordered receipts with a forged

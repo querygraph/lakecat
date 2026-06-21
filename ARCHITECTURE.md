@@ -382,7 +382,11 @@ handoff verifier also requires namespace receipt-chain `verifiedChainCount`
 values to match the chain hashes they summarize, requires duplicate-free
 namespace chain and receipt hash arrays, rejects duplicate structural
 `chainHash` values, and requires receipt hashes to match the structural
-per-receipt hashes in those chains exactly. It recomputes each structural
+per-receipt hashes in those chains exactly. Compact receipt bodies carry the
+view hash, principal subject, principal kind, and recorded timestamp, allowing
+the verifier to recompute each structural `receiptHash` from the same
+content-derived view-version receipt digest used by the LakeCat service. It
+also recomputes each structural
 `chainHash` from stable view identity, latest version, latest operation,
 tombstone state, and the ordered structural receipt hashes, matching the
 LakeCat service receipt-chain digest. Active accepted views must also have their
