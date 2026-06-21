@@ -6,6 +6,17 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin handoff verify lineage-event drift`.
+  QGLake handoff artifact verification now has explicit regression coverage
+  proving a saved `lakecatHandoffVerifyOutput` cannot report a drifted
+  `lineageDrainArtifactSemantics.lineageEvents` total while reusing an updated
+  verifier-output artifact hash.
+- Local verification for this QGLake artifact coverage slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_lineage_count_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Gate captured Sail test double by feature`.
   The service test-only `CapturingSailEngine` now only compiles in
   non-`sail-local` builds, matching the captured scan/fetch tests that use it

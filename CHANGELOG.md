@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added QGLake handoff artifact regression coverage proving saved
+  `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics.lineageEvents`
+  cannot drift from the accepted lineage-drain artifact while still passing
+  artifact verification.
 - Gated the service test-only `CapturingSailEngine` helper to non-`sail-local`
   builds, removing all-features dead-code warning noise while preserving the
   default feature tests that exercise the captured scan/fetch request path.
