@@ -13211,6 +13211,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_missing_table_commit_receipt_principal_evidence() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-missing-commit-receipt-principal".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commit".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-missing-commit-receipt-principal",
+                    "event-type": "table.commit",
+                    "table": table,
+                    "commit": {
+                        "table": table,
+                        "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+                        "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+                        "sequence_number": 7,
+                        "principal": principal,
+                        "format_version": 3,
+                        "snapshot_id": 42,
+                        "policy_hash": null,
+                        "request_hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+                        "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+                        "idempotency_key_sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+                        "committed_at": chrono::Utc::now(),
+                    },
+                    "authorization-receipt": {
+                        "action": "table-commit",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("missing table commit receipt principal should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commit"));
+        assert!(
+            message.contains("table commit evidence must contain authorization receipt principal")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-missing-commit-receipt-principal"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "missing receipt principal must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "missing receipt principal must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "missing receipt principal must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_mismatched_table_commit_identity_evidence() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),

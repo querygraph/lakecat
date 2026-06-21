@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover table commit receipt principal replay`.
+  Service `table.commit` outbox admission now has explicit regression coverage
+  proving replay that omits the authorization receipt principal fails before
+  acknowledgement, graph projection, or OpenLineage projection.
+- Local verification for this table commit receipt principal slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_missing_table_commit_receipt_principal_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service table_commit -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require table commit principal replay`.
   Service `table.commit` outbox admission now rejects commit replay that omits
   the embedded commit principal, and still requires that principal to match the

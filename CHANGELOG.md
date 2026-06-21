@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added regression coverage requiring `table.commit` replay evidence to carry
+  the authorization receipt principal before acknowledgement, graph projection,
+  or OpenLineage projection.
 - Required `table.commit` replay evidence to carry a valid commit principal
   matching the authorization receipt principal before acknowledgement, graph
   projection, or OpenLineage projection.
