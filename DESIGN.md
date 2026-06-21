@@ -490,7 +490,10 @@ principal, governed-read, and TTL fields.
 View receipt-chain proof must remain a structural proof, not just a bag of
 hashes: the first receipt must be a version-1 upsert without previous-link
 fields, and each later link must point at the previous receipt hash, use a
-supported operation, and preserve the expected version transition.
+supported operation, and preserve the expected version transition. Service
+replay must reject duplicate receipt, drop-receipt, and chain hash arrays
+before projection so later compact QGLake proof cannot inherit inflated
+view-history evidence.
 Lineage-drain replay summaries must also stay bound to the drain-level event
 type manifest: a compact QGLake handoff cannot include a replay summary for an
 event type that the drain did not declare as delivered.

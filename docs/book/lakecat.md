@@ -1936,6 +1936,10 @@ same content-derived digest LakeCat service uses for view receipt chains: stable
 view identity, latest version, latest operation, tombstone state, and the
 ordered receipt hashes. A compact proof therefore cannot pair an accepted
 receipt-chain hash with a different ordered receipt body.
+LakeCat enforces the duplicate-free part before compact proof generation as
+well: outbox replay rejects duplicate `receipt-hashes`,
+`drop-receipt-hashes`, or `chain-hashes` in view receipt-list and receipt-chain
+events before graph or OpenLineage projection.
 Each structural `receiptHash` is recomputed too, using the same
 content-derived view-version receipt digest LakeCat service emits over stable
 view identity, version, previous-link fields, operation, view hash, principal,

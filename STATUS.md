@@ -6,6 +6,28 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject duplicate view receipt replay hashes`.
+  Outbox admission now rejects duplicate hashes in
+  `view.version-receipts-listed` `receipt-hashes` /
+  `drop-receipt-hashes` and `view.version-receipt-chains-listed`
+  `chain-hashes` / `receipt-hashes` / `drop-receipt-hashes` before graph
+  projection, OpenLineage projection, or delivery acknowledgement. This keeps
+  service replay aligned with QGLake's duplicate-free view-history proof
+  contract.
+- Local verification for this view receipt duplicate-hash replay slice is
+  green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service view_receipt -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind bootstrap artifacts to verified manifests`.
   `querygraph.bootstrap` outbox replay now requires table artifact stable IDs to
   match `verified-tables`, view artifact stable IDs to match `verified-views`,

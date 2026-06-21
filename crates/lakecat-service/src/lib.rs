@@ -2891,6 +2891,12 @@ fn validate_view_receipt_list_event_evidence(
     let receipt_hashes = validate_required_full_hash_array_field(event, payload, "receipt-hashes")?;
     let drop_receipt_hashes =
         validate_required_full_hash_array_field(event, payload, "drop-receipt-hashes")?;
+    validate_unique_hash_array(event, &receipt_hashes, "view receipt-list receipt-hashes")?;
+    validate_unique_hash_array(
+        event,
+        &drop_receipt_hashes,
+        "view receipt-list drop-receipt-hashes",
+    )?;
     let Some(expected_receipt_count) = payload.get("receipt-count").and_then(Value::as_u64) else {
         return Err(outbox_evidence_error(
             event,
@@ -2958,9 +2964,17 @@ fn validate_view_receipt_chain_event_evidence(
         ));
     }
 
-    validate_optional_full_hash_array_field(event, payload, "chain-hashes")?;
-    validate_optional_full_hash_array_field(event, payload, "receipt-hashes")?;
-    validate_optional_full_hash_array_field(event, payload, "drop-receipt-hashes")?;
+    let chain_hashes = validate_optional_full_hash_array_field(event, payload, "chain-hashes")?;
+    validate_unique_hash_array(event, &chain_hashes, "view receipt-chain chain-hashes")?;
+    let receipt_hashes = validate_optional_full_hash_array_field(event, payload, "receipt-hashes")?;
+    validate_unique_hash_array(event, &receipt_hashes, "view receipt-chain receipt-hashes")?;
+    let drop_receipt_hashes =
+        validate_optional_full_hash_array_field(event, payload, "drop-receipt-hashes")?;
+    validate_unique_hash_array(
+        event,
+        &drop_receipt_hashes,
+        "view receipt-chain drop-receipt-hashes",
+    )?;
     Ok(())
 }
 
@@ -3530,13 +3544,13 @@ fn validate_required_full_hash_array_field<'a>(
     Ok(hashes)
 }
 
-fn validate_optional_full_hash_array_field(
+fn validate_optional_full_hash_array_field<'a>(
     event: &OutboxEvent,
-    object: &Value,
+    object: &'a Value,
     field: &str,
-) -> Result<(), LakeCatError> {
+) -> Result<Vec<&'a str>, LakeCatError> {
     let Some(values) = object.get(field) else {
-        return Ok(());
+        return Ok(Vec::new());
     };
     let Some(values) = values.as_array() else {
         return Err(outbox_evidence_error(
@@ -3544,11 +3558,36 @@ fn validate_optional_full_hash_array_field(
             &format!("{field} must be an array"),
         ));
     };
+    let mut hashes = Vec::with_capacity(values.len());
     for value in values {
-        if !value.as_str().is_some_and(is_full_sha256_digest_evidence) {
+        let Some(hash) = value.as_str() else {
             return Err(outbox_evidence_error(
                 event,
                 &format!("{field} must contain full SHA-256 digest evidence"),
+            ));
+        };
+        if !is_full_sha256_digest_evidence(hash) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{field} must contain full SHA-256 digest evidence"),
+            ));
+        }
+        hashes.push(hash);
+    }
+    Ok(hashes)
+}
+
+fn validate_unique_hash_array(
+    event: &OutboxEvent,
+    hashes: &[&str],
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let mut unique = BTreeSet::new();
+    for hash in hashes {
+        if !unique.insert(*hash) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} must not contain duplicate hashes"),
             ));
         }
     }
@@ -15996,6 +16035,97 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_duplicate_view_receipt_chain_hash_arrays() {
+        let receipt_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "view-version": 1,
+            "operation": "upsert"
+        }))
+        .unwrap();
+        let chain_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "receipt-hashes": [&receipt_hash]
+        }))
+        .unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-view-chain-duplicate-hash-array".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "view.version-receipt-chains-listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-view-chain-duplicate-hash-array",
+                    "event-type": "view.version-receipt-chains-listed",
+                    "payload": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "chain-count": 1,
+                        "receipt-count": 1,
+                        "tombstone-count": 0,
+                        "chain-verified-count": 1,
+                        "view-version-receipt-chains": [{
+                            "stable-id": "lakecat:view:local:default:events_view",
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "name": "events_view",
+                            "chain-hash": chain_hash,
+                            "chain-verified": true,
+                            "latest-view-version": 1,
+                            "latest-operation": "upsert",
+                            "tombstoned": false,
+                            "receipt-count": 1,
+                            "receipts": [{
+                                "stable-id": "lakecat:view:local:default:events_view",
+                                "warehouse": "local",
+                                "namespace": ["default"],
+                                "name": "events_view",
+                                "view-version": 1,
+                                "previous-view-version": null,
+                                "previous-receipt-hash": null,
+                                "operation": "upsert",
+                                "view-hash": content_hash_json(&json!({"view": "events_view", "version": 1})).unwrap(),
+                                "receipt-hash": receipt_hash,
+                                "principal-subject": "agent:operator",
+                                "principal-kind": "agent",
+                                "recorded-at": "2026-06-20T00:00:00Z"
+                            }]
+                        }],
+                        "chain-hashes": [chain_hash, chain_hash],
+                        "receipt-hashes": [receipt_hash],
+                        "drop-receipt-hashes": [],
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("duplicate receipt-chain hash arrays should fail before projection");
+
+        let message = err.to_string();
+        assert!(message.contains("view.version-receipt-chains-listed"));
+        assert!(
+            message.contains("view receipt-chain chain-hashes must not contain duplicate hashes")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-view-chain-duplicate-hash-array"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_view_receipt_list_evidence() {
         let receipt_hash = content_hash_json(&json!({
             "stable-id": "lakecat:view:local:default:events_view",
@@ -16047,6 +16177,62 @@ mod tests {
                 .contains("drop-receipt-hashes must be included"),
             "{err}"
         );
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_duplicate_view_receipt_list_hashes() {
+        let receipt_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "view-version": 1,
+            "operation": "upsert"
+        }))
+        .unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-view-receipts-duplicate-hash".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "view.version-receipts-listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-view-receipts-duplicate-hash",
+                    "event-type": "view.version-receipts-listed",
+                    "payload": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "view": "events_view",
+                        "receipt-count": 2,
+                        "receipt-hashes": [receipt_hash, receipt_hash],
+                        "drop-receipt-hashes": [],
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("duplicate view receipt-list hashes should fail before projection");
+
+        let message = err.to_string();
+        assert!(message.contains("view.version-receipts-listed"));
+        assert!(
+            message.contains("view receipt-list receipt-hashes must not contain duplicate hashes")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-view-receipts-duplicate-hash"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

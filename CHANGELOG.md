@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required view receipt-list and receipt-chain replay hash arrays to be
+  duplicate-free before graph/OpenLineage projection, so duplicated receipt,
+  drop-receipt, or chain hashes cannot inflate view-history proof evidence
+  before outbox delivery.
 - Bound `querygraph.bootstrap` replay table/view artifact stable IDs and
   view-version receipt stable IDs to the `verified-tables` and
   `verified-views` manifests before graph/OpenLineage projection, rejecting
