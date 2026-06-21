@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Revalidated table records at memory and Turso `create_table` boundaries,
+  rejecting deserialized records with empty table locations before they can
+  create namespaces or enter durable catalog state.
 - Revalidated policy bindings at the `CatalogStore` upsert boundary for the
   default, memory, and Turso stores, rejecting deserialized table-scoped policy
   bindings that omit a namespace before they can enter durable catalog state.

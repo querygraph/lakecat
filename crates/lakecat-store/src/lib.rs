@@ -308,6 +308,15 @@ impl TableRecord {
             version: 0,
         }
     }
+
+    pub fn validate(&self) -> LakeCatResult<()> {
+        if self.location.trim().is_empty() {
+            return Err(LakeCatError::InvalidArgument(
+                "table location must not be empty".to_string(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1238,6 +1247,7 @@ impl CatalogStore for MemoryCatalogStore {
     }
 
     async fn create_table(&self, table: TableRecord) -> LakeCatResult<TableRecord> {
+        table.validate()?;
         let mut state = self.state.write().await;
         let warehouse = table.ident.warehouse.as_str().to_string();
         let namespace = table.ident.namespace.clone();
@@ -3114,6 +3124,41 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_rejects_deserialized_empty_table_locations() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let ident = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("events").unwrap(),
+        );
+        let table = TableRecord {
+            ident: ident.clone(),
+            location: "   ".to_string(),
+            metadata_location: Some("file:///tmp/events/metadata/00000.json".to_string()),
+            metadata: serde_json::json!({"format-version": 3}),
+            created: AuditStamp::now(Principal::anonymous()),
+            updated_at: Utc::now(),
+            version: 0,
+        };
+
+        let err = store.create_table(table).await.unwrap_err();
+
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("table location must not be empty")
+        ));
+        assert!(matches!(
+            store.load_table(&ident).await,
+            Err(LakeCatError::NotFound { object, name })
+                if object == "table" && name == ident.stable_id()
+        ));
+        assert_eq!(store.list_namespaces(&warehouse).await.unwrap(), vec![]);
+    }
+
+    #[tokio::test]
     async fn memory_store_commit_records_table_commit_outbox_event() {
         let store = MemoryCatalogStore::new();
         let warehouse = WarehouseName::new("local").unwrap();
@@ -3432,6 +3477,7 @@ pub mod turso_store {
         }
 
         async fn create_table(&self, table: TableRecord) -> LakeCatResult<TableRecord> {
+            table.validate()?;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
             tx.execute(
@@ -5417,6 +5463,41 @@ pub mod turso_store {
                 store.drop_namespace(&warehouse, &occupied_namespace).await,
                 Err(LakeCatError::Conflict(message)) if message.contains("tables")
             ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_deserialized_empty_table_locations() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("events").unwrap(),
+            );
+            let table = TableRecord {
+                ident: ident.clone(),
+                location: "   ".to_string(),
+                metadata_location: Some("file:///tmp/events/metadata/00000.json".to_string()),
+                metadata: serde_json::json!({"format-version": 3}),
+                created: AuditStamp::now(Principal::anonymous()),
+                updated_at: Utc::now(),
+                version: 0,
+            };
+
+            let err = store.create_table(table).await.unwrap_err();
+
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("table location must not be empty")
+            ));
+            assert!(matches!(
+                store.load_table(&ident).await,
+                Err(LakeCatError::NotFound { object, name })
+                    if object == "table" && name == ident.stable_id()
+            ));
+            assert_eq!(store.list_namespaces(&warehouse).await.unwrap(), vec![]);
         }
 
         #[tokio::test]

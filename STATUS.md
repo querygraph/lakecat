@@ -6,6 +6,16 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate store table-create records`.
+  Memory and Turso `create_table` paths now revalidate direct/deserialized
+  `TableRecord` inputs and reject empty table locations before invalid table
+  records can create namespaces or enter durable catalog state.
+- Local verification for this table-create store slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_deserialized_empty_table_locations -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_deserialized_empty_table_locations -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local`.
+- Latest completed implementation slice:
   `Validate store policy-binding upserts`.
   `CatalogStore::upsert_policy_binding` now revalidates direct/deserialized
   `PolicyBinding` records in the default, memory, and Turso store paths,
