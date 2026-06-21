@@ -607,6 +607,9 @@ when a storage profile uses an external secret reference, and backend-supplied
 provider evidence must be replaced rather than trusted. Credential-vend replay
 must also reject response evidence whose secret-ref provider drifts from the
 selected storage profile before any graph or OpenLineage sink observes it.
+It must bind the replay payload table hint to the durable outbox table identity
+before projection, so a credential-vend event cannot project one table's
+credential-root decision as another table's graph or lineage evidence.
 Credential-vend replay must validate the nested storage-profile
 provider/issuance-mode and secret-ref/mode proof even when no credentials were
 returned, so blocked attempts cannot project a weaker credential-root claim

@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind credential replay table identity`.
+  Service `credentials.vend-attempted` outbox admission now rejects replay
+  whose payload table hint drifts from the durable outbox table identity before
+  acknowledgement, graph projection, or OpenLineage projection.
+- Local verification for this credential replay table identity slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_mismatched_credential_vend_table_identity -- --test-threads=1`;
+  `cargo test -p lakecat-service credential -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind commit-history replay table identity`.
   Service `table.commits-listed` outbox admission now rejects commit-history
   replay whose warehouse, namespace, or table evidence drifts from the durable

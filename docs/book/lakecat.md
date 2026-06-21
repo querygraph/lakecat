@@ -2119,7 +2119,11 @@ each returned credential, a full storage-profile `location-prefix-hash`, and
 non-contradictory secret-reference state. The top-level `storage-profile-id`
 must match the nested `storage-profile.profile-id`, even when no raw
 credentials were returned, and the nested `storage-profile.warehouse` must
-match the event table warehouse. If the top-level `secret-ref-present` field is
+match the event table warehouse. The replay payload's `table` hint must also
+match the durable outbox table identity before acknowledgement, graph
+projection, or OpenLineage projection, so a credential decision for one table
+cannot be replayed as another table's credential-root evidence. If the
+top-level `secret-ref-present` field is
 present, it must match `storage-profile.secret-ref-present`; older replay
 fixtures may omit the duplicate field, but contradictory evidence is rejected.
 Each returned credential entry must also agree with the catalog-derived
