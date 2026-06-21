@@ -1241,6 +1241,11 @@ resolver is authorized to run, backend lookup and secret payload parse failures
 still stay hash-only: LakeCat returns the secret-reference hash and an
 error-detail hash instead of the environment variable name, Vault path, token,
 namespace, backend exception text, or malformed secret fields.
+Secret payload parsing also rejects malformed credential configuration before
+issuance, including blank config keys in either object-shaped secrets,
+ConfigEntry-array secrets, or Vault's nested data object. That keeps
+secret-manager output from turning into ambiguous Iceberg client credential
+configuration.
 When storage-profile changes replay into lineage/OpenLineage evidence, LakeCat
 does not forward the full secret-store URI or raw storage root. The committed
 audit/outbox payload keeps `secret-ref-present` and `secret-ref-provider` so

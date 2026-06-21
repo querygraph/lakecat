@@ -6,6 +6,20 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject blank secret credential keys`.
+  TypeSec environment and Vault secret-ref credential resolvers now reject
+  blank credential config keys while parsing secret payloads, before
+  secret-backed credentials can be issued or returned through the catalog
+  credential endpoint.
+- Local verification for this secret credential key slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features typesec-local environment_secret_resolver_parses_supported_secret_shapes -- --test-threads=1`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require exact service fetch filter proof`.
   Service `table.scan-tasks-fetched` outbox admission now rejects empty or
   drifted `required-filters` proof whenever governed row-predicate evidence is

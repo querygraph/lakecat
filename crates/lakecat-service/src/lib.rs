@@ -670,7 +670,7 @@ pub mod typesec_credential_issuer {
                 "Vault secret data must be a JSON object".to_string(),
             ));
         };
-        object
+        let entries = object
             .iter()
             .map(|(key, value)| {
                 let Some(value) = value.as_str() else {
@@ -680,7 +680,8 @@ pub mod typesec_credential_issuer {
                 };
                 Ok(ConfigEntry::new(key.clone(), value.to_string()))
             })
-            .collect()
+            .collect::<LakeCatResult<Vec<_>>>()?;
+        validate_secret_config_entries(entries)
     }
 
     pub(crate) fn env_secret_variable(secret_ref: &str) -> LakeCatResult<String> {
@@ -738,7 +739,7 @@ pub mod typesec_credential_issuer {
                 "environment credential secret must be JSON: {err}"
             ))
         })?;
-        match value {
+        let entries = match value {
             Value::Object(object) => object
                 .into_iter()
                 .map(|(key, value)| {
@@ -749,7 +750,7 @@ pub mod typesec_credential_issuer {
                     };
                     Ok(ConfigEntry::new(key, value))
                 })
-                .collect(),
+                .collect::<LakeCatResult<Vec<_>>>()?,
             Value::Array(entries) => entries
                 .into_iter()
                 .map(|entry| {
@@ -759,12 +760,24 @@ pub mod typesec_credential_issuer {
                         ))
                     })
                 })
-                .collect(),
+                .collect::<LakeCatResult<Vec<_>>>()?,
             _ => Err(LakeCatError::InvalidArgument(
                 "environment credential secret must be a JSON object or ConfigEntry array"
                     .to_string(),
-            )),
+            ))?,
+        };
+        validate_secret_config_entries(entries)
+    }
+
+    fn validate_secret_config_entries(
+        entries: Vec<ConfigEntry>,
+    ) -> LakeCatResult<Vec<ConfigEntry>> {
+        if entries.iter().any(|entry| entry.key.trim().is_empty()) {
+            return Err(LakeCatError::InvalidArgument(
+                "credential config keys must not be blank".to_string(),
+            ));
         }
+        Ok(entries)
     }
 }
 
@@ -24714,6 +24727,10 @@ mod tests {
         );
 
         assert!(config_entries_from_secret_json(r#"{"aws.session-token":123}"#).is_err());
+        assert!(config_entries_from_secret_json(r#"{" ":"temporary-token"}"#).is_err());
+        assert!(
+            config_entries_from_secret_json(r#"[{"key":" ","value":"temporary-token"}]"#).is_err()
+        );
 
         let vault_entries = config_entries_from_vault_secret_json(serde_json::json!({
             "data": {
@@ -24734,6 +24751,16 @@ mod tests {
                 "data": {
                     "data": {
                         "aws.session-token": 123
+                    }
+                }
+            }))
+            .is_err()
+        );
+        assert!(
+            config_entries_from_vault_secret_json(serde_json::json!({
+                "data": {
+                    "data": {
+                        " ": "temporary-token"
                     }
                 }
             }))

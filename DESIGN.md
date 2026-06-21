@@ -582,6 +582,9 @@ restricted Sail-planned reads are the safer default. Any configured
 secret-manager or credential issuer backend must return credentials scoped no
 broader than the LakeCat storage profile that selected it; scope-rejection
 evidence should stay hash-only and must not emit credential replay records.
+Secret-manager payload parsing must also fail closed on malformed credential
+config shapes, including blank config keys, before any secret-backed
+credential response is issued.
 Credential responses should carry catalog-derived secret-ref provider evidence
 when a storage profile uses an external secret reference, and backend-supplied
 provider evidence must be replaced rather than trusted. Credential-vend replay

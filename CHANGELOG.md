@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Rejected blank credential config keys in TypeSec environment and Vault
+  secret-ref resolver payloads before secret-backed credentials can be issued.
 - Required `table.scan-tasks-fetched` outbox admission to reject empty or
   drifted `required-filters` proof when governed row-predicate evidence is
   present, before acknowledgement, graph projection, or OpenLineage projection.
