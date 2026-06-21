@@ -470,6 +470,8 @@ compact and raw replay should reject empty predicate objects, blank predicate
 types, and term-based predicates that omit the narrowed term/value evidence.
 Requested/effective projection and stats-field evidence should likewise stay
 non-empty, non-blank, and duplicate-free before narrowing proof is accepted.
+Service outbox admission must enforce the same field-array shape before graph
+or OpenLineage projection, not only in later CLI replay verification.
 Prefer upstream Sail APIs for any reusable planner or manifest work.
 
 ### P2 QGLake Acceptance

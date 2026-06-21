@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected blank and duplicate scan projection/stat field arrays at service
+  outbox admission before graph or OpenLineage projection, aligning live
+  scan-planned and scan-tasks-fetched replay evidence with compact QGLake proof
+  validation.
 - Required compact governed scan projection/stat evidence and raw
   lineage-drain scan replay evidence to use non-empty, duplicate-free field
   arrays before proving policy narrowing, preventing repeated requested fields

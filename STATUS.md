@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate service scan proof arrays`.
+  Service outbox admission now rejects blank or duplicate scan projection/stat
+  field arrays before graph or OpenLineage projection, so live scan-planned and
+  scan-tasks-fetched replay evidence cannot carry inflated field lists into
+  downstream QGLake proof.
+- Local verification for this service scan proof array slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service duplicate_requested_projection -- --test-threads=1`;
+  `cargo test -p lakecat-service blank_requested_stats_field -- --test-threads=1`;
+  `cargo test -p lakecat-service scan_planned -- --test-threads=1`;
+  `cargo test -p lakecat-service scan_fetch -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate scan projection proof arrays`.
   Compact QGLake handoff verification and raw lineage-drain scan replay now
   reject duplicate or blank requested/effective projection and stats-field
