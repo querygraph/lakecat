@@ -6,6 +6,21 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require commit-history receipt principal replay`.
+  Service `table.commits-listed` outbox admission now rejects commit-history
+  replay whose authorization receipt principal is missing or malformed before
+  acknowledgement, graph projection, or OpenLineage projection, giving QGLake
+  durable actor evidence before its stricter `agent` handoff checks run.
+- Local verification for this commit-history receipt principal slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_missing_table_commit_history_receipt_principal -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_table_commit_history_receipt_principal -- --test-threads=1`;
+  `cargo test -p lakecat-service table_commit -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover raw QGLake commit-history principal kind`.
   Raw QGLake lineage-drain regression coverage now proves
   `table.commits-listed` replay fails when commit-history principal kind

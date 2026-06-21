@@ -565,7 +565,9 @@ lineage-drain boundary and in compact handoff proof, so pointer-log evidence
 cannot drop or rewrite actor attribution, duplicate commits, or reorder between
 the catalog and QGLake proof. Raw lineage-drain regressions cover both missing
 and drifted commit-history principal subject and principal kind before compact
-handoff proof generation.
+handoff proof generation. Service replay admission must first require a valid
+authorization receipt principal for every `table.commits-listed` source event,
+so graph and OpenLineage projection never observe actorless pointer-log reads.
 Pending outbox replay should stay deterministic across embedded and Turso stores, ordered by
 `created_at,event_id`, with batch limits applied after that order and with
 duplicate-safe delivery accounting. Draining should acknowledge delivery only

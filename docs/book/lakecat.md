@@ -1949,7 +1949,11 @@ increasing, requires commit hashes to be duplicate-free, and requires positive
 graph event evidence plus replay and OpenLineage receipt hashes. Captured
 raw lineage-drain regressions cover both missing and drifted commit-history
 principal subject and principal kind, so actor attribution must survive before
-the compact handoff proof exists. Captured
+the compact handoff proof exists. The service admission layer now rejects
+`table.commits-listed` source replay whose authorization receipt principal is
+missing or malformed before acknowledgement, catalog graph projection, or
+OpenLineage projection, so the raw lineage-drain summary is never built from an
+actorless pointer-log read. Captured
 LakeCat replay-line recomputation enforces the same sequence invariant even
 when the captured replay JSON and compact summary agree on malformed sequence
 evidence, so operator-readable `table-commit-history-replay` text cannot

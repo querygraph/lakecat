@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required service `table.commits-listed` replay admission to carry a valid
+  authorization receipt principal before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Added raw QGLake lineage-drain regression coverage for missing or drifted
   table commit-history principal kind, keeping the source replay verifier
   locked to the accepted agent actor before compact handoff proof is generated.

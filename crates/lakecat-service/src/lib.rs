@@ -1429,6 +1429,20 @@ fn validate_table_commit_history_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    let Some(receipt_principal) = payload
+        .get("authorization-receipt")
+        .and_then(|receipt| receipt.get("principal"))
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            "table commit-history evidence must contain authorization receipt principal",
+        ));
+    };
+    decode_outbox_principal_value(
+        event,
+        receipt_principal,
+        "table commit-history authorization receipt principal",
+    )?;
     let commit_hashes = validate_required_full_hash_array_field(event, payload, "commit-hashes")?;
     validate_unique_hash_array(event, &commit_hashes, "table commit-history commit-hashes")?;
     let sequence_numbers = payload
@@ -13735,6 +13749,160 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_missing_table_commit_history_receipt_principal() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-commit-history-missing-receipt-principal".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commits-listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-commit-history-missing-receipt-principal",
+                    "event-type": "table.commits-listed",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "action": "table-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "table": "events",
+                        "commit-count": 1,
+                        "commit-hashes": [
+                            content_hash_json(&json!({"commit": 1})).unwrap()
+                        ],
+                        "sequence-numbers": [1],
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("missing commit-history receipt principal should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commits-listed"));
+        assert!(
+            message.contains(
+                "table commit-history evidence must contain authorization receipt principal"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-commit-history-missing-receipt-principal"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "missing commit-history receipt principal must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "missing commit-history receipt principal must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "missing commit-history receipt principal must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_table_commit_history_receipt_principal() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-commit-history-malformed-receipt-principal".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commits-listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-commit-history-malformed-receipt-principal",
+                    "event-type": "table.commits-listed",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": {
+                                "subject": "agent:writer",
+                                "kind": "unknown"
+                            },
+                            "action": "table-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "table": "events",
+                        "commit-count": 1,
+                        "commit-hashes": [
+                            content_hash_json(&json!({"commit": 1})).unwrap()
+                        ],
+                        "sequence-numbers": [1],
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("malformed commit-history receipt principal should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commits-listed"));
+        assert!(message.contains("table commit-history authorization receipt principal"));
+        assert!(message.contains("valid principal"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-commit-history-malformed-receipt-principal"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "malformed commit-history receipt principal must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "malformed commit-history receipt principal must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "malformed commit-history receipt principal must fail before lineage projection"
+        );
     }
 
     #[tokio::test]
