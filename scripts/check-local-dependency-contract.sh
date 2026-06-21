@@ -110,6 +110,8 @@ require_pattern 'cargo test --workspace --all-features' scripts/check-release-re
   "release-readiness gate must run the all-features workspace test"
 require_pattern 'cargo test -p lakecat-api --lib' scripts/check-release-readiness.sh \
   "release-readiness gate must run explicit lakecat-api unit tests"
+require_pattern 'encodes_null_and_nested_partition_literals_for_iceberg_rest' scripts/check-release-readiness.sh \
+  "release-readiness gate must prove v4 bridge partition literal encoding"
 require_pattern 'scripts/qglake-handoff-local.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must include the QGLake handoff proof"
 

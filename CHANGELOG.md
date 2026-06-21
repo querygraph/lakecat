@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added explicit Sail-local v4 bridge partition-literal regression coverage to
+  the full local release-readiness gate and dependency contract, keeping null
+  and nested partition values in the local-first release proof.
 - Deepened the LakeCat book's catalog-concepts and Sail-boundary explanation
   with a five-part standard-vs-extension classification and concrete governed
   read, commit, and QueryGraph bootstrap examples showing why Iceberg semantics

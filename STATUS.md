@@ -5,6 +5,19 @@ Updated: 2026-06-21
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Gate v4 partition literal bridge test`.
+  The full local `scripts/check-release-readiness.sh` gate now runs the
+  `lakecat-sail --features sail-local`
+  `encodes_null_and_nested_partition_literals_for_iceberg_rest` regression by
+  name, and the dependency contract requires that row to stay wired. This keeps
+  the P6 v4 JSON bridge promise that null partition slots and nested Sail
+  literals encode as Iceberg REST JSON in the local-first release proof.
+- Local verification for this v4 partition-literal release-gate slice is green:
+  `bash -n scripts/check-local-dependency-contract.sh scripts/check-workflow-trigger-contract.sh scripts/check-release-readiness.sh`;
+  `cargo test -p lakecat-sail --features sail-local --lib encodes_null_and_nested_partition_literals_for_iceberg_rest -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`.
 - Latest completed documentation slice:
   `Deepen catalog concepts and Sail boundary in the book`.
   The manuscript now explains the catalog vocabulary as a five-part
