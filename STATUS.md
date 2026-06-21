@@ -6,6 +6,20 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Hash storage-profile upsert roots before replay`.
+  Generated `storage-profile.upserted` audit/outbox evidence now records
+  `location-prefix-hash` instead of raw `location-prefix`, and service outbox
+  admission rejects raw storage-profile location-prefix replay before
+  acknowledgement, graph projection, or OpenLineage projection.
+- Local verification for this storage-profile replay evidence slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service storage_profile_location_prefix -- --test-threads=1`;
+  `cargo test -p lakecat-service storage_profile_upserts -- --test-threads=1`;
+  `cargo test -p lakecat-service storage_profile_event_payload -- --test-threads=1`;
+  `cargo test -p lakecat-service storage_profile -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate service credential block reasons`.
   Service `credentials.vend-attempted` outbox admission now rejects blocked
   raw-credential replay evidence unless it carries zero credentials and a

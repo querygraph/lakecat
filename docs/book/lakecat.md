@@ -1237,22 +1237,22 @@ still stay hash-only: LakeCat returns the secret-reference hash and an
 error-detail hash instead of the environment variable name, Vault path, token,
 namespace, backend exception text, or malformed secret fields.
 When storage-profile changes replay into lineage/OpenLineage evidence, LakeCat
-does not forward the full secret-store URI. The replay payload keeps
-`secret-ref-present` and `secret-ref-provider` so QueryGraph can verify that a
-production credential root exists without learning the Vault, cloud secret
-manager, or TypeSec environment path. It also replaces the raw storage
-`location-prefix` with `location-prefix-hash` before graph and lineage
-projection, so replayed evidence can bind a credential root to a storage scope
-without exposing the bucket, path, or local filesystem root to downstream
-consumers. Warehouse replay follows the same shape: `storage-root` becomes
-`storage-root-hash` before graph and lineage projection, keeping the tenant
-root replayable without exposing the raw root itself.
+does not forward the full secret-store URI or raw storage root. The committed
+audit/outbox payload keeps `secret-ref-present` and `secret-ref-provider` so
+QueryGraph can verify that a production credential root exists without learning
+the Vault, cloud secret manager, or TypeSec environment path. It also records a
+full `location-prefix-hash` instead of raw `location-prefix`, so replayed
+evidence can bind a credential root to a storage scope without exposing the
+bucket, path, or local filesystem root to downstream consumers. Warehouse
+replay follows the same shape: `storage-root` becomes `storage-root-hash`
+before graph and lineage projection, keeping the tenant root replayable without
+exposing the raw root itself.
 The drain also rejects unsafe storage-profile upsert evidence before delivery:
-`storage-profile.upserted` may carry the storage prefix that LakeCat hashes for
-projection, or a pre-redacted full `location-prefix-hash`, but it may not carry
-a raw `secret-ref`. If secret-reference presence is true, the replay evidence
-must carry a provider and full `secret-ref-hash`; if presence is false, provider
-and hash evidence must be absent.
+`storage-profile.upserted` must carry a full `location-prefix-hash` and must not
+carry raw `location-prefix` or raw `secret-ref` values. If secret-reference
+presence is true, the replay evidence must carry a provider and full
+`secret-ref-hash`; if presence is false, provider and hash evidence must be
+absent.
 The drain summary lifts the same proof into compact fields alongside the
 profile id and provider. QGLake replay verification requires that compact
 storage-profile upsert evidence, which means a saved handoff can prove the

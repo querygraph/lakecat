@@ -2049,23 +2049,13 @@ fn validate_storage_profile_upsert_event_evidence(
             "storage-profile upsert evidence must not contain raw secret-ref",
         ));
     }
-    if storage_profile
-        .get("location-prefix-hash")
-        .and_then(Value::as_str)
-        .is_some_and(is_full_sha256_digest_evidence)
-    {
-        // Already redacted replay evidence.
-    } else if storage_profile
-        .get("location-prefix")
-        .and_then(Value::as_str)
-        .filter(|location_prefix| !location_prefix.is_empty())
-        .is_none()
-    {
+    if storage_profile.get("location-prefix").is_some() {
         return Err(outbox_evidence_error(
             event,
-            "storage-profile upsert evidence must contain location-prefix or full location-prefix-hash",
+            "storage-profile upsert evidence must not contain raw location-prefix",
         ));
     }
+    validate_required_full_hash_field(event, storage_profile, "location-prefix-hash")?;
     validate_secret_ref_evidence(event, storage_profile, "storage-profile upsert")?;
     Ok(())
 }
@@ -8101,7 +8091,9 @@ fn storage_profile_event_payload(profile: &StorageProfile) -> Value {
     let mut payload = json!({
         "profile-id": profile.profile_id.clone(),
         "warehouse": profile.warehouse.as_str(),
-        "location-prefix": profile.location_prefix.clone(),
+        "location-prefix-hash": content_hash_json(&json!({
+            "location-prefix": &profile.location_prefix
+        })).expect("storage profile location prefix hash should serialize"),
         "provider": profile.provider.as_str(),
         "issuance-mode": profile.issuance_mode.as_str(),
         "secret-ref-present": profile.secret_ref.is_some(),
@@ -17079,7 +17071,9 @@ mod tests {
                         "storage-profile": {
                             "profile-id": "s3-events",
                             "warehouse": "local",
-                            "location-prefix": "s3://lakecat/events",
+                            "location-prefix-hash": content_hash_json(&json!({
+                                "location-prefix": "s3://lakecat/events"
+                            })).unwrap(),
                             "provider": "s3",
                             "issuance-mode": "secret-ref",
                             "secret-ref-present": true,
@@ -17338,7 +17332,9 @@ mod tests {
                         "storage-profile": {
                             "profile-id": "s3-events",
                             "warehouse": "local",
-                            "location-prefix": "s3://lakecat/events",
+                            "location-prefix-hash": content_hash_json(&json!({
+                                "location-prefix": "s3://lakecat/events"
+                            })).unwrap(),
                             "provider": "s3",
                             "issuance-mode": "secret-ref",
                             "secret-ref": "vault://kv/lakecat/events",
@@ -17373,8 +17369,67 @@ mod tests {
         assert!(lineage.events.lock().await.is_empty());
     }
 
+    #[tokio::test]
+    async fn outbox_drain_rejects_raw_storage_profile_location_prefix_evidence() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-storage-profile-location-prefix".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-storage-profile-location-prefix",
+                    "event-type": "storage-profile.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "storage-profile-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "storage-profile": {
+                            "profile-id": "s3-events",
+                            "warehouse": "local",
+                            "location-prefix": "s3://lakecat/events",
+                            "provider": "s3",
+                            "issuance-mode": "secret-ref",
+                            "secret-ref-present": false,
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("raw storage-profile location-prefix evidence should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("storage-profile.upserted"));
+        assert!(message.contains("raw location-prefix"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-storage-profile-location-prefix"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
     #[test]
-    fn storage_profile_event_payload_redacts_secret_ref() {
+    fn storage_profile_event_payload_redacts_secret_ref_and_location_prefix() {
         let profile = StorageProfile::new(
             "s3-events",
             WarehouseName::new("local").unwrap(),
@@ -17388,6 +17443,17 @@ mod tests {
 
         let payload = storage_profile_event_payload(&profile);
         assert_eq!(payload["profile-id"], serde_json::json!("s3-events"));
+        assert_eq!(
+            payload["location-prefix-hash"],
+            serde_json::json!(
+                content_hash_json(&json!({"location-prefix": "s3://lakecat/events"})).unwrap()
+            )
+        );
+        assert!(
+            payload["location-prefix-hash"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
+        );
         assert_eq!(payload["secret-ref-present"], serde_json::json!(true));
         assert_eq!(payload["secret-ref-provider"], serde_json::json!("typesec"));
         assert_eq!(
@@ -17396,6 +17462,7 @@ mod tests {
                 "typesec://env/LAKECAT_S3_EVENTS".as_bytes()
             ))
         );
+        assert!(payload.get("location-prefix").is_none());
         assert!(payload.get("secret-ref").is_none());
     }
 

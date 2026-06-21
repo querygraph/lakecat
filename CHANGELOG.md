@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Emitted hash-only `storage-profile.upserted` audit evidence for storage
+  roots, and required service outbox admission to reject raw
+  `location-prefix` values before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Required blocked `credentials.vend-attempted` replay evidence to carry zero
   credentials plus a non-empty block reason matching the raw-credential
   exception receipt context before graph or OpenLineage projection.
