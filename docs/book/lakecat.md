@@ -1824,6 +1824,10 @@ inside each namespace receipt-chain summary. Each chain entry keeps only
 catalog-facing evidence: stable view identity, the chain hash, the verified
 flag, latest view version, latest operation, tombstone state, receipt count,
 and per-receipt version, operation, receipt hash, and previous-link fields.
+The chain warehouse and namespace must match the enclosing namespace
+receipt-chain summary, and every receipt's stable ID, warehouse, namespace, and
+view name must match the chain identity, so compact evidence cannot splice
+receipts across views or namespaces while preserving hash-shaped fields.
 `qglake-verify-handoff` rejects a chain whose first receipt is not version 1
 `upsert`, whose previous links do not point to the prior receipt, whose upsert
 skips a version, whose drop advances the durable version, whose operation is

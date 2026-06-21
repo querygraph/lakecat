@@ -6,6 +6,27 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind compact view receipt-chain identities`.
+  QGLake handoff verification now binds namespace receipt-chain groups to
+  their structural chain summaries and binds each structural chain to every
+  per-receipt identity. A saved compact view proof is rejected if the chain
+  warehouse or namespace drifts from its enclosing receipt-chain group, or if a
+  receipt's stable ID, warehouse, namespace, or view name drifts from the chain
+  identity.
+- Local verification for this compact view receipt-chain identity slice is
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_view_receipt_chain_group_identity_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_view_receipt_chain_receipt_identity_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs -- --nocapture`;
+  `cargo test -p lakecat-cli qglake`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, ran
+  LakeCat replay, QueryGraph verify/import, verified compact view
+  receipt-chain identity binding, and ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Verify compact view receipt-chain structure`.
   QGLake replay and handoff proofs now carry compact structural view
   receipt-chain evidence in `receiptChains[].chains[]`, including stable view

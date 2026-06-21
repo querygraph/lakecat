@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound compact QGLake view receipt-chain identities across namespace
+  receipt-chain groups, chain summaries, and per-receipt entries, so saved
+  handoff summaries reject warehouse, namespace, stable ID, or view-name drift
+  inside otherwise hash-shaped view history evidence.
 - Added compact view receipt-chain structure to QGLake replay and handoff
   proofs, including per-receipt versions, operations, hashes, and previous-link
   evidence, and rejected handoff summaries with invalid chain heads, forged

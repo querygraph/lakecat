@@ -3680,6 +3680,16 @@ fn require_verified_view_receipt_chain_structures(
             chains.len()
         )));
     }
+    let group_warehouse = required_str(
+        chain_group,
+        "warehouse",
+        "viewReceiptChainProof.receiptChains[]",
+    )?;
+    let group_namespace = required_array(
+        chain_group,
+        "namespace",
+        "viewReceiptChainProof.receiptChains[]",
+    )?;
 
     for (chain_index, chain) in chains.iter().enumerate() {
         let chain = chain.as_object().ok_or_else(|| {
@@ -3692,6 +3702,8 @@ fn require_verified_view_receipt_chain_structures(
             group_index,
             chain_index,
             &chain_hashes,
+            group_warehouse,
+            group_namespace,
             chain_receipt_hashes,
         )?;
     }
@@ -3703,11 +3715,18 @@ fn require_verified_view_receipt_chain_structure(
     group_index: usize,
     chain_index: usize,
     chain_hashes: &BTreeSet<&str>,
+    group_warehouse: &str,
+    group_namespace: &[Value],
     chain_receipt_hashes: &mut BTreeSet<String>,
 ) -> lakecat_core::LakeCatResult<()> {
     let label = "viewReceiptChainProof.receiptChains[].chains[]";
-    require_non_empty_str(chain, "stableId", label)?;
-    require_non_empty_str(chain, "warehouse", label)?;
+    let stable_id = require_non_empty_str(chain, "stableId", label)?;
+    let warehouse = require_non_empty_str(chain, "warehouse", label)?;
+    if warehouse != group_warehouse {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].warehouse must match receipt-chain group warehouse"
+        )));
+    }
     let namespace = required_array(chain, "namespace", label)?;
     if namespace.is_empty()
         || namespace
@@ -3718,7 +3737,12 @@ fn require_verified_view_receipt_chain_structure(
             "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].namespace must contain namespace components"
         )));
     }
-    require_non_empty_str(chain, "name", label)?;
+    if namespace != group_namespace {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].namespace must match receipt-chain group namespace"
+        )));
+    }
+    let name = require_non_empty_str(chain, "name", label)?;
     let chain_hash = require_full_hash_str(chain, "chainHash", label)?;
     if !chain_hashes.contains(chain_hash) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -3757,6 +3781,10 @@ fn require_verified_view_receipt_chain_structure(
         chain_index,
         latest_view_version,
         latest_operation,
+        stable_id,
+        warehouse,
+        namespace,
+        name,
         chain_receipt_hashes,
     )
 }
@@ -3767,6 +3795,10 @@ fn require_verified_view_receipts(
     chain_index: usize,
     latest_view_version: u64,
     latest_operation: &str,
+    expected_stable_id: &str,
+    expected_warehouse: &str,
+    expected_namespace: &[Value],
+    expected_name: &str,
     chain_receipt_hashes: &mut BTreeSet<String>,
 ) -> lakecat_core::LakeCatResult<()> {
     let mut previous_view_version: Option<u64> = None;
@@ -3781,8 +3813,16 @@ fn require_verified_view_receipts(
             ))
         })?;
         let label = "viewReceiptChainProof.receiptChains[].chains[].receipts[]";
-        require_non_empty_str(receipt, "stableId", label)?;
-        require_non_empty_str(receipt, "warehouse", label)?;
+        if require_non_empty_str(receipt, "stableId", label)? != expected_stable_id {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}].stableId must match chain stableId"
+            )));
+        }
+        if require_non_empty_str(receipt, "warehouse", label)? != expected_warehouse {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}].warehouse must match chain warehouse"
+            )));
+        }
         let namespace = required_array(receipt, "namespace", label)?;
         if namespace.is_empty()
             || namespace
@@ -3793,7 +3833,16 @@ fn require_verified_view_receipts(
                 "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}].namespace must contain namespace components"
             )));
         }
-        require_non_empty_str(receipt, "name", label)?;
+        if namespace != expected_namespace {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}].namespace must match chain namespace"
+            )));
+        }
+        if require_non_empty_str(receipt, "name", label)? != expected_name {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}].name must match chain name"
+            )));
+        }
         let view_version = require_positive_u64(receipt, "viewVersion", label)?;
         let operation = required_str(receipt, "operation", label)?;
         let receipt_hash = require_full_hash_str(receipt, "receiptHash", label)?;
@@ -11789,6 +11838,38 @@ mod tests {
 
         assert!(err.to_string().contains("viewReceiptChainProof"));
         assert!(err.to_string().contains("transition is invalid"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_view_receipt_chain_group_identity_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chains"]
+            [0]["warehouse"] = json!("other");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject receipt-chain group identity drift");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(
+            err.to_string()
+                .contains("warehouse must match receipt-chain group warehouse")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_view_receipt_chain_receipt_identity_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chains"]
+            [0]["receipts"][0]["stableId"] = json!("lakecat:view:local:default:other_view");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject receipt-chain receipt identity drift");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(
+            err.to_string()
+                .contains("stableId must match chain stableId")
+        );
     }
 
     #[test]
