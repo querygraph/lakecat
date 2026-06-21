@@ -6,6 +6,16 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover duplicate planned effective stats replay`.
+  Service replay regression coverage now proves `table.scan-planned` rejects
+  duplicate `effective-stats-fields` evidence before delivery acknowledgement,
+  graph projection, or OpenLineage projection. This closes the planned-scan
+  stats-field duplicate-proof pair with the requested-stats coverage.
+- Local verification for this planned scan effective-stats slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_planned_duplicate_effective_stats_field -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_planned -- --test-threads=1`.
+- Latest completed implementation slice:
   `Cover duplicate planned requested stats replay`.
   Service replay regression coverage now proves `table.scan-planned` rejects
   duplicate `requested-stats-fields` evidence before delivery acknowledgement,
