@@ -7,10 +7,17 @@
   missing/blank or whose `max-credential-ttl-seconds` cap is missing or
   non-positive before acknowledgement, graph projection, or OpenLineage
   projection.
-- Expanded the LakeCat book's catalog-concepts material to distinguish
-  standard Iceberg vocabulary from LakeCat implementation choices and
-  QueryGraph/TypeSec control-plane extensions, including a detailed argument
-  for keeping reusable Iceberg planning and validation work in Sail.
+- Expanded the LakeCat book's catalog-concepts material into a detailed
+  standard-vs-LakeCat-vs-QueryGraph/TypeSec ledger covering the Rust service
+  spine, Turso store, Iceberg REST paths, commit CAS, idempotency, pointer
+  logs, audit/outbox, replay validation, governed scan and credential proof,
+  OpenLineage, QGLake handoff, and which surfaces are implementation details,
+  optional extensions, or future Iceberg-adjacent candidates.
+- Expanded the book's Sail argument with a concrete Sail-shaped versus
+  catalog-shaped responsibility split, explaining why reusable Iceberg
+  planning, manifest, delete, metadata-as-data, v3/v4, and commit-validation
+  work belongs in the Rust engine while LakeCat owns trust, transactions, and
+  evidence.
 - Added `scripts/check-release-readiness.sh` as the local-first first-release
   gate, with full and quick modes covering dependency contracts, formatting,
   core feature tests, book rebuilds, and QGLake handoff proof.
