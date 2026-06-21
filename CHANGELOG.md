@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Pinned pending outbox batch limits to apply after deterministic
+  `created_at,event_id` ordering in both embedded and Turso stores, so
+  batched drains replay the same prefix across durable backends.
 - Added fetched scan-task replay coverage for empty
   `read-restriction.allowed-columns`, proving both planned and fetched governed
   scan replay fail closed before outbox delivery.

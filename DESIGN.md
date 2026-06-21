@@ -500,9 +500,10 @@ setup failures should likewise expose only metadata-location and backend-error
 hashes, not raw URI parse text, schemes, or backend diagnostics. Catalog state
 changes should not lose outbox side effects.
 Pending outbox replay should stay deterministic across embedded and Turso stores, ordered by
-`created_at,event_id`, with duplicate-safe delivery accounting. Draining should
-acknowledge delivery only after every projection in the batch succeeds, leaving
-events pending for retry when graph or lineage projection fails.
+`created_at,event_id`, with batch limits applied after that order and with
+duplicate-safe delivery accounting. Draining should acknowledge delivery only
+after every projection in the batch succeeds, leaving events pending for retry
+when graph or lineage projection fails.
 
 ### P4 Semantic Catalog Graph
 

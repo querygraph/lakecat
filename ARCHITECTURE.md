@@ -323,13 +323,15 @@ through compare-and-swap, persist idempotency/audit/outbox records with both the
 normalized request hash and stored response hash plus compact format-version,
 snapshot-id, and policy-hash summary evidence, and expose a service-level drain
 that projects committed events to graph and lineage sinks.
-Outbox draining is all-or-retry across each selected batch: if a later graph or
-lineage projection fails after earlier events have emitted sink side effects, no
-event in that batch is acknowledged, so retry starts from the committed outbox
-state rather than from a partial delivery response. Unsupported outbox event
-types also fail closed during validation before graph emission, lineage
-emission, or delivery acknowledgement, leaving future/custom events pending
-instead of silently dropping them with an empty projection receipt. Governed
+Outbox draining is all-or-retry across each selected batch. Embedded and Turso
+stores expose the same pending prefix by ordering on `created_at,event_id`
+before applying the caller's batch limit; if a later graph or lineage
+projection fails after earlier events have emitted sink side effects, no event
+in that batch is acknowledged, so retry starts from the committed outbox state
+rather than from a partial delivery response. Unsupported outbox event types
+also fail closed during validation before graph emission, lineage emission, or
+delivery acknowledgement, leaving future/custom events pending instead of
+silently dropping them with an empty projection receipt. Governed
 read replay evidence with a `read-restriction.policy-hashes` field must carry a
 non-empty set of full policy digests before it can leave the outbox. The same
 check is applied to

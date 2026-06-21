@@ -6,6 +6,23 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin outbox limit ordering`.
+  Embedded and Turso store coverage now proves pending outbox batch limits are
+  applied after deterministic `created_at,event_id` ordering. This keeps
+  batched drain replay aligned across durable backends, even when insertion
+  order differs from delivery order.
+- Local verification for this outbox limit-ordering slice is green:
+  `cargo fmt -p lakecat-store`;
+  `cargo test -p lakecat-store memory_store_limits_pending_outbox_after_deterministic_ordering -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_limits_pending_outbox_after_deterministic_ordering -- --test-threads=1`;
+  `cargo test -p lakecat-store -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local -- --test-threads=1`;
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin fetch empty scan allowed columns`.
   Outbox admission coverage now proves governed `table.scan-tasks-fetched`
   replay rejects an empty `read-restriction.allowed-columns` array before graph

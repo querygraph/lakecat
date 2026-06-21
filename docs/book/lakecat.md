@@ -482,15 +482,18 @@ catalog state decides which metadata file is current.
 
 Outbox draining is intentionally strict. LakeCat projects a batch to graph and
 lineage sinks first, then acknowledges the whole projected batch in the store.
-If projection fails, nothing is acknowledged. If the store reports that fewer
-events were acknowledged than LakeCat projected, the drain fails with an
-acknowledgement mismatch instead of returning a quiet partial success. That
-keeps retry and operator evidence honest when a concurrent drain or backend
-anomaly interferes with delivery accounting. The regression suite covers the
-uncomfortable middle case too: if the first event in a multi-event batch
-already projected to graph and lineage but a later event fails during lineage
-projection, LakeCat still acknowledges none of the events. Recovery starts from
-the committed outbox batch instead of from a half-delivered response.
+Embedded and Turso stores select the same pending prefix by sorting on
+`created_at,event_id` before applying the drain limit, so a small batch means
+the same replay set in either durable backend. If projection fails, nothing is
+acknowledged. If the store reports that fewer events were acknowledged than
+LakeCat projected, the drain fails with an acknowledgement mismatch instead of
+returning a quiet partial success. That keeps retry and operator evidence
+honest when a concurrent drain or backend anomaly interferes with delivery
+accounting. The regression suite covers the uncomfortable middle case too: if
+the first event in a multi-event batch already projected to graph and lineage
+but a later event fails during lineage projection, LakeCat still acknowledges
+none of the events. Recovery starts from the committed outbox batch instead of
+from a half-delivered response.
 The drain also refuses unknown event types before any projection happens. A
 future or custom event stays pending until LakeCat knows how to project it,
 instead of disappearing behind an empty graph/lineage receipt.

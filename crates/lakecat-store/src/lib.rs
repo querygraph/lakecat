@@ -3017,6 +3017,64 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_limits_pending_outbox_after_deterministic_ordering() {
+        let store = MemoryCatalogStore::new();
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let mut expected = Vec::new();
+        let mut events = Vec::new();
+        for (event_type, created_at) in [
+            ("querygraph.bootstrap.late", "2026-01-01T00:00:02Z"),
+            ("querygraph.bootstrap.tie-b", "2026-01-01T00:00:01Z"),
+            ("querygraph.bootstrap.tie-a", "2026-01-01T00:00:01Z"),
+        ] {
+            let mut event = CatalogAuditEvent::new(
+                event_type,
+                Some(ident.clone()),
+                Principal::anonymous(),
+                serde_json::json!({
+                    "event-type": event_type,
+                    "table": ident.clone(),
+                    "sequence": event_type,
+                }),
+            )
+            .unwrap();
+            event.created_at = created_at.parse().unwrap();
+            let audit_event_id = audit_event_id(&event).unwrap();
+            let outbox_payload = audit_outbox_payload(&audit_event_id, &event);
+            let outbox_event = outbox_event_from_payload(&outbox_payload, event.created_at)
+                .expect("test event should produce an outbox event");
+            expected.push((outbox_event.created_at, outbox_event.event_id.clone()));
+            events.push((outbox_event.event_id, event));
+        }
+        events.sort_by(|left, right| right.0.cmp(&left.0));
+        for (_, event) in events {
+            store.record_audit_event(event).await.unwrap();
+        }
+        expected.sort();
+
+        let pending = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 2)
+            .await
+            .unwrap();
+        let event_ids = pending
+            .iter()
+            .map(|event| event.event_id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            event_ids,
+            expected
+                .iter()
+                .take(2)
+                .map(|(_, event_id)| event_id.clone())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
     async fn memory_store_commit_records_table_commit_outbox_event() {
         let store = MemoryCatalogStore::new();
         let warehouse = WarehouseName::new("local").unwrap();
@@ -5538,6 +5596,65 @@ pub mod turso_store {
                     .await
                     .unwrap(),
                 1
+            );
+        }
+
+        #[tokio::test]
+        async fn turso_store_limits_pending_outbox_after_deterministic_ordering() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let mut expected = Vec::new();
+            let mut events = Vec::new();
+            for (event_type, created_at) in [
+                ("querygraph.bootstrap.late", "2026-01-01T00:00:02Z"),
+                ("querygraph.bootstrap.tie-b", "2026-01-01T00:00:01Z"),
+                ("querygraph.bootstrap.tie-a", "2026-01-01T00:00:01Z"),
+            ] {
+                let mut event = CatalogAuditEvent::new(
+                    event_type,
+                    Some(ident.clone()),
+                    Principal::anonymous(),
+                    serde_json::json!({
+                        "event-type": event_type,
+                        "table": ident.clone(),
+                        "sequence": event_type,
+                    }),
+                )
+                .unwrap();
+                event.created_at = created_at.parse().unwrap();
+                let audit_event_id = crate::audit_event_id(&event).unwrap();
+                let outbox_payload = crate::audit_outbox_payload(&audit_event_id, &event);
+                let outbox_event =
+                    crate::outbox_event_from_payload(&outbox_payload, event.created_at)
+                        .expect("test event should produce an outbox event");
+                expected.push((outbox_event.created_at, outbox_event.event_id.clone()));
+                events.push((outbox_event.event_id, event));
+            }
+            events.sort_by(|left, right| right.0.cmp(&left.0));
+            for (_, event) in events {
+                store.record_audit_event(event).await.unwrap();
+            }
+            expected.sort();
+
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 2)
+                .await
+                .unwrap();
+            let event_ids = pending
+                .iter()
+                .map(|event| event.event_id.clone())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                event_ids,
+                expected
+                    .iter()
+                    .take(2)
+                    .map(|(_, event_id)| event_id.clone())
+                    .collect::<Vec<_>>()
             );
         }
 
