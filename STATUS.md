@@ -6,6 +6,26 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind compact view stable IDs to components`.
+  QGLake handoff verification now derives the expected
+  `lakecat:view:<warehouse>:<namespace>:<name>` stable ID for accepted views
+  and structural receipt-chain summaries. Saved compact view proofs are
+  rejected when visible warehouse, namespace, or view-name components drift
+  from the stable ID even if the verified view set and hash evidence still
+  look valid.
+- Local verification for this compact view stable-ID component slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_view_stable_id_component_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_view_receipt_chain_stable_id_component_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs -- --nocapture`;
+  `cargo test -p lakecat-cli qglake`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, ran
+  LakeCat replay, QueryGraph verify/import, verified compact view stable-ID
+  component binding, and ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Bind compact view receipt-chain identities`.
   QGLake handoff verification now binds namespace receipt-chain groups to
   their structural chain summaries and binds each structural chain to every

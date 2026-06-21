@@ -1816,18 +1816,23 @@ view list, carry stable warehouse/namespace/name identity, prove
 accepted receipt-chain hashes, positive accepted-view graph event evidence,
 tombstone receipt hashes, positive verified-chain counts, receipt-chain
 warehouse/namespace identity, namespace chain hashes, and replay/OpenLineage
-hashes. The verifier also checks that each namespace receipt-chain summary's
-`verifiedChainCount` equals the number of structural `chains[]` entries and
-that every chain entry is covered by `chainHashes`. The compact proof carries
-`chains[]` entries
-inside each namespace receipt-chain summary. Each chain entry keeps only
-catalog-facing evidence: stable view identity, the chain hash, the verified
-flag, latest view version, latest operation, tombstone state, receipt count,
-and per-receipt version, operation, receipt hash, and previous-link fields.
+hashes. It also derives the expected `lakecat:view:<warehouse>:<namespace>:<name>`
+stable ID from each accepted view's warehouse, namespace, and view name, so a
+saved handoff cannot keep a verified stable ID while drifting the visible
+component fields. The verifier also checks that each namespace receipt-chain
+summary's `verifiedChainCount` equals the number of structural `chains[]`
+entries and that every chain entry is covered by `chainHashes`. The compact
+proof carries `chains[]` entries inside each namespace receipt-chain summary.
+Each chain entry keeps only catalog-facing evidence: stable view identity, the
+chain hash, the verified flag, latest view version, latest operation, tombstone
+state, receipt count, and per-receipt version, operation, receipt hash, and
+previous-link fields.
 The chain warehouse and namespace must match the enclosing namespace
 receipt-chain summary, and every receipt's stable ID, warehouse, namespace, and
-view name must match the chain identity, so compact evidence cannot splice
-receipts across views or namespaces while preserving hash-shaped fields.
+view name must match the chain identity. Each structural chain stable ID is
+also checked against its own warehouse, namespace, and view-name components, so
+compact evidence cannot splice receipts across views or namespaces while
+preserving hash-shaped fields.
 `qglake-verify-handoff` rejects a chain whose first receipt is not version 1
 `upsert`, whose previous links do not point to the prior receipt, whose upsert
 skips a version, whose drop advances the durable version, whose operation is

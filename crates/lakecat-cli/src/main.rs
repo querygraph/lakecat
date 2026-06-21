@@ -3474,8 +3474,8 @@ fn require_view_receipt_chain_evidence(
                 "viewReceiptChainProof.views[{index}] must be an object"
             ))
         })?;
-        require_non_empty_str(view, "stableId", "viewReceiptChainProof.views[]")?;
-        require_non_empty_str(view, "warehouse", "viewReceiptChainProof.views[]")?;
+        let stable_id = require_non_empty_str(view, "stableId", "viewReceiptChainProof.views[]")?;
+        let warehouse = require_non_empty_str(view, "warehouse", "viewReceiptChainProof.views[]")?;
         let namespace = required_array(view, "namespace", "viewReceiptChainProof.views[]")?;
         if namespace.is_empty()
             || namespace
@@ -3487,7 +3487,14 @@ fn require_view_receipt_chain_evidence(
                     .to_string(),
             ));
         }
-        require_non_empty_str(view, "name", "viewReceiptChainProof.views[]")?;
+        let name = require_non_empty_str(view, "name", "viewReceiptChainProof.views[]")?;
+        require_view_stable_id_matches_components(
+            stable_id,
+            warehouse,
+            namespace,
+            name,
+            "viewReceiptChainProof.views[]",
+        )?;
         let view_version = required_u64(view, "viewVersion", "viewReceiptChainProof.views[]")?;
         let accepted_view_version =
             required_u64(view, "acceptedViewVersion", "viewReceiptChainProof.views[]")?;
@@ -3499,7 +3506,7 @@ fn require_view_receipt_chain_evidence(
         require_full_hash_str(view, "acceptedReceiptHash", "viewReceiptChainProof.views[]")?;
         require_positive_u64(view, "graphEvents", "viewReceiptChainProof.views[]")?;
         accepted_receipt_chain_hashes.push((
-            required_str(view, "stableId", "viewReceiptChainProof.views[]")?.to_string(),
+            stable_id.to_string(),
             accepted_view_version,
             require_full_hash_str(
                 view,
@@ -3651,6 +3658,44 @@ fn require_view_receipt_chain_evidence(
     Ok(())
 }
 
+fn require_view_stable_id_matches_components(
+    stable_id: &str,
+    warehouse: &str,
+    namespace: &[Value],
+    name: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let namespace_path = namespace_components_path(namespace, label)?;
+    let expected = format!("lakecat:view:{warehouse}:{namespace_path}:{name}");
+    if stable_id != expected {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.stableId must match warehouse/namespace/name: expected={expected} actual={stable_id}"
+        )));
+    }
+    Ok(())
+}
+
+fn namespace_components_path(
+    namespace: &[Value],
+    label: &str,
+) -> lakecat_core::LakeCatResult<String> {
+    let mut components = Vec::with_capacity(namespace.len());
+    for (index, component) in namespace.iter().enumerate() {
+        let Some(component) = component.as_str().filter(|component| !component.is_empty()) else {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label}.namespace[{index}] must be a non-empty string"
+            )));
+        };
+        components.push(component);
+    }
+    if components.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.namespace must contain namespace components"
+        )));
+    }
+    Ok(components.join("."))
+}
+
 fn require_verified_view_receipt_chain_structures(
     chain_group: &serde_json::Map<String, Value>,
     group_index: usize,
@@ -3743,6 +3788,7 @@ fn require_verified_view_receipt_chain_structure(
         )));
     }
     let name = require_non_empty_str(chain, "name", label)?;
+    require_view_stable_id_matches_components(stable_id, warehouse, namespace, name, label)?;
     let chain_hash = require_full_hash_str(chain, "chainHash", label)?;
     if !chain_hashes.contains(chain_hash) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -11869,6 +11915,40 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("stableId must match chain stableId")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_view_stable_id_component_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"][0]["name"] =
+            json!("other_view");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject accepted-view identity component drift");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(
+            err.to_string()
+                .contains("stableId must match warehouse/namespace/name")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_view_receipt_chain_stable_id_component_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chains"]
+            [0]["name"] = json!("other_view");
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chains"]
+            [0]["receipts"][0]["name"] = json!("other_view");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject receipt-chain identity component drift");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(
+            err.to_string()
+                .contains("stableId must match warehouse/namespace/name")
         );
     }
 

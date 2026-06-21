@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound compact QGLake accepted-view and structural receipt-chain stable IDs
+  to their warehouse, namespace, and view-name components, so saved handoff
+  summaries reject component drift even when the top-level verified view set
+  and receipt-chain hashes still look valid.
 - Bound compact QGLake view receipt-chain identities across namespace
   receipt-chain groups, chain summaries, and per-receipt entries, so saved
   handoff summaries reject warehouse, namespace, stable ID, or view-name drift
