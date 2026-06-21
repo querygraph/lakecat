@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Guard QGLake fixture dependency contract`.
+  The local dependency-contract audit now protects the new QGLake fixture
+  feature boundary: `lakecat-cli` must keep `sail-iceberg` optional behind the
+  explicit `qglake-fixture` feature, the handoff script must opt into that
+  feature only for fixture generation, and the manual-only CI matrix must keep
+  feature coverage without adding automatic GitHub triggers.
+- Local verification for this dependency-contract slice is green:
+  `scripts/check-local-dependency-contract.sh`;
+  `LAKECAT_CONTRACT_CHECK_ONLY=workflows scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-cli --features qglake-fixture qglake_fixture -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin decorated metadata-location redaction`.
   The service commit route now has REST-level regression coverage proving a
   decorated metadata object location is rejected before object-store writes and

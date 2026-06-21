@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Extended the local dependency-contract audit so the explicit
+  `lakecat-cli qglake-fixture` feature boundary is protected in CLI manifests,
+  the local handoff script, and the manual-only CI matrix.
 - Added REST-level commit coverage proving decorated metadata object locations
   are rejected with hash-only evidence and without leaking raw query strings,
   tokens, object names, or paths.

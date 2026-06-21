@@ -16,6 +16,8 @@ jobs:
         include:
           - name: default workspace
             command: cargo test --workspace
+          - name: qglake fixture cli
+            command: cargo test -p lakecat-cli --features qglake-fixture qglake_fixture
           - name: sail-local service
             command: cargo test -p lakecat-service --features sail-local
           - name: typesec-local security

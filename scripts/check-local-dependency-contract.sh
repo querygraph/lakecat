@@ -116,6 +116,12 @@ require_pattern 'sail-catalog = \{ path = "../sail/crates/sail-catalog" \}' Carg
   "sail-catalog must stay an explicit local Sail path until the needed Sail API is published"
 require_pattern 'sail-common-datafusion = \{ path = "../sail/crates/sail-common-datafusion" \}' Cargo.toml \
   "sail-common-datafusion must stay an explicit local Sail path until the needed Sail API is published"
+require_pattern 'qglake-fixture = \["dep:sail-iceberg"\]' crates/lakecat-cli/Cargo.toml \
+  "lakecat-cli qglake-fixture must keep its Sail fixture writer behind an explicit feature"
+require_pattern 'sail-iceberg = \{ path = "../../../sail/crates/sail-iceberg", optional = true \}' crates/lakecat-cli/Cargo.toml \
+  "lakecat-cli must keep sail-iceberg optional outside the qglake-fixture feature"
+require_pattern 'cargo run -p lakecat-cli --features qglake-fixture -- qglake-fixture' scripts/qglake-handoff-local.sh \
+  "local QGLake handoff must opt into the fixture feature only for the generator step"
 
 for sibling in ../sail/crates/sail-catalog ../sail/crates/sail-common-datafusion; do
   require_dir "$sibling"
@@ -160,6 +166,8 @@ require_pattern 'ci/sail-patches' .github/workflows/ci.yml \
   "manual CI must reference ci/sail-patches"
 require_pattern 'repository: lakehq/sail' .github/workflows/ci.yml \
   "manual CI must check out the Sail sibling repository"
+require_pattern 'cargo test -p lakecat-cli --features qglake-fixture qglake_fixture' .github/workflows/ci.yml \
+  "manual CI matrix must keep explicit QGLake fixture feature coverage without automatic triggers"
 
 require_file ../querygraph/qg-rust/src/lakecat.rs
 require_pattern 'pub receipt_chain_hash: String' ../querygraph/qg-rust/src/lakecat.rs \
