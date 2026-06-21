@@ -6,6 +6,25 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject duplicate commit-history replay hashes`.
+  Outbox admission now rejects `table.commits-listed` replay whose
+  `commit-hashes` repeat the same compact commit proof. Table pointer-log
+  evidence must be count-aligned, ordered by positive sequence numbers, and
+  duplicate-free by commit hash before graph projection, OpenLineage
+  projection, or delivery acknowledgement.
+- Local verification for this commit-history duplicate-hash slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service --lib table_commit_history -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject duplicate management-list replay IDs`.
   Outbox admission now rejects management-list replay whose optional ID arrays
   repeat server, project, warehouse, policy, or storage-profile identifiers.

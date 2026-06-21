@@ -2400,8 +2400,9 @@ recomputes each line from compact proof fields, including the management
 credential-root anchor and the table commit-history sequence/hash summary,
 before accepting captured LakeCat replay output. LakeCat service replay now
 requires table commit-history sequence numbers to be positive and strictly
-increasing before graph or OpenLineage projection, so the compact pointer-log
-summary cannot inherit duplicated or reordered catalog evidence.
+increasing, and commit hashes to be duplicate-free, before graph or OpenLineage
+projection. The compact pointer-log summary therefore cannot inherit duplicated
+or reordered catalog evidence.
 
 The scan line keeps the planned and fetched credential TTL caps visible beside
 the task counts, while JSON mode carries the full read-restriction evidence
