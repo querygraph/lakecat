@@ -852,7 +852,10 @@ local QueryGraph Rust importer for the LakeCat view receipt-chain contract:
 receipt-chain evidence must fail closed. Manual-only means no automatic push,
 pull-request, pull-request-target, merge-queue, repository-dispatch, scheduled,
 workflow-run, or reusable-workflow cloud runs; the local audit fails if any of
-those triggers appear before the local gates are proven stable. It is not a
+those triggers appear before the local gates are proven stable, including
+quoted YAML forms such as `"on": ["push"]` or quoted event names in block
+lists. The focused workflow-trigger self-test exists so this guard can be
+checked without running the full dependency audit. It is not a
 substitute for upstreaming the Sail helper APIs or re-enabling automatic CI; it
 is a guard that makes drift visible while LakeCat still depends on unpublished
 Sail helper work and a local QueryGraph acceptance target.

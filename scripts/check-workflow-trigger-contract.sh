@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+contract_script="$repo_root/scripts/check-local-dependency-contract.sh"
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+
+write_workflow() {
+  local name="$1"
+  local body="$2"
+  rm -rf "$tmp_dir/workflows"
+  mkdir -p "$tmp_dir/workflows"
+  printf '%s\n' "$body" > "$tmp_dir/workflows/$name.yml"
+}
+
+expect_accept() {
+  local name="$1"
+  local body="$2"
+  write_workflow "$name" "$body"
+  LAKECAT_CONTRACT_CHECK_ONLY=workflows \
+    LAKECAT_WORKFLOW_DIR="$tmp_dir/workflows" \
+    "$contract_script" >/dev/null
+}
+
+expect_reject() {
+  local name="$1"
+  local body="$2"
+  write_workflow "$name" "$body"
+  if LAKECAT_CONTRACT_CHECK_ONLY=workflows \
+    LAKECAT_WORKFLOW_DIR="$tmp_dir/workflows" \
+    "$contract_script" >/dev/null 2>"$tmp_dir/error.log"; then
+    echo "workflow trigger contract accepted an automatic trigger in $name" >&2
+    exit 1
+  fi
+  rg -q "must not" "$tmp_dir/error.log"
+}
+
+expect_accept "manual" 'name: CI
+on:
+  workflow_dispatch:'
+
+expect_reject "compact-quoted-on" 'name: CI
+"on": ["push"]'
+
+expect_reject "block-quoted-event" 'name: CI
+"on":
+  - "pull_request"'
+
+expect_reject "inline-map-quoted-event" 'name: CI
+on: {"workflow_run": {}}'
+
+echo "LakeCat workflow trigger contract self-test passed."

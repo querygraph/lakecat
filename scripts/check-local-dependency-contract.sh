@@ -27,25 +27,27 @@ require_pattern() {
 require_manual_only_workflows() {
   local workflow
   local workflow_files=()
+  local workflow_dir="${LAKECAT_WORKFLOW_DIR:-.github/workflows}"
   local automatic_events="push|pull_request|pull_request_target|merge_group|repository_dispatch|schedule|workflow_run|workflow_call"
+  local quoted_event_key="[\"']?(${automatic_events})[\"']?"
 
   while IFS= read -r -d '' workflow; do
     workflow_files+=("$workflow")
-  done < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | sort -z)
+  done < <(find "$workflow_dir" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | sort -z)
 
   [[ "${#workflow_files[@]}" -gt 0 ]] || fail "missing GitHub workflow files"
 
   for workflow in "${workflow_files[@]}"; do
-    if rg -q "^[[:space:]]*(${automatic_events}):" "$workflow"; then
+    if rg -q "^[[:space:]]*${quoted_event_key}[[:space:]]*:" "$workflow"; then
       fail "$workflow must not run on automatic GitHub events until the local gates are proven stable"
     fi
-    if rg -q "^[[:space:]]*on:[[:space:]]*(${automatic_events})([[:space:]#]|$)" "$workflow"; then
+    if rg -q "^[[:space:]]*[\"']?on[\"']?[[:space:]]*:[[:space:]]*${quoted_event_key}([[:space:]#]|$)" "$workflow"; then
       fail "$workflow must not use compact automatic GitHub event syntax until the local gates are proven stable"
     fi
-    if rg -q "^[[:space:]]*on:[[:space:]]*\\[[^]]*\\b(${automatic_events})\\b" "$workflow"; then
+    if rg -q "^[[:space:]]*[\"']?on[\"']?[[:space:]]*:[[:space:]]*\\[[^]]*${quoted_event_key}" "$workflow"; then
       fail "$workflow must not use inline automatic GitHub event lists until the local gates are proven stable"
     fi
-    if rg -q "^[[:space:]]*on:[[:space:]]*\\{[^}]*\\b(${automatic_events})\\b[[:space:]]*:" "$workflow"; then
+    if rg -q "^[[:space:]]*[\"']?on[\"']?[[:space:]]*:[[:space:]]*\\{[^}]*${quoted_event_key}[[:space:]]*:" "$workflow"; then
       fail "$workflow must not use inline automatic GitHub event maps until the local gates are proven stable"
     fi
     if awk -v events="$automatic_events" '
@@ -58,6 +60,7 @@ require_manual_only_workflows() {
       /^[^[:space:]#][^:]*:/ {
         key = $0
         sub(/:.*/, "", key)
+        gsub(/^[[:space:]"'\''"]+|[[:space:]"'\''"]+$/, "", key)
         in_on_block = key == "on"
         next
       }
@@ -68,6 +71,7 @@ require_manual_only_workflows() {
           item = line
           sub(/^[[:space:]]*-[[:space:]]*/, "", item)
           sub(/[[:space:]:].*/, "", item)
+          gsub(/^[[:space:]"'\''"]+|[[:space:]"'\''"]+$/, "", item)
           if (item in automatic) {
             exit 42
           }
@@ -80,6 +84,11 @@ require_manual_only_workflows() {
     fi
   done
 }
+
+if [[ "${LAKECAT_CONTRACT_CHECK_ONLY:-}" == "workflows" ]]; then
+  require_manual_only_workflows
+  exit 0
+fi
 
 require_file Cargo.toml
 require_file .github/workflows/ci.yml

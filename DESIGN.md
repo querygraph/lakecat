@@ -521,7 +521,8 @@ or pin published versions before removing local path/patch bridges. Replace v4
 JSON passthrough with typed Sail support when Sail exposes stable APIs.
 The local dependency contract is the guardrail while cloud CI is manual-only:
 it must reject automatic triggers across every GitHub workflow file, not just
-the primary CI workflow, before any pushed slice depends on cloud feedback.
+the primary CI workflow, including compact, block-list, inline-map, and quoted
+YAML trigger forms, before any pushed slice depends on cloud feedback.
 
 ## Review Gate
 

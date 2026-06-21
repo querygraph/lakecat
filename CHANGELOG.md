@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened the local dependency-contract workflow audit to reject quoted
+  `on` keys and quoted automatic event names, and added a workflow-trigger
+  self-test so manual-only CI cannot be bypassed through YAML quoting.
 - Required credential-vend replay raw-credential exception evidence to match
   the authorization receipt context before outbox delivery, so blocked-agent
   and trusted-human exception replay cannot drift from the durable TypeSec

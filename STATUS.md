@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject quoted automatic workflow triggers`.
+  The local dependency-contract audit now rejects quoted GitHub Actions
+  trigger syntax such as `"on": ["push"]`, `"on":` block lists with quoted
+  automatic events, and inline maps with quoted automatic event keys. A
+  dedicated local self-test exercises those trigger forms so manual-only cloud
+  CI cannot be bypassed through YAML quoting.
+- Local verification for this quoted workflow-trigger contract slice is green:
+  `bash -n scripts/check-local-dependency-contract.sh scripts/check-workflow-trigger-contract.sh`;
+  `scripts/check-workflow-trigger-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require raw credential exception receipt agreement`.
   Outbox admission for `credentials.vend-attempted` now rejects credential
   replay when the top-level `lakecat:raw-credential-exception` evidence is
