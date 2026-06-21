@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required service `table.commit` outbox admission to carry non-empty new
+  metadata pointer evidence, and rejected blank previous metadata pointer
+  evidence when present, before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Required service `table.commit` outbox admission to reject zero commit
   sequence numbers before acknowledgement, graph projection, or OpenLineage
   projection.

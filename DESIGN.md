@@ -561,6 +561,9 @@ when graph or lineage projection fails.
 Individual `table.commit` replay evidence must carry a positive sequence
 number before acknowledgement or projection, matching the positive,
 strictly-increasing invariant used by commit-history replay.
+It must also carry non-empty new metadata pointer evidence, and any previous
+metadata pointer evidence must be non-empty when present, before
+acknowledgement or projection.
 
 ### P4 Semantic Catalog Graph
 

@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate service table commit metadata pointers`.
+  Service `table.commit` outbox admission now rejects missing or blank new
+  metadata pointer evidence and blank previous metadata pointer evidence before
+  acknowledgement, graph projection, or OpenLineage projection, so live commit
+  replay cannot project ambiguous pointer state.
+- Local verification for this service table commit metadata pointer slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service table_commit_new_metadata_location -- --test-threads=1`;
+  `cargo test -p lakecat-service table_commit_previous_metadata_location -- --test-threads=1`;
+  `cargo test -p lakecat-service table_commit -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate service table commit sequences`.
   Service `table.commit` outbox admission now rejects zero commit sequence
   numbers before acknowledgement, graph projection, or OpenLineage projection,
