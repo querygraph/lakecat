@@ -537,6 +537,10 @@ QueryGraph receipt chains cannot be extended by invalid guarded requests.
 Keep local verification ahead of cloud CI. Land reusable Sail helpers upstream
 or pin published versions before removing local path/patch bridges. Replace v4
 JSON passthrough with typed Sail support when Sail exposes stable APIs.
+Catalog config should advertise the current bridge honestly:
+`lakecat.format.v4=extension-ready`,
+`lakecat.format.v4.bridge=json-passthrough`, and
+`lakecat.format.v4.typed-sail=unavailable` until typed Sail v4 support exists.
 The local dependency contract is the guardrail while cloud CI is manual-only:
 it must reject automatic triggers across every GitHub workflow file, not just
 the primary CI workflow, including compact, block-list, inline-map, and quoted

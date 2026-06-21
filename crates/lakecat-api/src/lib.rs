@@ -18,6 +18,8 @@ impl Default for CatalogConfigResponse {
                 ConfigEntry::new("lakecat.compatibility", "iceberg-rest"),
                 ConfigEntry::new("lakecat.format.baseline", "iceberg-v1-v3"),
                 ConfigEntry::new("lakecat.format.v4", "extension-ready"),
+                ConfigEntry::new("lakecat.format.v4.bridge", "json-passthrough"),
+                ConfigEntry::new("lakecat.format.v4.typed-sail", "unavailable"),
             ],
             overrides: Vec::new(),
             endpoints: vec![

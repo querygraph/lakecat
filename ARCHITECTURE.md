@@ -13,7 +13,10 @@ Iceberg format versions 1, 2, and 3 are the compatibility baseline. Format v4
 is still under active development, so LakeCat should be v4-ready rather than
 claiming settled v4 compatibility: all v4-facing work should enter behind
 versioned capability flags, open metadata extension points, and round-trip
-compatibility tests.
+compatibility tests. The Iceberg REST config response must say this plainly:
+LakeCat may advertise v4 as extension-ready while also declaring that the
+current bridge is JSON passthrough and typed Sail v4 support is unavailable
+until Sail exposes stable typed APIs.
 
 ## Design Goals
 

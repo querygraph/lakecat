@@ -6,6 +6,30 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Advertise v4 bridge config evidence`.
+  Catalog config defaults now advertise the current Iceberg v4 posture as
+  `lakecat.format.v4.bridge=json-passthrough` and
+  `lakecat.format.v4.typed-sail=unavailable`, alongside the existing
+  `lakecat.format.v4=extension-ready` claim. Config-read audit/outbox evidence
+  carries those defaults, and outbox admission rejects catalog config replay
+  that omits the v4 bridge posture before graph projection, OpenLineage
+  projection, or delivery acknowledgement.
+- Local verification for this v4 config-evidence slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service`;
+  `cargo test -p lakecat-service config_endpoint_reports_lakecat_capabilities -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_catalog_config_without_v4_bridge_defaults -- --test-threads=1`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service config -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `cargo test -p lakecat-api`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin workflow trigger contract scope`.
   The local dependency-contract workflow audit now rejects automatic GitHub
   events only when they appear under a workflow `on:` declaration, while still

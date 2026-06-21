@@ -2243,6 +2243,47 @@ fn validate_catalog_config_read_event_evidence(
     payload: &Value,
 ) -> Result<(), LakeCatError> {
     validate_required_warehouse_field(event, payload, "catalog config-read")?;
+    validate_catalog_config_defaults(event, payload)?;
+    Ok(())
+}
+
+fn validate_catalog_config_defaults(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(defaults) = payload.get("defaults") else {
+        return Err(outbox_evidence_error(
+            event,
+            "catalog config-read evidence must contain defaults",
+        ));
+    };
+    let Some(defaults) = defaults.as_array() else {
+        return Err(outbox_evidence_error(
+            event,
+            "catalog config-read defaults must be an array",
+        ));
+    };
+    let required = [
+        ("lakecat.compatibility", "iceberg-rest"),
+        ("lakecat.format.baseline", "iceberg-v1-v3"),
+        ("lakecat.format.v4", "extension-ready"),
+        ("lakecat.format.v4.bridge", "json-passthrough"),
+        ("lakecat.format.v4.typed-sail", "unavailable"),
+    ];
+    for (required_key, required_value) in required {
+        let found = defaults.iter().any(|entry| {
+            entry.get("key").and_then(Value::as_str) == Some(required_key)
+                && entry.get("value").and_then(Value::as_str) == Some(required_value)
+        });
+        if !found {
+            return Err(outbox_evidence_error(
+                event,
+                &format!(
+                    "catalog config-read defaults must include {required_key}={required_value}"
+                ),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -4058,6 +4099,7 @@ async fn get_config_in_warehouse(
     headers: HeaderMap,
 ) -> Result<Json<CatalogConfigResponse>, LakeCatHttpError> {
     let capability = authorize_catalog_config(&state, request_identity(&headers)?).await?;
+    let config = CatalogConfigResponse::default();
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -4068,10 +4110,11 @@ async fn get_config_in_warehouse(
                 "event-type": "catalog.config-read",
                 "authorization-receipt": capability.receipt(),
                 "warehouse": warehouse.as_str(),
+                "defaults": &config.defaults,
             }),
         )?)
         .await?;
-    Ok(Json(CatalogConfigResponse::default()))
+    Ok(Json(config))
 }
 
 async fn create_namespace(
@@ -9804,6 +9847,25 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_config_defaults_include(
+            &payload["defaults"],
+            "lakecat.format.v4",
+            "extension-ready",
+        );
+        assert_config_defaults_include(
+            &payload["defaults"],
+            "lakecat.format.v4.bridge",
+            "json-passthrough",
+        );
+        assert_config_defaults_include(
+            &payload["defaults"],
+            "lakecat.format.v4.typed-sail",
+            "unavailable",
+        );
     }
 
     #[tokio::test]
@@ -12925,6 +12987,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_catalog_config_without_v4_bridge_defaults() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-config-missing-v4-bridge".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-config-missing-v4-bridge",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": [
+                            {"key": "lakecat.compatibility", "value": "iceberg-rest"},
+                            {"key": "lakecat.format.baseline", "value": "iceberg-v1-v3"},
+                            {"key": "lakecat.format.v4", "value": "extension-ready"}
+                        ]
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("catalog config replay must include v4 bridge posture");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(
+            message.contains(
+                "catalog config-read defaults must include lakecat.format.v4.bridge=json-passthrough"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-config-missing-v4-bridge"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_namespace_list_evidence() {
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {
@@ -14068,6 +14192,7 @@ mod tests {
                             "policy_hash": null,
                             "checked_at": chrono::Utc::now(),
                         },
+                        "defaults": catalog_config_defaults_json(),
                     }
                 }),
                 created_at: chrono::Utc::now(),
@@ -14108,6 +14233,7 @@ mod tests {
                         "checked_at": chrono::Utc::now(),
                     },
                     "warehouse": warehouse,
+                    "defaults": catalog_config_defaults_json(),
                 }
             }),
             created_at,
@@ -14178,6 +14304,7 @@ mod tests {
                             "checked_at": chrono::Utc::now(),
                         },
                         "warehouse": "local",
+                        "defaults": catalog_config_defaults_json(),
                         "warehouse-record": {
                             "warehouse": "local",
                             "project-id": "default",
@@ -14241,6 +14368,11 @@ mod tests {
                 content_hash_json(&json!({"storage-root": "file:///tmp/lakecat/config"})).unwrap()
             )
         );
+        assert_config_defaults_include(
+            &graph_events[1].properties["defaults"],
+            "lakecat.format.v4.bridge",
+            "json-passthrough",
+        );
         let graph_payload = serde_json::to_string(&graph_events[1].properties).unwrap();
         assert!(!graph_payload.contains("file:///tmp/lakecat/config"));
         drop(graph_events);
@@ -14266,6 +14398,11 @@ mod tests {
             serde_json::json!(
                 content_hash_json(&json!({"storage-root": "file:///tmp/lakecat/config"})).unwrap()
             )
+        );
+        assert_config_defaults_include(
+            &lineage_events[0].payload["defaults"],
+            "lakecat.format.v4.typed-sail",
+            "unavailable",
         );
         let lineage_payload = serde_json::to_string(&lineage_events[0].payload).unwrap();
         assert!(!lineage_payload.contains("file:///tmp/lakecat/config"));
@@ -23465,6 +23602,23 @@ mod tests {
             WarehouseName::new("local").unwrap(),
             MemoryCatalogStore::new(),
         ))
+    }
+
+    fn catalog_config_defaults_json() -> serde_json::Value {
+        serde_json::to_value(CatalogConfigResponse::default().defaults).unwrap()
+    }
+
+    fn assert_config_defaults_include(defaults: &serde_json::Value, key: &str, value: &str) {
+        let defaults = defaults
+            .as_array()
+            .expect("config defaults should be an array");
+        assert!(
+            defaults.iter().any(|entry| {
+                entry.get("key").and_then(serde_json::Value::as_str) == Some(key)
+                    && entry.get("value").and_then(serde_json::Value::as_str) == Some(value)
+            }),
+            "config defaults should include {key}={value}: {defaults:?}"
+        );
     }
 
     #[cfg(feature = "sail-local")]

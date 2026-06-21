@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added explicit catalog config defaults for the Iceberg v4 JSON bridge:
+  `lakecat.format.v4.bridge=json-passthrough` and
+  `lakecat.format.v4.typed-sail=unavailable`, and required catalog config
+  replay evidence to carry those claims before graph/OpenLineage projection.
 - Tightened the workflow-trigger dependency-contract audit so automatic GitHub
   events are rejected only when they appear under `on:`, added block-map and
   inline-list/map trigger coverage, and proved harmless workflow keys such as a

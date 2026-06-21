@@ -938,6 +938,26 @@ management and bootstrap endpoints.
 curl -s http://127.0.0.1:3000/catalog/v1/config
 ```
 
+The defaults intentionally separate compatibility from future capability:
+
+```json
+{
+  "defaults": [
+    {"key": "lakecat.compatibility", "value": "iceberg-rest"},
+    {"key": "lakecat.format.baseline", "value": "iceberg-v1-v3"},
+    {"key": "lakecat.format.v4", "value": "extension-ready"},
+    {"key": "lakecat.format.v4.bridge", "value": "json-passthrough"},
+    {"key": "lakecat.format.v4.typed-sail", "value": "unavailable"}
+  ]
+}
+```
+
+That means LakeCat can preserve and replay emerging v4 metadata through the
+Sail JSON bridge, but it is not claiming typed Sail v4 semantics yet. The same
+defaults are stored in catalog config-read replay evidence, and malformed
+replay that omits the v4 bridge posture is rejected before graph or OpenLineage
+projection.
+
 At this point the catalog is already doing more than route HTTP. It has a
 warehouse identity, a store, a governance engine, a Sail planning seam, a graph
 sink, and a lineage sink. Embedded defaults keep the local loop small, but the
