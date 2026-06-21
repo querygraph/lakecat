@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required blocked `credentials.vend-attempted` replay evidence to carry zero
+  credentials plus a non-empty block reason matching the raw-credential
+  exception receipt context before graph or OpenLineage projection.
 - Required service `table.commit` outbox admission to carry non-empty new
   metadata pointer evidence, and rejected blank previous metadata pointer
   evidence when present, before acknowledgement, graph projection, or

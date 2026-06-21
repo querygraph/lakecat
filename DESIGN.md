@@ -584,6 +584,9 @@ when a storage profile uses an external secret reference, and backend-supplied
 provider evidence must be replaced rather than trusted. Credential-vend replay
 must also reject response evidence whose secret-ref provider drifts from the
 selected storage profile before any graph or OpenLineage sink observes it.
+Blocked raw-credential replay must carry zero credentials plus a non-empty
+block reason matching the raw-credential exception receipt context before any
+graph or OpenLineage sink observes it.
 Management-list replay should carry count-aligned, syntactically valid,
 duplicate-free ID arrays before projection, so compact QueryGraph proof cannot
 inflate server, project, warehouse, policy, or storage-profile reads with

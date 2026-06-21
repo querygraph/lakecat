@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate service credential block reasons`.
+  Service `credentials.vend-attempted` outbox admission now rejects blocked
+  raw-credential replay evidence unless it carries zero credentials and a
+  non-empty `lakecat:credential-block-reason` matching the raw-credential
+  exception receipt context, so graph and OpenLineage sinks cannot observe
+  ambiguous blocked credential-vend evidence.
+- Local verification for this service credential block reason slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service credential_block_reason -- --test-threads=1`;
+  `cargo test -p lakecat-service credential_vend -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate service table commit metadata pointers`.
   Service `table.commit` outbox admission now rejects missing or blank new
   metadata pointer evidence and blank previous metadata pointer evidence before

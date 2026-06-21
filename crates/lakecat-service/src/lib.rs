@@ -2789,6 +2789,7 @@ fn validate_credential_vend_event_evidence(
             "credential-vend credential-count does not match credential-response-evidence",
         ));
     }
+    validate_credential_block_reason_evidence(event, payload, credential_count)?;
     let Some(storage_profile) = payload.get("storage-profile") else {
         return Err(outbox_evidence_error(
             event,
@@ -2837,6 +2838,82 @@ fn validate_credential_vend_event_evidence(
             return Err(outbox_evidence_error(
                 event,
                 "credential-vend credential-response-evidence must not contain duplicate prefix-hash values",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_credential_block_reason_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+    credential_count: u64,
+) -> Result<(), LakeCatError> {
+    let block_reason = payload.get("lakecat:credential-block-reason");
+    if let Some(raw_exception) = payload.get("lakecat:raw-credential-exception") {
+        let Some(raw_exception_allowed) = raw_exception.get("allowed").and_then(Value::as_bool)
+        else {
+            return Err(outbox_evidence_error(
+                event,
+                "credential-vend raw-credential exception allowed must be boolean",
+            ));
+        };
+        if !raw_exception_allowed {
+            if credential_count != 0 {
+                return Err(outbox_evidence_error(
+                    event,
+                    "credential-vend blocked credential evidence must not carry credentials",
+                ));
+            }
+            let Some(expected_reason) = raw_exception
+                .get("reason")
+                .and_then(Value::as_str)
+                .filter(|reason| !reason.trim().is_empty())
+            else {
+                return Err(outbox_evidence_error(
+                    event,
+                    "credential-vend blocked raw-credential exception must carry non-empty reason",
+                ));
+            };
+            let Some(actual_reason) = block_reason
+                .and_then(Value::as_str)
+                .filter(|reason| !reason.trim().is_empty())
+            else {
+                return Err(outbox_evidence_error(
+                    event,
+                    "credential-vend blocked credential evidence must contain block reason",
+                ));
+            };
+            if actual_reason != expected_reason {
+                return Err(outbox_evidence_error(
+                    event,
+                    "credential-vend block reason must match raw-credential exception reason",
+                ));
+            }
+            return Ok(());
+        }
+        if !matches!(block_reason, None | Some(Value::Null)) {
+            return Err(outbox_evidence_error(
+                event,
+                "credential-vend block reason must be absent when raw credentials are allowed",
+            ));
+        }
+        return Ok(());
+    }
+    if let Some(reason) = block_reason {
+        if credential_count != 0 {
+            return Err(outbox_evidence_error(
+                event,
+                "credential-vend blocked credential evidence must not carry credentials",
+            ));
+        }
+        if !reason
+            .as_str()
+            .is_some_and(|reason| !reason.trim().is_empty())
+        {
+            return Err(outbox_evidence_error(
+                event,
+                "credential-vend blocked credential evidence must contain block reason",
             ));
         }
     }
@@ -13976,6 +14053,174 @@ mod tests {
         ));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-raw-credential-exception-drift"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_missing_credential_block_reason() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let raw_exception = json!({
+            "requested": true,
+            "allowed": false,
+            "reason": "fine-grained read restriction requires Sail-planned reads"
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-missing-credential-block-reason".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-missing-credential-block-reason",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                            "context": {
+                                "lakecat:raw-credential-exception": raw_exception
+                            }
+                        },
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "storage-profile-id": "events-local",
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                        "lakecat:raw-credential-exception": raw_exception
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("blocked credential replay must carry block reason");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(
+            message
+                .contains("credential-vend blocked credential evidence must contain block reason")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-missing-credential-block-reason"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_credential_block_reason_drift() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let raw_exception = json!({
+            "requested": true,
+            "allowed": false,
+            "reason": "fine-grained read restriction requires Sail-planned reads"
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-block-reason-drift".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-block-reason-drift",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                            "context": {
+                                "lakecat:raw-credential-exception": raw_exception
+                            }
+                        },
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "storage-profile-id": "events-local",
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                        "lakecat:credential-block-reason": "trusted human principal may use audited raw credential vending",
+                        "lakecat:raw-credential-exception": raw_exception
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("blocked credential replay reason must match receipt context");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(
+            message.contains(
+                "credential-vend block reason must match raw-credential exception reason"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-credential-block-reason-drift"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
