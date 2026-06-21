@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected empty `read-restriction.policy-hashes` arrays during outbox drain
+  validation, so governed read replay evidence with a policy field must carry
+  at least one full policy digest before projection or acknowledgement.
 - Rejected unsupported outbox event types before graph or lineage projection,
   leaving malformed future/custom events pending instead of silently
   acknowledging them with an empty projection receipt.

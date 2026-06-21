@@ -485,12 +485,13 @@ The drain also refuses unknown event types before any projection happens. A
 future or custom event stays pending until LakeCat knows how to project it,
 instead of disappearing behind an empty graph/lineage receipt.
 The drain also validates governed-read evidence before projection. If a pending
-event contains a `read-restriction.policy-hashes` array, each entry must already
-be a full `sha256:`-prefixed 64-hex digest. A readable placeholder such as
-`sha256:policy-name` fails the drain before graph or lineage sinks run and
-before the store can mark the event delivered, keeping malformed source
-evidence available for retry or operator repair instead of promoting it into a
-QGLake handoff. Table commit events receive the same treatment for compact
+event contains a `read-restriction.policy-hashes` array, it must be non-empty
+and each entry must already be a full `sha256:`-prefixed 64-hex digest. A
+readable placeholder such as `sha256:policy-name`, or an empty policy anchor
+array, fails the drain before graph or lineage sinks run and before the store
+can mark the event delivered, keeping malformed source evidence available for
+retry or operator repair instead of promoting it into a QGLake handoff. Table
+commit events receive the same treatment for compact
 commit receipt evidence: `request_hash`, `response_hash`,
 `idempotency_key_sha256`, and any present `policy_hash` must be full digests
 before the event can be projected or acknowledged.
@@ -2115,10 +2116,11 @@ SHA-256 digests, and the compact handoff verifier repeats that full-digest
 check for the saved `governedScanProof` arrays. The scan read restriction
 itself is part of that proof: both source replay and compact
 `plannedReadRestriction`/`fetchedReadRestriction` evidence require
-`policy-hashes` to be full `sha256:`-prefixed 64-hex digests, so a
-self-consistent handoff cannot smuggle placeholder policy names through a field
-that later readers treat as integrity evidence. The outbox drain checks the
-same digest shape before acknowledging any pending event that carries
+`policy-hashes` to be non-empty full `sha256:`-prefixed 64-hex digests, so a
+self-consistent handoff cannot smuggle placeholder policy names or empty policy
+anchors through a field that later readers treat as integrity evidence. The
+outbox drain checks the same digest shape and non-empty requirement before
+acknowledging any pending event that carries
 `read-restriction.policy-hashes`, so malformed source evidence is stopped
 before it becomes delivered replay material. Scan replay now gets the same
 drain-side admission check before Grust or OpenLineage projection: planned-scan

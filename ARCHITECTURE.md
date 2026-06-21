@@ -329,7 +329,9 @@ event in that batch is acknowledged, so retry starts from the committed outbox
 state rather than from a partial delivery response. Unsupported outbox event
 types also fail closed during validation before graph emission, lineage
 emission, or delivery acknowledgement, leaving future/custom events pending
-instead of silently dropping them with an empty projection receipt.
+instead of silently dropping them with an empty projection receipt. Governed
+read replay evidence with a `read-restriction.policy-hashes` field must carry a
+non-empty set of full policy digests before it can leave the outbox.
 Exact idempotency replays are verified to return before object-store writes, so
 the committed metadata object remains untouched on retry.
 Commit-history reads are now exposed through the governed management API and

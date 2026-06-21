@@ -1239,6 +1239,12 @@ fn validate_read_restriction_policy_hashes(
             "read restriction policy-hashes must be an array",
         ));
     };
+    if policy_hashes.is_empty() {
+        return Err(outbox_evidence_error(
+            event,
+            "read restriction policy-hashes must not be empty",
+        ));
+    }
     for policy_hash in policy_hashes {
         if !policy_hash
             .as_str()
@@ -10861,6 +10867,80 @@ mod tests {
         assert!(message.contains("read restriction policy-hashes"));
         assert!(message.contains("full SHA-256"));
         assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_empty_read_restriction_policy_hashes() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-empty-policy-hashes".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-planned".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-empty-policy-hashes",
+                    "event-type": "table.scan-planned",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": {
+                            "allowed-columns": ["event_id"],
+                            "row-predicate": {
+                                "type": "not-eq",
+                                "term": "severity",
+                                "value": "debug"
+                            },
+                            "policy-hashes": []
+                        },
+                        "requested-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
+                        "scan-task-count": 1,
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("empty read restriction policy hashes should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.scan-planned"));
+        assert!(message.contains("read restriction policy-hashes must not be empty"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-empty-policy-hashes"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
