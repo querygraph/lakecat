@@ -1102,6 +1102,12 @@ pub async fn drain_outbox_once(
 
 fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatError> {
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
+    if !is_known_outbox_event_type(event.event_type.as_str()) {
+        return Err(outbox_evidence_error(
+            event,
+            "outbox event type is not supported for projection",
+        ));
+    }
     validate_read_restriction_policy_hashes(event, payload.get("read-restriction"))?;
     if event.event_type == "table.commit" {
         validate_table_commit_hash_evidence(event)?;
@@ -1180,6 +1186,43 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
         validate_querygraph_bootstrap_event_evidence(event, payload)?;
     }
     Ok(())
+}
+
+fn is_known_outbox_event_type(event_type: &str) -> bool {
+    matches!(
+        event_type,
+        "catalog.config-read"
+            | "credentials.vend-attempted"
+            | "namespace.created"
+            | "namespace.dropped"
+            | "namespace.listed"
+            | "namespace.loaded"
+            | "policy-binding.listed"
+            | "policy-binding.upserted"
+            | "project.listed"
+            | "project.upserted"
+            | "querygraph.bootstrap"
+            | "server.listed"
+            | "server.upserted"
+            | "storage-profile.listed"
+            | "storage-profile.upserted"
+            | "table.commit"
+            | "table.commits-listed"
+            | "table.created"
+            | "table.deleted"
+            | "table.loaded"
+            | "table.restored"
+            | "table.scan-planned"
+            | "table.scan-tasks-fetched"
+            | "view.dropped"
+            | "view.listed"
+            | "view.loaded"
+            | "view.upserted"
+            | "view.version-receipt-chains-listed"
+            | "view.version-receipts-listed"
+            | "warehouse.listed"
+            | "warehouse.upserted"
+    )
 }
 
 fn validate_read_restriction_policy_hashes(
@@ -12368,6 +12411,70 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "mismatched table soft-delete evidence must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_unknown_event_type_before_projection() {
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-unknown-side-effect".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.future-compaction".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-unknown-side-effect",
+                    "event-type": "table.future-compaction",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": {
+                                "subject": "agent:writer",
+                                "kind": "agent"
+                            },
+                            "action": "table-maintenance",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("unknown outbox event type should fail before delivery");
+
+        let message = err.to_string();
+        assert!(
+            message.contains("outbox event table.future-compaction (lakecat.lineage-and-graph)")
+        );
+        assert!(message.contains("outbox event type is not supported for projection"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-unknown-side-effect"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "unknown event types must remain pending instead of being acknowledged"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "unknown event types must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "unknown event types must fail before lineage projection"
         );
     }
 

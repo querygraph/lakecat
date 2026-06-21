@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected unsupported outbox event types before graph or lineage projection,
+  leaving malformed future/custom events pending instead of silently
+  acknowledging them with an empty projection receipt.
 - Bound captured LakeCat `management-replay` and
   `table-commit-history-replay` text lines to compact QGLake management,
   storage-profile, and table commit-history proof fields, closing the remaining

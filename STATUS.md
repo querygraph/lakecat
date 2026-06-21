@@ -6,6 +6,25 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject unsupported outbox event types before projection`.
+  The service outbox drain now fails closed when a pending
+  `lakecat.lineage-and-graph` event has an event type LakeCat does not know how
+  to project. Unknown future/custom event types remain pending and reach
+  neither graph projection, lineage projection, nor delivery acknowledgement;
+  diagnostics include only the event type, sink, and event-id hash.
+- Local verification for this unsupported outbox event-type slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_unknown_event_type_before_projection -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain_rejects -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind captured QGLake management and commit replay lines to proof fields`.
   Saved handoff verification now recomputes the operator-facing
   `management-replay` and `table-commit-history-replay` text lines from compact

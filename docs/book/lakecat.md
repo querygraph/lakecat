@@ -481,6 +481,9 @@ uncomfortable middle case too: if the first event in a multi-event batch
 already projected to graph and lineage but a later event fails during lineage
 projection, LakeCat still acknowledges none of the events. Recovery starts from
 the committed outbox batch instead of from a half-delivered response.
+The drain also refuses unknown event types before any projection happens. A
+future or custom event stays pending until LakeCat knows how to project it,
+instead of disappearing behind an empty graph/lineage receipt.
 The drain also validates governed-read evidence before projection. If a pending
 event contains a `read-restriction.policy-hashes` array, each entry must already
 be a full `sha256:`-prefixed 64-hex digest. A readable placeholder such as
@@ -2407,9 +2410,9 @@ effects for that batch. The same redaction rule applies to malformed pending
 records. If a custom or corrupted store hands the drain an event whose payload
 cannot be projected, LakeCat reports only the outbox event-id hash and stops
 before graph emission, lineage emission, or delivery acknowledgement. Malformed
-table and principal identity JSON decode failures follow that same pattern:
-they carry event-hash evidence for correlation without echoing the raw event
-identifier into diagnostics.
+table and principal identity JSON decode failures, as well as unsupported event
+types, follow that same pattern: they carry event-hash evidence for correlation
+without echoing the raw event identifier into diagnostics.
 
 ### An Agentic QGLake Flow
 
