@@ -382,7 +382,10 @@ handoff verifier also requires namespace receipt-chain `verifiedChainCount`
 values to match the chain hashes they summarize, requires duplicate-free
 namespace chain and receipt hash arrays, rejects duplicate structural
 `chainHash` values, and requires receipt hashes to match the structural
-per-receipt hashes in those chains exactly. Active accepted views must also have their
+per-receipt hashes in those chains exactly. It recomputes each structural
+`chainHash` from stable view identity, latest version, latest operation,
+tombstone state, and the ordered structural receipt hashes, matching the
+LakeCat service receipt-chain digest. Active accepted views must also have their
 `acceptedReceiptChainHash` in the namespace `chainHashes` evidence, binding
 compact per-view proof to namespace receipt-chain replay without moving
 reusable graph traversal or taxonomy into LakeCat. Tombstoned accepted views

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound compact QGLake structural `chainHash` values to the same
+  content-derived receipt-chain digest that LakeCat service emits, so saved
+  handoff summaries cannot pair valid-looking ordered receipts with a forged
+  accepted view receipt-chain hash.
 - Required compact QGLake namespace view `chainHashes` and `receiptHashes`
   arrays to be duplicate-free, rejected duplicate structural chain hashes, and
   required declared receipt hashes to match the structural

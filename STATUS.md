@@ -6,6 +6,25 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind compact view chain hashes to structural digest`.
+  QGLake handoff verification now recomputes each compact structural
+  `chainHash` from the same content-derived receipt-chain digest that LakeCat
+  service emits: stable view identity, latest view version, latest operation,
+  tombstone state, and the ordered structural receipt hashes. Saved compact
+  view proofs are rejected when a declared/covered chain hash does not match
+  the ordered receipt-chain body.
+- Local verification for this compact structural chain digest slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_view_chain_hash_digest_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs -- --nocapture`;
+  `cargo test -p lakecat-cli qglake`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, ran
+  LakeCat replay, QueryGraph verify/import, recomputed compact structural view
+  receipt-chain digests, and ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Bind compact view receipt hash arrays to structure`.
   QGLake handoff verification now requires each namespace view receipt-chain
   summary's `chainHashes` and `receiptHashes` arrays to be duplicate-free,

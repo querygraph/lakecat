@@ -1840,7 +1840,11 @@ preserving hash-shaped fields. Structural chain bodies cannot repeat a
 are duplicate-free summaries of those same structural chains, and
 `receiptHashes` must match the structural per-receipt hashes exactly, so a
 compact proof cannot hide extra receipt hashes or omit receipts from the
-ordered chain bodies.
+ordered chain bodies. Each structural `chainHash` is also recomputed from the
+same content-derived digest LakeCat service uses for view receipt chains: stable
+view identity, latest version, latest operation, tombstone state, and the
+ordered receipt hashes. A compact proof therefore cannot pair an accepted
+receipt-chain hash with a different ordered receipt body.
 `qglake-verify-handoff` rejects a chain whose first receipt is not version 1
 `upsert`, whose previous links do not point to the prior receipt, whose upsert
 skips a version, whose drop advances the durable version, whose operation is
@@ -1861,8 +1865,9 @@ is the tombstone. Tombstoned views must also include tombstone receipt evidence
 whose `expectedViewVersion` preserves the accepted view version. A consumer can
 reject a handoff whose view history claim lacks identity, accepted-version,
 count-aligned hash-chain evidence, duplicate-free exact structural receipt-hash
-coverage, same-view accepted-chain coverage, tombstone guard evidence,
-same-view tombstone receipt coverage, or replay evidence before
+coverage, content-derived chain-hash agreement, same-view accepted-chain
+coverage, tombstone guard evidence, same-view tombstone receipt coverage, or
+replay evidence before
 parsing the full replay tree. It compares captured LakeCat replay
 `replay-evidence.management` list counts with compact
 `lakecatReplayVerification.managementProof`, requiring positive server,
