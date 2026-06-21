@@ -6,6 +6,17 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Gate lakecat-api release tests explicitly`.
+  The full local `scripts/check-release-readiness.sh` gate now runs
+  `cargo test -p lakecat-api --lib -- --test-threads=1`, and the dependency
+  contract requires that row to stay wired so API-owned compatibility and v4
+  bridge defaults remain part of the local-first release proof.
+- Local verification for this release-gate API test slice is green:
+  `bash -n scripts/check-local-dependency-contract.sh scripts/check-workflow-trigger-contract.sh scripts/check-release-readiness.sh`;
+  `cargo test -p lakecat-api --lib -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`.
+- Latest completed implementation slice:
   `Pin catalog config bridge constants`.
   Catalog configuration compatibility and v4 bridge posture strings now live as
   `lakecat-api` constants, `CatalogConfigResponse::default()` has direct

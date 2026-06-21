@@ -108,6 +108,8 @@ require_pattern 'scripts/check-workflow-trigger-contract.sh' scripts/check-relea
   "release-readiness gate must run the workflow trigger self-test"
 require_pattern 'cargo test --workspace --all-features' scripts/check-release-readiness.sh \
   "release-readiness gate must run the all-features workspace test"
+require_pattern 'cargo test -p lakecat-api --lib' scripts/check-release-readiness.sh \
+  "release-readiness gate must run explicit lakecat-api unit tests"
 require_pattern 'scripts/qglake-handoff-local.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must include the QGLake handoff proof"
 

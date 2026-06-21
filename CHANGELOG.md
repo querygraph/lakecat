@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added explicit `lakecat-api` unit-test coverage to the full local
+  release-readiness gate and required that row in the dependency contract, so
+  API-owned compatibility and v4 bridge contracts remain part of the
+  local-first release proof.
 - Promoted the catalog configuration compatibility and v4 bridge posture
   strings to `lakecat-api` constants, added API-level coverage for the default
   response, and wired service replay validation to the same constants so
