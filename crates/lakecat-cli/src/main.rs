@@ -3052,19 +3052,18 @@ fn require_querygraph_verified_scope(
 ) -> lakecat_core::LakeCatResult<()> {
     let table_count = required_u64(querygraph, "tableCount", "querygraphVerification")?;
     let verified_tables = required_array(querygraph, "verifiedTables", "querygraphVerification")?;
-    if verified_tables.len() as u64 != table_count {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "querygraphVerification.verifiedTables length mismatch: expected={table_count} actual={}",
-            verified_tables.len()
-        )));
-    }
+    let verified_tables = require_unique_stable_id_array(
+        verified_tables,
+        table_count,
+        "querygraphVerification.verifiedTables",
+    )?;
     let expected_table = format!(
         "lakecat:table:{}:{}:{}",
         scope.warehouse, scope.namespace, scope.table
     );
     if !verified_tables
         .iter()
-        .any(|table| table.as_str() == Some(expected_table.as_str()))
+        .any(|table| *table == expected_table.as_str())
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "querygraphVerification.verifiedTables must include {expected_table}"
@@ -3073,12 +3072,11 @@ fn require_querygraph_verified_scope(
 
     let view_count = required_u64(querygraph, "viewCount", "querygraphVerification")?;
     let verified_views = required_array(querygraph, "verifiedViews", "querygraphVerification")?;
-    if verified_views.len() as u64 != view_count {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "querygraphVerification.verifiedViews length mismatch: expected={view_count} actual={}",
-            verified_views.len()
-        )));
-    }
+    let verified_views = require_unique_stable_id_array(
+        verified_views,
+        view_count,
+        "querygraphVerification.verifiedViews",
+    )?;
     for (index, view) in required_array(views, "views", "viewReceiptChainProof")?
         .iter()
         .enumerate()
@@ -3089,10 +3087,7 @@ fn require_querygraph_verified_scope(
             ))
         })?;
         let expected_view = required_str(view, "stableId", "viewReceiptChainProof.views[]")?;
-        if !verified_views
-            .iter()
-            .any(|view| view.as_str() == Some(expected_view))
-        {
+        if !verified_views.iter().any(|view| *view == expected_view) {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "querygraphVerification.verifiedViews must include {expected_view}"
             )));
@@ -3116,6 +3111,40 @@ fn require_qglake_standards_value(value: &Value, label: &str) -> lakecat_core::L
         }
     }
     Ok(())
+}
+
+fn require_unique_stable_id_array<'a>(
+    values: &'a [Value],
+    expected_count: u64,
+    label: &str,
+) -> lakecat_core::LakeCatResult<Vec<&'a str>> {
+    if values.len() as u64 != expected_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} length mismatch: expected={expected_count} actual={}",
+            values.len()
+        )));
+    }
+    let mut stable_ids = Vec::with_capacity(values.len());
+    let mut seen = BTreeSet::new();
+    for (index, value) in values.iter().enumerate() {
+        let stable_id = value.as_str().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label}[{index}] must be a string"
+            ))
+        })?;
+        if stable_id.trim().is_empty() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label}[{index}] must not be empty"
+            )));
+        }
+        if !seen.insert(stable_id) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} must be duplicate-free"
+            )));
+        }
+        stable_ids.push(stable_id);
+    }
+    Ok(stable_ids)
 }
 
 fn require_querygraph_import_matches_verify(
@@ -11153,6 +11182,30 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_verified_tables() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["querygraphVerification"]["tableCount"] = json!(2);
+        summary["querygraphVerification"]["verifiedTables"] = json!([
+            "lakecat:table:local:default:events",
+            "lakecat:table:local:default:events"
+        ]);
+        summary["querygraphImportVerification"]["tableCount"] = json!(2);
+        summary["querygraphImportVerification"]["verifiedTables"] = json!([
+            "lakecat:table:local:default:events",
+            "lakecat:table:local:default:events"
+        ]);
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["tableArtifactCount"] =
+            json!(2);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicated verified tables");
+
+        assert!(err.to_string().contains("querygraphVerification"));
+        assert!(err.to_string().contains("verifiedTables"));
+        assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_verified_view_scope() {
         let mut summary = qglake_handoff_summary_json();
         summary["querygraphVerification"]["verifiedViews"] =
@@ -11188,6 +11241,31 @@ mod tests {
 
         assert!(err.to_string().contains("querygraphVerification"));
         assert!(err.to_string().contains("verifiedViews length mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_verified_views() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["querygraphVerification"]["viewCount"] = json!(2);
+        summary["querygraphVerification"]["verifiedViews"] = json!([
+            "lakecat:view:local:default:active_customers_view",
+            "lakecat:view:local:default:active_customers_view"
+        ]);
+        summary["querygraphImportVerification"]["viewCount"] = json!(2);
+        summary["querygraphImportVerification"]["verifiedViews"] = json!([
+            "lakecat:view:local:default:active_customers_view",
+            "lakecat:view:local:default:active_customers_view"
+        ]);
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["viewArtifactCount"] =
+            json!(2);
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["viewCount"] = json!(2);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicated verified views");
+
+        assert!(err.to_string().contains("querygraphVerification"));
+        assert!(err.to_string().contains("verifiedViews"));
+        assert!(err.to_string().contains("duplicate-free"));
     }
 
     #[test]

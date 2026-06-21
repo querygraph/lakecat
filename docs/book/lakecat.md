@@ -2440,6 +2440,10 @@ bootstrap bundle and reruns the tenant graph and semantic hash verifier. It
 also parses the saved QueryGraph import plan and requires its embedded
 verification, table/view stable ids, semantic hashes, standards, and graph
 node/edge evidence to match the compact QueryGraph import proof. The verifier
+requires the compact `verifiedTables` and `verifiedViews` manifests to be
+duplicate-free as well as count-aligned, so a saved handoff cannot inflate the
+number of accepted tables or views by repeating an already accepted stable id.
+The verifier
 also compares those QueryGraph import-plan graph node and edge counts with the
 verified bootstrap bundle graph counts, so an import plan cannot keep the
 semantic hashes and table/view ids while silently dropping graph material. It

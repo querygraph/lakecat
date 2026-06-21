@@ -6,6 +6,24 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject duplicate QGLake verified manifests`.
+  QGLake handoff summary verification now rejects duplicate `verifiedTables`
+  and `verifiedViews` stable IDs. Archived QueryGraph handoff artifacts can no
+  longer inflate table or view counts by repeating an already accepted LakeCat
+  stable ID while preserving membership checks.
+- Local verification for this QGLake verified-manifest duplicate-ID slice is
+  green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_duplicate_verified_tables -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_duplicate_verified_views -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake -- --test-threads=1`;
+  `scripts/qglake-handoff-local.sh`
+  (green, ending with `QGLake handoff verified`);
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject duplicate QGLake management IDs`.
   QGLake handoff summary verification and lineage-drain verification now reject
   duplicate server, project, warehouse, policy, or storage-profile IDs in

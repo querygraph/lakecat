@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake `verifiedTables` and `verifiedViews` manifests to be
+  duplicate-free in compact handoff summaries, so table/view counts cannot be
+  inflated by repeating already accepted stable IDs.
 - Required QGLake compact management proof IDs to be duplicate-free in saved
   handoff summaries and lineage-drain replay verification, matching the
   management-list service replay invariant for server, project, warehouse,
