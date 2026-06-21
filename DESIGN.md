@@ -489,8 +489,10 @@ from the authorization receipt context, or when returned credential evidence
 or nested storage-profile warehouse / top-level storage-profile id /
 secret-reference evidence drifts from the catalog-derived storage profile,
 principal, governed-read, and TTL fields. Returned credential replay evidence
-must also be duplicate-free by `prefix-hash`, so credential counts cannot be
-inflated with repeated redacted credential entries.
+must also surface redacted `credentialPrefixHashes` and keep them
+count-aligned, full SHA-256-shaped, and duplicate-free by `prefix-hash` in both
+raw lineage drains and compact handoff summaries, so credential counts cannot
+be inflated with repeated redacted credential entries.
 
 View receipt-chain proof must remain a structural proof, not just a bag of
 hashes: the first receipt must be a version-1 upsert without previous-link

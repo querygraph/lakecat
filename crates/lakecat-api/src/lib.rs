@@ -556,6 +556,8 @@ pub struct LineageDrainEventSummary {
     pub standards: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub credential_prefix_hashes: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credential_block_reason: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

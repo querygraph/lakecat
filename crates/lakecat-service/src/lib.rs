@@ -3978,6 +3978,18 @@ fn lineage_drain_event_summary(
                 .and_then(Value::as_str)
         })
         .map(str::to_string);
+    let credential_prefix_hashes = payload
+        .get("credential-response-evidence")
+        .and_then(Value::as_array)
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|entry| entry.get("prefix-hash"))
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
     LineageDrainEventSummary {
         event_id: event.event_id.clone(),
         event_type: event.event_type.clone(),
@@ -4222,6 +4234,7 @@ fn lineage_drain_event_summary(
             .get("credential-count")
             .and_then(Value::as_u64)
             .and_then(|count| usize::try_from(count).ok()),
+        credential_prefix_hashes,
         credential_block_reason: payload
             .get("lakecat:credential-block-reason")
             .and_then(Value::as_str)
@@ -10704,6 +10717,7 @@ mod tests {
         assert_eq!(credential_summary.graph_events, 2);
         assert_eq!(credential_summary.lineage_events, 1);
         assert_eq!(credential_summary.credential_count, Some(0));
+        assert!(credential_summary.credential_prefix_hashes.is_empty());
         assert_eq!(
             credential_summary.credential_block_reason.as_deref(),
             Some("fine-grained read restriction requires Sail-planned reads")

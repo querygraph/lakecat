@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added redacted `credentialPrefixHashes` to QGLake credential replay proof
+  and required raw lineage-drain artifacts plus compact handoff summaries to
+  keep returned credential prefix hashes count-aligned, full SHA-256-shaped,
+  and duplicate-free before credential proof can inflate replay counts.
 - Required raw QGLake lineage-drain view-history summaries to reject duplicate
   `viewVersionReceiptHashes` and `viewVersionReceiptChainHashes`, preventing
   tombstone and namespace receipt-chain replay from inflating view proof before

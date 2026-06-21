@@ -3447,6 +3447,7 @@ fn require_credential_vending_evidence(
         0,
         "credentialVendingProof.restricted",
     )?;
+    require_credential_prefix_hash_evidence(restricted, "credentialVendingProof.restricted")?;
     if required_bool(
         restricted,
         "rawCredentialExceptionAllowed",
@@ -3511,6 +3512,7 @@ fn require_credential_vending_evidence(
         "credentialCount",
         "credentialVendingProof.trustedHuman",
     )?;
+    require_credential_prefix_hash_evidence(trusted, "credentialVendingProof.trustedHuman")?;
     if required_bool(
         trusted,
         "rawCredentialExceptionAllowed",
@@ -3568,6 +3570,24 @@ fn require_credential_vending_evidence(
     )?;
 
     Ok(())
+}
+
+fn require_credential_prefix_hash_evidence(
+    credential: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let credential_count = required_u64(credential, "credentialCount", label)?;
+    let hashes = required_array(credential, "credentialPrefixHashes", label)?;
+    if hashes.len() as u64 != credential_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.credentialPrefixHashes count mismatch: expected={credential_count} actual={}",
+            hashes.len()
+        )));
+    }
+    if credential_count == 0 {
+        return Ok(());
+    }
+    require_full_hash_array(credential, "credentialPrefixHashes", label)
 }
 
 fn require_credential_storage_profile_matches_upsert(
@@ -4714,6 +4734,7 @@ fn qglake_credential_replay_evidence_json(
             "principalSubject": restricted.principal_subject.as_deref(),
             "principalKind": restricted.principal_kind.as_deref(),
             "credentialCount": restricted.credential_count.unwrap_or_default(),
+            "credentialPrefixHashes": &restricted.credential_prefix_hashes,
             "rawCredentialExceptionAllowed": restricted.raw_credential_exception_allowed.unwrap_or_default(),
             "blockReason": restricted.credential_block_reason.as_deref(),
             "maxCredentialTtlSeconds": qglake_event_max_credential_ttl_seconds(restricted),
@@ -4725,6 +4746,7 @@ fn qglake_credential_replay_evidence_json(
             "principalSubject": human.principal_subject.as_deref(),
             "principalKind": human.principal_kind.as_deref(),
             "credentialCount": human.credential_count.unwrap_or_default(),
+            "credentialPrefixHashes": &human.credential_prefix_hashes,
             "rawCredentialExceptionAllowed": human.raw_credential_exception_allowed.unwrap_or_default(),
             "rawCredentialExceptionReason": human.raw_credential_exception_reason.as_deref(),
             "blockReason": human.credential_block_reason.as_deref(),
@@ -8081,6 +8103,7 @@ fn verify_qglake_credential_lineage_projection(
     event: &LineageDrainEventSummary,
     label: &str,
 ) -> lakecat_core::LakeCatResult<()> {
+    verify_qglake_credential_prefix_hashes(event, label)?;
     if event.lineage_events == 0 {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "qglake lineage drain {label} credential replay emitted no lineage projection"
@@ -8110,6 +8133,35 @@ fn verify_qglake_credential_lineage_projection(
         )));
     }
     Ok(())
+}
+
+fn verify_qglake_credential_prefix_hashes(
+    event: &LineageDrainEventSummary,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let credential_count = event.credential_count.ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} credential replay is missing credential count evidence"
+        ))
+    })?;
+    if event.credential_prefix_hashes.len() != credential_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} credential replay credentialPrefixHashes count mismatch: expected={credential_count} actual={}",
+            event.credential_prefix_hashes.len()
+        )));
+    }
+    if credential_count == 0 {
+        return Ok(());
+    }
+    if !qglake_has_full_sha256_hashes(&event.credential_prefix_hashes) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} credential replay is missing full SHA-256 credential prefix hash evidence"
+        )));
+    }
+    require_qglake_duplicate_free_strings(
+        &event.credential_prefix_hashes,
+        &format!("qglake lineage drain {label} credential credentialPrefixHashes"),
+    )
 }
 
 fn verify_qglake_credential_restriction_match(
@@ -10058,6 +10110,7 @@ mod tests {
                         "principalSubject": "did:example:agent",
                         "principalKind": "agent",
                         "credentialCount": 0,
+                        "credentialPrefixHashes": [],
                         "rawCredentialExceptionAllowed": false,
                         "blockReason": QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
                         "maxCredentialTtlSeconds": 300,
@@ -10078,6 +10131,7 @@ mod tests {
                         "principalSubject": "human:qglake-operator",
                         "principalKind": "human",
                         "credentialCount": 1,
+                        "credentialPrefixHashes": [qglake_fixture_hash("human-credential-prefix")],
                         "rawCredentialExceptionAllowed": true,
                         "rawCredentialExceptionReason": QGLAKE_HUMAN_RAW_CREDENTIAL_EXCEPTION_REASON,
                         "blockReason": null,
@@ -10450,6 +10504,7 @@ mod tests {
                         "principalSubject": "did:example:agent",
                         "principalKind": "agent",
                         "credentialCount": 0,
+                        "credentialPrefixHashes": [],
                         "rawCredentialExceptionAllowed": false,
                         "blockReason": QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON,
                         "maxCredentialTtlSeconds": 300,
@@ -10470,6 +10525,7 @@ mod tests {
                         "principalSubject": "human:qglake-operator",
                         "principalKind": "human",
                         "credentialCount": 1,
+                        "credentialPrefixHashes": [qglake_fixture_hash("human-credential-prefix")],
                         "rawCredentialExceptionAllowed": true,
                         "rawCredentialExceptionReason": QGLAKE_HUMAN_RAW_CREDENTIAL_EXCEPTION_REASON,
                         "blockReason": null,
@@ -12396,6 +12452,40 @@ mod tests {
         assert!(err.to_string().contains("credentialVendingProof"));
         assert!(err.to_string().contains("replayEventHashes"));
         assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_credential_prefix_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]
+            .as_object_mut()
+            .unwrap()
+            .remove("credentialPrefixHashes");
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject missing trusted-human credential prefix hashes",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("credentialPrefixHashes"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_credential_prefix_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        let duplicate_hash = qglake_fixture_hash("duplicate-human-credential-prefix");
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]["credentialCount"] =
+            json!(2);
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]["credentialPrefixHashes"] =
+            json!([duplicate_hash, duplicate_hash]);
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject duplicate trusted-human credential prefix hashes",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("credentialPrefixHashes"));
+        assert!(err.to_string().contains("duplicate-free"));
     }
 
     #[test]
@@ -17810,6 +17900,7 @@ mod tests {
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
+                    credential_prefix_hashes: Vec::new(),
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
@@ -17904,6 +17995,7 @@ mod tests {
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
+                    credential_prefix_hashes: Vec::new(),
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
@@ -18000,6 +18092,7 @@ mod tests {
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
+                    credential_prefix_hashes: Vec::new(),
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
@@ -18094,6 +18187,7 @@ mod tests {
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
+                    credential_prefix_hashes: Vec::new(),
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
@@ -18188,6 +18282,7 @@ mod tests {
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
+                    credential_prefix_hashes: Vec::new(),
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
@@ -18282,6 +18377,7 @@ mod tests {
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
+                    credential_prefix_hashes: Vec::new(),
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
@@ -18376,6 +18472,7 @@ mod tests {
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
+                    credential_prefix_hashes: Vec::new(),
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
@@ -18470,6 +18567,7 @@ mod tests {
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
+                    credential_prefix_hashes: Vec::new(),
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
@@ -18564,6 +18662,7 @@ mod tests {
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
+                    credential_prefix_hashes: Vec::new(),
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
@@ -18658,6 +18757,7 @@ mod tests {
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
+                    credential_prefix_hashes: Vec::new(),
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
@@ -18752,6 +18852,7 @@ mod tests {
                     management_scope_warehouse: None,
                     standards: vec!["OpenLineage".to_string()],
                     credential_count: None,
+                    credential_prefix_hashes: Vec::new(),
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
@@ -18846,6 +18947,7 @@ mod tests {
                     management_scope_warehouse: None,
                     standards: qglake_lineage_standards(),
                     credential_count: None,
+                    credential_prefix_hashes: Vec::new(),
                     credential_block_reason: None,
                     raw_credential_exception_allowed: None,
                     raw_credential_exception_reason: None,
@@ -18944,6 +19046,7 @@ mod tests {
                         management_scope_warehouse: None,
                         standards: qglake_lineage_standards(),
                         credential_count: None,
+                        credential_prefix_hashes: Vec::new(),
                         credential_block_reason: None,
                         raw_credential_exception_allowed: None,
                         raw_credential_exception_reason: None,
@@ -19147,6 +19250,50 @@ mod tests {
         assert!(err.to_string().contains(
             "qglake lineage drain trusted human credential replay is missing SHA-256 sink receipt hashes"
         ));
+
+        let mut human_without_prefix_hash = qglake_human_credential_summary();
+        human_without_prefix_hash.credential_prefix_hashes.clear();
+        let err = verify_qglake_lineage_drain(
+            &qglake_lineage_drain_from_summaries(vec![
+                qglake_bootstrap_lineage_summary(),
+                qglake_restricted_credential_summary(),
+                human_without_prefix_hash,
+                qglake_scan_planned_lineage_summary(),
+                qglake_scan_tasks_fetched_lineage_summary(),
+            ]),
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject missing credential prefix hashes");
+        assert!(
+            err.to_string()
+                .contains("trusted human credential replay credentialPrefixHashes count mismatch")
+        );
+
+        let mut human_with_duplicate_prefix_hash = qglake_human_credential_summary();
+        let duplicate_hash = qglake_fixture_hash("duplicate-human-credential-prefix");
+        human_with_duplicate_prefix_hash.credential_count = Some(2);
+        human_with_duplicate_prefix_hash.credential_prefix_hashes =
+            vec![duplicate_hash.clone(), duplicate_hash];
+        let err = verify_qglake_lineage_drain(
+            &qglake_lineage_drain_from_summaries(vec![
+                qglake_bootstrap_lineage_summary(),
+                qglake_restricted_credential_summary(),
+                human_with_duplicate_prefix_hash,
+                qglake_scan_planned_lineage_summary(),
+                qglake_scan_tasks_fetched_lineage_summary(),
+            ]),
+            &verification,
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject duplicate credential prefix hashes");
+        assert!(
+            err.to_string()
+                .contains("trusted human credential credentialPrefixHashes")
+        );
+        assert!(err.to_string().contains("duplicate-free"));
 
         let mut human_without_exception_reason = qglake_human_credential_summary();
         human_without_exception_reason.raw_credential_exception_reason = None;
@@ -21871,6 +22018,7 @@ mod tests {
             management_scope_warehouse: None,
             standards: qglake_lineage_standards(),
             credential_count: None,
+            credential_prefix_hashes: Vec::new(),
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
@@ -21966,6 +22114,7 @@ mod tests {
             management_scope_warehouse: None,
             standards: Vec::new(),
             credential_count: None,
+            credential_prefix_hashes: Vec::new(),
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
@@ -22145,6 +22294,7 @@ mod tests {
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
             credential_count: None,
+            credential_prefix_hashes: Vec::new(),
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
@@ -22255,6 +22405,7 @@ mod tests {
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
             credential_count: None,
+            credential_prefix_hashes: Vec::new(),
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
@@ -22341,6 +22492,7 @@ mod tests {
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
             credential_count: None,
+            credential_prefix_hashes: Vec::new(),
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
@@ -22415,6 +22567,7 @@ mod tests {
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
             credential_count: None,
+            credential_prefix_hashes: Vec::new(),
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
@@ -22491,6 +22644,7 @@ mod tests {
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
             credential_count: None,
+            credential_prefix_hashes: Vec::new(),
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
@@ -22570,6 +22724,7 @@ mod tests {
             management_scope_warehouse: Some("local".to_string()),
             standards: Vec::new(),
             credential_count: None,
+            credential_prefix_hashes: Vec::new(),
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
@@ -22646,6 +22801,7 @@ mod tests {
             management_scope_warehouse: None,
             standards: Vec::new(),
             credential_count: None,
+            credential_prefix_hashes: Vec::new(),
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
@@ -22720,6 +22876,7 @@ mod tests {
             management_scope_warehouse: None,
             standards: Vec::new(),
             credential_count: None,
+            credential_prefix_hashes: Vec::new(),
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
@@ -22794,6 +22951,7 @@ mod tests {
             management_scope_warehouse: None,
             standards: Vec::new(),
             credential_count: None,
+            credential_prefix_hashes: Vec::new(),
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
@@ -22871,6 +23029,7 @@ mod tests {
             management_scope_warehouse: None,
             standards: Vec::new(),
             credential_count: Some(0),
+            credential_prefix_hashes: Vec::new(),
             credential_block_reason: Some(QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON.to_string()),
             raw_credential_exception_allowed: Some(false),
             raw_credential_exception_reason: None,
@@ -22950,6 +23109,7 @@ mod tests {
             management_scope_warehouse: None,
             standards: Vec::new(),
             credential_count: Some(1),
+            credential_prefix_hashes: vec![qglake_fixture_hash("human-credential-prefix")],
             credential_block_reason: None,
             raw_credential_exception_allowed: Some(true),
             raw_credential_exception_reason: Some(

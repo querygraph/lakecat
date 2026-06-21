@@ -2004,7 +2004,11 @@ claim that agents were blocked onto Sail-planned reads or that humans used an
 audited exception unless the captured LakeCat replay proves the same decision.
 Both credential branches must carry replay and OpenLineage arrays whose entries
 are full `sha256:`-prefixed 64-hex digests, so the compact proof cannot replace
-credential receipt evidence with prefix-shaped placeholders.
+credential receipt evidence with prefix-shaped placeholders. They also carry
+`credentialPrefixHashes`: the restricted-agent branch must prove the array is
+empty when zero credentials were returned, while the trusted-human branch must
+prove the array length matches `credentialCount`, every entry is a full
+SHA-256 digest, and no prefix hash is repeated.
 The verifier also binds the operator-facing replay text back to the same
 proof fields. The captured top-level `scan-replay` line is recomputed from
 `governedScanProof`, including plan/fetch task counts, the policy-derived
@@ -2045,8 +2049,11 @@ storage-profile id, catalog profile id, storage provider, credential mode,
 authorization principal, receipt principal, governed-read marker, and any
 policy-derived TTL cap. Returned credential entries must be duplicate-free by
 `prefix-hash`, so a replay event cannot count the same redacted credential
-twice. A malformed credential replay event therefore remains pending instead of
-becoming graph or OpenLineage evidence.
+twice. LakeCat carries those redacted prefix hashes into the raw lineage-drain
+summary as `credentialPrefixHashes`, and the QGLake verifier rejects the drain
+before compact proof generation if the prefix hashes are missing, count-drifted,
+short, or duplicated. A malformed credential replay event therefore remains
+pending instead of becoming graph or OpenLineage evidence.
 Credential replay also rejects a governed `read-restriction` that is missing
 from, or different from, the authorization receipt context, so credential TTL
 and blocked-agent evidence cannot drift away from the receipt that authorized
@@ -2066,7 +2073,10 @@ policy-derived `maxCredentialTtlSeconds` cap, explicitly set
 the trusted-human branch must name a human principal, prove a positive
 credential count, carry the same policy-derived TTL cap, carry the exact
 audited raw-credential exception reason, prove `blockReason` is null, and
-include replay/OpenLineage hashes.
+include replay/OpenLineage hashes. Both branches must also carry
+count-aligned, duplicate-free `credentialPrefixHashes`, with an empty array for
+the blocked branch and full SHA-256 returned-prefix hashes for any issued
+credential.
 The compact verifier has direct negative coverage for the credential-branch
 secret-reference rules too, so a handoff cannot hide malformed provider or hash
 evidence behind an otherwise matching storage-profile upsert proof.
@@ -2272,8 +2282,8 @@ replay has the same shape:
 full SHA-256 commit hashes and unsigned sequence numbers, so malformed
 pointer-log summaries cannot become delivered replay evidence. Credential-vend
 replay gets the same treatment: `credentials.vend-attempted` must carry a
-matching credential count, full credential-response hashes, a full redacted
-storage-profile location hash, internally consistent secret-reference
+matching credential count, full duplicate-free credential-response prefix
+hashes, a full redacted storage-profile location hash, internally consistent secret-reference
 presence/provider/hash fields, a top-level storage-profile id that agrees with
 nested storage-profile evidence, a nested storage-profile warehouse that agrees
 with the event table warehouse, any top-level secret-reference presence value
@@ -2450,12 +2460,12 @@ duplicate-free as well as count-aligned, matching service-side outbox admission,
 so a saved handoff cannot inflate the number of accepted tables or views by
 repeating an already accepted stable id.
 Raw lineage-drain replay summaries and compact handoff proof sections both
-keep replay, OpenLineage, view receipt, and view receipt-chain hash arrays
-duplicate-free, not only `sha256:` shaped. That covers the bootstrap, governed
-scan, management, table commit-history, view tombstone/receipt-chain,
-storage-profile upsert, and credential-vending proof sections, so a source
-replay or archived handoff cannot make an evidence set look larger by
-repeating an already accepted digest.
+keep replay, OpenLineage, credential prefix, view receipt, and view
+receipt-chain hash arrays duplicate-free, not only `sha256:` shaped. That
+covers the bootstrap, governed scan, management, table commit-history, view
+tombstone/receipt-chain, storage-profile upsert, and credential-vending proof
+sections, so a source replay or archived handoff cannot make an evidence set
+look larger by repeating an already accepted digest.
 The verifier
 also compares those QueryGraph import-plan graph node and edge counts with the
 verified bootstrap bundle graph counts, so an import plan cannot keep the

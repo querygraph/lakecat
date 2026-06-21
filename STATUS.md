@@ -6,6 +6,29 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake credential prefix hashes`.
+  Raw QGLake lineage-drain credential replay now carries redacted
+  `credentialPrefixHashes` extracted from credential response evidence and
+  rejects missing, malformed, count-drifted, or duplicate returned credential
+  prefix hashes. Compact QGLake handoff summaries enforce the same
+  count-aligned duplicate-free prefix-hash proof on restricted-agent and
+  trusted-human credential branches.
+- Local verification for this QGLake credential-prefix slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli`;
+  `cargo test -p lakecat-cli credential_prefix_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_duplicate_credential_response_prefix_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `scripts/qglake-handoff-local.sh`
+  (green, ending with `QGLake handoff verified`);
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject duplicate QGLake view drain hashes`.
   Raw QGLake lineage-drain verification now rejects duplicate
   `viewVersionReceiptHashes` and `viewVersionReceiptChainHashes` on

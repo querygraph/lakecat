@@ -466,6 +466,25 @@ function requireHashArray(value, label) {
     process.exit(1);
   }
 }
+function requireCredentialPrefixHashes(value, credentialCount, label) {
+  if (!Array.isArray(value) || value.length !== credentialCount) {
+    console.error(`LakeCat credential replay evidence ${label}.credentialPrefixHashes count mismatch`);
+    process.exit(1);
+  }
+  const seen = new Set();
+  for (const hash of value) {
+    if (typeof hash !== "string" || !/^sha256:[0-9a-fA-F]{64}$/.test(hash)) {
+      console.error(`LakeCat credential replay evidence ${label}.credentialPrefixHashes must contain full SHA-256 hashes`);
+      process.exit(1);
+    }
+    if (seen.has(hash)) {
+      console.error(`LakeCat credential replay evidence ${label}.credentialPrefixHashes must be duplicate-free`);
+      process.exit(1);
+    }
+    seen.add(hash);
+  }
+  return value;
+}
 function requireStorageProfile(value, label) {
   if (!value || typeof value !== "object") {
     console.error(`LakeCat credential replay evidence is missing ${label}.storageProfile`);
@@ -526,6 +545,11 @@ if (restricted.credentialCount !== 0 || restricted.blockReason !== "fine-grained
   console.error("LakeCat restricted credential evidence does not prove Sail-planned reads were required");
   process.exit(1);
 }
+const restrictedCredentialPrefixHashes = requireCredentialPrefixHashes(
+  restricted.credentialPrefixHashes,
+  restricted.credentialCount,
+  "restricted"
+);
 requireHashArray(restricted.replayEventHashes, "restricted replayEventHashes");
 requireHashArray(restricted.openLineageHashes, "restricted openLineageHashes");
 const restrictedStorageProfile = requireStorageProfile(restricted.storageProfile, "restricted");
@@ -542,6 +566,11 @@ if (!(trustedHuman.credentialCount > 0) || trustedHuman.rawCredentialExceptionAl
   console.error("LakeCat trusted-human credential evidence does not prove audited credential vending");
   process.exit(1);
 }
+const trustedHumanCredentialPrefixHashes = requireCredentialPrefixHashes(
+  trustedHuman.credentialPrefixHashes,
+  trustedHuman.credentialCount,
+  "trusted-human"
+);
 if (trustedHuman.rawCredentialExceptionReason !== "trusted human principal may use audited raw credential vending") {
   console.error("LakeCat trusted-human credential evidence is missing the audited exception reason");
   process.exit(1);
@@ -555,6 +584,7 @@ process.stdout.write(JSON.stringify({
     principalSubject: restricted.principalSubject,
     principalKind: restricted.principalKind,
     credentialCount: restricted.credentialCount,
+    credentialPrefixHashes: restrictedCredentialPrefixHashes,
     rawCredentialExceptionAllowed: restricted.rawCredentialExceptionAllowed,
     blockReason: restricted.blockReason,
     maxCredentialTtlSeconds: restrictedMaxCredentialTtlSeconds,
@@ -566,6 +596,7 @@ process.stdout.write(JSON.stringify({
     principalSubject: trustedHuman.principalSubject,
     principalKind: trustedHuman.principalKind,
     credentialCount: trustedHuman.credentialCount,
+    credentialPrefixHashes: trustedHumanCredentialPrefixHashes,
     rawCredentialExceptionAllowed: trustedHuman.rawCredentialExceptionAllowed,
     rawCredentialExceptionReason: trustedHuman.rawCredentialExceptionReason,
     blockReason: trustedHuman.blockReason ?? null,
