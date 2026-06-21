@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required `storage-profile.upserted` outbox admission to enforce
+  provider/issuance-mode compatibility before acknowledgement, graph
+  projection, or OpenLineage projection.
 - Required `storage-profile.upserted` outbox admission to keep
   `secret-ref-present` evidence consistent with credential issuance mode before
   acknowledgement, graph projection, or OpenLineage projection.

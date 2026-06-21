@@ -590,6 +590,9 @@ audit/outbox evidence records `location-prefix-hash`, and raw
 Storage-profile replay must also carry unambiguous credential-root identity:
 non-empty profile id, valid nested warehouse matching any top-level warehouse,
 valid provider, and valid issuance mode.
+Provider and issuance-mode compatibility must be replay-checked too:
+`local-file-no-secret` requires the file provider, while
+`short-lived-secret-ref` requires a cloud object provider.
 Secret-reference presence must match issuance mode: short-lived secret-ref
 profiles require redacted secret-ref proof, while governed-read and no-secret
 profiles cannot carry secret-reference proof.

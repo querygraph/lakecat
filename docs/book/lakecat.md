@@ -1256,6 +1256,9 @@ absent. The same admission check validates the credential-root identity before
 projection: profile id must be non-empty, the nested warehouse must be valid
 and match any top-level warehouse field, and provider plus issuance mode must
 use LakeCat's supported storage-profile vocabulary.
+Provider and issuance-mode compatibility is replay-checked as well:
+`local-file-no-secret` is only valid for the file provider, and
+`short-lived-secret-ref` is only valid for cloud object providers.
 Secret-reference presence must also agree with issuance mode: short-lived
 secret-ref profiles must carry redacted secret-reference proof, while governed
 and no-secret profiles cannot carry secret-reference proof.

@@ -6,6 +6,20 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate storage-profile provider modes`.
+  Service `storage-profile.upserted` outbox admission now rejects
+  credential-root replay whose provider and issuance mode could not have passed
+  the management write path: `local-file-no-secret` requires the file provider,
+  and `short-lived-secret-ref` requires a cloud object provider.
+- Local verification for this storage-profile provider mode slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service storage_profile_local_no_secret_remote_provider -- --test-threads=1`;
+  `cargo test -p lakecat-service storage_profile_short_lived_file_provider -- --test-threads=1`;
+  `cargo test -p lakecat-service storage_profile -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate storage-profile secret-ref modes`.
   Service `storage-profile.upserted` outbox admission now rejects
   credential-root replay whose `secret-ref-present` flag conflicts with

@@ -2073,14 +2073,15 @@ fn validate_storage_profile_upsert_event_evidence(
             ));
         }
     }
-    required_string_field(event, storage_profile, "provider", "storage-profile upsert")?
-        .parse::<StorageProvider>()
-        .map_err(|_| {
-            outbox_evidence_error(
-                event,
-                "storage-profile upsert evidence has invalid provider",
-            )
-        })?;
+    let provider =
+        required_string_field(event, storage_profile, "provider", "storage-profile upsert")?
+            .parse::<StorageProvider>()
+            .map_err(|_| {
+                outbox_evidence_error(
+                    event,
+                    "storage-profile upsert evidence has invalid provider",
+                )
+            })?;
     let issuance_mode = required_string_field(
         event,
         storage_profile,
@@ -2102,6 +2103,25 @@ fn validate_storage_profile_upsert_event_evidence(
         return Err(outbox_evidence_error(
             event,
             "storage-profile upsert secret-ref-present must match issuance-mode",
+        ));
+    }
+    if matches!(issuance_mode, CredentialIssuanceMode::LocalFileNoSecret)
+        && provider != StorageProvider::File
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "storage-profile upsert local-file-no-secret issuance mode requires file provider",
+        ));
+    }
+    if matches!(issuance_mode, CredentialIssuanceMode::ShortLivedSecretRef)
+        && !matches!(
+            provider,
+            StorageProvider::S3 | StorageProvider::Gcs | StorageProvider::Azure
+        )
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "storage-profile upsert short-lived-secret-ref issuance mode requires cloud object provider",
         ));
     }
     if storage_profile.get("secret-ref").is_some() {
@@ -17729,6 +17749,134 @@ mod tests {
         assert!(message.contains("secret-ref-present must match issuance-mode"));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-storage-profile-secret-ref-mode-unexpected-ref"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_storage_profile_local_no_secret_remote_provider() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-storage-profile-local-no-secret-remote-provider".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-storage-profile-local-no-secret-remote-provider",
+                    "event-type": "storage-profile.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "storage-profile-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "storage-profile": {
+                            "profile-id": "s3-events",
+                            "warehouse": "local",
+                            "location-prefix-hash": content_hash_json(&json!({
+                                "location-prefix": "s3://lakecat/events"
+                            })).unwrap(),
+                            "provider": "s3",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10).await.expect_err(
+            "storage-profile local-file-no-secret mode with remote provider should fail",
+        );
+        let message = err.to_string();
+        assert!(message.contains("storage-profile.upserted"));
+        assert!(message.contains("local-file-no-secret issuance mode requires file provider"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-storage-profile-local-no-secret-remote-provider"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_storage_profile_short_lived_file_provider() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-storage-profile-short-lived-file-provider".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-storage-profile-short-lived-file-provider",
+                    "event-type": "storage-profile.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "storage-profile-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "storage-profile": {
+                            "profile-id": "file-events",
+                            "warehouse": "local",
+                            "location-prefix-hash": content_hash_json(&json!({
+                                "location-prefix": "file:///tmp/lakecat/events"
+                            })).unwrap(),
+                            "provider": "file",
+                            "issuance-mode": "short-lived-secret-ref",
+                            "secret-ref-present": true,
+                            "secret-ref-provider": "typesec",
+                            "secret-ref-hash": content_hash_json(&json!({
+                                "secret-ref": "typesec://env/LAKECAT_FILE_EVENTS"
+                            })).unwrap(),
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10).await.expect_err(
+            "storage-profile short-lived-secret-ref mode with file provider should fail",
+        );
+        let message = err.to_string();
+        assert!(message.contains("storage-profile.upserted"));
+        assert!(
+            message.contains("short-lived-secret-ref issuance mode requires cloud object provider")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-storage-profile-short-lived-file-provider"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
