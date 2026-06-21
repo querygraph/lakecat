@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Cross-checked Turso metadata pointer-log row fields against decoded
+  `TableCommitRecord` JSON when reading commit history, rejecting row/JSON
+  drift before commit replay can observe contradictory sequence, pointer,
+  request-hash, or timestamp evidence.
 - Validated table commit-history records at memory and Turso read boundaries,
   rejecting malformed durable pointer-log JSON whose table, sequence, pointer,
   request, response, or idempotency-hash evidence would make replay unsafe.

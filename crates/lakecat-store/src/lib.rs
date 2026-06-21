@@ -4306,7 +4306,10 @@ pub mod turso_store {
             let end_version = end_version.unwrap_or(i64::MAX as u64);
             let mut rows = conn
                 .query(
-                    "select record_json from metadata_pointer_log
+                    "select sequence_number, previous_metadata_location,
+                            new_metadata_location, request_hash, committed_at,
+                            record_json
+                     from metadata_pointer_log
                      where table_key = ?1
                        and sequence_number >= ?2
                        and sequence_number <= ?3
@@ -4321,8 +4324,9 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut commits = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                let commit: TableCommitRecord = decode_json(row_string(&row, 0)?)?;
+                let commit: TableCommitRecord = decode_json(row_string(&row, 5)?)?;
                 commit.validate_for_table(ident)?;
+                validate_turso_commit_record_row(&commit, &row)?;
                 commits.push(commit);
             }
             Ok(commits)
@@ -5317,6 +5321,46 @@ pub mod turso_store {
         })
     }
 
+    fn validate_turso_commit_record_row(
+        record: &TableCommitRecord,
+        row: &Row,
+    ) -> LakeCatResult<()> {
+        let row_sequence_number = u64::try_from(row_i64(row, 0)?).map_err(|_| {
+            LakeCatError::Internal(
+                "Turso metadata pointer log sequence number must be positive".to_string(),
+            )
+        })?;
+        if record.sequence_number != row_sequence_number {
+            return Err(LakeCatError::Internal(
+                "table commit record sequence number does not match pointer log row".to_string(),
+            ));
+        }
+        if record.previous_metadata_location != row_optional_string(row, 1)? {
+            return Err(LakeCatError::Internal(
+                "table commit record previous metadata location does not match pointer log row"
+                    .to_string(),
+            ));
+        }
+        if record.new_metadata_location != row_optional_string(row, 2)? {
+            return Err(LakeCatError::Internal(
+                "table commit record new metadata location does not match pointer log row"
+                    .to_string(),
+            ));
+        }
+        if record.request_hash != row_string(row, 3)? {
+            return Err(LakeCatError::Internal(
+                "table commit record request hash does not match pointer log row".to_string(),
+            ));
+        }
+        if record.committed_at != parse_turso_datetime(row_string(row, 4)?, "commit committed_at")?
+        {
+            return Err(LakeCatError::Internal(
+                "table commit record timestamp does not match pointer log row".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     fn parse_turso_datetime(value: String, name: &str) -> LakeCatResult<chrono::DateTime<Utc>> {
         chrono::DateTime::parse_from_rfc3339(&value)
             .map(|datetime| datetime.with_timezone(&Utc))
@@ -6166,6 +6210,76 @@ pub mod turso_store {
                 LakeCatError::Internal(message)
                     if message.contains(
                         "table commit record idempotency key hash must be full SHA-256 evidence"
+                    )
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_commit_history_row_json_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("events").unwrap(),
+            );
+            store
+                .create_namespace(&warehouse, namespace.clone())
+                .await
+                .unwrap();
+            store
+                .create_table(TableRecord::new(
+                    ident.clone(),
+                    "file:///tmp/events".to_string(),
+                    Some("file:///tmp/events/metadata/00000.json".to_string()),
+                    serde_json::json!({"format-version": 3}),
+                    Principal::anonymous(),
+                ))
+                .await
+                .unwrap();
+            store
+                .commit_table(
+                    &ident,
+                    TableCommit {
+                        requirements: vec![],
+                        updates: vec![serde_json::json!({"action": "noop"})],
+                        expected_previous_metadata_location: Some(
+                            "file:///tmp/events/metadata/00000.json".to_string(),
+                        ),
+                        new_metadata_location: Some(
+                            "file:///tmp/events/metadata/00001.json".to_string(),
+                        ),
+                        new_metadata: Some(serde_json::json!({"format-version": 3})),
+                        idempotency_key: None,
+                        idempotency_request_hash: None,
+                        principal: Principal::anonymous(),
+                        authorization_receipt: None,
+                    },
+                )
+                .await
+                .unwrap();
+            let mut records = store.table_commit_records(&ident, 1, None).await.unwrap();
+            assert_eq!(records.len(), 1);
+            records[0].sequence_number = 2;
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update metadata_pointer_log set record_json = ?2 where table_key = ?1",
+                (table_key(&ident), encode_json(&records[0]).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .table_commit_records(&ident, 0, None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains(
+                        "table commit record sequence number does not match pointer log row"
                     )
             ));
         }

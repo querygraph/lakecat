@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate Turso pointer-log row drift`.
+  Turso `table_commit_records` now reads indexed pointer-log columns alongside
+  `record_json` and cross-checks sequence number, previous/new metadata
+  pointers, request hash, and committed timestamp before returning decoded
+  commit history. A corrupted JSON record can no longer contradict the durable
+  row evidence observed by replay callers.
+- Local verification for this Turso pointer-log consistency slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_commit_history_row_json_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate commit-history read records`.
   `TableCommitRecord::validate_for_table` now protects memory and Turso
   `table_commit_records` reads from malformed durable pointer-log JSON: table
