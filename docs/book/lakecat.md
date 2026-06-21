@@ -1938,10 +1938,12 @@ so an archived replay artifact cannot make empty planned or fetched
 `allowed-columns` look like a readable operator summary. It also compares the captured
 `replay-evidence.tableCommitHistory` object with
 `tableCommitHistoryProof`, including the commit count, sequence numbers, commit
-hashes, graph event count, replay hashes, and OpenLineage hashes that prove the
-pointer-log commit history was not rewritten between replay and summary and
-that the commit-history replay projected catalog graph evidence. The compact
-verifier also requires the commit count to match the sequence-number and
+hashes, replay principal subject/kind, graph event count, replay hashes, and
+OpenLineage hashes that prove the pointer-log commit history was not rewritten
+between replay and summary and that the commit-history replay projected catalog
+graph evidence for the accepted actor. The compact verifier also requires the
+commit-history principal subject and kind to match the accepted QGLake handoff
+principal, requires the commit count to match the sequence-number and
 commit-hash arrays, requires every sequence number to be positive and strictly
 increasing, requires commit hashes to be duplicate-free, and requires positive
 graph event evidence plus replay and OpenLineage receipt hashes. Captured
@@ -2084,8 +2086,8 @@ trusted-human exception, TTL caps, and redacted storage-profile anchors. The
 captured `management-replay` line is also recomputed from `managementProof` and
 `storageProfileUpsertProof`, while `table-commit-history-replay` is recomputed
 from `tableCommitHistoryProof`. A saved artifact therefore cannot keep valid
-structured proof while presenting a different terminal transcript to an
-operator.
+structured proof while presenting a different terminal transcript or
+principal-attribution story to an operator.
 Each credential branch carries the same redacted storage-scope anchor as the
 storage-profile upsert proof: `locationPrefixHash` binds the credential-vend
 attempt to the configured storage root without replaying the raw prefix. That
@@ -2353,8 +2355,10 @@ and a valid authorization receipt principal with matching values, and full
 SHA-256 commit hash evidence before graph or OpenLineage projection can start.
 Commit-history replay has the same shape:
 `table.commits-listed` event must carry a `commit-count` that matches both
-full SHA-256 commit hashes and unsigned sequence numbers, so malformed
-pointer-log summaries cannot become delivered replay evidence. Credential-vend
+full SHA-256 commit hashes and unsigned sequence numbers; compact QGLake proof
+also binds that pointer-log replay to the accepted principal subject/kind, so
+malformed or actor-drifted pointer-log summaries cannot become delivered replay
+evidence. Credential-vend
 replay gets the same treatment: `credentials.vend-attempted` must carry a
 matching credential count, full duplicate-free credential-response prefix
 hashes, a full redacted storage-profile location hash, internally consistent secret-reference

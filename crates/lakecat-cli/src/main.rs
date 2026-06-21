@@ -2009,6 +2009,8 @@ fn verify_lakecat_replay_table_commit_history_matches_summary(
         "commitCount",
         "sequenceNumbers",
         "commitHashes",
+        "principalSubject",
+        "principalKind",
         "graphEvents",
         "replayEventHashes",
         "openLineageHashes",
@@ -3023,7 +3025,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "tableCommitHistoryProof",
         "lakecatReplayVerification",
     )?;
-    require_table_commit_history_evidence(commit_history)?;
+    require_table_commit_history_evidence(commit_history, principal, "agent")?;
 
     let management = required_object(lakecat, "managementProof", "lakecatReplayVerification")?;
     require_management_evidence(
@@ -3385,7 +3387,21 @@ fn require_management_evidence(
 
 fn require_table_commit_history_evidence(
     commit_history: &serde_json::Map<String, Value>,
+    principal: &str,
+    principal_kind: &str,
 ) -> lakecat_core::LakeCatResult<()> {
+    require_string_match(
+        commit_history,
+        "principalSubject",
+        principal,
+        "tableCommitHistoryProof",
+    )?;
+    require_string_match(
+        commit_history,
+        "principalKind",
+        principal_kind,
+        "tableCommitHistoryProof",
+    )?;
     let commit_count =
         require_positive_u64(commit_history, "commitCount", "tableCommitHistoryProof")?;
     let sequence_numbers =
@@ -4861,6 +4877,8 @@ fn qglake_table_commit_history_replay_evidence_json(drain: &LineageDrainResponse
         "commitCount": commit_history.table_commit_count.unwrap_or_default(),
         "sequenceNumbers": &commit_history.table_commit_sequence_numbers,
         "commitHashes": &commit_history.table_commit_hashes,
+        "principalSubject": commit_history.principal_subject.as_deref(),
+        "principalKind": commit_history.principal_kind.as_deref(),
         "graphEvents": commit_history.graph_events,
         "replayEventHashes": &commit_history.replay_event_hashes,
         "openLineageHashes": &commit_history.replay_open_lineage_hashes,
@@ -10242,6 +10260,8 @@ mod tests {
                     "commitCount": 1,
                     "sequenceNumbers": [1],
                     "commitHashes": [qglake_fixture_hash("commit")],
+                    "principalSubject": "did:example:agent",
+                    "principalKind": "agent",
                     "graphEvents": 1,
                     "replayEventHashes": [qglake_fixture_hash("commit-replay")],
                     "openLineageHashes": [qglake_fixture_hash("commit-openlineage")]
@@ -10641,6 +10661,8 @@ mod tests {
                     "commitCount": 1,
                     "sequenceNumbers": [1],
                     "commitHashes": [qglake_fixture_hash("commit")],
+                    "principalSubject": "did:example:agent",
+                    "principalKind": "agent",
                     "graphEvents": 1,
                     "replayEventHashes": [qglake_fixture_hash("commit-replay")],
                     "openLineageHashes": [qglake_fixture_hash("commit-openlineage")]
@@ -12708,6 +12730,34 @@ mod tests {
         assert!(err.to_string().contains("tableCommitHistoryProof"));
         assert!(err.to_string().contains("sequenceNumbers"));
         assert!(err.to_string().contains("length mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_commit_history_principal() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("principalSubject");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing commit-history principal proof");
+
+        assert!(err.to_string().contains("tableCommitHistoryProof"));
+        assert!(err.to_string().contains("principalSubject"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_commit_history_principal_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["principalSubject"] =
+            json!("did:example:other");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject commit-history principal drift");
+
+        assert!(err.to_string().contains("tableCommitHistoryProof"));
+        assert!(err.to_string().contains("principalSubject mismatch"));
     }
 
     #[test]
@@ -15053,6 +15103,28 @@ mod tests {
             .expect_err("captured replay commit-history proof drift should be rejected");
         assert!(err.to_string().contains(
             "captured LakeCat replay output.replay-evidence.tableCommitHistory.commitCount mismatch"
+        ));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_commit_history_principal_drift() {
+        let temp = qglake_temp_dir("handoff-captured-table-commit-history-principal-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["tableCommitHistory"]["principalSubject"] =
+            json!("did:example:other");
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay commit-history principal drift should be rejected");
+        assert!(err.to_string().contains(
+            "captured LakeCat replay output.replay-evidence.tableCommitHistory.principalSubject mismatch"
         ));
     }
 

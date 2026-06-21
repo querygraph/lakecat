@@ -6,6 +6,22 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake commit-history replay principal`.
+  Compact QGLake `tableCommitHistoryProof` and captured LakeCat replay output
+  now carry the accepted replay principal subject/kind, and the verifier
+  rejects saved handoffs whose commit-history actor proof is missing or drifts.
+- Local verification for this QGLake commit-history principal slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_commit_history_principal -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_commit_history_principal_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_commit_history_principal_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --test-threads=1`;
+  `cargo test -p lakecat-cli -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover table commit receipt principal replay`.
   Service `table.commit` outbox admission now has explicit regression coverage
   proving replay that omits the authorization receipt principal fails before

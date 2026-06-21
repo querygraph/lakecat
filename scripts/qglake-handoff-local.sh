@@ -775,9 +775,10 @@ process.stdout.write(JSON.stringify({
 
 table_commit_history_evidence_json() {
   local file="$1"
+  local expected_principal="$2"
   node -e '
 const fs = require("fs");
-const [file] = process.argv.slice(1);
+const [file, expectedPrincipal] = process.argv.slice(1);
 const replay = JSON.parse(fs.readFileSync(file, "utf8"));
 const evidence = replay["replay-evidence"]?.tableCommitHistory;
 if (!evidence || typeof evidence !== "object") {
@@ -804,6 +805,14 @@ function requireHashArray(value, label) {
   }
 }
 requirePositiveInteger(evidence.commitCount, "commitCount");
+if (evidence.principalSubject !== expectedPrincipal) {
+  console.error(`LakeCat table commit-history replay principal mismatch: expected=${expectedPrincipal} actual=${evidence.principalSubject}`);
+  process.exit(1);
+}
+if (evidence.principalKind !== "agent") {
+  console.error("LakeCat table commit-history replay evidence does not prove an agent principal");
+  process.exit(1);
+}
 requireArray(evidence.sequenceNumbers, "sequenceNumbers");
 if (evidence.sequenceNumbers.some((item) => !Number.isInteger(item) || item <= 0)) {
   console.error("LakeCat table commit-history replay evidence has invalid sequenceNumbers");
@@ -817,11 +826,13 @@ process.stdout.write(JSON.stringify({
   commitCount: evidence.commitCount,
   sequenceNumbers: evidence.sequenceNumbers,
   commitHashes: evidence.commitHashes,
+  principalSubject: evidence.principalSubject,
+  principalKind: evidence.principalKind,
   graphEvents: evidence.graphEvents,
   replayEventHashes: evidence.replayEventHashes,
   openLineageHashes: evidence.openLineageHashes,
 }));
-' "$file"
+' "$file" "$expected_principal"
 }
 
 view_receipt_chain_evidence_json() {
@@ -1049,7 +1060,7 @@ write_summary() {
   lakecat_storage_profile_upsert_evidence="$(storage_profile_upsert_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_credential_vending_evidence="$(credential_vending_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_governed_scan_evidence="$(governed_scan_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
-  lakecat_table_commit_history_evidence="$(table_commit_history_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
+  lakecat_table_commit_history_evidence="$(table_commit_history_evidence_json "$LAKECAT_REPLAY_OUTPUT" "$PRINCIPAL")"
   lakecat_management_evidence="$(management_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_view_receipt_chain_evidence="$(view_receipt_chain_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   verified_tables="$(json_field "$QUERYGRAPH_VERIFY_OUTPUT" "table-count")"

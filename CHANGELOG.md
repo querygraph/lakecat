@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound compact QGLake table commit-history proof and captured LakeCat replay
+  output to the accepted replay principal subject and kind, rejecting saved
+  handoffs that drop or drift commit-history actor evidence.
 - Added regression coverage requiring `table.commit` replay evidence to carry
   the authorization receipt principal before acknowledgement, graph projection,
   or OpenLineage projection.
