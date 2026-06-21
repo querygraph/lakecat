@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog-concepts material to distinguish
+  standard Iceberg vocabulary from LakeCat implementation choices and
+  QueryGraph/TypeSec control-plane extensions, including a detailed argument
+  for keeping reusable Iceberg planning and validation work in Sail.
 - Added `scripts/check-release-readiness.sh` as the local-first first-release
   gate, with full and quick modes covering dependency contracts, formatting,
   core feature tests, book rebuilds, and QGLake handoff proof.

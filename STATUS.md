@@ -6,6 +6,21 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Expand catalog concepts in the LakeCat book`.
+  The book now separates standard Iceberg catalog vocabulary from LakeCat
+  implementation choices and QueryGraph/TypeSec control-plane extensions, and
+  makes the detailed case for pushing reusable Iceberg planning, validation,
+  pruning, delete handling, and metadata-as-data work into Sail.
+- Local verification for this book slice is green:
+  `docs/book/build.sh`;
+  `pdftotext -layout docs/book/dist/lakecat.pdf -`;
+  `git diff --check`.
+- Release-gate note:
+  A full `scripts/check-release-readiness.sh` run was started before this book
+  slice and progressed through the default workspace test suites, then was
+  interrupted during the `qglake-fixture` CLI compile when the user redirected
+  the work to book content. It is not counted as a green release gate.
+- Latest completed implementation slice:
   `Add release-readiness local gate`.
   `scripts/check-release-readiness.sh` now codifies the local-first first
   release gate with full and quick modes, and the dependency-contract audit now
