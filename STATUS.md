@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate pending outbox reads`.
+  `OutboxEvent::validate_pending` now protects memory and Turso
+  `pending_outbox_events` reads from corrupted event ids, missing or drifted
+  payload `event-type` values, empty sinks, and already-delivered rows before
+  graph or lineage projection can observe the batch.
+- Local verification for this pending-outbox read validation slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_corrupt_pending_outbox_event_ids -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_corrupt_pending_outbox_payloads -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate Turso pointer-log row drift`.
   Turso `table_commit_records` now reads indexed pointer-log columns alongside
   `record_json` and cross-checks sequence number, previous/new metadata

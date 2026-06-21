@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Validated pending outbox events at memory and Turso read boundaries, rejecting
+  corrupted event ids, missing or drifted payload event types, empty sinks, and
+  already-delivered rows before graph or lineage projection can observe them.
 - Cross-checked Turso metadata pointer-log row fields against decoded
   `TableCommitRecord` JSON when reading commit history, rejecting row/JSON
   drift before commit replay can observe contradictory sequence, pointer,

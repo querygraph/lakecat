@@ -1136,6 +1136,39 @@ pub struct OutboxEvent {
     pub delivered_at: Option<DateTime<Utc>>,
 }
 
+impl OutboxEvent {
+    pub fn validate_pending(&self) -> LakeCatResult<()> {
+        if self.delivered_at.is_some() {
+            return Err(LakeCatError::Internal(
+                "pending outbox event must not already be delivered".to_string(),
+            ));
+        }
+        if self.sink.trim().is_empty() {
+            return Err(LakeCatError::Internal(
+                "pending outbox event sink must not be empty".to_string(),
+            ));
+        }
+        let payload_event_type = self
+            .payload
+            .get("event-type")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                LakeCatError::Internal("pending outbox payload missing event-type".to_string())
+            })?;
+        if payload_event_type != self.event_type {
+            return Err(LakeCatError::Internal(
+                "pending outbox event type does not match payload".to_string(),
+            ));
+        }
+        if self.event_id != content_hash_json(&self.payload)? {
+            return Err(LakeCatError::Internal(
+                "pending outbox event id does not match payload hash".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CatalogAuditEvent {
     pub event_type: String,
@@ -1988,6 +2021,9 @@ impl CatalogStore for MemoryCatalogStore {
                 .then_with(|| left.event_id.cmp(&right.event_id))
         });
         events.truncate(limit);
+        for event in &events {
+            event.validate_pending()?;
+        }
         Ok(events)
     }
 
@@ -3121,6 +3157,44 @@ mod memory_tests {
                 .is_empty()
         );
         assert_eq!(store.mark_outbox_delivered(&event_ids).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_corrupt_pending_outbox_event_ids() {
+        let store = MemoryCatalogStore::new();
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        store
+            .record_audit_event(
+                CatalogAuditEvent::new(
+                    "querygraph.bootstrap",
+                    Some(ident.clone()),
+                    Principal::anonymous(),
+                    serde_json::json!({
+                        "event-type": "querygraph.bootstrap",
+                        "table": ident,
+                        "manifest-hash": "lakecat:test"
+                    }),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        store.state.write().await.outbox_events[0].event_id = "sha256:short".to_string();
+
+        let err = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("pending outbox event id does not match payload hash")
+        ));
     }
 
     #[tokio::test]
@@ -4907,7 +4981,9 @@ pub mod turso_store {
 
             let mut events = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                events.push(outbox_event_from_row(&row)?);
+                let event = outbox_event_from_row(&row)?;
+                event.validate_pending()?;
+                events.push(event);
             }
             Ok(events)
         }
@@ -6770,6 +6846,61 @@ pub mod turso_store {
                 credentials.payload["payload"]["authorization-receipt"]["action"],
                 serde_json::json!("credentials-vend")
             );
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_corrupt_pending_outbox_payloads() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            store
+                .record_audit_event(
+                    CatalogAuditEvent::new(
+                        "querygraph.bootstrap",
+                        Some(ident.clone()),
+                        Principal::anonymous(),
+                        serde_json::json!({
+                            "event-type": "querygraph.bootstrap",
+                            "table": ident,
+                            "manifest-hash": "lakecat:test"
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 1);
+
+            let mut drifted_payload = pending[0].payload.clone();
+            drifted_payload["event-type"] = serde_json::json!("querygraph.bootstrap.drifted");
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update outbox_events set payload_json = ?2 where event_id = ?1",
+                (
+                    pending[0].event_id.as_str(),
+                    encode_json(&drifted_payload).unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("pending outbox event type does not match payload")
+                        || message.contains("pending outbox event id does not match payload hash")
+            ));
         }
 
         #[tokio::test]
