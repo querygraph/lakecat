@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rejected governed scan replay with empty `read-restriction.allowed-columns`
+  before outbox delivery, matching live scan planning's fail-closed behavior
+  when a policy leaves no readable columns.
 - Required governed scan-planned replay `effective-stats-fields` to stay inside
   `read-restriction.allowed-columns` before outbox delivery, so stats evidence
   cannot preserve a forbidden column after projection has been narrowed.

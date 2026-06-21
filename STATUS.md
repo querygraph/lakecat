@@ -6,6 +6,27 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject empty scan allowed columns`.
+  Outbox admission for governed `table.scan-planned` replay now rejects an
+  empty `read-restriction.allowed-columns` array instead of treating it as an
+  unrestricted read. This aligns durable replay with live planning's
+  fail-closed behavior when policy leaves no readable columns before graph
+  projection, OpenLineage projection, or delivery acknowledgement.
+- Local verification for this empty scan allowed-columns slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan_planned_empty_allowed_columns -- --test-threads=1`;
+  `cargo test -p lakecat-service scan_planned -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan_planned_stats_field_policy_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject scan stats policy drift`.
   Outbox admission for `table.scan-planned` now rejects governed replay when
   `effective-stats-fields` includes a field outside

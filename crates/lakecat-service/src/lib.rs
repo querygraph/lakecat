@@ -1807,15 +1807,8 @@ fn validate_effective_projection_matches_read_restriction(
     if read_restriction.get("allowed-columns").is_none() {
         return Ok(());
     }
-    let allowed_columns = validate_required_string_array_field(
-        event,
-        read_restriction,
-        "allowed-columns",
-        &format!("{label} read-restriction"),
-    )?;
-    if allowed_columns.is_empty() {
-        return Ok(());
-    }
+    let allowed_columns =
+        validate_read_restriction_allowed_columns(event, read_restriction, label)?;
     let allowed_columns = allowed_columns.iter().collect::<BTreeSet<_>>();
     if !effective_projection
         .iter()
@@ -1841,15 +1834,8 @@ fn validate_effective_stats_matches_read_restriction(
     if read_restriction.get("allowed-columns").is_none() {
         return Ok(());
     }
-    let allowed_columns = validate_required_string_array_field(
-        event,
-        read_restriction,
-        "allowed-columns",
-        &format!("{label} read-restriction"),
-    )?;
-    if allowed_columns.is_empty() {
-        return Ok(());
-    }
+    let allowed_columns =
+        validate_read_restriction_allowed_columns(event, read_restriction, label)?;
     let allowed_columns = allowed_columns.iter().collect::<BTreeSet<_>>();
     if !effective_stats
         .iter()
@@ -1861,6 +1847,26 @@ fn validate_effective_stats_matches_read_restriction(
         ));
     }
     Ok(())
+}
+
+fn validate_read_restriction_allowed_columns(
+    event: &OutboxEvent,
+    read_restriction: &Value,
+    label: &str,
+) -> Result<Vec<String>, LakeCatError> {
+    let allowed_columns = validate_required_string_array_field(
+        event,
+        read_restriction,
+        "allowed-columns",
+        &format!("{label} read-restriction"),
+    )?;
+    if allowed_columns.is_empty() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} read-restriction allowed-columns must not be empty"),
+        ));
+    }
+    Ok(allowed_columns)
 }
 
 fn table_lifecycle_namespace_from_value(
@@ -13192,6 +13198,91 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "malformed scan-plan evidence must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_scan_planned_empty_allowed_columns() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let read_restriction = json!({
+            "allowed-columns": [],
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ]
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-plan-empty-allowed-columns".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-planned".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-plan-empty-allowed-columns",
+                    "event-type": "table.scan-planned",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "context": {
+                                "read-restriction": read_restriction
+                            },
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": read_restriction,
+                        "requested-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
+                        "scan-task-count": 1
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("scan-plan empty allowed-columns evidence should fail closed");
+
+        let message = err.to_string();
+        assert!(
+            message.contains(
+                "outbox event table.scan-planned (lakecat.lineage-and-graph) has invalid"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(
+            message.contains("scan-planned read-restriction allowed-columns must not be empty")
+        );
+        assert!(!message.contains("evt-scan-plan-empty-allowed-columns"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "empty allowed-column scan replay must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "empty allowed-column scan replay must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "empty allowed-column scan replay must fail before lineage projection"
         );
     }
 
