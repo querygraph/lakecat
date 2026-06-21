@@ -6,6 +6,26 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Label metadata setup backend hashes`.
+  Invalid metadata URI parsing and unsupported object-store backend setup
+  failures now return `metadata-location-hash` plus `backend-error-hash`
+  evidence. Write and cleanup failures continue using `error-detail-hash`, so
+  object-store setup admission errors have the explicit backend hash label
+  promised by the P3 commit-hardening plan.
+- Local verification for this metadata setup backend hash label slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_object_store_redacts_invalid_location_parse_failures -- --test-threads=1`;
+  `cargo test -p lakecat-service metadata_object_store_redacts_unsupported_backend_setup_failures -- --test-threads=1`;
+  `cargo test -p lakecat-service metadata_object_store_redacts -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local metadata_object_store_redacts -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features metadata_object_store_redacts -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact metadata prefix rejection profile ids`.
   Planned metadata-object writes that target outside the selected storage
   profile prefix now return only metadata-location and storage-profile-prefix

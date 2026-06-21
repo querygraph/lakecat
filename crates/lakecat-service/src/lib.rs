@@ -5336,14 +5336,14 @@ fn metadata_object_store(
         LakeCatError::InvalidArgument(format!(
             "invalid metadata location {}; {}",
             metadata_location_hash_context(location),
-            error_detail_hash_context(err)
+            backend_error_hash_context(err)
         ))
     })?;
     object_store::parse_url_opts(&url, std::env::vars()).map_err(|err| {
         LakeCatError::InvalidArgument(format!(
             "metadata object location {} is not supported or is not configured: {}",
             metadata_location_hash_context(location),
-            error_detail_hash_context(err)
+            backend_error_hash_context(err)
         ))
     })
 }
@@ -5559,6 +5559,13 @@ fn metadata_location_hash_context(metadata_location: &str) -> String {
 fn error_detail_hash_context(err: impl std::fmt::Display) -> String {
     format!(
         "error-detail-hash={}",
+        content_hash_bytes(err.to_string().as_bytes())
+    )
+}
+
+fn backend_error_hash_context(err: impl std::fmt::Display) -> String {
+    format!(
+        "backend-error-hash={}",
         content_hash_bytes(err.to_string().as_bytes())
     )
 }
@@ -16362,7 +16369,8 @@ mod tests {
 
         assert!(matches!(err, LakeCatError::InvalidArgument(_)));
         assert!(message.contains("metadata-location-hash=sha256:"));
-        assert!(message.contains("error-detail-hash=sha256:"));
+        assert!(message.contains("backend-error-hash=sha256:"));
+        assert!(!message.contains("error-detail-hash=sha256:"));
         assert!(!message.contains(location));
         assert!(!message.contains("lakecat-secret"));
         assert!(!message.contains("00001.json"));
@@ -16377,7 +16385,8 @@ mod tests {
 
         assert!(matches!(err, LakeCatError::InvalidArgument(_)));
         assert!(message.contains("metadata-location-hash=sha256:"));
-        assert!(message.contains("error-detail-hash=sha256:"));
+        assert!(message.contains("backend-error-hash=sha256:"));
+        assert!(!message.contains("error-detail-hash=sha256:"));
         assert!(!message.contains(location));
         assert!(!message.contains("lakecat-secret"));
         assert!(!message.contains("00001.json"));

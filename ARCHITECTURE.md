@@ -340,6 +340,9 @@ Exact idempotency replays are verified to return before object-store writes, so
 the committed metadata object remains untouched on retry.
 Metadata-location prefix failures identify the submitted object and selected
 storage profile root by hash, not by raw profile id, bucket, or path.
+Object-store setup failures identify parser or backend setup diagnostics with
+`backend-error-hash`, keeping invalid URI and unsupported backend details out of
+REST-visible error text.
 Commit-history reads are now exposed through the governed management API and
 replay as lineage evidence, giving QueryGraph an audit surface over pointer
 history without requiring backend-specific database access.

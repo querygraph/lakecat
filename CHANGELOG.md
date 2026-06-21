@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Labeled metadata object-store setup diagnostics with
+  `backend-error-hash`, preserving hash-only backend evidence while matching
+  the commit-hardening design contract for invalid URI and unsupported backend
+  failures.
 - Redacted storage-profile ids from metadata-object prefix rejection messages,
   keeping commit-location failures anchored by metadata-location and
   storage-profile-prefix hashes without echoing tenant or storage profile names.
