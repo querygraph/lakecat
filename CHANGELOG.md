@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound captured LakeCat `management-replay` and
+  `table-commit-history-replay` text lines to compact QGLake management,
+  storage-profile, and table commit-history proof fields, closing the remaining
+  operator-facing replay-line drift gap in saved handoff artifacts.
 - Bound captured LakeCat `scan-replay` and `credential-replay` text lines to
   the compact QGLake scan and credential proof fields, so saved handoff
   artifacts cannot drift operator-facing replay text away from the verified

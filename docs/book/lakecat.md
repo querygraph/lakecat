@@ -1915,9 +1915,12 @@ proof fields. The captured top-level `scan-replay` line is recomputed from
 `governedScanProof`, including plan/fetch task counts, the policy-derived
 purpose, and the TTL cap. The captured top-level `credential-replay` line is
 recomputed from `credentialVendingProof`, including the restricted-agent block,
-trusted-human exception, TTL caps, and redacted storage-profile anchors. A
-saved artifact therefore cannot keep valid structured proof while presenting a
-different terminal transcript to an operator.
+trusted-human exception, TTL caps, and redacted storage-profile anchors. The
+captured `management-replay` line is also recomputed from `managementProof` and
+`storageProfileUpsertProof`, while `table-commit-history-replay` is recomputed
+from `tableCommitHistoryProof`. A saved artifact therefore cannot keep valid
+structured proof while presenting a different terminal transcript to an
+operator.
 Each credential branch carries the same redacted storage-scope anchor as the
 storage-profile upsert proof: `locationPrefixHash` binds the credential-vend
 attempt to the configured storage root without replaying the raw prefix. That
@@ -1982,7 +1985,9 @@ URI or full storage prefix in the compact proof. The
 operator-readable management replay line now prints the same storage-scope hash
 and redacted secret-reference state, so a captured transcript cannot describe
 the credential root only by provider while omitting its redacted storage scope or
-secret-reference boundary. The script also
+secret-reference boundary. The saved handoff verifier recomputes that
+management line from compact proof fields before accepting captured output. The
+script also
 refuses to write a summary unless LakeCat
 replay proves both sides of credential vending: untrusted agents get no raw
 credentials, trusted humans receive only the audited standard exception, and
@@ -2270,7 +2275,10 @@ table commit history commits=1 sequences=1 hashes=sha256:... graph_events=1
 
 Those lines are intentionally small enough for QueryGraph handoff scripts and
 operator logs, but they still come from the same typed lineage-drain summaries
-that the verifier requires before accepting replay. The scan line keeps the
+that the verifier requires before accepting replay. The saved handoff verifier
+recomputes each line from compact proof fields, including the management
+credential-root anchor and the table commit-history sequence/hash summary,
+before accepting captured LakeCat replay output. The scan line keeps the
 planned and fetched credential TTL caps visible beside the task counts, while
 JSON mode carries the full read-restriction evidence tree. Scan planning records
 both requested and effective projection evidence; scan-task fetch records the

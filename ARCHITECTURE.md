@@ -384,7 +384,12 @@ view deletion to the captured LakeCat replay artifact. The standalone
 handoff summaries remain self-verifying outside the shell harness. It also
 recomputes captured `scan-replay` and `credential-replay` text from compact
 proof fields, binding operator-facing purpose, TTL, credential decision, and
-storage-scope evidence to the same facts QueryGraph verifies. The compact
+storage-scope evidence to the same facts QueryGraph verifies. It applies the
+same check to captured `management-replay` and
+`table-commit-history-replay`, deriving management counts, redacted
+credential-root scope, commit counts, sequence numbers, commit hashes, and graph
+event counts from compact proof fields before accepting saved handoff artifacts.
+The compact
 handoff verifier also requires namespace receipt-chain `verifiedChainCount`
 values to match the chain hashes they summarize, requires duplicate-free
 namespace chain and receipt hash arrays, rejects duplicate structural

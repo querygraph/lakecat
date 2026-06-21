@@ -1934,8 +1934,39 @@ fn verify_lakecat_replay_table_commit_history_matches_summary(
             "captured LakeCat replay output.replay-evidence.tableCommitHistory",
         )?;
     }
+    let expected_commit_history_replay =
+        expected_table_commit_history_replay_line_from_summary(summary_commit_history)?;
+    require_string_match(
+        capture,
+        "table-commit-history-replay",
+        expected_commit_history_replay.as_str(),
+        "captured LakeCat replay output",
+    )?;
 
     Ok(())
+}
+
+fn expected_table_commit_history_replay_line_from_summary(
+    commit_history: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<String> {
+    let mut sequence_numbers = Vec::new();
+    let sequence_values =
+        required_array(commit_history, "sequenceNumbers", "tableCommitHistoryProof")?;
+    for (index, value) in sequence_values.iter().enumerate() {
+        let sequence_number = value.as_u64().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "tableCommitHistoryProof.sequenceNumbers[{index}] must be a non-negative integer"
+            ))
+        })?;
+        sequence_numbers.push(sequence_number);
+    }
+    Ok(format!(
+        "table commit history commits={} sequences={} hashes={} graph_events={}",
+        required_u64(commit_history, "commitCount", "tableCommitHistoryProof")?,
+        join_u64s(&sequence_numbers),
+        required_string_array(commit_history, "commitHashes", "tableCommitHistoryProof")?.join(","),
+        required_u64(commit_history, "graphEvents", "tableCommitHistoryProof")?,
+    ))
 }
 
 fn lakecat_replay_table_commit_history(
@@ -2067,8 +2098,62 @@ fn verify_lakecat_replay_management_matches_summary(
             "captured LakeCat replay output.replay-evidence.management",
         )?;
     }
+    let expected_management_replay =
+        expected_management_replay_line_from_summary(summary_management, lakecat)?;
+    require_string_match(
+        capture,
+        "management-replay",
+        expected_management_replay.as_str(),
+        "captured LakeCat replay output",
+    )?;
 
     Ok(())
+}
+
+fn expected_management_replay_line_from_summary(
+    management: &serde_json::Map<String, Value>,
+    lakecat: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<String> {
+    let storage_profile = required_object(
+        lakecat,
+        "storageProfileUpsertProof",
+        "lakecatReplayVerification",
+    )?;
+    Ok(format!(
+        "management replay servers={} projects={} warehouses={} policies={} storage_profiles={} storage_profile_upserts={} credential_root={}",
+        required_u64(management, "serverCount", "managementProof")?,
+        required_u64(management, "projectCount", "managementProof")?,
+        required_u64(management, "warehouseCount", "managementProof")?,
+        required_u64(management, "policyBindingCount", "managementProof")?,
+        required_u64(management, "storageProfileCount", "managementProof")?,
+        1,
+        expected_management_storage_profile_upsert_line_from_summary(storage_profile)?,
+    ))
+}
+
+fn expected_management_storage_profile_upsert_line_from_summary(
+    storage_profile: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<String> {
+    let label = "storageProfileUpsertProof";
+    let secret_ref = if required_bool(storage_profile, "secretRefPresent", label)? {
+        format!(
+            "{}:secret_ref_hash={}",
+            required_str(storage_profile, "secretRefProvider", label)?,
+            required_str(storage_profile, "secretRefHash", label)?,
+        )
+    } else {
+        require_null_field(storage_profile, "secretRefProvider", label)?;
+        require_null_field(storage_profile, "secretRefHash", label)?;
+        "none".to_string()
+    };
+    Ok(format!(
+        "{}:{}:{}:location_prefix_hash={}:secret_ref={}",
+        required_str(storage_profile, "profileId", label)?,
+        required_str(storage_profile, "provider", label)?,
+        required_str(storage_profile, "issuanceMode", label)?,
+        required_str(storage_profile, "locationPrefixHash", label)?,
+        secret_ref,
+    ))
 }
 
 fn lakecat_replay_management_proof_value(
@@ -9916,6 +10001,10 @@ mod tests {
         let querygraph_import = dir.join("querygraph-import.json");
         let lakecat_handoff_verify = dir.join("lakecat-handoff-verify.json");
         let service_log = dir.join("lakecat-service.log");
+        let table_commit_history_replay = format!(
+            "table commit history commits=1 sequences=1 hashes={} graph_events=1",
+            qglake_fixture_hash("commit")
+        );
         let mut lakecat_replay_json = json!({
             "schema-version": "lakecat.qglake.replay-verification.v1",
             "status": "verified",
@@ -10134,6 +10223,10 @@ mod tests {
                 }
             }
         });
+        lakecat_replay_json["management-replay"] = json!(
+            "management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none"
+        );
+        lakecat_replay_json["table-commit-history-replay"] = json!(table_commit_history_replay);
         lakecat_replay_json["replay-evidence"]["management"]["serverIds"] =
             json!(["qglake-server"]);
         lakecat_replay_json["replay-evidence"]["management"]["projectIds"] = json!(["analytics"]);
@@ -13869,6 +13962,30 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_table_commit_history_replay_line_drift() {
+        let temp = qglake_temp_dir("handoff-captured-table-commit-history-replay-line-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["table-commit-history-replay"] = json!(
+            "table commit history commits=1 sequences=2 hashes=sha256:other-commit graph_events=1"
+        );
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay commit-history replay line drift should be rejected");
+        assert!(
+            err.to_string()
+                .contains("captured LakeCat replay output.table-commit-history-replay mismatch")
+        );
+    }
+
+    #[test]
     fn qglake_handoff_captured_output_semantics_rejects_view_receipt_chain_drift() {
         let temp = qglake_temp_dir("handoff-captured-view-receipt-chain-drift");
         let summary_path = temp.join("handoff-summary.json");
@@ -13960,6 +14077,30 @@ mod tests {
             err.to_string().contains(
                 "captured LakeCat replay output.replay-evidence.credentials.restricted.blockReason mismatch"
             )
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_management_replay_line_drift() {
+        let temp = qglake_temp_dir("handoff-captured-management-replay-line-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["management-replay"] = json!(
+            "management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:3333333333333333333333333333333333333333333333333333333333333333:secret_ref=none"
+        );
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay management replay line drift should be rejected");
+        assert!(
+            err.to_string()
+                .contains("captured LakeCat replay output.management-replay mismatch")
         );
     }
 
