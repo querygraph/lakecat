@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Deepened the LakeCat book's catalog-concepts and Sail-boundary explanation
+  with a five-part standard-vs-extension classification and concrete governed
+  read, commit, and QueryGraph bootstrap examples showing why Iceberg semantics
+  belong in Sail while LakeCat owns trust, transactions, and evidence.
 - Added explicit `lakecat-api` unit-test coverage to the full local
   release-readiness gate and required that row in the dependency contract, so
   API-owned compatibility and v4 bridge contracts remain part of the

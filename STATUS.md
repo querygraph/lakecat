@@ -5,6 +5,23 @@ Updated: 2026-06-21
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Deepen catalog concepts and Sail boundary in the book`.
+  The manuscript now explains the catalog vocabulary as a five-part
+  classification: required Iceberg compatibility, LakeCat reliability
+  implementation, optional LakeCat/QueryGraph extensions, TypeSec governance
+  extensions, and possible future Iceberg-adjacent proposals. The Sail chapter
+  now walks through governed read, commit, and QueryGraph bootstrap examples to
+  show why Iceberg semantics, planning, pruning, delete handling, metadata
+  preparation, and version-specific behavior should live in Sail while LakeCat
+  owns request identity, TypeSec receipts, CAS, idempotency, audit, outbox, and
+  replay evidence.
+- Local verification for this book concepts/Sail-boundary slice is green:
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`;
+  `readlink "docs/book/dist/$kindle_link"`;
+  `pdftotext -layout docs/book/dist/lakecat.pdf - | rg ...`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Gate lakecat-api release tests explicitly`.
   The full local `scripts/check-release-readiness.sh` gate now runs
