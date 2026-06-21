@@ -1953,7 +1953,10 @@ the compact handoff proof exists. The service admission layer now rejects
 `table.commits-listed` source replay whose authorization receipt principal is
 missing or malformed before acknowledgement, catalog graph projection, or
 OpenLineage projection, so the raw lineage-drain summary is never built from an
-actorless pointer-log read. Captured
+actorless pointer-log read. It also binds the replayed warehouse, namespace,
+and table evidence to the durable outbox table identity before projection, so a
+source replay cannot project one table's pointer log as another table's
+history. Captured
 LakeCat replay-line recomputation enforces the same sequence invariant even
 when the captured replay JSON and compact summary agree on malformed sequence
 evidence, so operator-readable `table-commit-history-replay` text cannot

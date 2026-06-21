@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind commit-history replay table identity`.
+  Service `table.commits-listed` outbox admission now rejects commit-history
+  replay whose warehouse, namespace, or table evidence drifts from the durable
+  outbox table identity before acknowledgement, graph projection, or
+  OpenLineage projection.
+- Local verification for this commit-history table identity slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_mismatched_table_commit_history_identity -- --test-threads=1`;
+  `cargo test -p lakecat-service table_commit -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require commit-history receipt principal replay`.
   Service `table.commits-listed` outbox admission now rejects commit-history
   replay whose authorization receipt principal is missing or malformed before

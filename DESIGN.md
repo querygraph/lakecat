@@ -567,7 +567,9 @@ the catalog and QGLake proof. Raw lineage-drain regressions cover both missing
 and drifted commit-history principal subject and principal kind before compact
 handoff proof generation. Service replay admission must first require a valid
 authorization receipt principal for every `table.commits-listed` source event,
-so graph and OpenLineage projection never observe actorless pointer-log reads.
+and must bind warehouse/namespace/table evidence to the durable outbox table
+identity, so graph and OpenLineage projection never observe actorless or
+cross-table pointer-log reads.
 Pending outbox replay should stay deterministic across embedded and Turso stores, ordered by
 `created_at,event_id`, with batch limits applied after that order and with
 duplicate-safe delivery accounting. Draining should acknowledge delivery only

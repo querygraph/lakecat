@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required service `table.commits-listed` replay admission to bind
+  warehouse/namespace/table evidence to the durable outbox table identity
+  before acknowledgement, graph projection, or OpenLineage projection.
 - Required service `table.commits-listed` replay admission to carry a valid
   authorization receipt principal before acknowledgement, graph projection, or
   OpenLineage projection.

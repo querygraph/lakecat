@@ -1429,6 +1429,9 @@ fn validate_table_commit_history_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    let table = validate_required_outbox_table_identity(event, "table commit-history")?;
+    validate_table_lifecycle_payload_scope(event, payload, &table, "table commit-history")?;
+    validate_required_payload_table_hint(event, payload, &table, "table commit-history")?;
     let Some(receipt_principal) = payload
         .get("authorization-receipt")
         .and_then(|receipt| receipt.get("principal"))
@@ -13533,6 +13536,86 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_mismatched_table_commit_history_identity() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-mismatched-commit-history-identity".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commits-listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-mismatched-commit-history-identity",
+                    "event-type": "table.commits-listed",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "namespace": ["other"],
+                        "table": "events",
+                        "commit-count": 1,
+                        "commit-hashes": [
+                            content_hash_json(&json!({"commit": 1})).unwrap()
+                        ],
+                        "sequence-numbers": [1],
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("mismatched commit-history table identity should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commits-listed"));
+        assert!(
+            message.contains("table commit-history namespace does not match table identity"),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-mismatched-commit-history-identity"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "mismatched commit-history table identity must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "mismatched commit-history table identity must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "mismatched commit-history table identity must fail before lineage projection"
+        );
     }
 
     #[tokio::test]
