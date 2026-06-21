@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened `TableRecord` validation so memory and Turso table creation reject
+  empty metadata-location strings and non-object table metadata before
+  malformed direct records can enter durable catalog state.
 - Revalidated table records at memory and Turso `create_table` boundaries,
   rejecting deserialized records with empty table locations before they can
   create namespaces or enter durable catalog state.

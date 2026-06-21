@@ -315,6 +315,20 @@ impl TableRecord {
                 "table location must not be empty".to_string(),
             ));
         }
+        if self
+            .metadata_location
+            .as_deref()
+            .is_some_and(|location| location.trim().is_empty())
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "table metadata location must not be empty when present".to_string(),
+            ));
+        }
+        if !self.metadata.is_object() {
+            return Err(LakeCatError::InvalidArgument(
+                "table metadata must be a JSON object".to_string(),
+            ));
+        }
         Ok(())
     }
 }
@@ -3159,6 +3173,55 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_rejects_deserialized_invalid_table_metadata() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let ident = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("events").unwrap(),
+        );
+        let base = TableRecord {
+            ident: ident.clone(),
+            location: "file:///tmp/events".to_string(),
+            metadata_location: Some("file:///tmp/events/metadata/00000.json".to_string()),
+            metadata: serde_json::json!({"format-version": 3}),
+            created: AuditStamp::now(Principal::anonymous()),
+            updated_at: Utc::now(),
+            version: 0,
+        };
+
+        let mut empty_metadata_location = base.clone();
+        empty_metadata_location.metadata_location = Some("  ".to_string());
+        let err = store
+            .create_table(empty_metadata_location)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("table metadata location must not be empty")
+        ));
+
+        let mut non_object_metadata = base;
+        non_object_metadata.metadata = serde_json::json!(["not", "metadata"]);
+        let err = store.create_table(non_object_metadata).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("table metadata must be a JSON object")
+        ));
+
+        assert!(matches!(
+            store.load_table(&ident).await,
+            Err(LakeCatError::NotFound { object, name })
+                if object == "table" && name == ident.stable_id()
+        ));
+        assert_eq!(store.list_namespaces(&warehouse).await.unwrap(), vec![]);
+    }
+
+    #[tokio::test]
     async fn memory_store_commit_records_table_commit_outbox_event() {
         let store = MemoryCatalogStore::new();
         let warehouse = WarehouseName::new("local").unwrap();
@@ -5492,6 +5555,55 @@ pub mod turso_store {
                 LakeCatError::InvalidArgument(message)
                     if message.contains("table location must not be empty")
             ));
+            assert!(matches!(
+                store.load_table(&ident).await,
+                Err(LakeCatError::NotFound { object, name })
+                    if object == "table" && name == ident.stable_id()
+            ));
+            assert_eq!(store.list_namespaces(&warehouse).await.unwrap(), vec![]);
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_deserialized_invalid_table_metadata() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("events").unwrap(),
+            );
+            let base = TableRecord {
+                ident: ident.clone(),
+                location: "file:///tmp/events".to_string(),
+                metadata_location: Some("file:///tmp/events/metadata/00000.json".to_string()),
+                metadata: serde_json::json!({"format-version": 3}),
+                created: AuditStamp::now(Principal::anonymous()),
+                updated_at: Utc::now(),
+                version: 0,
+            };
+
+            let mut empty_metadata_location = base.clone();
+            empty_metadata_location.metadata_location = Some("  ".to_string());
+            let err = store
+                .create_table(empty_metadata_location)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("table metadata location must not be empty")
+            ));
+
+            let mut non_object_metadata = base;
+            non_object_metadata.metadata = serde_json::json!("not metadata");
+            let err = store.create_table(non_object_metadata).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("table metadata must be a JSON object")
+            ));
+
             assert!(matches!(
                 store.load_table(&ident).await,
                 Err(LakeCatError::NotFound { object, name })

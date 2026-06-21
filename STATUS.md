@@ -6,6 +6,17 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate store table metadata records`.
+  `TableRecord::validate` now rejects empty metadata-location strings and
+  non-object table metadata, and the memory/Turso `create_table` paths prove
+  malformed direct/deserialized table metadata cannot persist or auto-create
+  namespaces.
+- Local verification for this table metadata store slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_deserialized_invalid_table_metadata -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_deserialized_invalid_table_metadata -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local`.
+- Latest completed implementation slice:
   `Validate store table-create records`.
   Memory and Turso `create_table` paths now revalidate direct/deserialized
   `TableRecord` inputs and reject empty table locations before invalid table
