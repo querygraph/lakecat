@@ -6,6 +6,20 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Run workflow-trigger self-test in release readiness`.
+  `scripts/check-release-readiness.sh` now runs
+  `scripts/check-workflow-trigger-contract.sh` instead of only syntax-checking
+  it, and the dependency contract requires that self-test to stay wired. The
+  workflow-trigger self-test now covers single-quoted automatic trigger forms
+  and harmless nested job/step text that mentions automatic event names outside
+  top-level `on:`.
+- Local verification for this release-gate contract slice is green:
+  `bash -n scripts/check-local-dependency-contract.sh scripts/check-workflow-trigger-contract.sh scripts/check-release-readiness.sh`;
+  `scripts/check-workflow-trigger-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover view recreate chains at the management route`.
   The service management view workflow now has route-level regression coverage
   that creates, updates, drops, and recreates a view, then proves the governed

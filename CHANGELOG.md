@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Wired the workflow-trigger self-test into the release-readiness gate and
+  dependency contract, adding single-quoted automatic-trigger regressions while
+  preserving harmless nested job/step text that mentions automatic event names.
 - Added management-route regression coverage proving recreated views surface as
   the next active durable version and as verified non-tombstoned receipt chains
   through the governed view receipt endpoints.

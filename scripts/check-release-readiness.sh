@@ -58,6 +58,7 @@ run bash -n scripts/check-workflow-trigger-contract.sh
 run bash -n scripts/qglake-handoff-local.sh
 run bash -n scripts/check-release-readiness.sh
 run scripts/check-local-dependency-contract.sh
+run scripts/check-workflow-trigger-contract.sh
 
 run cargo fmt \
   -p lakecat-api \

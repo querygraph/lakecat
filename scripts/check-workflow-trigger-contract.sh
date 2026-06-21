@@ -49,11 +49,24 @@ jobs:
     steps:
       - run: echo local gate'
 
+expect_accept "nested-job-step-event-names" 'name: CI
+on:
+  workflow_dispatch:
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mention pull_request safely
+        run: echo "push pull_request schedule are inert outside on"'
+
 expect_reject "compact-unquoted-event" 'name: CI
 on: push'
 
 expect_reject "compact-quoted-event" 'name: CI
 on: "pull_request"'
+
+expect_reject "compact-single-quoted-event" "name: CI
+on: 'merge_group'"
 
 expect_reject "compact-quoted-on" 'name: CI
 "on": ["push"]'
@@ -74,9 +87,18 @@ on:
   "pull_request_target":
     branches: [main]'
 
+expect_reject "block-map-single-quoted-event" "name: CI
+on:
+  'repository_dispatch':
+    types: [deploy]"
+
 expect_reject "block-quoted-event" 'name: CI
 "on":
   - "pull_request"'
+
+expect_reject "block-single-quoted-event" "name: CI
+'on':
+  - 'workflow_call'"
 
 expect_reject "inline-map-quoted-event" 'name: CI
 on: {"workflow_run": {}}'
