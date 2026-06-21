@@ -6,6 +6,24 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind compact tombstone receipt identity components`.
+  QGLake handoff verification now checks tombstone receipt `stableId` values
+  against their warehouse, namespace, and view-name components before accepting
+  expected-version guard evidence. Saved compact view proofs are rejected when
+  deletion-proof component fields drift from the stable view identity.
+- Local verification for this compact tombstone receipt identity slice is
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_view_tombstone_stable_id_component_drift -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs -- --nocapture`;
+  `cargo test -p lakecat-cli qglake`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, ran
+  LakeCat replay, QueryGraph verify/import, verified compact tombstone receipt
+  identity binding, and ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Bind compact view stable IDs to components`.
   QGLake handoff verification now derives the expected
   `lakecat:view:<warehouse>:<namespace>:<name>` stable ID for accepted views

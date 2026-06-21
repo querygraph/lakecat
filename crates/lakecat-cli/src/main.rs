@@ -3370,6 +3370,24 @@ fn require_view_tombstone_expected_versions(
             "stableId",
             "viewReceiptChainProof.tombstoneReceipts[]",
         )?;
+        let warehouse = required_str(
+            receipt,
+            "warehouse",
+            "viewReceiptChainProof.tombstoneReceipts[]",
+        )?;
+        let namespace = required_array(
+            receipt,
+            "namespace",
+            "viewReceiptChainProof.tombstoneReceipts[]",
+        )?;
+        let name = required_str(receipt, "name", "viewReceiptChainProof.tombstoneReceipts[]")?;
+        require_view_stable_id_matches_components(
+            stable_id,
+            warehouse,
+            namespace,
+            name,
+            "viewReceiptChainProof.tombstoneReceipts[]",
+        )?;
         let expected_view_version = required_u64(
             receipt,
             "expectedViewVersion",
@@ -9306,6 +9324,9 @@ mod tests {
                     }],
                     "tombstoneReceipts": [{
                         "stableId": "lakecat:view:local:default:active_customers_view",
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "active_customers_view",
                         "expectedViewVersion": 1,
                         "receiptHashes": [qglake_fixture_hash("tombstone")],
                         "replayEventHashes": [qglake_fixture_hash("tombstone-replay")],
@@ -9576,6 +9597,9 @@ mod tests {
                     }],
                     "tombstoneReceipts": [{
                         "stableId": "lakecat:view:local:default:active_customers_view",
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "active_customers_view",
                         "expectedViewVersion": 1,
                         "receiptHashes": [qglake_fixture_hash("tombstone")],
                         "replayEventHashes": [qglake_fixture_hash("tombstone-replay")],
@@ -11695,6 +11719,22 @@ mod tests {
         assert!(err.to_string().contains("viewReceiptChainProof"));
         assert!(err.to_string().contains("expectedViewVersion mismatch"));
         assert!(err.to_string().contains("expected=1 actual=99"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_view_tombstone_stable_id_component_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["tombstoneReceipts"][0]["name"] =
+            json!("other_view");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject tombstone identity component drift");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(
+            err.to_string()
+                .contains("stableId must match warehouse/namespace/name")
+        );
     }
 
     #[test]

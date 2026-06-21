@@ -1819,10 +1819,13 @@ warehouse/namespace identity, namespace chain hashes, and replay/OpenLineage
 hashes. It also derives the expected `lakecat:view:<warehouse>:<namespace>:<name>`
 stable ID from each accepted view's warehouse, namespace, and view name, so a
 saved handoff cannot keep a verified stable ID while drifting the visible
-component fields. The verifier also checks that each namespace receipt-chain
-summary's `verifiedChainCount` equals the number of structural `chains[]`
-entries and that every chain entry is covered by `chainHashes`. The compact
-proof carries `chains[]` entries inside each namespace receipt-chain summary.
+component fields. Tombstone receipt entries use the same component binding
+before their `expectedViewVersion` guard evidence is accepted, so deletion proof
+cannot drift from the stable view identity either. The verifier also checks that
+each namespace receipt-chain summary's `verifiedChainCount` equals the number
+of structural `chains[]` entries and that every chain entry is covered by
+`chainHashes`. The compact proof carries `chains[]` entries inside each
+namespace receipt-chain summary.
 Each chain entry keeps only catalog-facing evidence: stable view identity, the
 chain hash, the verified flag, latest view version, latest operation, tombstone
 state, receipt count, and per-receipt version, operation, receipt hash, and

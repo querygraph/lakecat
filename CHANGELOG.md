@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound compact QGLake tombstone receipt stable IDs to their warehouse,
+  namespace, and view-name components, so saved handoff summaries reject
+  deletion-proof identity drift before accepting tombstone guard evidence.
 - Bound compact QGLake accepted-view and structural receipt-chain stable IDs
   to their warehouse, namespace, and view-name components, so saved handoff
   summaries reject component drift even when the top-level verified view set
