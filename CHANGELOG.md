@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required credential-vend replay top-level `secret-ref-present` evidence, when
+  present, to match the nested storage-profile secret-reference state before
+  outbox delivery, so credential replay cannot project contradictory
+  credential-root secret posture.
 - Required credential-vend replay top-level `storage-profile-id` evidence to
   match the nested storage-profile `profile-id` before outbox delivery, so
   zero-credential blocked paths cannot project contradictory credential-root

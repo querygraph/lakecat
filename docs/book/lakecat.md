@@ -1969,11 +1969,14 @@ credential-response evidence, full SHA-256 prefix and issuer-config hashes for
 each returned credential, a full storage-profile `location-prefix-hash`, and
 non-contradictory secret-reference state. The top-level `storage-profile-id`
 must match the nested `storage-profile.profile-id`, even when no raw
-credentials were returned. Each returned credential entry must also agree with
-the catalog-derived storage-profile id, catalog profile id, storage provider,
-credential mode, authorization principal, receipt principal, governed-read
-marker, and any policy-derived TTL cap. A malformed credential replay event
-therefore remains pending instead of becoming graph or OpenLineage evidence.
+credentials were returned. If the top-level `secret-ref-present` field is
+present, it must match `storage-profile.secret-ref-present`; older replay
+fixtures may omit the duplicate field, but contradictory evidence is rejected.
+Each returned credential entry must also agree with the catalog-derived
+storage-profile id, catalog profile id, storage provider, credential mode,
+authorization principal, receipt principal, governed-read marker, and any
+policy-derived TTL cap. A malformed credential replay event therefore remains
+pending instead of becoming graph or OpenLineage evidence.
 Credential replay also rejects a governed `read-restriction` that is missing
 from, or different from, the authorization receipt context, so credential TTL
 and blocked-agent evidence cannot drift away from the receipt that authorized
@@ -2198,8 +2201,10 @@ replay gets the same treatment: `credentials.vend-attempted` must carry a
 matching credential count, full credential-response hashes, a full redacted
 storage-profile location hash, internally consistent secret-reference
 presence/provider/hash fields, a top-level storage-profile id that agrees with
-nested storage-profile evidence, and credential-response metadata that agrees
-with the selected storage profile and authorization receipt before delivery.
+nested storage-profile evidence, any top-level secret-reference presence value
+that agrees with nested storage-profile evidence, and credential-response
+metadata that agrees with the selected storage profile and authorization receipt
+before delivery.
 Storage-profile upsert replay must likewise reject raw secret references and contradictory
 secret-reference-state evidence before delivery. Policy-binding upsert replay
 must carry valid catalog scope evidence before delivery, including policy id,

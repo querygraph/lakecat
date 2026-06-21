@@ -6,6 +6,29 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject credential secret-ref presence drift`.
+  Outbox admission for `credentials.vend-attempted` now rejects replay when a
+  top-level `secret-ref-present` field contradicts nested
+  `storage-profile.secret-ref-present`. This keeps credential-root replay from
+  exposing one secret-reference posture at the event level and another at the
+  selected profile level before graph projection, OpenLineage projection, or
+  delivery acknowledgement.
+- Local verification for this credential secret-ref presence drift slice is
+  green:
+  `cargo fmt -p lakecat-service`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_credential_secret_ref_presence_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_credential_storage_profile_id_drift_without_credentials -- --test-threads=1`;
+  `cargo test -p lakecat-service credential_vend -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject credential storage-profile id drift`.
   Outbox admission for `credentials.vend-attempted` now rejects replay when
   the top-level `storage-profile-id` differs from the nested

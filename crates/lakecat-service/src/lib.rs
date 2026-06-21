@@ -2561,6 +2561,17 @@ fn validate_credential_vend_event_evidence(
         profile_id,
         "credential-vend evidence",
     )?;
+    let secret_ref_present = storage_profile
+        .get("secret-ref-present")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    validate_optional_bool_field_equals(
+        event,
+        payload,
+        "secret-ref-present",
+        secret_ref_present,
+        "credential-vend evidence",
+    )?;
 
     for entry in evidence {
         validate_credential_response_entry_evidence(event, payload, storage_profile, entry)?;
@@ -3263,6 +3274,31 @@ fn validate_string_field_equals(
     label: &str,
 ) -> Result<(), LakeCatError> {
     let actual = required_string_field(event, object, field, label)?;
+    if actual == expected {
+        return Ok(());
+    }
+    Err(outbox_evidence_error(
+        event,
+        &format!("{label} {field} must match catalog evidence"),
+    ))
+}
+
+fn validate_optional_bool_field_equals(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+    expected: bool,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(value) = object.get(field) else {
+        return Ok(());
+    };
+    let Some(actual) = value.as_bool() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} {field} must be a boolean when present"),
+        ));
+    };
     if actual == expected {
         return Ok(());
     }
@@ -12164,6 +12200,82 @@ mod tests {
         );
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-credential-storage-profile-id-drift"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_credential_secret_ref_presence_drift() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-secret-ref-presence-drift".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-secret-ref-presence-drift",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "storage-profile-id": "events-local",
+                        "secret-ref-present": true,
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("credential secret-ref presence must match nested profile evidence");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(
+            message.contains(
+                "credential-vend evidence secret-ref-present must match catalog evidence"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-credential-secret-ref-presence-drift"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
