@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin decorated metadata-location redaction`.
+  The service commit route now has REST-level regression coverage proving a
+  decorated metadata object location is rejected before object-store writes and
+  the client-visible error carries only `metadata-location-hash` evidence, not
+  the submitted query string, raw token text, object name, or path.
+- Local verification for this metadata-location redaction slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service commit_rejects_decorated_metadata_locations_without_leaking_details -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Gate QGLake fixture CLI feature`.
   The `lakecat-cli qglake-fixture` generator now requires the explicit
   `qglake-fixture` Cargo feature because it writes local Iceberg metadata and

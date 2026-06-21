@@ -405,7 +405,9 @@ boundary explicit. Create-only write and cleanup failures keep
 `error-detail-hash=sha256:...` because those happen after setup. In every case,
 the response names the hashed metadata location and hashed failure detail, not
 the submitted path, object name, scheme, or parser/backend diagnostic. That
-matters for local files, cloud bucket keys, and credential-provider diagnostics:
+route-level promise is pinned by a commit regression for decorated metadata
+locations with raw query-token material. It matters for local files, cloud
+bucket keys, and credential-provider diagnostics:
 operators can correlate a failure without copying sensitive storage topology
 into API responses or logs.
 

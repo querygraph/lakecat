@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added REST-level commit coverage proving decorated metadata object locations
+  are rejected with hash-only evidence and without leaking raw query strings,
+  tokens, object names, or paths.
 - Gated `lakecat-cli qglake-fixture` behind an explicit
   `qglake-fixture` feature so default CLI verification and management commands
   no longer pull Sail's local Iceberg fixture writer into every build.
