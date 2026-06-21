@@ -6,6 +6,25 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind captured QGLake replay lines to proof fields`.
+  Saved handoff verification now recomputes the operator-facing
+  `scan-replay` and `credential-replay` text lines from compact
+  `governedScanProof` and `credentialVendingProof` fields. A captured replay
+  artifact is rejected if those lines drift from the verified purpose, TTL cap,
+  task counts, credential decision, or redacted credential storage-scope
+  evidence.
+- Local verification for this captured replay-line binding slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --nocapture`;
+  `cargo test -p lakecat-cli qglake -- --nocapture`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, ran
+  LakeCat replay, QueryGraph verify/import, compared captured replay-line text
+  with compact scan and credential proof fields, and ended with
+  `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Prove outbox batch retry on later projection failure`.
   The service outbox drain now has a focused multi-event regression proving
   that if an earlier event projects successfully but a later lineage projection

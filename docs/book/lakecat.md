@@ -1910,6 +1910,14 @@ audited exception unless the captured LakeCat replay proves the same decision.
 Both credential branches must carry replay and OpenLineage arrays whose entries
 are full `sha256:`-prefixed 64-hex digests, so the compact proof cannot replace
 credential receipt evidence with prefix-shaped placeholders.
+The verifier also binds the operator-facing replay text back to the same
+proof fields. The captured top-level `scan-replay` line is recomputed from
+`governedScanProof`, including plan/fetch task counts, the policy-derived
+purpose, and the TTL cap. The captured top-level `credential-replay` line is
+recomputed from `credentialVendingProof`, including the restricted-agent block,
+trusted-human exception, TTL caps, and redacted storage-profile anchors. A
+saved artifact therefore cannot keep valid structured proof while presenting a
+different terminal transcript to an operator.
 Each credential branch carries the same redacted storage-scope anchor as the
 storage-profile upsert proof: `locationPrefixHash` binds the credential-vend
 attempt to the configured storage root without replaying the raw prefix. That

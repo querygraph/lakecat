@@ -381,7 +381,10 @@ expected view version before writing `viewReceiptChainProof`, binding governed
 view deletion to the captured LakeCat replay artifact. The standalone
 `lakecat-cli qglake-verify-handoff` verifier enforces the same
 `expectedViewVersion` match against the accepted view version, so compact
-handoff summaries remain self-verifying outside the shell harness. The compact
+handoff summaries remain self-verifying outside the shell harness. It also
+recomputes captured `scan-replay` and `credential-replay` text from compact
+proof fields, binding operator-facing purpose, TTL, credential decision, and
+storage-scope evidence to the same facts QueryGraph verifies. The compact
 handoff verifier also requires namespace receipt-chain `verifiedChainCount`
 values to match the chain hashes they summarize, requires duplicate-free
 namespace chain and receipt hash arrays, rejects duplicate structural

@@ -1852,8 +1852,50 @@ fn verify_lakecat_replay_scan_matches_summary(
             "captured LakeCat replay output.replay-evidence.scan",
         )?;
     }
+    let expected_scan_replay = expected_scan_replay_line_from_summary(summary_scan)?;
+    require_string_match(
+        capture,
+        "scan-replay",
+        expected_scan_replay.as_str(),
+        "captured LakeCat replay output",
+    )?;
 
     Ok(())
+}
+
+fn expected_scan_replay_line_from_summary(
+    scan: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<String> {
+    let planned = required_object(scan, "plannedReadRestriction", "governedScanProof")?;
+    let fetched = required_object(scan, "fetchedReadRestriction", "governedScanProof")?;
+    Ok(format!(
+        "scan replay plan_tasks={} plan_graph_events={} planned_ttl={} planned_purpose={} file_tasks={} delete_files={} child_plan_tasks={} fetched_ttl={} fetched_purpose={}",
+        require_positive_u64(scan, "planTaskCount", "governedScanProof")?,
+        require_positive_u64(scan, "planGraphEvents", "governedScanProof")?,
+        require_positive_u64(
+            planned,
+            "max-credential-ttl-seconds",
+            "governedScanProof.plannedReadRestriction",
+        )?,
+        require_non_empty_str(
+            planned,
+            "purpose",
+            "governedScanProof.plannedReadRestriction"
+        )?,
+        require_positive_u64(scan, "fileTaskCount", "governedScanProof")?,
+        require_positive_u64(scan, "deleteFileCount", "governedScanProof")?,
+        require_positive_u64(scan, "childPlanTaskCount", "governedScanProof")?,
+        require_positive_u64(
+            fetched,
+            "max-credential-ttl-seconds",
+            "governedScanProof.fetchedReadRestriction",
+        )?,
+        require_non_empty_str(
+            fetched,
+            "purpose",
+            "governedScanProof.fetchedReadRestriction"
+        )?,
+    ))
 }
 
 fn lakecat_replay_scan(
@@ -2188,8 +2230,86 @@ fn verify_lakecat_replay_credentials_match_summary(
             "captured LakeCat replay output.replay-evidence.credentials.trustedHuman",
         )?;
     }
+    let expected_credential_replay =
+        expected_credential_replay_line_from_summary(summary_credentials)?;
+    require_string_match(
+        capture,
+        "credential-replay",
+        expected_credential_replay.as_str(),
+        "captured LakeCat replay output",
+    )?;
 
     Ok(())
+}
+
+fn expected_credential_replay_line_from_summary(
+    credentials: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<String> {
+    let restricted = required_object(credentials, "restricted", "credentialVendingProof")?;
+    let human = required_object(credentials, "trustedHuman", "credentialVendingProof")?;
+    Ok(format!(
+        "credential replay restricted=blocked:sail-planned-read-required restricted_count={} restricted_ttl={} restricted_profile={} human=allowed:trusted-human-audited-raw human_count={} human_ttl={} human_profile={}",
+        required_u64(
+            restricted,
+            "credentialCount",
+            "credentialVendingProof.restricted"
+        )?,
+        require_positive_u64(
+            restricted,
+            "maxCredentialTtlSeconds",
+            "credentialVendingProof.restricted",
+        )?,
+        expected_credential_profile_line_from_summary(
+            required_object(
+                restricted,
+                "storageProfile",
+                "credentialVendingProof.restricted"
+            )?,
+            "credentialVendingProof.restricted.storageProfile",
+        )?,
+        required_u64(
+            human,
+            "credentialCount",
+            "credentialVendingProof.trustedHuman"
+        )?,
+        require_positive_u64(
+            human,
+            "maxCredentialTtlSeconds",
+            "credentialVendingProof.trustedHuman",
+        )?,
+        expected_credential_profile_line_from_summary(
+            required_object(
+                human,
+                "storageProfile",
+                "credentialVendingProof.trustedHuman"
+            )?,
+            "credentialVendingProof.trustedHuman.storageProfile",
+        )?,
+    ))
+}
+
+fn expected_credential_profile_line_from_summary(
+    profile: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<String> {
+    let secret_ref = if required_bool(profile, "secretRefPresent", label)? {
+        let provider = require_non_empty_str(profile, "secretRefProvider", label)?;
+        let hash = require_full_hash_str(profile, "secretRefHash", label)?;
+        format!("{provider}:secret_ref_hash={hash}")
+    } else {
+        require_null_field(profile, "secretRefProvider", label)?;
+        require_null_field(profile, "secretRefHash", label)?;
+        "none".to_string()
+    };
+    Ok(format!(
+        "{}:{}:{}:location_prefix_hash={}:secret_ref={}:graph_events={}",
+        require_non_empty_str(profile, "profileId", label)?,
+        require_non_empty_str(profile, "provider", label)?,
+        require_non_empty_str(profile, "issuanceMode", label)?,
+        require_full_hash_str(profile, "locationPrefixHash", label)?,
+        secret_ref,
+        require_positive_u64(profile, "graphEvents", label)?,
+    ))
 }
 
 fn lakecat_replay_credentials(
@@ -9086,6 +9206,19 @@ fn required_bool(
     })
 }
 
+fn require_null_field(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    if !required_value(value, field, label)?.is_null() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must be null"
+        )));
+    }
+    Ok(())
+}
+
 fn required_u64(
     value: &serde_json::Map<String, Value>,
     field: &str,
@@ -9792,6 +9925,8 @@ mod tests {
             "graph-hash": qglake_fixture_hash("graph"),
             "open-lineage-hash": qglake_fixture_hash("openlineage"),
             "querygraph-import-hash": qglake_fixture_hash("querygraph-import"),
+            "scan-replay": "scan replay plan_tasks=1 plan_graph_events=1 planned_ttl=300 planned_purpose=qglake-agent-demo file_tasks=1 delete_files=1 child_plan_tasks=2 fetched_ttl=300 fetched_purpose=qglake-agent-demo",
+            "credential-replay": "credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none:graph_events=2",
             "standards": [
                 "Iceberg REST",
                 "Croissant",
@@ -13620,6 +13755,30 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_scan_replay_line_drift() {
+        let temp = qglake_temp_dir("handoff-captured-scan-replay-line-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["scan-replay"] = json!(
+            "scan replay plan_tasks=1 plan_graph_events=1 planned_ttl=60 planned_purpose=qglake-agent-demo file_tasks=1 delete_files=1 child_plan_tasks=2 fetched_ttl=300 fetched_purpose=qglake-agent-demo"
+        );
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay scan replay line drift should be rejected");
+        assert!(
+            err.to_string()
+                .contains("captured LakeCat replay output.scan-replay mismatch")
+        );
+    }
+
+    #[test]
     fn qglake_handoff_captured_output_semantics_rejects_scan_projection_drift() {
         let temp = qglake_temp_dir("handoff-captured-scan-projection-drift");
         let summary_path = temp.join("handoff-summary.json");
@@ -13801,6 +13960,30 @@ mod tests {
             err.to_string().contains(
                 "captured LakeCat replay output.replay-evidence.credentials.restricted.blockReason mismatch"
             )
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_credential_replay_line_drift() {
+        let temp = qglake_temp_dir("handoff-captured-credential-replay-line-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["credential-replay"] = json!(
+            "credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=60 restricted_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none:graph_events=2"
+        );
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay credential replay line drift should be rejected");
+        assert!(
+            err.to_string()
+                .contains("captured LakeCat replay output.credential-replay mismatch")
         );
     }
 

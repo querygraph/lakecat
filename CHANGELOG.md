@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound captured LakeCat `scan-replay` and `credential-replay` text lines to
+  the compact QGLake scan and credential proof fields, so saved handoff
+  artifacts cannot drift operator-facing replay text away from the verified
+  purpose, TTL cap, and credential storage-scope evidence.
 - Added an outbox-drain regression proving that when a later projection in a
   multi-event batch fails, earlier successfully projected events are not
   acknowledged and the whole batch remains retryable from durable outbox state.
