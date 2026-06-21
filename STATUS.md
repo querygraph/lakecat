@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate soft-delete restore evidence`.
+  Memory and Turso soft-delete create/restore paths now revalidate
+  `SoftDeleteRecord` recovery evidence against the live `TableRecord` before
+  restore can consume the marker, rejecting corrupted table identity,
+  metadata-location, version, or authorization-receipt shape drift while
+  leaving the table hidden for retry/inspection.
+- Local verification for this soft-delete restore validation slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local corrupt_soft_delete -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate view replay reads`.
   Memory and Turso view load/list/drop paths now revalidate stored
   `ViewRecord` values, and view-version receipt list/hash paths revalidate

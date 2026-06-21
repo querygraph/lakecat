@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Revalidated soft-delete recovery records at memory and Turso delete/restore
+  boundaries, rejecting corrupted durable restore evidence before recovery can
+  consume the soft-delete marker or expose mismatched table pointer state.
 - Revalidated view records and view-version receipts at memory and Turso
   load/list/drop/read boundaries, rejecting corrupted durable view replay JSON
   and malformed receipt hash/identity evidence before view receipt chains can

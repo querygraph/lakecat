@@ -971,6 +971,49 @@ pub struct SoftDeleteRecord {
     pub deleted_at: DateTime<Utc>,
 }
 
+impl SoftDeleteRecord {
+    pub fn validate_for_table(&self, ident: &TableIdent, table: &TableRecord) -> LakeCatResult<()> {
+        table.validate()?;
+        if self.table != *ident {
+            return Err(LakeCatError::InvalidArgument(
+                "soft-delete record table does not match requested table".to_string(),
+            ));
+        }
+        if table.ident != *ident {
+            return Err(LakeCatError::InvalidArgument(
+                "soft-delete table record does not match requested table".to_string(),
+            ));
+        }
+        if self
+            .metadata_location
+            .as_deref()
+            .is_some_and(|location| location.trim().is_empty())
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "soft-delete metadata location must not be empty when present".to_string(),
+            ));
+        }
+        if self.metadata_location != table.metadata_location {
+            return Err(LakeCatError::InvalidArgument(
+                "soft-delete metadata location does not match table record".to_string(),
+            ));
+        }
+        if self.version != table.version {
+            return Err(LakeCatError::InvalidArgument(
+                "soft-delete version does not match table record".to_string(),
+            ));
+        }
+        if let Some(receipt) = &self.authorization_receipt
+            && !receipt.is_object()
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "soft-delete authorization receipt must be a JSON object when present".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct StorageProfile {
@@ -1782,17 +1825,16 @@ impl CatalogStore for MemoryCatalogStore {
                 object: "table",
                 name: ident.stable_id(),
             })?;
-        state.soft_deletes.insert(
-            key,
-            SoftDeleteRecord {
-                table: ident.clone(),
-                metadata_location: table.metadata_location.clone(),
-                version: table.version,
-                principal,
-                authorization_receipt,
-                deleted_at: Utc::now(),
-            },
-        );
+        let record = SoftDeleteRecord {
+            table: ident.clone(),
+            metadata_location: table.metadata_location.clone(),
+            version: table.version,
+            principal,
+            authorization_receipt,
+            deleted_at: Utc::now(),
+        };
+        record.validate_for_table(ident, &table)?;
+        state.soft_deletes.insert(key, record);
         Ok(table)
     }
 
@@ -1804,20 +1846,23 @@ impl CatalogStore for MemoryCatalogStore {
     ) -> LakeCatResult<TableRecord> {
         let mut state = self.state.write().await;
         let key = table_key(ident);
-        if state.soft_deletes.remove(&key).is_none() {
+        let Some(record) = state.soft_deletes.get(&key) else {
             return Err(LakeCatError::NotFound {
                 object: "soft-deleted table",
                 name: ident.stable_id(),
             });
-        }
-        state
+        };
+        let table = state
             .tables
             .get(&key)
             .cloned()
             .ok_or_else(|| LakeCatError::NotFound {
                 object: "table",
                 name: ident.stable_id(),
-            })
+            })?;
+        record.validate_for_table(ident, &table)?;
+        state.soft_deletes.remove(&key);
+        Ok(table)
     }
 
     async fn upsert_storage_profile(
@@ -3527,6 +3572,71 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_rejects_corrupt_soft_delete_records_on_restore() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let ident = TableIdent::new(
+            warehouse.clone(),
+            namespace,
+            TableName::new("events").unwrap(),
+        );
+        let table = TableRecord::new(
+            ident.clone(),
+            "file:///tmp/events".to_string(),
+            Some("file:///tmp/events/metadata/00000.json".to_string()),
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        );
+        store.create_table(table).await.unwrap();
+        store
+            .soft_delete_table(
+                &ident,
+                Principal::anonymous(),
+                Some(serde_json::json!({
+                    "engine": "typesec",
+                    "allowed": true,
+                    "action": "table-drop"
+                })),
+            )
+            .await
+            .unwrap();
+
+        let key = table_key(&ident);
+        store
+            .state
+            .write()
+            .await
+            .soft_deletes
+            .get_mut(&key)
+            .unwrap()
+            .version += 1;
+
+        let err = store
+            .restore_table(
+                &ident,
+                Principal::anonymous(),
+                Some(serde_json::json!({
+                    "engine": "typesec",
+                    "allowed": true,
+                    "action": "table-restore"
+                })),
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("soft-delete version does not match table record")
+        ));
+        assert!(store.state.read().await.soft_deletes.contains_key(&key));
+        assert!(matches!(
+            store.load_table(&ident).await,
+            Err(LakeCatError::NotFound { .. })
+        ));
+    }
+
+    #[tokio::test]
     async fn memory_store_records_and_marks_audit_outbox_events() {
         let store = MemoryCatalogStore::new();
         let ident = TableIdent::new(
@@ -4626,6 +4736,7 @@ pub mod turso_store {
                 });
             };
             let table: TableRecord = decode_json(row_string(&row, 0)?)?;
+            table.validate()?;
             let deleted_at = Utc::now();
             let record = SoftDeleteRecord {
                 table: ident.clone(),
@@ -4635,6 +4746,7 @@ pub mod turso_store {
                 authorization_receipt,
                 deleted_at,
             };
+            record.validate_for_table(ident, &table)?;
             tx.execute(
                 "insert into soft_deletes (
                     table_key, warehouse, namespace_path, table_name,
@@ -4723,7 +4835,7 @@ pub mod turso_store {
             let tx = conn.transaction().await.map_err(turso_error)?;
             let mut rows = tx
                 .query(
-                    "select t.record_json from tables t
+                    "select t.record_json, d.record_json from tables t
                      join soft_deletes d on d.table_key = t.table_key
                      where t.table_key = ?1",
                     (table_key(ident),),
@@ -4737,6 +4849,8 @@ pub mod turso_store {
                 });
             };
             let table: TableRecord = decode_json(row_string(&row, 0)?)?;
+            let soft_delete: SoftDeleteRecord = decode_json(row_string(&row, 1)?)?;
+            soft_delete.validate_for_table(ident, &table)?;
             let restored_at = Utc::now();
             let changed = tx
                 .execute(
@@ -9042,6 +9156,85 @@ pub mod turso_store {
                     .iter()
                     .any(|event| event.event_type == "table.restored")
             );
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_corrupt_soft_delete_records_on_restore() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace,
+                TableName::new("events").unwrap(),
+            );
+            let table = TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            );
+            store.create_table(table).await.unwrap();
+            store
+                .soft_delete_table(
+                    &ident,
+                    Principal::anonymous(),
+                    Some(serde_json::json!({
+                        "engine": "typesec",
+                        "allowed": true,
+                        "action": "table-drop"
+                    })),
+                )
+                .await
+                .unwrap();
+            assert!(matches!(
+                store.load_table(&ident).await,
+                Err(LakeCatError::NotFound { .. })
+            ));
+
+            let corrupt = SoftDeleteRecord {
+                table: ident.clone(),
+                metadata_location: Some("file:///tmp/events/metadata/00000.json".to_string()),
+                version: 1,
+                principal: Principal::anonymous(),
+                authorization_receipt: Some(serde_json::json!({
+                    "engine": "typesec",
+                    "allowed": true,
+                    "action": "table-drop"
+                })),
+                deleted_at: Utc::now(),
+            };
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update soft_deletes set record_json = ?2 where table_key = ?1",
+                (table_key(&ident), encode_json(&corrupt).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .restore_table(
+                    &ident,
+                    Principal::anonymous(),
+                    Some(serde_json::json!({
+                        "engine": "typesec",
+                        "allowed": true,
+                        "action": "table-restore"
+                    })),
+                )
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("soft-delete version does not match table record")
+            ));
+            assert_eq!(store.count_rows("soft_deletes").await.unwrap(), 1);
+            assert!(matches!(
+                store.load_table(&ident).await,
+                Err(LakeCatError::NotFound { .. })
+            ));
         }
     }
 }
