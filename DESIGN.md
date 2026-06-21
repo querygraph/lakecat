@@ -640,6 +640,10 @@ duplicate-free ID arrays and a valid authorization receipt principal before
 projection, so compact QueryGraph proof cannot inflate server, project,
 warehouse, policy, or storage-profile reads with repeated or actorless
 identities.
+Standard catalog replay for catalog config reads, namespace list/lifecycle
+events, and view list/lifecycle events must carry valid authorization receipt
+principals before projection too, so Iceberg-compatible control-plane evidence
+cannot become actorless graph or OpenLineage facts.
 
 View mutation guards must remain positive, store-assigned version checks so
 QueryGraph receipt chains cannot be extended by invalid guarded requests.

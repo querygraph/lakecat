@@ -1049,7 +1049,9 @@ stays pending and reaches neither the Grust-facing graph sink nor OpenLineage.
 Catalog read replay has the same fail-closed shape: `catalog.config-read`
 events must carry a valid warehouse, and `namespace.listed` events must carry
 both a valid warehouse and an unsigned namespace count before the read evidence
-can be projected.
+can be projected. These standard catalog reads and namespace lifecycle events
+must also carry a valid authorization receipt principal before delivery, so
+Iceberg-compatible control-plane replay remains attributable.
 Management-list replay is checked before delivery too: policy-binding,
 project, server, storage-profile, and warehouse list events must carry unsigned
 counts, warehouse-scoped lists must carry a valid warehouse, and optional
@@ -1057,7 +1059,9 @@ project scope must be a string before those reads can become replay evidence.
 View replay is checked at the same boundary: view list events must carry valid
 warehouse, namespace, and count evidence, while view create/load/drop evidence
 must carry a valid warehouse, namespace, and non-empty view name before graph or
-OpenLineage projection. Table lifecycle replay now follows the same rule:
+OpenLineage projection. View list and lifecycle replay must also carry a valid
+authorization receipt principal before delivery, preserving actor evidence for
+QueryGraph view proofs. Table lifecycle replay now follows the same rule:
 create, load, delete, and restore events must carry a valid root table identity,
 and any payload warehouse, namespace, table-name, or soft-delete table evidence
 must agree with that identity before the event can be acknowledged.
@@ -2398,14 +2402,17 @@ path or component array before create/load/drop events can be delivered.
 Catalog config and namespace-list read replay must likewise carry a valid
 warehouse, and namespace listing must preserve an unsigned namespace count,
 before those standard catalog reads become delivered graph/OpenLineage
-evidence.
+evidence. Catalog config, namespace list, namespace lifecycle, view list, and
+view lifecycle replay must also carry valid authorization receipt principals,
+so saved replay cannot turn standard Iceberg control-plane activity into
+actorless QueryGraph facts.
 Management-list read replay applies the same rule to operational discovery:
 policy, project, server, storage-profile, and warehouse list events must carry
 unsigned counts, valid warehouse scope when warehouse-scoped, and valid optional
 project scope before delivery.
 View list and lifecycle replay must carry valid warehouse, namespace, view
-name, and count evidence before those view events become graph/OpenLineage
-material for QueryGraph.
+name, count, and receipt principal evidence before those view events become
+graph/OpenLineage material for QueryGraph.
 Table lifecycle replay applies the same identity discipline before delivery:
 `table.created`, `table.loaded`, `table.deleted`, and `table.restored` must
 carry a decodable table identity, optional payload scope hints must match it,
