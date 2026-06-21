@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Continued durable view-version receipt chains across drop/recreate in both
+  memory and Turso stores: recreating a dropped view now advances after the
+  latest tombstone receipt and links to that receipt instead of starting a
+  second version-1-looking chain.
 - Refreshed the generated LakeCat book distribution artifacts after rebuilding
   the current catalog-concepts and Sail-rationale manuscript.
 - Bounded the local release-readiness feature matrix to package unit targets

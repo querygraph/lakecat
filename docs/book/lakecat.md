@@ -1889,7 +1889,11 @@ a view is dropped, LakeCat appends a compact tombstone receipt instead of
 inventing a new view version: the receipt keeps `view-version` at the last
 durable version, sets `operation` to `drop`, links to the previous receipt, and
 preserves the last content hash so QueryGraph or an operator can prove which
-catalog view state was removed.
+catalog view state was removed. If the same view name is later recreated, the
+new upsert continues after the latest receipt in that durable chain. A create,
+drop, and recreate sequence therefore looks like version 1 upsert, version 1
+drop tombstone, version 2 upsert linked to the tombstone receipt, not two
+unrelated version-1 chains for the same stable view id.
 
 ```json
 {
@@ -1991,6 +1995,15 @@ curl -s \
       "previous-view-version": 1,
       "previous-receipt-hash": "sha256:...",
       "operation": "drop",
+      "view-hash": "sha256:...",
+      "receipt-hash": "sha256:..."
+    },
+    {
+      "stable-id": "lakecat:view:local:default:events_view",
+      "view-version": 2,
+      "previous-view-version": 1,
+      "previous-receipt-hash": "sha256:...",
+      "operation": "upsert",
       "view-hash": "sha256:...",
       "receipt-hash": "sha256:..."
     }

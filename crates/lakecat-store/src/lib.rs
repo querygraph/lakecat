@@ -703,10 +703,24 @@ impl ViewRecord {
         Ok(self)
     }
 
-    pub fn with_next_version(mut self, previous: Option<&ViewRecord>) -> LakeCatResult<Self> {
-        self.view_version = previous
-            .map(|view| view.view_version.saturating_add(1))
-            .unwrap_or(1);
+    pub fn with_next_version(self, previous: Option<&ViewRecord>) -> LakeCatResult<Self> {
+        self.with_next_version_after_history(previous, previous.map(|view| view.view_version))
+    }
+
+    pub fn with_next_version_after_history(
+        mut self,
+        previous: Option<&ViewRecord>,
+        latest_receipt_version: Option<u64>,
+    ) -> LakeCatResult<Self> {
+        let base_version = previous
+            .map(|view| view.view_version)
+            .into_iter()
+            .chain(latest_receipt_version)
+            .max()
+            .unwrap_or(0);
+        self.view_version = base_version
+            .checked_add(1)
+            .ok_or_else(|| LakeCatError::InvalidArgument("view version overflow".to_string()))?;
         if let Some(previous) = previous {
             self.created = previous.created.clone();
         }
@@ -809,7 +823,7 @@ pub struct ViewVersionReceipt {
 
 impl ViewVersionReceipt {
     fn upsert(
-        previous: Option<&ViewRecord>,
+        previous_view_version: Option<u64>,
         previous_receipt_hash: Option<String>,
         view: &ViewRecord,
         principal: Principal,
@@ -820,7 +834,7 @@ impl ViewVersionReceipt {
             namespace: view.namespace.clone(),
             name: view.name.clone(),
             view_version: view.view_version,
-            previous_view_version: previous.map(|previous| previous.view_version),
+            previous_view_version,
             previous_receipt_hash,
             operation: ViewVersionOperation::Upsert,
             view_hash: content_hash_json(&serde_json::to_value(view).map_err(|err| {
@@ -909,9 +923,9 @@ fn view_receipt_hash(receipt: &ViewVersionReceipt) -> LakeCatResult<String> {
     })?)
 }
 
-fn latest_view_receipt_hash<'a>(
+fn latest_view_receipt_evidence<'a>(
     receipts: impl Iterator<Item = &'a ViewVersionReceipt>,
-) -> LakeCatResult<Option<String>> {
+) -> LakeCatResult<Option<(u64, String)>> {
     receipts
         .max_by(|left, right| {
             left.view_version
@@ -924,9 +938,15 @@ fn latest_view_receipt_hash<'a>(
         })
         .map(|receipt| {
             receipt.validate()?;
-            view_receipt_hash(receipt)
+            Ok((receipt.view_version, view_receipt_hash(receipt)?))
         })
         .transpose()
+}
+
+fn latest_view_receipt_hash<'a>(
+    receipts: impl Iterator<Item = &'a ViewVersionReceipt>,
+) -> LakeCatResult<Option<String>> {
+    latest_view_receipt_evidence(receipts).map(|evidence| evidence.map(|(_, hash)| hash))
 }
 
 fn view_version_operation_order(operation: &ViewVersionOperation) -> u8 {
@@ -1902,15 +1922,26 @@ impl CatalogStore for MemoryCatalogStore {
         let view_key = view_key(&view);
         let principal = view.created.principal.clone();
         let previous = state.views.get(&view_key);
-        let view = view.with_next_version(previous)?;
-        let previous_receipt_hash = latest_view_receipt_hash(
+        let latest_receipt = latest_view_receipt_evidence(
             state
                 .view_version_receipts
                 .iter()
                 .filter(|receipt| receipt.stable_id == view_stable_id(&view)),
         )?;
-        let receipt =
-            ViewVersionReceipt::upsert(previous, previous_receipt_hash, &view, principal)?;
+        let latest_receipt_version = latest_receipt
+            .as_ref()
+            .map(|(view_version, _)| *view_version);
+        let previous_receipt_hash = latest_receipt.map(|(_, receipt_hash)| receipt_hash);
+        let previous_view_version = previous
+            .map(|view| view.view_version)
+            .or(latest_receipt_version);
+        let view = view.with_next_version_after_history(previous, latest_receipt_version)?;
+        let receipt = ViewVersionReceipt::upsert(
+            previous_view_version,
+            previous_receipt_hash,
+            &view,
+            principal,
+        )?;
         state.views.insert(view_key, view.clone());
         state.view_version_receipts.push(receipt);
         Ok(view)
@@ -1932,15 +1963,26 @@ impl CatalogStore for MemoryCatalogStore {
         if let Some(expected) = expected_view_version {
             require_expected_view_version(previous, expected)?;
         }
-        let view = view.with_next_version(previous)?;
-        let previous_receipt_hash = latest_view_receipt_hash(
+        let latest_receipt = latest_view_receipt_evidence(
             state
                 .view_version_receipts
                 .iter()
                 .filter(|receipt| receipt.stable_id == view_stable_id(&view)),
         )?;
-        let receipt =
-            ViewVersionReceipt::upsert(previous, previous_receipt_hash, &view, principal)?;
+        let latest_receipt_version = latest_receipt
+            .as_ref()
+            .map(|(view_version, _)| *view_version);
+        let previous_receipt_hash = latest_receipt.map(|(_, receipt_hash)| receipt_hash);
+        let previous_view_version = previous
+            .map(|view| view.view_version)
+            .or(latest_receipt_version);
+        let view = view.with_next_version_after_history(previous, latest_receipt_version)?;
+        let receipt = ViewVersionReceipt::upsert(
+            previous_view_version,
+            previous_receipt_hash,
+            &view,
+            principal,
+        )?;
         state.views.insert(view_key, view.clone());
         state.view_version_receipts.push(receipt);
         Ok(view)
@@ -3464,6 +3506,49 @@ mod memory_tests {
             Err(LakeCatError::NotFound { object, name })
                 if object == "view" && name == "active_customers"
         ));
+        let recreated = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("active_customers").unwrap(),
+            "select id from customers where active",
+            "sql",
+            Some(3),
+            BTreeMap::from([("owner".to_string(), "lakecat".to_string())]),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        let recreated = store.upsert_view(recreated).await.unwrap();
+        assert_eq!(recreated.view_version, 3);
+        let receipts = store
+            .list_view_version_receipts(
+                &warehouse,
+                &namespace,
+                &TableName::new("active_customers").unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(receipts.len(), 4);
+        let drop_receipt_hash = view_receipt_hash(&receipts[2]).unwrap();
+        assert_eq!(receipts[3].stable_id, receipts[2].stable_id);
+        assert_eq!(receipts[3].view_version, 3);
+        assert_eq!(receipts[3].previous_view_version, Some(2));
+        assert_eq!(
+            receipts[3].previous_receipt_hash.as_deref(),
+            Some(drop_receipt_hash.as_str())
+        );
+        assert_eq!(receipts[3].operation, ViewVersionOperation::Upsert);
+        assert_ne!(receipts[3].view_hash, receipts[2].view_hash);
+        assert_eq!(
+            store
+                .load_view(
+                    &warehouse,
+                    &namespace,
+                    &TableName::new("active_customers").unwrap()
+                )
+                .await
+                .unwrap(),
+            recreated
+        );
     }
 
     #[tokio::test]
@@ -5227,7 +5312,17 @@ pub mod turso_store {
             if let Some(expected) = expected_view_version {
                 require_expected_view_version(previous.as_ref(), expected)?;
             }
-            let view = view.with_next_version(previous.as_ref())?;
+            let latest_receipt = latest_turso_view_receipt_evidence(&tx, view_key.as_str()).await?;
+            let latest_receipt_version = latest_receipt
+                .as_ref()
+                .map(|(view_version, _)| *view_version);
+            let previous_receipt_hash = latest_receipt.map(|(_, receipt_hash)| receipt_hash);
+            let previous_view_version = previous
+                .as_ref()
+                .map(|view| view.view_version)
+                .or(latest_receipt_version);
+            let view =
+                view.with_next_version_after_history(previous.as_ref(), latest_receipt_version)?;
             tx.execute(
                 "insert into views (
                     view_key, warehouse, namespace_path, view_name, dialect, record_json, updated_at
@@ -5249,10 +5344,8 @@ pub mod turso_store {
             )
             .await
             .map_err(turso_error)?;
-            let previous_receipt_hash =
-                latest_turso_view_receipt_hash(&tx, view_key.as_str()).await?;
             let receipt = ViewVersionReceipt::upsert(
-                previous.as_ref(),
+                previous_view_version,
                 previous_receipt_hash,
                 &view,
                 principal,
@@ -5915,14 +6008,17 @@ pub mod turso_store {
         }
     }
 
-    async fn latest_turso_view_receipt_hash(
+    async fn latest_turso_view_receipt_evidence(
         tx: &turso::transaction::Transaction<'_>,
         view_key: &str,
-    ) -> LakeCatResult<Option<String>> {
+    ) -> LakeCatResult<Option<(u64, String)>> {
         tx.query(
             "select receipt_json from view_version_receipts
              where view_key = ?1
-             order by view_version desc, recorded_at desc, receipt_id desc
+             order by view_version desc,
+                      recorded_at desc,
+                      case operation when 'drop' then 1 else 0 end desc,
+                      receipt_id desc
              limit 1",
             (view_key,),
         )
@@ -5934,9 +6030,18 @@ pub mod turso_store {
         .map(|row| {
             let receipt = decode_json::<ViewVersionReceipt>(row_string(&row, 0)?)?;
             receipt.validate()?;
-            view_receipt_hash(&receipt)
+            Ok((receipt.view_version, view_receipt_hash(&receipt)?))
         })
         .transpose()
+    }
+
+    async fn latest_turso_view_receipt_hash(
+        tx: &turso::transaction::Transaction<'_>,
+        view_key: &str,
+    ) -> LakeCatResult<Option<String>> {
+        latest_turso_view_receipt_evidence(tx, view_key)
+            .await
+            .map(|evidence| evidence.map(|(_, hash)| hash))
     }
 
     async fn count_matching_rows(
@@ -6548,6 +6653,49 @@ pub mod turso_store {
                 Err(LakeCatError::NotFound { object, name })
                     if object == "view" && name == "active_customers"
             ));
+            let recreated = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("active_customers").unwrap(),
+                "select id from customers where active",
+                "sql",
+                Some(3),
+                BTreeMap::from([("owner".to_string(), "lakecat".to_string())]),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            let recreated = store.upsert_view(recreated).await.unwrap();
+            assert_eq!(recreated.view_version, 3);
+            let receipts = store
+                .list_view_version_receipts(
+                    &warehouse,
+                    &namespace,
+                    &TableName::new("active_customers").unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(receipts.len(), 4);
+            let drop_receipt_hash = view_receipt_hash(&receipts[2]).unwrap();
+            assert_eq!(receipts[3].stable_id, receipts[2].stable_id);
+            assert_eq!(receipts[3].view_version, 3);
+            assert_eq!(receipts[3].previous_view_version, Some(2));
+            assert_eq!(
+                receipts[3].previous_receipt_hash.as_deref(),
+                Some(drop_receipt_hash.as_str())
+            );
+            assert_eq!(receipts[3].operation, ViewVersionOperation::Upsert);
+            assert_ne!(receipts[3].view_hash, receipts[2].view_hash);
+            assert_eq!(
+                store
+                    .load_view(
+                        &warehouse,
+                        &namespace,
+                        &TableName::new("active_customers").unwrap()
+                    )
+                    .await
+                    .unwrap(),
+                recreated
+            );
         }
 
         #[tokio::test]

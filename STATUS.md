@@ -6,6 +6,20 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Continue view receipt chains across drop/recreate`.
+  Memory and Turso stores now assign a recreated view the next durable
+  `view-version` after the latest receipt, including a drop tombstone, and the
+  new upsert receipt links back to that tombstone receipt. This prevents a
+  dropped and recreated view name from producing a second version-1-looking
+  chain while keeping drop tombstones at the deleted view version.
+- Local verification for this view receipt-chain slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_persists_view_records -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_persists_view_records -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local --lib -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bound and prove the full local release gate`.
   `scripts/check-release-readiness.sh` now runs feature-matrix package rows
   against unit/library targets so empty package doc-test phases cannot hang the
