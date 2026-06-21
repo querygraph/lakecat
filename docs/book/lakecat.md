@@ -1706,6 +1706,11 @@ restriction. The compact verifier requires the catalog URL to be an absolute HTT
 endpoint and requires warehouse, namespace, and table scope to be present before
 accepting the summary. It rejects captured QueryGraph verify/import output
 whose warehouse no longer matches the summary.
+The lineage-drain replay summaries are bound back to the drain-level
+`eventTypes` manifest as well. A saved handoff cannot add a compact replay
+summary for `storage-profile.upserted`, `querygraph.bootstrap`, or any other
+catalog event type unless the drain itself declared that event type as
+delivered.
 It also embeds `querygraphVerification.verifiedTables` and `verifiedViews`
 directly in the compact summary. `verifiedTables` must include the stable LakeCat
 table id derived from that scope, such as `lakecat:table:local:default:events`;

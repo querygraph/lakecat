@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake lineage-drain replay summaries to be covered by the
+  drain-level `eventTypes` list, and corrected accepted verifier fixtures to
+  declare `storage-profile.upserted` whenever they carry that replay summary.
 - Pinned pending outbox batch limits to apply after deterministic
   `created_at,event_id` ordering in both embedded and Turso stores, so
   batched drains replay the same prefix across durable backends.

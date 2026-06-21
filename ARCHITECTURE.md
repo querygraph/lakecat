@@ -646,6 +646,9 @@ summary hashes. The import half of the compact proof is self-contained too:
 table/view ids, bundle/graph/OpenLineage/import hashes, and standards as
 `querygraphVerification`, and the verifier rejects a handoff unless those fields
 match both the verify proof and the captured QueryGraph import output.
+Lineage-drain replay summaries are likewise bound to the drain-level
+`eventTypes` manifest, so a compact handoff cannot add replay evidence for an
+undeclared delivered catalog event type.
 
 ## Lakekeeper Lessons To Adopt
 

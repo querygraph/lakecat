@@ -7392,6 +7392,22 @@ fn verify_qglake_lineage_drain(
     verify_qglake_credential_replay_matches_storage_profile_upsert(drain, principal)?;
     verify_qglake_table_commit_history_replay(drain)?;
     verify_qglake_scan_replay(drain)?;
+    require_qglake_lineage_event_types_cover_summaries(drain)?;
+    Ok(())
+}
+
+fn require_qglake_lineage_event_types_cover_summaries(
+    drain: &LineageDrainResponse,
+) -> lakecat_core::LakeCatResult<()> {
+    let declared_event_types = drain.event_types.iter().collect::<BTreeSet<_>>();
+    for summary in &drain.events {
+        if !declared_event_types.contains(&summary.event_type) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain replay summary {} was not declared in event types",
+                summary.event_type
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -14957,6 +14973,7 @@ mod tests {
                 "credentials.vend-attempted".to_string(),
                 "policy-binding.listed".to_string(),
                 "storage-profile.listed".to_string(),
+                "storage-profile.upserted".to_string(),
                 "server.listed".to_string(),
                 "project.listed".to_string(),
                 "warehouse.listed".to_string(),
@@ -17152,6 +17169,21 @@ mod tests {
                 .contains("qglake lineage drain did not replay querygraph.bootstrap")
         );
 
+        let mut drain = qglake_handoff_lineage_drain();
+        let mut forged_summary = qglake_bootstrap_lineage_summary();
+        forged_summary.event_type = "querygraph.bootstrap-shadow".to_string();
+        drain.events.push(forged_summary);
+        let err = verify_qglake_lineage_drain(
+            &drain,
+            &qglake_handoff_lineage_verification(),
+            Some("did:example:agent"),
+            1,
+        )
+        .expect_err("QGLake lineage drain should reject undeclared replay summaries");
+        assert!(err.to_string().contains(
+            "qglake lineage drain replay summary querygraph.bootstrap-shadow was not declared in event types"
+        ));
+
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 1,
@@ -19203,6 +19235,7 @@ mod tests {
                     "view.upserted".to_string(),
                     "policy-binding.listed".to_string(),
                     "storage-profile.listed".to_string(),
+                    "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
@@ -19253,6 +19286,7 @@ mod tests {
                     "view.upserted".to_string(),
                     "policy-binding.listed".to_string(),
                     "storage-profile.listed".to_string(),
+                    "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
@@ -19303,6 +19337,7 @@ mod tests {
                     "view.upserted".to_string(),
                     "policy-binding.listed".to_string(),
                     "storage-profile.listed".to_string(),
+                    "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
@@ -20044,6 +20079,7 @@ mod tests {
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
                     "storage-profile.listed".to_string(),
+                    "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
@@ -20099,6 +20135,7 @@ mod tests {
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
                     "storage-profile.listed".to_string(),
+                    "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
@@ -20155,6 +20192,7 @@ mod tests {
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
                     "storage-profile.listed".to_string(),
+                    "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
@@ -20812,6 +20850,7 @@ mod tests {
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
                     "storage-profile.listed".to_string(),
+                    "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
@@ -20863,6 +20902,7 @@ mod tests {
                     "view.upserted".to_string(),
                     "policy-binding.listed".to_string(),
                     "storage-profile.listed".to_string(),
+                    "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
@@ -20910,6 +20950,7 @@ mod tests {
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
                     "storage-profile.listed".to_string(),
+                    "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),

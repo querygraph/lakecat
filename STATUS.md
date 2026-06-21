@@ -6,6 +6,24 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake drain summaries to event types`.
+  The QGLake lineage-drain verifier now rejects any compact replay summary
+  whose `event_type` was not declared in the drain-level `eventTypes` list.
+  Accepted verifier fixtures now declare `storage-profile.upserted` whenever
+  the replay summaries include storage-profile upsert proof, keeping saved
+  handoff evidence aligned with the drain contract.
+- Local verification for this QGLake event-type binding slice is green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake -- --test-threads=1`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh`
+  (green, ending with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Pin outbox limit ordering`.
   Embedded and Turso store coverage now proves pending outbox batch limits are
   applied after deterministic `created_at,event_id` ordering. This keeps
