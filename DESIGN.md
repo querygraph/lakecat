@@ -609,7 +609,9 @@ Provider and issuance-mode compatibility must be replay-checked too:
 `short-lived-secret-ref` requires a cloud object provider.
 Secret-reference presence must match issuance mode: short-lived secret-ref
 profiles require redacted secret-ref proof, while governed-read and no-secret
-profiles cannot carry secret-reference proof.
+profiles cannot carry secret-reference proof. Secret-ref providers must be
+nonblank whenever proof is required, and provider/hash fields must be absent
+when `secret-ref-present` is false, regardless of JSON type.
 Blocked raw-credential replay must carry zero credentials plus a non-empty
 block reason matching the raw-credential exception receipt context before any
 graph or OpenLineage sink observes it.

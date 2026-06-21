@@ -3231,11 +3231,12 @@ fn validate_secret_ref_evidence(
         .get("secret-ref-present")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let secret_ref_provider = object
-        .get("secret-ref-provider")
+    let secret_ref_provider_value = object.get("secret-ref-provider");
+    let secret_ref_provider = secret_ref_provider_value
         .and_then(Value::as_str)
-        .filter(|provider| !provider.is_empty());
-    let secret_ref_hash = object.get("secret-ref-hash").and_then(Value::as_str);
+        .filter(|provider| !provider.trim().is_empty());
+    let secret_ref_hash_value = object.get("secret-ref-hash");
+    let secret_ref_hash = secret_ref_hash_value.and_then(Value::as_str);
 
     if secret_ref_present {
         if secret_ref_provider.is_none() {
@@ -3250,7 +3251,7 @@ fn validate_secret_ref_evidence(
                 &format!("{label} secret-ref-hash must contain full SHA-256 digest evidence"),
             ));
         }
-    } else if secret_ref_provider.is_some() || secret_ref_hash.is_some() {
+    } else if secret_ref_provider_value.is_some() || secret_ref_hash_value.is_some() {
         return Err(outbox_evidence_error(
             event,
             &format!("{label} cannot carry secret-ref evidence when secret-ref-present is false"),
@@ -14145,6 +14146,83 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_credential_unexpected_secret_ref_evidence() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-unexpected-secret-ref-evidence".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-unexpected-secret-ref-evidence",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "storage-profile-id": "events-local",
+                        "secret-ref-present": false,
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "secret-ref-hash": {
+                                "unexpected": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+                            },
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("unexpected credential secret-ref evidence should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains(
+            "credential-vend storage-profile cannot carry secret-ref evidence when secret-ref-present is false"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-credential-unexpected-secret-ref-evidence"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_credential_storage_profile_local_no_secret_remote_provider() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),
@@ -18375,6 +18453,71 @@ mod tests {
         assert!(message.contains("secret-ref-present must match issuance-mode"));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-storage-profile-secret-ref-mode-missing-ref"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_storage_profile_blank_secret_ref_provider() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-storage-profile-blank-secret-provider".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-storage-profile-blank-secret-provider",
+                    "event-type": "storage-profile.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "storage-profile-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "storage-profile": {
+                            "profile-id": "s3-events",
+                            "warehouse": "local",
+                            "location-prefix-hash": content_hash_json(&json!({
+                                "location-prefix": "s3://lakecat/events"
+                            })).unwrap(),
+                            "provider": "s3",
+                            "issuance-mode": "short-lived-secret-ref",
+                            "secret-ref-present": true,
+                            "secret-ref-provider": " ",
+                            "secret-ref-hash": content_hash_json(&json!({
+                                "secret-ref": "typesec://env/LAKECAT_S3_EVENTS"
+                            })).unwrap(),
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("blank storage-profile secret-ref provider should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("storage-profile.upserted"));
+        assert!(message.contains("secret-ref-present requires secret-ref-provider"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-storage-profile-blank-secret-provider"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

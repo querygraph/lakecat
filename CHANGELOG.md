@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required storage-profile and credential-vend replay admission to reject blank
+  secret-ref providers and any unexpected secret-ref evidence when
+  `secret-ref-present` is false before graph or OpenLineage projection.
 - Required `table.commit` outbox admission to reject commit principal evidence
   that drifts from the authorization receipt principal before acknowledgement,
   graph projection, or OpenLineage projection.

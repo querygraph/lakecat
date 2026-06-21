@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject malformed secret-ref replay evidence`.
+  Shared service outbox admission now rejects blank secret-ref providers for
+  secret-ref-backed replay, and rejects any secret-ref provider/hash evidence
+  when `secret-ref-present` is false, before graph or OpenLineage projection.
+- Local verification for this secret-ref replay slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_storage_profile_blank_secret_ref_provider -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_credential_unexpected_secret_ref_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject commit principal replay drift`.
   Service `table.commit` outbox admission now rejects commit principal evidence
   that differs from the authorization receipt principal, so forged replay

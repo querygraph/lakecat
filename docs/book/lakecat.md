@@ -1200,7 +1200,11 @@ cap. It also rewrites LakeCat-owned profile, provider, mode, principal, and
 governed-read-required evidence after issuance. For secret-ref-backed profiles
 it also derives `lakecat.secret-ref-provider` from the selected storage profile,
 so a cloud secret backend cannot make the response look like a different
-catalog decision or secret-provider path. The service tests for the REST
+catalog decision or secret-provider path. Replay admission treats that evidence
+as structural too: secret-ref providers must be nonblank when
+`secret-ref-present` is true, and provider/hash fields must be absent when
+`secret-ref-present` is false, no matter how a corrupted pending event encodes
+them. The service tests for the REST
 credential endpoint prove this response shape directly, not just through helper
 functions. LakeCat also rejects any credential whose returned
 prefix is outside the storage profile's `location-prefix`, so a misconfigured
