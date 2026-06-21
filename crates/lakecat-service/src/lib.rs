@@ -1593,6 +1593,7 @@ fn validate_scan_planned_event_evidence(
         &effective_projection,
     )?;
     validate_read_restriction_receipt_match(event, payload, "scan-planned")?;
+    validate_scan_read_restriction_row_predicate(event, payload, "scan-planned")?;
 
     let requested_stats = validate_required_string_array_field(
         event,
@@ -1664,6 +1665,7 @@ fn validate_scan_tasks_fetched_event_evidence(
         &effective_projection,
     )?;
     validate_read_restriction_receipt_match(event, payload, "scan-tasks-fetched")?;
+    validate_scan_read_restriction_row_predicate(event, payload, "scan-tasks-fetched")?;
     let Some(required_filters) = payload.get("required-filters") else {
         return Err(outbox_evidence_error(
             event,
@@ -1674,6 +1676,66 @@ fn validate_scan_tasks_fetched_event_evidence(
         return Err(outbox_evidence_error(
             event,
             "scan-tasks-fetched required-filters must be an array",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_scan_read_restriction_row_predicate(
+    event: &OutboxEvent,
+    payload: &Value,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(read_restriction) = payload.get("read-restriction") else {
+        return Ok(());
+    };
+    let Some(row_predicate) = read_restriction.get("row-predicate") else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} read-restriction must contain row-predicate"),
+        ));
+    };
+    let Some(row_predicate) = row_predicate.as_object() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} read-restriction row-predicate must be an object"),
+        ));
+    };
+    if row_predicate.is_empty() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} read-restriction row-predicate must contain predicate evidence"),
+        ));
+    }
+    let Some(predicate_type) = row_predicate
+        .get("type")
+        .and_then(Value::as_str)
+        .filter(|predicate_type| !predicate_type.trim().is_empty())
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} read-restriction row-predicate.type must not be blank"),
+        ));
+    };
+    if predicate_type == "always-true" {
+        return Ok(());
+    }
+    if row_predicate
+        .get("term")
+        .and_then(Value::as_str)
+        .is_none_or(|term| term.trim().is_empty())
+    {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} read-restriction row-predicate.term must not be blank"),
+        ));
+    }
+    if matches!(predicate_type, "eq" | "not-eq") && !row_predicate.contains_key("value") {
+        return Err(outbox_evidence_error(
+            event,
+            &format!(
+                "{label} read-restriction row-predicate.value is required for {predicate_type} predicate evidence"
+            ),
         ));
     }
     Ok(())
@@ -14445,11 +14507,99 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_scan_planned_missing_row_predicate() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ]
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-plan-missing-row-predicate".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-planned".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-plan-missing-row-predicate",
+                    "event-type": "table.scan-planned",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "context": {
+                                "read-restriction": read_restriction
+                            },
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": read_restriction,
+                        "requested-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
+                        "scan-task-count": 1
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("scan-plan row-predicate evidence should be required");
+
+        let message = err.to_string();
+        assert!(
+            message.contains(
+                "outbox event table.scan-planned (lakecat.lineage-and-graph) has invalid"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("scan-planned read-restriction must contain row-predicate"));
+        assert!(!message.contains("evt-scan-plan-missing-row-predicate"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "missing row-predicate scan replay must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "missing row-predicate scan replay must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "missing row-predicate scan replay must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_scan_planned_stats_field_policy_drift() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let ident = table_ident("local", "default", "events").unwrap();
         let read_restriction = json!({
             "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
             "policy-hashes": [
                 content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
                     .unwrap()
@@ -14537,6 +14687,11 @@ mod tests {
         let ident = table_ident("local", "default", "events").unwrap();
         let read_restriction = json!({
             "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
             "policy-hashes": [
                 content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
                     .unwrap()
@@ -14778,6 +14933,95 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "malformed scan-task fetch evidence must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_scan_fetch_termless_row_predicate() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "value": "debug"
+            },
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ]
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-fetch-termless-row-predicate".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-tasks-fetched".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-fetch-termless-row-predicate",
+                    "event-type": "table.scan-tasks-fetched",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "context": {
+                                "read-restriction": read_restriction
+                            },
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": read_restriction,
+                        "required-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "required-filters": [{
+                            "type": "not-eq",
+                            "value": "debug"
+                        }],
+                        "file-scan-task-count": 1,
+                        "delete-file-count": 0,
+                        "child-plan-task-count": 0
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("scan-fetch row-predicate term evidence should be required");
+
+        let message = err.to_string();
+        assert!(message.contains(
+            "outbox event table.scan-tasks-fetched (lakecat.lineage-and-graph) has invalid"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("scan-tasks-fetched read-restriction row-predicate.term"));
+        assert!(!message.contains("evt-scan-fetch-termless-row-predicate"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "termless row-predicate scan replay must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "termless row-predicate scan replay must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "termless row-predicate scan replay must fail before lineage projection"
         );
     }
 

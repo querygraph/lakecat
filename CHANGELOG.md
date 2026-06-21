@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required service scan-planned and scan-tasks-fetched outbox admission to
+  reject missing or malformed governed read-restriction `row-predicate`
+  evidence before graph or OpenLineage projection.
 - Rejected blank and duplicate scan projection/stat field arrays at service
   outbox admission before graph or OpenLineage projection, aligning live
   scan-planned and scan-tasks-fetched replay evidence with compact QGLake proof

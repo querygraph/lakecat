@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate service scan row predicates`.
+  Service outbox admission now rejects scan-planned and scan-tasks-fetched
+  replay events whose governed read-restriction proof omits `row-predicate` or
+  carries malformed predicate type/term/value evidence, so graph and
+  OpenLineage sinks never observe ambiguous scan predicate narrowing proof.
+- Local verification for this service scan predicate proof slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service missing_row_predicate -- --test-threads=1`;
+  `cargo test -p lakecat-service termless_row_predicate -- --test-threads=1`;
+  `cargo test -p lakecat-service scan_planned -- --test-threads=1`;
+  `cargo test -p lakecat-service scan_fetch -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate service scan proof arrays`.
   Service outbox admission now rejects blank or duplicate scan projection/stat
   field arrays before graph or OpenLineage projection, so live scan-planned and
