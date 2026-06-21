@@ -338,8 +338,9 @@ receipt cannot retain weaker governed-read policy evidence than the top-level
 scan replay payload. Planned and fetched scan replay also require the top-level
 read restriction to match the authorization receipt context exactly before any
 graph or lineage projection is acknowledged.
-Credential-vend replay applies the same receipt agreement rule before
-projecting blocked-agent or audited raw-credential evidence.
+Credential-vend replay applies the same receipt agreement rule to both
+governed read restrictions and `lakecat:raw-credential-exception` evidence
+before projecting blocked-agent or audited raw-credential evidence.
 Exact idempotency replays are verified to return before object-store writes, so
 the committed metadata object remains untouched on retry.
 Metadata-location prefix failures identify the submitted object and selected

@@ -646,7 +646,10 @@ the response posture, but it does not inherit cloud session tokens. If the
 credential event carries a governed read restriction, outbox admission requires
 the top-level `read-restriction` to match
 `authorization-receipt.context.read-restriction`, keeping TTL and blocked-read
-evidence inside the durable receipt.
+evidence inside the durable receipt. Raw credential exceptions follow the same
+rule: the top-level `lakecat:raw-credential-exception` object must match
+`authorization-receipt.context.lakecat:raw-credential-exception` exactly, so
+trusted-human exceptions and blocked-agent denials cannot drift during replay.
 
 ## Rust-First Engines And The V3 To V4 Path
 

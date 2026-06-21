@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required credential-vend replay raw-credential exception evidence to match
+  the authorization receipt context before outbox delivery, so blocked-agent
+  and trusted-human exception replay cannot drift from the durable TypeSec
+  decision receipt.
 - Required credential-vend replay read restrictions to match the authorization
   receipt context before outbox delivery, so credential replay cannot preserve
   policy-derived TTL or blocked-read evidence outside the durable receipt.

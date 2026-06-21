@@ -6,6 +6,27 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require raw credential exception receipt agreement`.
+  Outbox admission for `credentials.vend-attempted` now rejects credential
+  replay when the top-level `lakecat:raw-credential-exception` evidence is
+  missing from, or differs from, the authorization receipt context. This keeps
+  blocked-agent and trusted-human raw credential exception replay tied to the
+  durable TypeSec decision receipt before graph projection, OpenLineage
+  projection, or delivery acknowledgement.
+- Local verification for this raw credential exception receipt agreement slice
+  is green:
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_raw_credential_exception_receipt_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_credential_vend_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require credential restriction receipt agreement`.
   Outbox admission for `credentials.vend-attempted` now rejects governed
   credential replay when the top-level `read-restriction` evidence is missing

@@ -1278,6 +1278,13 @@ fn authorization_receipt_read_restriction(payload: &Value) -> Option<&Value> {
         .get("read-restriction")
 }
 
+fn authorization_receipt_raw_credential_exception(payload: &Value) -> Option<&Value> {
+    payload
+        .get("authorization-receipt")?
+        .get("context")?
+        .get("lakecat:raw-credential-exception")
+}
+
 fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCatError> {
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
     let Some(commit) = payload
@@ -2510,6 +2517,7 @@ fn validate_credential_vend_event_evidence(
     payload: &Value,
 ) -> Result<(), LakeCatError> {
     validate_read_restriction_receipt_match(event, payload, "credential-vend")?;
+    validate_raw_credential_exception_receipt_match(event, payload)?;
 
     let Some(credential_count) = payload.get("credential-count").and_then(Value::as_u64) else {
         return Err(outbox_evidence_error(
@@ -2546,6 +2554,31 @@ fn validate_credential_vend_event_evidence(
     validate_required_full_hash_field(event, storage_profile, "location-prefix-hash")?;
     validate_secret_ref_evidence(event, storage_profile, "credential-vend storage-profile")?;
     Ok(())
+}
+
+fn validate_raw_credential_exception_receipt_match(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    match (
+        payload.get("lakecat:raw-credential-exception"),
+        authorization_receipt_raw_credential_exception(payload),
+    ) {
+        (None, None) => Ok(()),
+        (Some(exception), Some(receipt_exception)) if exception == receipt_exception => Ok(()),
+        (Some(_), None) => Err(outbox_evidence_error(
+            event,
+            "credential-vend raw-credential exception must be captured in authorization receipt context",
+        )),
+        (None, Some(_)) => Err(outbox_evidence_error(
+            event,
+            "credential-vend authorization receipt raw-credential exception must match top-level evidence",
+        )),
+        (Some(_), Some(_)) => Err(outbox_evidence_error(
+            event,
+            "credential-vend raw-credential exception must match authorization receipt context",
+        )),
+    }
 }
 
 fn validate_secret_ref_evidence(
@@ -11858,6 +11891,91 @@ mod tests {
         ));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-credential-restriction-missing-receipt-context"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_raw_credential_exception_receipt_drift() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "human:operator".to_string(),
+            kind: PrincipalKind::Human,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-raw-credential-exception-drift".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-raw-credential-exception-drift",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                            "context": {
+                                "lakecat:raw-credential-exception": {
+                                    "requested": true,
+                                    "allowed": true,
+                                    "reason": "trusted human principal may use audited raw credential vending"
+                                }
+                            }
+                        },
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "storage-profile-id": "events-local",
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                        "lakecat:raw-credential-exception": {
+                            "requested": true,
+                            "allowed": false,
+                            "reason": "fine-grained read restriction requires Sail-planned reads"
+                        }
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("raw credential exception must match receipt context");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains(
+            "credential-vend raw-credential exception must match authorization receipt context"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-raw-credential-exception-drift"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
