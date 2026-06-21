@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin catalog config bridge constants`.
+  Catalog configuration compatibility and v4 bridge posture strings now live as
+  `lakecat-api` constants, `CatalogConfigResponse::default()` has direct
+  API-level coverage for those values, and service replay validation uses the
+  same constants so catalog config responses and `catalog.config-read` outbox
+  admission cannot drift independently.
+- Local verification for this catalog config bridge constants slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -- --check`;
+  `cargo test -p lakecat-api catalog_config_defaults_pin_iceberg_v4_bridge_posture -- --test-threads=1`;
+  `cargo test -p lakecat-service catalog_config -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover multi-workflow trigger guard`.
   The workflow-trigger contract self-test now writes mixed `.yml`/`.yaml`
   workflow directories, accepts multiple manual-only workflow files, and rejects

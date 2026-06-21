@@ -3,6 +3,17 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
+pub const LAKECAT_COMPATIBILITY_KEY: &str = "lakecat.compatibility";
+pub const LAKECAT_COMPATIBILITY_VALUE: &str = "iceberg-rest";
+pub const LAKECAT_FORMAT_BASELINE_KEY: &str = "lakecat.format.baseline";
+pub const LAKECAT_FORMAT_BASELINE_VALUE: &str = "iceberg-v1-v3";
+pub const LAKECAT_FORMAT_V4_KEY: &str = "lakecat.format.v4";
+pub const LAKECAT_FORMAT_V4_VALUE: &str = "extension-ready";
+pub const LAKECAT_FORMAT_V4_BRIDGE_KEY: &str = "lakecat.format.v4.bridge";
+pub const LAKECAT_FORMAT_V4_BRIDGE_VALUE: &str = "json-passthrough";
+pub const LAKECAT_FORMAT_V4_TYPED_SAIL_KEY: &str = "lakecat.format.v4.typed-sail";
+pub const LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE: &str = "unavailable";
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct CatalogConfigResponse {
@@ -15,11 +26,14 @@ impl Default for CatalogConfigResponse {
     fn default() -> Self {
         Self {
             defaults: vec![
-                ConfigEntry::new("lakecat.compatibility", "iceberg-rest"),
-                ConfigEntry::new("lakecat.format.baseline", "iceberg-v1-v3"),
-                ConfigEntry::new("lakecat.format.v4", "extension-ready"),
-                ConfigEntry::new("lakecat.format.v4.bridge", "json-passthrough"),
-                ConfigEntry::new("lakecat.format.v4.typed-sail", "unavailable"),
+                ConfigEntry::new(LAKECAT_COMPATIBILITY_KEY, LAKECAT_COMPATIBILITY_VALUE),
+                ConfigEntry::new(LAKECAT_FORMAT_BASELINE_KEY, LAKECAT_FORMAT_BASELINE_VALUE),
+                ConfigEntry::new(LAKECAT_FORMAT_V4_KEY, LAKECAT_FORMAT_V4_VALUE),
+                ConfigEntry::new(LAKECAT_FORMAT_V4_BRIDGE_KEY, LAKECAT_FORMAT_V4_BRIDGE_VALUE),
+                ConfigEntry::new(
+                    LAKECAT_FORMAT_V4_TYPED_SAIL_KEY,
+                    LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE,
+                ),
             ],
             overrides: Vec::new(),
             endpoints: vec![
@@ -100,6 +114,48 @@ impl ConfigEntry {
             key: key.into(),
             value: value.into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn catalog_config_defaults_pin_iceberg_v4_bridge_posture() {
+        let defaults = CatalogConfigResponse::default()
+            .defaults
+            .into_iter()
+            .map(|entry| (entry.key, entry.value))
+            .collect::<BTreeMap<_, _>>();
+
+        assert_eq!(
+            defaults.get(LAKECAT_COMPATIBILITY_KEY).map(String::as_str),
+            Some(LAKECAT_COMPATIBILITY_VALUE)
+        );
+        assert_eq!(
+            defaults
+                .get(LAKECAT_FORMAT_BASELINE_KEY)
+                .map(String::as_str),
+            Some(LAKECAT_FORMAT_BASELINE_VALUE)
+        );
+        assert_eq!(
+            defaults.get(LAKECAT_FORMAT_V4_KEY).map(String::as_str),
+            Some(LAKECAT_FORMAT_V4_VALUE)
+        );
+        assert_eq!(
+            defaults
+                .get(LAKECAT_FORMAT_V4_BRIDGE_KEY)
+                .map(String::as_str),
+            Some(LAKECAT_FORMAT_V4_BRIDGE_VALUE)
+        );
+        assert_eq!(
+            defaults
+                .get(LAKECAT_FORMAT_V4_TYPED_SAIL_KEY)
+                .map(String::as_str),
+            Some(LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE)
+        );
     }
 }
 

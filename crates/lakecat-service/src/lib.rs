@@ -10,9 +10,12 @@ use axum::{Json, Router};
 use lakecat_api::{
     CatalogConfigResponse, CommitTableRequest, CommitTableResponse, ConfigEntry,
     CreateNamespaceRequest, CreateTableRequest, FetchScanTasksRequest as ApiFetchScanTasksRequest,
-    FetchScanTasksResponse, LineageDrainEventSummary, LineageDrainResponse, ListNamespacesResponse,
-    ListPolicyBindingsResponse, ListProjectsResponse, ListServersResponse,
-    ListStorageProfilesResponse, ListTableCommitRecordsResponse,
+    FetchScanTasksResponse, LAKECAT_COMPATIBILITY_KEY, LAKECAT_COMPATIBILITY_VALUE,
+    LAKECAT_FORMAT_BASELINE_KEY, LAKECAT_FORMAT_BASELINE_VALUE, LAKECAT_FORMAT_V4_BRIDGE_KEY,
+    LAKECAT_FORMAT_V4_BRIDGE_VALUE, LAKECAT_FORMAT_V4_KEY, LAKECAT_FORMAT_V4_TYPED_SAIL_KEY,
+    LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE, LAKECAT_FORMAT_V4_VALUE, LineageDrainEventSummary,
+    LineageDrainResponse, ListNamespacesResponse, ListPolicyBindingsResponse, ListProjectsResponse,
+    ListServersResponse, ListStorageProfilesResponse, ListTableCommitRecordsResponse,
     ListViewVersionReceiptChainsResponse, ListViewVersionReceiptsResponse, ListViewsResponse,
     ListWarehousesResponse, LoadCredentialsResponse, LoadTableResponse, NamespaceResponse,
     PlanTableScanRequest, PlanTableScanResponse, PolicyBindingResponse, ProjectResponse,
@@ -2629,11 +2632,14 @@ fn validate_catalog_config_defaults(
         }
     }
     let required = [
-        ("lakecat.compatibility", "iceberg-rest"),
-        ("lakecat.format.baseline", "iceberg-v1-v3"),
-        ("lakecat.format.v4", "extension-ready"),
-        ("lakecat.format.v4.bridge", "json-passthrough"),
-        ("lakecat.format.v4.typed-sail", "unavailable"),
+        (LAKECAT_COMPATIBILITY_KEY, LAKECAT_COMPATIBILITY_VALUE),
+        (LAKECAT_FORMAT_BASELINE_KEY, LAKECAT_FORMAT_BASELINE_VALUE),
+        (LAKECAT_FORMAT_V4_KEY, LAKECAT_FORMAT_V4_VALUE),
+        (LAKECAT_FORMAT_V4_BRIDGE_KEY, LAKECAT_FORMAT_V4_BRIDGE_VALUE),
+        (
+            LAKECAT_FORMAT_V4_TYPED_SAIL_KEY,
+            LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE,
+        ),
     ];
     for (required_key, required_value) in required {
         let found = defaults.iter().any(|entry| {

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Promoted the catalog configuration compatibility and v4 bridge posture
+  strings to `lakecat-api` constants, added API-level coverage for the default
+  response, and wired service replay validation to the same constants so
+  catalog config responses and outbox admission cannot drift independently.
 - Strengthened the workflow-trigger contract self-test with multi-file
   `.yml`/`.yaml` cases, proving the manual-only guard accepts multiple manual
   workflows and rejects an automatic trigger hidden in a secondary workflow
