@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required `table.commit` outbox admission to reject commit principal evidence
+  that drifts from the authorization receipt principal before acknowledgement,
+  graph projection, or OpenLineage projection.
 - Rejected empty or blank ODRL allowed-column lists and blank ODRL purposes
   while composing `ReadRestriction`, before policy material can reach
   credential issuance or governed Sail planning/fetch paths.

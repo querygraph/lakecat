@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject commit principal replay drift`.
+  Service `table.commit` outbox admission now rejects commit principal evidence
+  that differs from the authorization receipt principal, so forged replay
+  cannot project one actor to graph/OpenLineage while preserving a different
+  receipt principal.
+- Local verification for this commit principal replay slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_mismatched_table_commit_principal_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service table_commit -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject blank ODRL restrictions`.
   `lakecat-security` now rejects empty or blank ODRL allowed-column lists and
   blank ODRL purposes while composing `ReadRestriction`, so malformed policy

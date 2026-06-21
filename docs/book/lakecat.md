@@ -430,9 +430,11 @@ pointer-log/outbox stream without parsing full table metadata for every
 catalog audit question. Before a `table.commit` outbox event is projected or
 acknowledged, LakeCat now checks that it carries a commit object, an unsigned
 sequence number, a decodable root table identity, matching nested commit-table
-identity when present, and full `sha256:`-prefixed 64-hex request, response,
-idempotency-key, and present policy hashes. A prefix-shaped placeholder or
-contradictory commit identity cannot become delivered commit replay evidence.
+identity when present, a commit principal matching the authorization receipt
+principal when both are present, and full `sha256:`-prefixed 64-hex request,
+response, idempotency-key, and present policy hashes. A prefix-shaped
+placeholder, contradictory commit identity, or drifted principal cannot become
+delivered commit replay evidence.
 
 Operators and QueryGraph can read that pointer-log evidence through a governed
 management endpoint:
