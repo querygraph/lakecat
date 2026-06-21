@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required `credentials.vend-attempted` outbox admission to enforce the nested
+  storage-profile provider/issuance-mode and secret-ref/mode compatibility
+  proof even when credential count is zero.
 - Required `storage-profile.upserted` outbox admission to enforce
   provider/issuance-mode compatibility before acknowledgement, graph
   projection, or OpenLineage projection.

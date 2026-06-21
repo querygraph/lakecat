@@ -584,6 +584,10 @@ when a storage profile uses an external secret reference, and backend-supplied
 provider evidence must be replaced rather than trusted. Credential-vend replay
 must also reject response evidence whose secret-ref provider drifts from the
 selected storage profile before any graph or OpenLineage sink observes it.
+Credential-vend replay must validate the nested storage-profile
+provider/issuance-mode and secret-ref/mode proof even when no credentials were
+returned, so blocked attempts cannot project a weaker credential-root claim
+than storage-profile management would accept.
 Storage-profile upsert replay must be hash-only for storage roots: generated
 audit/outbox evidence records `location-prefix-hash`, and raw
 `location-prefix` values must fail before acknowledgement or projection.

@@ -6,6 +6,22 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate credential storage-profile modes`.
+  Service `credentials.vend-attempted` outbox admission now reuses the
+  storage-profile provider/issuance-mode replay proof for nested credential
+  storage-profile evidence, so zero-credential or blocked credential events
+  cannot project a profile that would have failed storage-profile management
+  validation.
+- Local verification for this credential storage-profile mode slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service credential_storage_profile_local_no_secret_remote_provider -- --test-threads=1`;
+  `cargo test -p lakecat-service credential_storage_profile_short_lived_file_provider -- --test-threads=1`;
+  `cargo test -p lakecat-service credential_storage_profile -- --test-threads=1`;
+  `cargo test -p lakecat-service credential_vend -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate storage-profile provider modes`.
   Service `storage-profile.upserted` outbox admission now rejects
   credential-root replay whose provider and issuance mode could not have passed

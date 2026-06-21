@@ -2073,57 +2073,11 @@ fn validate_storage_profile_upsert_event_evidence(
             ));
         }
     }
-    let provider =
-        required_string_field(event, storage_profile, "provider", "storage-profile upsert")?
-            .parse::<StorageProvider>()
-            .map_err(|_| {
-                outbox_evidence_error(
-                    event,
-                    "storage-profile upsert evidence has invalid provider",
-                )
-            })?;
-    let issuance_mode = required_string_field(
+    validate_storage_profile_provider_mode_evidence(
         event,
         storage_profile,
-        "issuance-mode",
         "storage-profile upsert",
-    )?
-    .parse::<CredentialIssuanceMode>()
-    .map_err(|_| {
-        outbox_evidence_error(
-            event,
-            "storage-profile upsert evidence has invalid issuance-mode",
-        )
-    })?;
-    let secret_ref_present = storage_profile
-        .get("secret-ref-present")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    if matches!(issuance_mode, CredentialIssuanceMode::ShortLivedSecretRef) != secret_ref_present {
-        return Err(outbox_evidence_error(
-            event,
-            "storage-profile upsert secret-ref-present must match issuance-mode",
-        ));
-    }
-    if matches!(issuance_mode, CredentialIssuanceMode::LocalFileNoSecret)
-        && provider != StorageProvider::File
-    {
-        return Err(outbox_evidence_error(
-            event,
-            "storage-profile upsert local-file-no-secret issuance mode requires file provider",
-        ));
-    }
-    if matches!(issuance_mode, CredentialIssuanceMode::ShortLivedSecretRef)
-        && !matches!(
-            provider,
-            StorageProvider::S3 | StorageProvider::Gcs | StorageProvider::Azure
-        )
-    {
-        return Err(outbox_evidence_error(
-            event,
-            "storage-profile upsert short-lived-secret-ref issuance mode requires cloud object provider",
-        ));
-    }
+    )?;
     if storage_profile.get("secret-ref").is_some() {
         return Err(outbox_evidence_error(
             event,
@@ -2869,6 +2823,11 @@ fn validate_credential_vend_event_evidence(
     };
     validate_required_full_hash_field(event, storage_profile, "location-prefix-hash")?;
     validate_secret_ref_evidence(event, storage_profile, "credential-vend storage-profile")?;
+    validate_storage_profile_provider_mode_evidence(
+        event,
+        storage_profile,
+        "credential-vend storage-profile",
+    )?;
     let profile_id = required_string_field(
         event,
         storage_profile,
@@ -3203,6 +3162,56 @@ fn validate_secret_ref_evidence(
         return Err(outbox_evidence_error(
             event,
             &format!("{label} cannot carry secret-ref evidence when secret-ref-present is false"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_storage_profile_provider_mode_evidence(
+    event: &OutboxEvent,
+    storage_profile: &Value,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let provider = required_string_field(event, storage_profile, "provider", label)?
+        .parse::<StorageProvider>()
+        .map_err(|_| {
+            outbox_evidence_error(event, &format!("{label} evidence has invalid provider"))
+        })?;
+    let issuance_mode = required_string_field(event, storage_profile, "issuance-mode", label)?
+        .parse::<CredentialIssuanceMode>()
+        .map_err(|_| {
+            outbox_evidence_error(
+                event,
+                &format!("{label} evidence has invalid issuance-mode"),
+            )
+        })?;
+    let secret_ref_present = storage_profile
+        .get("secret-ref-present")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if matches!(issuance_mode, CredentialIssuanceMode::ShortLivedSecretRef) != secret_ref_present {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} secret-ref-present must match issuance-mode"),
+        ));
+    }
+    if matches!(issuance_mode, CredentialIssuanceMode::LocalFileNoSecret)
+        && provider != StorageProvider::File
+    {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} local-file-no-secret issuance mode requires file provider"),
+        ));
+    }
+    if matches!(issuance_mode, CredentialIssuanceMode::ShortLivedSecretRef)
+        && !matches!(
+            provider,
+            StorageProvider::S3 | StorageProvider::Gcs | StorageProvider::Azure
+        )
+    {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} short-lived-secret-ref issuance mode requires cloud object provider"),
         ));
     }
     Ok(())
@@ -13956,6 +13965,154 @@ mod tests {
         );
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-credential-secret-ref-presence-drift"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_credential_storage_profile_local_no_secret_remote_provider() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-local-no-secret-remote-provider".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-local-no-secret-remote-provider",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "storage-profile-id": "events-prod",
+                        "storage-profile": {
+                            "profile-id": "events-prod",
+                            "warehouse": "local",
+                            "provider": "s3",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10).await.expect_err(
+            "credential storage-profile local-file-no-secret mode with remote provider should fail",
+        );
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains(
+            "credential-vend storage-profile local-file-no-secret issuance mode requires file provider"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-credential-local-no-secret-remote-provider"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_credential_storage_profile_short_lived_file_provider() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-short-lived-file-provider".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-short-lived-file-provider",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "storage-profile-id": "events-local",
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "short-lived-secret-ref",
+                            "secret-ref-present": true,
+                            "secret-ref-provider": "typesec",
+                            "secret-ref-hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10).await.expect_err(
+            "credential storage-profile short-lived-secret-ref mode with file provider should fail",
+        );
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains(
+            "credential-vend storage-profile short-lived-secret-ref issuance mode requires cloud object provider"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-credential-short-lived-file-provider"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

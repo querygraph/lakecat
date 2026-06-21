@@ -1212,7 +1212,12 @@ redacted response evidence includes the catalog-derived
 `lakecat.secret-ref-provider`, while the storage-profile replay evidence
 includes `secret-ref-provider` and a full `secret-ref-hash`; outbox admission
 rejects any credential response whose provider proof drifts from the selected
-profile before graph or OpenLineage projection. The storage-profile and
+profile before graph or OpenLineage projection. The nested storage-profile
+proof is still checked even when no credentials are returned: provider and
+issuance mode must be compatible, and secret-reference presence must match the
+mode. That keeps blocked credential attempts from projecting a weaker
+credential-root proof than storage-profile management would accept.
+The storage-profile and
 credential-vend service tests pin that producer-side `location-prefix-hash`
 evidence is already a full SHA-256 digest before QGLake receives the compact
 `locationPrefixHash` proof. The trusted-human credential-vending route test
