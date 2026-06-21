@@ -6,6 +6,15 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reconcile QGLake fixture guidance`.
+  `AGENTS.md` and `GOAL.md` now both name `qglake-fixture` as an explicit
+  feature gate, record why the fixture generator depends on Sail's local
+  Iceberg writer, and list the local fixture, dependency-contract, and book
+  rebuild gates that should accompany affected future slices.
+- Local verification for this guidance reconciliation slice is green:
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Guard QGLake fixture dependency contract`.
   The local dependency-contract audit now protects the new QGLake fixture
   feature boundary: `lakecat-cli` must keep `sail-iceberg` optional behind the

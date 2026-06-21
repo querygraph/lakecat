@@ -109,7 +109,11 @@ metadata-pointer state, policy gates, and integration events belong here.
   reusable catalog graph taxonomy belongs in Grust.
 - Keep feature gates honest. Default-feature tests should pass, and real
   integrations should be wired through explicit features such as `sail-local`,
-  `typesec-local`, and `grust-local`.
+  `typesec-local`, `grust-local`, and `qglake-fixture`.
+- Keep `lakecat-cli qglake-fixture` as an explicit feature because it depends
+  on Sail's local Iceberg fixture writer. Replay, handoff verification,
+  management, policy, and storage-profile CLI commands should remain available
+  in the default CLI build.
 - Side effects to graph and lineage should move toward a transactional outbox
   so catalog state changes are not lost or blocked by external sinks.
 - Prefer the Rust `turso` crate for LakeCat's durable local catalog spine. Keep
@@ -125,10 +129,17 @@ For LakeCat changes, prefer:
 
 - `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`
 - `cargo fmt -p lakecat-cli -- --check` when CLI behavior or fixtures change.
+- `cargo test -p lakecat-cli --features qglake-fixture qglake_fixture -- --test-threads=1`
+  when QGLake fixture generation, handoff scripts, or fixture feature gates
+  change.
 - `cargo test -p lakecat-store --features turso-local`
 - `cargo test -p lakecat-service --features turso-local`
 - `cargo test -p lakecat-service --all-features`
 - `cargo test --workspace --all-features`
+- `docs/book/build.sh` when user-facing workflows, public behavior,
+  acceptance evidence, or architecture guidance changes.
+- `scripts/check-local-dependency-contract.sh` when dependency contracts,
+  sibling APIs, CI policy, or QueryGraph handoff/import evidence changes.
 - `git diff --check`
 
 When a change touches Sail, Grust, TypeSec, or QueryGraph, run the focused
@@ -236,6 +247,9 @@ Continue moving toward:
 - Keep feature gates honest. Default-feature tests should pass, and real
   integrations must remain explicit rather than quietly becoming required for
   embedded or unit-test use.
+- Keep `qglake-fixture` in that explicit-feature set because it pulls in Sail's
+  local Iceberg fixture writer; default CLI verification and management
+  commands must stay available without it.
 - Keep LakeCat's durable local spine on the Rust `turso` crate. The
   `CatalogStore` contract should stay portable, but SQLx/SQLite should not be
   reintroduced unless explicitly requested.
@@ -271,10 +285,17 @@ For LakeCat changes, prefer these local gates before pushing:
 
 - `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`
 - `cargo fmt -p lakecat-cli -- --check` when CLI behavior or fixtures change.
+- `cargo test -p lakecat-cli --features qglake-fixture qglake_fixture -- --test-threads=1`
+  when QGLake fixture generation, handoff scripts, or fixture feature gates
+  change.
 - `cargo test -p lakecat-store --features turso-local`
 - `cargo test -p lakecat-service --features turso-local`
 - `cargo test -p lakecat-service --all-features`
 - `cargo test --workspace --all-features`
+- `docs/book/build.sh` when user-facing workflows, public behavior,
+  acceptance evidence, or architecture guidance changes.
+- `scripts/check-local-dependency-contract.sh` when dependency contracts,
+  sibling APIs, CI policy, or QueryGraph handoff/import evidence changes.
 - `git diff --check`
 
 When a change touches Sail, Grust, TypeSec, or QueryGraph, run focused tests in

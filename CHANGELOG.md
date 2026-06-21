@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reconciled `AGENTS.md` and `GOAL.md` so durable guidance names the
+  `qglake-fixture` feature boundary, CLI fixture verification, dependency
+  contract checks, and book rebuild expectations.
 - Extended the local dependency-contract audit so the explicit
   `lakecat-cli qglake-fixture` feature boundary is protected in CLI manifests,
   the local handoff script, and the manual-only CI matrix.
