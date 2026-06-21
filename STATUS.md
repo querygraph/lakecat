@@ -6,6 +6,24 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject duplicate QGLake view drain hashes`.
+  Raw QGLake lineage-drain verification now rejects duplicate
+  `viewVersionReceiptHashes` and `viewVersionReceiptChainHashes` on
+  view-history replay summaries. Tombstone receipt replay and namespace
+  receipt-chain replay now share the same duplicate-free view proof invariant
+  as service replay and compact handoff summaries before QGLake proof is
+  regenerated.
+- Local verification for this QGLake view-drain duplicate slice is green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_duplicate -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake -- --test-threads=1`;
+  `scripts/qglake-handoff-local.sh`
+  (green, ending with `QGLake handoff verified`);
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject duplicate QGLake drain hashes`.
   Raw QGLake lineage-drain verification now rejects duplicate
   `replayEventHashes` and `openLineageHashes` on replay summaries before the

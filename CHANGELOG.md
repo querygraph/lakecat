@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required raw QGLake lineage-drain view-history summaries to reject duplicate
+  `viewVersionReceiptHashes` and `viewVersionReceiptChainHashes`, preventing
+  tombstone and namespace receipt-chain replay from inflating view proof before
+  compact handoff generation.
 - Required raw QGLake lineage-drain replay summaries to reject duplicate
   `replayEventHashes` and `openLineageHashes` before compact handoff proof is
   regenerated, keeping source replay and saved handoff summaries aligned.

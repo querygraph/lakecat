@@ -2450,12 +2450,12 @@ duplicate-free as well as count-aligned, matching service-side outbox admission,
 so a saved handoff cannot inflate the number of accepted tables or views by
 repeating an already accepted stable id.
 Raw lineage-drain replay summaries and compact handoff proof sections both
-keep replay and OpenLineage hash arrays duplicate-free, not only `sha256:`
-shaped. That covers the bootstrap, governed scan, management, table
-commit-history, view receipt-chain, storage-profile upsert, and
-credential-vending proof sections, so a source replay or archived handoff
-cannot make an evidence set look larger by repeating an already accepted
-digest.
+keep replay, OpenLineage, view receipt, and view receipt-chain hash arrays
+duplicate-free, not only `sha256:` shaped. That covers the bootstrap, governed
+scan, management, table commit-history, view tombstone/receipt-chain,
+storage-profile upsert, and credential-vending proof sections, so a source
+replay or archived handoff cannot make an evidence set look larger by
+repeating an already accepted digest.
 The verifier
 also compares those QueryGraph import-plan graph node and edge counts with the
 verified bootstrap bundle graph counts, so an import plan cannot keep the

@@ -7522,6 +7522,20 @@ fn require_qglake_lineage_drain_sink_hashes_duplicate_free(
                 event.event_type
             ),
         )?;
+        require_qglake_duplicate_free_strings(
+            &event.view_version_receipt_hashes,
+            &format!(
+                "qglake lineage drain {} viewVersionReceiptHashes",
+                event.event_type
+            ),
+        )?;
+        require_qglake_duplicate_free_strings(
+            &event.view_version_receipt_chain_hashes,
+            &format!(
+                "qglake lineage drain {} viewVersionReceiptChainHashes",
+                event.event_type
+            ),
+        )?;
     }
     Ok(())
 }
@@ -21507,6 +21521,88 @@ mod tests {
 
         assert!(err.to_string().contains("server.listed"));
         assert!(err.to_string().contains("replayEventHashes"));
+        assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_duplicate_view_tombstone_receipt_hashes() {
+        let verification = qglake_view_lineage_verification();
+        let mut tombstone = qglake_view_tombstone_receipt_lineage_summary();
+        let duplicate_hash = tombstone
+            .view_version_receipt_hashes
+            .first()
+            .expect("tombstone receipt hash fixture")
+            .clone();
+        tombstone.view_version_receipt_hashes = vec![duplicate_hash.clone(), duplicate_hash];
+        let drain = qglake_lineage_drain_from_summaries(vec![
+            qglake_bootstrap_lineage_summary_for(&verification, 1),
+            qglake_restricted_credential_summary(),
+            qglake_human_credential_summary(),
+            qglake_view_lineage_summary(),
+            qglake_view_drop_lineage_summary(),
+            tombstone,
+            qglake_view_receipt_chain_lineage_summary(),
+            qglake_policy_list_lineage_summary(),
+            qglake_storage_profile_list_lineage_summary(),
+            qglake_storage_profile_upsert_lineage_summary(),
+            qglake_server_list_lineage_summary(),
+            qglake_project_list_lineage_summary(),
+            qglake_warehouse_list_lineage_summary(),
+            qglake_table_commit_history_lineage_summary(),
+            qglake_scan_planned_lineage_summary(),
+            qglake_scan_tasks_fetched_lineage_summary(),
+        ]);
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject duplicate tombstone receipt hashes");
+
+        assert!(err.to_string().contains("view.version-receipts-listed"));
+        assert!(err.to_string().contains("viewVersionReceiptHashes"));
+        assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_duplicate_view_receipt_chain_hashes() {
+        let verification = qglake_view_lineage_verification();
+        let mut chain = qglake_view_receipt_chain_lineage_summary();
+        let duplicate_hash = chain
+            .view_version_receipt_chain_hashes
+            .first()
+            .expect("receipt-chain hash fixture")
+            .clone();
+        chain.view_version_receipt_chain_verified_count = 2;
+        chain.view_version_receipt_chain_hashes = vec![duplicate_hash.clone(), duplicate_hash];
+        chain.view_version_receipt_hashes = vec![
+            "sha256:view-drop-receipt".to_string(),
+            "sha256:view-receipt-v2".to_string(),
+        ];
+        let drain = qglake_lineage_drain_from_summaries(vec![
+            qglake_bootstrap_lineage_summary_for(&verification, 1),
+            qglake_restricted_credential_summary(),
+            qglake_human_credential_summary(),
+            qglake_view_lineage_summary(),
+            qglake_view_drop_lineage_summary(),
+            qglake_view_tombstone_receipt_lineage_summary(),
+            chain,
+            qglake_policy_list_lineage_summary(),
+            qglake_storage_profile_list_lineage_summary(),
+            qglake_storage_profile_upsert_lineage_summary(),
+            qglake_server_list_lineage_summary(),
+            qglake_project_list_lineage_summary(),
+            qglake_warehouse_list_lineage_summary(),
+            qglake_table_commit_history_lineage_summary(),
+            qglake_scan_planned_lineage_summary(),
+            qglake_scan_tasks_fetched_lineage_summary(),
+        ]);
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject duplicate receipt-chain hashes");
+
+        assert!(
+            err.to_string()
+                .contains("view.version-receipt-chains-listed")
+        );
+        assert!(err.to_string().contains("viewVersionReceiptChainHashes"));
         assert!(err.to_string().contains("duplicate-free"));
     }
 
