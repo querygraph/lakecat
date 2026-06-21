@@ -6,6 +6,20 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject empty captured scan projections`.
+  Captured LakeCat scan replay-line recomputation now reuses the governed
+  read-restriction evidence guard for both planned and fetched restrictions,
+  rejecting empty `allowed-columns` even when the captured replay JSON and
+  compact proof agree on the malformed restriction.
+- Local verification for this captured scan projection slice is green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_empty_planned_allowed_columns -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_empty_fetched_allowed_columns -- --test-threads=1`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind captured commit-history sequence proof`.
   Captured LakeCat replay output now rejects zero or non-increasing
   `tableCommitHistoryProof.sequenceNumbers` during replay-line recomputation,

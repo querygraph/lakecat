@@ -1936,6 +1936,8 @@ fn expected_scan_replay_line_from_summary(
 ) -> lakecat_core::LakeCatResult<String> {
     let planned = required_object(scan, "plannedReadRestriction", "governedScanProof")?;
     let fetched = required_object(scan, "fetchedReadRestriction", "governedScanProof")?;
+    require_read_restriction_evidence(planned, "governedScanProof.plannedReadRestriction")?;
+    require_read_restriction_evidence(fetched, "governedScanProof.fetchedReadRestriction")?;
     Ok(format!(
         "scan replay plan_tasks={} plan_graph_events={} planned_ttl={} planned_purpose={} file_tasks={} delete_files={} child_plan_tasks={} fetched_ttl={} fetched_purpose={}",
         require_positive_u64(scan, "planTaskCount", "governedScanProof")?,
@@ -14473,6 +14475,52 @@ mod tests {
             err.to_string()
                 .contains("captured LakeCat replay output.scan-replay mismatch")
         );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_empty_planned_allowed_columns() {
+        let temp = qglake_temp_dir("handoff-captured-scan-empty-planned-allowed-columns");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedReadRestriction"]["allowed-columns"] =
+            json!([]);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["scan"]["plannedReadRestriction"]["allowed-columns"] = json!([]);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured scan replay should reject empty planned allowed columns");
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("plannedReadRestriction"));
+        assert!(err.to_string().contains("allowed-columns"));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_empty_fetched_allowed_columns() {
+        let temp = qglake_temp_dir("handoff-captured-scan-empty-fetched-allowed-columns");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        summary["lakecatReplayVerification"]["governedScanProof"]["fetchedReadRestriction"]["allowed-columns"] =
+            json!([]);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["scan"]["fetchedReadRestriction"]["allowed-columns"] = json!([]);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured scan replay should reject empty fetched allowed columns");
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("fetchedReadRestriction"));
+        assert!(err.to_string().contains("allowed-columns"));
     }
 
     #[test]

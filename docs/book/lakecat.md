@@ -1900,7 +1900,10 @@ columns, row predicate, and policy hashes alongside the planned/fetched replay
 and OpenLineage hashes that prove the Sail-planned read path. The compact Rust
 verifier requires both planned and fetched replay/OpenLineage arrays to contain
 full `sha256:`-prefixed 64-hex digests, so automation can reject incomplete or
-placeholder scan lineage without falling back to the shell harness. It also compares the captured
+placeholder scan lineage without falling back to the shell harness. Captured
+scan replay-line recomputation also reuses the governed read-restriction guard,
+so an archived replay artifact cannot make empty planned or fetched
+`allowed-columns` look like a readable operator summary. It also compares the captured
 `replay-evidence.tableCommitHistory` object with
 `tableCommitHistoryProof`, including the commit count, sequence numbers, commit
 hashes, graph event count, replay hashes, and OpenLineage hashes that prove the

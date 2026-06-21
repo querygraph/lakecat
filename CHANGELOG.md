@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required captured QGLake scan replay-line recomputation to reject empty
+  planned or fetched `allowed-columns`, so archived operator replay text cannot
+  treat an empty governed projection as unrestricted access.
 - Tightened captured QGLake table commit-history replay-line recomputation so
   saved LakeCat replay artifacts must keep positive, strictly increasing commit
   sequence proof before operator text is accepted.
