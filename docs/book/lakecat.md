@@ -640,15 +640,16 @@ entries cannot widen or confuse the policy cap. The same response boundary owns
 the rest of the LakeCat evidence:
 issuer-supplied values for `lakecat.storage-profile-id`,
 `lakecat.storage-provider`, `lakecat.credential-mode`,
-`lakecat.authorization-principal`, and `lakecat.governed-read-required` are
-removed and replaced with catalog-derived values before the response is
-returned. The REST credential-vending regressions exercise this at the public
-response boundary: a backend can return multiple TTL entries or forged catalog
-evidence, but `loadCredentials` exposes one canonical proof while preserving
-issuer-owned credential details such as credential kind and provider session
-tokens. LakeCat records the same decision shape in audit/outbox evidence without
-copying raw credentials: each vended credential gets a hashed prefix, canonical
-LakeCat evidence values, and a hash of issuer-owned config. Replay can prove
+`lakecat.authorization-principal`, `lakecat.governed-read-required`, and
+`lakecat.secret-ref-provider` are removed and replaced with catalog-derived
+values before the response is returned. The REST credential-vending regressions
+exercise this at the public response boundary: a backend can return multiple
+TTL entries or forged catalog evidence, but `loadCredentials` exposes one
+canonical proof while preserving issuer-owned credential details such as
+credential kind and provider session tokens. LakeCat records the same decision
+shape in audit/outbox evidence without copying raw credentials: each vended
+credential gets a hashed prefix, canonical LakeCat evidence values, and a hash
+of issuer-owned config. Replay can prove
 the response posture, but it does not inherit cloud session tokens. If the
 credential event carries a governed read restriction, outbox admission requires
 the top-level `read-restriction` to match
@@ -1187,10 +1188,12 @@ read restriction, and returned credentials must preserve that cap in
 entries into one effective value before returning credentials, preserving a
 stricter issuer TTL when it is valid and otherwise falling back to the policy
 cap. It also rewrites LakeCat-owned profile, provider, mode, principal, and
-governed-read-required evidence after issuance, so a cloud secret backend cannot
-make the response look like a different catalog decision. The service tests for
-the REST credential endpoint prove this response shape directly, not just
-through helper functions. LakeCat also rejects any credential whose returned
+governed-read-required evidence after issuance. For secret-ref-backed profiles
+it also derives `lakecat.secret-ref-provider` from the selected storage profile,
+so a cloud secret backend cannot make the response look like a different
+catalog decision or secret-provider path. The service tests for the REST
+credential endpoint prove this response shape directly, not just through helper
+functions. LakeCat also rejects any credential whose returned
 prefix is outside the storage profile's `location-prefix`, so a misconfigured
 cloud secret backend cannot widen a table's storage scope after TypeSec has
 authorized the secret reference.

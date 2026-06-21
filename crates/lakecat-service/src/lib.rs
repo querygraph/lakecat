@@ -7769,6 +7769,32 @@ fn apply_credential_ttl_cap(
     credentials
 }
 
+fn apply_secret_ref_provider_evidence(
+    mut credentials: Vec<StorageCredential>,
+    profile: &StorageProfile,
+) -> Vec<StorageCredential> {
+    let Some(secret_ref_provider) = profile
+        .secret_ref
+        .as_deref()
+        .and_then(secret_ref_provider_label)
+        .map(str::to_string)
+    else {
+        return credentials;
+    };
+    for credential in &mut credentials {
+        credential.config.retain(|entry| {
+            !entry
+                .key
+                .eq_ignore_ascii_case("lakecat.secret-ref-provider")
+        });
+        credential.config.push(ConfigEntry::new(
+            "lakecat.secret-ref-provider",
+            secret_ref_provider.clone(),
+        ));
+    }
+    credentials
+}
+
 fn canonicalize_credential_response_evidence(
     mut credentials: Vec<StorageCredential>,
     profile: &StorageProfile,
@@ -7809,7 +7835,7 @@ fn canonicalize_credential_response_evidence(
             ));
         }
     }
-    credentials
+    apply_secret_ref_provider_evidence(credentials, profile)
 }
 
 const LAKECAT_CREDENTIAL_RESPONSE_EVIDENCE_KEYS: &[&str] = &[
@@ -7818,6 +7844,7 @@ const LAKECAT_CREDENTIAL_RESPONSE_EVIDENCE_KEYS: &[&str] = &[
     "lakecat.credential-mode",
     "lakecat.authorization-principal",
     "lakecat.governed-read-required",
+    "lakecat.secret-ref-provider",
 ];
 
 fn issued_credentials_for_profile(
@@ -7835,9 +7862,9 @@ fn issued_credentials_for_profile(
             )));
         }
     }
-    Ok(apply_credential_ttl_cap(
-        credentials,
-        max_credential_ttl_seconds,
+    Ok(apply_secret_ref_provider_evidence(
+        apply_credential_ttl_cap(credentials, max_credential_ttl_seconds),
+        profile,
     ))
 }
 
@@ -21754,6 +21781,10 @@ mod tests {
                     && entry.value == format!("{provider_label}-short-lived")
             }));
             assert!(credentials[0].config.iter().any(|entry| {
+                entry.key == "lakecat.secret-ref-provider"
+                    && entry.value == secret_ref.split_once("://").unwrap().0
+            }));
+            assert!(credentials[0].config.iter().any(|entry| {
                 entry.key == "lakecat.max-credential-ttl-seconds" && entry.value == "300"
             }));
             assert_eq!(
@@ -21783,6 +21814,49 @@ mod tests {
                 "denied TypeSec decisions must not dispatch to the production backend"
             );
         }
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_replaces_backend_secret_ref_provider_evidence() {
+        use crate::typesec_credential_issuer::{
+            ExternalSecretRefCredentialResolver, SecretRefCredentialResolver, SecretRefProvider,
+            StaticSecretRefCredentialResolver, TypeSecCredentialIssuer,
+        };
+
+        let secret_ref = "aws-sm://lakecat/s3-events";
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:agent".to_string(),
+                resource: secret_ref.to_string(),
+            }),
+            ExternalSecretRefCredentialResolver::with_provider_backends(BTreeMap::from([(
+                SecretRefProvider::AwsSecretsManager,
+                StaticSecretRefCredentialResolver::new(BTreeMap::from([(
+                    secret_ref.to_string(),
+                    vec![
+                        ConfigEntry::new("lakecat.secret-ref-provider", "backend-shadow"),
+                        ConfigEntry::new("aws.session-token", "temporary-token"),
+                    ],
+                )])) as Arc<dyn SecretRefCredentialResolver>,
+            )])),
+        );
+
+        let credentials = issuer
+            .issue(production_secret_credential_request(secret_ref))
+            .await
+            .unwrap();
+        assert_eq!(credentials.len(), 1);
+        assert_single_config_value(
+            &credentials[0].config,
+            "lakecat.secret-ref-provider",
+            "aws-sm",
+        );
+        assert!(
+            credentials[0].config.iter().any(|entry| {
+                entry.key == "aws.session-token" && entry.value == "temporary-token"
+            })
+        );
     }
 
     #[cfg(feature = "typesec-local")]

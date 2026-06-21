@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Canonicalized `lakecat.secret-ref-provider` on issued credential responses
+  from the selected storage profile, so TypeSec-gated production backends
+  cannot shadow which external secret-ref provider authorized a credential.
 - Encoded null and nested Sail Iceberg partition literals into Iceberg REST
   JSON instead of rejecting them in the LakeCat Sail adapter, keeping manifest
   expansion compatible with richer partition tuples while typed v4 Sail work

@@ -6,6 +6,21 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Canonicalize credential secret-ref provider evidence`.
+  Issued credential responses now derive `lakecat.secret-ref-provider` from the
+  selected storage profile's external secret reference and replace any backend
+  shadow value before returning credentials or recording replay evidence.
+- Local verification for this credential-provider evidence slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service --all-features typesec_credential_issuer -- --test-threads=1`
+  (green with the existing unused `CapturingSailEngine` warning);
+  `git diff --check`.
+- Latest completed implementation slice:
   `Encode nested Sail partition literals`.
   The LakeCat Sail adapter now converts null partition slots to JSON `null`
   and recursively encodes Sail `Struct`, `List`, and `Map` literals for
