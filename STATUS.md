@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate store table commits`.
+  `TableCommit::validate` now rejects empty expected/new metadata pointer
+  strings and non-object replacement metadata, and the memory/Turso
+  `commit_table` paths prove malformed direct/deserialized commits cannot
+  mutate table pointers, append commit history, or enqueue outbox events.
+- Local verification for this table-commit store slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_deserialized_invalid_table_commits -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_deserialized_invalid_table_commits -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate store table metadata records`.
   `TableRecord::validate` now rejects empty metadata-location strings and
   non-object table metadata, and the memory/Turso `create_table` paths prove

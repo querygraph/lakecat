@@ -347,6 +347,39 @@ pub struct TableCommit {
     pub authorization_receipt: Option<Value>,
 }
 
+impl TableCommit {
+    pub fn validate(&self) -> LakeCatResult<()> {
+        if self
+            .expected_previous_metadata_location
+            .as_deref()
+            .is_some_and(|location| location.trim().is_empty())
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "expected table metadata location must not be empty when present".to_string(),
+            ));
+        }
+        if self
+            .new_metadata_location
+            .as_deref()
+            .is_some_and(|location| location.trim().is_empty())
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "new table metadata location must not be empty when present".to_string(),
+            ));
+        }
+        if self
+            .new_metadata
+            .as_ref()
+            .is_some_and(|metadata| !metadata.is_object())
+        {
+            return Err(LakeCatError::InvalidArgument(
+                "new table metadata must be a JSON object".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TableCommitRecord {
     pub table: TableIdent,
@@ -1300,6 +1333,7 @@ impl CatalogStore for MemoryCatalogStore {
         ident: &TableIdent,
         commit: TableCommit,
     ) -> LakeCatResult<TableRecord> {
+        commit.validate()?;
         let mut state = self.state.write().await;
         let key = table_key(ident);
         if state.soft_deletes.contains_key(&key) {
@@ -3222,6 +3256,82 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_rejects_deserialized_invalid_table_commits() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let ident = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("events").unwrap(),
+        );
+        store
+            .create_namespace(&warehouse, namespace.clone())
+            .await
+            .unwrap();
+        store
+            .create_table(TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            ))
+            .await
+            .unwrap();
+
+        let base_commit = TableCommit {
+            requirements: vec![],
+            updates: vec![serde_json::json!({"action": "noop"})],
+            expected_previous_metadata_location: Some(
+                "file:///tmp/events/metadata/00000.json".to_string(),
+            ),
+            new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+            new_metadata: Some(serde_json::json!({"format-version": 3})),
+            idempotency_key: None,
+            idempotency_request_hash: None,
+            principal: Principal::anonymous(),
+            authorization_receipt: None,
+        };
+
+        let mut empty_new_location = base_commit.clone();
+        empty_new_location.new_metadata_location = Some("  ".to_string());
+        let err = store
+            .commit_table(&ident, empty_new_location)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("new table metadata location must not be empty")
+        ));
+
+        let mut non_object_metadata = base_commit;
+        non_object_metadata.new_metadata = Some(serde_json::json!("not metadata"));
+        let err = store
+            .commit_table(&ident, non_object_metadata)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("new table metadata must be a JSON object")
+        ));
+
+        let table = store.load_table(&ident).await.unwrap();
+        assert_eq!(table.version, 0);
+        assert_eq!(
+            table.metadata_location.as_deref(),
+            Some("file:///tmp/events/metadata/00000.json")
+        );
+        assert_eq!(
+            store.table_commit_records(&ident, 0, None).await.unwrap(),
+            vec![]
+        );
+        assert_eq!(store.pending_outbox_events(None, 10).await.unwrap(), vec![]);
+    }
+
+    #[tokio::test]
     async fn memory_store_commit_records_table_commit_outbox_event() {
         let store = MemoryCatalogStore::new();
         let warehouse = WarehouseName::new("local").unwrap();
@@ -3617,6 +3727,7 @@ pub mod turso_store {
             ident: &TableIdent,
             commit: TableCommit,
         ) -> LakeCatResult<TableRecord> {
+            commit.validate()?;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
             let request_hash = content_hash_json(&serde_json::json!({
@@ -5610,6 +5721,91 @@ pub mod turso_store {
                     if object == "table" && name == ident.stable_id()
             ));
             assert_eq!(store.list_namespaces(&warehouse).await.unwrap(), vec![]);
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_deserialized_invalid_table_commits() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("events").unwrap(),
+            );
+            store
+                .create_namespace(&warehouse, namespace.clone())
+                .await
+                .unwrap();
+            store
+                .create_table(TableRecord::new(
+                    ident.clone(),
+                    "file:///tmp/events".to_string(),
+                    Some("file:///tmp/events/metadata/00000.json".to_string()),
+                    serde_json::json!({"format-version": 3}),
+                    Principal::anonymous(),
+                ))
+                .await
+                .unwrap();
+
+            let base_commit = TableCommit {
+                requirements: vec![],
+                updates: vec![serde_json::json!({"action": "noop"})],
+                expected_previous_metadata_location: Some(
+                    "file:///tmp/events/metadata/00000.json".to_string(),
+                ),
+                new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+                new_metadata: Some(serde_json::json!({"format-version": 3})),
+                idempotency_key: None,
+                idempotency_request_hash: None,
+                principal: Principal::anonymous(),
+                authorization_receipt: None,
+            };
+
+            let mut empty_expected_location = base_commit.clone();
+            empty_expected_location.expected_previous_metadata_location = Some("  ".to_string());
+            let err = store
+                .commit_table(&ident, empty_expected_location)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("expected table metadata location must not be empty")
+            ));
+
+            let mut empty_new_location = base_commit.clone();
+            empty_new_location.new_metadata_location = Some("  ".to_string());
+            let err = store
+                .commit_table(&ident, empty_new_location)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("new table metadata location must not be empty")
+            ));
+
+            let mut non_object_metadata = base_commit;
+            non_object_metadata.new_metadata = Some(serde_json::json!("not metadata"));
+            let err = store
+                .commit_table(&ident, non_object_metadata)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("new table metadata must be a JSON object")
+            ));
+
+            let table = store.load_table(&ident).await.unwrap();
+            assert_eq!(table.version, 0);
+            assert_eq!(
+                table.metadata_location.as_deref(),
+                Some("file:///tmp/events/metadata/00000.json")
+            );
+            assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 0);
+            assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);
         }
 
         #[tokio::test]

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened `TableCommit` validation so memory and Turso commit paths reject
+  empty metadata-pointer strings and non-object replacement metadata before
+  malformed direct commits can mutate tables, commit history, or outbox state.
 - Tightened `TableRecord` validation so memory and Turso table creation reject
   empty metadata-location strings and non-object table metadata before
   malformed direct records can enter durable catalog state.
