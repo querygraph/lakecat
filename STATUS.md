@@ -6,6 +6,25 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind credential response secret-ref provider replay`.
+  Credential-vend audit payloads now include catalog-derived
+  `secret-ref-provider` and `secret-ref-hash` on secret-backed storage-profile
+  evidence, redacted `credential-response-evidence` now records
+  `lakecat.secret-ref-provider`, and outbox admission rejects response/provider
+  drift before graph or OpenLineage projection.
+- Local verification for this credential response replay slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service outbox_drain_rejects_credential_response_secret_ref_provider_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service credentials_vend_audit_payload_records_secret_ref_provider_response_evidence -- --test-threads=1`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`;
+  `cargo test -p lakecat-service --all-features outbox_drain_rejects_credential_response_secret_ref_provider_drift -- --test-threads=1`
+  (green with the existing unused `CapturingSailEngine` warning);
+  `cargo test -p lakecat-service --all-features credentials_vend_audit_payload_records_secret_ref_provider_response_evidence -- --test-threads=1`
+  (green with the existing unused `CapturingSailEngine` warning).
+- Latest completed implementation slice:
   `Canonicalize credential secret-ref provider evidence`.
   Issued credential responses now derive `lakecat.secret-ref-provider` from the
   selected storage profile's external secret reference and replace any backend

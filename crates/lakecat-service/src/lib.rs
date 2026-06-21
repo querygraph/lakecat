@@ -2825,6 +2825,32 @@ fn validate_credential_response_entry_evidence(
         },
         "credential-vend credential-response",
     )?;
+    let secret_ref_present = storage_profile
+        .get("secret-ref-present")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if secret_ref_present {
+        let secret_ref_provider = required_string_field(
+            event,
+            storage_profile,
+            "secret-ref-provider",
+            "credential-vend storage-profile",
+        )?;
+        validate_string_field_equals(
+            event,
+            entry,
+            "secret-ref-provider",
+            secret_ref_provider,
+            "credential-vend credential-response",
+        )?;
+    } else {
+        validate_null_or_absent_field(
+            event,
+            entry,
+            "secret-ref-provider",
+            "credential-vend credential-response",
+        )?;
+    }
 
     let expected_ttl = payload
         .get("read-restriction")
@@ -4837,6 +4863,17 @@ fn credentials_vend_audit_payload(
         )?,
         "mode": storage_profile.issuance_mode.as_str(),
     });
+    if let Some(provider) = storage_profile
+        .secret_ref
+        .as_deref()
+        .and_then(secret_ref_provider_label)
+    {
+        audit_payload["storage-profile"]["secret-ref-provider"] = json!(provider);
+    }
+    if let Some(secret_ref) = storage_profile.secret_ref.as_deref() {
+        audit_payload["storage-profile"]["secret-ref-hash"] =
+            json!(content_hash_bytes(secret_ref.as_bytes()));
+    }
     if let Some(restriction) = receipt.context.get("read-restriction") {
         audit_payload["read-restriction"] = restriction.clone();
     }
@@ -4894,6 +4931,10 @@ fn credential_response_evidence(
                     "max-credential-ttl-seconds": single_config_value(
                         &credential.config,
                         "lakecat.max-credential-ttl-seconds"
+                    ),
+                    "secret-ref-provider": single_config_value(
+                        &credential.config,
+                        "lakecat.secret-ref-provider"
                     ),
                     "issuer-config-entry-count": non_lakecat_config
                         .as_array()
@@ -12823,6 +12864,94 @@ mod tests {
         ));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-credential-response-profile-drift"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_credential_response_secret_ref_provider_drift() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "human:operator".to_string(),
+            kind: PrincipalKind::Human,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-response-secret-provider-drift".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-response-secret-provider-drift",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "credential-count": 1,
+                        "credential-response-evidence": [{
+                            "prefix-hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                            "issuer-config-hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                            "storage-profile-id": "events-prod",
+                            "catalog-profile-id": "events-prod",
+                            "storage-provider": "s3",
+                            "credential-mode": "short-lived-secret-ref",
+                            "authorization-principal": "human:operator",
+                            "governed-read-required": "false",
+                            "max-credential-ttl-seconds": null,
+                            "secret-ref-provider": "vault",
+                            "issuer-config-entry-count": 0,
+                            "receipt-principal": "human:operator"
+                        }],
+                        "storage-profile-id": "events-prod",
+                        "storage-profile": {
+                            "profile-id": "events-prod",
+                            "warehouse": "local",
+                            "provider": "s3",
+                            "issuance-mode": "short-lived-secret-ref",
+                            "secret-ref-present": true,
+                            "secret-ref-provider": "typesec",
+                            "secret-ref-hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10).await.expect_err(
+            "credential response secret-ref provider evidence must match selected storage profile",
+        );
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains(
+            "credential-vend credential-response secret-ref-provider must match catalog evidence"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-credential-response-secret-provider-drift"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
@@ -23286,6 +23415,10 @@ mod tests {
             serde_json::json!("true")
         );
         assert_eq!(
+            response_evidence[0]["secret-ref-provider"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
             response_evidence[0]["max-credential-ttl-seconds"],
             serde_json::json!("120")
         );
@@ -23302,6 +23435,71 @@ mod tests {
         let evidence_text = serde_json::to_string(&response_evidence).unwrap();
         assert!(!evidence_text.contains("temporary-test-token"));
         assert!(!evidence_text.contains("file:///tmp/events"));
+    }
+
+    #[test]
+    fn credentials_vend_audit_payload_records_secret_ref_provider_response_evidence() {
+        let ident = table_ident("local", "default", "events").unwrap();
+        let table = TableRecord::new(
+            ident.clone(),
+            "s3://lakecat-demo/events".to_string(),
+            Some("s3://lakecat-demo/events/metadata/00000.json".to_string()),
+            serde_json::json!({ "format-version": 3 }),
+            Principal::anonymous(),
+        );
+        let profile = StorageProfile::new(
+            "events-prod",
+            WarehouseName::new("local").unwrap(),
+            "s3://lakecat-demo/events",
+            StorageProvider::S3,
+            CredentialIssuanceMode::ShortLivedSecretRef,
+            Some("typesec://lakecat/local/events-prod".to_string()),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let receipt = AuthorizationReceipt {
+            principal: Principal::new("human:operator", PrincipalKind::Human).unwrap(),
+            action: CatalogAction::CredentialsVend,
+            table: Some(ident.clone()),
+            allowed: true,
+            engine: "test".to_string(),
+            policy_hash: None,
+            context: serde_json::json!({}),
+            checked_at: chrono::Utc::now(),
+        };
+        let credentials = canonicalize_credential_response_evidence(
+            vec![StorageCredential {
+                prefix: "s3://lakecat-demo/events".to_string(),
+                config: vec![
+                    ConfigEntry::new("lakecat.secret-ref-provider", "backend-shadow"),
+                    ConfigEntry::new("aws.session-token", "temporary-test-token"),
+                ],
+            }],
+            &profile,
+            &receipt,
+            false,
+            None,
+        );
+
+        let payload =
+            credentials_vend_audit_payload(&ident, &table, &profile, &credentials, &receipt)
+                .unwrap();
+        let response_evidence = payload["credential-response-evidence"]
+            .as_array()
+            .expect("credential response evidence should be an array");
+
+        assert_eq!(
+            response_evidence[0]["secret-ref-provider"],
+            serde_json::json!("typesec")
+        );
+        assert_eq!(
+            payload["storage-profile"]["secret-ref-provider"],
+            serde_json::json!("typesec")
+        );
+        let evidence_text = serde_json::to_string(&response_evidence).unwrap();
+        assert!(!evidence_text.contains("backend-shadow"));
+        assert!(!evidence_text.contains("temporary-test-token"));
+        assert!(!evidence_text.contains("typesec://lakecat/local/events-prod"));
     }
 
     #[test]

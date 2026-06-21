@@ -1203,7 +1203,12 @@ The audit event for the credential attempt records redacted
 `credential-response-evidence`: the response prefix is hashed, LakeCat-owned
 proof fields are kept as canonical values, and issuer-owned config is hashed
 rather than copied. That keeps OpenLineage and QueryGraph replay useful without
-turning lineage into a credential leak. The storage-profile and
+turning lineage into a credential leak. For secret-ref-backed profiles the
+redacted response evidence includes the catalog-derived
+`lakecat.secret-ref-provider`, while the storage-profile replay evidence
+includes `secret-ref-provider` and a full `secret-ref-hash`; outbox admission
+rejects any credential response whose provider proof drifts from the selected
+profile before graph or OpenLineage projection. The storage-profile and
 credential-vend service tests pin that producer-side `location-prefix-hash`
 evidence is already a full SHA-256 digest before QGLake receives the compact
 `locationPrefixHash` proof. The trusted-human credential-vending route test

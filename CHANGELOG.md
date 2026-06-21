@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Recorded `lakecat.secret-ref-provider` in redacted
+  `credential-response-evidence` and required credential-vend replay admission
+  to match that provider against the selected storage profile before graph or
+  OpenLineage projection.
 - Canonicalized `lakecat.secret-ref-provider` on issued credential responses
   from the selected storage profile, so TypeSec-gated production backends
   cannot shadow which external secret-ref provider authorized a credential.

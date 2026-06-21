@@ -563,7 +563,9 @@ broader than the LakeCat storage profile that selected it; scope-rejection
 evidence should stay hash-only and must not emit credential replay records.
 Credential responses should carry catalog-derived secret-ref provider evidence
 when a storage profile uses an external secret reference, and backend-supplied
-provider evidence must be replaced rather than trusted.
+provider evidence must be replaced rather than trusted. Credential-vend replay
+must also reject response evidence whose secret-ref provider drifts from the
+selected storage profile before any graph or OpenLineage sink observes it.
 Management-list replay should carry count-aligned, syntactically valid,
 duplicate-free ID arrays before projection, so compact QueryGraph proof cannot
 inflate server, project, warehouse, policy, or storage-profile reads with
