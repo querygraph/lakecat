@@ -1101,7 +1101,10 @@ no stored profile matches, LakeCat falls back to an inferred governed-read
 profile for the table location. The same check runs after the credential
 issuer returns: `loadCredentials` rejects any returned prefix broader than the
 selected profile before LakeCat attaches canonical response evidence, so a
-custom issuer cannot widen catalog-owned storage scope.
+custom issuer cannot widen catalog-owned storage scope. The rejection exposes
+only `credential-prefix-hash` and `storage-profile-prefix-hash` evidence, and
+LakeCat records no `credentials.vend-attempted` replay event for that failed
+issuer response.
 
 ```sh
 curl -s -X PUT \
@@ -1154,10 +1157,12 @@ cap. It also rewrites LakeCat-owned profile, provider, mode, principal, and
 governed-read-required evidence after issuance, so a cloud secret backend cannot
 make the response look like a different catalog decision. The service tests for
 the REST credential endpoint prove this response shape directly, not just
-through helper functions. The issuer also rejects any credential whose returned
+through helper functions. LakeCat also rejects any credential whose returned
 prefix is outside the storage profile's `location-prefix`, so a misconfigured
 cloud secret backend cannot widen a table's storage scope after TypeSec has
 authorized the secret reference.
+That failure remains hash-only and stops before credential-vend replay evidence
+is recorded.
 The audit event for the credential attempt records redacted
 `credential-response-evidence`: the response prefix is hashed, LakeCat-owned
 proof fields are kept as canonical values, and issuer-owned config is hashed

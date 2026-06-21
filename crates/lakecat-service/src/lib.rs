@@ -7592,11 +7592,9 @@ fn issued_credentials_for_profile(
         if !location_is_within_prefix(&credential.prefix, &profile.location_prefix) {
             return Err(LakeCatError::InvalidArgument(format!(
                 "issued credential prefix is outside storage profile scope; \
-                 credential-prefix-hash={}; storage-profile-prefix-hash={}; \
-                 storage-profile='{}'",
+                 credential-prefix-hash={}; storage-profile-prefix-hash={}",
                 content_hash_json(&json!({"credential-prefix": &credential.prefix}))?,
-                content_hash_json(&json!({"location-prefix": &profile.location_prefix}))?,
-                profile.profile_id
+                content_hash_json(&json!({"location-prefix": &profile.location_prefix}))?
             )));
         }
     }
@@ -21579,12 +21577,25 @@ mod tests {
         assert!(message.contains("credential-prefix-hash=sha256:"));
         assert!(message.contains("storage-profile-prefix-hash=sha256:"));
         assert!(!message.contains("s3://lakecat-demo"));
+        assert!(!message.contains("local:file"));
 
         let requests = issuer.requests.lock().await;
         assert_eq!(requests.len(), 1);
         assert_eq!(
             requests[0].profile.location_prefix,
             "s3://lakecat-demo/events/tenant-a"
+        );
+        drop(requests);
+
+        let outbox = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        assert!(
+            outbox
+                .iter()
+                .all(|event| event.event_type != "credentials.vend-attempted"),
+            "out-of-scope issuer credentials must fail before credential-vend replay evidence"
         );
     }
 

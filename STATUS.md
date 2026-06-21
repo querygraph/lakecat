@@ -6,6 +6,25 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact issuer scope rejection evidence`.
+  Credential issuer responses whose returned prefix is outside the selected
+  storage profile now fail with only `credential-prefix-hash` and
+  `storage-profile-prefix-hash` evidence. The regression also proves the
+  rejected issuer response fails before `credentials.vend-attempted` replay
+  evidence is recorded.
+- Local verification for this issuer scope-rejection slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service credential_vend_rejects_issuer_credentials_outside_profile_scope -- --test-threads=1`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service credential_vend -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local credential_vend -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features credential_vend -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin scan restriction receipt drift`.
   Outbox admission coverage now explicitly exercises both `table.scan-planned`
   and `table.scan-tasks-fetched` events whose top-level

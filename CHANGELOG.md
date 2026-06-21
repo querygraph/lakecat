@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Redacted credential issuer scope-rejection errors to only
+  `credential-prefix-hash` and `storage-profile-prefix-hash` evidence, and
+  pinned that out-of-scope issuer credentials fail before credential-vend replay
+  evidence is recorded.
 - Added explicit service regression coverage proving both planned and fetched
   governed scan replay reject top-level `read-restriction` evidence that drifts
   from `authorization-receipt.context.read-restriction` before graph,
