@@ -6,6 +6,28 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin fetch empty scan allowed columns`.
+  Outbox admission coverage now proves governed `table.scan-tasks-fetched`
+  replay rejects an empty `read-restriction.allowed-columns` array before graph
+  projection, OpenLineage projection, or delivery acknowledgement. This pins
+  the shared fail-closed helper across both planned and fetched governed scan
+  replay.
+- Local verification for this fetched empty scan allowed-columns slice is
+  green:
+  `cargo fmt -p lakecat-service`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan_fetch_empty_allowed_columns -- --test-threads=1`;
+  `cargo test -p lakecat-service scan_fetch -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan_planned_empty_allowed_columns -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject empty scan allowed columns`.
   Outbox admission for governed `table.scan-planned` replay now rejects an
   empty `read-restriction.allowed-columns` array instead of treating it as an

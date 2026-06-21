@@ -13374,6 +13374,91 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_scan_fetch_empty_allowed_columns() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let read_restriction = json!({
+            "allowed-columns": [],
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ]
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-fetch-empty-allowed-columns".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-tasks-fetched".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-fetch-empty-allowed-columns",
+                    "event-type": "table.scan-tasks-fetched",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "context": {
+                                "read-restriction": read_restriction
+                            },
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": read_restriction,
+                        "required-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "required-filters": [],
+                        "file-scan-task-count": 1,
+                        "delete-file-count": 0,
+                        "child-plan-task-count": 0
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("scan-fetch empty allowed-columns evidence should fail closed");
+
+        let message = err.to_string();
+        assert!(message.contains(
+            "outbox event table.scan-tasks-fetched (lakecat.lineage-and-graph) has invalid"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(
+            message
+                .contains("scan-tasks-fetched read-restriction allowed-columns must not be empty")
+        );
+        assert!(!message.contains("evt-scan-fetch-empty-allowed-columns"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "empty allowed-column fetch replay must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "empty allowed-column fetch replay must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "empty allowed-column fetch replay must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_scan_fetch_evidence() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let ident = table_ident("local", "default", "events").unwrap();

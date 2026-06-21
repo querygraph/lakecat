@@ -341,7 +341,8 @@ graph or lineage projection is acknowledged. Planned scan replay additionally
 requires effective stats fields to remain inside
 `read-restriction.allowed-columns`, matching the same policy-narrowing boundary
 as effective projection evidence. Empty `allowed-columns` arrays fail closed
-during replay admission, matching live planning's no-readable-columns conflict.
+during both planned and fetched replay admission, matching live planning's
+no-readable-columns conflict.
 Credential-vend replay applies the same receipt agreement rule to both
 governed read restrictions and `lakecat:raw-credential-exception` evidence
 before projecting blocked-agent or audited raw-credential evidence. Returned

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added fetched scan-task replay coverage for empty
+  `read-restriction.allowed-columns`, proving both planned and fetched governed
+  scan replay fail closed before outbox delivery.
 - Rejected governed scan replay with empty `read-restriction.allowed-columns`
   before outbox delivery, matching live scan planning's fail-closed behavior
   when a policy leaves no readable columns.
