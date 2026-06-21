@@ -6,6 +6,25 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject non-increasing commit-history replay`.
+  Outbox admission now rejects `table.commits-listed` replay whose
+  `sequence-numbers` are zero, duplicated, or decreasing. Table pointer-log
+  evidence must be positive and strictly increasing before graph projection,
+  OpenLineage projection, or delivery acknowledgement, matching the QGLake
+  compact proof contract.
+- Local verification for this commit-history sequence replay slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service --lib table_commit_history -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject duplicate credential response replay`.
   Outbox admission now rejects `credentials.vend-attempted` replay whose
   `credential-response-evidence` repeats a returned credential `prefix-hash`.

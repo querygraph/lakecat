@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required table commit-history replay `sequence-numbers` to be positive and
+  strictly increasing before graph/OpenLineage projection, so duplicated or
+  reordered pointer-log evidence cannot become accepted replay.
 - Required credential-vend replay `credential-response-evidence` entries to be
   duplicate-free by returned credential `prefix-hash` before graph/OpenLineage
   projection, so replay cannot inflate credential counts with repeated

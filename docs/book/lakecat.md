@@ -2397,17 +2397,22 @@ operator logs, but they still come from the same typed lineage-drain summaries
 that the verifier requires before accepting replay. The saved handoff verifier
 recomputes each line from compact proof fields, including the management
 credential-root anchor and the table commit-history sequence/hash summary,
-before accepting captured LakeCat replay output. The scan line keeps the
-planned and fetched credential TTL caps visible beside the task counts, while
-JSON mode carries the full read-restriction evidence tree. Scan planning records
-both requested and effective projection evidence; scan-task fetch records the
-server-derived required projection and mirrors it as `effective-projection`, so
-replay can compare both stages with the same policy-narrowed vocabulary. QGLake
-acceptance now rejects handoffs where the fetched effective projection is missing
-or drifts away from the fetched read restriction, which means a compact replay
-summary cannot quietly widen what the server actually planned. The live handoff
-harness performs that projection check before writing `handoff-summary.json`, so
-the artifact is born with the same proof shape the verifier later enforces.
+before accepting captured LakeCat replay output. LakeCat service replay now
+requires table commit-history sequence numbers to be positive and strictly
+increasing before graph or OpenLineage projection, so the compact pointer-log
+summary cannot inherit duplicated or reordered catalog evidence.
+
+The scan line keeps the planned and fetched credential TTL caps visible beside
+the task counts, while JSON mode carries the full read-restriction evidence
+tree. Scan planning records both requested and effective projection evidence;
+scan-task fetch records the server-derived required projection and mirrors it
+as `effective-projection`, so replay can compare both stages with the same
+policy-narrowed vocabulary. QGLake acceptance now rejects handoffs where the
+fetched effective projection is missing or drifts away from the fetched read
+restriction, which means a compact replay summary cannot quietly widen what
+the server actually planned. The live handoff harness performs that projection
+check before writing `handoff-summary.json`, so the artifact is born with the
+same proof shape the verifier later enforces.
 
 After the full local handoff writes `handoff-summary.json`, LakeCat can also
 verify the compact summary itself:

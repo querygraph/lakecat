@@ -516,7 +516,10 @@ evidence stays hash-only for both the submitted metadata location and storage
 profile root, without echoing the storage-profile id. Metadata object-store
 setup failures should likewise expose only metadata-location and backend-error
 hashes, not raw URI parse text, schemes, or backend diagnostics. Catalog state
-changes should not lose outbox side effects.
+changes should not lose outbox side effects. Table commit-history replay must
+carry positive, strictly increasing sequence numbers before projection, so
+pointer-log evidence cannot be duplicated or reordered between the catalog and
+QGLake proof.
 Pending outbox replay should stay deterministic across embedded and Turso stores, ordered by
 `created_at,event_id`, with batch limits applied after that order and with
 duplicate-safe delivery accounting. Draining should acknowledge delivery only

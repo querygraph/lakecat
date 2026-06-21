@@ -1347,13 +1347,30 @@ fn validate_table_commit_history_event_evidence(
                 "table commit-history evidence must contain sequence-numbers",
             )
         })?;
+    let mut previous_sequence_number = None;
     for sequence_number in sequence_numbers {
-        if sequence_number.as_u64().is_none() {
+        let Some(sequence_number) = sequence_number.as_u64() else {
             return Err(outbox_evidence_error(
                 event,
                 "table commit-history sequence-numbers must be unsigned integers",
             ));
+        };
+        if sequence_number == 0 {
+            return Err(outbox_evidence_error(
+                event,
+                "table commit-history sequence-numbers must be positive",
+            ));
         }
+        if previous_sequence_number
+            .map(|previous| sequence_number <= previous)
+            .unwrap_or(false)
+        {
+            return Err(outbox_evidence_error(
+                event,
+                "table commit-history sequence-numbers must be strictly increasing",
+            ));
+        }
+        previous_sequence_number = Some(sequence_number);
     }
     let Some(expected_commit_count) = payload.get("commit-count").and_then(Value::as_u64) else {
         return Err(outbox_evidence_error(
@@ -12358,6 +12375,149 @@ mod tests {
         assert!(message.contains("table.commits-listed"));
         assert!(message.contains("commit-count does not match commit-hashes"));
         assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_non_increasing_table_commit_history_sequences() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-non-increasing-commit-history".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commits-listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-non-increasing-commit-history",
+                    "event-type": "table.commits-listed",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "table": "events",
+                        "commit-count": 2,
+                        "commit-hashes": [
+                            content_hash_json(&json!({"commit": 1})).unwrap(),
+                            content_hash_json(&json!({"commit": 2})).unwrap()
+                        ],
+                        "sequence-numbers": [1, 1],
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("non-increasing commit history evidence should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commits-listed"));
+        assert!(
+            message.contains("table commit-history sequence-numbers must be strictly increasing"),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-non-increasing-commit-history"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_zero_table_commit_history_sequence() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-zero-commit-history-sequence".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commits-listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-zero-commit-history-sequence",
+                    "event-type": "table.commits-listed",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "table": "events",
+                        "commit-count": 1,
+                        "commit-hashes": [
+                            content_hash_json(&json!({"commit": 0})).unwrap()
+                        ],
+                        "sequence-numbers": [0],
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("zero commit history sequence should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commits-listed"));
+        assert!(
+            message.contains("table commit-history sequence-numbers must be positive"),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-zero-commit-history-sequence"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
