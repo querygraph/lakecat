@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Gated the service test-only `CapturingSailEngine` helper to non-`sail-local`
+  builds, removing all-features dead-code warning noise while preserving the
+  default feature tests that exercise the captured scan/fetch request path.
 - Reconciled `AGENTS.md` and `GOAL.md` so durable guidance names the
   `qglake-fixture` feature boundary, CLI fixture verification, dependency
   contract checks, and book rebuild expectations.

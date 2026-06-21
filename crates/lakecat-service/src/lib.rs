@@ -9104,12 +9104,14 @@ mod tests {
         }
     }
 
+    #[cfg(not(feature = "sail-local"))]
     #[derive(Debug, Default)]
     struct CapturingSailEngine {
         last_scan: Mutex<Option<lakecat_sail::ScanPlanningRequest>>,
         last_fetch: Mutex<Option<lakecat_sail::FetchScanTasksRequest>>,
     }
 
+    #[cfg(not(feature = "sail-local"))]
     #[async_trait]
     impl SailCatalogEngine for CapturingSailEngine {
         async fn prepare_commit(

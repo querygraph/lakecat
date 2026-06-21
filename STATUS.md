@@ -6,6 +6,20 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Gate captured Sail test double by feature`.
+  The service test-only `CapturingSailEngine` now only compiles in
+  non-`sail-local` builds, matching the captured scan/fetch tests that use it
+  and keeping the local `lakecat-service --all-features` gate free of
+  dead-code warning noise.
+- Local verification for this service feature-gate slice is green:
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --all-features`;
+  `cargo test -p lakecat-service scan_planning_route_sends_effective_policy_scope_to_sail -- --test-threads=1`;
+  `cargo test -p lakecat-service fetch_scan_tasks_route_sends_required_policy_scope_to_sail -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reconcile QGLake fixture guidance`.
   `AGENTS.md` and `GOAL.md` now both name `qglake-fixture` as an explicit
   feature gate, record why the fixture generator depends on Sail's local
