@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required service management-upsert replay admission for policy bindings,
+  projects, servers, storage profiles, and warehouses to carry a valid
+  authorization receipt principal before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Required service management-list replay admission to carry a valid
   authorization receipt principal before acknowledgement, graph projection, or
   OpenLineage projection.

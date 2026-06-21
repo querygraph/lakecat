@@ -6,6 +6,20 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require management-upsert receipt principal replay`.
+  Service management-upsert outbox admission now rejects policy-binding,
+  project, server, storage-profile, and warehouse replay whose authorization
+  receipt lacks a valid principal before acknowledgement, graph projection, or
+  OpenLineage projection.
+- Local verification for this management-upsert receipt principal slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_missing_management_upsert_receipt_principal -- --test-threads=1`;
+  `cargo test -p lakecat-service upsert -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require management-list receipt principal replay`.
   Service management-list outbox admission now rejects replay whose
   authorization receipt lacks a valid principal before acknowledgement, graph

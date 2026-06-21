@@ -1038,7 +1038,10 @@ properties. Policy-binding upsert replay is checked before projection too: the
 evidence must carry a valid policy id, warehouse, optional namespace/table
 scope, an enforcement flag, and the captured ODRL material. LakeCat does not
 reason over that ODRL during replay, but malformed binding shape fails closed
-before the policy anchor can be delivered to graph or lineage sinks.
+before the policy anchor can be delivered to graph or lineage sinks. Those
+management upserts must also carry a valid authorization receipt principal, so
+the catalog graph and OpenLineage stream never accept actorless tenant-root,
+storage-profile, or policy mutations.
 Namespace lifecycle replay is checked before projection as well: create, load,
 and drop events must carry a valid warehouse and either a valid namespace path
 or non-empty namespace component array. A malformed namespace lifecycle event
@@ -2410,7 +2413,10 @@ and soft-delete evidence must point at the same table with an unsigned version.
 Project, server, and warehouse upsert replay must carry valid
 tenant-root evidence too: project ids, server scopes, endpoint URLs, storage
 roots, identifiers, properties, and pre-redacted hash anchors are checked
-before delivery. It also requires
+before delivery. Policy-binding, project, server, storage-profile, and
+warehouse upsert replay must also carry a valid authorization receipt
+principal before delivery, so compact QueryGraph proof can attribute
+management mutations to the actor accepted by LakeCat. It also requires
 planned and fetched read restrictions to match before compact proof generation,
 requires both requested/effective projection and
 requested/effective stats-field evidence, requires effective projection to be a

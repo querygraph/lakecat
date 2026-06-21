@@ -620,6 +620,10 @@ audit/outbox evidence records `location-prefix-hash`, and raw
 Storage-profile replay must also carry unambiguous credential-root identity:
 non-empty profile id, valid nested warehouse matching any top-level warehouse,
 valid provider, and valid issuance mode.
+Management-upsert replay for policy bindings, projects, servers, storage
+profiles, and warehouses must also carry a valid authorization receipt
+principal before projection, so tenant-root and policy mutations cannot become
+actorless catalog graph or OpenLineage facts.
 Provider and issuance-mode compatibility must be replay-checked too:
 `local-file-no-secret` requires the file provider, while
 `short-lived-secret-ref` requires a cloud object provider.
