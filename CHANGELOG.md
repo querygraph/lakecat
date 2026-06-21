@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required compact QGLake replay and OpenLineage hash arrays to be
+  duplicate-free in saved handoff summaries, so archived handoffs cannot
+  inflate bootstrap, scan, management, commit-history, view, storage-profile,
+  or credential proof evidence by repeating an already accepted full digest.
 - Required `querygraph.bootstrap` outbox replay to reject duplicate
   `verified-tables` and `verified-views` manifests before graph/OpenLineage
   projection, matching compact QGLake handoff verification.

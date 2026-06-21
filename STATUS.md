@@ -6,6 +6,23 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject duplicate QGLake replay hashes`.
+  Compact QGLake handoff summary verification now rejects duplicate full
+  replay and OpenLineage digests across bootstrap, scan, management,
+  commit-history, view, storage-profile, and credential proof arrays. Archived
+  handoff summaries can no longer inflate evidence by repeating an already
+  accepted hash while preserving full SHA-256 shape checks.
+- Local verification for this QGLake replay-hash duplicate slice is green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_duplicate -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake -- --test-threads=1`;
+  `scripts/qglake-handoff-local.sh`
+  (green, ending with `QGLake handoff verified`);
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject duplicate QueryGraph bootstrap manifests`.
   `querygraph.bootstrap` outbox admission now rejects duplicate
   `verified-tables` and `verified-views` stable IDs before graph projection,

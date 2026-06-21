@@ -9656,6 +9656,16 @@ fn require_full_hash_array(
             "{label}.{field} must contain full SHA-256 hashes"
         )));
     }
+    let mut seen = BTreeSet::new();
+    if array
+        .iter()
+        .filter_map(Value::as_str)
+        .any(|hash| !seen.insert(hash))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must be duplicate-free"
+        )));
+    }
     Ok(())
 }
 
@@ -11361,6 +11371,21 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_bootstrap_replay_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        let duplicate_hash = qglake_fixture_hash("duplicate-bootstrap-replay");
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["replayEventHashes"] =
+            json!([duplicate_hash, duplicate_hash]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicate bootstrap replay hashes");
+
+        assert!(err.to_string().contains("queryGraphBootstrapProof"));
+        assert!(err.to_string().contains("replayEventHashes"));
+        assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_required_standards() {
         let mut summary = qglake_handoff_summary_json();
         let incomplete = json!([
@@ -11472,6 +11497,21 @@ mod tests {
         assert!(err.to_string().contains("managementProof"));
         assert!(err.to_string().contains("serverReplayEventHashes"));
         assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_management_receipt_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        let duplicate_hash = qglake_fixture_hash("duplicate-server-list-replay");
+        summary["lakecatReplayVerification"]["managementProof"]["serverReplayEventHashes"] =
+            json!([duplicate_hash, duplicate_hash]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicate management receipt hashes");
+
+        assert!(err.to_string().contains("managementProof"));
+        assert!(err.to_string().contains("serverReplayEventHashes"));
+        assert!(err.to_string().contains("duplicate-free"));
     }
 
     #[test]
@@ -12145,6 +12185,21 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_scan_openlineage_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        let duplicate_hash = qglake_fixture_hash("duplicate-scan-plan-openlineage");
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedOpenLineageHashes"] =
+            json!([duplicate_hash, duplicate_hash]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicate scan OpenLineage hashes");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("plannedOpenLineageHashes"));
+        assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_table_commit_history_count_match() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["commitCount"] = json!(2);
@@ -12221,6 +12276,21 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_commit_history_replay_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        let duplicate_hash = qglake_fixture_hash("duplicate-commit-history-replay");
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["replayEventHashes"] =
+            json!([duplicate_hash, duplicate_hash]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicate commit-history replay hashes");
+
+        assert!(err.to_string().contains("tableCommitHistoryProof"));
+        assert!(err.to_string().contains("replayEventHashes"));
+        assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_short_commit_history_hashes() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["commitHashes"] =
@@ -12274,6 +12344,22 @@ mod tests {
         assert!(err.to_string().contains("credentialVendingProof"));
         assert!(err.to_string().contains("replayEventHashes"));
         assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_credential_openlineage_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        let duplicate_hash = qglake_fixture_hash("duplicate-restricted-openlineage");
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["openLineageHashes"] =
+            json!([duplicate_hash, duplicate_hash]);
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject duplicate restricted credential OpenLineage hashes",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("openLineageHashes"));
+        assert!(err.to_string().contains("duplicate-free"));
     }
 
     #[test]

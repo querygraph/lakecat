@@ -1,6 +1,6 @@
 # LakeCat Design
 
-Updated: 2026-06-20
+Updated: 2026-06-21
 
 Status: living design. This document supersedes the OPUS review/design notes
 that are now archived under `docs/completed/`.
@@ -512,6 +512,10 @@ graph event count, and lineage event count. Compact table commit-history proof
 must preserve the same duplicate-free commit-hash invariant as service replay,
 so archived QueryGraph handoff summaries cannot inflate pointer-log evidence by
 repeating a valid commit hash.
+Compact replay and OpenLineage hash arrays must be duplicate-free as well as
+full-digest-shaped, so saved handoff summaries cannot inflate bootstrap, scan,
+management, commit-history, view, storage-profile, or credential proof evidence
+by repeating a valid digest.
 Compact management proof must preserve the same duplicate-free ID invariant as
 service replay, so saved QGLake summaries and lineage-drain artifacts cannot
 inflate server, project, warehouse, policy, or storage-profile reads by
