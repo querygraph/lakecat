@@ -335,7 +335,9 @@ non-empty set of full policy digests before it can leave the outbox. The same
 check is applied to
 `authorization-receipt.context.read-restriction.policy-hashes`, so the durable
 receipt cannot retain weaker governed-read policy evidence than the top-level
-scan replay payload.
+scan replay payload. Planned and fetched scan replay also require the top-level
+read restriction to match the authorization receipt context exactly before any
+graph or lineage projection is acknowledged.
 Exact idempotency replays are verified to return before object-store writes, so
 the committed metadata object remains untouched on retry.
 Metadata-location prefix failures identify the submitted object and selected

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required scan replay read restrictions to match the authorization receipt
+  context before outbox delivery, so governed planned/fetched scan evidence
+  cannot claim policy narrowing that the durable receipt did not capture.
 - Labeled metadata object-store setup diagnostics with
   `backend-error-hash`, preserving hash-only backend evidence while matching
   the commit-hardening design contract for invalid URI and unsupported backend

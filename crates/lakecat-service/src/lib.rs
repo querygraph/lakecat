@@ -1567,6 +1567,7 @@ fn validate_scan_planned_event_evidence(
         "scan-planned",
         &effective_projection,
     )?;
+    validate_scan_read_restriction_receipt_match(event, payload, "scan-planned")?;
 
     let requested_stats = validate_required_string_array_field(
         event,
@@ -1631,6 +1632,7 @@ fn validate_scan_tasks_fetched_event_evidence(
         "scan-tasks-fetched",
         &effective_projection,
     )?;
+    validate_scan_read_restriction_receipt_match(event, payload, "scan-tasks-fetched")?;
     let Some(required_filters) = payload.get("required-filters") else {
         return Err(outbox_evidence_error(
             event,
@@ -1644,6 +1646,38 @@ fn validate_scan_tasks_fetched_event_evidence(
         ));
     }
     Ok(())
+}
+
+fn validate_scan_read_restriction_receipt_match(
+    event: &OutboxEvent,
+    payload: &Value,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    match (
+        payload.get("read-restriction"),
+        authorization_receipt_read_restriction(payload),
+    ) {
+        (None, None) => Ok(()),
+        (Some(read_restriction), Some(receipt_read_restriction))
+            if read_restriction == receipt_read_restriction =>
+        {
+            Ok(())
+        }
+        (Some(_), None) => Err(outbox_evidence_error(
+            event,
+            &format!("{label} read-restriction must be captured in authorization receipt context"),
+        )),
+        (None, Some(_)) => Err(outbox_evidence_error(
+            event,
+            &format!(
+                "{label} authorization receipt read-restriction must match top-level read-restriction"
+            ),
+        )),
+        (Some(_), Some(_)) => Err(outbox_evidence_error(
+            event,
+            &format!("{label} read-restriction must match authorization receipt context"),
+        )),
+    }
 }
 
 fn validate_required_outbox_table_identity(
@@ -9861,6 +9895,17 @@ mod tests {
                                 "engine": "test",
                                 "policy_hash": null,
                                 "checked_at": chrono::Utc::now(),
+                                "context": {
+                                    "read-restriction": {
+                                        "allowed-columns": ["event_id"],
+                                        "row-predicate": {
+                                            "type": "not-eq",
+                                            "term": "severity",
+                                            "value": "debug"
+                                        },
+                                        "policy-hashes": [full_policy_hash.clone()]
+                                    }
+                                }
                             },
                             "read-restriction": {
                                 "allowed-columns": ["event_id"],
@@ -11056,6 +11101,85 @@ mod tests {
         );
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-empty-receipt-policy-hashes"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_scan_restriction_missing_from_receipt_context() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-restriction-missing-receipt-context".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-planned".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-restriction-missing-receipt-context",
+                    "event-type": "table.scan-planned",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "table": table,
+                        "read-restriction": {
+                            "allowed-columns": ["event_id"],
+                            "row-predicate": {
+                                "type": "not-eq",
+                                "term": "severity",
+                                "value": "debug"
+                            },
+                            "policy-hashes": [
+                                "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                            ]
+                        },
+                        "requested-projection": ["event_id", "severity"],
+                        "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
+                        "scan-task-count": 1,
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("scan restriction must be copied into the receipt context");
+
+        let message = err.to_string();
+        assert!(message.contains("table.scan-planned"));
+        assert!(message.contains(
+            "scan-planned read-restriction must be captured in authorization receipt context"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-scan-restriction-missing-receipt-context"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

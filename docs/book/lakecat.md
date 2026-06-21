@@ -293,7 +293,11 @@ request and narrowed result as replay evidence. During `fetchScanTasks`,
 LakeCat recomputes the current restriction and sends Sail the required
 projection and mandatory filters again;
 the response extension and audit outbox record the same proof. A stale or
-legacy token cannot silently expand back to all columns.
+legacy token cannot silently expand back to all columns. Outbox admission also
+checks that governed planned/fetched scan replay carries the same
+`read-restriction` in the top-level payload and in
+`authorization-receipt.context.read-restriction`, so replay cannot claim policy
+narrowing that the durable receipt did not capture.
 
 ## The Commit Path
 
@@ -2133,9 +2137,12 @@ outbox drain checks the same digest shape and non-empty requirement before
 acknowledging any pending event that carries
 `read-restriction.policy-hashes`, including the copy embedded in the
 authorization receipt context, so malformed source evidence is stopped before
-it becomes delivered replay material. Scan replay now gets the same drain-side
-admission check before Grust or OpenLineage projection: planned-scan events
-must carry matching table identity, unsigned task counts,
+it becomes delivered replay material. Scan replay also requires the top-level
+read restriction to match the authorization receipt context exactly before
+delivery, so policy narrowing cannot be asserted in one replay field and absent
+from the durable receipt. Scan replay now gets the same drain-side admission
+check before Grust or OpenLineage projection: planned-scan events must carry
+matching table identity, unsigned task counts,
 requested/effective projection arrays, and requested/effective stats-field
 arrays; fetched-task events must carry matching table identity, fetched
 file/delete/child-plan counts, required filters, and required/effective

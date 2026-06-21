@@ -6,6 +6,26 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require scan restriction receipt agreement`.
+  Outbox admission for `table.scan-planned` and `table.scan-tasks-fetched`
+  now rejects governed scan replay when the top-level `read-restriction`
+  evidence is missing from, or differs from, the authorization receipt context.
+  This pins the durable receipt as the proof of policy narrowing before graph
+  projection, OpenLineage projection, or delivery acknowledgement.
+- Local verification for this scan restriction receipt agreement slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan_restriction_missing_from_receipt_context -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Label metadata setup backend hashes`.
   Invalid metadata URI parsing and unsupported object-store backend setup
   failures now return `metadata-location-hash` plus `backend-error-hash`
