@@ -2020,12 +2020,24 @@ fn expected_table_commit_history_replay_line_from_summary(
     let mut sequence_numbers = Vec::new();
     let sequence_values =
         required_array(commit_history, "sequenceNumbers", "tableCommitHistoryProof")?;
+    let mut previous = 0;
     for (index, value) in sequence_values.iter().enumerate() {
         let sequence_number = value.as_u64().ok_or_else(|| {
             lakecat_core::LakeCatError::InvalidArgument(format!(
-                "tableCommitHistoryProof.sequenceNumbers[{index}] must be a non-negative integer"
+                "tableCommitHistoryProof.sequenceNumbers[{index}] must be a positive integer"
             ))
         })?;
+        if sequence_number == 0 {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "tableCommitHistoryProof.sequenceNumbers[{index}] must be positive"
+            )));
+        }
+        if sequence_number <= previous {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "tableCommitHistoryProof.sequenceNumbers must be strictly increasing".to_string(),
+            ));
+        }
+        previous = sequence_number;
         sequence_numbers.push(sequence_number);
     }
     Ok(format!(
@@ -14551,6 +14563,68 @@ mod tests {
         assert!(err.to_string().contains(
             "captured LakeCat replay output.replay-evidence.tableCommitHistory.commitCount mismatch"
         ));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_zero_commit_history_sequence() {
+        let temp = qglake_temp_dir("handoff-captured-table-commit-history-zero-sequence");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["sequenceNumbers"] =
+            json!([0]);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["tableCommitHistory"]["sequenceNumbers"] = json!([0]);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+        let summary_bytes = serde_json::to_vec_pretty(&summary).expect("summary JSON bytes");
+        fs::write(&summary_path, summary_bytes).expect("write drifted handoff summary");
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay commit-history proof should reject zero sequence");
+        assert!(err.to_string().contains("tableCommitHistoryProof"));
+        assert!(err.to_string().contains("sequenceNumbers"));
+        assert!(err.to_string().contains("positive"));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_non_increasing_commit_history_sequences() {
+        let temp = qglake_temp_dir("handoff-captured-table-commit-history-sequence-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["commitCount"] = json!(2);
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["sequenceNumbers"] =
+            json!([1, 1]);
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["commitHashes"] = json!([
+            qglake_fixture_hash("commit-history-sequence-drift-a"),
+            qglake_fixture_hash("commit-history-sequence-drift-b")
+        ]);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["tableCommitHistory"]["commitCount"] = json!(2);
+        drifted["replay-evidence"]["tableCommitHistory"]["sequenceNumbers"] = json!([1, 1]);
+        drifted["replay-evidence"]["tableCommitHistory"]["commitHashes"] = json!([
+            qglake_fixture_hash("commit-history-sequence-drift-a"),
+            qglake_fixture_hash("commit-history-sequence-drift-b")
+        ]);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+        let summary_bytes = serde_json::to_vec_pretty(&summary).expect("summary JSON bytes");
+        fs::write(&summary_path, summary_bytes).expect("write drifted handoff summary");
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err(
+                "captured replay commit-history proof should reject non-increasing sequences",
+            );
+        assert!(err.to_string().contains("tableCommitHistoryProof"));
+        assert!(err.to_string().contains("sequenceNumbers"));
+        assert!(err.to_string().contains("strictly increasing"));
     }
 
     #[test]

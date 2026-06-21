@@ -6,6 +6,22 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind captured commit-history sequence proof`.
+  Captured LakeCat replay output now rejects zero or non-increasing
+  `tableCommitHistoryProof.sequenceNumbers` during replay-line recomputation,
+  even when captured replay JSON and compact handoff proof agree on the bad
+  sequence evidence, so operator-readable `table-commit-history-replay` text
+  cannot be weaker than the compact verifier.
+- Local verification for this captured commit-history sequence slice is green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_zero_commit_history_sequence -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_non_increasing_commit_history_sequences -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_table_commit_history_replay_line_drift -- --test-threads=1`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require full QGLake replay secret-ref hashes`.
   QGLake operator-facing management and credential replay lines now fail closed
   when secret-backed storage-profile evidence carries a short

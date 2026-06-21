@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened captured QGLake table commit-history replay-line recomputation so
+  saved LakeCat replay artifacts must keep positive, strictly increasing commit
+  sequence proof before operator text is accepted.
 - Tightened QGLake operator replay-line generation so storage-profile and
   credential replay summaries require full SHA-256 secret-ref hashes instead
   of rendering prefix-only placeholder credential-root evidence.
