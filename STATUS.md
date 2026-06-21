@@ -6,6 +6,20 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate storage-profile replay identity`.
+  Service `storage-profile.upserted` outbox admission now rejects missing or
+  drifted credential-root identity evidence before acknowledgement, graph
+  projection, or OpenLineage projection: replay must carry a non-empty profile
+  id, valid nested warehouse matching any top-level warehouse, valid provider,
+  and valid issuance mode.
+- Local verification for this storage-profile replay identity slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service storage_profile_upsert_warehouse_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service storage_profile_upsert_missing_provider -- --test-threads=1`;
+  `cargo test -p lakecat-service storage_profile -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Hash storage-profile upsert roots before replay`.
   Generated `storage-profile.upserted` audit/outbox evidence now records
   `location-prefix-hash` instead of raw `location-prefix`, and service outbox

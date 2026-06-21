@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required `storage-profile.upserted` outbox admission to validate
+  credential-root identity fields, nested warehouse scope, provider, and
+  issuance mode before acknowledgement, graph projection, or OpenLineage
+  projection.
 - Emitted hash-only `storage-profile.upserted` audit evidence for storage
   roots, and required service outbox admission to reject raw
   `location-prefix` values before acknowledgement, graph projection, or

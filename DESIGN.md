@@ -587,6 +587,9 @@ selected storage profile before any graph or OpenLineage sink observes it.
 Storage-profile upsert replay must be hash-only for storage roots: generated
 audit/outbox evidence records `location-prefix-hash`, and raw
 `location-prefix` values must fail before acknowledgement or projection.
+Storage-profile replay must also carry unambiguous credential-root identity:
+non-empty profile id, valid nested warehouse matching any top-level warehouse,
+valid provider, and valid issuance mode.
 Blocked raw-credential replay must carry zero credentials plus a non-empty
 block reason matching the raw-credential exception receipt context before any
 graph or OpenLineage sink observes it.

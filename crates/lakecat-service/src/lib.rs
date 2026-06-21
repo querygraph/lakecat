@@ -2043,6 +2043,57 @@ fn validate_storage_profile_upsert_event_evidence(
             "storage-profile upsert evidence must contain storage-profile",
         ));
     };
+    required_string_field(
+        event,
+        storage_profile,
+        "profile-id",
+        "storage-profile upsert",
+    )?;
+    let warehouse_name = required_string_field(
+        event,
+        storage_profile,
+        "warehouse",
+        "storage-profile upsert",
+    )?;
+    WarehouseName::new(warehouse_name).map_err(|_| {
+        outbox_evidence_error(
+            event,
+            "storage-profile upsert evidence has invalid warehouse",
+        )
+    })?;
+    if let Some(payload_warehouse) = payload
+        .get("warehouse")
+        .and_then(Value::as_str)
+        .filter(|warehouse| !warehouse.is_empty())
+    {
+        if payload_warehouse != warehouse_name {
+            return Err(outbox_evidence_error(
+                event,
+                "storage-profile upsert warehouse must match storage-profile",
+            ));
+        }
+    }
+    required_string_field(event, storage_profile, "provider", "storage-profile upsert")?
+        .parse::<StorageProvider>()
+        .map_err(|_| {
+            outbox_evidence_error(
+                event,
+                "storage-profile upsert evidence has invalid provider",
+            )
+        })?;
+    required_string_field(
+        event,
+        storage_profile,
+        "issuance-mode",
+        "storage-profile upsert",
+    )?
+    .parse::<CredentialIssuanceMode>()
+    .map_err(|_| {
+        outbox_evidence_error(
+            event,
+            "storage-profile upsert evidence has invalid issuance-mode",
+        )
+    })?;
     if storage_profile.get("secret-ref").is_some() {
         return Err(outbox_evidence_error(
             event,
@@ -17423,6 +17474,127 @@ mod tests {
         assert!(message.contains("raw location-prefix"));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-storage-profile-location-prefix"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_storage_profile_upsert_warehouse_drift() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-storage-profile-warehouse-drift".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-storage-profile-warehouse-drift",
+                    "event-type": "storage-profile.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "storage-profile-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "storage-profile": {
+                            "profile-id": "s3-events",
+                            "warehouse": "shadow",
+                            "location-prefix-hash": content_hash_json(&json!({
+                                "location-prefix": "s3://lakecat/events"
+                            })).unwrap(),
+                            "provider": "s3",
+                            "issuance-mode": "secret-ref",
+                            "secret-ref-present": false,
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("storage-profile warehouse drift should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("storage-profile.upserted"));
+        assert!(message.contains("warehouse must match storage-profile"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-storage-profile-warehouse-drift"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_storage_profile_upsert_missing_provider() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-storage-profile-missing-provider".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-storage-profile-missing-provider",
+                    "event-type": "storage-profile.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "storage-profile-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "storage-profile": {
+                            "profile-id": "s3-events",
+                            "warehouse": "local",
+                            "location-prefix-hash": content_hash_json(&json!({
+                                "location-prefix": "s3://lakecat/events"
+                            })).unwrap(),
+                            "issuance-mode": "secret-ref",
+                            "secret-ref-present": false,
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("storage-profile provider evidence should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("storage-profile.upserted"));
+        assert!(message.contains("storage-profile upsert provider must be a non-empty string"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-storage-profile-missing-provider"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

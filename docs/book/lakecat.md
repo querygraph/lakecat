@@ -1252,7 +1252,10 @@ The drain also rejects unsafe storage-profile upsert evidence before delivery:
 carry raw `location-prefix` or raw `secret-ref` values. If secret-reference
 presence is true, the replay evidence must carry a provider and full
 `secret-ref-hash`; if presence is false, provider and hash evidence must be
-absent.
+absent. The same admission check validates the credential-root identity before
+projection: profile id must be non-empty, the nested warehouse must be valid
+and match any top-level warehouse field, and provider plus issuance mode must
+use LakeCat's supported storage-profile vocabulary.
 The drain summary lifts the same proof into compact fields alongside the
 profile id and provider. QGLake replay verification requires that compact
 storage-profile upsert evidence, which means a saved handoff can prove the
