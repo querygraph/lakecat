@@ -2518,6 +2518,7 @@ fn validate_credential_vend_event_evidence(
 ) -> Result<(), LakeCatError> {
     validate_read_restriction_receipt_match(event, payload, "credential-vend")?;
     validate_raw_credential_exception_receipt_match(event, payload)?;
+    let table = validate_required_outbox_table_identity(event, "credential-vend")?;
 
     let Some(credential_count) = payload.get("credential-count").and_then(Value::as_u64) else {
         return Err(outbox_evidence_error(
@@ -2552,6 +2553,13 @@ fn validate_credential_vend_event_evidence(
         event,
         storage_profile,
         "profile-id",
+        "credential-vend storage-profile",
+    )?;
+    validate_string_field_equals(
+        event,
+        storage_profile,
+        "warehouse",
+        table.warehouse.as_str(),
         "credential-vend storage-profile",
     )?;
     validate_string_field_equals(
@@ -12200,6 +12208,81 @@ mod tests {
         );
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-credential-storage-profile-id-drift"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_credential_storage_profile_warehouse_drift() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-storage-profile-warehouse-drift".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-storage-profile-warehouse-drift",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "storage-profile-id": "events-local",
+                        "secret-ref-present": false,
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "forged",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("credential storage-profile warehouse must match table evidence");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(
+            message
+                .contains("credential-vend storage-profile warehouse must match catalog evidence")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-credential-storage-profile-warehouse-drift"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

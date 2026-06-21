@@ -343,6 +343,7 @@ governed read restrictions and `lakecat:raw-credential-exception` evidence
 before projecting blocked-agent or audited raw-credential evidence. Returned
 credential evidence must also match the catalog-derived storage profile,
 provider, credential mode, principal, governed-read marker, and TTL cap; the
+storage-profile warehouse must match the event table warehouse, and the
 top-level `storage-profile-id` and any top-level `secret-ref-present` value must
 match nested storage-profile evidence before delivery is acknowledged.
 Exact idempotency replays are verified to return before object-store writes, so

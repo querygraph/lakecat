@@ -6,6 +6,28 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject credential storage-profile warehouse drift`.
+  Outbox admission for `credentials.vend-attempted` now rejects replay when
+  nested `storage-profile.warehouse` differs from the event table warehouse.
+  This also covers blocked or restricted zero-credential events, so
+  credential-root graph and OpenLineage anchors cannot be replayed under a
+  forged warehouse before delivery acknowledgement.
+- Local verification for this credential storage-profile warehouse drift slice
+  is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_credential_storage_profile_warehouse_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_credential_secret_ref_presence_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service credential_vend -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject credential secret-ref presence drift`.
   Outbox admission for `credentials.vend-attempted` now rejects replay when a
   top-level `secret-ref-present` field contradicts nested

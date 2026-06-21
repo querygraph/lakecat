@@ -1969,7 +1969,8 @@ credential-response evidence, full SHA-256 prefix and issuer-config hashes for
 each returned credential, a full storage-profile `location-prefix-hash`, and
 non-contradictory secret-reference state. The top-level `storage-profile-id`
 must match the nested `storage-profile.profile-id`, even when no raw
-credentials were returned. If the top-level `secret-ref-present` field is
+credentials were returned, and the nested `storage-profile.warehouse` must
+match the event table warehouse. If the top-level `secret-ref-present` field is
 present, it must match `storage-profile.secret-ref-present`; older replay
 fixtures may omit the duplicate field, but contradictory evidence is rejected.
 Each returned credential entry must also agree with the catalog-derived
@@ -2201,7 +2202,8 @@ replay gets the same treatment: `credentials.vend-attempted` must carry a
 matching credential count, full credential-response hashes, a full redacted
 storage-profile location hash, internally consistent secret-reference
 presence/provider/hash fields, a top-level storage-profile id that agrees with
-nested storage-profile evidence, any top-level secret-reference presence value
+nested storage-profile evidence, a nested storage-profile warehouse that agrees
+with the event table warehouse, any top-level secret-reference presence value
 that agrees with nested storage-profile evidence, and credential-response
 metadata that agrees with the selected storage profile and authorization receipt
 before delivery.

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required credential-vend replay nested storage-profile `warehouse` evidence to
+  match the event table warehouse before outbox delivery, so zero-credential
+  blocked paths cannot replay a credential root under a forged warehouse anchor.
 - Required credential-vend replay top-level `secret-ref-present` evidence, when
   present, to match the nested storage-profile secret-reference state before
   outbox delivery, so credential replay cannot project contradictory
