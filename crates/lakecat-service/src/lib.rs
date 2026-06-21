@@ -9484,12 +9484,18 @@ mod tests {
             limit: usize,
         ) -> lakecat_core::LakeCatResult<Vec<OutboxEvent>> {
             let events = self.events.lock().await;
-            Ok(events
+            let mut events = events
                 .iter()
                 .filter(|event| sink.is_none_or(|sink| event.sink == sink))
-                .take(limit)
                 .cloned()
-                .collect())
+                .collect::<Vec<_>>();
+            events.sort_by(|left, right| {
+                left.created_at
+                    .cmp(&right.created_at)
+                    .then_with(|| left.event_id.cmp(&right.event_id))
+            });
+            events.truncate(limit);
+            Ok(events)
         }
 
         async fn mark_outbox_delivered(
@@ -15184,8 +15190,7 @@ mod tests {
     #[tokio::test]
     async fn outbox_drain_orders_pending_batch_before_projection() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
-        let created_at = "2026-01-01T00:00:00Z".parse().unwrap();
-        let make_event = |event_id: &str, warehouse: &str| OutboxEvent {
+        let make_event = |event_id: &str, warehouse: &str, created_at: &str| OutboxEvent {
             event_id: event_id.to_string(),
             sink: "lakecat.lineage-and-graph".to_string(),
             event_type: "catalog.config-read".to_string(),
@@ -15205,13 +15210,14 @@ mod tests {
                     "defaults": catalog_config_defaults_json(),
                 }
             }),
-            created_at,
+            created_at: created_at.parse().unwrap(),
             delivered_at: None,
         };
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![
-                make_event("evt-sort-b", "analytics-b"),
-                make_event("evt-sort-a", "analytics-a"),
+                make_event("evt-sort-late", "analytics-late", "2026-01-01T00:00:01Z"),
+                make_event("evt-sort-b", "analytics-b", "2026-01-01T00:00:00Z"),
+                make_event("evt-sort-a", "analytics-a", "2026-01-01T00:00:00Z"),
             ]),
             delivered: Mutex::default(),
         });
@@ -15225,7 +15231,7 @@ mod tests {
                 lineage.clone(),
             );
 
-        let drain = drain_outbox_once(&state, 10).await.unwrap();
+        let drain = drain_outbox_once(&state, 2).await.unwrap();
 
         assert_eq!(drain.delivered, 2);
         assert_eq!(
@@ -15239,6 +15245,14 @@ mod tests {
         assert_eq!(
             store.delivered.lock().await.as_slice(),
             &["evt-sort-a".to_string(), "evt-sort-b".to_string()]
+        );
+        assert!(
+            !store
+                .delivered
+                .lock()
+                .await
+                .iter()
+                .any(|event_id| event_id == "evt-sort-late")
         );
         let lineage_events = lineage.events.lock().await;
         assert_eq!(lineage_events.len(), 2);

@@ -484,7 +484,9 @@ Outbox draining is intentionally strict. LakeCat projects a batch to graph and
 lineage sinks first, then acknowledges the whole projected batch in the store.
 Embedded and Turso stores select the same pending prefix by sorting on
 `created_at,event_id` before applying the drain limit, so a small batch means
-the same replay set in either durable backend. If projection fails, nothing is
+the same replay set in either durable backend. The drain response and delivery
+acknowledgement follow that ordered prefix, leaving later pending events for a
+future drain. If projection fails, nothing is
 acknowledged. If the store reports that fewer events were acknowledged than
 LakeCat projected, the drain fails with an acknowledgement mismatch instead of
 returning a quiet partial success. That keeps retry and operator evidence

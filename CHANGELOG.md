@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened service-level outbox drain coverage so pending batches are selected
+  by `created_at,event_id` before applying the drain limit, and only that
+  ordered prefix is projected and acknowledged.
 - Refreshed the full local QGLake handoff proof after captured replay
   hardening, confirming the live harness still verifies the LakeCat,
   QueryGraph, graph, and OpenLineage artifact chain end to end.

@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin outbox ordered drain limits`.
+  The service outbox drain test double now preserves the production store
+  contract by sorting pending events by `created_at,event_id` before applying
+  the limit, and the drain regression proves only that ordered prefix is
+  projected and acknowledged when a later pending event is present.
+- Local verification for this outbox ordered-limit slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service outbox_drain_orders_pending_batch_before_projection -- --test-threads=1`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Refresh live QGLake handoff after replay hardening`.
   The full local QGLake handoff harness is green after the captured scan and
   commit-history replay hardening. The live run generated one table and one
