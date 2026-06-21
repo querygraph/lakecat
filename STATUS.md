@@ -6,6 +6,23 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reconcile QGLake drain aggregate counts`.
+  The QGLake lineage-drain verifier now requires accepted drain artifacts to
+  reconcile `delivered`, `eventTypes`, replay summary count, `graphEvents`, and
+  `lineageEvents` before treating the handoff boundary as verified. Accepted
+  CLI fixtures now carry honest aggregate drain totals, and a regression test
+  rejects count drift on an otherwise valid drain.
+- Local verification for this QGLake drain aggregate-count slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_count_drift -- --test-threads=1`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-cli qglake -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`;
+  `scripts/qglake-handoff-local.sh`
+  (green, ending with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Bind handoff verifier drain semantics`.
   When a saved `lakecatHandoffVerifyOutputHash` is present, LakeCat now parses
   the actual lineage-drain artifact and requires the saved verifier output's

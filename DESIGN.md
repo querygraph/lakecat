@@ -490,6 +490,9 @@ supported operation, and preserve the expected version transition.
 Lineage-drain replay summaries must also stay bound to the drain-level event
 type manifest: a compact QGLake handoff cannot include a replay summary for an
 event type that the drain did not declare as delivered.
+Accepted lineage-drain artifacts must also reconcile their top-level
+`delivered`, `eventTypes`, `graphEvents`, and `lineageEvents` totals with the
+actual replay summary array before the handoff can be treated as verified.
 Saved `lakecatHandoffVerifyOutput` artifacts must stay bound to the archived
 lineage-drain artifact as well, including delivered count, event type manifest,
 graph event count, and lineage event count.

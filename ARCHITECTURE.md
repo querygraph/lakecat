@@ -649,6 +649,9 @@ match both the verify proof and the captured QueryGraph import output.
 Lineage-drain replay summaries are likewise bound to the drain-level
 `eventTypes` manifest, so a compact handoff cannot add replay evidence for an
 undeclared delivered catalog event type.
+The verifier also reconciles the drain artifact's top-level `delivered`,
+`eventTypes`, `graphEvents`, and `lineageEvents` counts against the replay
+summary array before accepting the artifact.
 When a saved `lakecatHandoffVerifyOutput` is present, LakeCat also compares
 that artifact's `lineageDrainArtifactSemantics` counters and event type list
 against the actual lineage-drain artifact before accepting the self-verified

@@ -1815,7 +1815,10 @@ or payload text into the catalog response. The JSON output from
 `lakecat-cli qglake-verify-handoff` also carries
 the accepted lineage-drain identity source, identity state, and TypeDID
 envelope/proof hash slots in `lineageDrainArtifactSemantics`, so QueryGraph can
-index the verified drain boundary without reparsing the raw drain artifact. If
+index the verified drain boundary without reparsing the raw drain artifact.
+Before that boundary is accepted, the verifier reconciles the drain artifact's
+top-level delivered count, `eventTypes` list, graph event count, and lineage
+event count against the replay summary array. If
 a saved `lakecatHandoffVerifyOutput` artifact is present, LakeCat binds those
 saved drain identity semantics back to the compact `requestIdentityProof`, so a
 rehash cannot disguise drift in principal, authorization receipt, source/state,
@@ -2433,7 +2436,8 @@ import-plan graph counts must still match the saved bundle graph counts. Then
 it parses the archived lineage-drain artifact and requires the saved
 lineage-drain semantics' delivered count, event type list, graph event count,
 and lineage event count to match before accepting the verifier-output hash.
-Then it parses those captured
+The archived drain itself must also reconcile those same top-level counts with
+its replay summary array. Then it parses those captured
 JSON files and checks that the replay schema/status,
 table/view counts, semantic hashes, standards, request-identity proof,
 QueryGraph bootstrap proof, governed scan proof, storage-profile upsert proof,

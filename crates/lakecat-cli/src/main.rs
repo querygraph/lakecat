@@ -7461,6 +7461,49 @@ fn verify_qglake_lineage_drain(
     verify_qglake_table_commit_history_replay(drain)?;
     verify_qglake_scan_replay(drain)?;
     require_qglake_lineage_event_types_cover_summaries(drain)?;
+    require_qglake_lineage_drain_counts_match_summaries(drain)?;
+    Ok(())
+}
+
+fn require_qglake_lineage_drain_counts_match_summaries(
+    drain: &LineageDrainResponse,
+) -> lakecat_core::LakeCatResult<()> {
+    if drain.delivered != drain.event_types.len() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain delivered count {} does not match eventTypes count {}",
+            drain.delivered,
+            drain.event_types.len()
+        )));
+    }
+    if drain.delivered != drain.events.len() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain delivered count {} does not match replay summary count {}",
+            drain.delivered,
+            drain.events.len()
+        )));
+    }
+    let summed_graph_events = drain
+        .events
+        .iter()
+        .map(|event| event.graph_events)
+        .sum::<usize>();
+    if drain.graph_events != summed_graph_events {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain graphEvents count {} does not match replay summary graph event count {}",
+            drain.graph_events, summed_graph_events
+        )));
+    }
+    let summed_lineage_events = drain
+        .events
+        .iter()
+        .map(|event| event.lineage_events)
+        .sum::<usize>();
+    if drain.lineage_events != summed_lineage_events {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain lineageEvents count {} does not match replay summary lineage event count {}",
+            drain.lineage_events, summed_lineage_events
+        )));
+    }
     Ok(())
 }
 
@@ -10508,7 +10551,7 @@ mod tests {
                 "graphEdges": 7
             },
             "lineageDrainArtifactSemantics": {
-                "delivered": 12,
+                "delivered": 13,
                 "eventTypes": [
                     "table.scan-planned",
                     "table.scan-tasks-fetched",
@@ -10524,7 +10567,7 @@ mod tests {
                     "table.commits-listed",
                     "querygraph.bootstrap"
                 ],
-                "graphEvents": 8,
+                "graphEvents": 14,
                 "lineageEvents": 13,
                 "principalSubject": summary["lakecatReplayVerification"]["requestIdentityProof"]["principalSubject"].clone(),
                 "principalKind": summary["lakecatReplayVerification"]["requestIdentityProof"]["principalKind"].clone(),
@@ -10701,7 +10744,7 @@ mod tests {
         view.replay_open_lineage_hashes = vec!["sha256:view-openlineage".to_string()];
 
         LineageDrainResponse {
-            delivered: 12,
+            delivered: 13,
             event_types: vec![
                 "table.scan-planned".to_string(),
                 "table.scan-tasks-fetched".to_string(),
@@ -10717,7 +10760,7 @@ mod tests {
                 "table.commits-listed".to_string(),
                 "querygraph.bootstrap".to_string(),
             ],
-            graph_events: 8,
+            graph_events: 14,
             lineage_events: 13,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
@@ -10741,6 +10784,28 @@ mod tests {
                 qglake_scan_planned_lineage_summary(),
                 qglake_scan_tasks_fetched_lineage_summary(),
             ],
+        }
+    }
+
+    fn qglake_lineage_drain_from_summaries(
+        events: Vec<LineageDrainEventSummary>,
+    ) -> LineageDrainResponse {
+        LineageDrainResponse {
+            delivered: events.len(),
+            event_types: events
+                .iter()
+                .map(|event| event.event_type.clone())
+                .collect(),
+            graph_events: events.iter().map(|event| event.graph_events).sum(),
+            lineage_events: events.iter().map(|event| event.lineage_events).sum(),
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            request_identity_source: Some("x-lakecat-agent-did".to_string()),
+            typedid_envelope_hash: None,
+            typedid_proof_hash: None,
+            events,
         }
     }
 
@@ -13624,7 +13689,7 @@ mod tests {
             verify_qglake_handoff_lineage_drain_artifact_semantics(&summary_path, &summary)
                 .expect("lineage drain artifact semantics should verify");
 
-        assert_eq!(semantics["delivered"], json!(12));
+        assert_eq!(semantics["delivered"], json!(13));
         assert_eq!(
             semantics["verifiedViews"],
             json!(["lakecat:view:local:default:active_customers_view"])
@@ -15062,7 +15127,7 @@ mod tests {
         let verification = bundle.verify_manifest().unwrap();
         let policy_binding_count = qglake_policy_binding_count(&bundle);
         let drain = LineageDrainResponse {
-            delivered: 11,
+            delivered: 12,
             event_types: vec![
                 "table.scan-planned".to_string(),
                 "table.scan-tasks-fetched".to_string(),
@@ -15077,7 +15142,7 @@ mod tests {
                 "table.commits-listed".to_string(),
                 "querygraph.bootstrap".to_string(),
             ],
-            graph_events: 1,
+            graph_events: 12,
             lineage_events: 12,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
@@ -17179,7 +17244,7 @@ mod tests {
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
                 typedid_proof_hash: None,
-                events: Vec::new(),
+                events: vec![qglake_scan_planned_lineage_summary()],
             },
             &verification,
             Some("did:example:agent"),
@@ -17193,8 +17258,11 @@ mod tests {
 
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 1,
-                event_types: vec!["querygraph.bootstrap".to_string()],
+                delivered: 2,
+                event_types: vec![
+                    "querygraph.bootstrap".to_string(),
+                    "table.scan-planned".to_string(),
+                ],
                 graph_events: 0,
                 lineage_events: 0,
                 principal_subject: Some("did:example:agent".to_string()),
@@ -17204,7 +17272,7 @@ mod tests {
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
                 typedid_proof_hash: None,
-                events: Vec::new(),
+                events: vec![qglake_scan_planned_lineage_summary()],
             },
             &verification,
             Some("did:example:agent"),
@@ -17218,8 +17286,11 @@ mod tests {
 
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 1,
-                event_types: vec!["querygraph.bootstrap".to_string()],
+                delivered: 2,
+                event_types: vec![
+                    "querygraph.bootstrap".to_string(),
+                    "table.scan-planned".to_string(),
+                ],
                 graph_events: 0,
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
@@ -17229,7 +17300,7 @@ mod tests {
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
                 typedid_proof_hash: None,
-                events: Vec::new(),
+                events: vec![qglake_scan_planned_lineage_summary()],
             },
             &verification,
             Some("did:example:agent"),
@@ -17254,7 +17325,7 @@ mod tests {
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
                 typedid_proof_hash: None,
-                events: Vec::new(),
+                events: vec![qglake_scan_planned_lineage_summary()],
             },
             &verification,
             Some("did:example:agent"),
@@ -17269,6 +17340,10 @@ mod tests {
         let mut drain = qglake_handoff_lineage_drain();
         let mut forged_summary = qglake_bootstrap_lineage_summary();
         forged_summary.event_type = "querygraph.bootstrap-shadow".to_string();
+        drain.delivered += 1;
+        drain.event_types.push("table.scan-planned".to_string());
+        drain.graph_events += forged_summary.graph_events;
+        drain.lineage_events += forged_summary.lineage_events;
         drain.events.push(forged_summary);
         let err = verify_qglake_lineage_drain(
             &drain,
@@ -17294,7 +17369,7 @@ mod tests {
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
                 typedid_proof_hash: None,
-                events: Vec::new(),
+                events: vec![qglake_scan_planned_lineage_summary()],
             },
             &verification,
             Some("did:example:agent"),
@@ -17320,7 +17395,7 @@ mod tests {
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
                 typedid_proof_hash: None,
-                events: Vec::new(),
+                events: vec![qglake_scan_planned_lineage_summary()],
             },
             &verification,
             Some("did:example:agent"),
@@ -17346,7 +17421,7 @@ mod tests {
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
                 typedid_proof_hash: None,
-                events: Vec::new(),
+                events: vec![qglake_scan_planned_lineage_summary()],
             },
             &verification,
             Some("did:example:agent"),
@@ -17384,7 +17459,7 @@ mod tests {
                     typedid_proof_hash: None,
                     agent_delegation_hash: Some("sha256:delegation".to_string()),
                     agent_summary_signature_hash: Some("sha256:summary".to_string()),
-                    graph_events: 0,
+                    graph_events: 1,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
@@ -17478,7 +17553,7 @@ mod tests {
                     typedid_proof_hash: None,
                     agent_delegation_hash: Some("sha256:delegation".to_string()),
                     agent_summary_signature_hash: Some("sha256:summary".to_string()),
-                    graph_events: 0,
+                    graph_events: 1,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
@@ -17574,7 +17649,7 @@ mod tests {
                     typedid_proof_hash: None,
                     agent_delegation_hash: Some("sha256:delegation".to_string()),
                     agent_summary_signature_hash: Some("sha256:summary".to_string()),
-                    graph_events: 0,
+                    graph_events: 1,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:other-bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
@@ -17668,7 +17743,7 @@ mod tests {
                     typedid_proof_hash: None,
                     agent_delegation_hash: Some("sha256:delegation".to_string()),
                     agent_summary_signature_hash: Some("sha256:summary".to_string()),
-                    graph_events: 0,
+                    graph_events: 1,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
@@ -17762,7 +17837,7 @@ mod tests {
                     typedid_proof_hash: None,
                     agent_delegation_hash: Some("sha256:delegation".to_string()),
                     agent_summary_signature_hash: Some("sha256:summary".to_string()),
-                    graph_events: 0,
+                    graph_events: 1,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
@@ -17856,7 +17931,7 @@ mod tests {
                     typedid_proof_hash: None,
                     agent_delegation_hash: Some("sha256:delegation".to_string()),
                     agent_summary_signature_hash: Some("sha256:summary".to_string()),
-                    graph_events: 0,
+                    graph_events: 1,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
@@ -17950,7 +18025,7 @@ mod tests {
                     typedid_proof_hash: None,
                     agent_delegation_hash: Some("sha256:delegation".to_string()),
                     agent_summary_signature_hash: Some("sha256:summary".to_string()),
-                    graph_events: 0,
+                    graph_events: 1,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
@@ -18044,7 +18119,7 @@ mod tests {
                     typedid_proof_hash: None,
                     agent_delegation_hash: None,
                     agent_summary_signature_hash: Some("sha256:summary".to_string()),
-                    graph_events: 0,
+                    graph_events: 1,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
@@ -18138,7 +18213,7 @@ mod tests {
                     typedid_proof_hash: None,
                     agent_delegation_hash: Some("sha256:delegation".to_string()),
                     agent_summary_signature_hash: None,
-                    graph_events: 0,
+                    graph_events: 1,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
@@ -18232,7 +18307,7 @@ mod tests {
                     typedid_proof_hash: None,
                     agent_delegation_hash: Some("sha256:delegation".to_string()),
                     agent_summary_signature_hash: Some("sha256:summary".to_string()),
-                    graph_events: 0,
+                    graph_events: 1,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
@@ -18326,7 +18401,7 @@ mod tests {
                     typedid_proof_hash: None,
                     agent_delegation_hash: Some("sha256:delegation".to_string()),
                     agent_summary_signature_hash: Some("sha256:summary".to_string()),
-                    graph_events: 0,
+                    graph_events: 1,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
@@ -18420,7 +18495,7 @@ mod tests {
                     typedid_proof_hash: None,
                     agent_delegation_hash: Some("sha256:delegation".to_string()),
                     agent_summary_signature_hash: Some("sha256:summary".to_string()),
-                    graph_events: 0,
+                    graph_events: 1,
                     lineage_events: 1,
                     bundle_hash: Some("sha256:bundle".to_string()),
                     graph_hash: Some("sha256:graph".to_string()),
@@ -18491,8 +18566,11 @@ mod tests {
 
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 1,
-                event_types: vec!["querygraph.bootstrap".to_string()],
+                delivered: 2,
+                event_types: vec![
+                    "querygraph.bootstrap".to_string(),
+                    "table.scan-planned".to_string(),
+                ],
                 graph_events: 1,
                 lineage_events: 1,
                 principal_subject: Some("did:example:agent".to_string()),
@@ -18502,77 +18580,80 @@ mod tests {
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
                 typedid_proof_hash: None,
-                events: vec![LineageDrainEventSummary {
-                    event_id: "evt-bootstrap".to_string(),
-                    event_type: "querygraph.bootstrap".to_string(),
-                    principal_subject: Some("did:example:agent".to_string()),
-                    principal_kind: Some("agent".to_string()),
-                    authorization_receipt_hash: Some("sha256:authorization".to_string()),
-                    request_identity_state: Some("verified".to_string()),
-                    request_identity_source: Some("x-lakecat-agent-did".to_string()),
-                    typedid_envelope_hash: None,
-                    typedid_proof_hash: None,
-                    agent_delegation_hash: Some("sha256:delegation".to_string()),
-                    agent_summary_signature_hash: Some("sha256:summary".to_string()),
-                    graph_events: 0,
-                    lineage_events: 0,
-                    bundle_hash: Some("sha256:bundle".to_string()),
-                    graph_hash: Some("sha256:graph".to_string()),
-                    open_lineage_hash: Some("sha256:openlineage".to_string()),
-                    querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
-                    table_artifact_count: 1,
-                    view_artifact_count: 0,
-                    view_version_receipt_hashes: Vec::new(),
-                    view_version_receipt_chain_hashes: Vec::new(),
-                    view_version_receipt_chain_verified_count: 0,
-                    view_version_receipt_chains: Vec::new(),
-                    view_warehouse: None,
-                    view_namespace: Vec::new(),
-                    view_name: None,
-                    view_stable_id: None,
-                    view_version: None,
-                    expected_view_version: None,
-                    policy_binding_count: 1,
-                    policy_ids: Vec::new(),
-                    project_count: None,
-                    project_ids: Vec::new(),
-                    server_count: None,
-                    server_ids: Vec::new(),
-                    storage_profile_count: None,
-                    storage_profile_ids: Vec::new(),
-                    storage_profile_id: None,
-                    storage_profile_provider: None,
-                    storage_profile_issuance_mode: None,
-                    storage_profile_location_prefix_hash: None,
-                    storage_profile_secret_ref_present: None,
-                    storage_profile_secret_ref_provider: None,
-                    storage_profile_secret_ref_hash: None,
-                    warehouse_count: None,
-                    warehouse_names: Vec::new(),
-                    table_commit_count: None,
-                    table_commit_sequence_numbers: Vec::new(),
-                    table_commit_hashes: Vec::new(),
-                    scan_task_count: None,
-                    file_scan_task_count: None,
-                    delete_file_count: None,
-                    child_plan_task_count: None,
-                    read_restriction: None,
-                    required_projection: Vec::new(),
-                    requested_projection: Vec::new(),
-                    effective_projection: Vec::new(),
-                    required_filters: Vec::new(),
-                    requested_stats_fields: Vec::new(),
-                    effective_stats_fields: Vec::new(),
-                    management_scope_project_id: None,
-                    management_scope_warehouse: None,
-                    standards: qglake_lineage_standards(),
-                    credential_count: None,
-                    credential_block_reason: None,
-                    raw_credential_exception_allowed: None,
-                    raw_credential_exception_reason: None,
-                    replay_event_hashes: vec!["sha256:replay-event".to_string()],
-                    replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
-                }],
+                events: vec![
+                    LineageDrainEventSummary {
+                        event_id: "evt-bootstrap".to_string(),
+                        event_type: "querygraph.bootstrap".to_string(),
+                        principal_subject: Some("did:example:agent".to_string()),
+                        principal_kind: Some("agent".to_string()),
+                        authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                        request_identity_state: Some("verified".to_string()),
+                        request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                        typedid_envelope_hash: None,
+                        typedid_proof_hash: None,
+                        agent_delegation_hash: Some("sha256:delegation".to_string()),
+                        agent_summary_signature_hash: Some("sha256:summary".to_string()),
+                        graph_events: 0,
+                        lineage_events: 0,
+                        bundle_hash: Some("sha256:bundle".to_string()),
+                        graph_hash: Some("sha256:graph".to_string()),
+                        open_lineage_hash: Some("sha256:openlineage".to_string()),
+                        querygraph_import_hash: Some("sha256:querygraph-import".to_string()),
+                        table_artifact_count: 1,
+                        view_artifact_count: 0,
+                        view_version_receipt_hashes: Vec::new(),
+                        view_version_receipt_chain_hashes: Vec::new(),
+                        view_version_receipt_chain_verified_count: 0,
+                        view_version_receipt_chains: Vec::new(),
+                        view_warehouse: None,
+                        view_namespace: Vec::new(),
+                        view_name: None,
+                        view_stable_id: None,
+                        view_version: None,
+                        expected_view_version: None,
+                        policy_binding_count: 1,
+                        policy_ids: Vec::new(),
+                        project_count: None,
+                        project_ids: Vec::new(),
+                        server_count: None,
+                        server_ids: Vec::new(),
+                        storage_profile_count: None,
+                        storage_profile_ids: Vec::new(),
+                        storage_profile_id: None,
+                        storage_profile_provider: None,
+                        storage_profile_issuance_mode: None,
+                        storage_profile_location_prefix_hash: None,
+                        storage_profile_secret_ref_present: None,
+                        storage_profile_secret_ref_provider: None,
+                        storage_profile_secret_ref_hash: None,
+                        warehouse_count: None,
+                        warehouse_names: Vec::new(),
+                        table_commit_count: None,
+                        table_commit_sequence_numbers: Vec::new(),
+                        table_commit_hashes: Vec::new(),
+                        scan_task_count: None,
+                        file_scan_task_count: None,
+                        delete_file_count: None,
+                        child_plan_task_count: None,
+                        read_restriction: None,
+                        required_projection: Vec::new(),
+                        requested_projection: Vec::new(),
+                        effective_projection: Vec::new(),
+                        required_filters: Vec::new(),
+                        requested_stats_fields: Vec::new(),
+                        effective_stats_fields: Vec::new(),
+                        management_scope_project_id: None,
+                        management_scope_warehouse: None,
+                        standards: qglake_lineage_standards(),
+                        credential_count: None,
+                        credential_block_reason: None,
+                        raw_credential_exception_allowed: None,
+                        raw_credential_exception_reason: None,
+                        replay_event_hashes: vec!["sha256:replay-event".to_string()],
+                        replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+                    },
+                    qglake_scan_planned_lineage_summary(),
+                ],
             },
             &verification,
             Some("did:example:agent"),
@@ -18597,7 +18678,7 @@ mod tests {
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
                 typedid_proof_hash: None,
-                events: vec![qglake_bootstrap_lineage_summary()],
+                events: vec![qglake_scan_planned_lineage_summary()],
             },
             &verification,
             Some("did:example:agent"),
@@ -18623,7 +18704,7 @@ mod tests {
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
                 typedid_proof_hash: Some("sha256:typedid-proof".to_string()),
-                events: vec![qglake_bootstrap_lineage_summary()],
+                events: vec![qglake_scan_planned_lineage_summary()],
             },
             &verification,
             Some("did:example:agent"),
@@ -18636,6 +18717,7 @@ mod tests {
         );
 
         let mut bootstrap_malformed_agent_hash = qglake_bootstrap_lineage_summary();
+        bootstrap_malformed_agent_hash.graph_events = 1;
         bootstrap_malformed_agent_hash.agent_delegation_hash =
             Some("not-a-sha256-hash".to_string());
         let err = verify_qglake_lineage_drain(
@@ -18663,6 +18745,7 @@ mod tests {
         ));
 
         let mut bootstrap_typedid_without_envelope = qglake_bootstrap_lineage_summary();
+        bootstrap_typedid_without_envelope.graph_events = 1;
         bootstrap_typedid_without_envelope.typedid_proof_hash =
             Some("sha256:typedid-proof".to_string());
         let err = verify_qglake_lineage_drain(
@@ -18690,28 +18773,12 @@ mod tests {
         ));
 
         let err = verify_qglake_lineage_drain(
-            &LineageDrainResponse {
-                delivered: 3,
-                event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "querygraph.bootstrap".to_string(),
-                ],
-                graph_events: 1,
-                lineage_events: 3,
-                principal_subject: Some("did:example:agent".to_string()),
-                principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
-                request_identity_state: Some("verified".to_string()),
-                request_identity_source: Some("x-lakecat-agent-did".to_string()),
-                typedid_envelope_hash: None,
-                typedid_proof_hash: None,
-                events: vec![
-                    qglake_bootstrap_lineage_summary(),
-                    qglake_human_credential_summary(),
-                ],
-            },
+            &qglake_lineage_drain_from_summaries(vec![
+                qglake_bootstrap_lineage_summary(),
+                qglake_human_credential_summary(),
+                qglake_scan_planned_lineage_summary(),
+                qglake_scan_tasks_fetched_lineage_summary(),
+            ]),
             &verification,
             Some("did:example:agent"),
             1,
@@ -18724,28 +18791,12 @@ mod tests {
         );
 
         let err = verify_qglake_lineage_drain(
-            &LineageDrainResponse {
-                delivered: 3,
-                event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "querygraph.bootstrap".to_string(),
-                ],
-                graph_events: 1,
-                lineage_events: 3,
-                principal_subject: Some("did:example:agent".to_string()),
-                principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
-                request_identity_state: Some("verified".to_string()),
-                request_identity_source: Some("x-lakecat-agent-did".to_string()),
-                typedid_envelope_hash: None,
-                typedid_proof_hash: None,
-                events: vec![
-                    qglake_bootstrap_lineage_summary(),
-                    qglake_restricted_credential_summary(),
-                ],
-            },
+            &qglake_lineage_drain_from_summaries(vec![
+                qglake_bootstrap_lineage_summary(),
+                qglake_restricted_credential_summary(),
+                qglake_scan_planned_lineage_summary(),
+                qglake_scan_tasks_fetched_lineage_summary(),
+            ]),
             &verification,
             Some("did:example:agent"),
             1,
@@ -18764,30 +18815,13 @@ mod tests {
             .replay_open_lineage_hashes
             .clear();
         let err = verify_qglake_lineage_drain(
-            &LineageDrainResponse {
-                delivered: 4,
-                event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "querygraph.bootstrap".to_string(),
-                ],
-                graph_events: 1,
-                lineage_events: 3,
-                principal_subject: Some("did:example:agent".to_string()),
-                principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
-                request_identity_state: Some("verified".to_string()),
-                request_identity_source: Some("x-lakecat-agent-did".to_string()),
-                typedid_envelope_hash: None,
-                typedid_proof_hash: None,
-                events: vec![
-                    qglake_bootstrap_lineage_summary(),
-                    restricted_without_receipts,
-                    qglake_human_credential_summary(),
-                ],
-            },
+            &qglake_lineage_drain_from_summaries(vec![
+                qglake_bootstrap_lineage_summary(),
+                restricted_without_receipts,
+                qglake_human_credential_summary(),
+                qglake_scan_planned_lineage_summary(),
+                qglake_scan_tasks_fetched_lineage_summary(),
+            ]),
             &verification,
             Some("did:example:agent"),
             1,
@@ -18800,30 +18834,13 @@ mod tests {
         let mut human_without_openlineage = qglake_human_credential_summary();
         human_without_openlineage.replay_open_lineage_hashes.clear();
         let err = verify_qglake_lineage_drain(
-            &LineageDrainResponse {
-                delivered: 4,
-                event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "querygraph.bootstrap".to_string(),
-                ],
-                graph_events: 1,
-                lineage_events: 4,
-                principal_subject: Some("did:example:agent".to_string()),
-                principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
-                request_identity_state: Some("verified".to_string()),
-                request_identity_source: Some("x-lakecat-agent-did".to_string()),
-                typedid_envelope_hash: None,
-                typedid_proof_hash: None,
-                events: vec![
-                    qglake_bootstrap_lineage_summary(),
-                    qglake_restricted_credential_summary(),
-                    human_without_openlineage,
-                ],
-            },
+            &qglake_lineage_drain_from_summaries(vec![
+                qglake_bootstrap_lineage_summary(),
+                qglake_restricted_credential_summary(),
+                human_without_openlineage,
+                qglake_scan_planned_lineage_summary(),
+                qglake_scan_tasks_fetched_lineage_summary(),
+            ]),
             &verification,
             Some("did:example:agent"),
             1,
@@ -18836,30 +18853,13 @@ mod tests {
         let mut human_without_exception_reason = qglake_human_credential_summary();
         human_without_exception_reason.raw_credential_exception_reason = None;
         let err = verify_qglake_lineage_drain(
-            &LineageDrainResponse {
-                delivered: 4,
-                event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "querygraph.bootstrap".to_string(),
-                ],
-                graph_events: 1,
-                lineage_events: 4,
-                principal_subject: Some("did:example:agent".to_string()),
-                principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
-                request_identity_state: Some("verified".to_string()),
-                request_identity_source: Some("x-lakecat-agent-did".to_string()),
-                typedid_envelope_hash: None,
-                typedid_proof_hash: None,
-                events: vec![
-                    qglake_bootstrap_lineage_summary(),
-                    qglake_restricted_credential_summary(),
-                    human_without_exception_reason,
-                ],
-            },
+            &qglake_lineage_drain_from_summaries(vec![
+                qglake_bootstrap_lineage_summary(),
+                qglake_restricted_credential_summary(),
+                human_without_exception_reason,
+                qglake_scan_planned_lineage_summary(),
+                qglake_scan_tasks_fetched_lineage_summary(),
+            ]),
             &verification,
             Some("did:example:agent"),
             1,
@@ -18873,30 +18873,13 @@ mod tests {
         restricted_with_exception_reason.raw_credential_exception_reason =
             Some("trusted-human-override".to_string());
         let err = verify_qglake_lineage_drain(
-            &LineageDrainResponse {
-                delivered: 4,
-                event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "querygraph.bootstrap".to_string(),
-                ],
-                graph_events: 1,
-                lineage_events: 4,
-                principal_subject: Some("did:example:agent".to_string()),
-                principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
-                request_identity_state: Some("verified".to_string()),
-                request_identity_source: Some("x-lakecat-agent-did".to_string()),
-                typedid_envelope_hash: None,
-                typedid_proof_hash: None,
-                events: vec![
-                    qglake_bootstrap_lineage_summary(),
-                    restricted_with_exception_reason,
-                    qglake_human_credential_summary(),
-                ],
-            },
+            &qglake_lineage_drain_from_summaries(vec![
+                qglake_bootstrap_lineage_summary(),
+                restricted_with_exception_reason,
+                qglake_human_credential_summary(),
+                qglake_scan_planned_lineage_summary(),
+                qglake_scan_tasks_fetched_lineage_summary(),
+            ]),
             &verification,
             Some("did:example:agent"),
             1,
@@ -18909,30 +18892,13 @@ mod tests {
         let mut human_without_ttl = qglake_human_credential_summary();
         human_without_ttl.read_restriction = None;
         let err = verify_qglake_lineage_drain(
-            &LineageDrainResponse {
-                delivered: 4,
-                event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "querygraph.bootstrap".to_string(),
-                ],
-                graph_events: 1,
-                lineage_events: 4,
-                principal_subject: Some("did:example:agent".to_string()),
-                principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
-                request_identity_state: Some("verified".to_string()),
-                request_identity_source: Some("x-lakecat-agent-did".to_string()),
-                typedid_envelope_hash: None,
-                typedid_proof_hash: None,
-                events: vec![
-                    qglake_bootstrap_lineage_summary(),
-                    qglake_restricted_credential_summary(),
-                    human_without_ttl,
-                ],
-            },
+            &qglake_lineage_drain_from_summaries(vec![
+                qglake_bootstrap_lineage_summary(),
+                qglake_restricted_credential_summary(),
+                human_without_ttl,
+                qglake_scan_planned_lineage_summary(),
+                qglake_scan_tasks_fetched_lineage_summary(),
+            ]),
             &verification,
             Some("did:example:agent"),
             1,
@@ -20077,7 +20043,7 @@ mod tests {
                     "warehouse.listed".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
-                graph_events: 4,
+                graph_events: 16,
                 lineage_events: 11,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
@@ -20111,7 +20077,7 @@ mod tests {
 
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 11,
+                delivered: 12,
                 event_types: vec![
                     "table.scan-planned".to_string(),
                     "table.scan-tasks-fetched".to_string(),
@@ -20127,7 +20093,7 @@ mod tests {
                     "warehouse.listed".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
-                graph_events: 4,
+                graph_events: 16,
                 lineage_events: 12,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
@@ -20164,7 +20130,7 @@ mod tests {
         drifted_receipt_chain.view_namespace = vec!["other_namespace".to_string()];
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 12,
+                delivered: 13,
                 event_types: vec![
                     "table.scan-planned".to_string(),
                     "table.scan-tasks-fetched".to_string(),
@@ -20353,7 +20319,7 @@ mod tests {
                     "table.commits-listed".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
-                graph_events: 4,
+                graph_events: 16,
                 lineage_events: 16,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
@@ -20813,7 +20779,7 @@ mod tests {
         }));
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 15,
+                delivered: 16,
                 event_types: vec![
                     "table.scan-planned".to_string(),
                     "table.scan-tasks-fetched".to_string(),
@@ -20831,7 +20797,7 @@ mod tests {
                     "table.commits-listed".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
-                graph_events: 4,
+                graph_events: 16,
                 lineage_events: 16,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
@@ -20935,7 +20901,7 @@ mod tests {
 
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 15,
+                delivered: 16,
                 event_types: vec![
                     "table.scan-planned".to_string(),
                     "table.scan-tasks-fetched".to_string(),
@@ -20954,7 +20920,7 @@ mod tests {
                     "table.commits-listed".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
-                graph_events: 4,
+                graph_events: 16,
                 lineage_events: 16,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
@@ -20990,7 +20956,7 @@ mod tests {
 
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 12,
+                delivered: 13,
                 event_types: vec![
                     "table.scan-planned".to_string(),
                     "table.scan-tasks-fetched".to_string(),
@@ -21006,7 +20972,7 @@ mod tests {
                     "table.commits-listed".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
-                graph_events: 3,
+                graph_events: 14,
                 lineage_events: 13,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
@@ -21039,7 +21005,7 @@ mod tests {
 
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 11,
+                delivered: 12,
                 event_types: vec![
                     "table.scan-planned".to_string(),
                     "table.scan-tasks-fetched".to_string(),
@@ -21054,7 +21020,7 @@ mod tests {
                     "table.commits-listed".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
-                graph_events: 1,
+                graph_events: 12,
                 lineage_events: 12,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
@@ -21101,6 +21067,20 @@ mod tests {
 
         assert!(err.to_string().contains("policy list replay"));
         assert!(err.to_string().contains("SHA-256 receipt hashes"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_count_drift() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        drain.delivered -= 1;
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject delivered count drift");
+
+        assert!(err.to_string().contains("qglake lineage drain"));
+        assert!(err.to_string().contains("delivered count"));
+        assert!(err.to_string().contains("eventTypes count"));
     }
 
     #[test]
@@ -21201,6 +21181,7 @@ mod tests {
             .find(|event| event.event_type == "table.scan-planned")
             .expect("scan plan replay fixture");
         scan_plan.graph_events = 0;
+        drain.graph_events -= 1;
 
         let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
             .expect_err("QGLake lineage drain should reject missing scan-plan graph proof");

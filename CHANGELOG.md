@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required QGLake lineage-drain artifacts to reconcile `delivered`,
+  `eventTypes`, replay summary count, `graphEvents`, and `lineageEvents` before
+  acceptance, and corrected accepted fixtures to carry honest aggregate drain
+  totals.
 - Bound saved `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics`
   `delivered`, `eventTypes`, `graphEvents`, and `lineageEvents` back to the
   actual lineage-drain artifact whenever a verifier-output hash is present.
