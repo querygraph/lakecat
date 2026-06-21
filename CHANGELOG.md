@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Revalidated policy bindings at the `CatalogStore` upsert boundary for the
+  default, memory, and Turso stores, rejecting deserialized table-scoped policy
+  bindings that omit a namespace before they can enter durable catalog state.
 - Added QGLake handoff artifact regression coverage proving saved
   `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics.lineageEvents`
   cannot drift from the accepted lineage-drain artifact while still passing

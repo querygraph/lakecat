@@ -6,6 +6,17 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate store policy-binding upserts`.
+  `CatalogStore::upsert_policy_binding` now revalidates direct/deserialized
+  `PolicyBinding` records in the default, memory, and Turso store paths,
+  rejecting table-scoped bindings that omit a namespace before malformed
+  policy scope evidence can enter durable catalog state.
+- Local verification for this policy-binding store slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_deserialized_invalid_policy_bindings -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_deserialized_invalid_policy_bindings -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local`.
+- Latest completed implementation slice:
   `Pin handoff verify lineage-event drift`.
   QGLake handoff artifact verification now has explicit regression coverage
   proving a saved `lakecatHandoffVerifyOutput` cannot report a drifted

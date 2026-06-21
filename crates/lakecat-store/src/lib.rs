@@ -242,6 +242,7 @@ pub trait CatalogStore: Send + Sync + 'static {
         Ok(Vec::new())
     }
     async fn upsert_policy_binding(&self, binding: PolicyBinding) -> LakeCatResult<PolicyBinding> {
+        binding.validate()?;
         Ok(binding)
     }
     async fn list_policy_bindings(
@@ -1080,6 +1081,16 @@ impl PolicyBinding {
             (None, Some(_)) => false,
         }
     }
+
+    pub fn validate(&self) -> LakeCatResult<()> {
+        validate_policy_id(&self.policy_id)?;
+        if self.table.is_some() && self.namespace.is_none() {
+            return Err(LakeCatError::InvalidArgument(
+                "table-scoped policy binding requires namespace".to_string(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl CatalogAuditEvent {
@@ -1792,6 +1803,7 @@ impl CatalogStore for MemoryCatalogStore {
     }
 
     async fn upsert_policy_binding(&self, binding: PolicyBinding) -> LakeCatResult<PolicyBinding> {
+        binding.validate()?;
         let mut state = self.state.write().await;
         state.policy_bindings.insert(
             policy_binding_key(&binding.warehouse, &binding.policy_id),
@@ -2698,6 +2710,33 @@ mod memory_tests {
             store.drop_namespace(&warehouse, &policy_namespace).await,
             Err(LakeCatError::Conflict(message)) if message.contains("policy bindings")
         ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_deserialized_invalid_policy_bindings() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let binding = PolicyBinding {
+            policy_id: "table-policy".to_string(),
+            warehouse: warehouse.clone(),
+            namespace: None,
+            table: Some(TableName::new("events").unwrap()),
+            enforced: true,
+            odrl: serde_json::json!({"uid": "policy:table-policy"}),
+            updated_at: Utc::now(),
+        };
+
+        let err = store.upsert_policy_binding(binding).await.unwrap_err();
+
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("table-scoped policy binding requires namespace")
+        ));
+        assert_eq!(
+            store.list_policy_bindings(&warehouse).await.unwrap(),
+            vec![]
+        );
     }
 
     #[tokio::test]
@@ -4616,6 +4655,7 @@ pub mod turso_store {
             &self,
             binding: PolicyBinding,
         ) -> LakeCatResult<PolicyBinding> {
+            binding.validate()?;
             let conn = self.connect()?;
             conn.execute(
                 "insert into policy_bindings (
@@ -7228,6 +7268,33 @@ pub mod turso_store {
             assert_eq!(
                 active[0].odrl["uid"],
                 serde_json::json!("policy:agent-read")
+            );
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_deserialized_invalid_policy_bindings() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let binding = PolicyBinding {
+                policy_id: "table-policy".to_string(),
+                warehouse: warehouse.clone(),
+                namespace: None,
+                table: Some(TableName::new("events").unwrap()),
+                enforced: true,
+                odrl: serde_json::json!({"uid": "policy:table-policy"}),
+                updated_at: Utc::now(),
+            };
+
+            let err = store.upsert_policy_binding(binding).await.unwrap_err();
+
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("table-scoped policy binding requires namespace")
+            ));
+            assert_eq!(
+                store.list_policy_bindings(&warehouse).await.unwrap(),
+                vec![]
             );
         }
 
