@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate storage-profile reads`.
+  Memory and Turso `list_storage_profiles` plus storage-profile table matching
+  now revalidate stored `StorageProfile` credential-root records before replay
+  can observe them, and unsupported storage-profile identifiers now carry hash
+  evidence instead of raw decorated values.
+- Local verification for this storage-profile read validation slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_corrupt_storage_profiles_on_read -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_corrupt_storage_profiles_on_read -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate warehouse record reads`.
   Memory and Turso `load_warehouse`, `list_warehouses`, and
   `list_project_warehouses` now revalidate decoded/stored `WarehouseRecord`

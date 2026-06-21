@@ -975,6 +975,7 @@ impl StorageProfile {
     }
 
     pub fn validate(&self) -> LakeCatResult<()> {
+        validate_profile_id(&self.profile_id)?;
         validate_location_prefix_path(&self.location_prefix)?;
         validate_location_prefix_provider(&self.location_prefix, self.provider)?;
         validate_issuance_mode_provider(self.issuance_mode, self.provider, &self.location_prefix)?;
@@ -1792,6 +1793,9 @@ impl CatalogStore for MemoryCatalogStore {
             .cloned()
             .collect::<Vec<_>>();
         profiles.sort_by(|left, right| left.profile_id.cmp(&right.profile_id));
+        for profile in &profiles {
+            profile.validate()?;
+        }
         Ok(profiles)
     }
 
@@ -1964,10 +1968,12 @@ impl CatalogStore for MemoryCatalogStore {
         table: &TableRecord,
     ) -> LakeCatResult<StorageProfile> {
         let state = self.state.read().await;
-        Ok(
-            storage_profile_match(state.storage_profiles.values(), table)?
-                .unwrap_or_else(|| StorageProfile::inferred_for_table(table)),
-        )
+        let profiles = state.storage_profiles.values().collect::<Vec<_>>();
+        for profile in &profiles {
+            profile.validate()?;
+        }
+        Ok(storage_profile_match(profiles.into_iter(), table)?
+            .unwrap_or_else(|| StorageProfile::inferred_for_table(table)))
     }
 
     async fn upsert_policy_binding(&self, binding: PolicyBinding) -> LakeCatResult<PolicyBinding> {
@@ -2231,7 +2237,8 @@ fn validate_profile_id(profile_id: &str) -> LakeCatResult<()> {
         .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
     {
         return Err(LakeCatError::InvalidArgument(format!(
-            "storage profile id contains unsupported characters: {profile_id}"
+            "storage profile id contains unsupported characters; {}",
+            storage_profile_id_hash_context(profile_id)
         )));
     }
     Ok(())
@@ -2597,6 +2604,13 @@ fn project_id_hash_context(project_id: &str) -> String {
     )
 }
 
+fn storage_profile_id_hash_context(profile_id: &str) -> String {
+    format!(
+        "storage-profile-id-hash={}",
+        content_hash_bytes(profile_id.as_bytes())
+    )
+}
+
 fn validate_policy_id(policy_id: &str) -> LakeCatResult<()> {
     if policy_id.is_empty() {
         return Err(LakeCatError::InvalidArgument(
@@ -2815,6 +2829,54 @@ mod memory_tests {
             err.to_string()
                 .contains("warehouse-storage-root-hash=sha256:")
         );
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_corrupt_storage_profiles_on_read() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let table = TableRecord::new(
+            TableIdent::new(
+                warehouse.clone(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            ),
+            "s3://lakecat-demo/events/table".to_string(),
+            None,
+            serde_json::json!({"format-version": 3}),
+            Principal::anonymous(),
+        );
+        let profile = StorageProfile::new(
+            "s3-events",
+            warehouse.clone(),
+            "s3://lakecat-demo/events",
+            StorageProvider::S3,
+            CredentialIssuanceMode::ShortLivedSecretRef,
+            Some("typesec://lakecat/local/s3-events".to_string()),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        store.upsert_storage_profile(profile).await.unwrap();
+
+        let key = storage_profile_key(&warehouse, "s3-events");
+        store
+            .state
+            .write()
+            .await
+            .storage_profiles
+            .get_mut(&key)
+            .unwrap()
+            .profile_id = "s3-events?token=secret".to_string();
+
+        let err = store.list_storage_profiles(&warehouse).await.unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("storage-profile-id-hash=sha256:"));
+        assert!(!message.contains("token=secret"));
+
+        let err = store.storage_profile_for_table(&table).await.unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("storage-profile-id-hash=sha256:"));
+        assert!(!message.contains("token=secret"));
     }
 
     #[tokio::test]
@@ -5224,7 +5286,9 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut profiles = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                profiles.push(decode_json(row_string(&row, 0)?)?);
+                let profile: StorageProfile = decode_json(row_string(&row, 0)?)?;
+                profile.validate()?;
+                profiles.push(profile);
             }
             Ok(profiles)
         }
@@ -7312,6 +7376,56 @@ pub mod turso_store {
                 matched.public_config["lakecat.endpoint"],
                 narrow.public_config["lakecat.endpoint"]
             );
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_corrupt_storage_profiles_on_read() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let table = TableRecord::new(
+                TableIdent::new(
+                    warehouse.clone(),
+                    "default".parse::<Namespace>().unwrap(),
+                    TableName::new("events").unwrap(),
+                ),
+                "s3://lakecat-demo/events/table".to_string(),
+                None,
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            );
+            let mut profile = StorageProfile::new(
+                "s3-events",
+                warehouse.clone(),
+                "s3://lakecat-demo/events",
+                StorageProvider::S3,
+                CredentialIssuanceMode::ShortLivedSecretRef,
+                Some("typesec://lakecat/local/s3-events".to_string()),
+                BTreeMap::new(),
+            )
+            .unwrap();
+            store.upsert_storage_profile(profile.clone()).await.unwrap();
+            profile.profile_id = "s3-events?token=secret".to_string();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update storage_profiles set profile_json = ?2 where profile_key = ?1",
+                (
+                    storage_profile_key(&warehouse, "s3-events"),
+                    encode_json(&profile).unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store.list_storage_profiles(&warehouse).await.unwrap_err();
+            let message = err.to_string();
+            assert!(message.contains("storage-profile-id-hash=sha256:"));
+            assert!(!message.contains("token=secret"));
+
+            let err = store.storage_profile_for_table(&table).await.unwrap_err();
+            let message = err.to_string();
+            assert!(message.contains("storage-profile-id-hash=sha256:"));
+            assert!(!message.contains("token=secret"));
         }
 
         #[tokio::test]

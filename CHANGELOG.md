@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Revalidated storage-profile credential roots at memory and Turso list/match
+  read boundaries, rejecting corrupted durable profile JSON and replacing raw
+  invalid storage-profile identifiers with hash evidence.
 - Revalidated warehouse management records at memory and Turso load/list-read
   boundaries, rejecting corrupted durable storage-root JSON before management
   replay can expose invalid roots or leak decorated storage-root material.
