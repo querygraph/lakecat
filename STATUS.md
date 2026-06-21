@@ -6,6 +6,23 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate storage-profile secret-ref modes`.
+  Service `storage-profile.upserted` outbox admission now rejects
+  credential-root replay whose `secret-ref-present` flag conflicts with
+  `issuance-mode`, so short-lived secret-ref roots cannot replay without
+  secret-ref proof and no-secret/governed roots cannot project
+  secret-reference proof.
+- Local verification for this storage-profile secret-ref mode slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service storage_profile_secret_ref_mode -- --test-threads=1`;
+  `cargo test -p lakecat-service storage_profile -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- All-features service verification also refreshed the QueryGraph bootstrap
+  duplicate verified-table/view assertions so they match the generic
+  duplicate-free string-array admission boundary.
+- Latest completed implementation slice:
   `Validate storage-profile replay identity`.
   Service `storage-profile.upserted` outbox admission now rejects missing or
   drifted credential-root identity evidence before acknowledgement, graph

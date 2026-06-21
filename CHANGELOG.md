@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Required `storage-profile.upserted` outbox admission to keep
+  `secret-ref-present` evidence consistent with credential issuance mode before
+  acknowledgement, graph projection, or OpenLineage projection.
+- Aligned QueryGraph bootstrap duplicate verified-table/view assertions with
+  the generic duplicate-free string-array admission boundary used by
+  all-features service tests.
 - Required `storage-profile.upserted` outbox admission to validate
   credential-root identity fields, nested warehouse scope, provider, and
   issuance mode before acknowledgement, graph projection, or OpenLineage

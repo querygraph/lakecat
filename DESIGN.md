@@ -590,6 +590,9 @@ audit/outbox evidence records `location-prefix-hash`, and raw
 Storage-profile replay must also carry unambiguous credential-root identity:
 non-empty profile id, valid nested warehouse matching any top-level warehouse,
 valid provider, and valid issuance mode.
+Secret-reference presence must match issuance mode: short-lived secret-ref
+profiles require redacted secret-ref proof, while governed-read and no-secret
+profiles cannot carry secret-reference proof.
 Blocked raw-credential replay must carry zero credentials plus a non-empty
 block reason matching the raw-credential exception receipt context before any
 graph or OpenLineage sink observes it.
