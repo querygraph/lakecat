@@ -60,7 +60,7 @@ cargo run -p lakecat-cli -- policy-upsert \
   --namespace default \
   --table events \
   --odrl-file ./policy.odrl.json
-cargo run -p lakecat-cli -- qglake-fixture \
+cargo run -p lakecat-cli --features qglake-fixture -- qglake-fixture \
   --output target/qglake/lakecat-bootstrap.json \
   --drain-output target/qglake/lineage-drain.json \
   --principal did:example:agent

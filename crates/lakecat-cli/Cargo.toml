@@ -5,13 +5,17 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = []
+qglake-fixture = ["dep:sail-iceberg"]
+
 [dependencies]
 chrono = { workspace = true }
 lakecat-api = { workspace = true }
 lakecat-core = { workspace = true }
 lakecat-querygraph = { workspace = true }
 reqwest = { workspace = true }
-sail-iceberg = { path = "../../../sail/crates/sail-iceberg" }
+sail-iceberg = { path = "../../../sail/crates/sail-iceberg", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

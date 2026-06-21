@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Gated `lakecat-cli qglake-fixture` behind an explicit
+  `qglake-fixture` feature so default CLI verification and management commands
+  no longer pull Sail's local Iceberg fixture writer into every build.
 - Tightened service-level outbox drain coverage so pending batches are selected
   by `created_at,event_id` before applying the drain limit, and only that
   ordered prefix is projected and acknowledged.

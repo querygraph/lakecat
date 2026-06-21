@@ -2628,7 +2628,7 @@ The local fixture compresses this story into a short artifact-producing
 sequence:
 
 ```sh
-cargo run -p lakecat-cli -- qglake-fixture \
+cargo run -p lakecat-cli --features qglake-fixture -- qglake-fixture \
   --output target/qglake/lakecat-bootstrap.json \
   --drain-output target/qglake/lineage-drain.json \
   --principal did:example:agent
@@ -2637,6 +2637,12 @@ cargo run -p lakecat-cli -- qglake-verify-replay \
   --drain target/qglake/lineage-drain.json \
   --principal did:example:agent
 ```
+
+The fixture generator opts into `lakecat-cli`'s `qglake-fixture` feature because
+it writes local Iceberg metadata and manifest files through Sail. Verification
+commands stay in the default CLI surface, which keeps ordinary catalog
+inspection, replay, and handoff checks available without pulling in the local
+fixture writer.
 
 The one-command handoff wraps the same evidence in a live local service run and
 then asks QueryGraph to verify and import it:
@@ -2673,7 +2679,7 @@ The local development posture is intentionally small:
 cargo run -p lakecat-cli -- config
 cargo run -p lakecat-cli -- storage-profile-list
 cargo run -p lakecat-cli -- policy-list
-cargo run -p lakecat-cli -- qglake-fixture \
+cargo run -p lakecat-cli --features qglake-fixture -- qglake-fixture \
   --output target/qglake/lakecat-bootstrap.json \
   --drain-output target/qglake/lineage-drain.json \
   --principal did:example:agent

@@ -6,6 +6,24 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Gate QGLake fixture CLI feature`.
+  The `lakecat-cli qglake-fixture` generator now requires the explicit
+  `qglake-fixture` Cargo feature because it writes local Iceberg metadata and
+  manifests through Sail. Replay verification, handoff verification,
+  management, policy, and storage-profile commands remain on the default CLI
+  surface, and the local handoff script plus docs opt into the fixture feature
+  only for the generator step.
+- Local verification for this QGLake fixture feature-gate slice is green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_fixture_requires_explicit_feature -- --test-threads=1`;
+  `cargo test -p lakecat-cli --features qglake-fixture qglake_fixture -- --test-threads=1`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo check -p lakecat-cli --bin lakecat-cli`;
+  `scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin outbox ordered drain limits`.
   The service outbox drain test double now preserves the production store
   contract by sorting pending events by `created_at,event_id` before applying

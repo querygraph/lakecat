@@ -1,25 +1,35 @@
+#[cfg(feature = "qglake-fixture")]
+use std::sync::Arc;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use lakecat_api::{
-    CatalogConfigResponse, CommitTableRequest, CommitTableResponse, CreateNamespaceRequest,
-    CreateTableRequest, FetchScanTasksRequest, FetchScanTasksResponse, LineageDrainEventSummary,
-    LineageDrainResponse, ListNamespacesResponse, ListPolicyBindingsResponse, ListProjectsResponse,
-    ListServersResponse, ListStorageProfilesResponse, ListTableCommitRecordsResponse,
-    ListViewVersionReceiptChainsResponse, ListViewVersionReceiptsResponse, ListWarehousesResponse,
-    LoadCredentialsResponse, LoadTableResponse, NamespaceResponse, PlanTableScanRequest,
-    PlanTableScanResponse, PolicyBindingResponse, ProjectResponse, ServerResponse,
-    StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest, UpsertProjectRequest,
-    UpsertServerRequest, UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest,
-    ViewResponse, ViewVersionReceiptChainResponse, ViewVersionReceiptResponse, WarehouseResponse,
+    CatalogConfigResponse, LineageDrainEventSummary, LineageDrainResponse,
+    ListPolicyBindingsResponse, ListStorageProfilesResponse, PolicyBindingResponse,
+    StorageProfileResponse, UpsertPolicyBindingRequest, UpsertStorageProfileRequest,
+    ViewVersionReceiptChainResponse, ViewVersionReceiptResponse,
+};
+#[cfg(feature = "qglake-fixture")]
+use lakecat_api::{
+    CommitTableRequest, CommitTableResponse, CreateNamespaceRequest, CreateTableRequest,
+    FetchScanTasksRequest, ListProjectsResponse, ListServersResponse,
+    ListTableCommitRecordsResponse, ListViewVersionReceiptChainsResponse,
+    ListViewVersionReceiptsResponse, ListWarehousesResponse, LoadTableResponse, NamespaceResponse,
+    PlanTableScanRequest, ProjectResponse, ServerResponse, TableIdentifier, UpsertProjectRequest,
+    UpsertServerRequest, UpsertViewRequest, UpsertWarehouseRequest, ViewResponse,
+    WarehouseResponse,
+};
+#[cfg(any(test, feature = "qglake-fixture"))]
+use lakecat_api::{
+    FetchScanTasksResponse, ListNamespacesResponse, LoadCredentialsResponse, PlanTableScanResponse,
 };
 use lakecat_core::{content_hash_bytes, content_hash_json};
 use lakecat_querygraph::{QueryGraphBootstrap, QueryGraphBootstrapVerification};
+#[cfg(feature = "qglake-fixture")]
 use sail_iceberg::spec::{
     DataContentType, DataFile, DataFileFormat, FormatVersion, ManifestContentType, ManifestFile,
     ManifestListWriter, ManifestMetadata, ManifestWriterBuilder, TableMetadata,
@@ -134,6 +144,7 @@ async fn run() -> lakecat_core::LakeCatResult<()> {
             )
             .await?,
         ),
+        #[cfg(feature = "qglake-fixture")]
         Command::QglakeFixture {
             catalog,
             warehouse,
@@ -240,6 +251,7 @@ fn write_bootstrap_bundle(
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn write_json_file<T: Serialize>(
     output: &PathBuf,
     value: &T,
@@ -5306,6 +5318,7 @@ async fn post_json_with_identity<B: Serialize, T: DeserializeOwned>(
     decode_json_response(response, label).await
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn post_json_with_identity_and_idempotency<B: Serialize, T: DeserializeOwned>(
     catalog: &str,
     path: &str,
@@ -5328,6 +5341,7 @@ async fn post_json_with_identity_and_idempotency<B: Serialize, T: DeserializeOwn
     decode_json_response(response, label).await
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn post_json_or_conflict_with_identity<B: Serialize, T: DeserializeOwned>(
     catalog: &str,
     path: &str,
@@ -5363,6 +5377,7 @@ async fn post_json_or_conflict_with_identity<B: Serialize, T: DeserializeOwned>(
     })
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn delete_with_identity(
     catalog: &str,
     path: &str,
@@ -5391,6 +5406,7 @@ async fn delete_with_identity(
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(not(feature = "qglake-fixture"), allow(dead_code))]
 enum RequestIdentityMode {
     Principal,
     AgentDid,
@@ -5450,6 +5466,7 @@ fn print_json<T: Serialize>(value: &T) -> lakecat_core::LakeCatResult<()> {
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn qglake_fixture(
     catalog: String,
     warehouse: String,
@@ -5640,6 +5657,7 @@ async fn qglake_fixture(
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn ensure_qglake_namespace(
     catalog: &str,
     namespace: &[String],
@@ -5679,6 +5697,7 @@ async fn ensure_qglake_namespace(
     )))
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn ensure_qglake_table(
     catalog: &str,
     namespace_path: &str,
@@ -5718,6 +5737,7 @@ async fn ensure_qglake_table(
     verify_qglake_existing_table(&response, namespace, table, metadata_location)
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn ensure_qglake_transient_view(
     catalog: &str,
     warehouse: &str,
@@ -5768,6 +5788,7 @@ async fn ensure_qglake_transient_view(
     Ok(response.view_version)
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn drop_qglake_transient_view(
     catalog: &str,
     warehouse: &str,
@@ -5800,6 +5821,7 @@ async fn drop_qglake_transient_view(
     verify_qglake_transient_view_tombstone_receipts(&receipts, view)
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn verify_qglake_view_receipt_chains(
     catalog: &str,
     warehouse: &str,
@@ -5855,6 +5877,7 @@ async fn verify_qglake_view_receipt_chains(
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn verify_qglake_transient_view_tombstone_receipts(
     receipts: &ListViewVersionReceiptsResponse,
     view: &str,
@@ -5881,6 +5904,7 @@ fn verify_qglake_transient_view_tombstone_receipts(
     Ok(())
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn namespace_list_contains(response: &ListNamespacesResponse, namespace: &[String]) -> bool {
     response
         .namespaces
@@ -5888,6 +5912,7 @@ fn namespace_list_contains(response: &ListNamespacesResponse, namespace: &[Strin
         .any(|candidate| candidate == namespace)
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn verify_qglake_existing_table(
     response: &LoadTableResponse,
     namespace: &[String],
@@ -5938,6 +5963,7 @@ fn verify_qglake_existing_table(
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn verify_qglake_metadata_pointer(
     metadata_location: &str,
     expected_metadata: &Value,
@@ -5961,6 +5987,7 @@ fn verify_qglake_metadata_pointer(
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn metadata_has_field(metadata: &Value, field_name: &str) -> bool {
     metadata["schemas"]
         .as_array()
@@ -5970,6 +5997,7 @@ fn metadata_has_field(metadata: &Value, field_name: &str) -> bool {
         .any(|field| field["name"] == field_name)
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn metadata_has_manifest_list(metadata: &Value) -> bool {
     metadata["snapshots"]
         .as_array()
@@ -5978,6 +6006,7 @@ fn metadata_has_manifest_list(metadata: &Value) -> bool {
         .any(|snapshot| snapshot["manifest-list"].as_str().is_some())
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn verify_qglake_manifest_lists(metadata: &Value) -> lakecat_core::LakeCatResult<()> {
     for manifest_list in metadata["snapshots"]
         .as_array()
@@ -6556,6 +6585,7 @@ fn qglake_graph_has_edge(bundle: &QueryGraphBootstrap, from: &str, to: &str, lab
         .any(|edge| edge.from == from && edge.to == to && edge.label == label)
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn verify_qglake_policy_list(
     catalog: &str,
     warehouse: &str,
@@ -6583,6 +6613,7 @@ async fn verify_qglake_policy_list(
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn verify_qglake_server_list(
     catalog: &str,
     server: &str,
@@ -6609,6 +6640,7 @@ async fn verify_qglake_server_list(
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn verify_qglake_project_list(
     catalog: &str,
     project: &str,
@@ -6635,6 +6667,7 @@ async fn verify_qglake_project_list(
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn verify_qglake_warehouse_list(
     catalog: &str,
     warehouse: &str,
@@ -6661,6 +6694,7 @@ async fn verify_qglake_warehouse_list(
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn verify_qglake_storage_profile_list(
     catalog: &str,
     warehouse: &str,
@@ -6688,6 +6722,7 @@ async fn verify_qglake_storage_profile_list(
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn verify_qglake_table_commit_history(
     catalog: &str,
     warehouse: &str,
@@ -6732,6 +6767,7 @@ async fn verify_qglake_table_commit_history(
     verify_qglake_table_commit_record_evidence(record, warehouse, namespace_path, table)
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn verify_qglake_table_commit_record_evidence(
     record: &lakecat_api::TableCommitRecordResponse,
     warehouse: &str,
@@ -6776,6 +6812,7 @@ fn verify_qglake_table_commit_record_evidence(
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn verify_qglake_governed_scan(
     catalog: &str,
     namespace_path: &str,
@@ -6821,6 +6858,7 @@ async fn verify_qglake_governed_scan(
     .await
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn empty_scan_request() -> PlanTableScanRequest {
     PlanTableScanRequest {
         projection: Vec::new(),
@@ -6837,6 +6875,7 @@ fn empty_scan_request() -> PlanTableScanRequest {
     }
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn verify_qglake_scan_plan(plan: &PlanTableScanResponse) -> lakecat_core::LakeCatResult<()> {
     verify_qglake_sail_planner("scan plan", &plan.planned_by)?;
     if plan.plan_tasks.is_empty() {
@@ -6905,6 +6944,7 @@ fn verify_qglake_scan_plan(plan: &PlanTableScanResponse) -> lakecat_core::LakeCa
     Ok(())
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn verify_qglake_sail_planner(label: &str, planned_by: &str) -> lakecat_core::LakeCatResult<()> {
     if planned_by != "sail-rest-models" {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -6914,10 +6954,12 @@ fn verify_qglake_sail_planner(label: &str, planned_by: &str) -> lakecat_core::La
     Ok(())
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn qglake_policy_hash(table: &str) -> lakecat_core::LakeCatResult<String> {
     content_hash_json(&qglake_odrl_policy(table))
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn verify_qglake_fetch_scan_tasks(
     catalog: &str,
     namespace_path: &str,
@@ -6973,6 +7015,7 @@ async fn verify_qglake_fetch_scan_tasks(
     Ok(())
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn verify_qglake_scan_tasks(
     fetched: &FetchScanTasksResponse,
     table_location: &str,
@@ -7011,6 +7054,7 @@ fn verify_qglake_scan_tasks(
     Ok(())
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn verify_qglake_leaf_scan_tasks(
     fetched: &FetchScanTasksResponse,
     table_location: &str,
@@ -7031,6 +7075,7 @@ fn verify_qglake_leaf_scan_tasks(
     Ok(())
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn verify_qglake_delete_manifest_scan_tasks(
     fetched: &FetchScanTasksResponse,
     table_location: &str,
@@ -7069,6 +7114,7 @@ fn verify_qglake_delete_manifest_scan_tasks(
     Ok(())
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn verify_qglake_scan_task_common(
     fetched: &FetchScanTasksResponse,
     table_location: &str,
@@ -7100,6 +7146,7 @@ fn verify_qglake_scan_task_common(
     verify_qglake_fetch_restriction(fetched)
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn verify_qglake_fetch_restriction(
     fetched: &FetchScanTasksResponse,
 ) -> lakecat_core::LakeCatResult<()> {
@@ -7147,6 +7194,7 @@ fn verify_qglake_fetch_restriction(
     Ok(())
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn verify_qglake_plan_or_fetch_read_restriction(
     restriction: &Value,
     table: &str,
@@ -7200,6 +7248,7 @@ fn verify_qglake_plan_or_fetch_read_restriction(
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn verify_qglake_credentials_blocked(
     catalog: &str,
     namespace_path: &str,
@@ -7218,6 +7267,7 @@ async fn verify_qglake_credentials_blocked(
     verify_qglake_credentials_response(&credentials)
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn verify_qglake_credentials_response(
     credentials: &LoadCredentialsResponse,
 ) -> lakecat_core::LakeCatResult<()> {
@@ -7230,6 +7280,7 @@ fn verify_qglake_credentials_response(
     )))
 }
 
+#[cfg(feature = "qglake-fixture")]
 async fn verify_qglake_trusted_human_credentials(
     catalog: &str,
     namespace_path: &str,
@@ -7247,6 +7298,7 @@ async fn verify_qglake_trusted_human_credentials(
     verify_qglake_trusted_human_credentials_response(&credentials, table_location)
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn verify_qglake_trusted_human_credentials_response(
     credentials: &LoadCredentialsResponse,
     table_location: &str,
@@ -8694,6 +8746,7 @@ fn qglake_policy_binding_count(bundle: &QueryGraphBootstrap) -> usize {
         .sum()
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn qglake_table_metadata(
     location: &str,
     metadata_location: &str,
@@ -8810,6 +8863,7 @@ fn qglake_table_metadata(
     Ok(metadata)
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn write_qglake_metadata_file(
     metadata_file: &std::path::Path,
     metadata: &Value,
@@ -8826,6 +8880,7 @@ fn write_qglake_metadata_file(
     })
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn write_qglake_manifest_files(
     metadata: &Value,
     manifest_path: &std::path::Path,
@@ -9025,6 +9080,7 @@ fn write_qglake_manifest_files(
     Ok(())
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn file_url_path(value: &str, label: &str) -> lakecat_core::LakeCatResult<PathBuf> {
     Url::parse(value)
         .map_err(|err| {
@@ -9040,6 +9096,7 @@ fn file_url_path(value: &str, label: &str) -> lakecat_core::LakeCatResult<PathBu
         })
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn file_path_url(path: &std::path::Path, label: &str) -> lakecat_core::LakeCatResult<String> {
     Url::from_file_path(path)
         .map_err(|_| {
@@ -9050,6 +9107,7 @@ fn file_path_url(path: &std::path::Path, label: &str) -> lakecat_core::LakeCatRe
         .map(|url| url.to_string())
 }
 
+#[cfg(any(test, feature = "qglake-fixture"))]
 fn qglake_odrl_policy(table: &str) -> Value {
     json!({
         "@context": {
@@ -9140,6 +9198,7 @@ enum Command {
         public_config: BTreeMap<String, String>,
         principal: Option<String>,
     },
+    #[cfg(feature = "qglake-fixture")]
     QglakeFixture {
         catalog: String,
         warehouse: String,
@@ -9169,7 +9228,12 @@ impl Command {
             "policy-upsert" => parse_policy_upsert(args),
             "storage-profile-list" => parse_storage_profile_list(args),
             "storage-profile-upsert" => parse_storage_profile_upsert(args),
+            #[cfg(feature = "qglake-fixture")]
             "qglake-fixture" => parse_qglake_fixture(args),
+            #[cfg(not(feature = "qglake-fixture"))]
+            "qglake-fixture" => Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake-fixture requires the lakecat-cli qglake-fixture feature".to_string(),
+            )),
             _ => Err(usage_error()),
         }
     }
@@ -9404,6 +9468,7 @@ fn parse_storage_profile_upsert(
     })
 }
 
+#[cfg(feature = "qglake-fixture")]
 fn parse_qglake_fixture(
     args: impl Iterator<Item = String>,
 ) -> lakecat_core::LakeCatResult<Command> {
@@ -14985,6 +15050,17 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "qglake-fixture"))]
+    fn qglake_fixture_requires_explicit_feature() {
+        let err = match Command::parse(["qglake-fixture".to_string()]) {
+            Ok(_) => panic!("qglake-fixture should require its explicit feature"),
+            Err(err) => err,
+        };
+        assert!(err.to_string().contains("qglake-fixture feature"));
+    }
+
+    #[test]
+    #[cfg(feature = "qglake-fixture")]
     fn parses_qglake_fixture_command_defaults() {
         let command = Command::parse(["qglake-fixture".to_string()]).unwrap();
         match command {
@@ -15012,6 +15088,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "qglake-fixture")]
     fn parses_qglake_fixture_drain_output() {
         let command = Command::parse([
             "qglake-fixture".to_string(),
@@ -15031,6 +15108,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "qglake-fixture")]
     fn qglake_fixture_metadata_contains_restricted_raw_payload_column() {
         let (location, metadata_location) = qglake_test_fixture_urls("metadata");
         let metadata = qglake_table_metadata(&location, &metadata_location).unwrap();
@@ -15072,6 +15150,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "qglake-fixture")]
     fn qglake_existing_table_verifier_accepts_matching_fixture_table() {
         let (location, metadata_location) = qglake_test_fixture_urls("matching");
         let response = LoadTableResponse {
@@ -15094,6 +15173,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "qglake-fixture")]
     fn qglake_existing_table_verifier_rejects_drifted_fixture_table() {
         let (location, metadata_location) = qglake_test_fixture_urls("drifted");
         let mut metadata = qglake_table_metadata(&location, &metadata_location).unwrap();
@@ -15127,6 +15207,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "qglake-fixture")]
     fn qglake_existing_table_verifier_rejects_missing_metadata_pointer_file() {
         let (location, metadata_location) = qglake_test_fixture_urls("missing-pointer");
         let metadata = qglake_table_metadata(&location, &metadata_location).unwrap();
@@ -15152,6 +15233,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "qglake-fixture")]
     fn qglake_existing_table_verifier_rejects_drifted_metadata_pointer_file() {
         let (location, metadata_location) = qglake_test_fixture_urls("drifted-pointer");
         let metadata = qglake_table_metadata(&location, &metadata_location).unwrap();
@@ -15180,6 +15262,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "qglake-fixture")]
     fn qglake_existing_table_verifier_rejects_missing_manifest_list_file() {
         let (location, metadata_location) = qglake_test_fixture_urls("missing-manifest-list");
         let metadata = qglake_table_metadata(&location, &metadata_location).unwrap();
@@ -15211,6 +15294,7 @@ mod tests {
         assert!(err.to_string().contains("manifest list"));
     }
 
+    #[cfg(feature = "qglake-fixture")]
     fn qglake_test_fixture_urls(name: &str) -> (String, String) {
         let root = std::env::temp_dir().join(format!(
             "lakecat-qglake-cli-{name}-{}",

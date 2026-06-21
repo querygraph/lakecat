@@ -1259,7 +1259,7 @@ SERVICE_PID="$!"
 wait_for_lakecat
 
 echo "Generating live QGLake bootstrap and lineage-drain artifacts"
-cargo run -p lakecat-cli -- qglake-fixture \
+cargo run -p lakecat-cli --features qglake-fixture -- qglake-fixture \
   --catalog "$CATALOG_URL" \
   --warehouse "$WAREHOUSE" \
   --namespace "$NAMESPACE" \
