@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected syntactically invalid compact management IDs in QGLake lineage-drain
+  and handoff-summary proof verification, preventing path/query-decorated
+  server, project, warehouse, policy, or storage-profile identities from
+  entering archived management replay evidence.
 - Revalidated soft-delete recovery records at memory and Turso delete/restore
   boundaries, rejecting corrupted durable restore evidence before recovery can
   consume the soft-delete marker or expose mismatched table pointer state.

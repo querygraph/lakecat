@@ -8529,7 +8529,28 @@ fn verify_qglake_management_ids(
             "qglake lineage drain {label} replay contains duplicate compact management ID evidence"
         )));
     }
+    if ids.iter().any(|id| !is_qglake_compact_management_id(id)) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} replay contains syntactically invalid compact management ID evidence"
+        )));
+    }
     Ok(())
+}
+
+fn is_qglake_compact_management_id(id: &str) -> bool {
+    if id.trim() != id || id.is_empty() {
+        return false;
+    }
+    if id == "." || id == ".." {
+        return false;
+    }
+    if id
+        .chars()
+        .any(|ch| ch.is_control() || ch.is_whitespace() || matches!(ch, '/' | '\\' | '?' | '#'))
+    {
+        return false;
+    }
+    true
 }
 
 fn verify_qglake_table_commit_history_replay(
@@ -9725,6 +9746,14 @@ fn require_unique_string_array_count(
     if values.iter().any(|value| value.trim().is_empty()) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "{label}.{field} must contain non-empty strings"
+        )));
+    }
+    if values
+        .iter()
+        .any(|value| !is_qglake_compact_management_id(value))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} contains syntactically invalid compact management ID evidence"
         )));
     }
     let mut seen = BTreeSet::new();
@@ -11667,6 +11696,40 @@ mod tests {
         assert!(err.to_string().contains("managementProof"));
         assert!(err.to_string().contains("serverIds"));
         assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_path_decorated_management_ids() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["projectIds"] =
+            json!(["analytics/../../secret"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject path-decorated management ids");
+
+        assert!(err.to_string().contains("managementProof"));
+        assert!(err.to_string().contains("projectIds"));
+        assert!(
+            err.to_string()
+                .contains("syntactically invalid compact management ID evidence")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_query_decorated_management_ids() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["storageProfileIds"] =
+            json!(["events?token=secret"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject query-decorated management ids");
+
+        assert!(err.to_string().contains("managementProof"));
+        assert!(err.to_string().contains("storageProfileIds"));
+        assert!(
+            err.to_string()
+                .contains("syntactically invalid compact management ID evidence")
+        );
     }
 
     #[test]
@@ -22191,6 +22254,48 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("duplicate compact management ID evidence")
+        );
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_path_decorated_management_ids() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let project_list = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "project.listed")
+            .expect("project list replay fixture");
+        project_list.project_ids = vec!["analytics/../../secret".to_string()];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject path-decorated management IDs");
+
+        assert!(err.to_string().contains("project list replay"));
+        assert!(
+            err.to_string()
+                .contains("syntactically invalid compact management ID evidence")
+        );
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_query_decorated_management_ids() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let storage_profile_list = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "storage-profile.listed")
+            .expect("storage profile list replay fixture");
+        storage_profile_list.storage_profile_ids = vec!["events?token=secret".to_string()];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject query-decorated management IDs");
+
+        assert!(err.to_string().contains("storage profile list replay"));
+        assert!(
+            err.to_string()
+                .contains("syntactically invalid compact management ID evidence")
         );
     }
 
