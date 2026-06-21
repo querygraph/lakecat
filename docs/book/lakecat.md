@@ -1847,15 +1847,16 @@ digests, so a saved handoff cannot use readable placeholder strings as view
 acceptance evidence. It also requires
 `queryGraphBootstrapProof.viewVersionReceiptHashes` to match the accepted view
 receipt hashes exactly, so the compact summary cannot combine bootstrap view
-receipt evidence from one run with accepted-view proof from another. For both
-active and tombstoned accepted views, it additionally requires
-`acceptedReceiptChainHash` to appear in the namespace `chainHashes` evidence, so
-a compact summary cannot pair a valid-looking accepted view receipt or deletion
-receipt with an unrelated namespace receipt-chain proof. Tombstoned views must
-also include tombstone receipt evidence whose `expectedViewVersion` preserves
-the accepted view version. A consumer can reject a handoff whose view history
-claim lacks identity, accepted-version, count-aligned hash-chain evidence,
-accepted-chain coverage, tombstone guard evidence, or replay evidence before
+receipt evidence from one run with accepted-view proof from another. Accepted
+receipt-chain hashes and tombstone receipt hashes must be covered by structural
+`chains[]` evidence for the same stable view, not merely by another chain in
+the same namespace receipt-chain summary. A tombstoned view therefore carries
+both the accepted pre-drop chain and a structural drop chain whose final receipt
+is the tombstone. Tombstoned views must also include tombstone receipt evidence
+whose `expectedViewVersion` preserves the accepted view version. A consumer can
+reject a handoff whose view history claim lacks identity, accepted-version,
+count-aligned hash-chain evidence, same-view accepted-chain coverage, tombstone
+guard evidence, same-view tombstone receipt coverage, or replay evidence before
 parsing the full replay tree. It compares captured LakeCat replay
 `replay-evidence.management` list counts with compact
 `lakecatReplayVerification.managementProof`, requiring positive server,

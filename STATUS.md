@@ -6,6 +6,26 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind compact view hash coverage per stable view`.
+  QGLake handoff verification now maps structural receipt-chain hashes and
+  per-receipt hashes by stable view ID. Accepted view
+  `acceptedReceiptChainHash` values and tombstone receipt hashes must be
+  covered by structural receipt-chain evidence for the same stable view, not
+  merely by some other chain in the namespace.
+- Local verification for this compact per-view receipt-chain coverage slice is
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_cross_view_receipt_chain_hash_splice -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_cross_view_tombstone_receipt_hash_splice -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs -- --nocapture`;
+  `cargo test -p lakecat-cli qglake`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, ran
+  LakeCat replay, QueryGraph verify/import, verified compact per-view
+  receipt-chain hash coverage, and ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Bind compact tombstone receipt identity components`.
   QGLake handoff verification now checks tombstone receipt `stableId` values
   against their warehouse, namespace, and view-name components before accepting

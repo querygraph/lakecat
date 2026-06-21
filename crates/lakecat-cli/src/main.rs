@@ -3537,7 +3537,7 @@ fn require_view_receipt_chain_evidence(
         require_full_hash_array(view, "openLineageHashes", "viewReceiptChainProof.views[]")?;
     }
 
-    let mut tombstone_receipt_hashes = BTreeSet::new();
+    let mut tombstone_receipt_hashes_by_view: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for (index, receipt) in required_array(views, "tombstoneReceipts", "viewReceiptChainProof")?
         .iter()
         .enumerate()
@@ -3547,6 +3547,11 @@ fn require_view_receipt_chain_evidence(
                 "viewReceiptChainProof.tombstoneReceipts[{index}] must be an object"
             ))
         })?;
+        let stable_id = required_str(
+            receipt,
+            "stableId",
+            "viewReceiptChainProof.tombstoneReceipts[]",
+        )?;
         require_full_hash_array(
             receipt,
             "receiptHashes",
@@ -3558,7 +3563,10 @@ fn require_view_receipt_chain_evidence(
             "viewReceiptChainProof.tombstoneReceipts[]",
         )? {
             if let Some(hash) = hash.as_str() {
-                tombstone_receipt_hashes.insert(hash.to_string());
+                tombstone_receipt_hashes_by_view
+                    .entry(stable_id.to_string())
+                    .or_default()
+                    .insert(hash.to_string());
             }
         }
         require_full_hash_array(
@@ -3580,8 +3588,8 @@ fn require_view_receipt_chain_evidence(
                 .to_string(),
         ));
     }
-    let mut verified_chain_hashes = std::collections::HashSet::new();
-    let mut chain_receipt_hashes = BTreeSet::new();
+    let mut verified_chain_hashes_by_view: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut chain_receipt_hashes_by_view: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for (index, chain) in receipt_chains.iter().enumerate() {
         let chain = chain.as_object().ok_or_else(|| {
             lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -3616,11 +3624,6 @@ fn require_view_receipt_chain_evidence(
             "receiptHashes",
             "viewReceiptChainProof.receiptChains[]",
         )?;
-        for receipt_hash in receipt_hashes {
-            if let Some(receipt_hash) = receipt_hash.as_str() {
-                chain_receipt_hashes.insert(receipt_hash.to_string());
-            }
-        }
         let chain_hashes = required_array(
             chain,
             "chainHashes",
@@ -3642,12 +3645,12 @@ fn require_view_receipt_chain_evidence(
                 "viewReceiptChainProof.receiptChains[{index}].receiptHashes must cover every verified chain hash"
             )));
         }
-        require_verified_view_receipt_chain_structures(chain, index, &mut chain_receipt_hashes)?;
-        for chain_hash in chain_hashes {
-            if let Some(chain_hash) = chain_hash.as_str() {
-                verified_chain_hashes.insert(chain_hash.to_string());
-            }
-        }
+        require_verified_view_receipt_chain_structures(
+            chain,
+            index,
+            &mut verified_chain_hashes_by_view,
+            &mut chain_receipt_hashes_by_view,
+        )?;
         require_full_hash_array(
             chain,
             "replayEventHashes",
@@ -3660,17 +3663,24 @@ fn require_view_receipt_chain_evidence(
         )?;
     }
     for (stable_id, accepted_view_version, accepted_chain_hash) in accepted_receipt_chain_hashes {
-        if !verified_chain_hashes.contains(&accepted_chain_hash) {
+        if !verified_chain_hashes_by_view
+            .get(&stable_id)
+            .is_some_and(|hashes| hashes.contains(&accepted_chain_hash))
+        {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-                "viewReceiptChainProof.views[] accepted view {stable_id} version {accepted_view_version} acceptedReceiptChainHash {accepted_chain_hash} is not covered by receiptChains[].chainHashes"
+                "viewReceiptChainProof.views[] accepted view {stable_id} version {accepted_view_version} acceptedReceiptChainHash {accepted_chain_hash} is not covered by the same view's receiptChains[].chains[].chainHash"
             )));
         }
     }
-    if !tombstone_receipt_hashes.is_subset(&chain_receipt_hashes) {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "viewReceiptChainProof.tombstoneReceipts[].receiptHashes must be covered by receiptChains[].receiptHashes"
-                .to_string(),
-        ));
+    for (stable_id, tombstone_receipt_hashes) in tombstone_receipt_hashes_by_view {
+        if !chain_receipt_hashes_by_view
+            .get(&stable_id)
+            .is_some_and(|chain_hashes| tombstone_receipt_hashes.is_subset(chain_hashes))
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.tombstoneReceipts[].receiptHashes for {stable_id} must be covered by the same view's receiptChains[].chains[].receipts[].receiptHash"
+            )));
+        }
     }
 
     Ok(())
@@ -3717,7 +3727,8 @@ fn namespace_components_path(
 fn require_verified_view_receipt_chain_structures(
     chain_group: &serde_json::Map<String, Value>,
     group_index: usize,
-    chain_receipt_hashes: &mut BTreeSet<String>,
+    verified_chain_hashes_by_view: &mut BTreeMap<String, BTreeSet<String>>,
+    chain_receipt_hashes_by_view: &mut BTreeMap<String, BTreeSet<String>>,
 ) -> lakecat_core::LakeCatResult<()> {
     let verified_chain_count = require_positive_u64(
         chain_group,
@@ -3767,7 +3778,8 @@ fn require_verified_view_receipt_chain_structures(
             &chain_hashes,
             group_warehouse,
             group_namespace,
-            chain_receipt_hashes,
+            verified_chain_hashes_by_view,
+            chain_receipt_hashes_by_view,
         )?;
     }
     Ok(())
@@ -3780,7 +3792,8 @@ fn require_verified_view_receipt_chain_structure(
     chain_hashes: &BTreeSet<&str>,
     group_warehouse: &str,
     group_namespace: &[Value],
-    chain_receipt_hashes: &mut BTreeSet<String>,
+    verified_chain_hashes_by_view: &mut BTreeMap<String, BTreeSet<String>>,
+    chain_receipt_hashes_by_view: &mut BTreeMap<String, BTreeSet<String>>,
 ) -> lakecat_core::LakeCatResult<()> {
     let label = "viewReceiptChainProof.receiptChains[].chains[]";
     let stable_id = require_non_empty_str(chain, "stableId", label)?;
@@ -3813,6 +3826,10 @@ fn require_verified_view_receipt_chain_structure(
             "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].chainHash is not covered by chainHashes"
         )));
     }
+    verified_chain_hashes_by_view
+        .entry(stable_id.to_string())
+        .or_default()
+        .insert(chain_hash.to_string());
     if !required_bool(chain, "chainVerified", label)? {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].chainVerified must be true"
@@ -3849,7 +3866,7 @@ fn require_verified_view_receipt_chain_structure(
         warehouse,
         namespace,
         name,
-        chain_receipt_hashes,
+        chain_receipt_hashes_by_view,
     )
 }
 
@@ -3863,7 +3880,7 @@ fn require_verified_view_receipts(
     expected_warehouse: &str,
     expected_namespace: &[Value],
     expected_name: &str,
-    chain_receipt_hashes: &mut BTreeSet<String>,
+    chain_receipt_hashes_by_view: &mut BTreeMap<String, BTreeSet<String>>,
 ) -> lakecat_core::LakeCatResult<()> {
     let mut previous_view_version: Option<u64> = None;
     let mut previous_receipt_hash: Option<String> = None;
@@ -3910,7 +3927,10 @@ fn require_verified_view_receipts(
         let view_version = require_positive_u64(receipt, "viewVersion", label)?;
         let operation = required_str(receipt, "operation", label)?;
         let receipt_hash = require_full_hash_str(receipt, "receiptHash", label)?;
-        chain_receipt_hashes.insert(receipt_hash.to_string());
+        chain_receipt_hashes_by_view
+            .entry(expected_stable_id.to_string())
+            .or_default()
+            .insert(receipt_hash.to_string());
 
         if receipt_index == 0 {
             if operation != "upsert"
@@ -9410,6 +9430,15 @@ mod tests {
     }
 
     fn qglake_add_view_receipt_chain_structures(view_receipts: &mut Value) {
+        view_receipts["receiptChains"][0]["verifiedChainCount"] = json!(2);
+        view_receipts["receiptChains"][0]["receiptHashes"] = json!([
+            qglake_fixture_hash("view-receipt"),
+            qglake_fixture_hash("tombstone")
+        ]);
+        view_receipts["receiptChains"][0]["chainHashes"] = json!([
+            qglake_fixture_hash("view-receipt-chain"),
+            qglake_fixture_hash("view-tombstone-receipt-chain")
+        ]);
         view_receipts["receiptChains"][0]["chains"] = json!([{
             "stableId": "lakecat:view:local:default:active_customers_view",
             "warehouse": "local",
@@ -9431,6 +9460,38 @@ mod tests {
                 "previousReceiptHash": null,
                 "operation": "upsert",
                 "receiptHash": qglake_fixture_hash("view-receipt")
+            }]
+        }, {
+            "stableId": "lakecat:view:local:default:active_customers_view",
+            "warehouse": "local",
+            "namespace": ["default"],
+            "name": "active_customers_view",
+            "chainHash": qglake_fixture_hash("view-tombstone-receipt-chain"),
+            "chainVerified": true,
+            "latestViewVersion": 1,
+            "latestOperation": "drop",
+            "tombstoned": true,
+            "receiptCount": 2,
+            "receipts": [{
+                "stableId": "lakecat:view:local:default:active_customers_view",
+                "warehouse": "local",
+                "namespace": ["default"],
+                "name": "active_customers_view",
+                "viewVersion": 1,
+                "previousViewVersion": null,
+                "previousReceiptHash": null,
+                "operation": "upsert",
+                "receiptHash": qglake_fixture_hash("view-receipt")
+            }, {
+                "stableId": "lakecat:view:local:default:active_customers_view",
+                "warehouse": "local",
+                "namespace": ["default"],
+                "name": "active_customers_view",
+                "viewVersion": 1,
+                "previousViewVersion": 1,
+                "previousReceiptHash": qglake_fixture_hash("view-receipt"),
+                "operation": "drop",
+                "receiptHash": qglake_fixture_hash("tombstone")
             }]
         }]);
     }
@@ -11812,6 +11873,50 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_cross_view_receipt_chain_hash_splice() {
+        let mut summary = qglake_handoff_summary_json();
+        let other_chain_hash = qglake_fixture_hash("other-view-receipt-chain");
+        qglake_add_other_view_receipt_chain(
+            &mut summary,
+            other_chain_hash.clone(),
+            qglake_fixture_hash("other-view-receipt"),
+        );
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"][0]["acceptedReceiptChainHash"] =
+            json!(other_chain_hash);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject cross-view accepted chain hash splicing");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(
+            err.to_string()
+                .contains("same view's receiptChains[].chains[].chainHash")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_cross_view_tombstone_receipt_hash_splice() {
+        let mut summary = qglake_handoff_summary_json();
+        let other_receipt_hash = qglake_fixture_hash("other-view-receipt");
+        qglake_add_other_view_receipt_chain(
+            &mut summary,
+            qglake_fixture_hash("other-view-receipt-chain"),
+            other_receipt_hash.clone(),
+        );
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["tombstoneReceipts"][0]["receiptHashes"] =
+            json!([other_receipt_hash]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject cross-view tombstone receipt splicing");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(
+            err.to_string()
+                .contains("same view's receiptChains[].chains[].receipts[].receiptHash")
+        );
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_tombstoned_uncovered_view_receipt_chain_hash() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"][0]["acceptedReceiptChainHash"] = json!(
@@ -11868,6 +11973,50 @@ mod tests {
                 "receiptHash": receipt_v2
             }]
         });
+    }
+
+    fn qglake_add_other_view_receipt_chain(
+        summary: &mut Value,
+        chain_hash: String,
+        receipt_hash: String,
+    ) {
+        let receipt_chain_group =
+            &mut summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0];
+        receipt_chain_group["chainHashes"]
+            .as_array_mut()
+            .expect("fixture chainHashes")
+            .push(json!(chain_hash.clone()));
+        receipt_chain_group["receiptHashes"]
+            .as_array_mut()
+            .expect("fixture receiptHashes")
+            .push(json!(receipt_hash.clone()));
+        let chains = receipt_chain_group["chains"]
+            .as_array_mut()
+            .expect("fixture chains");
+        chains.push(json!({
+            "stableId": "lakecat:view:local:default:other_view",
+            "warehouse": "local",
+            "namespace": ["default"],
+            "name": "other_view",
+            "chainHash": chain_hash,
+            "chainVerified": true,
+            "latestViewVersion": 1,
+            "latestOperation": "upsert",
+            "tombstoned": false,
+            "receiptCount": 1,
+            "receipts": [{
+                "stableId": "lakecat:view:local:default:other_view",
+                "warehouse": "local",
+                "namespace": ["default"],
+                "name": "other_view",
+                "viewVersion": 1,
+                "previousViewVersion": null,
+                "previousReceiptHash": null,
+                "operation": "upsert",
+                "receiptHash": receipt_hash
+            }]
+        }));
+        receipt_chain_group["verifiedChainCount"] = json!(chains.len());
     }
 
     #[test]
@@ -12075,7 +12224,7 @@ mod tests {
     fn qglake_handoff_summary_verifier_rejects_view_receipt_chain_count_mismatch() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["verifiedChainCount"] =
-            json!(2);
+            json!(3);
 
         let err = verify_qglake_handoff_summary_value(&summary)
             .expect_err("handoff summary should reject mismatched chain counts");

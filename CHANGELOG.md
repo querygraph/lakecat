@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound compact QGLake accepted receipt-chain hashes and tombstone receipt
+  hashes to structural receipt-chain evidence for the same stable view, so
+  saved handoff summaries reject cross-view hash splicing within a namespace.
 - Bound compact QGLake tombstone receipt stable IDs to their warehouse,
   namespace, and view-name components, so saved handoff summaries reject
   deletion-proof identity drift before accepting tombstone guard evidence.
