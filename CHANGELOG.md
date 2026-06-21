@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required compact governed scan projection/stat evidence and raw
+  lineage-drain scan replay evidence to use non-empty, duplicate-free field
+  arrays before proving policy narrowing, preventing repeated requested fields
+  from inflating archived QGLake scan proof.
 - Rejected empty and malformed `row-predicate` objects in compact governed
   read-restriction proof verification for QGLake lineage-drain and
   handoff-summary replay, requiring non-empty predicate type evidence and

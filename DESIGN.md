@@ -468,6 +468,8 @@ becoming replay-time unrestricted access.
 Governed `row-predicate` evidence must also remain structurally meaningful:
 compact and raw replay should reject empty predicate objects, blank predicate
 types, and term-based predicates that omit the narrowed term/value evidence.
+Requested/effective projection and stats-field evidence should likewise stay
+non-empty, non-blank, and duplicate-free before narrowing proof is accepted.
 Prefer upstream Sail APIs for any reusable planner or manifest work.
 
 ### P2 QGLake Acceptance

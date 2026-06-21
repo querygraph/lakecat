@@ -1479,6 +1479,8 @@ fn require_governed_scan_stats_field_evidence(
             "governedScanProof stats-field evidence must preserve non-empty requested and effective fields".to_string(),
         ));
     }
+    require_non_empty_unique_strings(&requested, "governedScanProof.plannedRequestedStatsFields")?;
+    require_non_empty_unique_strings(&effective, "governedScanProof.plannedEffectiveStatsFields")?;
     if requested.len() <= effective.len() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "governedScanProof plannedRequestedStatsFields must prove a wider request than plannedEffectiveStatsFields".to_string(),
@@ -1527,6 +1529,8 @@ fn require_governed_scan_projection_evidence(
             "governedScanProof missing requested/effective projection evidence".to_string(),
         ));
     }
+    require_non_empty_unique_strings(&requested, "governedScanProof.plannedRequestedProjection")?;
+    require_non_empty_unique_strings(&effective, "governedScanProof.plannedEffectiveProjection")?;
     if requested.len() <= effective.len() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "governedScanProof plannedRequestedProjection does not prove projection narrowing versus plannedEffectiveProjection".to_string(),
@@ -7906,6 +7910,14 @@ fn verify_qglake_scan_restriction_replay(
                 .to_string(),
         ));
     }
+    require_non_empty_unique_strings(
+        &planned.requested_projection,
+        "qglake lineage drain scan planning requested projection",
+    )?;
+    require_non_empty_unique_strings(
+        &planned.effective_projection,
+        "qglake lineage drain scan planning effective projection",
+    )?;
     if planned.requested_projection.len() <= planned.effective_projection.len() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain scan planning replay does not prove projection narrowing"
@@ -7949,6 +7961,14 @@ fn verify_qglake_scan_restriction_replay(
                 .to_string(),
         ));
     }
+    require_non_empty_unique_strings(
+        &planned.requested_stats_fields,
+        "qglake lineage drain scan planning requested stats fields",
+    )?;
+    require_non_empty_unique_strings(
+        &planned.effective_stats_fields,
+        "qglake lineage drain scan planning effective stats fields",
+    )?;
     if planned.requested_stats_fields.len() <= planned.effective_stats_fields.len() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain scan planning replay does not prove stats-field narrowing"
@@ -9717,6 +9737,24 @@ fn required_string_array(
             })
         })
         .collect()
+}
+
+fn require_non_empty_unique_strings(
+    values: &[String],
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    if values.iter().any(|value| value.trim().is_empty()) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} must contain non-empty strings"
+        )));
+    }
+    let mut seen = BTreeSet::new();
+    if values.iter().any(|value| !seen.insert(value.as_str())) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} must be duplicate-free"
+        )));
+    }
+    Ok(())
 }
 
 fn required_str<'a>(
@@ -12269,6 +12307,26 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_requested_scan_projection() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedRequestedProjection"] =
+            json!([
+                "event_id",
+                "occurred_at",
+                "severity",
+                "raw_payload",
+                "raw_payload"
+            ]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicate requested scan projection");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("plannedRequestedProjection"));
+        assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_effective_scan_stats_field_evidence() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["governedScanProof"]
@@ -12315,6 +12373,20 @@ mod tests {
         assert!(err.to_string().contains("plannedEffectiveStatsFields"));
         assert!(err.to_string().contains("tenant_id"));
         assert!(err.to_string().contains("not requested"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_blank_requested_scan_stats_field() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedRequestedStatsFields"] =
+            json!(["event_id", "occurred_at", "severity", "raw_payload", " "]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject blank requested scan stats field");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("plannedRequestedStatsFields"));
+        assert!(err.to_string().contains("non-empty"));
     }
 
     #[test]
@@ -17848,6 +17920,24 @@ mod tests {
     }
 
     #[test]
+    fn qglake_scan_replay_rejects_duplicate_requested_projection() {
+        let mut planned = qglake_scan_planned_lineage_summary();
+        planned.requested_projection.push("raw_payload".to_string());
+
+        let err = verify_qglake_scan_restriction_replay(
+            &planned,
+            &qglake_scan_tasks_fetched_lineage_summary(),
+        )
+        .expect_err("scan replay should reject duplicate requested projection evidence");
+
+        assert!(
+            err.to_string()
+                .contains("scan planning requested projection")
+        );
+        assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
     fn qglake_scan_replay_rejects_missing_fetched_effective_projection() {
         let mut fetched = qglake_scan_tasks_fetched_lineage_summary();
         fetched.effective_projection = Vec::new();
@@ -17926,6 +18016,24 @@ mod tests {
 
         assert!(err.to_string().contains("tenant_id"));
         assert!(err.to_string().contains("was not requested"));
+    }
+
+    #[test]
+    fn qglake_scan_replay_rejects_blank_requested_stats_field() {
+        let mut planned = qglake_scan_planned_lineage_summary();
+        planned.requested_stats_fields.push(" ".to_string());
+
+        let err = verify_qglake_scan_restriction_replay(
+            &planned,
+            &qglake_scan_tasks_fetched_lineage_summary(),
+        )
+        .expect_err("scan replay should reject blank requested stats-field evidence");
+
+        assert!(
+            err.to_string()
+                .contains("scan planning requested stats fields")
+        );
+        assert!(err.to_string().contains("non-empty"));
     }
 
     #[test]

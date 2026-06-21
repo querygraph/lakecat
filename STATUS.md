@@ -6,6 +6,21 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate scan projection proof arrays`.
+  Compact QGLake handoff verification and raw lineage-drain scan replay now
+  reject duplicate or blank requested/effective projection and stats-field
+  arrays before accepting policy-narrowing proof, so repeated requested fields
+  cannot inflate archived scan evidence.
+- Local verification for this scan projection proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli requested_scan -- --test-threads=1`;
+  `cargo test -p lakecat-cli requested_projection -- --test-threads=1`;
+  `cargo test -p lakecat-cli requested_stats -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_scan_replay -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate compact read-restriction row predicates`.
   QGLake lineage-drain verification and compact handoff-summary verification
   now reject governed read-restriction proof whose `row-predicate` is empty,
