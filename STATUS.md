@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require management-list receipt principal replay`.
+  Service management-list outbox admission now rejects replay whose
+  authorization receipt lacks a valid principal before acknowledgement, graph
+  projection, or OpenLineage projection.
+- Local verification for this management-list receipt principal slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_missing_management_list_receipt_principal -- --test-threads=1`;
+  `cargo test -p lakecat-service management_list -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind credential replay table identity`.
   Service `credentials.vend-attempted` outbox admission now rejects replay
   whose payload table hint drifts from the durable outbox table identity before

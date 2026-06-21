@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required service management-list replay admission to carry a valid
+  authorization receipt principal before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Required service `credentials.vend-attempted` replay admission to bind the
   payload table hint to the durable outbox table identity before
   acknowledgement, graph projection, or OpenLineage projection.

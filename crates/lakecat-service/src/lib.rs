@@ -1425,6 +1425,28 @@ fn decode_outbox_principal_value(
     })
 }
 
+fn validate_authorization_receipt_principal(
+    event: &OutboxEvent,
+    payload: &Value,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(receipt_principal) = payload
+        .get("authorization-receipt")
+        .and_then(|receipt| receipt.get("principal"))
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} evidence must contain authorization receipt principal"),
+        ));
+    };
+    decode_outbox_principal_value(
+        event,
+        receipt_principal,
+        &format!("{label} authorization receipt principal"),
+    )?;
+    Ok(())
+}
+
 fn validate_table_commit_history_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
@@ -2771,6 +2793,7 @@ fn validate_management_list_event_evidence(
         }
         _ => {}
     }
+    validate_authorization_receipt_principal(event, payload, "management-list")?;
     Ok(())
 }
 
@@ -15827,6 +15850,71 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "missing management-list IDs must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_missing_management_list_receipt_principal() {
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-secret-management-list-principal-token".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "server.listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-missing-management-list-principal",
+                    "event-type": "server.listed",
+                    "payload": {
+                        "authorization-receipt": {
+                            "action": "management-list",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "server-count": 1,
+                        "server-ids": ["prod-us"],
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("missing management-list receipt principal should fail before delivery");
+
+        let message = err.to_string();
+        assert!(
+            message.contains("outbox event server.listed (lakecat.lineage-and-graph) has invalid")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(
+            message
+                .contains("management-list evidence must contain authorization receipt principal")
+        );
+        assert!(!message.contains("evt-secret-management-list-principal-token"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "missing management-list principal must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "missing management-list principal must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "missing management-list principal must fail before lineage projection"
         );
     }
 

@@ -632,9 +632,10 @@ Blocked raw-credential replay must carry zero credentials plus a non-empty
 block reason matching the raw-credential exception receipt context before any
 graph or OpenLineage sink observes it.
 Management-list replay must carry count-aligned, syntactically valid,
-duplicate-free ID arrays before projection, so compact QueryGraph proof cannot
-inflate server, project, warehouse, policy, or storage-profile reads with
-repeated identities.
+duplicate-free ID arrays and a valid authorization receipt principal before
+projection, so compact QueryGraph proof cannot inflate server, project,
+warehouse, policy, or storage-profile reads with repeated or actorless
+identities.
 
 View mutation guards must remain positive, store-assigned version checks so
 QueryGraph receipt chains cannot be extended by invalid guarded requests.
