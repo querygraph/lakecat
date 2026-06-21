@@ -2048,10 +2048,11 @@ verifier also requires those replay and OpenLineage arrays to contain full
 a full `sha256:`-prefixed 64-hex digest and requires a redacted
 secret-reference provider plus full-digest `secretRefHash` whenever the proof
 says a secret reference is present. If the proof says no secret reference is
-present, the provider and hash must both be null. Source replay enforces the
-same full-digest secret-reference rule before compact proof generation, so the
-saved summary cannot launder short placeholder credential-root hashes through
-the lineage-drain artifact. The positive QGLake acceptance fixture covers the
+present, the provider and hash may be omitted or null, but any other
+provider/hash value is rejected. Source replay enforces the same full-digest
+secret-reference rule before compact proof generation, so the saved summary
+cannot launder short placeholder credential-root hashes through the
+lineage-drain artifact. The positive QGLake acceptance fixture covers the
 production-shaped case too: when the storage profile uses a secret reference,
 the compact handoff accepts the proof only when the storage-profile branch and
 both credential branches agree on the redacted provider and full
@@ -2143,8 +2144,10 @@ count-aligned, duplicate-free `credentialPrefixHashes`, with an empty array for
 the blocked branch and full SHA-256 returned-prefix hashes for any issued
 credential.
 The compact verifier has direct negative coverage for the credential-branch
-secret-reference rules too, so a handoff cannot hide malformed provider or hash
-evidence behind an otherwise matching storage-profile upsert proof.
+secret-reference rules too: blank providers are rejected when a secret ref is
+present, and non-null provider/hash evidence is rejected when no secret ref is
+present. That way a handoff cannot hide malformed provider or hash evidence
+behind an otherwise matching storage-profile upsert proof.
 The local handoff harness now preserves those replay fields while building the
 compact summary, rather than relying on the nested raw replay blob alone: scan
 graph events and fetch-side projection/filter requirements, management graph

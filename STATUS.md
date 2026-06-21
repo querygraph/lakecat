@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Align QGLake secret-ref proof shape`.
+  Compact QGLake handoff verification now matches service replay admission for
+  storage-profile and credential secret-reference evidence: present refs require
+  nonblank providers and full hashes, while absent refs accept omitted or null
+  provider/hash fields and reject any non-null evidence.
+- Local verification for this QGLake secret-ref proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject malformed secret-ref replay evidence`.
   Shared service outbox admission now rejects blank secret-ref providers for
   secret-ref-backed replay, and rejects any secret-ref provider/hash evidence

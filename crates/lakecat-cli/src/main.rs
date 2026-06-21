@@ -2137,8 +2137,6 @@ fn verify_lakecat_replay_storage_profile_matches_summary(
 
     for field in [
         "secretRefPresent",
-        "secretRefProvider",
-        "secretRefHash",
         "graphEvents",
         "replayEventHashes",
         "openLineageHashes",
@@ -2147,6 +2145,14 @@ fn verify_lakecat_replay_storage_profile_matches_summary(
             captured_storage_profile,
             field,
             required_value(summary_storage_profile, field, "storageProfileUpsertProof")?,
+            "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert",
+        )?;
+    }
+    for field in ["secretRefProvider", "secretRefHash"] {
+        require_optional_null_value_match(
+            captured_storage_profile,
+            field,
+            summary_storage_profile.get(field),
             "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert",
         )?;
     }
@@ -2236,12 +2242,12 @@ fn expected_management_storage_profile_upsert_line_from_summary(
     let secret_ref = if required_bool(storage_profile, "secretRefPresent", label)? {
         format!(
             "{}:secret_ref_hash={}",
-            required_str(storage_profile, "secretRefProvider", label)?,
-            required_str(storage_profile, "secretRefHash", label)?,
+            require_non_blank_str(storage_profile, "secretRefProvider", label)?,
+            require_full_hash_str(storage_profile, "secretRefHash", label)?,
         )
     } else {
-        require_null_field(storage_profile, "secretRefProvider", label)?;
-        require_null_field(storage_profile, "secretRefHash", label)?;
+        require_absent_or_null_field(storage_profile, "secretRefProvider", label)?;
+        require_absent_or_null_field(storage_profile, "secretRefHash", label)?;
         "none".to_string()
     };
     Ok(format!(
@@ -2477,12 +2483,12 @@ fn expected_credential_profile_line_from_summary(
     label: &str,
 ) -> lakecat_core::LakeCatResult<String> {
     let secret_ref = if required_bool(profile, "secretRefPresent", label)? {
-        let provider = require_non_empty_str(profile, "secretRefProvider", label)?;
+        let provider = require_non_blank_str(profile, "secretRefProvider", label)?;
         let hash = require_full_hash_str(profile, "secretRefHash", label)?;
         format!("{provider}:secret_ref_hash={hash}")
     } else {
-        require_null_field(profile, "secretRefProvider", label)?;
-        require_null_field(profile, "secretRefHash", label)?;
+        require_absent_or_null_field(profile, "secretRefProvider", label)?;
+        require_absent_or_null_field(profile, "secretRefHash", label)?;
         "none".to_string()
     };
     Ok(format!(
@@ -3270,7 +3276,7 @@ fn require_storage_profile_upsert_evidence(
         "secretRefPresent",
         "storageProfileUpsertProof",
     )? {
-        require_non_empty_str(
+        require_non_blank_str(
             storage_profile,
             "secretRefProvider",
             "storageProfileUpsertProof",
@@ -3280,30 +3286,17 @@ fn require_storage_profile_upsert_evidence(
             "secretRefHash",
             "storageProfileUpsertProof",
         )?;
-    } else if !matches!(
-        required_value(
+    } else {
+        require_absent_or_null_field(
             storage_profile,
             "secretRefProvider",
-            "storageProfileUpsertProof"
-        )?,
-        Value::Null
-    ) {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "storageProfileUpsertProof.secretRefProvider must be null when secretRefPresent is false"
-                .to_string(),
-        ));
-    } else if !matches!(
-        required_value(
+            "storageProfileUpsertProof",
+        )?;
+        require_absent_or_null_field(
             storage_profile,
             "secretRefHash",
-            "storageProfileUpsertProof"
-        )?,
-        Value::Null
-    ) {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "storageProfileUpsertProof.secretRefHash must be null when secretRefPresent is false"
-                .to_string(),
-        ));
+            "storageProfileUpsertProof",
+        )?;
     }
     require_full_hash_array(
         storage_profile,
@@ -3634,13 +3627,19 @@ fn require_credential_storage_profile_matches_upsert(
         "issuanceMode",
         "locationPrefixHash",
         "secretRefPresent",
-        "secretRefProvider",
-        "secretRefHash",
     ] {
         require_value_match(
             storage_profile,
             field,
             required_value(storage_profile_upsert, field, "storageProfileUpsertProof")?,
+            storage_label.as_str(),
+        )?;
+    }
+    for field in ["secretRefProvider", "secretRefHash"] {
+        require_optional_null_value_match(
+            storage_profile,
+            field,
+            storage_profile_upsert.get(field),
             storage_label.as_str(),
         )?;
     }
@@ -3662,22 +3661,11 @@ fn require_credential_storage_profile_evidence(
         storage_label.as_str(),
     )?;
     if required_bool(storage_profile, "secretRefPresent", storage_label.as_str())? {
-        require_non_empty_str(storage_profile, "secretRefProvider", storage_label.as_str())?;
+        require_non_blank_str(storage_profile, "secretRefProvider", storage_label.as_str())?;
         require_full_hash_str(storage_profile, "secretRefHash", storage_label.as_str())?;
-    } else if !matches!(
-        required_value(storage_profile, "secretRefProvider", storage_label.as_str())?,
-        Value::Null
-    ) {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "{storage_label}.secretRefProvider must be null when secretRefPresent is false"
-        )));
-    } else if !matches!(
-        required_value(storage_profile, "secretRefHash", storage_label.as_str())?,
-        Value::Null
-    ) {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "{storage_label}.secretRefHash must be null when secretRefPresent is false"
-        )));
+    } else {
+        require_absent_or_null_field(storage_profile, "secretRefProvider", storage_label.as_str())?;
+        require_absent_or_null_field(storage_profile, "secretRefHash", storage_label.as_str())?;
     }
     require_positive_u64(storage_profile, "graphEvents", storage_label.as_str())?;
     Ok(())
@@ -9779,14 +9767,14 @@ fn required_bool(
     })
 }
 
-fn require_null_field(
+fn require_absent_or_null_field(
     value: &serde_json::Map<String, Value>,
     field: &str,
     label: &str,
 ) -> lakecat_core::LakeCatResult<()> {
-    if !required_value(value, field, label)?.is_null() {
+    if value.get(field).is_some_and(|value| !value.is_null()) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "{label}.{field} must be null"
+            "{label}.{field} must be absent or null"
         )));
     }
     Ok(())
@@ -9862,6 +9850,20 @@ fn require_non_empty_str<'a>(
     if string.is_empty() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "{label}.{field} must not be empty"
+        )));
+    }
+    Ok(string)
+}
+
+fn require_non_blank_str<'a>(
+    value: &'a serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<&'a str> {
+    let string = require_non_empty_str(value, field, label)?;
+    if string.trim().is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must not be blank"
         )));
     }
     Ok(string)
@@ -10022,6 +10024,18 @@ fn require_value_match(
         )));
     }
     Ok(())
+}
+
+fn require_optional_null_value_match(
+    value: &serde_json::Map<String, Value>,
+    field: &str,
+    expected: Option<&Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    match expected {
+        Some(expected) if !expected.is_null() => require_value_match(value, field, expected, label),
+        _ => require_absent_or_null_field(value, field, label),
+    }
 }
 
 fn next_arg(
@@ -12109,6 +12123,24 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_blank_secret_ref_provider_when_present() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefPresent"] =
+            json!(true);
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefProvider"] =
+            json!("   ");
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefHash"] =
+            json!(qglake_fixture_hash("storage-secret-ref"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject blank secret-ref providers");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("secretRefProvider"));
+        assert!(err.to_string().contains("blank"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_secret_ref_hash_when_present() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["secretRefPresent"] =
@@ -12188,6 +12220,28 @@ mod tests {
         assert!(err.to_string().contains("storageProfileUpsertProof"));
         assert!(err.to_string().contains("secretRefHash"));
         assert!(err.to_string().contains("null"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_allows_omitted_secret_ref_fields_when_absent() {
+        let mut summary = qglake_handoff_summary_json();
+        let storage_profile = summary["lakecatReplayVerification"]["storageProfileUpsertProof"]
+            .as_object_mut()
+            .unwrap();
+        storage_profile.remove("secretRefProvider");
+        storage_profile.remove("secretRefHash");
+        for proof in ["restricted", "trustedHuman"] {
+            let storage_profile = summary["lakecatReplayVerification"]["credentialVendingProof"]
+                [proof]["storageProfile"]
+                .as_object_mut()
+                .unwrap();
+            storage_profile.remove("secretRefProvider");
+            storage_profile.remove("secretRefHash");
+        }
+
+        verify_qglake_handoff_summary_value(&summary).expect(
+            "handoff summary should accept omitted secret-ref proof fields when secretRefPresent is false",
+        );
     }
 
     #[test]
@@ -12983,6 +13037,29 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_blank_credential_secret_ref_provider_when_present() {
+        let mut summary = qglake_handoff_summary_json();
+        let storage_profile = summary["lakecatReplayVerification"]["credentialVendingProof"]
+            ["trustedHuman"]["storageProfile"]
+            .as_object_mut()
+            .unwrap();
+        storage_profile.insert("secretRefPresent".to_string(), json!(true));
+        storage_profile.insert("secretRefProvider".to_string(), json!("\t "));
+        storage_profile.insert(
+            "secretRefHash".to_string(),
+            json!(qglake_fixture_hash("credential-secret-ref")),
+        );
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject credential secret-ref presence with blank provider",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("secretRefProvider"));
+        assert!(err.to_string().contains("blank"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_credential_secret_ref_hash_when_present() {
         let mut summary = qglake_handoff_summary_json();
         let storage_profile = summary["lakecatReplayVerification"]["credentialVendingProof"]
@@ -13052,6 +13129,21 @@ mod tests {
         assert!(err.to_string().contains("credentialVendingProof"));
         assert!(err.to_string().contains("secretRefHash"));
         assert!(err.to_string().contains("null"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_credential_secret_ref_provider_when_absent() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]["storageProfile"]
+            ["secretRefProvider"] = json!({"provider": "vault"});
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject credential secret-ref provider evidence without presence",
+        );
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("secretRefProvider"));
+        assert!(err.to_string().contains("absent or null"));
     }
 
     #[test]

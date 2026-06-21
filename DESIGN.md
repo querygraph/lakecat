@@ -539,6 +539,10 @@ replay, OpenLineage, view receipt, and view receipt-chain hash arrays
 duplicate-free as well as SHA-256-shaped, so source replay and archived proof
 cannot inflate bootstrap, scan, management, commit-history, view,
 storage-profile, or credential evidence by repeating a valid digest.
+Compact QGLake storage-profile and credential secret-reference proof must
+mirror service replay admission: present secret refs require nonblank providers
+and full SHA-256 hashes, while absent secret refs may omit provider/hash fields
+or encode them as null, but any other provider/hash value is rejected.
 Compact management proof must preserve the same duplicate-free ID invariant as
 service replay, so saved QGLake summaries and lineage-drain artifacts cannot
 inflate server, project, warehouse, policy, or storage-profile reads by

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Aligned compact QGLake handoff secret-reference verification with service
+  replay admission: storage-profile and credential proofs now reject blank
+  secret-ref providers, accept omitted provider/hash fields only when
+  `secretRefPresent` is false, and reject any non-null provider/hash evidence
+  when no secret ref is present.
 - Required storage-profile and credential-vend replay admission to reject blank
   secret-ref providers and any unexpected secret-ref evidence when
   `secret-ref-present` is false before graph or OpenLineage projection.
