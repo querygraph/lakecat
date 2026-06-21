@@ -3684,9 +3684,25 @@ fn require_read_restriction_evidence(
     label: &str,
 ) -> lakecat_core::LakeCatResult<()> {
     let allowed_columns = required_array(restriction, "allowed-columns", label)?;
-    if allowed_columns.is_empty() || allowed_columns.iter().any(|column| !column.is_string()) {
+    if allowed_columns.is_empty()
+        || allowed_columns.iter().any(|column| {
+            !column
+                .as_str()
+                .is_some_and(|column| !column.trim().is_empty())
+        })
+    {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "{label}.allowed-columns must contain column names"
+        )));
+    }
+    let mut seen_columns = BTreeSet::new();
+    if allowed_columns
+        .iter()
+        .filter_map(Value::as_str)
+        .any(|column| !seen_columns.insert(column))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.allowed-columns must be duplicate-free"
         )));
     }
     required_object(restriction, "row-predicate", label)?;
@@ -12278,6 +12294,34 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("allowed-columns mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_empty_scan_allowed_columns() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedReadRestriction"]["allowed-columns"] =
+            json!(["event_id", ""]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject empty scan allowed columns");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("allowed-columns"));
+        assert!(err.to_string().contains("column names"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_scan_allowed_columns() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedReadRestriction"]["allowed-columns"] =
+            json!(["event_id", "event_id"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicate scan allowed columns");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("allowed-columns"));
+        assert!(err.to_string().contains("duplicate-free"));
     }
 
     #[test]
@@ -22367,6 +22411,70 @@ mod tests {
         );
         assert!(err.to_string().contains("policy-hashes"));
         assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_empty_scan_allowed_columns() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let scan_plan = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.scan-planned")
+            .expect("scan plan replay fixture");
+        scan_plan.read_restriction = Some(json!({
+            "allowed-columns": ["event_id", ""],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [qglake_fixture_hash("scan-policy")]
+        }));
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject empty scan allowed columns");
+
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain scan planning read restriction")
+        );
+        assert!(err.to_string().contains("allowed-columns"));
+        assert!(err.to_string().contains("column names"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_duplicate_scan_allowed_columns() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let scan_plan = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.scan-planned")
+            .expect("scan plan replay fixture");
+        scan_plan.read_restriction = Some(json!({
+            "allowed-columns": ["event_id", "event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [qglake_fixture_hash("scan-policy")]
+        }));
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject duplicate scan allowed columns");
+
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain scan planning read restriction")
+        );
+        assert!(err.to_string().contains("allowed-columns"));
+        assert!(err.to_string().contains("duplicate-free"));
     }
 
     #[test]

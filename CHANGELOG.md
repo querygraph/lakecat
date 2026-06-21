@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected empty and duplicate `allowed-columns` values in compact governed
+  read-restriction proof verification for QGLake lineage-drain and
+  handoff-summary replay, keeping scan and credential restriction evidence
+  syntactically meaningful before archived proof is accepted.
 - Rejected syntactically invalid compact management IDs in QGLake lineage-drain
   and handoff-summary proof verification, preventing path/query-decorated
   server, project, warehouse, policy, or storage-profile identities from

@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate compact read-restriction allowed columns`.
+  QGLake lineage-drain verification and compact handoff-summary verification
+  now reject governed read-restriction proof whose `allowed-columns` array
+  contains empty or duplicate column names, so scan and credential replay cannot
+  carry ambiguous narrowing evidence into archived proof.
+- Local verification for this compact read-restriction proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli scan_allowed_columns -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate compact management ID proof syntax`.
   QGLake lineage-drain verification and compact handoff-summary verification
   now reject syntactically invalid management IDs before archived replay proof
