@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate view replay reads`.
+  Memory and Turso view load/list/drop paths now revalidate stored
+  `ViewRecord` values, and view-version receipt list/hash paths revalidate
+  receipt identity, version linkage, and SHA-256 evidence before view receipt
+  chains can advance or replay consumers can observe corrupted durable JSON.
+- Local verification for this view replay read validation slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store corrupt_view -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local corrupt_view -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate policy-binding reads`.
   Memory and Turso `list_policy_bindings` and `policy_bindings_for_table` now
   revalidate stored `PolicyBinding` governance records before replay can

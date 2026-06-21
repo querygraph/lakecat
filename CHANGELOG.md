@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Revalidated view records and view-version receipts at memory and Turso
+  load/list/drop/read boundaries, rejecting corrupted durable view replay JSON
+  and malformed receipt hash/identity evidence before view receipt chains can
+  advance.
 - Revalidated policy-binding governance records at memory and Turso list/table
   read boundaries, rejecting corrupted durable binding JSON before governance
   replay can expose table-scoped bindings without namespace evidence.

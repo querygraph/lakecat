@@ -852,6 +852,55 @@ impl ViewVersionReceipt {
             recorded_at: Utc::now(),
         })
     }
+
+    pub fn validate(&self) -> LakeCatResult<()> {
+        let expected_stable_id = format!(
+            "lakecat:view:{}:{}:{}",
+            self.warehouse.as_str(),
+            self.namespace.path(),
+            self.name.as_str()
+        );
+        if self.stable_id != expected_stable_id {
+            return Err(LakeCatError::InvalidArgument(
+                "view receipt stable id does not match receipt identity".to_string(),
+            ));
+        }
+        if self.view_version == 0 {
+            return Err(LakeCatError::InvalidArgument(
+                "view receipt version must be greater than zero".to_string(),
+            ));
+        }
+        match self.operation {
+            ViewVersionOperation::Upsert => {
+                if let Some(previous) = self.previous_view_version
+                    && previous >= self.view_version
+                {
+                    return Err(LakeCatError::InvalidArgument(
+                        "view upsert receipt previous version must be less than receipt version"
+                            .to_string(),
+                    ));
+                }
+            }
+            ViewVersionOperation::Drop => {
+                if self.previous_view_version != Some(self.view_version) {
+                    return Err(LakeCatError::InvalidArgument(
+                        "view drop receipt previous version must equal receipt version".to_string(),
+                    ));
+                }
+            }
+        }
+        validate_sha256_evidence(
+            &self.view_hash,
+            "view receipt hash must be a SHA-256 digest",
+        )?;
+        if let Some(previous_receipt_hash) = self.previous_receipt_hash.as_deref() {
+            validate_sha256_evidence(
+                previous_receipt_hash,
+                "previous view receipt hash must be a SHA-256 digest",
+            )?;
+        }
+        Ok(())
+    }
 }
 
 fn view_receipt_hash(receipt: &ViewVersionReceipt) -> LakeCatResult<String> {
@@ -873,7 +922,10 @@ fn latest_view_receipt_hash<'a>(
                         .cmp(&view_version_operation_order(&right.operation))
                 })
         })
-        .map(view_receipt_hash)
+        .map(|receipt| {
+            receipt.validate()?;
+            view_receipt_hash(receipt)
+        })
         .transpose()
 }
 
@@ -1856,7 +1908,7 @@ impl CatalogStore for MemoryCatalogStore {
         view: &TableName,
     ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
         let state = self.state.read().await;
-        Ok(state
+        let receipts = state
             .view_version_receipts
             .iter()
             .filter(|receipt| {
@@ -1865,7 +1917,11 @@ impl CatalogStore for MemoryCatalogStore {
                     && receipt.name == *view
             })
             .cloned()
-            .collect())
+            .collect::<Vec<_>>();
+        for receipt in &receipts {
+            receipt.validate()?;
+        }
+        Ok(receipts)
     }
 
     async fn list_namespace_view_version_receipts(
@@ -1874,12 +1930,16 @@ impl CatalogStore for MemoryCatalogStore {
         namespace: &Namespace,
     ) -> LakeCatResult<Vec<ViewVersionReceipt>> {
         let state = self.state.read().await;
-        Ok(state
+        let receipts = state
             .view_version_receipts
             .iter()
             .filter(|receipt| receipt.warehouse == *warehouse && receipt.namespace == *namespace)
             .cloned()
-            .collect())
+            .collect::<Vec<_>>();
+        for receipt in &receipts {
+            receipt.validate()?;
+        }
+        Ok(receipts)
     }
 
     async fn load_view(
@@ -1896,6 +1956,10 @@ impl CatalogStore for MemoryCatalogStore {
             .ok_or_else(|| LakeCatError::NotFound {
                 object: "view",
                 name: view.as_str().to_string(),
+            })
+            .and_then(|record| {
+                record.validate()?;
+                Ok(record)
             })
     }
 
@@ -1930,6 +1994,7 @@ impl CatalogStore for MemoryCatalogStore {
                 object: "view",
                 name: view.as_str().to_string(),
             })?;
+        current.validate()?;
         if let Some(expected) = expected_view_version {
             require_expected_view_version(Some(current), expected)?;
         }
@@ -1960,6 +2025,9 @@ impl CatalogStore for MemoryCatalogStore {
             .cloned()
             .collect::<Vec<_>>();
         views.sort_by(|left, right| left.name.as_str().cmp(right.name.as_str()));
+        for view in &views {
+            view.validate()?;
+        }
         Ok(views)
     }
 
@@ -3350,6 +3418,111 @@ mod memory_tests {
                 .await,
             Err(LakeCatError::NotFound { object, name })
                 if object == "view" && name == "active_customers"
+        ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_corrupt_view_records_on_read() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let view_name = TableName::new("active_customers").unwrap();
+        let view = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            view_name.clone(),
+            "select * from customers where active",
+            "sql",
+            Some(1),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        let view = store.upsert_view(view).await.unwrap();
+
+        store
+            .state
+            .write()
+            .await
+            .views
+            .get_mut(&view_key(&view))
+            .unwrap()
+            .sql = "   ".to_string();
+
+        let err = store
+            .load_view(&warehouse, &namespace, &view_name)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("view SQL must not be empty")
+        ));
+
+        let err = store.list_views(&warehouse, &namespace).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("view SQL must not be empty")
+        ));
+
+        let err = store
+            .drop_view(&warehouse, &namespace, &view_name, Principal::anonymous())
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("view SQL must not be empty")
+        ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_corrupt_view_receipts_on_read() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let view_name = TableName::new("active_customers").unwrap();
+        let view = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            view_name.clone(),
+            "select * from customers where active",
+            "sql",
+            Some(1),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_view(view).await.unwrap();
+
+        store
+            .state
+            .write()
+            .await
+            .view_version_receipts
+            .first_mut()
+            .unwrap()
+            .view_hash = "sha256:short".to_string();
+
+        let err = store
+            .list_view_version_receipts(&warehouse, &namespace, &view_name)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("view receipt hash must be a SHA-256 digest")
+        ));
+
+        let err = store
+            .list_namespace_view_version_receipts(&warehouse, &namespace)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("view receipt hash must be a SHA-256 digest")
         ));
     }
 
@@ -4931,7 +5104,11 @@ pub mod turso_store {
                 .next()
                 .await
                 .map_err(turso_error)?
-                .map(|row| decode_json::<ViewRecord>(row_string(&row, 0)?))
+                .map(|row| {
+                    let view = decode_json::<ViewRecord>(row_string(&row, 0)?)?;
+                    view.validate()?;
+                    Ok(view)
+                })
                 .transpose()?;
             if let Some(expected) = expected_view_version {
                 require_expected_view_version(previous.as_ref(), expected)?;
@@ -5018,7 +5195,9 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut receipts = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                receipts.push(decode_json(row_string(&row, 0)?)?);
+                let receipt: ViewVersionReceipt = decode_json(row_string(&row, 0)?)?;
+                receipt.validate()?;
+                receipts.push(receipt);
             }
             Ok(receipts)
         }
@@ -5040,7 +5219,9 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut receipts = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                receipts.push(decode_json(row_string(&row, 0)?)?);
+                let receipt: ViewVersionReceipt = decode_json(row_string(&row, 0)?)?;
+                receipt.validate()?;
+                receipts.push(receipt);
             }
             Ok(receipts)
         }
@@ -5064,7 +5245,11 @@ pub mod turso_store {
             .next()
             .await
             .map_err(turso_error)?
-            .map(|row| decode_json(row_string(&row, 0)?))
+            .map(|row| {
+                let view = decode_json::<ViewRecord>(row_string(&row, 0)?)?;
+                view.validate()?;
+                Ok(view)
+            })
             .transpose()?
             .ok_or_else(|| LakeCatError::NotFound {
                 object: "view",
@@ -5109,7 +5294,11 @@ pub mod turso_store {
                 .next()
                 .await
                 .map_err(turso_error)?
-                .map(|row| decode_json::<ViewRecord>(row_string(&row, 0)?))
+                .map(|row| {
+                    let view = decode_json::<ViewRecord>(row_string(&row, 0)?)?;
+                    view.validate()?;
+                    Ok(view)
+                })
                 .transpose()?
                 .ok_or_else(|| LakeCatError::NotFound {
                     object: "view",
@@ -5177,7 +5366,9 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut views = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                views.push(decode_json(row_string(&row, 0)?)?);
+                let view: ViewRecord = decode_json(row_string(&row, 0)?)?;
+                view.validate()?;
+                views.push(view);
             }
             Ok(views)
         }
@@ -5628,6 +5819,7 @@ pub mod turso_store {
         .map_err(turso_error)?
         .map(|row| {
             let receipt = decode_json::<ViewVersionReceipt>(row_string(&row, 0)?)?;
+            receipt.validate()?;
             view_receipt_hash(&receipt)
         })
         .transpose()
@@ -6241,6 +6433,116 @@ pub mod turso_store {
                     .await,
                 Err(LakeCatError::NotFound { object, name })
                     if object == "view" && name == "active_customers"
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_corrupt_view_records_on_read() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let view_name = TableName::new("active_customers").unwrap();
+            let view = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select * from customers where active",
+                "sql",
+                Some(1),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            let mut view = store.upsert_view(view).await.unwrap();
+            view.sql = "   ".to_string();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update views set record_json = ?2 where view_key = ?1",
+                (view_key(&view), encode_json(&view).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .load_view(&warehouse, &namespace, &view_name)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("view SQL must not be empty")
+            ));
+
+            let err = store.list_views(&warehouse, &namespace).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("view SQL must not be empty")
+            ));
+
+            let err = store
+                .drop_view(&warehouse, &namespace, &view_name, Principal::anonymous())
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("view SQL must not be empty")
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_corrupt_view_receipts_on_read() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let view_name = TableName::new("active_customers").unwrap();
+            let view = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select * from customers where active",
+                "sql",
+                Some(1),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_view(view).await.unwrap();
+
+            let mut receipts = store
+                .list_view_version_receipts(&warehouse, &namespace, &view_name)
+                .await
+                .unwrap();
+            let receipt_id = view_receipt_hash(&receipts[0]).unwrap();
+            receipts[0].view_hash = "sha256:short".to_string();
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update view_version_receipts set receipt_json = ?2 where receipt_id = ?1",
+                (receipt_id, encode_json(&receipts[0]).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .list_view_version_receipts(&warehouse, &namespace, &view_name)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("view receipt hash must be a SHA-256 digest")
+            ));
+
+            let err = store
+                .list_namespace_view_version_receipts(&warehouse, &namespace)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("view receipt hash must be a SHA-256 digest")
             ));
         }
 
