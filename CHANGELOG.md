@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Refreshed the generated LakeCat book distribution artifacts after rebuilding
+  the current catalog-concepts and Sail-rationale manuscript.
 - Bounded the local release-readiness feature matrix to package unit targets
   where package doc-tests add no LakeCat coverage and can hang in rustdoc after
   the Turso store tests pass; the gate now keeps explicit CLI all-features,
