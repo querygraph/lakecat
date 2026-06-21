@@ -1610,6 +1610,9 @@ impl CatalogStore for MemoryCatalogStore {
         let state = self.state.read().await;
         let mut servers = state.servers.values().cloned().collect::<Vec<_>>();
         servers.sort_by(|left, right| left.server_id.cmp(&right.server_id));
+        for server in &servers {
+            server.validate()?;
+        }
         Ok(servers)
     }
 
@@ -2639,6 +2642,39 @@ mod memory_tests {
         store.upsert_server(updated.clone()).await.unwrap();
 
         assert_eq!(store.list_servers().await.unwrap(), vec![updated]);
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_corrupt_server_records_on_read() {
+        let store = MemoryCatalogStore::new();
+        let record = ServerRecord::new(
+            "lakecat-local",
+            Some("Local LakeCat".to_string()),
+            Some("http://127.0.0.1:8181".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_server(record).await.unwrap();
+
+        store
+            .state
+            .write()
+            .await
+            .servers
+            .get_mut("lakecat-local")
+            .unwrap()
+            .endpoint_url = Some("http://127.0.0.1:8181?token=secret".to_string());
+
+        let err = store.list_servers().await.unwrap_err();
+        let message = err.to_string();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("server endpoint URL")
+                    || message.contains("server-endpoint-url-hash=sha256:")
+        ));
+        assert!(!message.contains("token=secret"));
     }
 
     #[tokio::test]
@@ -4444,7 +4480,9 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut servers = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                servers.push(decode_json(row_string(&row, 0)?)?);
+                let server: ServerRecord = decode_json(row_string(&row, 0)?)?;
+                server.validate()?;
+                servers.push(server);
             }
             Ok(servers)
         }
@@ -5515,6 +5553,39 @@ pub mod turso_store {
             store.upsert_server(updated.clone()).await.unwrap();
 
             assert_eq!(store.list_servers().await.unwrap(), vec![updated]);
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_corrupt_server_records_on_read() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let mut record = ServerRecord::new(
+                "lakecat-local",
+                Some("Local LakeCat".to_string()),
+                Some("http://127.0.0.1:8181".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_server(record.clone()).await.unwrap();
+            record.endpoint_url = Some("http://127.0.0.1:8181?token=secret".to_string());
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update servers set record_json = ?2 where server_id = ?1",
+                ("lakecat-local", encode_json(&record).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store.list_servers().await.unwrap_err();
+            let message = err.to_string();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("server endpoint URL")
+                        || message.contains("server-endpoint-url-hash=sha256:")
+            ));
+            assert!(!message.contains("token=secret"));
         }
 
         #[tokio::test]

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Revalidated server management records at memory and Turso list-read
+  boundaries, rejecting corrupted durable `record_json` before management
+  replay can expose invalid endpoint URLs or leak decorated endpoint material.
 - Validated pending outbox events at memory and Turso read boundaries, rejecting
   corrupted event ids, missing or drifted payload event types, empty sinks, and
   already-delivered rows before graph or lineage projection can observe them.

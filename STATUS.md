@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate server record reads`.
+  Memory and Turso `list_servers` now revalidate decoded/stored
+  `ServerRecord` values before management replay can observe them, rejecting
+  corrupted durable server JSON and keeping decorated endpoint material out of
+  error text.
+- Local verification for this server read validation slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_corrupt_server_records_on_read -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_corrupt_server_records_on_read -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate pending outbox reads`.
   `OutboxEvent::validate_pending` now protects memory and Turso
   `pending_outbox_events` reads from corrupted event ids, missing or drifted
