@@ -2179,9 +2179,10 @@ evidence rather than untrusted text. The compact handoff
 verifier repeats that check with the stricter full `sha256:`-prefixed 64-hex
 digest shape for every management replay and OpenLineage array, and it verifies
 that `serverIds`, `projectIds`, `warehouseNames`, `policyIds`, and
-`storageProfileIds` match their recorded counts. Saved summaries therefore
-cannot preserve only prefix-shaped placeholders for control-plane read receipts
-or normalize malformed management identities later. Captured replay agreement
+`storageProfileIds` match their recorded counts and are duplicate-free. Saved
+summaries therefore cannot preserve only prefix-shaped placeholders for
+control-plane read receipts, inflate a count with repeated valid identities, or
+normalize malformed management identities later. Captured replay agreement
 checks the same ID arrays against the saved compact `managementProof`, so a
 handoff cannot keep valid artifact hashes while swapping the server, project,
 warehouse, policy, or storage-profile identities between source replay and the

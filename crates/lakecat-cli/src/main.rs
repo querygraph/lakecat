@@ -3279,20 +3279,20 @@ fn require_management_evidence(
 ) -> lakecat_core::LakeCatResult<()> {
     let server_count = require_positive_u64(management, "serverCount", "managementProof")?;
     require_positive_u64(management, "serverGraphEvents", "managementProof")?;
-    require_string_array_count(management, "serverIds", server_count, "managementProof")?;
+    require_unique_string_array_count(management, "serverIds", server_count, "managementProof")?;
     let project_count = require_positive_u64(management, "projectCount", "managementProof")?;
     require_positive_u64(management, "projectGraphEvents", "managementProof")?;
-    require_string_array_count(management, "projectIds", project_count, "managementProof")?;
+    require_unique_string_array_count(management, "projectIds", project_count, "managementProof")?;
     let warehouse_count = require_positive_u64(management, "warehouseCount", "managementProof")?;
     require_positive_u64(management, "warehouseGraphEvents", "managementProof")?;
-    require_string_array_count(
+    require_unique_string_array_count(
         management,
         "warehouseNames",
         warehouse_count,
         "managementProof",
     )?;
     require_positive_u64(management, "policyGraphEvents", "managementProof")?;
-    require_string_array_count(
+    require_unique_string_array_count(
         management,
         "policyIds",
         expected_policy_binding_count,
@@ -3301,7 +3301,7 @@ fn require_management_evidence(
     let storage_profile_count =
         require_positive_u64(management, "storageProfileCount", "managementProof")?;
     require_positive_u64(management, "storageProfileGraphEvents", "managementProof")?;
-    require_string_array_count(
+    require_unique_string_array_count(
         management,
         "storageProfileIds",
         storage_profile_count,
@@ -8308,6 +8308,12 @@ fn verify_qglake_management_ids(
             "qglake lineage drain {label} replay is missing compact management ID evidence"
         )));
     }
+    let mut seen = BTreeSet::new();
+    if ids.iter().any(|id| !seen.insert(id)) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} replay contains duplicate compact management ID evidence"
+        )));
+    }
     Ok(())
 }
 
@@ -9475,7 +9481,7 @@ fn require_positive_u64(
     Ok(number)
 }
 
-fn require_string_array_count(
+fn require_unique_string_array_count(
     value: &serde_json::Map<String, Value>,
     field: &str,
     expected_count: u64,
@@ -9491,6 +9497,12 @@ fn require_string_array_count(
     if values.iter().any(|value| value.trim().is_empty()) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "{label}.{field} must contain non-empty strings"
+        )));
+    }
+    let mut seen = BTreeSet::new();
+    if values.iter().any(|value| !seen.insert(value)) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must be duplicate-free"
         )));
     }
     Ok(())
@@ -11334,6 +11346,21 @@ mod tests {
         assert!(err.to_string().contains("managementProof"));
         assert!(err.to_string().contains("serverIds"));
         assert!(err.to_string().contains("count mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_management_ids() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["serverCount"] = json!(2);
+        summary["lakecatReplayVerification"]["managementProof"]["serverIds"] =
+            json!(["qglake-server", "qglake-server"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicate management ids");
+
+        assert!(err.to_string().contains("managementProof"));
+        assert!(err.to_string().contains("serverIds"));
+        assert!(err.to_string().contains("duplicate-free"));
     }
 
     #[test]
@@ -21196,6 +21223,28 @@ mod tests {
 
         assert!(err.to_string().contains("storage profile list replay"));
         assert!(err.to_string().contains("compact management ID evidence"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_duplicate_management_ids() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let server_list = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "server.listed")
+            .expect("server list replay fixture");
+        server_list.server_count = Some(2);
+        server_list.server_ids = vec!["qglake-server".to_string(), "qglake-server".to_string()];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject duplicate management IDs");
+
+        assert!(err.to_string().contains("server list replay"));
+        assert!(
+            err.to_string()
+                .contains("duplicate compact management ID evidence")
+        );
     }
 
     #[test]

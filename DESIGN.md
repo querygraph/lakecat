@@ -508,6 +508,10 @@ graph event count, and lineage event count. Compact table commit-history proof
 must preserve the same duplicate-free commit-hash invariant as service replay,
 so archived QueryGraph handoff summaries cannot inflate pointer-log evidence by
 repeating a valid commit hash.
+Compact management proof must preserve the same duplicate-free ID invariant as
+service replay, so saved QGLake summaries and lineage-drain artifacts cannot
+inflate server, project, warehouse, policy, or storage-profile reads by
+repeating valid control-plane identities.
 
 ### P3 Commit Hardening
 

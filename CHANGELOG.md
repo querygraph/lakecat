@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required QGLake compact management proof IDs to be duplicate-free in saved
+  handoff summaries and lineage-drain replay verification, matching the
+  management-list service replay invariant for server, project, warehouse,
+  policy, and storage-profile reads.
 - Required QGLake compact table commit-history proof `commitHashes` to be
   duplicate-free in saved handoff summaries and lineage-drain replay
   verification.
