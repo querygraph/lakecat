@@ -2002,6 +2002,9 @@ the captured `replay-evidence.credentials` restricted-agent and trusted-human
 branches with the compact `credentialVendingProof`, so a saved handoff cannot
 claim that agents were blocked onto Sail-planned reads or that humans used an
 audited exception unless the captured LakeCat replay proves the same decision.
+That equality includes `credentialPrefixHashes`, which closes the gap where a
+captured replay artifact could report a different redacted returned-credential
+set while the compact summary still looked valid.
 Both credential branches must carry replay and OpenLineage arrays whose entries
 are full `sha256:`-prefixed 64-hex digests, so the compact proof cannot replace
 credential receipt evidence with prefix-shaped placeholders. They also carry

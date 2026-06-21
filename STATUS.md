@@ -6,6 +6,22 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind captured QGLake credential prefix hashes`.
+  Captured LakeCat replay credential branches now compare
+  `credentialPrefixHashes` against compact `credentialVendingProof`, so an
+  archived QGLake handoff cannot keep a valid compact credential summary while
+  saving drifted returned-credential prefix evidence in `lakecat-replay.txt`.
+- Local verification for this captured credential-prefix binding is green:
+  `cargo fmt -p lakecat-cli`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake -- --test-threads=1`;
+  `scripts/qglake-handoff-local.sh`
+  (green, ending with `QGLake handoff verified`);
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind QGLake credential prefix hashes`.
   Raw QGLake lineage-drain credential replay now carries redacted
   `credentialPrefixHashes` extracted from credential response evidence and

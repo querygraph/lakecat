@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound captured LakeCat replay `credentialPrefixHashes` to the compact QGLake
+  `credentialVendingProof`, so archived handoffs are rejected when captured
+  restricted-agent or trusted-human credential prefix evidence drifts from the
+  accepted compact proof.
 - Added redacted `credentialPrefixHashes` to QGLake credential replay proof
   and required raw lineage-drain artifacts plus compact handoff summaries to
   keep returned credential prefix hashes count-aligned, full SHA-256-shaped,

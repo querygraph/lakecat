@@ -2318,6 +2318,7 @@ fn verify_lakecat_replay_credentials_match_summary(
         }
         for field in [
             "credentialCount",
+            "credentialPrefixHashes",
             "maxCredentialTtlSeconds",
             "replayEventHashes",
             "openLineageHashes",
@@ -14644,6 +14645,30 @@ mod tests {
                 "captured LakeCat replay output.replay-evidence.credentials.restricted.blockReason mismatch"
             )
         );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_credential_prefix_hash_drift() {
+        let temp = qglake_temp_dir("handoff-captured-credential-prefix-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["credentials"]["trustedHuman"]["credentialPrefixHashes"] =
+            json!([qglake_fixture_hash("other-human-credential-prefix")]);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay credential prefix hash drift should be rejected");
+        assert!(
+            err.to_string()
+                .contains("captured LakeCat replay output.replay-evidence.credentials")
+        );
+        assert!(err.to_string().contains("credentialPrefixHashes mismatch"));
     }
 
     #[test]
