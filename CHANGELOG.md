@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added positive QGLake acceptance coverage for secret-ref-backed credential
+  roots: compact handoff summaries and operator replay lines now prove matching
+  redacted provider/hash evidence for production credential profiles.
 - Recorded `lakecat.secret-ref-provider` in redacted
   `credential-response-evidence` and required credential-vend replay admission
   to match that provider against the selected storage profile before graph or

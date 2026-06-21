@@ -2012,7 +2012,12 @@ says a secret reference is present. If the proof says no secret reference is
 present, the provider and hash must both be null. Source replay enforces the
 same full-digest secret-reference rule before compact proof generation, so the
 saved summary cannot launder short placeholder credential-root hashes through
-the lineage-drain artifact. It also compares
+the lineage-drain artifact. The positive QGLake acceptance fixture covers the
+production-shaped case too: when the storage profile uses a secret reference,
+the compact handoff accepts the proof only when the storage-profile branch and
+both credential branches agree on the redacted provider and full
+`secretRefHash`, and the operator replay line carries
+`secret_ref_hash=sha256:...` rather than a raw secret URI. It also compares
 the captured `replay-evidence.credentials` restricted-agent and trusted-human
 branches with the compact `credentialVendingProof`, so a saved handoff cannot
 claim that agents were blocked onto Sail-planned reads or that humans used an

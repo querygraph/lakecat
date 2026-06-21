@@ -6,6 +6,21 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover secret-backed QGLake credential proof`.
+  QGLake acceptance tests now prove the positive secret-ref-backed credential
+  path: compact handoff summaries accept matching redacted provider/hash
+  evidence across storage-profile and credential branches, and the
+  operator-facing credential replay line includes the provider plus
+  `secret_ref_hash`.
+- Local verification for this QGLake secret-ref proof slice is green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_secret_ref_backed_credential_proof -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_credential_replay_line_summarizes_secret_ref_hashes -- --test-threads=1`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind credential response secret-ref provider replay`.
   Credential-vend audit payloads now include catalog-derived
   `secret-ref-provider` and `secret-ref-hash` on secret-backed storage-profile

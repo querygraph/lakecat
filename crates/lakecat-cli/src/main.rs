@@ -12720,6 +12720,35 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_accepts_secret_ref_backed_credential_proof() {
+        let mut summary = qglake_handoff_summary_json();
+        let secret_ref_hash = qglake_fixture_hash("qglake-production-secret-ref");
+        set_qglake_secret_ref_backed_profile(
+            &mut summary["lakecatReplayVerification"]["storageProfileUpsertProof"],
+            &secret_ref_hash,
+        );
+        set_qglake_secret_ref_backed_profile(
+            &mut summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["storageProfile"],
+            &secret_ref_hash,
+        );
+        set_qglake_secret_ref_backed_profile(
+            &mut summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]["storageProfile"],
+            &secret_ref_hash,
+        );
+
+        verify_qglake_handoff_summary_value(&summary)
+            .expect("handoff summary should accept matching redacted secret-ref proof");
+    }
+
+    fn set_qglake_secret_ref_backed_profile(profile: &mut Value, secret_ref_hash: &str) {
+        profile["provider"] = json!("s3");
+        profile["issuanceMode"] = json!("short-lived-secret-ref");
+        profile["secretRefPresent"] = json!(true);
+        profile["secretRefProvider"] = json!("typesec");
+        profile["secretRefHash"] = json!(secret_ref_hash);
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_credential_storage_profile_drift() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["storageProfile"]
@@ -17639,6 +17668,48 @@ mod tests {
             line,
             "credential replay restricted=blocked:sail-planned-read-required restricted_count=0 restricted_ttl=300 restricted_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none:graph_events=2 human=allowed:trusted-human-audited-raw human_count=1 human_ttl=300 human_profile=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none:graph_events=2"
         );
+    }
+
+    #[test]
+    fn qglake_credential_replay_line_summarizes_secret_ref_hashes() {
+        let secret_ref_hash = qglake_fixture_hash("qglake-production-secret-ref");
+        let mut restricted = qglake_restricted_credential_summary();
+        let mut human = qglake_human_credential_summary();
+        for event in [&mut restricted, &mut human] {
+            event.storage_profile_provider = Some("s3".to_string());
+            event.storage_profile_issuance_mode = Some("short-lived-secret-ref".to_string());
+            event.storage_profile_secret_ref_present = Some(true);
+            event.storage_profile_secret_ref_provider = Some("typesec".to_string());
+            event.storage_profile_secret_ref_hash = Some(secret_ref_hash.clone());
+        }
+
+        let line = qglake_credential_replay_line(
+            &LineageDrainResponse {
+                delivered: 2,
+                event_types: vec![
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                ],
+                graph_events: 0,
+                lineage_events: 2,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![restricted, human],
+            },
+            Some("did:example:agent"),
+        )
+        .expect("credential replay line should summarize secret-ref evidence");
+
+        assert!(line.contains("restricted_profile=events-local:s3:short-lived-secret-ref"));
+        assert!(line.contains("human_profile=events-local:s3:short-lived-secret-ref"));
+        assert!(line.contains(&format!(
+            "secret_ref=typesec:secret_ref_hash={secret_ref_hash}"
+        )));
     }
 
     #[test]
