@@ -1888,8 +1888,8 @@ pointer-log commit history was not rewritten between replay and summary and
 that the commit-history replay projected catalog graph evidence. The compact
 verifier also requires the commit count to match the sequence-number and
 commit-hash arrays, requires every sequence number to be positive and strictly
-increasing, and requires positive graph event evidence plus replay and
-OpenLineage receipt hashes. It compares the captured
+increasing, requires commit hashes to be duplicate-free, and requires positive
+graph event evidence plus replay and OpenLineage receipt hashes. It compares the captured
 `replay-evidence.views` object with `viewReceiptChainProof`, including accepted
 view receipts, accepted-view graph event counts, expected-version guard
 evidence, tombstone receipts, namespace receipt-chain hashes, and their

@@ -504,7 +504,10 @@ Accepted lineage-drain artifacts must also reconcile their top-level
 actual replay summary array before the handoff can be treated as verified.
 Saved `lakecatHandoffVerifyOutput` artifacts must stay bound to the archived
 lineage-drain artifact as well, including delivered count, event type manifest,
-graph event count, and lineage event count.
+graph event count, and lineage event count. Compact table commit-history proof
+must preserve the same duplicate-free commit-hash invariant as service replay,
+so archived QueryGraph handoff summaries cannot inflate pointer-log evidence by
+repeating a valid commit hash.
 
 ### P3 Commit Hardening
 

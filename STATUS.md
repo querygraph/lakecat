@@ -6,6 +6,25 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject duplicate QGLake commit-history hashes`.
+  QGLake handoff summary verification and lineage-drain verification now reject
+  duplicate table commit-history hashes in compact pointer-log proof. Archived
+  QueryGraph handoff artifacts can no longer rehash a saved summary whose
+  `tableCommitHistoryProof.commitHashes` repeat the same commit proof even
+  though sequence counts and hash shapes look valid.
+- Local verification for this QGLake commit-history duplicate-hash slice is
+  green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_duplicate_commit_history_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_count_drift -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake -- --test-threads=1`;
+  `scripts/qglake-handoff-local.sh`
+  (green, ending with `QGLake handoff verified`);
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject duplicate commit-history replay hashes`.
   Outbox admission now rejects `table.commits-listed` replay whose
   `commit-hashes` repeat the same compact commit proof. Table pointer-log

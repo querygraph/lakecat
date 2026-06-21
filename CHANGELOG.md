@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake compact table commit-history proof `commitHashes` to be
+  duplicate-free in saved handoff summaries and lineage-drain replay
+  verification.
 - Required table commit-history replay `commit-hashes` to be duplicate-free
   before graph/OpenLineage projection, so repeated compact commit proof cannot
   inflate pointer-log replay counts.
