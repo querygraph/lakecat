@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Added service replay regression coverage proving `table.scan-planned`
+  rejects duplicate requested-stats-fields evidence before acknowledgement,
+  graph projection, or OpenLineage projection.
+- Added service replay regression coverage proving `table.scan-planned`
   rejects duplicate effective-projection evidence before acknowledgement, graph
   projection, or OpenLineage projection.
 - Added service replay regression coverage proving `table.scan-tasks-fetched`
