@@ -558,6 +558,9 @@ Pending outbox replay should stay deterministic across embedded and Turso stores
 duplicate-safe delivery accounting. Draining should acknowledge delivery only
 after every projection in the batch succeeds, leaving events pending for retry
 when graph or lineage projection fails.
+Individual `table.commit` replay evidence must carry a positive sequence
+number before acknowledgement or projection, matching the positive,
+strictly-increasing invariant used by commit-history replay.
 
 ### P4 Semantic Catalog Graph
 

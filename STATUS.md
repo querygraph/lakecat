@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate service table commit sequences`.
+  Service `table.commit` outbox admission now rejects zero commit sequence
+  numbers before acknowledgement, graph projection, or OpenLineage projection,
+  aligning live commit replay with positive pointer-log sequence proof used by
+  commit-history replay and compact QGLake verification.
+- Local verification for this service table commit sequence slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service zero_table_commit_sequence -- --test-threads=1`;
+  `cargo test -p lakecat-service table_commit_hash_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service table_commit -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate service read-restriction policy hashes`.
   Service outbox admission now rejects duplicate governed read-restriction
   `policy-hashes` in both top-level scan evidence and authorization-receipt

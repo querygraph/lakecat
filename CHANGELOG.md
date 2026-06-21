@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required service `table.commit` outbox admission to reject zero commit
+  sequence numbers before acknowledgement, graph projection, or OpenLineage
+  projection.
 - Required service outbox admission to reject duplicate governed
   read-restriction `policy-hashes` for both top-level scan evidence and
   authorization-receipt contexts before graph or OpenLineage projection.
