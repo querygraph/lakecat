@@ -6,6 +6,15 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Refresh live QGLake handoff after replay hardening`.
+  The full local QGLake handoff harness is green after the captured scan and
+  commit-history replay hardening. The live run generated one table and one
+  view, drained 26 lineage/outbox events, verified saved LakeCat replay
+  artifacts, verified the bundle with QueryGraph, wrote the QueryGraph import
+  plan, and ended with `QGLake handoff verified`.
+- Local verification for this live handoff refresh is green:
+  `scripts/qglake-handoff-local.sh`.
+- Latest completed implementation slice:
   `Reject empty captured scan projections`.
   Captured LakeCat scan replay-line recomputation now reuses the governed
   read-restriction evidence guard for both planned and fetched restrictions,

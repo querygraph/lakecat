@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refreshed the full local QGLake handoff proof after captured replay
+  hardening, confirming the live harness still verifies the LakeCat,
+  QueryGraph, graph, and OpenLineage artifact chain end to end.
 - Required captured QGLake scan replay-line recomputation to reject empty
   planned or fetched `allowed-columns`, so archived operator replay text cannot
   treat an empty governed projection as unrestricted access.
