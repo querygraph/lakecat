@@ -6,6 +6,24 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind handoff verifier drain semantics`.
+  When a saved `lakecatHandoffVerifyOutputHash` is present, LakeCat now parses
+  the actual lineage-drain artifact and requires the saved verifier output's
+  `lineageDrainArtifactSemantics.delivered`, `eventTypes`, `graphEvents`, and
+  `lineageEvents` fields to match it. This prevents a rehashed saved verifier
+  output from drifting the drain event manifest or projection counts away from
+  the archived lineage-drain artifact.
+- Local verification for this saved handoff verifier-output slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_event_type_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake -- --test-threads=1`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh`
+  (green, ending with `QGLake handoff verified`);
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind QGLake drain summaries to event types`.
   The QGLake lineage-drain verifier now rejects any compact replay summary
   whose `event_type` was not declared in the drain-level `eventTypes` list.

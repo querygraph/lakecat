@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound saved `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics`
+  `delivered`, `eventTypes`, `graphEvents`, and `lineageEvents` back to the
+  actual lineage-drain artifact whenever a verifier-output hash is present.
 - Required QGLake lineage-drain replay summaries to be covered by the
   drain-level `eventTypes` list, and corrected accepted verifier fixtures to
   declare `storage-profile.upserted` whenever they carry that replay summary.

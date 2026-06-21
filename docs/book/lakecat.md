@@ -1819,7 +1819,11 @@ index the verified drain boundary without reparsing the raw drain artifact. If
 a saved `lakecatHandoffVerifyOutput` artifact is present, LakeCat binds those
 saved drain identity semantics back to the compact `requestIdentityProof`, so a
 rehash cannot disguise drift in principal, authorization receipt, source/state,
-or TypeDID hash-slot evidence. It compares captured
+or TypeDID hash-slot evidence. The same self-verification pass compares the
+saved verifier output's delivered count, `eventTypes`, graph event count, and
+lineage event count with the archived lineage-drain artifact, so a rehashed
+verifier output cannot rewrite the drain manifest while keeping the artifact
+hash set intact. It compares captured
 `replay-evidence.scan` with `governedScanProof`, requiring positive plan task,
 scan-plan graph event, file task, delete file, and child plan task counts plus
 the planned and fetched read-restriction objects and the fetch-side required
@@ -2426,7 +2430,10 @@ QueryGraph proof, bundle artifact semantics must match QueryGraph
 verification, import-plan semantics must match QueryGraph import verification,
 lineage-drain semantics must match the accepted replay proof, and saved
 import-plan graph counts must still match the saved bundle graph counts. Then
-it parses those captured
+it parses the archived lineage-drain artifact and requires the saved
+lineage-drain semantics' delivered count, event type list, graph event count,
+and lineage event count to match before accepting the verifier-output hash.
+Then it parses those captured
 JSON files and checks that the replay schema/status,
 table/view counts, semantic hashes, standards, request-identity proof,
 QueryGraph bootstrap proof, governed scan proof, storage-profile upsert proof,
