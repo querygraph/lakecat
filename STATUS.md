@@ -5,6 +5,23 @@ Updated: 2026-06-21
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Clarify catalog concepts in the LakeCat book`.
+  The manuscript now includes an implementation-status ledger that separates
+  standard Iceberg parlance from LakeCat implementation details,
+  LakeCat/QueryGraph optional catalog extensions, TypeSec governance proof, and
+  future Iceberg-adjacent candidates. The Sail rationale now states a concrete
+  operating rule: push table-format semantics into Sail, keep catalog atomicity
+  and evidence in LakeCat, push graph behavior into Grust, keep security
+  semantics in TypeSec, and leave semantic application import to QueryGraph.
+- Local verification for this book concepts slice is green:
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `readlink "docs/book/dist/$kindle_link"`;
+  `pdftotext -layout docs/book/dist/lakecat.pdf - | rg ...`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Run workflow-trigger self-test in release readiness`.
   `scripts/check-release-readiness.sh` now runs

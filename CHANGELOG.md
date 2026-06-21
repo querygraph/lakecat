@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with an implementation-status ledger that separates
+  standard Iceberg parlance from LakeCat implementation details,
+  LakeCat/QueryGraph optional catalog extensions, TypeSec governance proof, and
+  future Iceberg-adjacent candidates; also strengthened the Sail rationale with
+  a concrete engine/catalog/graph/security responsibility rule.
 - Wired the workflow-trigger self-test into the release-readiness gate and
   dependency contract, adding single-quoted automatic-trigger regressions while
   preserving harmless nested job/step text that mentions automatic event names.
