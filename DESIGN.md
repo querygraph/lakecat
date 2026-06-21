@@ -670,6 +670,11 @@ the primary CI workflow, including compact, block-list, inline-map, and quoted
 YAML trigger forms, before any pushed slice depends on cloud feedback. The
 guard should inspect actual `on:` trigger declarations while allowing harmless
 workflow keys such as job ids that happen to share event names.
+The first-release gate is local too:
+`scripts/check-release-readiness.sh` is the durable release checklist command,
+with full mode running dependency-contract, formatting, Turso, Sail, TypeSec,
+Grust, all-features workspace, book, and QGLake handoff checks, and quick mode
+available for script/contract smoke checks during narrow slices.
 
 ## Review Gate
 
@@ -685,5 +690,7 @@ Before implementing a slice:
 - Run the focused local gates first. Include
   `scripts/check-local-dependency-contract.sh` when dependency boundaries,
   sibling APIs, CI policy, or QueryGraph handoff/import evidence changes.
+- Before cutting a first release, run `scripts/check-release-readiness.sh`
+  locally and treat it as the authoritative gate while cloud CI is manual-only.
 - Commit each logical unit only after the corresponding docs/status are
   reconciled.

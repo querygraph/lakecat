@@ -69,6 +69,7 @@ cargo run -p lakecat-cli -- qglake-verify-replay \
   --drain target/qglake/lineage-drain.json \
   --principal did:example:agent
 scripts/qglake-handoff-local.sh
+scripts/check-release-readiness.sh --quick
 cargo run -p lakecat-cli -- bootstrap-export --output lakecat-bootstrap.json
 ```
 
@@ -85,3 +86,15 @@ replay, `lakecat-verify`, and `lakecat-import` agree, structured
 scan/management/credential/commit replay evidence, artifact paths, raw file
 hashes, captured LakeCat replay output, QueryGraph verify output, QueryGraph
 import output, and service log path for automation.
+
+For first-release readiness, run the local release gate instead of relying on
+cloud CI:
+
+```bash
+scripts/check-release-readiness.sh
+```
+
+The full gate runs the dependency contract, formatting, default and integration
+feature tests, the all-features workspace test, book rebuild, and QGLake
+handoff proof. Use `--quick` for a faster script/contract smoke check while
+developing a narrow slice.

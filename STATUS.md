@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Add release-readiness local gate`.
+  `scripts/check-release-readiness.sh` now codifies the local-first first
+  release gate with full and quick modes, and the dependency-contract audit now
+  requires the release gate to keep dependency, all-features workspace, and
+  QGLake handoff checks wired.
+- Local verification for this release-readiness gate slice is green for the
+  script/docs unit:
+  `scripts/check-release-readiness.sh --quick`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+  The full `scripts/check-release-readiness.sh` matrix is the pre-release gate
+  and has not been run in this narrow script-introduction slice.
+- Latest completed implementation slice:
   `Require standard catalog receipt principal replay`.
   Service standard catalog outbox admission now rejects catalog config,
   namespace list/lifecycle, and view list/lifecycle replay whose authorization

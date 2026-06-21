@@ -880,6 +880,20 @@ substitute for upstreaming the Sail helper APIs or re-enabling automatic CI; it
 is a guard that makes drift visible while LakeCat still depends on unpublished
 Sail helper work and a local QueryGraph acceptance target.
 
+For the first release, LakeCat has one local release gate:
+
+```sh
+scripts/check-release-readiness.sh
+```
+
+The full gate runs the dependency contract, the workspace formatting matrix,
+default workspace tests, QGLake fixture coverage, Turso store tests, Sail,
+TypeSec, and Grust integration feature tests, the all-features workspace test,
+the book build, and the QGLake handoff proof. The `--quick` mode keeps script
+syntax, dependency-contract, formatting, and diff checks cheap enough to run
+inside narrow implementation slices. Cloud CI remains manual-only until this
+local gate is boringly green.
+
 As of the current local reconciliation, the Sail helper work is not an
 anonymous dirty tree. `/Users/alexy/src/sail` has scoped local commits on
 `codex/graph` for exposing Iceberg REST models to LakeCat, preserving Iceberg

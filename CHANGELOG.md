@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `scripts/check-release-readiness.sh` as the local-first first-release
+  gate, with full and quick modes covering dependency contracts, formatting,
+  core feature tests, book rebuilds, and QGLake handoff proof.
 - Required standard catalog replay admission for catalog config reads,
   namespace list/lifecycle events, and view list/lifecycle events to carry a
   valid authorization receipt principal before acknowledgement, graph

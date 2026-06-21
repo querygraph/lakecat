@@ -97,10 +97,17 @@ fi
 
 require_file Cargo.toml
 require_file .github/workflows/ci.yml
+require_file scripts/check-release-readiness.sh
 
 require_pattern 'workflow_dispatch:' .github/workflows/ci.yml \
   "CI must remain manual-only through workflow_dispatch"
 require_manual_only_workflows
+require_pattern 'scripts/check-local-dependency-contract.sh' scripts/check-release-readiness.sh \
+  "release-readiness gate must run the dependency contract"
+require_pattern 'cargo test --workspace --all-features' scripts/check-release-readiness.sh \
+  "release-readiness gate must run the all-features workspace test"
+require_pattern 'scripts/qglake-handoff-local.sh' scripts/check-release-readiness.sh \
+  "release-readiness gate must include the QGLake handoff proof"
 
 require_pattern 'grust-graph = \{ package = "grust-graph", version = "0\.9\.0",' Cargo.toml \
   "grust-graph must use the published 0.9.0 crate"
