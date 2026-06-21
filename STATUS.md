@@ -6,6 +6,17 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover duplicate fetched effective projection replay`.
+  Service replay regression coverage now proves `table.scan-tasks-fetched`
+  rejects duplicate `effective-projection` evidence before delivery
+  acknowledgement, graph projection, or OpenLineage projection. This closes
+  the sibling fetched-scan field-array proof next to the duplicate
+  `required-projection` coverage.
+- Local verification for this fetched scan effective-projection slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_fetch_duplicate_effective_projection -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_fetch -- --test-threads=1`.
+- Latest completed implementation slice:
   `Cover duplicate fetched scan projection replay`.
   Service replay regression coverage now proves `table.scan-tasks-fetched`
   rejects duplicate `required-projection` evidence before delivery
