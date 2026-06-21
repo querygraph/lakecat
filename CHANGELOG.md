@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Rejected empty and malformed `row-predicate` objects in compact governed
+  read-restriction proof verification for QGLake lineage-drain and
+  handoff-summary replay, requiring non-empty predicate type evidence and
+  term/value evidence for term-based predicates before archived proof is
+  accepted.
 - Rejected empty and duplicate `allowed-columns` values in compact governed
   read-restriction proof verification for QGLake lineage-drain and
   handoff-summary replay, keeping scan and credential restriction evidence

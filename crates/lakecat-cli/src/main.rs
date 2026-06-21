@@ -3705,10 +3705,44 @@ fn require_read_restriction_evidence(
             "{label}.allowed-columns must be duplicate-free"
         )));
     }
-    required_object(restriction, "row-predicate", label)?;
+    let row_predicate = required_object(restriction, "row-predicate", label)?;
+    require_row_predicate_evidence(row_predicate, &format!("{label}.row-predicate"))?;
     require_non_empty_str(restriction, "purpose", label)?;
     require_full_hash_array(restriction, "policy-hashes", label)?;
     require_positive_u64(restriction, "max-credential-ttl-seconds", label)?;
+    Ok(())
+}
+
+fn require_row_predicate_evidence(
+    predicate: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    if predicate.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} must contain predicate evidence"
+        )));
+    }
+    let predicate_type = require_non_empty_str(predicate, "type", label)?;
+    if predicate_type.trim().is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.type must not be blank"
+        )));
+    }
+    if predicate_type == "always-true" {
+        return Ok(());
+    }
+
+    let term = require_non_empty_str(predicate, "term", label)?;
+    if term.trim().is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.term must not be blank"
+        )));
+    }
+    if matches!(predicate_type, "eq" | "not-eq") && !predicate.contains_key("value") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.value is required for {predicate_type} predicate evidence"
+        )));
+    }
     Ok(())
 }
 
@@ -12322,6 +12356,53 @@ mod tests {
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("allowed-columns"));
         assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_empty_scan_row_predicate() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedReadRestriction"]["row-predicate"] =
+            json!({});
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject empty scan row predicate");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("row-predicate"));
+        assert!(err.to_string().contains("predicate evidence"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_blank_scan_row_predicate_type() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedReadRestriction"]["row-predicate"] = json!({
+            "type": " ",
+            "term": "severity",
+            "value": "debug"
+        });
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject blank scan row predicate type");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("row-predicate"));
+        assert!(err.to_string().contains("type"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_termless_scan_row_predicate() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedReadRestriction"]["row-predicate"] = json!({
+            "type": "not-eq",
+            "value": "debug"
+        });
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject termless scan row predicate");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("row-predicate"));
+        assert!(err.to_string().contains("term"));
     }
 
     #[test]
@@ -22475,6 +22556,97 @@ mod tests {
         );
         assert!(err.to_string().contains("allowed-columns"));
         assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_empty_scan_row_predicate() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let scan_plan = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.scan-planned")
+            .expect("scan plan replay fixture");
+        scan_plan.read_restriction = Some(json!({
+            "allowed-columns": ["event_id", "occurred_at", "severity"],
+            "row-predicate": {},
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [qglake_fixture_hash("scan-policy")]
+        }));
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject empty scan row predicate");
+
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain scan planning read restriction")
+        );
+        assert!(err.to_string().contains("row-predicate"));
+        assert!(err.to_string().contains("predicate evidence"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_blank_scan_row_predicate_type() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let scan_plan = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.scan-planned")
+            .expect("scan plan replay fixture");
+        scan_plan.read_restriction = Some(json!({
+            "allowed-columns": ["event_id", "occurred_at", "severity"],
+            "row-predicate": {
+                "type": " ",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [qglake_fixture_hash("scan-policy")]
+        }));
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject blank scan row predicate type");
+
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain scan planning read restriction")
+        );
+        assert!(err.to_string().contains("row-predicate"));
+        assert!(err.to_string().contains("type"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_termless_scan_row_predicate() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let scan_plan = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.scan-planned")
+            .expect("scan plan replay fixture");
+        scan_plan.read_restriction = Some(json!({
+            "allowed-columns": ["event_id", "occurred_at", "severity"],
+            "row-predicate": {
+                "type": "not-eq",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [qglake_fixture_hash("scan-policy")]
+        }));
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject termless scan row predicate");
+
+        assert!(
+            err.to_string()
+                .contains("qglake lineage drain scan planning read restriction")
+        );
+        assert!(err.to_string().contains("row-predicate"));
+        assert!(err.to_string().contains("term"));
     }
 
     #[test]

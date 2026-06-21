@@ -465,6 +465,9 @@ replay should continue failing when effective projection/stat evidence drifts
 outside allowed columns. Empty governed `allowed-columns` evidence should fail
 closed for planned and fetched replay like live scan planning instead of
 becoming replay-time unrestricted access.
+Governed `row-predicate` evidence must also remain structurally meaningful:
+compact and raw replay should reject empty predicate objects, blank predicate
+types, and term-based predicates that omit the narrowed term/value evidence.
 Prefer upstream Sail APIs for any reusable planner or manifest work.
 
 ### P2 QGLake Acceptance

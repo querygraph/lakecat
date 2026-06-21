@@ -6,6 +6,20 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate compact read-restriction row predicates`.
+  QGLake lineage-drain verification and compact handoff-summary verification
+  now reject governed read-restriction proof whose `row-predicate` is empty,
+  missing non-empty predicate type evidence, or missing required term/value
+  evidence for term-based predicates, so scan and credential replay cannot
+  carry ambiguous predicate narrowing evidence into archived proof.
+- Local verification for this compact read-restriction predicate proof slice is
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli scan_row_predicate -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate compact read-restriction allowed columns`.
   QGLake lineage-drain verification and compact handoff-summary verification
   now reject governed read-restriction proof whose `allowed-columns` array
