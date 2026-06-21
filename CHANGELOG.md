@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required raw QGLake lineage-drain replay summaries to reject duplicate
+  `replayEventHashes` and `openLineageHashes` before compact handoff proof is
+  regenerated, keeping source replay and saved handoff summaries aligned.
 - Required compact QGLake replay and OpenLineage hash arrays to be
   duplicate-free in saved handoff summaries, so archived handoffs cannot
   inflate bootstrap, scan, management, commit-history, view, storage-profile,

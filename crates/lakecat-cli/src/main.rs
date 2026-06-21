@@ -7500,6 +7500,44 @@ fn verify_qglake_lineage_drain(
     verify_qglake_scan_replay(drain)?;
     require_qglake_lineage_event_types_cover_summaries(drain)?;
     require_qglake_lineage_drain_counts_match_summaries(drain)?;
+    require_qglake_lineage_drain_sink_hashes_duplicate_free(drain)?;
+    Ok(())
+}
+
+fn require_qglake_lineage_drain_sink_hashes_duplicate_free(
+    drain: &LineageDrainResponse,
+) -> lakecat_core::LakeCatResult<()> {
+    for event in &drain.events {
+        require_qglake_duplicate_free_strings(
+            &event.replay_event_hashes,
+            &format!(
+                "qglake lineage drain {} replayEventHashes",
+                event.event_type
+            ),
+        )?;
+        require_qglake_duplicate_free_strings(
+            &event.replay_open_lineage_hashes,
+            &format!(
+                "qglake lineage drain {} openLineageHashes",
+                event.event_type
+            ),
+        )?;
+    }
+    Ok(())
+}
+
+fn require_qglake_duplicate_free_strings(
+    values: &[String],
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    let mut seen = BTreeSet::new();
+    for value in values {
+        if !seen.insert(value.as_str()) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} must be duplicate-free"
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -21406,6 +21444,70 @@ mod tests {
 
         assert!(err.to_string().contains("qglake lineage drain"));
         assert!(err.to_string().contains("eventTypes multiset"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_duplicate_bootstrap_replay_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let bootstrap = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "querygraph.bootstrap")
+            .expect("bootstrap replay fixture");
+        bootstrap.replay_event_hashes = vec![
+            "sha256:bootstrap-replay".to_string(),
+            "sha256:bootstrap-replay".to_string(),
+        ];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject duplicate bootstrap replay hashes");
+
+        assert!(err.to_string().contains("querygraph.bootstrap"));
+        assert!(err.to_string().contains("replayEventHashes"));
+        assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_duplicate_scan_openlineage_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let scan_plan = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.scan-planned")
+            .expect("scan planning replay fixture");
+        let duplicate_hash = qglake_fixture_hash("duplicate-scan-plan-openlineage");
+        scan_plan.replay_open_lineage_hashes = vec![duplicate_hash.clone(), duplicate_hash];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject duplicate scan OpenLineage hashes");
+
+        assert!(err.to_string().contains("table.scan-planned"));
+        assert!(err.to_string().contains("openLineageHashes"));
+        assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_duplicate_management_receipt_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let server_list = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "server.listed")
+            .expect("server list replay fixture");
+        server_list.replay_event_hashes = vec![
+            "sha256:server-list-replay-event".to_string(),
+            "sha256:server-list-replay-event".to_string(),
+        ];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject duplicate management receipt hashes");
+
+        assert!(err.to_string().contains("server.listed"));
+        assert!(err.to_string().contains("replayEventHashes"));
+        assert!(err.to_string().contains("duplicate-free"));
     }
 
     #[test]

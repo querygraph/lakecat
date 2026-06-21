@@ -6,6 +6,22 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject duplicate QGLake drain hashes`.
+  Raw QGLake lineage-drain verification now rejects duplicate
+  `replayEventHashes` and `openLineageHashes` on replay summaries before the
+  compact handoff proof is regenerated. Source replay evidence and saved
+  handoff summary proof now share the same duplicate-free digest invariant.
+- Local verification for this QGLake drain-hash duplicate slice is green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_duplicate -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake -- --test-threads=1`;
+  `scripts/qglake-handoff-local.sh`
+  (green, ending with `QGLake handoff verified`);
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject duplicate QGLake replay hashes`.
   Compact QGLake handoff summary verification now rejects duplicate full
   replay and OpenLineage digests across bootstrap, scan, management,
