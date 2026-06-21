@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate project record reads`.
+  Memory and Turso `list_projects` now revalidate decoded/stored
+  `ProjectRecord` values before management replay can observe them, and
+  unsupported project/server identifier errors now carry hash evidence instead
+  of raw decorated values.
+- Local verification for this project read validation slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_corrupt_project_records_on_read -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_corrupt_project_records_on_read -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate server record reads`.
   Memory and Turso `list_servers` now revalidate decoded/stored
   `ServerRecord` values before management replay can observe them, rejecting

@@ -1637,6 +1637,9 @@ impl CatalogStore for MemoryCatalogStore {
         let state = self.state.read().await;
         let mut projects = state.projects.values().cloned().collect::<Vec<_>>();
         projects.sort_by(|left, right| left.project_id.cmp(&right.project_id));
+        for project in &projects {
+            project.validate()?;
+        }
         Ok(projects)
     }
 
@@ -2367,7 +2370,8 @@ fn validate_project_id(project_id: &str) -> LakeCatResult<()> {
         .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
     {
         return Err(LakeCatError::InvalidArgument(format!(
-            "project id contains unsupported characters: {project_id}"
+            "project id contains unsupported characters; {}",
+            project_id_hash_context(project_id)
         )));
     }
     Ok(())
@@ -2575,6 +2579,13 @@ fn server_endpoint_url_hash_context(endpoint_url: &str) -> String {
     format!(
         "server-endpoint-url-hash={}",
         content_hash_bytes(endpoint_url.as_bytes())
+    )
+}
+
+fn project_id_hash_context(project_id: &str) -> String {
+    format!(
+        "project-id-hash={}",
+        content_hash_bytes(project_id.as_bytes())
     )
 }
 
@@ -2802,6 +2813,51 @@ mod memory_tests {
             Err(LakeCatError::NotFound { object, name })
                 if object == "server" && name == "missing-server"
         ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_corrupt_project_records_on_read() {
+        let store = MemoryCatalogStore::new();
+        store
+            .upsert_server(
+                ServerRecord::new(
+                    "lakecat-local",
+                    Some("Local LakeCat".to_string()),
+                    None,
+                    BTreeMap::new(),
+                    Principal::anonymous(),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        let project = ProjectRecord::new(
+            "default",
+            Some("lakecat-local".to_string()),
+            Some("QueryGraph Project".to_string()),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_project(project).await.unwrap();
+
+        store
+            .state
+            .write()
+            .await
+            .projects
+            .get_mut("default")
+            .unwrap()
+            .server_id = Some("lakecat-local?token=secret".to_string());
+
+        let err = store.list_projects().await.unwrap_err();
+        let message = err.to_string();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("project") || message.contains("identifier")
+        ));
+        assert!(!message.contains("token=secret"));
     }
 
     #[tokio::test]
@@ -4538,7 +4594,9 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut projects = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                projects.push(decode_json(row_string(&row, 0)?)?);
+                let project: ProjectRecord = decode_json(row_string(&row, 0)?)?;
+                project.validate()?;
+                projects.push(project);
             }
             Ok(projects)
         }
@@ -5713,6 +5771,51 @@ pub mod turso_store {
                 Err(LakeCatError::NotFound { object, name })
                     if object == "server" && name == "missing-server"
             ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_corrupt_project_records_on_read() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            store
+                .upsert_server(
+                    ServerRecord::new(
+                        "lakecat-local",
+                        Some("Local LakeCat".to_string()),
+                        None,
+                        BTreeMap::new(),
+                        Principal::anonymous(),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            let mut project = ProjectRecord::new(
+                "default",
+                Some("lakecat-local".to_string()),
+                Some("QueryGraph Project".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_project(project.clone()).await.unwrap();
+            project.server_id = Some("lakecat-local?token=secret".to_string());
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update projects set record_json = ?2 where project_id = ?1",
+                ("default", encode_json(&project).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store.list_projects().await.unwrap_err();
+            let message = err.to_string();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("project") || message.contains("identifier")
+            ));
+            assert!(!message.contains("token=secret"));
         }
 
         #[tokio::test]

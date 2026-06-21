@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Revalidated project management records at memory and Turso list-read
+  boundaries, rejecting corrupted durable hierarchy JSON and replacing raw
+  invalid project/server identifiers in validation errors with hash evidence.
 - Revalidated server management records at memory and Turso list-read
   boundaries, rejecting corrupted durable `record_json` before management
   replay can expose invalid endpoint URLs or leak decorated endpoint material.
