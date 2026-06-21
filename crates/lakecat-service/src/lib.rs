@@ -2540,11 +2540,6 @@ fn validate_credential_vend_event_evidence(
             "credential-vend credential-count does not match credential-response-evidence",
         ));
     }
-    for entry in evidence {
-        validate_required_full_hash_field(event, entry, "prefix-hash")?;
-        validate_required_full_hash_field(event, entry, "issuer-config-hash")?;
-    }
-
     let Some(storage_profile) = payload.get("storage-profile") else {
         return Err(outbox_evidence_error(
             event,
@@ -2553,6 +2548,133 @@ fn validate_credential_vend_event_evidence(
     };
     validate_required_full_hash_field(event, storage_profile, "location-prefix-hash")?;
     validate_secret_ref_evidence(event, storage_profile, "credential-vend storage-profile")?;
+
+    for entry in evidence {
+        validate_credential_response_entry_evidence(event, payload, storage_profile, entry)?;
+    }
+    Ok(())
+}
+
+fn validate_credential_response_entry_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+    storage_profile: &Value,
+    entry: &Value,
+) -> Result<(), LakeCatError> {
+    validate_required_full_hash_field(event, entry, "prefix-hash")?;
+    validate_required_full_hash_field(event, entry, "issuer-config-hash")?;
+
+    let profile_id = required_string_field(
+        event,
+        storage_profile,
+        "profile-id",
+        "credential-vend storage-profile",
+    )?;
+    let provider = required_string_field(
+        event,
+        storage_profile,
+        "provider",
+        "credential-vend storage-profile",
+    )?;
+    let issuance_mode = required_string_field(
+        event,
+        storage_profile,
+        "issuance-mode",
+        "credential-vend storage-profile",
+    )?;
+    let receipt_principal = required_pointer_string(
+        event,
+        payload,
+        "/authorization-receipt/principal/subject",
+        "credential-vend authorization receipt principal subject",
+    )?;
+
+    validate_string_field_equals(
+        event,
+        entry,
+        "storage-profile-id",
+        profile_id,
+        "credential-vend credential-response",
+    )?;
+    validate_string_field_equals(
+        event,
+        entry,
+        "catalog-profile-id",
+        profile_id,
+        "credential-vend credential-response",
+    )?;
+    validate_string_field_equals(
+        event,
+        entry,
+        "storage-provider",
+        provider,
+        "credential-vend credential-response",
+    )?;
+    validate_string_field_equals(
+        event,
+        entry,
+        "credential-mode",
+        issuance_mode,
+        "credential-vend credential-response",
+    )?;
+    validate_string_field_equals(
+        event,
+        entry,
+        "authorization-principal",
+        receipt_principal,
+        "credential-vend credential-response",
+    )?;
+    validate_string_field_equals(
+        event,
+        entry,
+        "receipt-principal",
+        receipt_principal,
+        "credential-vend credential-response",
+    )?;
+    validate_string_field_equals(
+        event,
+        entry,
+        "governed-read-required",
+        if payload.get("read-restriction").is_some() {
+            "true"
+        } else {
+            "false"
+        },
+        "credential-vend credential-response",
+    )?;
+
+    let expected_ttl = payload
+        .get("read-restriction")
+        .and_then(|restriction| restriction.get("max-credential-ttl-seconds"))
+        .and_then(Value::as_u64)
+        .map(|ttl| ttl.to_string());
+    match expected_ttl {
+        Some(ttl) => validate_string_field_equals(
+            event,
+            entry,
+            "max-credential-ttl-seconds",
+            &ttl,
+            "credential-vend credential-response",
+        )?,
+        None => validate_null_or_absent_field(
+            event,
+            entry,
+            "max-credential-ttl-seconds",
+            "credential-vend credential-response",
+        )?,
+    }
+
+    if !entry
+        .get("issuer-config-entry-count")
+        .and_then(Value::as_u64)
+        .is_some()
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "credential-vend credential-response issuer-config-entry-count must be unsigned",
+        ));
+    }
+
     Ok(())
 }
 
@@ -3087,6 +3209,69 @@ fn validate_required_full_hash_field(
         event,
         &format!("{field} must contain full SHA-256 digest evidence"),
     ))
+}
+
+fn required_string_field<'a>(
+    event: &OutboxEvent,
+    object: &'a Value,
+    field: &str,
+    label: &str,
+) -> Result<&'a str, LakeCatError> {
+    object
+        .get(field)
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            outbox_evidence_error(
+                event,
+                &format!("{label} {field} must be a non-empty string"),
+            )
+        })
+}
+
+fn required_pointer_string<'a>(
+    event: &OutboxEvent,
+    object: &'a Value,
+    pointer: &str,
+    label: &str,
+) -> Result<&'a str, LakeCatError> {
+    object
+        .pointer(pointer)
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| outbox_evidence_error(event, &format!("{label} must be a non-empty string")))
+}
+
+fn validate_string_field_equals(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+    expected: &str,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let actual = required_string_field(event, object, field, label)?;
+    if actual == expected {
+        return Ok(());
+    }
+    Err(outbox_evidence_error(
+        event,
+        &format!("{label} {field} must match catalog evidence"),
+    ))
+}
+
+fn validate_null_or_absent_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    match object.get(field) {
+        None | Some(Value::Null) => Ok(()),
+        _ => Err(outbox_evidence_error(
+            event,
+            &format!("{label} {field} must be absent when not authorized by receipt evidence"),
+        )),
+    }
 }
 
 fn validate_required_full_hash_array_field<'a>(
@@ -11806,6 +11991,91 @@ mod tests {
         assert!(message.contains("location-prefix-hash"));
         assert!(message.contains("full SHA-256"));
         assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_credential_response_profile_drift() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "human:operator".to_string(),
+            kind: PrincipalKind::Human,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-response-profile-drift".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-response-profile-drift",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "credential-count": 1,
+                        "credential-response-evidence": [{
+                            "prefix-hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                            "issuer-config-hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                            "storage-profile-id": "forged-profile",
+                            "catalog-profile-id": "events-local",
+                            "storage-provider": "file",
+                            "credential-mode": "local-file-no-secret",
+                            "authorization-principal": "human:operator",
+                            "governed-read-required": "false",
+                            "max-credential-ttl-seconds": null,
+                            "issuer-config-entry-count": 0,
+                            "receipt-principal": "human:operator"
+                        }],
+                        "storage-profile-id": "events-local",
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("credential response evidence must match selected storage profile");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains(
+            "credential-vend credential-response storage-profile-id must match catalog evidence"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-credential-response-profile-drift"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

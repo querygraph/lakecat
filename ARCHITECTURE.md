@@ -340,7 +340,10 @@ read restriction to match the authorization receipt context exactly before any
 graph or lineage projection is acknowledged.
 Credential-vend replay applies the same receipt agreement rule to both
 governed read restrictions and `lakecat:raw-credential-exception` evidence
-before projecting blocked-agent or audited raw-credential evidence.
+before projecting blocked-agent or audited raw-credential evidence. Returned
+credential evidence must also match the catalog-derived storage profile,
+provider, credential mode, principal, governed-read marker, and TTL cap before
+delivery is acknowledged.
 Exact idempotency replays are verified to return before object-store writes, so
 the committed metadata object remains untouched on retry.
 Metadata-location prefix failures identify the submitted object and selected

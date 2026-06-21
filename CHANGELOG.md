@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required credential-vend replay response evidence to match catalog-derived
+  storage profile, provider, credential mode, principal, governed-read, and TTL
+  fields before outbox delivery, so forged credential metadata cannot become
+  graph or OpenLineage evidence.
 - Hardened the local dependency-contract workflow audit to reject quoted
   `on` keys and quoted automatic event names, and added a workflow-trigger
   self-test so manual-only CI cannot be bypassed through YAML quoting.

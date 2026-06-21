@@ -6,6 +6,28 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject credential response replay drift`.
+  Outbox admission for `credentials.vend-attempted` now rejects returned
+  credential evidence whose catalog-derived storage-profile id, provider,
+  credential mode, authorization principal, receipt principal, governed-read
+  marker, or TTL cap drifts from the selected storage profile and
+  authorization receipt. Hash-valid but forged credential metadata therefore
+  remains pending before graph projection, OpenLineage projection, or delivery
+  acknowledgement.
+- Local verification for this credential response replay drift slice is green:
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_credential_response_profile_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_credential_vend_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service credential_vend -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject quoted automatic workflow triggers`.
   The local dependency-contract audit now rejects quoted GitHub Actions
   trigger syntax such as `"on": ["push"]`, `"on":` block lists with quoted
