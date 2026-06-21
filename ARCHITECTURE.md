@@ -338,6 +338,8 @@ receipt cannot retain weaker governed-read policy evidence than the top-level
 scan replay payload.
 Exact idempotency replays are verified to return before object-store writes, so
 the committed metadata object remains untouched on retry.
+Metadata-location prefix failures identify the submitted object and selected
+storage profile root by hash, not by raw profile id, bucket, or path.
 Commit-history reads are now exposed through the governed management API and
 replay as lineage evidence, giving QueryGraph an audit surface over pointer
 history without requiring backend-specific database access.

@@ -485,9 +485,10 @@ conflict receipts, and recovery behavior. Metadata-object writes must be
 create-only child objects under the selected storage profile, never overwrites
 of the current pointer, existing objects, or the storage root itself; rejection
 evidence stays hash-only for both the submitted metadata location and storage
-profile root. Metadata object-store setup failures should likewise expose only
-metadata-location and backend-error hashes, not raw URI parse text, schemes, or
-backend diagnostics. Catalog state changes should not lose outbox side effects.
+profile root, without echoing the storage-profile id. Metadata object-store
+setup failures should likewise expose only metadata-location and backend-error
+hashes, not raw URI parse text, schemes, or backend diagnostics. Catalog state
+changes should not lose outbox side effects.
 Pending outbox replay should stay deterministic across embedded and Turso stores, ordered by
 `created_at,event_id`, with duplicate-safe delivery accounting. Draining should
 acknowledge delivery only after every projection in the batch succeeds, leaving

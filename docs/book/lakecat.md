@@ -349,15 +349,18 @@ The same audit-safe shape applies before the write:
 current-pointer overwrite, existing-object overwrite, unsupported object-store
 configuration, and storage-profile-prefix failures report metadata-location
 hashes, and prefix mismatches also report a storage-profile-prefix hash rather
-than raw object paths. A root-targeted metadata write uses the same redacted
-error shape: the operator sees that the plan did not name a child metadata
-object without receiving the raw table or storage root. Dot-segment failures
-use the same style: literal `..` and percent-encoded `%2e%2e` paths fail before
-object-store writes and expose only the metadata-location hash. Decorated
-metadata object locations with URI query strings, fragments, or URI userinfo
-are rejected at the same pre-write boundary, so a commit plan cannot smuggle
-version selectors, backend hints, fragment markers, or embedded credentials
-into what should be a plain metadata object address.
+than raw object paths. LakeCat also keeps the storage-profile id out of this
+error text, so tenant or profile naming conventions do not leak when a planned
+metadata object falls outside the selected root. A root-targeted metadata write
+uses the same redacted error shape: the operator sees that the plan did not
+name a child metadata object without receiving the raw table or storage root.
+Dot-segment failures use the same style: literal `..` and percent-encoded
+`%2e%2e` paths fail before object-store writes and expose only the
+metadata-location hash. Decorated metadata object locations with URI query
+strings, fragments, or URI userinfo are rejected at the same pre-write
+boundary, so a commit plan cannot smuggle version selectors, backend hints,
+fragment markers, or embedded credentials into what should be a plain metadata
+object address.
 
 Idempotency is part of correctness. Reusing the same key for the same commit can
 return the stored response even after the table has advanced beyond the

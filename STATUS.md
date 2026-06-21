@@ -6,6 +6,25 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Redact metadata prefix rejection profile ids`.
+  Planned metadata-object writes that target outside the selected storage
+  profile prefix now return only metadata-location and storage-profile-prefix
+  hash evidence. The rejection no longer echoes the storage-profile id, so
+  tenant/profile naming conventions cannot leak through commit validation
+  errors while operators still get stable correlation anchors.
+- Local verification for this metadata prefix rejection redaction slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service metadata_prefix_rejection_redacts_storage_profile_id -- --test-threads=1`;
+  `cargo test -p lakecat-service metadata_object_location_must_be_child_of_storage_profile_root -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local metadata_prefix_rejection_redacts_storage_profile_id -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features metadata_prefix_rejection_redacts_storage_profile_id -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject empty authorization-receipt policy hash evidence`.
   The service outbox drain now validates both the top-level governed
   `read-restriction.policy-hashes` field and the

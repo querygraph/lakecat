@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redacted storage-profile ids from metadata-object prefix rejection messages,
+  keeping commit-location failures anchored by metadata-location and
+  storage-profile-prefix hashes without echoing tenant or storage profile names.
 - Rejected empty authorization-receipt read-restriction `policy-hashes` arrays
   during outbox drain validation, so replay receipts cannot carry weaker
   governed-read policy evidence than the top-level scan event before graph or

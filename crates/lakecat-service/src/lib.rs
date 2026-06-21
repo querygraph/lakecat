@@ -5421,9 +5421,8 @@ fn validate_planned_metadata_location(
         storage_profile.location_prefix.as_str(),
     ) {
         return Err(LakeCatError::InvalidArgument(format!(
-            "metadata object location {} is outside storage profile '{}' prefix or is not a child object; storage-profile-prefix-hash={}",
+            "metadata object location {} is outside the selected storage profile prefix or is not a child object; storage-profile-prefix-hash={}",
             metadata_location_hash_context(new_metadata_location),
-            storage_profile.profile_id,
             content_hash_bytes(storage_profile.location_prefix.as_bytes())
         )));
     }
@@ -16444,6 +16443,41 @@ mod tests {
         assert!(!message.contains(&storage_root));
         assert!(!message.contains(root.to_string_lossy().as_ref()));
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn metadata_prefix_rejection_redacts_storage_profile_id() {
+        let storage_root = "s3://lakecat-secret-bucket/events";
+        let profile = StorageProfile::new(
+            "tenant-secret-prod-profile",
+            WarehouseName::new("local").unwrap(),
+            storage_root,
+            StorageProvider::S3,
+            CredentialIssuanceMode::ShortLivedSecretRef,
+            Some("typesec://lakecat/local/tenant-secret-prod-profile".to_string()),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let outside_location = "s3://other-secret-bucket/events/metadata/00001.json";
+        let plan = lakecat_sail::CommitPlan {
+            prepared_by: "test".to_string(),
+            requirements: Vec::new(),
+            updates: Vec::new(),
+            new_metadata_location: Some(outside_location.to_string()),
+            new_metadata: serde_json::json!({"format-version": 3}),
+            metadata_write_required: true,
+            metadata_patch: serde_json::json!({}),
+        };
+
+        let err = validate_planned_metadata_location(&plan, None, &profile).unwrap_err();
+
+        let message = err.to_string();
+        assert!(message.contains("metadata-location-hash=sha256:"));
+        assert!(message.contains("storage-profile-prefix-hash=sha256:"));
+        assert!(!message.contains("tenant-secret-prod-profile"));
+        assert!(!message.contains("lakecat-secret-bucket"));
+        assert!(!message.contains("other-secret-bucket"));
+        assert!(!message.contains("00001.json"));
     }
 
     #[tokio::test]
