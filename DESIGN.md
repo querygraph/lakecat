@@ -562,8 +562,10 @@ changes should not lose outbox side effects. Table commit-history replay must
 carry the accepted replay principal subject/agent kind, positive, strictly
 increasing sequence numbers, and duplicate-free commit hashes at the raw
 lineage-drain boundary and in compact handoff proof, so pointer-log evidence
-cannot drop actor attribution, duplicate commits, or reorder between the
-catalog and QGLake proof.
+cannot drop or rewrite actor attribution, duplicate commits, or reorder between
+the catalog and QGLake proof. Raw lineage-drain regressions cover both missing
+and drifted commit-history principal subject and principal kind before compact
+handoff proof generation.
 Pending outbox replay should stay deterministic across embedded and Turso stores, ordered by
 `created_at,event_id`, with batch limits applied after that order and with
 duplicate-safe delivery accounting. Draining should acknowledge delivery only

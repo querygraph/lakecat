@@ -6,11 +6,12 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
-  `Bind QGLake raw commit-history replay principal`.
-  Raw QGLake lineage-drain verification now rejects `table.commits-listed`
-  replay whose commit-history principal subject is missing or differs from the
-  accepted handoff principal, and still requires the replay principal kind to
-  be `agent` before compact handoff proof can be generated.
+  `Cover raw QGLake commit-history principal kind`.
+  Raw QGLake lineage-drain regression coverage now proves
+  `table.commits-listed` replay fails when commit-history principal kind
+  evidence is missing or drifts from the accepted `agent` actor, matching the
+  existing principal-subject checks before compact handoff proof can be
+  generated.
 - Local verification for this raw QGLake commit-history principal slice is
   green:
   `cargo fmt -p lakecat-cli -- --check`;

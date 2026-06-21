@@ -1947,6 +1947,9 @@ principal, requires the commit count to match the sequence-number and
 commit-hash arrays, requires every sequence number to be positive and strictly
 increasing, requires commit hashes to be duplicate-free, and requires positive
 graph event evidence plus replay and OpenLineage receipt hashes. Captured
+raw lineage-drain regressions cover both missing and drifted commit-history
+principal subject and principal kind, so actor attribution must survive before
+the compact handoff proof exists. Captured
 LakeCat replay-line recomputation enforces the same sequence invariant even
 when the captured replay JSON and compact summary agree on malformed sequence
 evidence, so operator-readable `table-commit-history-replay` text cannot

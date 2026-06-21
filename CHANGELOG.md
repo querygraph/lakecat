@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added raw QGLake lineage-drain regression coverage for missing or drifted
+  table commit-history principal kind, keeping the source replay verifier
+  locked to the accepted agent actor before compact handoff proof is generated.
 - Required raw QGLake lineage-drain table commit-history replay to carry the
   accepted replay principal subject and agent kind before compact handoff proof
   can be generated.
