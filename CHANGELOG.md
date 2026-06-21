@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required credential-vend replay `credential-response-evidence` entries to be
+  duplicate-free by returned credential `prefix-hash` before graph/OpenLineage
+  projection, so replay cannot inflate credential counts with repeated
+  redacted credential evidence.
 - Required view receipt-list and receipt-chain replay hash arrays to be
   duplicate-free before graph/OpenLineage projection, so duplicated receipt,
   drop-receipt, or chain hashes cannot inflate view-history proof evidence

@@ -6,6 +6,27 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject duplicate credential response replay`.
+  Outbox admission now rejects `credentials.vend-attempted` replay whose
+  `credential-response-evidence` repeats a returned credential `prefix-hash`.
+  Credential-count evidence can no longer be inflated with duplicate redacted
+  credential entries before graph projection, OpenLineage projection, or
+  delivery acknowledgement.
+- Local verification for this credential response duplicate replay slice is
+  green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service credential_vend -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_duplicate_credential_response_prefix_hashes -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject duplicate view receipt replay hashes`.
   Outbox admission now rejects duplicate hashes in
   `view.version-receipts-listed` `receipt-hashes` /

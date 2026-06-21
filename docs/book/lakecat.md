@@ -2038,8 +2038,10 @@ fixtures may omit the duplicate field, but contradictory evidence is rejected.
 Each returned credential entry must also agree with the catalog-derived
 storage-profile id, catalog profile id, storage provider, credential mode,
 authorization principal, receipt principal, governed-read marker, and any
-policy-derived TTL cap. A malformed credential replay event therefore remains
-pending instead of becoming graph or OpenLineage evidence.
+policy-derived TTL cap. Returned credential entries must be duplicate-free by
+`prefix-hash`, so a replay event cannot count the same redacted credential
+twice. A malformed credential replay event therefore remains pending instead of
+becoming graph or OpenLineage evidence.
 Credential replay also rejects a governed `read-restriction` that is missing
 from, or different from, the authorization receipt context, so credential TTL
 and blocked-agent evidence cannot drift away from the receipt that authorized
