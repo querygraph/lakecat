@@ -1719,6 +1719,39 @@ fn validate_scan_tasks_fetched_event_evidence(
             "scan-tasks-fetched required-filters must be an array",
         ));
     }
+    validate_scan_required_filters_match_row_predicate(event, payload, "scan-tasks-fetched")?;
+    Ok(())
+}
+
+fn validate_scan_required_filters_match_row_predicate(
+    event: &OutboxEvent,
+    payload: &Value,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(read_restriction) = payload.get("read-restriction") else {
+        return Ok(());
+    };
+    let Some(row_predicate) = read_restriction.get("row-predicate") else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} read-restriction must contain row-predicate"),
+        ));
+    };
+    let Some(required_filters) = payload.get("required-filters").and_then(Value::as_array) else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} required-filters must be an array"),
+        ));
+    };
+    let expected_filters = vec![row_predicate.clone()];
+    if required_filters.as_slice() != expected_filters.as_slice() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!(
+                "{label} required-filters must exactly preserve read-restriction row-predicate"
+            ),
+        ));
+    }
     Ok(())
 }
 
@@ -16136,6 +16169,188 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "termless row-predicate scan replay must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_scan_fetch_empty_required_filters() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ]
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-fetch-empty-required-filters".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-tasks-fetched".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-fetch-empty-required-filters",
+                    "event-type": "table.scan-tasks-fetched",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "context": {
+                                "read-restriction": read_restriction
+                            },
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": read_restriction,
+                        "required-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "required-filters": [],
+                        "file-scan-task-count": 1,
+                        "delete-file-count": 0,
+                        "child-plan-task-count": 0
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("scan-fetch required filters should preserve row predicate");
+
+        let message = err.to_string();
+        assert!(message.contains(
+            "outbox event table.scan-tasks-fetched (lakecat.lineage-and-graph) has invalid"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains(
+            "scan-tasks-fetched required-filters must exactly preserve read-restriction row-predicate"
+        ));
+        assert!(!message.contains("evt-scan-fetch-empty-required-filters"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "empty required-filters replay must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "empty required-filters replay must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "empty required-filters replay must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_scan_fetch_drifted_required_filters() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ]
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-fetch-drifted-required-filters".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-tasks-fetched".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-fetch-drifted-required-filters",
+                    "event-type": "table.scan-tasks-fetched",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "context": {
+                                "read-restriction": read_restriction
+                            },
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": read_restriction,
+                        "required-projection": ["event_id"],
+                        "effective-projection": ["event_id"],
+                        "required-filters": [{
+                            "type": "eq",
+                            "term": "severity",
+                            "value": "info"
+                        }],
+                        "file-scan-task-count": 1,
+                        "delete-file-count": 0,
+                        "child-plan-task-count": 0
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("scan-fetch required filters should reject predicate drift");
+
+        let message = err.to_string();
+        assert!(message.contains(
+            "outbox event table.scan-tasks-fetched (lakecat.lineage-and-graph) has invalid"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains(
+            "scan-tasks-fetched required-filters must exactly preserve read-restriction row-predicate"
+        ));
+        assert!(!message.contains("evt-scan-fetch-drifted-required-filters"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "drifted required-filters replay must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "drifted required-filters replay must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "drifted required-filters replay must fail before lineage projection"
         );
     }
 

@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require exact service fetch filter proof`.
+  Service `table.scan-tasks-fetched` outbox admission now rejects empty or
+  drifted `required-filters` proof whenever governed row-predicate evidence is
+  present, so fetched scan replay cannot claim one read restriction while
+  projecting a different or empty filter proof to graph/OpenLineage sinks.
+- Local verification for this service fetch filter proof slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service empty_required_filters -- --test-threads=1`;
+  `cargo test -p lakecat-service drifted_required_filters -- --test-threads=1`;
+  `cargo test -p lakecat-service scan_fetch -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`.
+- Latest completed implementation slice:
   `Reject empty scan proof arrays`.
   Service `table.scan-planned` and `table.scan-tasks-fetched` outbox admission
   now rejects empty projection/stat proof arrays before acknowledgement, graph

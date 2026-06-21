@@ -476,7 +476,8 @@ Service outbox admission must enforce the same field-array shape before graph
 or OpenLineage projection, not only in later CLI replay verification.
 Scan-planned and scan-tasks-fetched outbox admission must also reject missing
 or malformed `row-predicate` proof whenever governed read-restriction evidence
-is present.
+is present, and fetched `required-filters` proof must exactly preserve that
+row predicate before the event is acknowledged.
 Read-restriction `policy-hashes` must remain non-empty, full SHA-256-shaped,
 and duplicate-free at outbox admission as well as in later replay artifacts.
 Prefer upstream Sail APIs for any reusable planner or manifest work.

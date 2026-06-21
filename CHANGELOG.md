@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required `table.scan-tasks-fetched` outbox admission to reject empty or
+  drifted `required-filters` proof when governed row-predicate evidence is
+  present, before acknowledgement, graph projection, or OpenLineage projection.
 - Required scan-planned and scan-tasks-fetched outbox admission to reject empty
   projection/stat proof arrays before acknowledgement, graph projection, or
   OpenLineage projection.
