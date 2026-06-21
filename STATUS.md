@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bound and prove the full local release gate`.
+  `scripts/check-release-readiness.sh` now runs feature-matrix package rows
+  against unit/library targets so empty package doc-test phases cannot hang the
+  gate after the relevant Turso/Sail/TypeSec/Grust tests pass. The full local
+  gate has now completed successfully, including dependency-contract,
+  formatting, default workspace tests, QGLake fixture tests, Turso store tests,
+  Sail/TypeSec/Grust feature tests, explicit all-features CLI tests,
+  all-features workspace library tests, book rebuild, QGLake handoff, and
+  `git diff --check`.
+- Local verification for this release-gate proof slice is green:
+  `scripts/check-release-readiness.sh --quick`;
+  `scripts/check-release-readiness.sh`.
+- Latest completed implementation slice:
   `Require scan replay purpose and TTL`.
   Service outbox admission now rejects `table.scan-planned` and
   `table.scan-tasks-fetched` replay whose governed read restriction drops a
@@ -28,10 +41,10 @@ Updated: 2026-06-21
   `pdftotext -layout docs/book/dist/lakecat.pdf -`;
   `git diff --check`.
 - Release-gate note:
-  A full `scripts/check-release-readiness.sh` run was started before this book
-  slice and progressed through the default workspace test suites, then was
-  interrupted during the `qglake-fixture` CLI compile when the user redirected
-  the work to book content. It is not counted as a green release gate.
+  The full `scripts/check-release-readiness.sh` matrix is now counted as green
+  as of the `Bound and prove the full local release gate` slice above. Cloud CI
+  remains manual-only; first-release readiness should continue to be proven
+  locally before any cloud automation is trusted.
 - Latest completed implementation slice:
   `Add release-readiness local gate`.
   `scripts/check-release-readiness.sh` now codifies the local-first first
@@ -43,8 +56,8 @@ Updated: 2026-06-21
   `scripts/check-release-readiness.sh --quick`;
   `docs/book/build.sh`;
   `git diff --check`.
-  The full `scripts/check-release-readiness.sh` matrix is the pre-release gate
-  and has not been run in this narrow script-introduction slice.
+  The later `Bound and prove the full local release gate` slice completed the
+  full `scripts/check-release-readiness.sh` matrix.
 - Latest completed implementation slice:
   `Require standard catalog receipt principal replay`.
   Service standard catalog outbox admission now rejects catalog config,

@@ -1259,11 +1259,14 @@ scripts/check-release-readiness.sh
 
 The full gate runs the dependency contract, the workspace formatting matrix,
 default workspace tests, QGLake fixture coverage, Turso store tests, Sail,
-TypeSec, and Grust integration feature tests, the all-features workspace test,
-the book build, and the QGLake handoff proof. The `--quick` mode keeps script
-syntax, dependency-contract, formatting, and diff checks cheap enough to run
-inside narrow implementation slices. Cloud CI remains manual-only until this
-local gate is boringly green.
+TypeSec, and Grust integration feature tests, an explicit all-features CLI
+test, the all-features workspace library test, the book build, and the QGLake
+handoff proof. The default workspace test still covers ordinary doc-tests; the
+feature matrix targets package unit tests so an empty rustdoc phase cannot hang
+after the actual Turso/Sail/TypeSec/Grust coverage has passed. The `--quick`
+mode keeps script syntax, dependency-contract, formatting, and diff checks
+cheap enough to run inside narrow implementation slices. Cloud CI remains
+manual-only until this local gate is boringly green.
 
 As of the current local reconciliation, the Sail helper work is not an
 anonymous dirty tree. `/Users/alexy/src/sail` has scoped local commits on

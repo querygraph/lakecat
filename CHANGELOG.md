@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bounded the local release-readiness feature matrix to package unit targets
+  where package doc-tests add no LakeCat coverage and can hang in rustdoc after
+  the Turso store tests pass; the gate now keeps explicit CLI all-features,
+  workspace all-features library, book, and QGLake handoff checks.
 - Required service `table.scan-planned` and `table.scan-tasks-fetched` replay
   admission to reject governed read-restriction evidence whose purpose is
   missing/blank or whose `max-credential-ttl-seconds` cap is missing or

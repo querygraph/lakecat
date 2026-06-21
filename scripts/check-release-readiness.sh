@@ -75,15 +75,16 @@ run cargo fmt \
 if [[ "$mode" == "full" ]]; then
   run cargo test --workspace
   run cargo test -p lakecat-cli --features qglake-fixture qglake_fixture -- --test-threads=1
-  run cargo test -p lakecat-store --features turso-local -- --test-threads=1
-  run cargo test -p lakecat-service --features turso-local -- --test-threads=1
-  run cargo test -p lakecat-service --features sail-local -- --test-threads=1
-  run cargo test -p lakecat-service --features typesec-local -- --test-threads=1
-  run cargo test -p lakecat-security --features typesec-local -- --test-threads=1
-  run cargo test -p lakecat-graph --features grust-local -- --test-threads=1
-  run cargo test -p lakecat-graph --features grust-local \
+  run cargo test -p lakecat-store --features turso-local --lib -- --test-threads=1
+  run cargo test -p lakecat-service --features turso-local --lib -- --test-threads=1
+  run cargo test -p lakecat-service --features sail-local --lib -- --test-threads=1
+  run cargo test -p lakecat-service --features typesec-local --lib -- --test-threads=1
+  run cargo test -p lakecat-security --features typesec-local --lib -- --test-threads=1
+  run cargo test -p lakecat-graph --features grust-local --lib -- --test-threads=1
+  run cargo test -p lakecat-graph --features grust-local --lib \
     grust_cypher_can_query_lakecat_catalog_projection_boundary -- --test-threads=1
-  run cargo test --workspace --all-features -- --test-threads=1
+  run cargo test -p lakecat-cli --all-features -- --test-threads=1
+  run cargo test --workspace --all-features --lib -- --test-threads=1
 
   if [[ "$skip_book" -eq 0 ]]; then
     run docs/book/build.sh
