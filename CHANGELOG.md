@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required raw QGLake lineage-drain table commit-history replay to carry the
+  accepted replay principal subject and agent kind before compact handoff proof
+  can be generated.
 - Bound compact QGLake table commit-history proof and captured LakeCat replay
   output to the accepted replay principal subject and kind, rejecting saved
   handoffs that drop or drift commit-history actor evidence.

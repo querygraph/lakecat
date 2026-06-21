@@ -2356,9 +2356,10 @@ SHA-256 commit hash evidence before graph or OpenLineage projection can start.
 Commit-history replay has the same shape:
 `table.commits-listed` event must carry a `commit-count` that matches both
 full SHA-256 commit hashes and unsigned sequence numbers; compact QGLake proof
-also binds that pointer-log replay to the accepted principal subject/kind, so
-malformed or actor-drifted pointer-log summaries cannot become delivered replay
-evidence. Credential-vend
+also binds that pointer-log replay to the accepted principal subject/kind. The
+raw QGLake lineage-drain verifier checks the same accepted-principal and agent
+kind before compact handoff proof is generated, so malformed or actor-drifted
+pointer-log summaries cannot become delivered replay evidence. Credential-vend
 replay gets the same treatment: `credentials.vend-attempted` must carry a
 matching credential count, full duplicate-free credential-response prefix
 hashes, a full redacted storage-profile location hash, internally consistent secret-reference
