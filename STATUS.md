@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate commit-history read records`.
+  `TableCommitRecord::validate_for_table` now protects memory and Turso
+  `table_commit_records` reads from malformed durable pointer-log JSON: table
+  identity, positive sequence numbers, non-empty metadata pointers, and full
+  SHA-256 request/response/idempotency evidence must all hold before replay
+  callers can see commit history.
+- Local verification for this commit-history read validation slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_malformed_commit_history_records -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_malformed_commit_history_records -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate store table commits`.
   `TableCommit::validate` now rejects empty expected/new metadata pointer
   strings and non-object replacement metadata, and the memory/Turso

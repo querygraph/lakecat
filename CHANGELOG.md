@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Validated table commit-history records at memory and Turso read boundaries,
+  rejecting malformed durable pointer-log JSON whose table, sequence, pointer,
+  request, response, or idempotency-hash evidence would make replay unsafe.
 - Tightened `TableCommit` validation so memory and Turso commit paths reject
   empty metadata-pointer strings and non-object replacement metadata before
   malformed direct commits can mutate tables, commit history, or outbox state.

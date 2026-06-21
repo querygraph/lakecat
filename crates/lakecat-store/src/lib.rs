@@ -400,6 +400,66 @@ pub struct TableCommitRecord {
     pub committed_at: DateTime<Utc>,
 }
 
+impl TableCommitRecord {
+    pub fn validate_for_table(&self, ident: &TableIdent) -> LakeCatResult<()> {
+        if &self.table != ident {
+            return Err(LakeCatError::Internal(
+                "table commit record table does not match requested table".to_string(),
+            ));
+        }
+        if self.sequence_number == 0 {
+            return Err(LakeCatError::Internal(
+                "table commit record sequence number must be positive".to_string(),
+            ));
+        }
+        if self
+            .previous_metadata_location
+            .as_deref()
+            .is_some_and(|location| location.trim().is_empty())
+        {
+            return Err(LakeCatError::Internal(
+                "table commit record previous metadata location must not be empty when present"
+                    .to_string(),
+            ));
+        }
+        if self
+            .new_metadata_location
+            .as_deref()
+            .is_some_and(|location| location.trim().is_empty())
+        {
+            return Err(LakeCatError::Internal(
+                "table commit record new metadata location must not be empty when present"
+                    .to_string(),
+            ));
+        }
+        validate_sha256_evidence(
+            &self.request_hash,
+            "table commit record request hash must be full SHA-256 evidence",
+        )?;
+        validate_sha256_evidence(
+            &self.response_hash,
+            "table commit record response hash must be full SHA-256 evidence",
+        )?;
+        if let Some(idempotency_key_sha256) = self.idempotency_key_sha256.as_deref() {
+            validate_sha256_evidence(
+                idempotency_key_sha256,
+                "table commit record idempotency key hash must be full SHA-256 evidence",
+            )?;
+        }
+        Ok(())
+    }
+}
+
+fn validate_sha256_evidence(value: &str, message: &str) -> LakeCatResult<()> {
+    let Some(digest) = value.strip_prefix("sha256:") else {
+        return Err(LakeCatError::Internal(message.to_string()));
+    };
+    if digest.len() != 64 || !digest.as_bytes().iter().all(u8::is_ascii_hexdigit) {
+        return Err(LakeCatError::Internal(message.to_string()));
+    }
+    Ok(())
+}
+
 fn table_response_hash(table: &TableRecord) -> LakeCatResult<String> {
     let value = serde_json::to_value(table).map_err(|err| {
         LakeCatError::Internal(format!(
@@ -1491,14 +1551,17 @@ impl CatalogStore for MemoryCatalogStore {
         end_version: Option<u64>,
     ) -> LakeCatResult<Vec<TableCommitRecord>> {
         let state = self.state.read().await;
-        Ok(state
+        state
             .commits
             .iter()
             .filter(|commit| &commit.table == ident)
             .filter(|commit| commit.sequence_number >= start_version)
             .filter(|commit| end_version.is_none_or(|end| commit.sequence_number <= end))
-            .cloned()
-            .collect())
+            .map(|commit| {
+                commit.validate_for_table(ident)?;
+                Ok(commit.clone())
+            })
+            .collect()
     }
 
     async fn upsert_server(&self, server: ServerRecord) -> LakeCatResult<ServerRecord> {
@@ -3441,6 +3504,67 @@ mod memory_tests {
         assert!(!message.contains("stale.json"));
         assert!(!message.contains("00000.json"));
     }
+
+    #[tokio::test]
+    async fn memory_store_rejects_malformed_commit_history_records() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let ident = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("events").unwrap(),
+        );
+        store
+            .create_namespace(&warehouse, namespace.clone())
+            .await
+            .unwrap();
+        store
+            .create_table(TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            ))
+            .await
+            .unwrap();
+        store
+            .commit_table(
+                &ident,
+                TableCommit {
+                    requirements: vec![],
+                    updates: vec![serde_json::json!({"action": "noop"})],
+                    expected_previous_metadata_location: Some(
+                        "file:///tmp/events/metadata/00000.json".to_string(),
+                    ),
+                    new_metadata_location: Some(
+                        "file:///tmp/events/metadata/00001.json".to_string(),
+                    ),
+                    new_metadata: Some(serde_json::json!({"format-version": 3})),
+                    idempotency_key: Some("commit-1".to_string()),
+                    idempotency_request_hash: None,
+                    principal: Principal::anonymous(),
+                    authorization_receipt: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        store.state.write().await.commits[0].response_hash = "sha256:short".to_string();
+
+        let err = store
+            .table_commit_records(&ident, 0, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains(
+                    "table commit record response hash must be full SHA-256 evidence"
+                )
+        ));
+    }
 }
 
 #[cfg(feature = "turso-local")]
@@ -4197,7 +4321,9 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut commits = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                commits.push(decode_json(row_string(&row, 0)?)?);
+                let commit: TableCommitRecord = decode_json(row_string(&row, 0)?)?;
+                commit.validate_for_table(ident)?;
+                commits.push(commit);
             }
             Ok(commits)
         }
@@ -5972,6 +6098,76 @@ pub mod turso_store {
                     .is_empty()
             );
             assert_eq!(store.mark_outbox_delivered(&event_ids).await.unwrap(), 0);
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_malformed_commit_history_records() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("events").unwrap(),
+            );
+            store
+                .create_namespace(&warehouse, namespace.clone())
+                .await
+                .unwrap();
+            store
+                .create_table(TableRecord::new(
+                    ident.clone(),
+                    "file:///tmp/events".to_string(),
+                    Some("file:///tmp/events/metadata/00000.json".to_string()),
+                    serde_json::json!({"format-version": 3}),
+                    Principal::anonymous(),
+                ))
+                .await
+                .unwrap();
+            store
+                .commit_table(
+                    &ident,
+                    TableCommit {
+                        requirements: vec![],
+                        updates: vec![serde_json::json!({"action": "noop"})],
+                        expected_previous_metadata_location: Some(
+                            "file:///tmp/events/metadata/00000.json".to_string(),
+                        ),
+                        new_metadata_location: Some(
+                            "file:///tmp/events/metadata/00001.json".to_string(),
+                        ),
+                        new_metadata: Some(serde_json::json!({"format-version": 3})),
+                        idempotency_key: Some("commit-1".to_string()),
+                        idempotency_request_hash: None,
+                        principal: Principal::anonymous(),
+                        authorization_receipt: None,
+                    },
+                )
+                .await
+                .unwrap();
+            let mut records = store.table_commit_records(&ident, 1, None).await.unwrap();
+            assert_eq!(records.len(), 1);
+            records[0].idempotency_key_sha256 = Some("sha256:short".to_string());
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update metadata_pointer_log set record_json = ?2 where table_key = ?1",
+                (table_key(&ident), encode_json(&records[0]).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .table_commit_records(&ident, 0, None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains(
+                        "table commit record idempotency key hash must be full SHA-256 evidence"
+                    )
+            ));
         }
 
         #[tokio::test]
