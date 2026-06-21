@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required management-list replay to carry count-aligned, syntactically valid,
+  duplicate-free ID arrays before acknowledgement, graph projection, or
+  OpenLineage projection, instead of accepting omitted identity arrays.
 - Aligned compact QGLake handoff secret-reference verification with service
   replay admission: storage-profile and credential proofs now reject blank
   secret-ref providers, accept omitted provider/hash fields only when

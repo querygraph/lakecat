@@ -619,7 +619,7 @@ when `secret-ref-present` is false, regardless of JSON type.
 Blocked raw-credential replay must carry zero credentials plus a non-empty
 block reason matching the raw-credential exception receipt context before any
 graph or OpenLineage sink observes it.
-Management-list replay should carry count-aligned, syntactically valid,
+Management-list replay must carry count-aligned, syntactically valid,
 duplicate-free ID arrays before projection, so compact QueryGraph proof cannot
 inflate server, project, warehouse, policy, or storage-profile reads with
 repeated identities.

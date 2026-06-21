@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require management-list replay IDs`.
+  Service outbox admission now rejects management-list replay that omits the
+  count-aligned stable ID arrays for servers, projects, warehouses, policies,
+  or storage profiles before acknowledgement, graph projection, or OpenLineage
+  projection.
+- Local verification for this management-list replay slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_missing_management_list_ids -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_management_list -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Align QGLake secret-ref proof shape`.
   Compact QGLake handoff verification now matches service replay admission for
   storage-profile and credential secret-reference evidence: present refs require

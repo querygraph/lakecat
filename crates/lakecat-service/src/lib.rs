@@ -2651,7 +2651,7 @@ fn validate_management_list_event_evidence(
                 "policy-count",
                 "policy-binding list",
             )?;
-            validate_optional_management_id_array(
+            validate_required_management_id_array(
                 event,
                 payload,
                 "policy-ids",
@@ -2667,7 +2667,7 @@ fn validate_management_list_event_evidence(
                 "project-count",
                 "project list",
             )?;
-            validate_optional_management_id_array(
+            validate_required_management_id_array(
                 event,
                 payload,
                 "project-ids",
@@ -2686,7 +2686,7 @@ fn validate_management_list_event_evidence(
                 "server-count",
                 "server list",
             )?;
-            validate_optional_management_id_array(
+            validate_required_management_id_array(
                 event,
                 payload,
                 "server-ids",
@@ -2707,7 +2707,7 @@ fn validate_management_list_event_evidence(
                 "storage-profile-count",
                 "storage-profile list",
             )?;
-            validate_optional_management_id_array(
+            validate_required_management_id_array(
                 event,
                 payload,
                 "storage-profile-ids",
@@ -2735,7 +2735,7 @@ fn validate_management_list_event_evidence(
                 "warehouse list",
             )?;
             optional_string_field(event, payload, "project-id", "warehouse list")?;
-            validate_optional_management_id_array(
+            validate_required_management_id_array(
                 event,
                 payload,
                 "warehouse-names",
@@ -2749,7 +2749,7 @@ fn validate_management_list_event_evidence(
     Ok(())
 }
 
-fn validate_optional_management_id_array(
+fn validate_required_management_id_array(
     event: &OutboxEvent,
     payload: &Value,
     field: &str,
@@ -2758,7 +2758,10 @@ fn validate_optional_management_id_array(
     is_valid_id: impl Fn(&str) -> bool,
 ) -> Result<(), LakeCatError> {
     let Some(ids) = payload.get(field) else {
-        return Ok(());
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} evidence must contain {field}"),
+        ));
     };
     let Some(ids) = ids.as_array() else {
         return Err(outbox_evidence_error(
@@ -2774,7 +2777,7 @@ fn validate_optional_management_id_array(
     }
     let mut unique_ids = BTreeSet::new();
     for id in ids {
-        let Some(id) = id.as_str().filter(|id| !id.is_empty()) else {
+        let Some(id) = id.as_str().filter(|id| !id.trim().is_empty()) else {
             return Err(outbox_evidence_error(
                 event,
                 &format!("{label} {field} must contain non-empty strings"),
@@ -15257,6 +15260,61 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "malformed management-list evidence must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_missing_management_list_ids() {
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-missing-management-list-ids".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-missing-management-list-ids",
+                    "event-type": "storage-profile.listed",
+                    "payload": {
+                        "warehouse": "local",
+                        "storage-profile-count": 1,
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("missing management-list IDs should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains(
+            "outbox event storage-profile.listed (lakecat.lineage-and-graph) has invalid"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("storage-profile list evidence must contain storage-profile-ids"));
+        assert!(!message.contains("evt-missing-management-list-ids"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "missing management-list IDs must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "missing management-list IDs must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "missing management-list IDs must fail before lineage projection"
         );
     }
 
