@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added an outbox-drain regression proving that when a later projection in a
+  multi-event batch fails, earlier successfully projected events are not
+  acknowledged and the whole batch remains retryable from durable outbox state.
 - Bound compact QGLake structural `receiptHash` values to the same
   content-derived view-version receipt digest that LakeCat service emits by
   carrying view hash, principal identity, principal kind, and recorded timestamp

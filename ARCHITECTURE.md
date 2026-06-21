@@ -323,6 +323,10 @@ through compare-and-swap, persist idempotency/audit/outbox records with both the
 normalized request hash and stored response hash plus compact format-version,
 snapshot-id, and policy-hash summary evidence, and expose a service-level drain
 that projects committed events to graph and lineage sinks.
+Outbox draining is all-or-retry across each selected batch: if a later graph or
+lineage projection fails after earlier events have emitted sink side effects, no
+event in that batch is acknowledged, so retry starts from the committed outbox
+state rather than from a partial delivery response.
 Exact idempotency replays are verified to return before object-store writes, so
 the committed metadata object remains untouched on retry.
 Commit-history reads are now exposed through the governed management API and

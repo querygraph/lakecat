@@ -8204,6 +8204,30 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
+    struct FailingLineageAfter {
+        events: Mutex<Vec<LineageEvent>>,
+        fail_after: usize,
+    }
+
+    #[async_trait]
+    impl LineageSink for FailingLineageAfter {
+        async fn emit(&self, event: LineageEvent) -> lakecat_core::LakeCatResult<LineageReceipt> {
+            let mut events = self.events.lock().await;
+            events.push(event);
+            if events.len() > self.fail_after {
+                return Err(LakeCatError::Internal(
+                    "intentional later lineage projection failure".to_string(),
+                ));
+            }
+            Ok(LineageReceipt {
+                event_hash: format!("recorded-{}", events.len()),
+                open_lineage_hash: format!("recorded-openlineage-{}", events.len()),
+                sink: "recording".to_string(),
+            })
+        }
+    }
+
     #[derive(Debug, Default)]
     struct RecordingCredentialIssuer {
         requests: Mutex<Vec<CredentialIssuanceRequest>>,
@@ -10494,6 +10518,100 @@ mod tests {
         assert!(
             !graph.events.lock().await.is_empty(),
             "graph projection may already be emitted, so retryability depends on outbox ack"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_does_not_acknowledge_earlier_events_when_later_projection_fails() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let first_created_at = chrono::Utc::now();
+        let second_created_at = first_created_at + chrono::Duration::seconds(1);
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![
+                OutboxEvent {
+                    event_id: "evt-first-projected".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.created".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-first-projected",
+                        "event-type": "table.created",
+                        "table": table.clone(),
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal.clone(),
+                                "action": "table-create",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": first_created_at,
+                            },
+                            "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        }
+                    }),
+                    created_at: first_created_at,
+                    delivered_at: None,
+                },
+                OutboxEvent {
+                    event_id: "evt-second-fails".to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.created".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-second-fails",
+                        "event-type": "table.created",
+                        "table": table,
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "table-create",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": second_created_at,
+                            },
+                            "metadata-location": "file:///tmp/events/metadata/00001.json",
+                        }
+                    }),
+                    created_at: second_created_at,
+                    delivered_at: None,
+                },
+            ]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(FailingLineageAfter {
+            events: Mutex::default(),
+            fail_after: 1,
+        });
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("later lineage projection failure must fail the whole drain");
+
+        assert!(err.to_string().contains("later lineage projection failure"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "a later projection failure must leave earlier projected events pending too"
+        );
+        assert_eq!(lineage.events.lock().await.len(), 2);
+        assert_eq!(
+            graph.events.lock().await.len(),
+            4,
+            "graph projections may already have happened for both events before lineage fails"
         );
     }
 

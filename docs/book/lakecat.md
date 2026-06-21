@@ -476,7 +476,11 @@ If projection fails, nothing is acknowledged. If the store reports that fewer
 events were acknowledged than LakeCat projected, the drain fails with an
 acknowledgement mismatch instead of returning a quiet partial success. That
 keeps retry and operator evidence honest when a concurrent drain or backend
-anomaly interferes with delivery accounting.
+anomaly interferes with delivery accounting. The regression suite covers the
+uncomfortable middle case too: if the first event in a multi-event batch
+already projected to graph and lineage but a later event fails during lineage
+projection, LakeCat still acknowledges none of the events. Recovery starts from
+the committed outbox batch instead of from a half-delivered response.
 The drain also validates governed-read evidence before projection. If a pending
 event contains a `read-restriction.policy-hashes` array, each entry must already
 be a full `sha256:`-prefixed 64-hex digest. A readable placeholder such as

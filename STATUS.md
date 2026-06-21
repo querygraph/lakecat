@@ -6,6 +6,24 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Prove outbox batch retry on later projection failure`.
+  The service outbox drain now has a focused multi-event regression proving
+  that if an earlier event projects successfully but a later lineage projection
+  in the same batch fails, LakeCat does not acknowledge any event in that
+  batch. The durable outbox remains the recovery source even after graph
+  projections have already been emitted for the earlier and failing events.
+- Local verification for this outbox batch retry proof is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_does_not_acknowledge_earlier_events_when_later_projection_fails -- --nocapture`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with an existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind compact view receipt hashes to structural digest`.
   QGLake handoff verification now recomputes each compact structural
   `receiptHash` from the same content-derived view-version receipt digest that
