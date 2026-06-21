@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required credential-vend replay top-level `storage-profile-id` evidence to
+  match the nested storage-profile `profile-id` before outbox delivery, so
+  zero-credential blocked paths cannot project contradictory credential-root
+  anchors.
 - Required credential-vend replay response evidence to match catalog-derived
   storage profile, provider, credential mode, principal, governed-read, and TTL
   fields before outbox delivery, so forged credential metadata cannot become

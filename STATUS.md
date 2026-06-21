@@ -6,6 +6,28 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject credential storage-profile id drift`.
+  Outbox admission for `credentials.vend-attempted` now rejects replay when
+  the top-level `storage-profile-id` differs from the nested
+  `storage-profile.profile-id`. This also covers blocked or restricted
+  zero-credential events, so credential-root graph and OpenLineage anchors
+  cannot be selected from contradictory profile evidence.
+- Local verification for this credential storage-profile id drift slice is
+  green:
+  `cargo fmt -p lakecat-service`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_credential_storage_profile_id_drift_without_credentials -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_credential_response_profile_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service credential_vend -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject credential response replay drift`.
   Outbox admission for `credentials.vend-attempted` now rejects returned
   credential evidence whose catalog-derived storage-profile id, provider,
