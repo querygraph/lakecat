@@ -6,6 +6,21 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require full QGLake replay secret-ref hashes`.
+  QGLake operator-facing management and credential replay lines now fail closed
+  when secret-backed storage-profile evidence carries a short
+  `secret_ref_hash`, so readable replay output cannot summarize prefix-only
+  credential-root evidence that the structured verifier would reject.
+- Local verification for this QGLake replay-line hash slice is green:
+  `cargo fmt -p lakecat-cli`;
+  `cargo test -p lakecat-cli qglake_management_replay_line_summarizes_verified_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_credential_replay_line_rejects_short_secret_ref_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_credential_replay_line_summarizes_secret_ref_hashes -- --test-threads=1`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover secret-backed QGLake credential proof`.
   QGLake acceptance tests now prove the positive secret-ref-backed credential
   path: compact handoff summaries accept matching redacted provider/hash

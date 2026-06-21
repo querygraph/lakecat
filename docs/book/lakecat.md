@@ -2017,7 +2017,10 @@ production-shaped case too: when the storage profile uses a secret reference,
 the compact handoff accepts the proof only when the storage-profile branch and
 both credential branches agree on the redacted provider and full
 `secretRefHash`, and the operator replay line carries
-`secret_ref_hash=sha256:...` rather than a raw secret URI. It also compares
+`secret_ref_hash=sha256:...` rather than a raw secret URI. Those
+operator-facing management and credential replay lines also fail closed when
+secret-backed evidence has only a prefix-shaped or placeholder hash, so the
+human-readable proof cannot be weaker than the structured verifier. It also compares
 the captured `replay-evidence.credentials` restricted-agent and trusted-human
 branches with the compact `credentialVendingProof`, so a saved handoff cannot
 claim that agents were blocked onto Sail-planned reads or that humans used an

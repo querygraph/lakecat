@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tightened QGLake operator replay-line generation so storage-profile and
+  credential replay summaries require full SHA-256 secret-ref hashes instead
+  of rendering prefix-only placeholder credential-root evidence.
 - Added positive QGLake acceptance coverage for secret-ref-backed credential
   roots: compact handoff summaries and operator replay lines now prove matching
   redacted provider/hash evidence for production credential profiles.

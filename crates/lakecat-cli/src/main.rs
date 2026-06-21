@@ -4542,13 +4542,11 @@ fn qglake_storage_profile_upsert_line(event: &LineageDrainEventSummary) -> Optio
         let provider = event
             .storage_profile_secret_ref_provider
             .as_deref()
-            .filter(|provider| !provider.trim().is_empty())
-            .unwrap_or("unknown");
+            .filter(|provider| !provider.trim().is_empty())?;
         let hash = event
             .storage_profile_secret_ref_hash
             .as_deref()
-            .filter(|hash| is_sha256_hash(hash))
-            .unwrap_or("missing");
+            .filter(|hash| is_full_sha256_hash(hash))?;
         format!("{provider}:secret_ref_hash={hash}")
     } else {
         if event.storage_profile_secret_ref_provider.is_some()
@@ -5102,13 +5100,11 @@ fn qglake_credential_storage_profile_line(event: &LineageDrainEventSummary) -> O
         let provider = event
             .storage_profile_secret_ref_provider
             .as_deref()
-            .filter(|provider| !provider.trim().is_empty())
-            .unwrap_or("unknown");
+            .filter(|provider| !provider.trim().is_empty())?;
         let hash = event
             .storage_profile_secret_ref_hash
             .as_deref()
-            .filter(|hash| is_sha256_hash(hash))
-            .unwrap_or("missing");
+            .filter(|hash| is_full_sha256_hash(hash))?;
         format!("{provider}:secret_ref_hash={hash}")
     } else {
         if event.storage_profile_secret_ref_provider.is_some()
@@ -17617,6 +17613,44 @@ mod tests {
             .is_none(),
             "management replay line should reject secret-ref provider without presence"
         );
+
+        let mut upsert_with_short_secret_ref_hash = qglake_storage_profile_upsert_lineage_summary();
+        upsert_with_short_secret_ref_hash.storage_profile_secret_ref_present = Some(true);
+        upsert_with_short_secret_ref_hash.storage_profile_secret_ref_provider =
+            Some("typesec".to_string());
+        upsert_with_short_secret_ref_hash.storage_profile_secret_ref_hash =
+            Some("sha256:short-secret-ref".to_string());
+        assert!(
+            qglake_management_replay_line(&LineageDrainResponse {
+                delivered: 5,
+                event_types: vec![
+                    "server.listed".to_string(),
+                    "project.listed".to_string(),
+                    "warehouse.listed".to_string(),
+                    "policy-binding.listed".to_string(),
+                    "storage-profile.listed".to_string(),
+                ],
+                graph_events: 0,
+                lineage_events: 5,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![
+                    qglake_server_list_lineage_summary(),
+                    qglake_project_list_lineage_summary(),
+                    qglake_warehouse_list_lineage_summary(),
+                    qglake_policy_list_lineage_summary(),
+                    qglake_storage_profile_list_lineage_summary(),
+                    upsert_with_short_secret_ref_hash,
+                ],
+            })
+            .is_none(),
+            "management replay line should reject short secret-ref hash evidence"
+        );
     }
 
     #[test]
@@ -17710,6 +17744,45 @@ mod tests {
         assert!(line.contains(&format!(
             "secret_ref=typesec:secret_ref_hash={secret_ref_hash}"
         )));
+    }
+
+    #[test]
+    fn qglake_credential_replay_line_rejects_short_secret_ref_hashes() {
+        let mut restricted = qglake_restricted_credential_summary();
+        let mut human = qglake_human_credential_summary();
+        for event in [&mut restricted, &mut human] {
+            event.storage_profile_provider = Some("s3".to_string());
+            event.storage_profile_issuance_mode = Some("short-lived-secret-ref".to_string());
+            event.storage_profile_secret_ref_present = Some(true);
+            event.storage_profile_secret_ref_provider = Some("typesec".to_string());
+            event.storage_profile_secret_ref_hash = Some("sha256:short-secret-ref".to_string());
+        }
+
+        let line = qglake_credential_replay_line(
+            &LineageDrainResponse {
+                delivered: 2,
+                event_types: vec![
+                    "credentials.vend-attempted".to_string(),
+                    "credentials.vend-attempted".to_string(),
+                ],
+                graph_events: 0,
+                lineage_events: 2,
+                principal_subject: Some("did:example:agent".to_string()),
+                principal_kind: Some("agent".to_string()),
+                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                request_identity_state: Some("verified".to_string()),
+                request_identity_source: Some("x-lakecat-agent-did".to_string()),
+                typedid_envelope_hash: None,
+                typedid_proof_hash: None,
+                events: vec![restricted, human],
+            },
+            Some("did:example:agent"),
+        );
+
+        assert!(
+            line.is_none(),
+            "credential replay line must not summarize short secret-ref hash evidence"
+        );
     }
 
     #[test]
