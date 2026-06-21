@@ -1761,9 +1761,12 @@ directly in the compact summary. `verifiedTables` must include the stable LakeCa
 table id derived from that scope, such as `lakecat:table:local:default:events`;
 `verifiedViews` must include every accepted stable view id from LakeCat replay,
 such as `lakecat:view:local:default:active_customers_view`; and both arrays must
-match the QueryGraph table/view counts. Captured QueryGraph verify/import output
-must match those compact arrays exactly, which keeps a verified artifact set from
-being replayed against the wrong catalog tenant, table, or view. The
+match the QueryGraph table/view counts. LakeCat rejects duplicate entries in
+those manifests at outbox admission before graph or OpenLineage projection, and
+the compact handoff verifier repeats the check for archived summaries. Captured
+QueryGraph verify/import output must match those compact arrays exactly, which
+keeps a verified artifact set from being replayed against the wrong catalog
+tenant, table, or view. The
 `querygraphImportVerification` object is also a compact proof, not only a
 boolean: it repeats the QueryGraph import table/view ids, counts, bundle hash,
 graph hash, OpenLineage hash, QueryGraph import hash, and standards, and LakeCat
@@ -2443,8 +2446,9 @@ also parses the saved QueryGraph import plan and requires its embedded
 verification, table/view stable ids, semantic hashes, standards, and graph
 node/edge evidence to match the compact QueryGraph import proof. The verifier
 requires the compact `verifiedTables` and `verifiedViews` manifests to be
-duplicate-free as well as count-aligned, so a saved handoff cannot inflate the
-number of accepted tables or views by repeating an already accepted stable id.
+duplicate-free as well as count-aligned, matching service-side outbox admission,
+so a saved handoff cannot inflate the number of accepted tables or views by
+repeating an already accepted stable id.
 The verifier
 also compares those QueryGraph import-plan graph node and edge counts with the
 verified bootstrap bundle graph counts, so an import plan cannot keep the

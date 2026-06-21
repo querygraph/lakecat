@@ -3073,6 +3073,16 @@ fn validate_querygraph_bootstrap_event_evidence(
             "querygraph bootstrap view-count does not match verified-views",
         ));
     }
+    validate_unique_string_array(
+        event,
+        &verified_tables,
+        "querygraph bootstrap verified-tables",
+    )?;
+    validate_unique_string_array(
+        event,
+        &verified_views,
+        "querygraph bootstrap verified-views",
+    )?;
 
     let table_artifact_ids = validate_querygraph_artifacts(
         event,
@@ -3627,6 +3637,23 @@ fn validate_unique_hash_array(
             return Err(outbox_evidence_error(
                 event,
                 &format!("{label} must not contain duplicate hashes"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_unique_string_array(
+    event: &OutboxEvent,
+    values: &[String],
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let mut unique = BTreeSet::new();
+    for value in values {
+        if !unique.insert(value.as_str()) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} must not contain duplicate values"),
             ));
         }
     }
@@ -14593,6 +14620,98 @@ mod tests {
         ));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-bootstrap-view-receipt-drift"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_duplicate_querygraph_verified_tables() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let mut payload = valid_querygraph_bootstrap_payload(principal);
+        payload["payload"]["table-count"] = json!(2);
+        payload["payload"]["verified-tables"] =
+            json!(["local.default.events", "local.default.events"]);
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-bootstrap-duplicate-verified-tables".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                payload,
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("duplicate QueryGraph verified tables must fail");
+
+        let message = err.to_string();
+        assert!(message.contains("querygraph.bootstrap"));
+        assert!(
+            message
+                .contains("querygraph bootstrap verified-tables must not contain duplicate values")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-bootstrap-duplicate-verified-tables"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_duplicate_querygraph_verified_views() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let mut payload = valid_querygraph_bootstrap_payload(principal);
+        payload["payload"]["view-count"] = json!(2);
+        payload["payload"]["verified-views"] = json!([
+            "lakecat:view:local:default:active_customers",
+            "lakecat:view:local:default:active_customers"
+        ]);
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-bootstrap-duplicate-verified-views".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                payload,
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("duplicate QueryGraph verified views must fail");
+
+        let message = err.to_string();
+        assert!(message.contains("querygraph.bootstrap"));
+        assert!(
+            message
+                .contains("querygraph bootstrap verified-views must not contain duplicate values")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-bootstrap-duplicate-verified-views"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required `querygraph.bootstrap` outbox replay to reject duplicate
+  `verified-tables` and `verified-views` manifests before graph/OpenLineage
+  projection, matching compact QGLake handoff verification.
 - Required QGLake lineage-drain `eventTypes` to match replay summary event
   types as a multiset, so repeated valid event types such as credential or
   scan-task replay cannot hide missing or extra replay summaries.

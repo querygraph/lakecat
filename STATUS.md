@@ -6,6 +6,24 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject duplicate QueryGraph bootstrap manifests`.
+  `querygraph.bootstrap` outbox admission now rejects duplicate
+  `verified-tables` and `verified-views` stable IDs before graph projection,
+  OpenLineage projection, or delivery acknowledgement. The service-side replay
+  invariant now matches the compact QGLake handoff verifier, so malformed
+  bootstrap evidence cannot reach downstream sinks first.
+- Local verification for this QueryGraph bootstrap manifest slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_duplicate_querygraph_verified_tables -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_duplicate_querygraph_verified_views -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind QGLake drain eventTypes by multiplicity`.
   QGLake lineage-drain verification now compares the top-level `eventTypes`
   list with replay summary event types as a multiset. Archived drains can no
