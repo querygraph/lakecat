@@ -6,6 +6,20 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require table commit principal replay`.
+  Service `table.commit` outbox admission now rejects commit replay that omits
+  the embedded commit principal, and still requires that principal to match the
+  authorization receipt principal before acknowledgement, graph projection, or
+  OpenLineage projection.
+- Local verification for this table commit principal slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_missing_table_commit_principal_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_mismatched_table_commit_principal_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service table_commit -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require management-list replay IDs`.
   Service outbox admission now rejects management-list replay that omits the
   count-aligned stable ID arrays for servers, projects, warehouses, policies,

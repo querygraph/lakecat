@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required `table.commit` replay evidence to carry a valid commit principal
+  matching the authorization receipt principal before acknowledgement, graph
+  projection, or OpenLineage projection.
 - Required management-list replay to carry count-aligned, syntactically valid,
   duplicate-free ID arrays before acknowledgement, graph projection, or
   OpenLineage projection, instead of accepting omitted identity arrays.

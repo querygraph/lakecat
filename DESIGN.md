@@ -572,9 +572,10 @@ number before acknowledgement or projection, matching the positive,
 strictly-increasing invariant used by commit-history replay.
 It must also carry non-empty new metadata pointer evidence, and any previous
 metadata pointer evidence must be non-empty when present, before
-acknowledgement or projection. The commit principal embedded in replay evidence
-must match the authorization receipt principal before graph or OpenLineage
-projection, so replay cannot attribute the same commit to two actors.
+acknowledgement or projection. The replay evidence must include a valid commit
+principal matching the authorization receipt principal before graph or
+OpenLineage projection, so replay cannot drop or rewrite the actor associated
+with a committed pointer transition.
 
 ### P4 Semantic Catalog Graph
 
