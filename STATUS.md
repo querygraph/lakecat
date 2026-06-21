@@ -6,6 +6,31 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind compact view receipt hash arrays to structure`.
+  QGLake handoff verification now requires each namespace view receipt-chain
+  summary's `chainHashes` and `receiptHashes` arrays to be duplicate-free,
+  rejects duplicate structural chain hashes, and requires `receiptHashes` to
+  match the structural
+  `receiptChains[].chains[].receipts[].receiptHash` set exactly. Saved compact
+  view proofs are rejected when namespace hash arrays include extra hashes,
+  omit structural receipt hashes, or duplicate view-history chain evidence.
+- Local verification for this compact receipt hash array binding slice is
+  green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_duplicate_view_receipt_chain_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_duplicate_structural_view_chain_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_duplicate_view_receipt_hashes -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_view_receipt_hash_structural_mismatch -- --nocapture`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_compact_proofs -- --nocapture`;
+  `cargo test -p lakecat-cli qglake`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, ran
+  LakeCat replay, QueryGraph verify/import, verified duplicate-free exact
+  compact view receipt hash array coverage, and ended with
+  `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Bind compact view hash coverage per stable view`.
   QGLake handoff verification now maps structural receipt-chain hashes and
   per-receipt hashes by stable view ID. Accepted view

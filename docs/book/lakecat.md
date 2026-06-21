@@ -1835,7 +1835,12 @@ receipt-chain summary, and every receipt's stable ID, warehouse, namespace, and
 view name must match the chain identity. Each structural chain stable ID is
 also checked against its own warehouse, namespace, and view-name components, so
 compact evidence cannot splice receipts across views or namespaces while
-preserving hash-shaped fields.
+preserving hash-shaped fields. Structural chain bodies cannot repeat a
+`chainHash`. The enclosing namespace `chainHashes` and `receiptHashes` arrays
+are duplicate-free summaries of those same structural chains, and
+`receiptHashes` must match the structural per-receipt hashes exactly, so a
+compact proof cannot hide extra receipt hashes or omit receipts from the
+ordered chain bodies.
 `qglake-verify-handoff` rejects a chain whose first receipt is not version 1
 `upsert`, whose previous links do not point to the prior receipt, whose upsert
 skips a version, whose drop advances the durable version, whose operation is
@@ -1855,8 +1860,9 @@ both the accepted pre-drop chain and a structural drop chain whose final receipt
 is the tombstone. Tombstoned views must also include tombstone receipt evidence
 whose `expectedViewVersion` preserves the accepted view version. A consumer can
 reject a handoff whose view history claim lacks identity, accepted-version,
-count-aligned hash-chain evidence, same-view accepted-chain coverage, tombstone
-guard evidence, same-view tombstone receipt coverage, or replay evidence before
+count-aligned hash-chain evidence, duplicate-free exact structural receipt-hash
+coverage, same-view accepted-chain coverage, tombstone guard evidence,
+same-view tombstone receipt coverage, or replay evidence before
 parsing the full replay tree. It compares captured LakeCat replay
 `replay-evidence.management` list counts with compact
 `lakecatReplayVerification.managementProof`, requiring positive server,

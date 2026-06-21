@@ -3743,6 +3743,37 @@ fn require_verified_view_receipt_chain_structures(
     .iter()
     .filter_map(Value::as_str)
     .collect::<BTreeSet<_>>();
+    let declared_chain_hash_count = required_array(
+        chain_group,
+        "chainHashes",
+        "viewReceiptChainProof.receiptChains[]",
+    )?
+    .len();
+    if declared_chain_hash_count != chain_hashes.len() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].chainHashes must not contain duplicate hashes"
+        )));
+    }
+    let receipt_hashes = required_array(
+        chain_group,
+        "receiptHashes",
+        "viewReceiptChainProof.receiptChains[]",
+    )?
+    .iter()
+    .filter_map(Value::as_str)
+    .map(str::to_string)
+    .collect::<BTreeSet<_>>();
+    let declared_receipt_hash_count = required_array(
+        chain_group,
+        "receiptHashes",
+        "viewReceiptChainProof.receiptChains[]",
+    )?
+    .len();
+    if declared_receipt_hash_count != receipt_hashes.len() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].receiptHashes must not contain duplicate hashes"
+        )));
+    }
     let chains = required_array(
         chain_group,
         "chains",
@@ -3765,6 +3796,8 @@ fn require_verified_view_receipt_chain_structures(
         "viewReceiptChainProof.receiptChains[]",
     )?;
 
+    let mut structural_receipt_hashes = BTreeSet::new();
+    let mut structural_chain_hashes = BTreeSet::new();
     for (chain_index, chain) in chains.iter().enumerate() {
         let chain = chain.as_object().ok_or_else(|| {
             lakecat_core::LakeCatError::InvalidArgument(format!(
@@ -3780,7 +3813,14 @@ fn require_verified_view_receipt_chain_structures(
             group_namespace,
             verified_chain_hashes_by_view,
             chain_receipt_hashes_by_view,
+            &mut structural_chain_hashes,
+            &mut structural_receipt_hashes,
         )?;
+    }
+    if structural_receipt_hashes != receipt_hashes {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].receiptHashes must match receiptChains[].chains[].receipts[].receiptHash exactly"
+        )));
     }
     Ok(())
 }
@@ -3794,6 +3834,8 @@ fn require_verified_view_receipt_chain_structure(
     group_namespace: &[Value],
     verified_chain_hashes_by_view: &mut BTreeMap<String, BTreeSet<String>>,
     chain_receipt_hashes_by_view: &mut BTreeMap<String, BTreeSet<String>>,
+    structural_chain_hashes: &mut BTreeSet<String>,
+    structural_receipt_hashes: &mut BTreeSet<String>,
 ) -> lakecat_core::LakeCatResult<()> {
     let label = "viewReceiptChainProof.receiptChains[].chains[]";
     let stable_id = require_non_empty_str(chain, "stableId", label)?;
@@ -3824,6 +3866,11 @@ fn require_verified_view_receipt_chain_structure(
     if !chain_hashes.contains(chain_hash) {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].chainHash is not covered by chainHashes"
+        )));
+    }
+    if !structural_chain_hashes.insert(chain_hash.to_string()) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].chains[] must not contain duplicate chainHash values"
         )));
     }
     verified_chain_hashes_by_view
@@ -3867,6 +3914,7 @@ fn require_verified_view_receipt_chain_structure(
         namespace,
         name,
         chain_receipt_hashes_by_view,
+        structural_receipt_hashes,
     )
 }
 
@@ -3881,6 +3929,7 @@ fn require_verified_view_receipts(
     expected_namespace: &[Value],
     expected_name: &str,
     chain_receipt_hashes_by_view: &mut BTreeMap<String, BTreeSet<String>>,
+    structural_receipt_hashes: &mut BTreeSet<String>,
 ) -> lakecat_core::LakeCatResult<()> {
     let mut previous_view_version: Option<u64> = None;
     let mut previous_receipt_hash: Option<String> = None;
@@ -3931,6 +3980,7 @@ fn require_verified_view_receipts(
             .entry(expected_stable_id.to_string())
             .or_default()
             .insert(receipt_hash.to_string());
+        structural_receipt_hashes.insert(receipt_hash.to_string());
 
         if receipt_index == 0 {
             if operation != "upsert"
@@ -12207,6 +12257,52 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_view_receipt_chain_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        let duplicate_chain_hash = qglake_fixture_hash("view-receipt-chain");
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chainHashes"] =
+            json!([duplicate_chain_hash.clone(), duplicate_chain_hash.clone()]);
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chains"]
+            [1]["chainHash"] = json!(duplicate_chain_hash);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicate view receipt-chain hashes");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("chainHashes"));
+        assert!(err.to_string().contains("duplicate"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_structural_view_chain_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chains"]
+            [1]["chainHash"] = json!(qglake_fixture_hash("view-receipt-chain"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicate structural view chain hashes");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("chainHash"));
+        assert!(err.to_string().contains("duplicate"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_view_receipt_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        let duplicate_receipt_hash = qglake_fixture_hash("view-receipt");
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["receiptHashes"] =
+            json!([duplicate_receipt_hash.clone(), duplicate_receipt_hash]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicate view receipt hashes");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("receiptHashes"));
+        assert!(err.to_string().contains("duplicate"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_verified_view_receipt_chain_count() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["verifiedChainCount"] =
@@ -12251,6 +12347,27 @@ mod tests {
         assert!(err.to_string().contains("viewReceiptChainProof"));
         assert!(err.to_string().contains("receiptHashes"));
         assert!(err.to_string().contains("cover"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_view_receipt_hash_structural_mismatch() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["receiptHashes"] =
+            json!([
+                qglake_fixture_hash("view-receipt"),
+                qglake_fixture_hash("extra-view-receipt")
+            ]);
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject receipt hash arrays that do not match structural receipts",
+        );
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("receiptHashes"));
+        assert!(
+            err.to_string()
+                .contains("chains[].receipts[].receiptHash exactly")
+        );
     }
 
     #[test]

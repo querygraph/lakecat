@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Required compact QGLake namespace view `chainHashes` and `receiptHashes`
+  arrays to be duplicate-free, rejected duplicate structural chain hashes, and
+  required declared receipt hashes to match the structural
+  `receiptChains[].chains[]` proof bodies exactly, so saved handoff summaries
+  cannot carry extra, omitted, or duplicated view-history hash evidence.
 - Bound compact QGLake accepted receipt-chain hashes and tombstone receipt
   hashes to structural receipt-chain evidence for the same stable view, so
   saved handoff summaries reject cross-view hash splicing within a namespace.

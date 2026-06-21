@@ -379,8 +379,10 @@ view deletion to the captured LakeCat replay artifact. The standalone
 `expectedViewVersion` match against the accepted view version, so compact
 handoff summaries remain self-verifying outside the shell harness. The compact
 handoff verifier also requires namespace receipt-chain `verifiedChainCount`
-values to match the chain hashes they summarize and requires receipt hashes to
-cover those chains. Active accepted views must also have their
+values to match the chain hashes they summarize, requires duplicate-free
+namespace chain and receipt hash arrays, rejects duplicate structural
+`chainHash` values, and requires receipt hashes to match the structural
+per-receipt hashes in those chains exactly. Active accepted views must also have their
 `acceptedReceiptChainHash` in the namespace `chainHashes` evidence, binding
 compact per-view proof to namespace receipt-chain replay without moving
 reusable graph traversal or taxonomy into LakeCat. Tombstoned accepted views
