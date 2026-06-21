@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving `table.scan-tasks-fetched`
+  rejects duplicate required-projection evidence before acknowledgement, graph
+  projection, or OpenLineage projection.
 - Added explicit Sail-local v4 bridge partition-literal regression coverage to
   the full local release-readiness gate and dependency contract, keeping null
   and nested partition values in the local-first release proof.
