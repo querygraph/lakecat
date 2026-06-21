@@ -480,6 +480,10 @@ Scan-planned and scan-tasks-fetched outbox admission must also reject missing
 or malformed `row-predicate` proof whenever governed read-restriction evidence
 is present, and fetched `required-filters` proof must exactly preserve that
 row predicate before the event is acknowledged.
+Planned and fetched scan outbox admission now also rejects governed
+read-restriction evidence whose purpose is missing/blank or whose
+`max-credential-ttl-seconds` cap is missing or non-positive, so the service
+boundary enforces the purpose/TTL proof QGLake later verifies.
 Read-restriction `policy-hashes` must remain non-empty, full SHA-256-shaped,
 and duplicate-free at outbox admission as well as in later replay artifacts.
 Prefer upstream Sail APIs for any reusable planner or manifest work.

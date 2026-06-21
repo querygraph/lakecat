@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require scan replay purpose and TTL`.
+  Service outbox admission now rejects `table.scan-planned` and
+  `table.scan-tasks-fetched` replay whose governed read restriction drops a
+  nonblank purpose or a positive `max-credential-ttl-seconds` cap before
+  acknowledgement, graph projection, or OpenLineage projection.
+- Local verification for this scan replay purpose/TTL slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Expand catalog concepts in the LakeCat book`.
   The book now separates standard Iceberg catalog vocabulary from LakeCat
   implementation choices and QueryGraph/TypeSec control-plane extensions, and

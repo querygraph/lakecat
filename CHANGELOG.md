@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Required service `table.scan-planned` and `table.scan-tasks-fetched` replay
+  admission to reject governed read-restriction evidence whose purpose is
+  missing/blank or whose `max-credential-ttl-seconds` cap is missing or
+  non-positive before acknowledgement, graph projection, or OpenLineage
+  projection.
 - Expanded the LakeCat book's catalog-concepts material to distinguish
   standard Iceberg vocabulary from LakeCat implementation choices and
   QueryGraph/TypeSec control-plane extensions, including a detailed argument

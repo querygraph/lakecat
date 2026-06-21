@@ -516,7 +516,11 @@ legacy token cannot silently expand back to all columns. Outbox admission also
 checks that governed planned/fetched scan replay carries the same
 `read-restriction` in the top-level payload and in
 `authorization-receipt.context.read-restriction`, so replay cannot claim policy
-narrowing that the durable receipt did not capture.
+narrowing that the durable receipt did not capture. The same admission boundary
+requires governed scan replay to keep a nonblank `purpose` and a positive
+`max-credential-ttl-seconds` value before graph or OpenLineage projection, so a
+QGLake handoff cannot learn task evidence whose purpose or credential TTL cap
+was lost before replay.
 
 ## The Commit Path
 
@@ -736,7 +740,9 @@ while the top-level scan event looks valid. LakeCat also rejects both planned
 and fetched scan replay when the top-level `read-restriction` differs from
 `authorization-receipt.context.read-restriction`, so graph and OpenLineage
 evidence cannot drift from the TypeSec receipt that authorized the narrowed
-read. Table
+read. Planned and fetched scan replay must also carry nonblank purpose evidence
+and a positive policy-derived credential TTL cap before the outbox event can be
+acknowledged or projected. Table
 commit events receive the same treatment for compact
 commit receipt evidence: `request_hash`, `response_hash`,
 `idempotency_key_sha256`, and any present `policy_hash` must be full digests
