@@ -6,6 +6,21 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Encode nested Sail partition literals`.
+  The LakeCat Sail adapter now converts null partition slots to JSON `null`
+  and recursively encodes Sail `Struct`, `List`, and `Map` literals for
+  Iceberg REST manifest expansion instead of rejecting richer partition
+  tuples.
+- Local verification for this Sail partition-literal bridge is green:
+  `cargo fmt -p lakecat-sail`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -- --check`;
+  `cargo test -p lakecat-sail --features sail-local encodes_null_and_nested_partition_literals_for_iceberg_rest -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test -p lakecat-sail --features sail-local -- --test-threads=1`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind captured QGLake credential prefix hashes`.
   Captured LakeCat replay credential branches now compare
   `credentialPrefixHashes` against compact `credentialVendingProof`, so an

@@ -4282,14 +4282,9 @@ pub mod sail_integration {
     ) -> LakeCatResult<Vec<Value>> {
         partition
             .iter()
-            .map(|literal| {
-                match literal {
+            .map(|literal| match literal {
                 Some(literal) => rest_literal_value(literal),
-                None => Err(LakeCatError::NotSupported(
-                    "Iceberg REST partition null values are not yet supported by LakeCat conversion"
-                        .to_string(),
-                )),
-            }
+                None => Ok(Value::Null),
             })
             .collect()
     }
@@ -4297,12 +4292,40 @@ pub mod sail_integration {
     fn rest_literal_value(literal: &sail_iceberg::spec::Literal) -> LakeCatResult<Value> {
         match literal {
             sail_iceberg::spec::Literal::Primitive(value) => rest_primitive_literal_value(value),
-            sail_iceberg::spec::Literal::Struct(_)
-            | sail_iceberg::spec::Literal::List(_)
-            | sail_iceberg::spec::Literal::Map(_) => Err(LakeCatError::NotSupported(
-                "nested Iceberg partition values are not yet supported by LakeCat conversion"
-                    .to_string(),
-            )),
+            sail_iceberg::spec::Literal::Struct(fields) => {
+                let mut object = serde_json::Map::with_capacity(fields.len());
+                for (name, value) in fields {
+                    object.insert(
+                        name.clone(),
+                        match value {
+                            Some(value) => rest_literal_value(value)?,
+                            None => Value::Null,
+                        },
+                    );
+                }
+                Ok(Value::Object(object))
+            }
+            sail_iceberg::spec::Literal::List(items) => items
+                .iter()
+                .map(|item| match item {
+                    Some(item) => rest_literal_value(item),
+                    None => Ok(Value::Null),
+                })
+                .collect::<LakeCatResult<Vec<_>>>()
+                .map(Value::Array),
+            sail_iceberg::spec::Literal::Map(entries) => entries
+                .iter()
+                .map(|(key, value)| {
+                    Ok(json!({
+                        "key": rest_literal_value(key)?,
+                        "value": match value {
+                            Some(value) => rest_literal_value(value)?,
+                            None => Value::Null,
+                        },
+                    }))
+                })
+                .collect::<LakeCatResult<Vec<_>>>()
+                .map(Value::Array),
         }
     }
 
@@ -4939,7 +4962,7 @@ pub mod sail_integration {
 
         use lakecat_core::{Namespace, Principal, TableIdent, TableName, WarehouseName};
         use sail_iceberg::spec::{
-            DataContentType, DataFile, DataFileFormat, FormatVersion, ManifestContentType,
+            DataContentType, DataFile, DataFileFormat, FormatVersion, Literal, ManifestContentType,
             ManifestFile, ManifestListWriter, ManifestMetadata, ManifestWriterBuilder,
             PrimitiveLiteral, PrimitiveType,
         };
@@ -5160,6 +5183,51 @@ pub mod sail_integration {
             );
             assert_eq!(residual.pointer("/projection"), Some(&json!(["id"])));
             assert_eq!(residual.pointer("/filters/0/type"), Some(&json!("eq")));
+        }
+
+        #[test]
+        fn encodes_null_and_nested_partition_literals_for_iceberg_rest() {
+            let partition = rest_partition_values(&[
+                None,
+                Some(Literal::Struct(vec![
+                    (
+                        "region".to_string(),
+                        Some(Literal::Primitive(PrimitiveLiteral::String(
+                            "west".to_string(),
+                        ))),
+                    ),
+                    ("bucket".to_string(), None),
+                ])),
+                Some(Literal::List(vec![
+                    Some(Literal::Primitive(PrimitiveLiteral::Int(7))),
+                    None,
+                ])),
+                Some(Literal::Map(vec![(
+                    Literal::Primitive(PrimitiveLiteral::String("tier".to_string())),
+                    Some(Literal::Primitive(PrimitiveLiteral::String(
+                        "gold".to_string(),
+                    ))),
+                )])),
+            ])
+            .expect("partition literals should encode as REST JSON");
+
+            assert_eq!(
+                Value::Array(partition),
+                json!([
+                    null,
+                    {
+                        "region": "west",
+                        "bucket": null
+                    },
+                    [7, null],
+                    [
+                        {
+                            "key": "tier",
+                            "value": "gold"
+                        }
+                    ]
+                ])
+            );
         }
 
         #[tokio::test]

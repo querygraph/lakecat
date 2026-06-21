@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Encoded null and nested Sail Iceberg partition literals into Iceberg REST
+  JSON instead of rejecting them in the LakeCat Sail adapter, keeping manifest
+  expansion compatible with richer partition tuples while typed v4 Sail work
+  continues upstream.
 - Bound captured LakeCat replay `credentialPrefixHashes` to the compact QGLake
   `credentialVendingProof`, so archived handoffs are rejected when captured
   restricted-agent or trusted-human credential prefix evidence drifts from the

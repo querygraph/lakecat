@@ -961,6 +961,13 @@ with duplicate-free keys, so a saved outbox event cannot say both
 `lakecat.format.v4.typed-sail=unavailable` and
 `lakecat.format.v4.typed-sail=available`.
 
+The bridge is intentionally conservative, but it should not reject Iceberg
+metadata that Sail has already decoded. Manifest expansion now emits null
+partition slots as JSON `null` and recursively encodes nested Sail partition
+literals into JSON objects, arrays, and explicit key/value map entries. That
+keeps standard Iceberg REST fetch responses usable for richer partition tuples
+without pretending LakeCat owns a full typed v4 implementation.
+
 At this point the catalog is already doing more than route HTTP. It has a
 warehouse identity, a store, a governance engine, a Sail planning seam, a graph
 sink, and a lineage sink. Embedded defaults keep the local loop small, but the

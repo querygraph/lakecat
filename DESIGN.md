@@ -578,6 +578,10 @@ Catalog config should advertise the current bridge honestly:
 `lakecat.format.v4=extension-ready`,
 `lakecat.format.v4.bridge=json-passthrough`, and
 `lakecat.format.v4.typed-sail=unavailable` until typed Sail v4 support exists.
+The bridge should still preserve Iceberg REST compatibility for the Sail
+metadata it can already decode: manifest expansion must encode null partition
+slots and nested Sail literals as JSON instead of treating those partition
+tuples as unsupported.
 Replay evidence for those defaults must stay unambiguous: defaults are
 structured string key/value entries, duplicate keys are rejected, and stale or
 contradictory v4 bridge claims fail before graph or OpenLineage projection.
