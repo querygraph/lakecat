@@ -2543,6 +2543,7 @@ fn validate_optional_management_id_array(
             &format!("{label} {field} count must match {label} count"),
         ));
     }
+    let mut unique_ids = BTreeSet::new();
     for id in ids {
         let Some(id) = id.as_str().filter(|id| !id.is_empty()) else {
             return Err(outbox_evidence_error(
@@ -2550,6 +2551,12 @@ fn validate_optional_management_id_array(
                 &format!("{label} {field} must contain non-empty strings"),
             ));
         };
+        if !unique_ids.insert(id) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} {field} must not contain duplicate identifiers"),
+            ));
+        }
         if !is_valid_id(id) {
             return Err(outbox_evidence_error(
                 event,
@@ -15760,6 +15767,61 @@ mod tests {
             lineage_events[0].payload["storage-profile"]
                 .get("secret-ref")
                 .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_duplicate_management_list_ids() {
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-duplicate-server-list-ids".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "server.listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-duplicate-server-list-ids",
+                    "event-type": "server.listed",
+                    "payload": {
+                        "server-count": 2,
+                        "server-ids": ["prod", "prod"],
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("duplicate management-list IDs should fail before delivery");
+
+        let message = err.to_string();
+        assert!(
+            message.contains("outbox event server.listed (lakecat.lineage-and-graph) has invalid")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains("server list server-ids must not contain duplicate identifiers"));
+        assert!(!message.contains("evt-duplicate-server-list-ids"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "duplicate management-list IDs must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "duplicate management-list IDs must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "duplicate management-list IDs must fail before lineage projection"
         );
     }
 

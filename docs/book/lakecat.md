@@ -2165,16 +2165,17 @@ and traversal model. The durable audit/outbox payload carries only the redacted
 stable ID arrays beside the counts: policy ids, project ids, server ids,
 storage-profile ids, and warehouse names. Before projection, LakeCat rejects a
 management-list event when an optional ID array is malformed, contains an
-invalid identifier, or no longer matches the recorded count. The drain response
-lifts their counts, ID arrays, and management scope into compact fields, so
-QueryGraph can verify the control-plane read evidence without opening the raw
-lineage payload. It also carries replay and OpenLineage hash arrays for those
-management-list reads, so a compact handoff cannot prove only that the right
-number of management records existed while losing the identities or receipt
-evidence for the reads. The lineage-drain verifier rejects those source replay
-events when the ID arrays are missing, empty, count-drifted, or when the receipt
-arrays are empty or not SHA-256-shaped, so the compact `managementProof` starts
-from verified replay evidence rather than untrusted text. The compact handoff
+invalid identifier, repeats an identifier, or no longer matches the recorded
+count. The drain response lifts their counts, ID arrays, and management scope
+into compact fields, so QueryGraph can verify the control-plane read evidence
+without opening the raw lineage payload. It also carries replay and OpenLineage
+hash arrays for those management-list reads, so a compact handoff cannot prove
+only that the right number of management records existed while losing the
+identities or receipt evidence for the reads. The lineage-drain verifier rejects
+those source replay events when the ID arrays are missing, empty,
+duplicate-inflated, count-drifted, or when the receipt arrays are empty or not
+SHA-256-shaped, so the compact `managementProof` starts from verified replay
+evidence rather than untrusted text. The compact handoff
 verifier repeats that check with the stricter full `sha256:`-prefixed 64-hex
 digest shape for every management replay and OpenLineage array, and it verifies
 that `serverIds`, `projectIds`, `warehouseNames`, `policyIds`, and

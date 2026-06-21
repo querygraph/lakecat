@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required management-list replay ID arrays to be duplicate-free before
+  graph/OpenLineage projection, so server, project, warehouse, policy, or
+  storage-profile list counts cannot be inflated with repeated identifiers.
 - Required table commit-history replay `sequence-numbers` to be positive and
   strictly increasing before graph/OpenLineage projection, so duplicated or
   reordered pointer-log evidence cannot become accepted replay.

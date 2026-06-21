@@ -540,6 +540,10 @@ restricted Sail-planned reads are the safer default. Any configured
 secret-manager or credential issuer backend must return credentials scoped no
 broader than the LakeCat storage profile that selected it; scope-rejection
 evidence should stay hash-only and must not emit credential replay records.
+Management-list replay should carry count-aligned, syntactically valid,
+duplicate-free ID arrays before projection, so compact QueryGraph proof cannot
+inflate server, project, warehouse, policy, or storage-profile reads with
+repeated identities.
 
 View mutation guards must remain positive, store-assigned version checks so
 QueryGraph receipt chains cannot be extended by invalid guarded requests.
