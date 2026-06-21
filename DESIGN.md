@@ -472,7 +472,8 @@ anchors. Scan replay must preserve the server-derived purpose and
 policy-derived TTL cap in both captured LakeCat replay text and compact handoff
 proof. Credential replay must preserve the policy-derived TTL cap and redacted
 storage-scope hash in both the captured LakeCat replay evidence and compact
-handoff summary.
+handoff summary. Credential-vend replay should fail when top-level
+read-restriction evidence drifts from the authorization receipt context.
 
 View receipt-chain proof must remain a structural proof, not just a bag of
 hashes: the first receipt must be a version-1 upsert without previous-link

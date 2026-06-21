@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required credential-vend replay read restrictions to match the authorization
+  receipt context before outbox delivery, so credential replay cannot preserve
+  policy-derived TTL or blocked-read evidence outside the durable receipt.
 - Required scan replay read restrictions to match the authorization receipt
   context before outbox delivery, so governed planned/fetched scan evidence
   cannot claim policy narrowing that the durable receipt did not capture.

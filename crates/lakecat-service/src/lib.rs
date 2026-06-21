@@ -1567,7 +1567,7 @@ fn validate_scan_planned_event_evidence(
         "scan-planned",
         &effective_projection,
     )?;
-    validate_scan_read_restriction_receipt_match(event, payload, "scan-planned")?;
+    validate_read_restriction_receipt_match(event, payload, "scan-planned")?;
 
     let requested_stats = validate_required_string_array_field(
         event,
@@ -1632,7 +1632,7 @@ fn validate_scan_tasks_fetched_event_evidence(
         "scan-tasks-fetched",
         &effective_projection,
     )?;
-    validate_scan_read_restriction_receipt_match(event, payload, "scan-tasks-fetched")?;
+    validate_read_restriction_receipt_match(event, payload, "scan-tasks-fetched")?;
     let Some(required_filters) = payload.get("required-filters") else {
         return Err(outbox_evidence_error(
             event,
@@ -1648,7 +1648,7 @@ fn validate_scan_tasks_fetched_event_evidence(
     Ok(())
 }
 
-fn validate_scan_read_restriction_receipt_match(
+fn validate_read_restriction_receipt_match(
     event: &OutboxEvent,
     payload: &Value,
     label: &str,
@@ -2509,6 +2509,8 @@ fn validate_credential_vend_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_read_restriction_receipt_match(event, payload, "credential-vend")?;
+
     let Some(credential_count) = payload.get("credential-count").and_then(Value::as_u64) else {
         return Err(outbox_evidence_error(
             event,
@@ -11771,6 +11773,91 @@ mod tests {
         assert!(message.contains("location-prefix-hash"));
         assert!(message.contains("full SHA-256"));
         assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_credential_restriction_missing_from_receipt_context() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-restriction-missing-receipt-context".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-restriction-missing-receipt-context",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": {
+                            "allowed-columns": ["event_id"],
+                            "row-predicate": {
+                                "type": "eq",
+                                "term": "event_id",
+                                "value": "evt-1"
+                            },
+                            "max-credential-ttl-seconds": 300,
+                            "policy-hashes": [
+                                "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                            ]
+                        },
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "storage-profile-id": "events-local",
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("credential restriction must be copied into the receipt context");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains(
+            "credential-vend read-restriction must be captured in authorization receipt context"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-credential-restriction-missing-receipt-context"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

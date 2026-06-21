@@ -642,7 +642,11 @@ issuer-owned credential details such as credential kind and provider session
 tokens. LakeCat records the same decision shape in audit/outbox evidence without
 copying raw credentials: each vended credential gets a hashed prefix, canonical
 LakeCat evidence values, and a hash of issuer-owned config. Replay can prove
-the response posture, but it does not inherit cloud session tokens.
+the response posture, but it does not inherit cloud session tokens. If the
+credential event carries a governed read restriction, outbox admission requires
+the top-level `read-restriction` to match
+`authorization-receipt.context.read-restriction`, keeping TTL and blocked-read
+evidence inside the durable receipt.
 
 ## Rust-First Engines And The V3 To V4 Path
 
@@ -1959,6 +1963,10 @@ credential-response evidence, full SHA-256 prefix and issuer-config hashes for
 each returned credential, a full storage-profile `location-prefix-hash`, and
 non-contradictory secret-reference state. A malformed credential replay event
 therefore remains pending instead of becoming graph or OpenLineage evidence.
+Credential replay also rejects a governed `read-restriction` that is missing
+from, or different from, the authorization receipt context, so credential TTL
+and blocked-agent evidence cannot drift away from the receipt that authorized
+the decision.
 Source replay and compact handoff verification both reserve
 `rawCredentialExceptionReason` for the audited trusted-human path; a restricted
 agent proof must be blocked with `blockReason` and cannot carry a raw
