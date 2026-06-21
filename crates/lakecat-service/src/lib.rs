@@ -24943,6 +24943,92 @@ mod tests {
         let response = app.clone().oneshot(repeated_drop).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
+        let recreate = Request::builder()
+            .method(Method::PUT)
+            .uri("/management/v1/warehouses/local/namespaces/default/views/active_customers")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                serde_json::json!({
+                    "sql": "select id from customers where active",
+                    "dialect": "sql",
+                    "schema-version": 3,
+                    "properties": {
+                        "semantic-domain": "customer"
+                    }
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(recreate).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["view-version"], serde_json::json!(3));
+
+        let receipts_after_recreate = Request::builder()
+            .method(Method::GET)
+            .uri(
+                "/management/v1/warehouses/local/namespaces/default/views/active_customers/version-receipts",
+            )
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(receipts_after_recreate).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let receipts = body["receipts"].as_array().unwrap();
+        assert_eq!(receipts.len(), 4);
+        assert_eq!(receipts[3]["view-version"], serde_json::json!(3));
+        assert_eq!(receipts[3]["previous-view-version"], serde_json::json!(2));
+        assert_eq!(
+            receipts[3]["previous-receipt-hash"],
+            receipts[2]["receipt-hash"]
+        );
+        assert_eq!(receipts[3]["operation"], serde_json::json!("upsert"));
+        assert_ne!(receipts[3]["view-hash"], receipts[2]["view-hash"]);
+        assert!(
+            receipts[3]["receipt-hash"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
+        );
+
+        let chains_after_recreate = Request::builder()
+            .method(Method::GET)
+            .uri("/management/v1/warehouses/local/namespaces/default/view-version-receipt-chains")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(chains_after_recreate).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let chains = body["chains"].as_array().unwrap();
+        let recreated_chain = chains
+            .iter()
+            .find(|chain| chain["name"] == serde_json::json!("active_customers"))
+            .unwrap();
+        assert_eq!(recreated_chain["tombstoned"], serde_json::json!(false));
+        assert_eq!(recreated_chain["latest-view-version"], serde_json::json!(3));
+        assert_eq!(
+            recreated_chain["latest-operation"],
+            serde_json::json!("upsert")
+        );
+        assert_eq!(recreated_chain["receipt-count"], serde_json::json!(4));
+        assert_eq!(recreated_chain["chain-verified"], serde_json::json!(true));
+        assert!(
+            recreated_chain["chain-hash"]
+                .as_str()
+                .is_some_and(is_full_sha256_hash)
+        );
+
         let missing = Request::builder()
             .method(Method::GET)
             .uri("/catalog/v1/local/namespaces/default/views/missing_view")

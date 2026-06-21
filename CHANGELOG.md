@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added management-route regression coverage proving recreated views surface as
+  the next active durable version and as verified non-tombstoned receipt chains
+  through the governed view receipt endpoints.
 - Continued durable view-version receipt chains across drop/recreate in both
   memory and Turso stores: recreating a dropped view now advances after the
   latest tombstone receipt and links to that receipt instead of starting a

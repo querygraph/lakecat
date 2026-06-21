@@ -6,6 +6,17 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover view recreate chains at the management route`.
+  The service management view workflow now has route-level regression coverage
+  that creates, updates, drops, and recreates a view, then proves the governed
+  version-receipts endpoint returns the recreated view as version 3 linked to
+  the tombstone receipt and the namespace receipt-chain endpoint reports a
+  verified, non-tombstoned chain.
+- Local verification for this management-route view recreate slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service management_views_are_durable_management_entities -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Continue view receipt chains across drop/recreate`.
   Memory and Turso stores now assign a recreated view the next durable
   `view-version` after the latest receipt, including a drop tombstone, and the
