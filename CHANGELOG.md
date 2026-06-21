@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Strengthened the workflow-trigger contract self-test with multi-file
+  `.yml`/`.yaml` cases, proving the manual-only guard accepts multiple manual
+  workflows and rejects an automatic trigger hidden in a secondary workflow
+  file before release-readiness can pass.
 - Expanded the LakeCat book with an implementation-status ledger that separates
   standard Iceberg parlance from LakeCat implementation details,
   LakeCat/QueryGraph optional catalog extensions, TypeSec governance proof, and

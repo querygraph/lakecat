@@ -6,12 +6,21 @@ contract_script="$repo_root/scripts/check-local-dependency-contract.sh"
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
+write_workflows() {
+  rm -rf "$tmp_dir/workflows"
+  mkdir -p "$tmp_dir/workflows"
+  while [[ "$#" -gt 0 ]]; do
+    local name="$1"
+    local body="$2"
+    shift 2
+    printf '%s\n' "$body" > "$tmp_dir/workflows/$name"
+  done
+}
+
 write_workflow() {
   local name="$1"
   local body="$2"
-  rm -rf "$tmp_dir/workflows"
-  mkdir -p "$tmp_dir/workflows"
-  printf '%s\n' "$body" > "$tmp_dir/workflows/$name.yml"
+  write_workflows "$name.yml" "$body"
 }
 
 expect_accept() {
@@ -105,5 +114,34 @@ on: {"workflow_run": {}}'
 
 expect_reject "inline-map-unquoted-event" 'name: CI
 on: {merge_group: {}}'
+
+write_workflows \
+  "ci.yml" 'name: CI
+on:
+  workflow_dispatch:' \
+  "release.yaml" 'name: Release
+"on":
+  workflow_dispatch:'
+
+LAKECAT_CONTRACT_CHECK_ONLY=workflows \
+  LAKECAT_WORKFLOW_DIR="$tmp_dir/workflows" \
+  "$contract_script" >/dev/null
+
+write_workflows \
+  "ci.yml" 'name: CI
+on:
+  workflow_dispatch:' \
+  "nightly.yaml" 'name: Nightly
+on:
+  schedule:
+    - cron: "0 0 * * *"'
+
+if LAKECAT_CONTRACT_CHECK_ONLY=workflows \
+  LAKECAT_WORKFLOW_DIR="$tmp_dir/workflows" \
+  "$contract_script" >/dev/null 2>"$tmp_dir/error.log"; then
+  echo "workflow trigger contract accepted an automatic trigger in a secondary .yaml workflow" >&2
+  exit 1
+fi
+rg -q "must not" "$tmp_dir/error.log"
 
 echo "LakeCat workflow trigger contract self-test passed."

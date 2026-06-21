@@ -5,6 +5,17 @@ Updated: 2026-06-21
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Cover multi-workflow trigger guard`.
+  The workflow-trigger contract self-test now writes mixed `.yml`/`.yaml`
+  workflow directories, accepts multiple manual-only workflow files, and rejects
+  an automatic trigger hidden in a secondary `.yaml` workflow before the
+  release-readiness gate can pass.
+- Local verification for this multi-workflow trigger guard slice is green:
+  `bash -n scripts/check-local-dependency-contract.sh scripts/check-workflow-trigger-contract.sh scripts/check-release-readiness.sh`;
+  `scripts/check-workflow-trigger-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`.
 - Latest completed documentation slice:
   `Clarify catalog concepts in the LakeCat book`.
   The manuscript now includes an implementation-status ledger that separates
