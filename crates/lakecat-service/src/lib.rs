@@ -17045,6 +17045,92 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_scan_planned_duplicate_effective_projection() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ]
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-scan-plan-duplicate-effective-projection".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.scan-planned".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-scan-plan-duplicate-effective-projection",
+                    "event-type": "table.scan-planned",
+                    "table": ident,
+                    "payload": {
+                        "table": ident,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-plan-scan",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": "sha256:policy",
+                            "context": {
+                                "read-restriction": read_restriction
+                            },
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "read-restriction": read_restriction,
+                        "requested-projection": ["event_id"],
+                        "effective-projection": ["event_id", "event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
+                        "scan-task-count": 1
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("duplicate effective scan projection evidence should fail closed");
+
+        let message = err.to_string();
+        assert!(
+            message.contains(
+                "outbox event table.scan-planned (lakecat.lineage-and-graph) has invalid"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(
+            message.contains("scan-planned effective-projection must be duplicate-free"),
+            "{message}"
+        );
+        assert!(!message.contains("evt-scan-plan-duplicate-effective-projection"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "duplicate effective projection scan replay must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "duplicate effective projection scan replay must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "duplicate effective projection scan replay must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_scan_planned_empty_effective_stats_fields() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let ident = table_ident("local", "default", "events").unwrap();
