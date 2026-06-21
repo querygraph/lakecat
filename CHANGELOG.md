@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Revalidated policy-binding governance records at memory and Turso list/table
+  read boundaries, rejecting corrupted durable binding JSON before governance
+  replay can expose table-scoped bindings without namespace evidence.
 - Revalidated storage-profile credential roots at memory and Turso list/match
   read boundaries, rejecting corrupted durable profile JSON and replacing raw
   invalid storage-profile identifiers with hash evidence.

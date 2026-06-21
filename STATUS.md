@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate policy-binding reads`.
+  Memory and Turso `list_policy_bindings` and `policy_bindings_for_table` now
+  revalidate stored `PolicyBinding` governance records before replay can
+  observe them, rejecting corrupted table-scoped binding JSON whose namespace
+  evidence is missing.
+- Local verification for this policy-binding read validation slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_corrupt_policy_bindings_on_read -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_corrupt_policy_bindings_on_read -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Validate storage-profile reads`.
   Memory and Turso `list_storage_profiles` plus storage-profile table matching
   now revalidate stored `StorageProfile` credential-root records before replay
