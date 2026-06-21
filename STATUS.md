@@ -6,6 +6,33 @@ Updated: 2026-06-20
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Verify compact view receipt-chain structure`.
+  QGLake replay and handoff proofs now carry compact structural view
+  receipt-chain evidence in `receiptChains[].chains[]`, including stable view
+  identity, chain hash, verified flag, latest version/operation, tombstone
+  state, receipt count, and per-receipt version, operation, receipt hash, and
+  previous-link fields. The handoff verifier rejects invalid chain heads,
+  forged previous links, skipped upsert versions, unsupported operations, drops
+  that advance the durable version, and chain heads that do not match the latest
+  receipt. Tombstoned accepted views derive a compact historical accepted chain
+  from the verified receipt prefix, so both the drop chain and accepted
+  pre-drop chain hash have structural proof.
+- Local verification for this compact view receipt-chain structure slice is
+  green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-api`;
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/qglake-handoff-local.sh` (generated one table and one view, drained
+  26 lineage/outbox events, ran LakeCat replay, QueryGraph verify/import,
+  verified compact structural view receipt-chain evidence in the handoff
+  summary and saved verifier output, and ended with `QGLake handoff verified`).
+- Latest completed implementation slice:
   `Verify saved handoff replay sections`.
   Saved `lakecat-handoff-verify.json` artifacts now have to preserve every
   compact `capturedOutputSemantics.lakecatReplay` proof section, including

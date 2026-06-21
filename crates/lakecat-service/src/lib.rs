@@ -3270,6 +3270,18 @@ fn lineage_drain_event_summary(
                 })
         })
         .unwrap_or_default();
+    let view_version_receipt_chains = payload
+        .get("view-version-receipt-chains")
+        .and_then(Value::as_array)
+        .map(|chains| {
+            chains
+                .iter()
+                .filter_map(|chain| {
+                    serde_json::from_value::<ViewVersionReceiptChainResponse>(chain.clone()).ok()
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     let storage_profile = payload.get("storage-profile");
     let storage_profile_secret_ref = storage_profile
         .and_then(|profile| profile.get("secret-ref"))
@@ -3386,6 +3398,7 @@ fn lineage_drain_event_summary(
         view_version_receipt_hashes,
         view_version_receipt_chain_hashes,
         view_version_receipt_chain_verified_count,
+        view_version_receipt_chains,
         view_warehouse,
         view_namespace,
         view_name,

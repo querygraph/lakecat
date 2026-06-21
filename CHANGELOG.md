@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added compact view receipt-chain structure to QGLake replay and handoff
+  proofs, including per-receipt versions, operations, hashes, and previous-link
+  evidence, and rejected handoff summaries with invalid chain heads, forged
+  previous links, skipped upsert versions, unsupported operations, or chain
+  heads that do not match the latest receipt.
 - Required saved `lakecat-handoff-verify.json` artifacts to preserve every
   captured LakeCat replay proof section, including management ID arrays,
   governed scan proof, table commit history, view receipt chains, storage

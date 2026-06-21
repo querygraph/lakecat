@@ -1817,12 +1817,22 @@ accepted receipt-chain hashes, positive accepted-view graph event evidence,
 tombstone receipt hashes, positive verified-chain counts, receipt-chain
 warehouse/namespace identity, namespace chain hashes, and replay/OpenLineage
 hashes. The verifier also checks that each namespace receipt-chain summary's
-`verifiedChainCount` equals the number of chain hashes and that the receipt
-hashes cover those chains. In the compact verifier, accepted-view receipt
-hashes, accepted receipt-chain hashes, tombstone receipts, namespace
-receipt/chain hashes, and view replay/OpenLineage hashes must all be full
-`sha256:`-prefixed 64-hex digests, so a saved handoff cannot use readable
-placeholder strings as view acceptance evidence. It also requires
+`verifiedChainCount` equals the number of structural `chains[]` entries and
+that every chain entry is covered by `chainHashes`. The compact proof carries
+`chains[]` entries
+inside each namespace receipt-chain summary. Each chain entry keeps only
+catalog-facing evidence: stable view identity, the chain hash, the verified
+flag, latest view version, latest operation, tombstone state, receipt count,
+and per-receipt version, operation, receipt hash, and previous-link fields.
+`qglake-verify-handoff` rejects a chain whose first receipt is not version 1
+`upsert`, whose previous links do not point to the prior receipt, whose upsert
+skips a version, whose drop advances the durable version, whose operation is
+unsupported, or whose latest receipt does not match the chain head. In the
+compact verifier, accepted-view receipt hashes, accepted receipt-chain hashes,
+tombstone receipts, namespace receipt/chain hashes, per-receipt hashes, and
+view replay/OpenLineage hashes must all be full `sha256:`-prefixed 64-hex
+digests, so a saved handoff cannot use readable placeholder strings as view
+acceptance evidence. It also requires
 `queryGraphBootstrapProof.viewVersionReceiptHashes` to match the accepted view
 receipt hashes exactly, so the compact summary cannot combine bootstrap view
 receipt evidence from one run with accepted-view proof from another. For both

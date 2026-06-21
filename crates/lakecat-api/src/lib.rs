@@ -470,6 +470,8 @@ pub struct LineageDrainEventSummary {
     pub view_version_receipt_chain_hashes: Vec<String>,
     #[serde(default)]
     pub view_version_receipt_chain_verified_count: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub view_version_receipt_chains: Vec<ViewVersionReceiptChainResponse>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view_warehouse: Option<String>,
     #[serde(default)]

@@ -15,7 +15,7 @@ use lakecat_api::{
     PlanTableScanResponse, PolicyBindingResponse, ProjectResponse, ServerResponse,
     StorageProfileResponse, TableIdentifier, UpsertPolicyBindingRequest, UpsertProjectRequest,
     UpsertServerRequest, UpsertStorageProfileRequest, UpsertViewRequest, UpsertWarehouseRequest,
-    ViewResponse, WarehouseResponse,
+    ViewResponse, ViewVersionReceiptChainResponse, ViewVersionReceiptResponse, WarehouseResponse,
 };
 use lakecat_core::{content_hash_bytes, content_hash_json};
 use lakecat_querygraph::{QueryGraphBootstrap, QueryGraphBootstrapVerification};
@@ -3617,6 +3617,7 @@ fn require_view_receipt_chain_evidence(
                 "viewReceiptChainProof.receiptChains[{index}].receiptHashes must cover every verified chain hash"
             )));
         }
+        require_verified_view_receipt_chain_structures(chain, index, &mut chain_receipt_hashes)?;
         for chain_hash in chain_hashes {
             if let Some(chain_hash) = chain_hash.as_str() {
                 verified_chain_hashes.insert(chain_hash.to_string());
@@ -3647,6 +3648,200 @@ fn require_view_receipt_chain_evidence(
         ));
     }
 
+    Ok(())
+}
+
+fn require_verified_view_receipt_chain_structures(
+    chain_group: &serde_json::Map<String, Value>,
+    group_index: usize,
+    chain_receipt_hashes: &mut BTreeSet<String>,
+) -> lakecat_core::LakeCatResult<()> {
+    let verified_chain_count = require_positive_u64(
+        chain_group,
+        "verifiedChainCount",
+        "viewReceiptChainProof.receiptChains[]",
+    )?;
+    let chain_hashes = required_array(
+        chain_group,
+        "chainHashes",
+        "viewReceiptChainProof.receiptChains[]",
+    )?
+    .iter()
+    .filter_map(Value::as_str)
+    .collect::<BTreeSet<_>>();
+    let chains = required_array(
+        chain_group,
+        "chains",
+        "viewReceiptChainProof.receiptChains[]",
+    )?;
+    if chains.len() as u64 != verified_chain_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].chains length mismatch: expected={verified_chain_count} actual={}",
+            chains.len()
+        )));
+    }
+
+    for (chain_index, chain) in chains.iter().enumerate() {
+        let chain = chain.as_object().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}] must be an object"
+            ))
+        })?;
+        require_verified_view_receipt_chain_structure(
+            chain,
+            group_index,
+            chain_index,
+            &chain_hashes,
+            chain_receipt_hashes,
+        )?;
+    }
+    Ok(())
+}
+
+fn require_verified_view_receipt_chain_structure(
+    chain: &serde_json::Map<String, Value>,
+    group_index: usize,
+    chain_index: usize,
+    chain_hashes: &BTreeSet<&str>,
+    chain_receipt_hashes: &mut BTreeSet<String>,
+) -> lakecat_core::LakeCatResult<()> {
+    let label = "viewReceiptChainProof.receiptChains[].chains[]";
+    require_non_empty_str(chain, "stableId", label)?;
+    require_non_empty_str(chain, "warehouse", label)?;
+    let namespace = required_array(chain, "namespace", label)?;
+    if namespace.is_empty()
+        || namespace
+            .iter()
+            .any(|component| !component.as_str().is_some_and(|value| !value.is_empty()))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].namespace must contain namespace components"
+        )));
+    }
+    require_non_empty_str(chain, "name", label)?;
+    let chain_hash = require_full_hash_str(chain, "chainHash", label)?;
+    if !chain_hashes.contains(chain_hash) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].chainHash is not covered by chainHashes"
+        )));
+    }
+    if !required_bool(chain, "chainVerified", label)? {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].chainVerified must be true"
+        )));
+    }
+    let latest_view_version = require_positive_u64(chain, "latestViewVersion", label)?;
+    let latest_operation = required_str(chain, "latestOperation", label)?;
+    if !matches!(latest_operation, "upsert" | "drop") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].latestOperation is unsupported"
+        )));
+    }
+    let tombstoned = required_bool(chain, "tombstoned", label)?;
+    if tombstoned != (latest_operation == "drop") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].tombstoned must match latestOperation"
+        )));
+    }
+    let receipt_count = require_positive_u64(chain, "receiptCount", label)?;
+    let receipts = required_array(chain, "receipts", label)?;
+    if receipts.len() as u64 != receipt_count {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receiptCount mismatch: expected={} actual={receipt_count}",
+            receipts.len()
+        )));
+    }
+    require_verified_view_receipts(
+        receipts,
+        group_index,
+        chain_index,
+        latest_view_version,
+        latest_operation,
+        chain_receipt_hashes,
+    )
+}
+
+fn require_verified_view_receipts(
+    receipts: &[Value],
+    group_index: usize,
+    chain_index: usize,
+    latest_view_version: u64,
+    latest_operation: &str,
+    chain_receipt_hashes: &mut BTreeSet<String>,
+) -> lakecat_core::LakeCatResult<()> {
+    let mut previous_view_version: Option<u64> = None;
+    let mut previous_receipt_hash: Option<String> = None;
+    let mut latest_receipt_operation = None;
+    let mut latest_receipt_version = None;
+
+    for (receipt_index, receipt) in receipts.iter().enumerate() {
+        let receipt = receipt.as_object().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}] must be an object"
+            ))
+        })?;
+        let label = "viewReceiptChainProof.receiptChains[].chains[].receipts[]";
+        require_non_empty_str(receipt, "stableId", label)?;
+        require_non_empty_str(receipt, "warehouse", label)?;
+        let namespace = required_array(receipt, "namespace", label)?;
+        if namespace.is_empty()
+            || namespace
+                .iter()
+                .any(|component| !component.as_str().is_some_and(|value| !value.is_empty()))
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}].namespace must contain namespace components"
+            )));
+        }
+        require_non_empty_str(receipt, "name", label)?;
+        let view_version = require_positive_u64(receipt, "viewVersion", label)?;
+        let operation = required_str(receipt, "operation", label)?;
+        let receipt_hash = require_full_hash_str(receipt, "receiptHash", label)?;
+        chain_receipt_hashes.insert(receipt_hash.to_string());
+
+        if receipt_index == 0 {
+            if operation != "upsert"
+                || view_version != 1
+                || !required_value(receipt, "previousViewVersion", label)?.is_null()
+                || !required_value(receipt, "previousReceiptHash", label)?.is_null()
+            {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[0] must be a version 1 upsert without previous links"
+                )));
+            }
+        } else {
+            if required_u64(receipt, "previousViewVersion", label)?
+                != previous_view_version.unwrap()
+                || required_str(receipt, "previousReceiptHash", label)?
+                    != previous_receipt_hash.as_deref().unwrap()
+            {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}] previous links must match the prior receipt"
+                )));
+            }
+            match operation {
+                "upsert" if view_version == previous_view_version.unwrap().saturating_add(1) => {}
+                "drop" if view_version == previous_view_version.unwrap() => {}
+                _ => {
+                    return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                        "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}] transition is invalid"
+                    )));
+                }
+            }
+        }
+        latest_receipt_operation = Some(operation.to_string());
+        latest_receipt_version = Some(view_version);
+        previous_view_version = Some(view_version);
+        previous_receipt_hash = Some(receipt_hash.to_string());
+    }
+
+    if latest_receipt_version != Some(latest_view_version)
+        || latest_receipt_operation.as_deref() != Some(latest_operation)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "viewReceiptChainProof.receiptChains[{group_index}].chains[{chain_index}] latest receipt does not match chain head"
+        )));
+    }
     Ok(())
 }
 
@@ -4051,14 +4246,22 @@ fn qglake_view_replay_evidence_json(
                     chain_hashes.insert(accepted_chain_hash.clone());
                 }
             }
+            let chains = qglake_compact_view_receipt_chains(event, verification);
+            let mut chain_hashes = chain_hashes;
+            for chain in &chains {
+                if let Some(chain_hash) = chain.get("chainHash").and_then(Value::as_str) {
+                    chain_hashes.insert(chain_hash.to_string());
+                }
+            }
             let chain_hashes = chain_hashes.into_iter().collect::<Vec<_>>();
-            let verified_chain_count = chain_hashes.len();
+            let verified_chain_count = chains.len();
             json!({
                 "warehouse": event.view_warehouse.as_deref(),
                 "namespace": &event.view_namespace,
                 "receiptHashes": &event.view_version_receipt_hashes,
                 "chainHashes": chain_hashes,
                 "verifiedChainCount": verified_chain_count,
+                "chains": chains,
                 "replayEventHashes": &event.replay_event_hashes,
                 "openLineageHashes": &event.replay_open_lineage_hashes,
             })
@@ -4071,6 +4274,116 @@ fn qglake_view_replay_evidence_json(
         "tombstoneReceipts": tombstone_receipts,
         "receiptChains": receipt_chains,
     }))
+}
+
+fn qglake_compact_view_receipt_chains(
+    event: &LineageDrainEventSummary,
+    verification: &QueryGraphBootstrapVerification,
+) -> Vec<Value> {
+    let mut chains = event
+        .view_version_receipt_chains
+        .iter()
+        .filter(|chain| chain.chain_verified)
+        .map(qglake_compact_view_receipt_chain)
+        .collect::<Vec<_>>();
+    let mut chain_hashes = chains
+        .iter()
+        .filter_map(|chain| chain.get("chainHash").and_then(Value::as_str))
+        .map(str::to_string)
+        .collect::<BTreeSet<_>>();
+    for view_stable_id in &verification.verified_views {
+        let Some(accepted_chain_hash) = verification
+            .verified_view_receipt_chain_hashes
+            .get(view_stable_id)
+            .map(String::as_str)
+        else {
+            continue;
+        };
+        if chain_hashes.contains(accepted_chain_hash) {
+            continue;
+        }
+        let Some(accepted_receipt_hash) = verification
+            .verified_view_receipt_hashes
+            .get(view_stable_id)
+            .map(String::as_str)
+        else {
+            continue;
+        };
+        let Some(accepted_view_version) = verification
+            .verified_view_versions
+            .get(view_stable_id)
+            .copied()
+        else {
+            continue;
+        };
+        let Some(chain) = event
+            .view_version_receipt_chains
+            .iter()
+            .find(|chain| chain.stable_id == *view_stable_id)
+        else {
+            continue;
+        };
+        let Some(receipt_index) = chain
+            .receipts
+            .iter()
+            .position(|receipt| receipt.receipt_hash == accepted_receipt_hash)
+        else {
+            continue;
+        };
+        let receipts = chain.receipts[..=receipt_index]
+            .iter()
+            .map(qglake_compact_view_receipt)
+            .collect::<Vec<_>>();
+        chains.push(json!({
+            "stableId": chain.stable_id,
+            "warehouse": chain.warehouse,
+            "namespace": chain.namespace,
+            "name": chain.name,
+            "chainHash": accepted_chain_hash,
+            "chainVerified": true,
+            "latestViewVersion": accepted_view_version,
+            "latestOperation": chain.receipts[receipt_index].operation,
+            "tombstoned": false,
+            "receiptCount": receipts.len(),
+            "receipts": receipts,
+        }));
+        chain_hashes.insert(accepted_chain_hash.to_string());
+    }
+    chains
+}
+
+fn qglake_compact_view_receipt_chain(chain: &ViewVersionReceiptChainResponse) -> Value {
+    json!({
+        "stableId": chain.stable_id,
+        "warehouse": chain.warehouse,
+        "namespace": chain.namespace,
+        "name": chain.name,
+        "chainHash": chain.chain_hash,
+        "chainVerified": chain.chain_verified,
+        "latestViewVersion": chain.latest_view_version,
+        "latestOperation": chain.latest_operation,
+        "tombstoned": chain.tombstoned,
+        "receiptCount": chain.receipt_count,
+        "receipts": chain
+            .receipts
+            .iter()
+            .map(qglake_compact_view_receipt)
+            .collect::<Vec<_>>(),
+    })
+}
+
+fn qglake_compact_view_receipt(receipt: &ViewVersionReceiptResponse) -> Value {
+    json!({
+        "stableId": receipt.stable_id,
+        "warehouse": receipt.warehouse,
+        "namespace": receipt.namespace,
+        "name": receipt.name,
+        "viewVersion": receipt.view_version,
+        "previousViewVersion": receipt.previous_view_version,
+        "previousReceiptHash": receipt.previous_receipt_hash,
+        "operation": receipt.operation,
+        "receiptHash": receipt.receipt_hash,
+    })
 }
 
 fn qglake_credential_replay_line(
@@ -8974,7 +9287,36 @@ mod tests {
         qglake_add_management_receipt_hashes(
             &mut summary["lakecatReplayVerification"]["managementProof"],
         );
+        qglake_add_view_receipt_chain_structures(
+            &mut summary["lakecatReplayVerification"]["viewReceiptChainProof"],
+        );
         summary
+    }
+
+    fn qglake_add_view_receipt_chain_structures(view_receipts: &mut Value) {
+        view_receipts["receiptChains"][0]["chains"] = json!([{
+            "stableId": "lakecat:view:local:default:active_customers_view",
+            "warehouse": "local",
+            "namespace": ["default"],
+            "name": "active_customers_view",
+            "chainHash": qglake_fixture_hash("view-receipt-chain"),
+            "chainVerified": true,
+            "latestViewVersion": 1,
+            "latestOperation": "upsert",
+            "tombstoned": false,
+            "receiptCount": 1,
+            "receipts": [{
+                "stableId": "lakecat:view:local:default:active_customers_view",
+                "warehouse": "local",
+                "namespace": ["default"],
+                "name": "active_customers_view",
+                "viewVersion": 1,
+                "previousViewVersion": null,
+                "previousReceiptHash": null,
+                "operation": "upsert",
+                "receiptHash": qglake_fixture_hash("view-receipt")
+            }]
+        }]);
     }
 
     fn qglake_handoff_summary_json_with_artifacts(dir: &Path) -> Value {
@@ -9209,6 +9551,9 @@ mod tests {
             json!(["events-local"]);
         qglake_add_management_receipt_hashes(
             &mut lakecat_replay_json["replay-evidence"]["management"],
+        );
+        qglake_add_view_receipt_chain_structures(
+            &mut lakecat_replay_json["replay-evidence"]["views"],
         );
         let querygraph_capture_json = json!({
             "warehouse": "local",
@@ -11349,6 +11694,101 @@ mod tests {
                 .contains("lakecat:view:local:default:active_customers_view")
         );
         assert!(err.to_string().contains("version 1"));
+    }
+
+    fn qglake_set_two_receipt_view_chain(summary: &mut Value) {
+        let receipt_v1 = qglake_fixture_hash("view-receipt-v1");
+        let receipt_v2 = qglake_fixture_hash("view-receipt");
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chains"]
+            [0] = json!({
+            "stableId": "lakecat:view:local:default:active_customers_view",
+            "warehouse": "local",
+            "namespace": ["default"],
+            "name": "active_customers_view",
+            "chainHash": qglake_fixture_hash("view-receipt-chain"),
+            "chainVerified": true,
+            "latestViewVersion": 2,
+            "latestOperation": "upsert",
+            "tombstoned": false,
+            "receiptCount": 2,
+            "receipts": [{
+                "stableId": "lakecat:view:local:default:active_customers_view",
+                "warehouse": "local",
+                "namespace": ["default"],
+                "name": "active_customers_view",
+                "viewVersion": 1,
+                "previousViewVersion": null,
+                "previousReceiptHash": null,
+                "operation": "upsert",
+                "receiptHash": receipt_v1
+            }, {
+                "stableId": "lakecat:view:local:default:active_customers_view",
+                "warehouse": "local",
+                "namespace": ["default"],
+                "name": "active_customers_view",
+                "viewVersion": 2,
+                "previousViewVersion": 1,
+                "previousReceiptHash": receipt_v1,
+                "operation": "upsert",
+                "receiptHash": receipt_v2
+            }]
+        });
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_invalid_view_receipt_chain_head() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chains"]
+            [0]["receipts"][0]["operation"] = json!("drop");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject invalid view receipt-chain heads");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("version 1 upsert"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_forged_view_receipt_previous_link() {
+        let mut summary = qglake_handoff_summary_json();
+        qglake_set_two_receipt_view_chain(&mut summary);
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chains"]
+            [0]["receipts"][1]["previousReceiptHash"] =
+            json!(qglake_fixture_hash("forged-previous"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject forged view receipt previous links");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("previous links"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_skipped_view_receipt_version() {
+        let mut summary = qglake_handoff_summary_json();
+        qglake_set_two_receipt_view_chain(&mut summary);
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chains"]
+            [0]["receipts"][1]["viewVersion"] = json!(3);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject skipped view receipt versions");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("transition is invalid"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_unsupported_view_receipt_operation() {
+        let mut summary = qglake_handoff_summary_json();
+        qglake_set_two_receipt_view_chain(&mut summary);
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chains"]
+            [0]["receipts"][1]["operation"] = json!("replace");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject unsupported view receipt operations");
+
+        assert!(err.to_string().contains("viewReceiptChainProof"));
+        assert!(err.to_string().contains("transition is invalid"));
     }
 
     #[test]
@@ -13657,7 +14097,15 @@ mod tests {
         );
         assert_eq!(
             view_replay_json["views"]["receiptChains"][0]["verifiedChainCount"],
-            json!(2)
+            json!(1)
+        );
+        assert_eq!(
+            view_replay_json["views"]["receiptChains"][0]["chains"][0]["latestOperation"],
+            json!("drop")
+        );
+        assert_eq!(
+            view_replay_json["views"]["receiptChains"][0]["chains"][0]["receipts"][2]["previousReceiptHash"],
+            json!("sha256:view-version-receipt")
         );
     }
 
@@ -15731,6 +16179,7 @@ mod tests {
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
                     view_version_receipt_chain_verified_count: 0,
+                    view_version_receipt_chains: Vec::new(),
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -15824,6 +16273,7 @@ mod tests {
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
                     view_version_receipt_chain_verified_count: 0,
+                    view_version_receipt_chains: Vec::new(),
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -15919,6 +16369,7 @@ mod tests {
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
                     view_version_receipt_chain_verified_count: 0,
+                    view_version_receipt_chains: Vec::new(),
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -16012,6 +16463,7 @@ mod tests {
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
                     view_version_receipt_chain_verified_count: 0,
+                    view_version_receipt_chains: Vec::new(),
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -16105,6 +16557,7 @@ mod tests {
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
                     view_version_receipt_chain_verified_count: 0,
+                    view_version_receipt_chains: Vec::new(),
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -16198,6 +16651,7 @@ mod tests {
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
                     view_version_receipt_chain_verified_count: 0,
+                    view_version_receipt_chains: Vec::new(),
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -16291,6 +16745,7 @@ mod tests {
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
                     view_version_receipt_chain_verified_count: 0,
+                    view_version_receipt_chains: Vec::new(),
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -16384,6 +16839,7 @@ mod tests {
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
                     view_version_receipt_chain_verified_count: 0,
+                    view_version_receipt_chains: Vec::new(),
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -16477,6 +16933,7 @@ mod tests {
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
                     view_version_receipt_chain_verified_count: 0,
+                    view_version_receipt_chains: Vec::new(),
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -16570,6 +17027,7 @@ mod tests {
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
                     view_version_receipt_chain_verified_count: 0,
+                    view_version_receipt_chains: Vec::new(),
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -16663,6 +17121,7 @@ mod tests {
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
                     view_version_receipt_chain_verified_count: 0,
+                    view_version_receipt_chains: Vec::new(),
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -16756,6 +17215,7 @@ mod tests {
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
                     view_version_receipt_chain_verified_count: 0,
+                    view_version_receipt_chains: Vec::new(),
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -16849,6 +17309,7 @@ mod tests {
                     view_version_receipt_hashes: Vec::new(),
                     view_version_receipt_chain_hashes: Vec::new(),
                     view_version_receipt_chain_verified_count: 0,
+                    view_version_receipt_chains: Vec::new(),
                     view_warehouse: None,
                     view_namespace: Vec::new(),
                     view_name: None,
@@ -19617,6 +20078,7 @@ mod tests {
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
             view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -19711,6 +20173,7 @@ mod tests {
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
             view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
             view_warehouse: Some("local".to_string()),
             view_namespace: vec!["default".to_string()],
             view_name: Some("active_customers".to_string()),
@@ -19800,6 +20263,65 @@ mod tests {
         summary.view_version_receipt_hashes = vec!["sha256:view-drop-receipt".to_string()];
         summary.view_version_receipt_chain_hashes = vec!["sha256:view-receipt-chain".to_string()];
         summary.view_version_receipt_chain_verified_count = 1;
+        summary.view_version_receipt_chains = vec![ViewVersionReceiptChainResponse {
+            stable_id: "lakecat:view:local:default:active_customers".to_string(),
+            warehouse: "local".to_string(),
+            namespace: vec!["default".to_string()],
+            name: "active_customers".to_string(),
+            chain_hash: "sha256:view-receipt-chain".to_string(),
+            chain_verified: true,
+            latest_view_version: 2,
+            latest_operation: "drop".to_string(),
+            tombstoned: true,
+            receipt_count: 3,
+            receipts: vec![
+                ViewVersionReceiptResponse {
+                    stable_id: "lakecat:view:local:default:active_customers".to_string(),
+                    warehouse: "local".to_string(),
+                    namespace: vec!["default".to_string()],
+                    name: "active_customers".to_string(),
+                    view_version: 1,
+                    previous_view_version: None,
+                    previous_receipt_hash: None,
+                    operation: "upsert".to_string(),
+                    view_hash: "sha256:view-v1".to_string(),
+                    receipt_hash: "sha256:view-receipt-v1".to_string(),
+                    principal_subject: "did:example:agent".to_string(),
+                    principal_kind: "agent".to_string(),
+                    recorded_at: "2026-06-20T00:00:00Z".to_string(),
+                },
+                ViewVersionReceiptResponse {
+                    stable_id: "lakecat:view:local:default:active_customers".to_string(),
+                    warehouse: "local".to_string(),
+                    namespace: vec!["default".to_string()],
+                    name: "active_customers".to_string(),
+                    view_version: 2,
+                    previous_view_version: Some(1),
+                    previous_receipt_hash: Some("sha256:view-receipt-v1".to_string()),
+                    operation: "upsert".to_string(),
+                    view_hash: "sha256:view-v2".to_string(),
+                    receipt_hash: "sha256:view-version-receipt".to_string(),
+                    principal_subject: "did:example:agent".to_string(),
+                    principal_kind: "agent".to_string(),
+                    recorded_at: "2026-06-20T00:00:01Z".to_string(),
+                },
+                ViewVersionReceiptResponse {
+                    stable_id: "lakecat:view:local:default:active_customers".to_string(),
+                    warehouse: "local".to_string(),
+                    namespace: vec!["default".to_string()],
+                    name: "active_customers".to_string(),
+                    view_version: 2,
+                    previous_view_version: Some(2),
+                    previous_receipt_hash: Some("sha256:view-version-receipt".to_string()),
+                    operation: "drop".to_string(),
+                    view_hash: "sha256:view-drop".to_string(),
+                    receipt_hash: "sha256:view-drop-receipt".to_string(),
+                    principal_subject: "did:example:agent".to_string(),
+                    principal_kind: "agent".to_string(),
+                    recorded_at: "2026-06-20T00:00:02Z".to_string(),
+                },
+            ],
+        }];
         summary.replay_event_hashes = vec!["sha256:view-receipt-chains-replay-event".to_string()];
         summary.replay_open_lineage_hashes =
             vec!["sha256:view-receipt-chains-replay-openlineage".to_string()];
@@ -19830,6 +20352,7 @@ mod tests {
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
             view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -19921,6 +20444,7 @@ mod tests {
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
             view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -20012,6 +20536,7 @@ mod tests {
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
             view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -20097,6 +20622,7 @@ mod tests {
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
             view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -20172,6 +20698,7 @@ mod tests {
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
             view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -20247,6 +20774,7 @@ mod tests {
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
             view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -20325,6 +20853,7 @@ mod tests {
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
             view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -20398,6 +20927,7 @@ mod tests {
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
             view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -20471,6 +21001,7 @@ mod tests {
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
             view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -20544,6 +21075,7 @@ mod tests {
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
             view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
@@ -20622,6 +21154,7 @@ mod tests {
             view_version_receipt_hashes: Vec::new(),
             view_version_receipt_chain_hashes: Vec::new(),
             view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
             view_warehouse: None,
             view_namespace: Vec::new(),
             view_name: None,
