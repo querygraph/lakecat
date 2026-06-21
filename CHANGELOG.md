@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required governed scan-planned replay `effective-stats-fields` to stay inside
+  `read-restriction.allowed-columns` before outbox delivery, so stats evidence
+  cannot preserve a forbidden column after projection has been narrowed.
 - Required credential-vend replay nested storage-profile `warehouse` evidence to
   match the event table warehouse before outbox delivery, so zero-credential
   blocked paths cannot replay a credential root under a forged warehouse anchor.

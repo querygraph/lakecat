@@ -460,7 +460,8 @@ receipts. Scan evidence should preserve both requested and effective
 projection/stat metadata so replay can prove what policy narrowed. Outbox
 admission should keep top-level scan read restrictions and authorization
 receipt read-restriction contexts at the same policy-hash evidence strength,
-and governed scan replay should fail when those two restriction objects drift.
+and governed scan replay should fail when those two restriction objects drift
+or when effective projection/stat evidence drifts outside allowed columns.
 Prefer upstream Sail APIs for any reusable planner or manifest work.
 
 ### P2 QGLake Acceptance

@@ -2170,9 +2170,10 @@ requested/effective projection arrays, and requested/effective stats-field
 arrays; fetched-task events must carry matching table identity, fetched
 file/delete/child-plan counts, required filters, and required/effective
 projection arrays. When a governed read restriction is present, the effective
-projection must remain inside the allowed columns, and explicit effective
-projection or stats evidence cannot widen beyond the caller-requested or
-server-required evidence it claims to preserve. QueryGraph bootstrap replay is
+projection and effective stats fields must remain inside the allowed columns,
+and explicit effective projection or stats evidence cannot widen beyond the
+caller-requested or server-required evidence it claims to preserve. QueryGraph
+bootstrap replay is
 also checked at the drain boundary before it becomes accepted handoff material:
 the event must carry a valid warehouse, table/view counts matching the verified
 ids and artifact arrays, full SHA-256 bundle/graph/OpenLineage/import hashes,
@@ -2236,8 +2237,9 @@ planned and fetched read restrictions to match before compact proof generation,
 requires both requested/effective projection and
 requested/effective stats-field evidence, requires effective projection to be a
 narrowed subset of the requested projection and to match the planned allowed
-columns, and requires effective stats fields to be a narrowed subset of the
-requested stats fields in both source replay and compact handoff proof. It also
+columns, and requires effective stats fields to be both inside the planned
+allowed columns and a narrowed subset of the requested stats fields in source
+replay and compact handoff proof. It also
 requires the fetched projection and filter requirements to exactly preserve the
 fetched allowed columns and row predicate. A fetched
 response that omits required-filter proof is rejected just like one that widens

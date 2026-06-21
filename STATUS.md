@@ -6,6 +6,28 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject scan stats policy drift`.
+  Outbox admission for `table.scan-planned` now rejects governed replay when
+  `effective-stats-fields` includes a field outside
+  `read-restriction.allowed-columns`, even if the effective projection itself
+  is already narrowed. This keeps stats replay evidence from preserving a
+  forbidden column before graph projection, OpenLineage projection, or delivery
+  acknowledgement.
+- Local verification for this scan stats policy drift slice is green:
+  `cargo fmt -p lakecat-service`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan_planned_stats_field_policy_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_scan_planned_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service scan_planned -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject credential storage-profile warehouse drift`.
   Outbox admission for `credentials.vend-attempted` now rejects replay when
   nested `storage-profile.warehouse` differs from the event table warehouse.

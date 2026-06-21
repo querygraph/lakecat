@@ -337,7 +337,10 @@ check is applied to
 receipt cannot retain weaker governed-read policy evidence than the top-level
 scan replay payload. Planned and fetched scan replay also require the top-level
 read restriction to match the authorization receipt context exactly before any
-graph or lineage projection is acknowledged.
+graph or lineage projection is acknowledged. Planned scan replay additionally
+requires effective stats fields to remain inside
+`read-restriction.allowed-columns`, matching the same policy-narrowing boundary
+as effective projection evidence.
 Credential-vend replay applies the same receipt agreement rule to both
 governed read restrictions and `lakecat:raw-credential-exception` evidence
 before projecting blocked-agent or audited raw-credential evidence. Returned
