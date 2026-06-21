@@ -457,8 +457,10 @@ whether an old OPUS item still needs work.
 Keep tightening the read path so the effective restriction is derived by the
 server, carried by capability, applied by Sail plan/fetch paths, and captured in
 receipts. Scan evidence should preserve both requested and effective
-projection/stat metadata so replay can prove what policy narrowed. Prefer
-upstream Sail APIs for any reusable planner or manifest work.
+projection/stat metadata so replay can prove what policy narrowed. Outbox
+admission should keep top-level scan read restrictions and authorization
+receipt read-restriction contexts at the same policy-hash evidence strength.
+Prefer upstream Sail APIs for any reusable planner or manifest work.
 
 ### P2 QGLake Acceptance
 

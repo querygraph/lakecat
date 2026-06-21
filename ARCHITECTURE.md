@@ -331,7 +331,11 @@ types also fail closed during validation before graph emission, lineage
 emission, or delivery acknowledgement, leaving future/custom events pending
 instead of silently dropping them with an empty projection receipt. Governed
 read replay evidence with a `read-restriction.policy-hashes` field must carry a
-non-empty set of full policy digests before it can leave the outbox.
+non-empty set of full policy digests before it can leave the outbox. The same
+check is applied to
+`authorization-receipt.context.read-restriction.policy-hashes`, so the durable
+receipt cannot retain weaker governed-read policy evidence than the top-level
+scan replay payload.
 Exact idempotency replays are verified to return before object-store writes, so
 the committed metadata object remains untouched on retry.
 Commit-history reads are now exposed through the governed management API and

@@ -490,7 +490,11 @@ and each entry must already be a full `sha256:`-prefixed 64-hex digest. A
 readable placeholder such as `sha256:policy-name`, or an empty policy anchor
 array, fails the drain before graph or lineage sinks run and before the store
 can mark the event delivered, keeping malformed source evidence available for
-retry or operator repair instead of promoting it into a QGLake handoff. Table
+retry or operator repair instead of promoting it into a QGLake handoff. LakeCat
+now applies that same admission rule to
+`authorization-receipt.context.read-restriction.policy-hashes`, so the receipt
+kept for later proof cannot preserve an empty or placeholder policy anchor
+while the top-level scan event looks valid. Table
 commit events receive the same treatment for compact
 commit receipt evidence: `request_hash`, `response_hash`,
 `idempotency_key_sha256`, and any present `policy_hash` must be full digests
@@ -2121,10 +2125,11 @@ self-consistent handoff cannot smuggle placeholder policy names or empty policy
 anchors through a field that later readers treat as integrity evidence. The
 outbox drain checks the same digest shape and non-empty requirement before
 acknowledging any pending event that carries
-`read-restriction.policy-hashes`, so malformed source evidence is stopped
-before it becomes delivered replay material. Scan replay now gets the same
-drain-side admission check before Grust or OpenLineage projection: planned-scan
-events must carry matching table identity, unsigned task counts,
+`read-restriction.policy-hashes`, including the copy embedded in the
+authorization receipt context, so malformed source evidence is stopped before
+it becomes delivered replay material. Scan replay now gets the same drain-side
+admission check before Grust or OpenLineage projection: planned-scan events
+must carry matching table identity, unsigned task counts,
 requested/effective projection arrays, and requested/effective stats-field
 arrays; fetched-task events must carry matching table identity, fetched
 file/delete/child-plan counts, required filters, and required/effective

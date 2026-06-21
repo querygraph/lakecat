@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rejected empty authorization-receipt read-restriction `policy-hashes` arrays
+  during outbox drain validation, so replay receipts cannot carry weaker
+  governed-read policy evidence than the top-level scan event before graph or
+  lineage projection.
 - Rejected empty `read-restriction.policy-hashes` arrays during outbox drain
   validation, so governed read replay evidence with a policy field must carry
   at least one full policy digest before projection or acknowledgement.

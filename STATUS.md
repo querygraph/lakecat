@@ -6,13 +6,34 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject empty authorization-receipt policy hash evidence`.
+  The service outbox drain now validates both the top-level governed
+  `read-restriction.policy-hashes` field and the
+  `authorization-receipt.context.read-restriction.policy-hashes` field when
+  present. A pending replay event cannot carry an empty policy-hash array in
+  the durable receipt context while presenting valid top-level scan evidence.
+- Local verification for this authorization-receipt policy hash evidence slice
+  is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_empty_authorization_receipt_policy_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects_empty_read_restriction_policy_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain_rejects -- --test-threads=1`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject empty governed-read policy hash evidence`.
-  The service outbox drain now rejects pending events whose
+  The service outbox drain rejects pending events whose
   `read-restriction.policy-hashes` field is present but empty. Governed read
   replay evidence that declares a policy-hash array must carry at least one
   full SHA-256 policy digest before graph projection, lineage projection, or
   delivery acknowledgement.
-- Local verification for this governed-read policy hash evidence slice is
+- Local verification for the governed-read policy hash evidence slice is
   green:
   `cargo fmt -p lakecat-service -- --check`;
   `cargo test -p lakecat-service outbox_drain_rejects_empty_read_restriction_policy_hashes -- --nocapture`;
