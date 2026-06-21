@@ -40,8 +40,39 @@ expect_accept "manual" 'name: CI
 on:
   workflow_dispatch:'
 
+expect_accept "job-named-push" 'name: CI
+on:
+  workflow_dispatch:
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo local gate'
+
+expect_reject "compact-unquoted-event" 'name: CI
+on: push'
+
+expect_reject "compact-quoted-event" 'name: CI
+on: "pull_request"'
+
 expect_reject "compact-quoted-on" 'name: CI
 "on": ["push"]'
+
+expect_reject "inline-list-unquoted-event" 'name: CI
+on: [workflow_call]'
+
+expect_reject "inline-list-quoted-event" 'name: CI
+on: ["schedule"]'
+
+expect_reject "block-map-event" 'name: CI
+on:
+  push:
+    branches: [main]'
+
+expect_reject "block-map-quoted-event" 'name: CI
+on:
+  "pull_request_target":
+    branches: [main]'
 
 expect_reject "block-quoted-event" 'name: CI
 "on":
@@ -49,5 +80,8 @@ expect_reject "block-quoted-event" 'name: CI
 
 expect_reject "inline-map-quoted-event" 'name: CI
 on: {"workflow_run": {}}'
+
+expect_reject "inline-map-unquoted-event" 'name: CI
+on: {merge_group: {}}'
 
 echo "LakeCat workflow trigger contract self-test passed."

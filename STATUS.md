@@ -6,6 +6,20 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin workflow trigger contract scope`.
+  The local dependency-contract workflow audit now rejects automatic GitHub
+  events only when they appear under a workflow `on:` declaration, while still
+  allowing harmless workflow keys such as a `jobs.push` job id. The focused
+  self-test now covers compact scalar triggers, inline trigger lists and maps,
+  block-list and block-map triggers, quoted `on` keys, quoted event names, and
+  the non-trigger job-id case.
+- Local verification for this workflow-trigger contract slice is green:
+  `scripts/check-workflow-trigger-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `docs/book/build.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Redact issuer scope rejection evidence`.
   Credential issuer responses whose returned prefix is outside the selected
   storage profile now fail with only `credential-prefix-hash` and

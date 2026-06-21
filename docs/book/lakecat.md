@@ -860,9 +860,12 @@ receipt-chain evidence must fail closed. Manual-only means no automatic push,
 pull-request, pull-request-target, merge-queue, repository-dispatch, scheduled,
 workflow-run, or reusable-workflow cloud runs; the local audit fails if any of
 those triggers appear before the local gates are proven stable, including
-quoted YAML forms such as `"on": ["push"]` or quoted event names in block
-lists. The focused workflow-trigger self-test exists so this guard can be
-checked without running the full dependency audit. It is not a
+compact scalar triggers, inline lists and maps, block lists and maps, quoted
+YAML forms such as `"on": ["push"]`, and quoted event names in trigger blocks.
+The guard looks specifically at the workflow `on:` declaration, so a harmless
+job id such as `jobs.push` is allowed. The focused workflow-trigger self-test
+exists so this guard can be checked without running the full dependency audit.
+It is not a
 substitute for upstreaming the Sail helper APIs or re-enabling automatic CI; it
 is a guard that makes drift visible while LakeCat still depends on unpublished
 Sail helper work and a local QueryGraph acceptance target.

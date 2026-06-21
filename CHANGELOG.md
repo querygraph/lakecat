@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened the workflow-trigger dependency-contract audit so automatic GitHub
+  events are rejected only when they appear under `on:`, added block-map and
+  inline-list/map trigger coverage, and proved harmless workflow keys such as a
+  `jobs.push` job id remain accepted.
 - Redacted credential issuer scope-rejection errors to only
   `credential-prefix-hash` and `storage-profile-prefix-hash` evidence, and
   pinned that out-of-scope issuer credentials fail before credential-vend replay

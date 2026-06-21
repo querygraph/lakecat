@@ -38,9 +38,6 @@ require_manual_only_workflows() {
   [[ "${#workflow_files[@]}" -gt 0 ]] || fail "missing GitHub workflow files"
 
   for workflow in "${workflow_files[@]}"; do
-    if rg -q "^[[:space:]]*${quoted_event_key}[[:space:]]*:" "$workflow"; then
-      fail "$workflow must not run on automatic GitHub events until the local gates are proven stable"
-    fi
     if rg -q "^[[:space:]]*[\"']?on[\"']?[[:space:]]*:[[:space:]]*${quoted_event_key}([[:space:]#]|$)" "$workflow"; then
       fail "$workflow must not use compact automatic GitHub event syntax until the local gates are proven stable"
     fi
@@ -71,6 +68,14 @@ require_manual_only_workflows() {
           item = line
           sub(/^[[:space:]]*-[[:space:]]*/, "", item)
           sub(/[[:space:]:].*/, "", item)
+          gsub(/^[[:space:]"'\''"]+|[[:space:]"'\''"]+$/, "", item)
+          if (item in automatic) {
+            exit 42
+          }
+        } else if (line ~ /^[[:space:]]+["'\''"]?[^[:space:]"'\''":]+["'\''"]?[[:space:]]*:/) {
+          item = line
+          sub(/^[[:space:]]+/, "", item)
+          sub(/:.*/, "", item)
           gsub(/^[[:space:]"'\''"]+|[[:space:]"'\''"]+$/, "", item)
           if (item in automatic) {
             exit 42
