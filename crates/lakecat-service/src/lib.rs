@@ -3021,7 +3021,7 @@ fn validate_querygraph_bootstrap_event_evidence(
         ));
     }
 
-    validate_querygraph_artifacts(
+    let table_artifact_ids = validate_querygraph_artifacts(
         event,
         payload,
         "table-artifacts",
@@ -3034,8 +3034,27 @@ fn validate_querygraph_bootstrap_event_evidence(
             "policy-bindings-hash",
         ],
     )?;
-    validate_querygraph_artifacts(event, payload, "view-artifacts", view_count, &["osi-hash"])?;
-    validate_querygraph_view_receipts(event, payload, view_count)?;
+    let view_artifact_ids =
+        validate_querygraph_artifacts(event, payload, "view-artifacts", view_count, &["osi-hash"])?;
+    validate_stable_id_set_matches_manifest(
+        event,
+        "querygraph bootstrap table-artifacts",
+        &table_artifact_ids,
+        &verified_tables,
+    )?;
+    validate_stable_id_set_matches_manifest(
+        event,
+        "querygraph bootstrap view-artifacts",
+        &view_artifact_ids,
+        &verified_views,
+    )?;
+    let view_receipt_ids = validate_querygraph_view_receipts(event, payload, view_count)?;
+    validate_stable_id_set_matches_manifest(
+        event,
+        "querygraph bootstrap view-version-receipts",
+        &view_receipt_ids,
+        &verified_views,
+    )?;
     validate_querygraph_bootstrap_standards(event, payload)?;
     validate_querygraph_bootstrap_request_identity(event, payload)?;
     Ok(())
@@ -3047,7 +3066,7 @@ fn validate_querygraph_artifacts(
     field: &str,
     expected_count: u64,
     hash_fields: &[&str],
-) -> Result<(), LakeCatError> {
+) -> Result<BTreeSet<String>, LakeCatError> {
     let Some(artifacts) = payload.get(field).and_then(Value::as_array) else {
         return Err(outbox_evidence_error(
             event,
@@ -3060,6 +3079,7 @@ fn validate_querygraph_artifacts(
             &format!("querygraph bootstrap {field} count does not match manifest count"),
         ));
     }
+    let mut stable_ids = BTreeSet::new();
     for artifact in artifacts {
         let Some(stable_id) = artifact
             .get("stable-id")
@@ -3077,21 +3097,29 @@ fn validate_querygraph_artifacts(
                 &format!("querygraph bootstrap {field} stable-id must not contain whitespace"),
             ));
         }
+        if !stable_ids.insert(stable_id.to_string()) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!(
+                    "querygraph bootstrap {field} must not contain duplicate stable-id values"
+                ),
+            ));
+        }
         for hash_field in hash_fields {
             validate_required_full_hash_field(event, artifact, hash_field)?;
         }
     }
-    Ok(())
+    Ok(stable_ids)
 }
 
 fn validate_querygraph_view_receipts(
     event: &OutboxEvent,
     payload: &Value,
     view_count: u64,
-) -> Result<(), LakeCatError> {
+) -> Result<BTreeSet<String>, LakeCatError> {
     let Some(receipts) = payload.get("view-version-receipts") else {
         if view_count == 0 {
-            return Ok(());
+            return Ok(BTreeSet::new());
         }
         return Err(outbox_evidence_error(
             event,
@@ -3110,6 +3138,7 @@ fn validate_querygraph_view_receipts(
             "querygraph bootstrap view-version-receipts count does not match view-count",
         ));
     }
+    let mut stable_ids = BTreeSet::new();
     for receipt in receipts {
         let Some(stable_id) = receipt
             .get("stable-id")
@@ -3127,6 +3156,12 @@ fn validate_querygraph_view_receipts(
                 "querygraph bootstrap view-version receipt stable-id must not contain whitespace",
             ));
         }
+        if !stable_ids.insert(stable_id.to_string()) {
+            return Err(outbox_evidence_error(
+                event,
+                "querygraph bootstrap view-version-receipts must not contain duplicate stable-id values",
+            ));
+        }
         let Some(view_version) = receipt.get("view-version").and_then(Value::as_u64) else {
             return Err(outbox_evidence_error(
                 event,
@@ -3141,6 +3176,22 @@ fn validate_querygraph_view_receipts(
         }
         validate_required_full_hash_field(event, receipt, "receipt-hash")?;
         validate_required_full_hash_field(event, receipt, "receipt-chain-hash")?;
+    }
+    Ok(stable_ids)
+}
+
+fn validate_stable_id_set_matches_manifest(
+    event: &OutboxEvent,
+    label: &str,
+    actual: &BTreeSet<String>,
+    expected: &[String],
+) -> Result<(), LakeCatError> {
+    let expected = expected.iter().cloned().collect::<BTreeSet<_>>();
+    if actual != &expected {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} stable-id set must match verified manifest"),
+        ));
     }
     Ok(())
 }
@@ -14063,6 +14114,92 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_querygraph_bootstrap_table_artifact_manifest_drift() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let mut payload = valid_querygraph_bootstrap_payload(principal);
+        payload["payload"]["table-artifacts"][0]["stable-id"] =
+            json!("local.default.forged_events");
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-bootstrap-table-artifact-drift".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                payload,
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("QueryGraph bootstrap table artifacts must match verified table manifest");
+
+        let message = err.to_string();
+        assert!(message.contains("querygraph.bootstrap"));
+        assert!(message.contains(
+            "querygraph bootstrap table-artifacts stable-id set must match verified manifest"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-bootstrap-table-artifact-drift"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_querygraph_bootstrap_view_receipt_manifest_drift() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let mut payload = valid_querygraph_bootstrap_payload(principal);
+        payload["payload"]["view-version-receipts"][0]["stable-id"] =
+            json!("lakecat:view:local:default:forged_customers");
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-bootstrap-view-receipt-drift".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                payload,
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("QueryGraph bootstrap view receipts must match verified view manifest");
+
+        let message = err.to_string();
+        assert!(message.contains("querygraph.bootstrap"));
+        assert!(message.contains(
+            "querygraph bootstrap view-version-receipts stable-id set must match verified manifest"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-bootstrap-view-receipt-drift"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_missing_table_lifecycle_identity() {
         let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
         let store = Arc::new(RecordingOutboxStore {
@@ -23750,6 +23887,73 @@ mod tests {
 
     fn catalog_config_defaults_json() -> serde_json::Value {
         serde_json::to_value(CatalogConfigResponse::default().defaults).unwrap()
+    }
+
+    fn valid_querygraph_bootstrap_payload(principal: Principal) -> serde_json::Value {
+        let bundle_hash = content_hash_json(&json!({"querygraph-bootstrap": "bundle"})).unwrap();
+        let graph_hash = content_hash_json(&json!({"querygraph-bootstrap": "graph"})).unwrap();
+        let open_lineage_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "open-lineage"})).unwrap();
+        let import_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "querygraph-import"})).unwrap();
+        let table_hash = content_hash_json(&json!({"querygraph-bootstrap": "table"})).unwrap();
+        let view_hash = content_hash_json(&json!({"querygraph-bootstrap": "view"})).unwrap();
+        let receipt_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "view-receipt"})).unwrap();
+        let receipt_chain_hash =
+            content_hash_json(&json!({"querygraph-bootstrap": "view-chain"})).unwrap();
+
+        json!({
+            "audit-event-id": "audit-bootstrap",
+            "event-type": "querygraph.bootstrap",
+            "payload": {
+                "authorization-receipt": {
+                    "principal": principal,
+                    "action": "graph-read",
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "checked_at": chrono::Utc::now(),
+                },
+                "warehouse": "local",
+                "table-count": 1,
+                "view-count": 1,
+                "policy-binding-count": 1,
+                "verified-tables": ["local.default.events"],
+                "verified-views": ["lakecat:view:local:default:active_customers"],
+                "bundle-hash": bundle_hash,
+                "graph-hash": graph_hash,
+                "open-lineage-hash": open_lineage_hash,
+                "querygraph-import-hash": import_hash,
+                "table-artifacts": [{
+                    "stable-id": "local.default.events",
+                    "croissant-hash": table_hash,
+                    "cdif-hash": table_hash,
+                    "osi-hash": table_hash,
+                    "odrl-hash": table_hash,
+                    "policy-bindings-hash": table_hash
+                }],
+                "view-artifacts": [{
+                    "stable-id": "lakecat:view:local:default:active_customers",
+                    "osi-hash": view_hash
+                }],
+                "view-version-receipts": [{
+                    "stable-id": "lakecat:view:local:default:active_customers",
+                    "view-version": 1,
+                    "receipt-hash": receipt_hash,
+                    "receipt-chain-hash": receipt_chain_hash
+                }],
+                "standards": [
+                    "Iceberg REST",
+                    "Croissant",
+                    "CDIF",
+                    "OSI handoff",
+                    "ODRL",
+                    "Grust catalog graph",
+                    "OpenLineage"
+                ]
+            }
+        })
     }
 
     fn assert_config_defaults_include(defaults: &serde_json::Value, key: &str, value: &str) {

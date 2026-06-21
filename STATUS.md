@@ -6,6 +6,26 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind bootstrap artifacts to verified manifests`.
+  `querygraph.bootstrap` outbox replay now requires table artifact stable IDs to
+  match `verified-tables`, view artifact stable IDs to match `verified-views`,
+  and view-version receipt stable IDs to match `verified-views`. Spliced
+  bootstrap artifacts or view receipt evidence fail before graph projection,
+  OpenLineage projection, or delivery acknowledgement.
+- Local verification for this QueryGraph bootstrap manifest-binding slice is
+  green:
+  `cargo fmt -p lakecat-service`;
+  `cargo test -p lakecat-service querygraph_bootstrap -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-sail -p lakecat-service -p lakecat-api -- --check`;
+  `cargo test -p lakecat-service outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features outbox_drain -- --test-threads=1`
+  (green with the existing all-features warning for unused test helper
+  `CapturingSailEngine`);
+  `scripts/check-local-dependency-contract.sh`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Reject ambiguous config defaults replay`.
   Catalog config-read outbox evidence now requires replayed defaults to be
   structured string key/value entries with duplicate-free keys. Malformed

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound `querygraph.bootstrap` replay table/view artifact stable IDs and
+  view-version receipt stable IDs to the `verified-tables` and
+  `verified-views` manifests before graph/OpenLineage projection, rejecting
+  spliced QueryGraph bootstrap evidence before outbox delivery.
 - Required catalog config-read replay defaults to be structured string
   key/value entries with duplicate-free keys before graph/OpenLineage
   projection, so v4 bridge posture cannot be replayed with contradictory

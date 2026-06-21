@@ -1692,6 +1692,14 @@ That gives QueryGraph a manifest-covered way to reject a view bootstrap that
 lost the accepted catalog receipt or detached the ordered receipt chain before
 the richer graph import begins.
 
+LakeCat also enforces the same binding when a `querygraph.bootstrap` outbox
+event is replayed. Table artifact stable IDs must match the `verified-tables`
+manifest exactly, view artifact stable IDs must match `verified-views`, and
+view-version receipt stable IDs must match `verified-views`. A saved replay
+event that keeps valid-looking hashes while swapping in another table artifact
+or another view's receipt evidence fails before graph or OpenLineage
+projection.
+
 The QueryGraph side should verify the same bundle before importing it:
 
 ```sh
