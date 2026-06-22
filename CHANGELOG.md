@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expanded the book's standards/extension guidance with a direct decision test
+  for what is standard Iceberg, LakeCat implementation, governance extension,
+  QueryGraph application surface, or future optional Iceberg-adjacent proposal.
+  The new text deepens the Sail-first argument: table-format interpretation,
+  manifest metrics, delete planning, metadata-as-data, scan task generation,
+  commit validation, and typed v4 work belong in Sail, while LakeCat persists
+  compact proof and replayable catalog state.
 - Bound credential response secret-reference hash proof. Secret-ref-backed
   credential responses now carry catalog-derived `secret-ref-hash` evidence
   beside `secret-ref-provider`, backend-supplied shadow values are replaced,

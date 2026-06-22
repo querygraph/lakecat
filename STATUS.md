@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Clarify standards, extensions, proposals, and Sail ownership in the book`.
+  The book now includes a direct decision test for whether catalog concepts are
+  standard Iceberg, LakeCat implementation, TypeSec governance extensions,
+  QueryGraph application surfaces, or future optional Iceberg-adjacent proposal
+  candidates, and it deepens the argument that table-format interpretation
+  belongs in Sail while LakeCat persists compact proof and replayable catalog
+  state.
+- Local verification for this standards/extension book slice is green:
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Bind credential response secret-ref hashes`.
   Secret-ref-backed credential responses now carry catalog-derived
   `secret-ref-hash` evidence beside `secret-ref-provider`, canonicalization
