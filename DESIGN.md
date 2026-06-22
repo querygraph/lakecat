@@ -674,7 +674,10 @@ enough if the saved self-verifier artifact can carry placeholder or prefix-only
 hashes. The same object must be closed over the known artifact manifest: extra
 top-level artifact keys or extra nested captured-output keys are rejected so a
 saved sidecar cannot smuggle unverified artifact claims alongside the checked
-bundle.
+bundle. The saved self-verifier root and `capturedOutputSemantics` object must
+also be closed over their known schema keys, so a sidecar cannot append
+unverified proof sections or captured-output semantics that no verifier compares
+to the compact summary.
 Handoff artifact paths must resolve under the handoff summary directory before
 LakeCat hashes or parses them. A saved summary must not be able to splice in an
 absolute path or `..` traversal to matching bytes outside the archived bundle.

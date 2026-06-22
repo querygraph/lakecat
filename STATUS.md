@@ -6,6 +6,26 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close QGLake self-verifier proof schemas`.
+  Saved `lakecatHandoffVerifyOutput` sidecars now reject unexpected top-level
+  proof fields and unexpected `capturedOutputSemantics` sections before any
+  saved sidecar can be accepted. This complements the closed
+  `artifactFiles` manifest and keeps saved handoff verifier output from
+  appending unverified proof or captured-output semantic claims that no
+  verifier compares to the compact summary.
+- Local verification for this implementation/book slice is green so far:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_top_level_proof -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_captured_semantics -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close QGLake self-verifier artifact manifests`.
   Saved `lakecatHandoffVerifyOutput.artifactFiles` sidecars now reject
   unexpected top-level artifact keys and unexpected nested captured-output keys

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed saved QGLake self-verifier proof schemas over their known keys. The
+  verifier now rejects unexpected top-level
+  `lakecatHandoffVerifyOutput` fields and unexpected
+  `capturedOutputSemantics` sections, so a saved sidecar cannot append
+  unverified proof claims that no verifier compares to the compact handoff
+  summary.
 - Closed saved QGLake self-verifier artifact manifests over their known key
   set. `lakecatHandoffVerifyOutput.artifactFiles` now rejects unexpected
   top-level artifact keys and unexpected nested captured-output keys before
