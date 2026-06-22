@@ -17477,24 +17477,29 @@ mod tests {
         let bundle = qglake_querygraph_bundle(vec![projection], vec![output]);
         let verification = bundle.verify_manifest().unwrap();
         let policy_binding_count = qglake_policy_binding_count(&bundle);
+        let events = vec![
+            qglake_bootstrap_lineage_summary_for(&verification, policy_binding_count),
+            qglake_restricted_credential_summary(),
+            qglake_human_credential_summary(),
+            qglake_policy_list_lineage_summary(),
+            qglake_policy_upsert_lineage_summary(),
+            qglake_storage_profile_list_lineage_summary(),
+            qglake_storage_profile_upsert_lineage_summary(),
+            qglake_server_list_lineage_summary(),
+            qglake_project_list_lineage_summary(),
+            qglake_warehouse_list_lineage_summary(),
+            qglake_table_commit_history_lineage_summary(),
+            qglake_scan_planned_lineage_summary(),
+            qglake_scan_tasks_fetched_lineage_summary(),
+        ];
         let drain = LineageDrainResponse {
-            delivered: 12,
-            event_types: vec![
-                "table.scan-planned".to_string(),
-                "table.scan-tasks-fetched".to_string(),
-                "credentials.vend-attempted".to_string(),
-                "credentials.vend-attempted".to_string(),
-                "policy-binding.listed".to_string(),
-                "storage-profile.listed".to_string(),
-                "storage-profile.upserted".to_string(),
-                "server.listed".to_string(),
-                "project.listed".to_string(),
-                "warehouse.listed".to_string(),
-                "table.commits-listed".to_string(),
-                "querygraph.bootstrap".to_string(),
-            ],
-            graph_events: 12,
-            lineage_events: 12,
+            delivered: events.len(),
+            event_types: events
+                .iter()
+                .map(|event| event.event_type.clone())
+                .collect(),
+            graph_events: events.iter().map(|event| event.graph_events).sum(),
+            lineage_events: events.iter().map(|event| event.lineage_events).sum(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
@@ -17503,20 +17508,7 @@ mod tests {
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
             typedid_proof_hash: None,
-            events: vec![
-                qglake_bootstrap_lineage_summary_for(&verification, policy_binding_count),
-                qglake_restricted_credential_summary(),
-                qglake_human_credential_summary(),
-                qglake_policy_list_lineage_summary(),
-                qglake_storage_profile_list_lineage_summary(),
-                qglake_storage_profile_upsert_lineage_summary(),
-                qglake_server_list_lineage_summary(),
-                qglake_project_list_lineage_summary(),
-                qglake_warehouse_list_lineage_summary(),
-                qglake_table_commit_history_lineage_summary(),
-                qglake_scan_planned_lineage_summary(),
-                qglake_scan_tasks_fetched_lineage_summary(),
-            ],
+            events,
         };
 
         let replay_verification =
@@ -19464,16 +19456,17 @@ mod tests {
     #[test]
     fn qglake_management_replay_line_summarizes_verified_evidence() {
         let line = qglake_management_replay_line(&LineageDrainResponse {
-            delivered: 5,
+            delivered: 6,
             event_types: vec![
                 "server.listed".to_string(),
                 "project.listed".to_string(),
                 "warehouse.listed".to_string(),
                 "policy-binding.listed".to_string(),
+                "policy-binding.upserted".to_string(),
                 "storage-profile.listed".to_string(),
             ],
             graph_events: 0,
-            lineage_events: 5,
+            lineage_events: 6,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
@@ -19487,6 +19480,7 @@ mod tests {
                 qglake_project_list_lineage_summary(),
                 qglake_warehouse_list_lineage_summary(),
                 qglake_policy_list_lineage_summary(),
+                qglake_policy_upsert_lineage_summary(),
                 qglake_storage_profile_list_lineage_summary(),
                 qglake_storage_profile_upsert_lineage_summary(),
             ],
@@ -19495,7 +19489,7 @@ mod tests {
 
         assert_eq!(
             line,
-            "management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none"
+            "management replay servers=1 projects=1 warehouses=1 policies=1 policy_upserts=1 policy=agent-columns:odrl_hash=sha256:8f0ab09903123af3536f8bd6b9ef59a2429fb46b2235c44c8865aac5b388db1c storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none"
         );
 
         let mut upsert_without_location_hash = qglake_storage_profile_upsert_lineage_summary();

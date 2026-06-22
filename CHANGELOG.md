@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed QGLake accepted replay fixtures so policy-list evidence is paired with
+  `policy-binding.upserted` content proof and the accepted lineage-drain
+  manifest derives `delivered`, `eventTypes`, `graphEvents`, and
+  `lineageEvents` from the actual replay summaries. This keeps the full local
+  workspace gate aligned with the verifier's policy-upsert and event-order
+  invariants.
 - Expanded the book's release-ledger explanation with a standards-document
   reading guide. The new section separates Iceberg-standard namespace/table
   and CAS behavior from LakeCat Rust/Turso implementation choices,

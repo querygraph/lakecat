@@ -5,6 +5,20 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Repair QGLake accepted replay fixtures`.
+  The accepted QGLake replay artifacts now include `policy-binding.upserted`
+  content proof whenever policy-list proof is present, and the accepted
+  lineage-drain fixture derives `delivered`, `eventTypes`, `graphEvents`, and
+  `lineageEvents` from the actual replay summaries. This restores the full
+  local workspace all-features gate while preserving the verifier's policy
+  upsert and event-order invariants.
+- Local verification for this QGLake fixture repair is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli --all-features`;
+  `cargo test --workspace --all-features`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Expand catalog standards-boundary guide in the book`.
   The book now includes a standards-document reading guide for the release
