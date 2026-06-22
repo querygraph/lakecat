@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog-concepts chapter with a reader-facing
+  naming discipline and proposal filter that separates standard Iceberg
+  behavior from LakeCat control-plane proof, QueryGraph/TypeSec integration,
+  and future Iceberg-adjacent profile candidates. The same slice strengthens
+  the argument for pushing Iceberg table-format interpretation into Sail.
 - Added QGLake lineage-drain verifier coverage for missing governed scan
   authorization receipt hashes, proving fetched scan replay cannot shed the
   TypeSec-style receipt digest before compact handoff proof is accepted.

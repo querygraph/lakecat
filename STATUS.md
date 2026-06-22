@@ -5,6 +5,26 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Expand catalog concept standards guidance`.
+  The book now more thoroughly explains the Rust service/catalog spine,
+  Turso-backed local store direction, Iceberg REST-compatible
+  namespace/table paths, commit CAS/idempotency/pointer-log/audit/outbox/replay
+  hardening, TypeSec-style governed scan and credential receipts, and broad
+  QueryGraph/QGLake handoff surfaces. The added material explicitly separates
+  standard Iceberg parlance from LakeCat control-plane proof,
+  QueryGraph/TypeSec integration surfaces, implementation choices, and narrow
+  future Iceberg-adjacent profile candidates. It also strengthens the argument
+  for pushing table-format interpretation into Sail.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover has no standalone page
+  number and the body starts with numbered Contents;
+  the versioned EPUB symlink resolves to `lakecat.epub`;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest QGLake handoff slice:
   `Cover missing scan authorization hashes`.
   The QGLake lineage-drain verifier now has focused coverage for missing
