@@ -9877,6 +9877,12 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
                 )
                 .into());
             }
+            if token.bytes().any(|byte| byte.is_ascii_whitespace()) {
+                return Err(LakeCatError::InvalidArgument(
+                    "Authorization Bearer token must not contain whitespace".to_string(),
+                )
+                .into());
+            }
             let token_sha256 = content_hash_bytes(token.as_bytes());
             (
                 Principal::new(format!("bearer:{token_sha256}"), PrincipalKind::Service)?,
@@ -11408,6 +11414,59 @@ mod tests {
             .unwrap();
         let message = String::from_utf8(body.to_vec()).unwrap();
         assert!(message.contains("Authorization Bearer token must not be empty"));
+        assert!(!message.contains("bearer:"));
+        assert!(governance.principals.lock().await.is_empty());
+        assert!(governance.contexts.lock().await.is_empty());
+    }
+
+    #[test]
+    fn request_identity_rejects_whitespace_in_bearer_token() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer service token".parse().unwrap());
+
+        let err =
+            request_identity(&headers).expect_err("whitespace-bearing token should fail closed");
+        let LakeCatHttpError(inner) = err;
+        let message = inner.to_string();
+
+        assert!(message.contains("Authorization Bearer token must not contain whitespace"));
+        assert!(!message.contains("service token"));
+        assert!(!message.contains("bearer:"));
+    }
+
+    #[tokio::test]
+    async fn config_endpoint_rejects_whitespace_bearer_token_before_governance() {
+        let governance = Arc::new(RecordingGovernance::default());
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_integrations(
+            default_sail_engine(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        ));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/config")
+                    .header("authorization", "Bearer service-token ")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let message = String::from_utf8(body.to_vec()).unwrap();
+        assert!(message.contains("Authorization Bearer token must not contain whitespace"));
+        assert!(!message.contains("service-token"));
         assert!(!message.contains("bearer:"));
         assert!(governance.principals.lock().await.is_empty());
         assert!(governance.contexts.lock().await.is_empty());

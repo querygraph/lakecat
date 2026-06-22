@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Reject whitespace-bearing bearer identity tokens`.
+  Request identity parsing now accepts only a single opaque token after
+  `Authorization: Bearer `. Bearer values with embedded or trailing whitespace
+  are rejected before governance, TypeSec verification, Sail calls, audit, or
+  outbox evidence. The regressions keep diagnostics generic and prove token
+  material is not echoed.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib bearer_token -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Reject orphan principal-kind headers`.
   Request identity parsing now accepts `x-lakecat-principal-kind` only when
   `x-lakecat-principal` is present. Orphan kind hints are rejected before bearer

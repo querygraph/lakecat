@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened bearer identity admission so `Authorization: Bearer ...` accepts a
+  single opaque token only. Bearer values containing embedded or trailing
+  whitespace are rejected before governance, TypeSec verification, Sail calls,
+  audit, or outbox evidence, and diagnostics avoid echoing the token material.
 - Hardened request identity admission so `x-lakecat-principal-kind` is accepted
   only with `x-lakecat-principal`. Orphan principal-kind hints are now rejected
   before bearer, agent DID, TypeDID, governance, Sail, audit, or outbox paths
