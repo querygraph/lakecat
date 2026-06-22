@@ -329,6 +329,7 @@ impl TableRecord {
                 "table metadata must be a JSON object".to_string(),
             ));
         }
+        validate_table_metadata_format_version(&self.metadata, "table metadata")?;
         Ok(())
     }
 }
@@ -375,6 +376,9 @@ impl TableCommit {
             return Err(LakeCatError::InvalidArgument(
                 "new table metadata must be a JSON object".to_string(),
             ));
+        }
+        if let Some(metadata) = self.new_metadata.as_ref() {
+            validate_table_metadata_format_version(metadata, "new table metadata")?;
         }
         Ok(())
     }
@@ -432,6 +436,26 @@ impl TableCommitRecord {
                     .to_string(),
             ));
         }
+        let Some(format_version) = self.format_version else {
+            return Err(LakeCatError::Internal(
+                "table commit record format version must be present".to_string(),
+            ));
+        };
+        if format_version <= 0 {
+            return Err(LakeCatError::Internal(
+                "table commit record format version must be positive".to_string(),
+            ));
+        }
+        let Some(snapshot_id) = self.snapshot_id else {
+            return Err(LakeCatError::Internal(
+                "table commit record snapshot id must be present".to_string(),
+            ));
+        };
+        if snapshot_id < 0 {
+            return Err(LakeCatError::Internal(
+                "table commit record snapshot id must be non-negative".to_string(),
+            ));
+        }
         validate_sha256_evidence(
             &self.request_hash,
             "table commit record request hash must be full SHA-256 evidence",
@@ -469,19 +493,39 @@ fn table_response_hash(table: &TableRecord) -> LakeCatResult<String> {
     content_hash_json(&value)
 }
 
-fn table_commit_format_version(table: &TableRecord) -> Option<i32> {
-    table
-        .metadata
+fn validate_table_metadata_format_version(metadata: &Value, label: &str) -> LakeCatResult<()> {
+    let Some(format_version) = table_metadata_format_version(metadata) else {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "{label} format-version must be present"
+        )));
+    };
+    if format_version <= 0 {
+        return Err(LakeCatError::InvalidArgument(format!(
+            "{label} format-version must be positive"
+        )));
+    }
+    Ok(())
+}
+
+fn table_metadata_format_version(metadata: &Value) -> Option<i32> {
+    metadata
         .get("format-version")
         .and_then(Value::as_i64)
         .and_then(|value| i32::try_from(value).ok())
 }
 
+fn table_commit_format_version(table: &TableRecord) -> Option<i32> {
+    table_metadata_format_version(&table.metadata)
+}
+
 fn table_commit_snapshot_id(table: &TableRecord) -> Option<i64> {
-    table
-        .metadata
-        .get("current-snapshot-id")
-        .and_then(Value::as_i64)
+    Some(
+        table
+            .metadata
+            .get("current-snapshot-id")
+            .and_then(Value::as_i64)
+            .unwrap_or(0),
+    )
 }
 
 fn table_commit_policy_hash(authorization_receipt: Option<&Value>) -> Option<String> {
@@ -4342,6 +4386,36 @@ mod memory_tests {
                 if message.contains("table metadata must be a JSON object")
         ));
 
+        let mut missing_format_version = TableRecord {
+            ident: ident.clone(),
+            location: "file:///tmp/events".to_string(),
+            metadata_location: Some("file:///tmp/events/metadata/00000.json".to_string()),
+            metadata: serde_json::json!({"current-snapshot-id": 42}),
+            created: AuditStamp::now(Principal::anonymous()),
+            updated_at: Utc::now(),
+            version: 0,
+        };
+        let err = store
+            .create_table(missing_format_version.clone())
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("table metadata format-version must be present")
+        ));
+
+        missing_format_version.metadata = serde_json::json!({"format-version": 0});
+        let err = store
+            .create_table(missing_format_version)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("table metadata format-version must be positive")
+        ));
+
         assert!(matches!(
             store.load_table(&ident).await,
             Err(LakeCatError::NotFound { object, name })
@@ -4411,6 +4485,52 @@ mod memory_tests {
             err,
             LakeCatError::InvalidArgument(message)
                 if message.contains("new table metadata must be a JSON object")
+        ));
+
+        let missing_format_version = TableCommit {
+            requirements: vec![],
+            updates: vec![serde_json::json!({"action": "noop"})],
+            expected_previous_metadata_location: Some(
+                "file:///tmp/events/metadata/00000.json".to_string(),
+            ),
+            new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+            new_metadata: Some(serde_json::json!({"current-snapshot-id": 42})),
+            idempotency_key: None,
+            idempotency_request_hash: None,
+            principal: Principal::anonymous(),
+            authorization_receipt: None,
+        };
+        let err = store
+            .commit_table(&ident, missing_format_version)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("new table metadata format-version must be present")
+        ));
+
+        let zero_format_version = TableCommit {
+            requirements: vec![],
+            updates: vec![serde_json::json!({"action": "noop"})],
+            expected_previous_metadata_location: Some(
+                "file:///tmp/events/metadata/00000.json".to_string(),
+            ),
+            new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+            new_metadata: Some(serde_json::json!({"format-version": 0})),
+            idempotency_key: None,
+            idempotency_request_hash: None,
+            principal: Principal::anonymous(),
+            authorization_receipt: None,
+        };
+        let err = store
+            .commit_table(&ident, zero_format_version)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("new table metadata format-version must be positive")
         ));
 
         let table = store.load_table(&ident).await.unwrap();
@@ -4486,6 +4606,10 @@ mod memory_tests {
         assert_eq!(
             pending[0].payload["commit"]["idempotency_key_sha256"],
             serde_json::json!(content_hash_bytes("commit-1".as_bytes()))
+        );
+        assert_eq!(
+            pending[0].payload["commit"]["snapshot_id"],
+            serde_json::json!(0)
         );
         assert_eq!(
             pending[0].payload["authorization-receipt"]["engine"],
@@ -7815,6 +7939,36 @@ pub mod turso_store {
                     if message.contains("table metadata must be a JSON object")
             ));
 
+            let mut missing_format_version = TableRecord {
+                ident: ident.clone(),
+                location: "file:///tmp/events".to_string(),
+                metadata_location: Some("file:///tmp/events/metadata/00000.json".to_string()),
+                metadata: serde_json::json!({"current-snapshot-id": 42}),
+                created: AuditStamp::now(Principal::anonymous()),
+                updated_at: Utc::now(),
+                version: 0,
+            };
+            let err = store
+                .create_table(missing_format_version.clone())
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("table metadata format-version must be present")
+            ));
+
+            missing_format_version.metadata = serde_json::json!({"format-version": 0});
+            let err = store
+                .create_table(missing_format_version)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("table metadata format-version must be positive")
+            ));
+
             assert!(matches!(
                 store.load_table(&ident).await,
                 Err(LakeCatError::NotFound { object, name })
@@ -7896,6 +8050,52 @@ pub mod turso_store {
                 err,
                 LakeCatError::InvalidArgument(message)
                     if message.contains("new table metadata must be a JSON object")
+            ));
+
+            let missing_format_version = TableCommit {
+                requirements: vec![],
+                updates: vec![serde_json::json!({"action": "noop"})],
+                expected_previous_metadata_location: Some(
+                    "file:///tmp/events/metadata/00000.json".to_string(),
+                ),
+                new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+                new_metadata: Some(serde_json::json!({"current-snapshot-id": 42})),
+                idempotency_key: None,
+                idempotency_request_hash: None,
+                principal: Principal::anonymous(),
+                authorization_receipt: None,
+            };
+            let err = store
+                .commit_table(&ident, missing_format_version)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("new table metadata format-version must be present")
+            ));
+
+            let zero_format_version = TableCommit {
+                requirements: vec![],
+                updates: vec![serde_json::json!({"action": "noop"})],
+                expected_previous_metadata_location: Some(
+                    "file:///tmp/events/metadata/00000.json".to_string(),
+                ),
+                new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+                new_metadata: Some(serde_json::json!({"format-version": 0})),
+                idempotency_key: None,
+                idempotency_request_hash: None,
+                principal: Principal::anonymous(),
+                authorization_receipt: None,
+            };
+            let err = store
+                .commit_table(&ident, zero_format_version)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("new table metadata format-version must be positive")
             ));
 
             let table = store.load_table(&ident).await.unwrap();
@@ -8005,7 +8205,7 @@ pub mod turso_store {
                 crate::table_response_hash(&replayed_probe).unwrap()
             );
             assert_eq!(commit_records[0].format_version, Some(3));
-            assert_eq!(commit_records[0].snapshot_id, None);
+            assert_eq!(commit_records[0].snapshot_id, Some(0));
             assert_eq!(commit_records[0].policy_hash, None);
             let replay_mismatch = store
                 .replay_table_commit(&ident, "commit-1", "sha256:different-request")
@@ -8053,6 +8253,10 @@ pub mod turso_store {
             assert_eq!(
                 pending[0].payload["commit"]["format_version"],
                 serde_json::json!(3)
+            );
+            assert_eq!(
+                pending[0].payload["commit"]["snapshot_id"],
+                serde_json::json!(0)
             );
             assert!(!pending[0].payload.to_string().contains("commit-1"));
             assert_eq!(

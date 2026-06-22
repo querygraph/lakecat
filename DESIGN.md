@@ -669,10 +669,14 @@ response hash, and idempotency-key hash evidence before projection; only the
 policy hash remains optional when no policy participated. It must also carry
 positive Iceberg format-version evidence and non-negative snapshot-id evidence,
 so graph and OpenLineage projections cannot lose the table-format summary that
-the pointer-log path exposes later. The individual commit envelope must also
-carry an RFC3339 committed-at timestamp before acknowledgement or projection,
-so replay cannot preserve pointer movement while dropping the time at which the
-catalog accepted it.
+the pointer-log path exposes later. The store producer now rejects table and
+commit metadata that lacks positive `format-version` evidence before producing
+durable commit records, and it emits explicit `snapshot_id: 0` evidence for
+commits where the Iceberg metadata has no current snapshot, so a schema-only or
+empty-table commit does not create an undrainable `table.commit` event. The
+individual commit envelope must also carry an RFC3339 committed-at timestamp
+before acknowledgement or projection, so replay cannot preserve pointer
+movement while dropping the time at which the catalog accepted it.
 
 ### P4 Semantic Catalog Graph
 

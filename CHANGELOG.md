@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Hardened table commit proof at the store boundary: table and commit metadata
+  now require positive Iceberg `format-version` evidence before memory or Turso
+  state changes can produce durable commit records, and commits without a
+  current Iceberg snapshot now emit explicit `snapshot_id: 0` proof instead of
+  omitting snapshot evidence. This keeps store-produced `table.commit` outbox
+  events aligned with service replay admission before graph/OpenLineage/QGLake
+  projection.
 - Added a dedicated book section, `The Standards Boundary For The Current
   Release`, that classifies the Rust service spine, Turso store, Iceberg REST
   paths, commit CAS hardening, governed scan/credential receipts,

@@ -3739,16 +3739,23 @@ to clients and later projected through graph and lineage replay.
 
 The same commit record includes compact summary evidence: Iceberg format
 version, current snapshot id, and the policy hash from the authorization
-receipt when one exists. QueryGraph can inspect those fields from the
+receipt when one exists. Memory and Turso commit producers now require positive
+Iceberg `format-version` evidence before table or commit metadata can produce a
+durable commit record. If the table metadata has no current snapshot, the
+producer emits explicit `snapshot_id: 0` evidence instead of omitting the
+field, preserving no-snapshot Iceberg states without creating an undrainable
+`table.commit` event. QueryGraph can inspect those fields from the
 pointer-log/outbox stream without parsing full table metadata for every
 catalog audit question. Before a `table.commit` outbox event is projected or
 acknowledged, LakeCat now checks that it carries a commit object, an unsigned
 sequence number, a decodable root table identity, matching nested commit-table
 identity when present, both the commit principal and authorization receipt
-principal with matching values, and full `sha256:`-prefixed 64-hex request,
-response, idempotency-key, and present policy hashes. A prefix-shaped
-placeholder, contradictory commit identity, missing receipt principal, or
-drifted principal cannot become delivered commit replay evidence.
+principal with matching values, positive format-version evidence, non-negative
+snapshot-id evidence, and full `sha256:`-prefixed 64-hex request, response,
+idempotency-key, and present policy hashes. A prefix-shaped placeholder,
+contradictory commit identity, missing receipt principal, missing
+table-format evidence, or drifted principal cannot become delivered commit
+replay evidence.
 
 Operators and QueryGraph can read that pointer-log evidence through a governed
 management endpoint:
@@ -5930,8 +5937,11 @@ non-empty new metadata pointer evidence, non-blank previous pointer evidence
 when present, matching commit and authorization principals, the `table-commit`
 receipt action, positive Iceberg format-version evidence, non-negative
 snapshot-id evidence, and full SHA-256 request, response, and idempotency-key
-hashes. The policy hash is the only optional hash in that envelope, because
-some standard commits do not pass through a policy binding.
+hashes. The store path now supplies explicit `snapshot_id: 0` proof for
+metadata with no current snapshot, keeping empty-table or schema-only commits
+compatible with the replay contract. The policy hash is the only optional hash
+in that envelope, because some standard commits do not pass through a policy
+binding.
 Credential-vend replay gets the same treatment: `credentials.vend-attempted`
 must carry a
 matching credential count, full duplicate-free credential-response prefix

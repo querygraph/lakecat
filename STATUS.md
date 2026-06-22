@@ -5,6 +5,23 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation/documentation slice:
+  `Require commit proof format and snapshot evidence`.
+  Memory and Turso table writes now reject table or commit metadata that lacks
+  a positive Iceberg `format-version` before durable state changes can produce
+  commit proof. Store-produced commit records now also emit explicit
+  `snapshot_id: 0` evidence when the table has no current Iceberg snapshot, so
+  `table.commit` outbox events produced by the durable catalog spine satisfy
+  service replay admission before graph, OpenLineage, or QGLake projection.
+- Local verification for this commit-proof evidence slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store deserialized_invalid_table -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local deserialized_invalid_table -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Document standards boundary and Sail engine boundary`.
   The book now has a front-of-book section that explicitly separates standard
