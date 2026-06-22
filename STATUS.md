@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Reject mixed Authorization and LakeCat identity headers`.
+  Request identity parsing now rejects `Authorization` when it is combined with
+  `x-lakecat-principal`, `x-lakecat-agent-did`, or `x-lakecat-typedid`.
+  Mixed primary identity sources fail before bearer token hashing, governance,
+  TypeSec verification, Sail calls, audit, or outbox evidence. The regressions
+  keep diagnostics generic and prove competing principal, DID, or token
+  material is not echoed.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib authorization_with -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Reject whitespace-bearing bearer identity tokens`.
   Request identity parsing now accepts only a single opaque token after
   `Authorization: Bearer `. Bearer values with embedded or trailing whitespace

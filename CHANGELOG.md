@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened request identity admission so `Authorization` cannot be combined
+  with `x-lakecat-principal`, `x-lakecat-agent-did`, or
+  `x-lakecat-typedid`. Mixed primary identity sources now fail before bearer
+  token hashing, governance, TypeSec verification, Sail calls, audit, or outbox
+  evidence, and diagnostics avoid echoing the competing principal, DID, or
+  token material.
 - Hardened bearer identity admission so `Authorization: Bearer ...` accepts a
   single opaque token only. Bearer values containing embedded or trailing
   whitespace are rejected before governance, TypeSec verification, Sail calls,

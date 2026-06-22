@@ -9850,6 +9850,14 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
     let delegation = header("x-lakecat-agent-delegation")?;
     let signed_summary = header("x-lakecat-agent-summary-signature")?;
     let authorization = header("authorization")?;
+    if authorization.is_some()
+        && (explicit_principal.is_some() || agent_did.is_some() || explicit_typedid.is_some())
+    {
+        return Err(LakeCatError::InvalidArgument(
+            "Authorization cannot be combined with x-lakecat-principal, x-lakecat-agent-did, or x-lakecat-typedid".to_string(),
+        )
+        .into());
+    }
 
     let (principal, source, bearer_token_sha256) = if let Some(subject) = explicit_principal {
         (
@@ -11466,6 +11474,67 @@ mod tests {
             .unwrap();
         let message = String::from_utf8(body.to_vec()).unwrap();
         assert!(message.contains("Authorization Bearer token must not contain whitespace"));
+        assert!(!message.contains("service-token"));
+        assert!(!message.contains("bearer:"));
+        assert!(governance.principals.lock().await.is_empty());
+        assert!(governance.contexts.lock().await.is_empty());
+    }
+
+    #[test]
+    fn request_identity_rejects_authorization_with_explicit_identity() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-lakecat-principal", "alice@example.com".parse().unwrap());
+        headers.insert("x-lakecat-principal-kind", "human".parse().unwrap());
+        headers.insert("authorization", "Bearer service-token".parse().unwrap());
+
+        let err = request_identity(&headers).expect_err("mixed identity should fail closed");
+        let LakeCatHttpError(inner) = err;
+        let message = inner.to_string();
+
+        assert!(message.contains(
+            "Authorization cannot be combined with x-lakecat-principal, x-lakecat-agent-did, or x-lakecat-typedid"
+        ));
+        assert!(!message.contains("alice@example.com"));
+        assert!(!message.contains("service-token"));
+        assert!(!message.contains("bearer:"));
+    }
+
+    #[tokio::test]
+    async fn config_endpoint_rejects_authorization_with_agent_identity_before_governance() {
+        let governance = Arc::new(RecordingGovernance::default());
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_integrations(
+            default_sail_engine(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        ));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/config")
+                    .header("x-lakecat-agent-did", "did:example:agent")
+                    .header("authorization", "Bearer service-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let message = String::from_utf8(body.to_vec()).unwrap();
+        assert!(message.contains(
+            "Authorization cannot be combined with x-lakecat-principal, x-lakecat-agent-did, or x-lakecat-typedid"
+        ));
+        assert!(!message.contains("did:example:agent"));
         assert!(!message.contains("service-token"));
         assert!(!message.contains("bearer:"));
         assert!(governance.principals.lock().await.is_empty());
