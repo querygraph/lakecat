@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound saved `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics`
+  authorization receipt actions to the compact request-identity proof, so a
+  rehashed handoff self-verifier artifact cannot drift the drain read away from
+  `lineage-read`.
 - Required QGLake lineage-drain `eventTypes` manifests to match replay summary
   order, not only count or multiplicity, so compact handoff artifacts prove the
   replay sequence and cannot reorder catalog event summaries after drain.

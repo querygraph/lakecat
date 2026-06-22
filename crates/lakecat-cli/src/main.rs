@@ -829,6 +829,7 @@ fn require_qglake_handoff_verify_output_lineage_drain_identity_match_summary(
         "principalSubject",
         "principalKind",
         "authorizationReceiptHash",
+        "authorizationReceiptAction",
         "requestIdentitySource",
         "requestIdentityState",
         "typedidEnvelopeHash",
@@ -14494,6 +14495,34 @@ mod tests {
         assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
         assert!(err.to_string().contains("lineageDrainArtifactSemantics"));
         assert!(err.to_string().contains("requestIdentitySource mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_lineage_action_drift() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-lineage-action-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["lineageDrainArtifactSemantics"]["authorizationReceiptAction"] = json!("graph-read");
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject handoff verifier action drift");
+
+        assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
+        assert!(err.to_string().contains("lineageDrainArtifactSemantics"));
+        assert!(
+            err.to_string()
+                .contains("authorizationReceiptAction mismatch")
+        );
     }
 
     #[test]

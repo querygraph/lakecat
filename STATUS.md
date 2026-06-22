@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind handoff self-verifier lineage action`.
+  Saved `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics` now binds
+  `authorizationReceiptAction` to the compact request-identity proof, so a
+  rehashed handoff self-verifier artifact cannot drift the archived lineage
+  drain read away from `lineage-read`.
+- Local verification for this self-verifier action slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind QGLake eventTypes to replay order`.
   QGLake lineage-drain verification now requires the compact `eventTypes`
   manifest to match replay summary order, not only delivered count or event

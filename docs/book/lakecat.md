@@ -4716,6 +4716,10 @@ action, and rejects valid-but-wrong action drift, such as `table-commit`
 attached to `table.commits-listed`. Captured replay agreement checks the same
 field in saved handoff artifacts, so an archive cannot keep valid hash-shaped
 proof while silently changing what catalog action was authorized.
+The saved self-verifier sidecar repeats that binding for
+`lineageDrainArtifactSemantics`: its drain-read `authorizationReceiptAction`
+must still match the compact request-identity proof, so a rehashed
+`lakecat-handoff-verify.json` cannot describe a different lineage-read action.
 Commit-history replay has the same shape:
 `table.commits-listed` event must carry a `commit-count` that matches both
 full SHA-256 commit hashes and unsigned sequence numbers, plus
@@ -4996,7 +5000,8 @@ lineage-drain semantics must match the accepted replay proof, and saved
 import-plan graph counts must still match the saved bundle graph counts. Then
 it parses the archived lineage-drain artifact and requires the saved
 lineage-drain semantics' delivered count, event type list, graph event count,
-and lineage event count to match before accepting the verifier-output hash.
+lineage event count, and drain authorization action to match before accepting
+the verifier-output hash.
 The archived drain itself must also reconcile those same top-level counts with
 its replay summary array, including repeated event-type multiplicity and the
 exact `eventTypes` to replay-summary order. Then it parses those captured JSON

@@ -537,14 +537,17 @@ Lineage-drain replay summaries must also stay bound to the drain-level event
 type manifest: a compact QGLake handoff cannot include a replay summary for an
 event type that the drain did not declare as delivered, and repeated event
 types must match replay summary multiplicity rather than only set membership.
+The manifest order must also match replay summary order, so `eventTypes` is a
+compact replay sequence proof rather than a reorderable inventory.
 Accepted lineage-drain artifacts must also reconcile their top-level
 `delivered`, `eventTypes`, `graphEvents`, and `lineageEvents` totals with the
 actual replay summary array before the handoff can be treated as verified.
 Saved `lakecatHandoffVerifyOutput` artifacts must stay bound to the archived
 lineage-drain artifact as well, including delivered count, event type manifest,
-graph event count, and lineage event count. Compact table commit-history proof
-must preserve the same duplicate-free commit-hash invariant as service replay,
-so archived QueryGraph handoff summaries cannot inflate pointer-log evidence by
+graph event count, lineage event count, and the drain-read authorization action
+from the compact request-identity proof. Compact table commit-history proof must
+preserve the same duplicate-free commit-hash invariant as service replay, so
+archived QueryGraph handoff summaries cannot inflate pointer-log evidence by
 repeating a valid commit hash.
 Raw lineage-drain replay summaries and compact handoff summaries must both keep
 replay, OpenLineage, view receipt, and view receipt-chain hash arrays
