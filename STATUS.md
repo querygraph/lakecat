@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Cover credential-vend allowed decisions`.
+  Service replay admission already required `credentials.vend-attempted`
+  authorization receipts to carry an affirmative allow decision; the new
+  regression pins that credential-vending surface directly, proving missing or
+  denied decisions fail before acknowledgement, graph projection, OpenLineage
+  projection, QGLake proof, or QueryGraph import can inherit unauthorized
+  credential-vending evidence.
+- Local verification for this implementation/testing slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_missing_or_denied_credential_vend_receipt_allowed_decision -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Cover all management-list allowed decisions`.
   Service replay admission already required management-list authorization
   receipts to carry an affirmative allow decision; the regression now pins

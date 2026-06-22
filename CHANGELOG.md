@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added credential-vend replay coverage for denied or incomplete authorization
+  receipt decisions. `credentials.vend-attempted` now has a direct regression
+  proving missing or false `allowed` decisions fail before acknowledgement,
+  graph projection, OpenLineage projection, QGLake proof, or QueryGraph import
+  can inherit unauthorized credential-vending evidence.
 - Extended management-list replay coverage for denied or incomplete
   authorization receipt decisions. `policy-binding.listed`,
   `project.listed`, `server.listed`, `storage-profile.listed`, and

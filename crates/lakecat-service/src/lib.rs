@@ -22123,6 +22123,106 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_missing_or_denied_credential_vend_receipt_allowed_decision() {
+        let principal = Principal {
+            subject: "human:operator".to_string(),
+            kind: PrincipalKind::Human,
+        };
+        for (case, allowed, expected_message) in [
+            (
+                "missing",
+                None,
+                "credential-vend evidence must contain authorization receipt allowed decision",
+            ),
+            (
+                "denied",
+                Some(false),
+                "credential-vend authorization receipt must allow replay projection",
+            ),
+        ] {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let mut authorization_receipt = json!({
+                "principal": principal.clone(),
+                "action": "credentials-vend",
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            });
+            if let Some(allowed) = allowed {
+                authorization_receipt["allowed"] = json!(allowed);
+            }
+            let event_id = format!("evt-credential-vend-{case}-receipt-allowed");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "credentials.vend-attempted".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "credentials.vend-attempted",
+                        "table": table,
+                        "payload": {
+                            "authorization-receipt": authorization_receipt,
+                            "credential-count": 0,
+                            "credential-response-evidence": [],
+                            "storage-profile-id": "events-local",
+                            "storage-profile": {
+                                "profile-id": "events-local",
+                                "warehouse": "local",
+                                "provider": "file",
+                                "issuance-mode": "local-file-no-secret",
+                                "secret-ref-present": false,
+                                "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            },
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("missing or denied credential-vend receipt decision should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("credentials.vend-attempted"));
+            assert!(
+                message.contains(expected_message),
+                "credential-vend should reject {case} receipt allowed decision: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{case} credential-vend receipt decision must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{case} credential-vend receipt decision must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{case} credential-vend receipt decision must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_credential_vend_receipt_principal() {
         let cases = [
             (
