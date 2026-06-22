@@ -5,6 +5,21 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Expand catalog concept map in the book`.
+  The book now gives a detailed reader-facing explanation of which concepts are
+  standard Iceberg parlance, which are LakeCat implementation choices, which
+  are TypeSec/QueryGraph extensions, and which narrow proof shapes could become
+  future optional Iceberg-adjacent profiles. It specifically covers the Rust
+  service/catalog spine, Turso-backed store, Iceberg REST namespace/table
+  paths, commit CAS hardening, governed scan and credential receipts,
+  audit/outbox/OpenLineage replay, QueryGraph/QGLake handoff, and the reason
+  Sail should own table-format, manifest, scan-planning, delete,
+  metadata-as-data, row-lineage, and v4 interpretation work.
+- Local verification for this documentation slice is green:
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed implementation/documentation slice:
   `Require commit proof format and snapshot evidence`.
   Memory and Turso table writes now reject table or commit metadata that lacks

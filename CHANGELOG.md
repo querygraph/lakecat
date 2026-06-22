@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a detailed catalog concept map that explains
+  the Rust service/catalog spine, Turso-backed local store, Iceberg
+  REST-compatible namespace/table paths, commit CAS hardening, governed
+  scan/credential receipts, audit/outbox/OpenLineage replay, QueryGraph/QGLake
+  handoff, and Iceberg v4 typed interpretation as separate standard,
+  implementation, extension, and future-profile categories. The new section
+  makes the Sail boundary explicit: field ids, schema and partition evolution,
+  manifests, metrics, deletes, scan tasks, metadata-as-data, row lineage, and
+  v4 interpretation belong in Sail rather than a LakeCat-local shadow engine.
 - Hardened table commit proof at the store boundary: table and commit metadata
   now require positive Iceberg `format-version` evidence before memory or Turso
   state changes can produce durable commit records, and commits without a
