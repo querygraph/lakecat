@@ -6,6 +6,14 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Cover view receipt-list allowed decisions`.
+  Service replay admission already required `view.version-receipts-listed`
+  authorization receipts to carry an affirmative allow decision; the new
+  regression pins that contract directly on the view-history read surface,
+  proving a missing or denied decision fails before acknowledgement, graph
+  projection, OpenLineage projection, QGLake proof, or QueryGraph import can
+  inherit unauthorized view-history evidence.
+- Latest implementation/testing slice:
   `Cover management-list allowed receipt decisions`.
   Service replay admission already required management-list authorization
   receipts to carry an affirmative allow decision; the new regression pins that

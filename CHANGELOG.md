@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added view receipt-list replay coverage for denied or incomplete
+  authorization receipt decisions. `view.version-receipts-listed` outbox
+  admission now has a direct regression proving a missing or false `allowed`
+  decision fails before acknowledgement, graph projection, OpenLineage
+  projection, QGLake proof, or QueryGraph import can inherit unauthorized
+  view-history evidence.
 - Added management-list replay coverage for denied or incomplete authorization
   receipt decisions. `server.listed` outbox admission now has a direct
   regression proving a missing or false `allowed` decision fails before
