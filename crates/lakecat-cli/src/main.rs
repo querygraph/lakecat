@@ -2893,7 +2893,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     )?;
     require_typedid_hash_pair(bootstrap, "queryGraphBootstrapProof")?;
     if required_u64(querygraph, "viewCount", "querygraphVerification")? > 0 {
-        require_hash_array(
+        require_full_hash_array(
             bootstrap,
             "viewVersionReceiptHashes",
             "queryGraphBootstrapProof",
@@ -10487,24 +10487,6 @@ fn require_optional_hash_value(
     }
 }
 
-fn require_hash_array(
-    value: &serde_json::Map<String, Value>,
-    field: &str,
-    label: &str,
-) -> lakecat_core::LakeCatResult<()> {
-    let array = required_array(value, field, label)?;
-    if array.is_empty()
-        || array
-            .iter()
-            .any(|item| !item.as_str().is_some_and(is_sha256_hash))
-    {
-        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "{label}.{field} must contain sha256 hashes"
-        )));
-    }
-    Ok(())
-}
-
 fn require_full_hash_array(
     value: &serde_json::Map<String, Value>,
     field: &str,
@@ -14306,6 +14288,22 @@ mod tests {
                 .contains("queryGraphBootstrapProof.viewVersionReceiptHashes")
         );
         assert!(err.to_string().contains("acceptedReceiptHash"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_short_bootstrap_view_receipt_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["viewVersionReceiptHashes"] =
+            json!(["sha256:view-receipt"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short bootstrap view receipt hashes");
+
+        assert!(
+            err.to_string()
+                .contains("queryGraphBootstrapProof.viewVersionReceiptHashes")
+        );
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]

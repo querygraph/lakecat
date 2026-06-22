@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest QGLake handoff slice:
+  `Require full bootstrap view receipt hashes`.
+  Compact QGLake handoff verification now requires
+  `queryGraphBootstrapProof.viewVersionReceiptHashes` to carry full
+  SHA-256-shaped, duplicate-free receipt hashes before structural view receipt
+  binding runs. The regression rejects short bootstrap receipt hashes so
+  archived handoff proof cannot preserve weak `sha256:`-prefix-only evidence.
+- Local verification for this QGLake handoff slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli bootstrap_view_receipt_hash -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation slice:
   `Reject explicit anonymous principal kind`.
   Request identity parsing now rejects `x-lakecat-principal-kind: anonymous`.

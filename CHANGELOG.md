@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Tightened compact QGLake handoff verification so
+  `queryGraphBootstrapProof.viewVersionReceiptHashes` must contain full
+  SHA-256-shaped, duplicate-free receipt hashes before structural view receipt
+  binding runs. The regression rejects short bootstrap receipt hashes instead
+  of allowing weak `sha256:`-prefix evidence into the archived handoff proof.
 - Hardened request identity admission so explicit `x-lakecat-principal-kind:
   anonymous` is rejected. Anonymous access is now represented only by omitting
   identity headers, preventing explicit subjects from entering the TypeDID,
