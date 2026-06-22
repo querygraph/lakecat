@@ -1682,6 +1682,12 @@ const WAREHOUSE_LIST_EVIDENCE_FIELDS: &[&str] = &[
     "warehouse-count",
     "warehouse-names",
 ];
+const NAMESPACE_LIFECYCLE_EVIDENCE_FIELDS: &[&str] = &[
+    "event-type",
+    "authorization-receipt",
+    "warehouse",
+    "namespace",
+];
 
 fn validate_read_restriction_evidence_schema(
     event: &OutboxEvent,
@@ -3601,6 +3607,12 @@ fn validate_namespace_lifecycle_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_object_evidence_schema(
+        event,
+        payload,
+        "namespace lifecycle",
+        NAMESPACE_LIFECYCLE_EVIDENCE_FIELDS,
+    )?;
     validate_required_warehouse_field(event, payload, "namespace lifecycle")?;
     let Some(namespace) = payload.get("namespace") else {
         return Err(outbox_evidence_error(
@@ -26409,6 +26421,105 @@ mod tests {
             assert!(
                 lineage.events.lock().await.is_empty(),
                 "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_namespace_lifecycle_fields() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            (
+                "namespace.created",
+                "namespace-create",
+                "created",
+                "unverified-created-claim",
+            ),
+            (
+                "namespace.loaded",
+                "namespace-load",
+                "loaded",
+                "unverified-loaded-claim",
+            ),
+            (
+                "namespace.dropped",
+                "namespace-drop",
+                "dropped",
+                "unverified-dropped-claim",
+            ),
+        ];
+
+        for (event_type, action, label, extra_field) in cases {
+            let event_id = format!("evt-namespace-{label}-extra-field");
+            let mut payload = json!({
+                "authorization-receipt": {
+                    "principal": principal,
+                    "action": action,
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "checked_at": chrono::Utc::now(),
+                },
+                "warehouse": "local",
+                "namespace": ["default"],
+            });
+            payload[extra_field] = json!("shadow");
+
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-namespace-{label}-extra-field"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("extra namespace lifecycle fields should fail before delivery");
+
+            let message = err.to_string();
+            assert!(
+                message.contains(&format!(
+                    "outbox event {event_type} (lakecat.lineage-and-graph) has invalid"
+                )),
+                "{event_type} should be identified in the validation error"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(
+                message.contains(&format!(
+                    "namespace lifecycle contains unexpected field {extra_field}"
+                )),
+                "{message}"
+            );
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "extra namespace lifecycle fields must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "extra namespace lifecycle fields must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "extra namespace lifecycle fields must fail before lineage projection"
             );
         }
     }

@@ -998,6 +998,10 @@ view mutations, so service replay and QGLake handoff action contracts stay
 aligned. View lifecycle replay must also preserve event-matching actions:
 `view.upserted` uses `view-manage`, `view.loaded` uses `view-load`, and
 `view.dropped` uses `view-drop` before graph or OpenLineage projection.
+Namespace lifecycle replay must also close the top-level payload schema over
+`event-type`, `authorization-receipt`, `warehouse`, and `namespace`, so
+create/load/drop replay cannot append unverified namespace, scope, graph,
+lineage, or QGLake claims beside otherwise valid standard catalog evidence.
 Table lifecycle replay for create, load, delete, and restore events must carry
 the same valid authorization receipt principal plus an event-matching catalog
 action, affirmative allowed decision, non-empty engine, and RFC3339 `checked_at`

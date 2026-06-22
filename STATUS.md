@@ -6,6 +6,30 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close service namespace lifecycle schemas`.
+  Service outbox admission now rejects unexpected top-level payload fields for
+  `namespace.created`, `namespace.loaded`, and `namespace.dropped` replay before
+  acknowledgement, graph projection, OpenLineage projection, or QGLake proof can
+  inherit unverified namespace, scope, replay, lineage, or QueryGraph claims
+  beside the checked warehouse, namespace, and authorization evidence.
+- The book now adds front-of-book guidance for the catalog concept ledger,
+  including standard Iceberg parlance, LakeCat implementation, TypeSec
+  governance extensions, QueryGraph/QGLake integration surfaces, future optional
+  profile candidates, and the argument for pushing table-format work into Sail.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_namespace_lifecycle_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service namespace_lifecycle -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close service list-event schemas`.
   Service outbox admission now rejects unexpected top-level payload fields for
   `namespace.listed`, `view.listed`, and management list replay before

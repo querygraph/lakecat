@@ -28,6 +28,21 @@ Iceberg REST catalog, while QueryGraph can bootstrap Croissant, CDIF, OSI, ODRL,
 OpenLineage, TypeSec security receipts, and a Grust-backed graph from the same
 governed source of truth.
 
+The book returns to the release vocabulary several times on purpose. Start
+with **How To Read The Catalog Vocabulary** for the short standard-versus-
+extension distinction. Read **Release Concept Deep Dive** for the full argument
+that the Rust service spine and Turso store are LakeCat implementation, the
+REST namespace/table routes and optimistic commit CAS are Iceberg compatibility,
+the idempotency, pointer-log, audit/outbox, and replay validators are LakeCat
+catalog-control proof, the governed scan and credential receipts are
+TypeSec-backed governance extensions, and the QueryGraph/QGLake, OpenLineage,
+bootstrap, management, view, credential, and commit proofs are additive
+integration surfaces. Then read **Why The Work Belongs In The Engine** and
+**Why Sail Should Own The Heavy Work** for the engineering case: LakeCat should
+not become a shadow Iceberg engine; Sail should own table-format
+interpretation, scan planning, metadata-as-data, commit validation, and typed
+v4 behavior so the catalog proof is tied to engine truth.
+
 ## How To Read The Catalog Vocabulary
 
 LakeCat uses familiar Iceberg words and new LakeCat, QueryGraph, and TypeSec
@@ -6086,6 +6101,10 @@ Namespace lifecycle replay is checked before projection as well: create, load,
 and drop events must carry a valid warehouse and either a valid namespace path
 or non-empty namespace component array. A malformed namespace lifecycle event
 stays pending and reaches neither the Grust-facing graph sink nor OpenLineage.
+Service replay closes those namespace lifecycle payloads over `event-type`,
+`authorization-receipt`, `warehouse`, and `namespace`, so an archived create,
+load, or drop cannot attach unverified namespace, scope, replay, OpenLineage,
+or QueryGraph claims beside valid standard catalog evidence.
 Catalog read replay has the same fail-closed shape: `catalog.config-read`
 events must carry a valid warehouse, and `namespace.listed` events must carry
 both a valid warehouse and an unsigned namespace count before the read evidence

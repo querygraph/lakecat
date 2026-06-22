@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Closed service outbox admission over namespace lifecycle replay payloads.
+  `namespace.created`, `namespace.loaded`, and `namespace.dropped` now reject
+  unexpected top-level payload fields before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake proof can inherit unverified namespace,
+  scope, replay, or lineage claims beside checked warehouse, namespace, and
+  authorization evidence.
+- Added front-of-book guidance that points readers from the release vocabulary
+  to the detailed standard-versus-extension claim ledger and Sail engine-boundary
+  argument, so the Rust spine, Turso store, Iceberg REST paths, CAS,
+  idempotency, pointer logs, audit/outbox, replay validation, governed receipt
+  evidence, and QueryGraph proof surfaces are easier to read as either standard
+  Iceberg parlance, LakeCat/TypeSec/QueryGraph extensions, or future optional
+  profile candidates.
 - Closed service outbox admission over list-event replay payloads.
   `namespace.listed`, `view.listed`, and management list events now reject
   unexpected top-level payload fields before acknowledgement, graph projection,
