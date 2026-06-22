@@ -5,6 +5,20 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation slice:
+  `Add first-release readiness ledger`.
+  `DESIGN.md`, `README.md`, and the book now separate first-release blockers
+  from longer-term architecture ambitions. The release-blocking scope is the
+  standard Iceberg REST surface, Rust/Turso catalog spine, CAS/idempotency,
+  audit/outbox and replay admission, governed Sail-planned access, redacted
+  credential proof, OpenLineage/Grust projection boundaries, and QGLake handoff
+  evidence. Typed Iceberg v4 semantics, richer graph mechanics, cloud SDK
+  secret managers, TypeSec/QueryGraph semantic expansion, and automatic cloud
+  CI remain follow-on work unless a future release checklist promotes them.
+- Local verification for this documentation slice is green:
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/book slice:
   `Bind table commit replay scope`.
   `table.commit` replay admission now rejects optional payload-level

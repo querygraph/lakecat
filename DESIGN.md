@@ -276,6 +276,57 @@ evidence before the slice is considered done. If a slice touches Sail, Grust,
 TypeSec, or QueryGraph boundaries, either push the reusable work to that repo or
 record the local/published dependency state explicitly.
 
+### First-Release Ledger
+
+The first release should be cut around behavior that is already locally
+verifiable, not around every long-term architecture ambition. Treat this ledger
+as the release-scope map until it is replaced by an explicit release checklist.
+
+Release-blocking scope:
+
+- Standard Iceberg REST compatibility for catalog config, namespaces, tables,
+  metadata-pointer commits, table loads, and warehouse-prefixed routing must
+  remain green through the local release gate.
+- The Rust service spine, `CatalogStore` seam, Turso-backed local store, memory
+  store, pointer CAS, idempotency records, pointer logs, audit rows, and outbox
+  rows must remain covered by default, Turso, and all-features tests.
+- Replay admission must fail before graph/OpenLineage projection for malformed
+  table, namespace, view, management, credential, scan, commit, config, and
+  QueryGraph bootstrap evidence that current producers can emit.
+- QGLake handoff must keep proving bootstrap, governed scan/fetch, credential,
+  management, view receipt-chain, table commit-history, OpenLineage, and
+  QueryGraph import evidence with saved artifact hashes.
+- The book, README, `STATUS.md`, `CHANGELOG.md`, and this design must describe
+  the same standard-vs-extension posture and the same local verification path.
+
+Release-deferred scope:
+
+- Typed Iceberg v4 semantics remain Sail-owned future work. LakeCat may
+  advertise `extension-ready` JSON passthrough with
+  `typed-sail=unavailable`, but it must not claim settled typed v4 support.
+- Cloud SDK-backed secret managers beyond the current Vault and file-backed
+  provider roots remain future work. Existing secret-ref proof must stay
+  redacted and TypeSec-gated.
+- Reusable graph taxonomy, traversal, Cypher, graph stores, and algorithms
+  remain Grust-owned. LakeCat keeps only catalog-facing projection/sink
+  contracts.
+- Full QueryGraph product semantics, Croissant/CDIF/OSI/ODRL composition, and
+  agentic reasoning remain QueryGraph/TypeSec responsibilities above the
+  catalog substrate.
+- Automatic cloud CI stays manual-only until the full local release gate is
+  boringly green and any sibling dependency bridge is explicit or published.
+
+Authoritative first-release evidence:
+
+- `scripts/check-release-readiness.sh` is the broad local proof.
+- `scripts/check-release-readiness.sh --quick` is the narrow-slice smoke proof.
+- `scripts/qglake-handoff-local.sh` is the end-to-end LakeCat to QueryGraph
+  handoff proof.
+- `docs/book/build.sh` proves the reader-facing book artifacts match the
+  current source.
+- `scripts/check-local-dependency-contract.sh` proves the Grust/TypeSec/Sail,
+  QueryGraph, and CI-trigger assumptions still match the current repo.
+
 ## Thesis
 
 Iceberg constrains one layer: how table state is stored and how standard

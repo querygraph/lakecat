@@ -100,3 +100,12 @@ row, explicit all-features CLI tests, all-features workspace library tests,
 book rebuild, and QGLake handoff proof.
 Use `--quick` for a faster script/contract smoke check while developing a
 narrow slice.
+
+First-release scope is intentionally narrower than the long-term architecture:
+standard Iceberg REST behavior, the Rust/Turso catalog spine, CAS/idempotency,
+audit/outbox replay, governed Sail-planned access, redacted credentials,
+OpenLineage/Grust projection boundaries, and QGLake handoff proof are in scope.
+Typed Iceberg v4 semantics, richer reusable graph mechanics, cloud SDK secret
+managers, and full QueryGraph product semantics remain Sail, Grust, TypeSec, and
+QueryGraph follow-on work rather than release blockers for LakeCat's catalog
+substrate.

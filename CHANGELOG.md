@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added a first-release readiness ledger to the living design, README, and
+  book. The new text separates release-blocking catalog substrate behavior
+  from deferred Sail/Grust/TypeSec/QueryGraph work, and names the local
+  evidence commands that prove the release claim: release-readiness, QGLake
+  handoff, book build, and dependency-contract checks.
 - Hardened `table.commit` replay admission so optional payload-level
   warehouse, namespace, and table-name scope hints must match the durable
   outbox table identity before graph/OpenLineage projection. The book now

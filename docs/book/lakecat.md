@@ -7378,6 +7378,72 @@ The important thing is what these commands exercise. They are not a separate
 product surface. They touch the same catalog, policy, bootstrap, and QueryGraph
 export contracts that the service uses.
 
+## First Release Readiness
+
+The first LakeCat release should not try to finish every idea in this book. It
+should release the catalog substrate that can already be proven locally. The
+right question is not "does LakeCat contain the whole future QueryGraph stack?"
+It is "does LakeCat provide a compatible, durable, governed catalog foundation
+that QueryGraph can trust?"
+
+For the first release, the release-blocking behavior is the catalog spine:
+standard Iceberg REST config, namespace, table-load, table-create, and
+table-commit paths; warehouse-prefixed routing; Rust service identity handling;
+the `CatalogStore` seam; the Turso-backed local store; memory-store parity for
+embedded tests; metadata-pointer CAS; idempotent commit replay; pointer logs;
+audit rows; outbox rows; and replay admission that rejects malformed durable
+evidence before graph or OpenLineage projection.
+
+The governed path is also release-blocking because it is the reason LakeCat
+exists for agents. A restricted agent should be able to ask for a governed
+read, receive a TypeSec-style receipt, get Sail-planned work instead of broad
+storage authority, and leave behind replayable scan, fetch, credential,
+management, view, and commit-history evidence. Trusted raw credential vending
+can exist only as an audited exception with redacted storage-scope proof.
+
+The QueryGraph handoff is release-blocking as an acceptance proof, not as a
+requirement for ordinary Iceberg clients. The local QGLake workflow must keep
+creating a bootstrap bundle, draining LakeCat lineage/outbox evidence, verifying
+replay, running QueryGraph verification/import, and saving a handoff summary
+whose artifact hashes, table/view counts, standards, OpenLineage receipts,
+graph hashes, policy anchors, credential proof, view receipt chains, and commit
+history agree. If that handoff cannot be reproduced locally, LakeCat may still
+serve an Iceberg endpoint, but it has not proven the QueryGraph foundation.
+
+The first release should explicitly defer work that belongs elsewhere or is not
+yet ready to claim. Typed Iceberg v4 semantics belong in Sail; LakeCat should
+advertise only the current JSON passthrough bridge with
+`typed-sail=unavailable` until Sail exposes stable typed support. Reusable graph
+taxonomy, traversal, Cypher, graph stores, and algorithms belong in Grust.
+Capability composition, TypeDID envelopes, secure-agent proof, and richer
+policy semantics belong in TypeSec. Croissant, CDIF, OSI, ODRL application
+composition, and agent-facing reasoning belong in QueryGraph. Cloud SDK secret
+managers beyond the current Vault and file-backed provider roots are future
+credential backends, not blockers for the catalog substrate.
+
+The release evidence is concrete:
+
+```sh
+scripts/check-release-readiness.sh
+scripts/qglake-handoff-local.sh
+docs/book/build.sh
+scripts/check-local-dependency-contract.sh
+```
+
+The quick check is acceptable while landing a narrow slice:
+
+```sh
+scripts/check-release-readiness.sh --quick
+```
+
+The full gate is the first-release claim. It runs local dependency-contract
+checks, workflow-trigger checks, formatting, default workspace tests, feature
+matrix tests, Turso rows, Sail/TypeSec/Grust integration rows, all-features
+workspace tests, the book build, and the QGLake handoff proof. Cloud CI remains
+manual-only until that local proof is boring. A release should be cut from the
+state those commands prove, not from a hope that a remote runner will discover
+the truth later.
+
 ## What Comes Next
 
 LakeCat is a direction more than a single release. The next slices should keep
