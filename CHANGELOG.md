@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over list-event replay payloads.
+  `namespace.listed`, `view.listed`, and management list events now reject
+  unexpected top-level payload fields before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake proof can inherit unverified inventory,
+  scope, replay, or lineage claims beside checked count and ID evidence.
 - Replayed storage-profile public config now fails closed on reserved or
   secret-like keys and values. `storage-profile.upserted` and
   `credentials.vend-attempted` outbox admission reject public config that would

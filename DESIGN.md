@@ -769,6 +769,11 @@ repeating valid control-plane identities. It must also preserve warehouse-list
 project scope as compact `warehouseProjectId` evidence and reject malformed or
 unlisted scopes, so archived QGLake management proof cannot detach a
 project-filtered warehouse inventory from the project list it claims.
+Service replay admission must also close the top-level payload schema for
+`namespace.listed`, `view.listed`, and management list events, so an archived
+inventory read cannot append unverified namespace, view, management,
+OpenLineage, replay, or QueryGraph claims beside otherwise valid count and
+ID/name/path evidence before acknowledgement or projection.
 Policy-list proof must be paired with policy-upsert content proof: compact
 `managementProof.policyUpsertProof` must carry a policy id listed in
 `policyIds`, a full ODRL content hash, principal subject/kind, full

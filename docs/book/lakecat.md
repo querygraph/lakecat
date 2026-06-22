@@ -7536,7 +7536,11 @@ recorded count. LakeCat also requires the authorization receipt to carry a
 valid principal, the event-matching catalog action, an affirmative allow
 decision, a non-empty engine, and an RFC3339 checked-at timestamp before
 acknowledging the event, so QueryGraph never has to accept actorless or
-action-drifted management inventory replay. The drain response lifts their
+action-drifted management inventory replay. Service replay also closes the
+top-level payload schema for `namespace.listed`, `view.listed`, and management
+list events, so an archived inventory read cannot attach unverified namespace,
+view, management, replay, OpenLineage, or QueryGraph claims beside the checked
+count and ID/name/path evidence. The drain response lifts their
 counts, ID arrays, and management scope into compact fields, so QueryGraph can
 verify the control-plane read evidence without opening the raw lineage payload.
 It also carries replay and OpenLineage hash arrays for those management-list
