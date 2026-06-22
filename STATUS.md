@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Cover all management-list allowed decisions`.
+  Service replay admission already required management-list authorization
+  receipts to carry an affirmative allow decision; the regression now pins
+  that contract across `policy-binding.listed`, `project.listed`,
+  `server.listed`, `storage-profile.listed`, and `warehouse.listed`, proving
+  missing or denied decisions fail before acknowledgement, graph projection,
+  OpenLineage projection, QGLake proof, or QueryGraph import can inherit
+  unauthorized management inventory evidence.
+- Local verification for this implementation/testing slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_missing_or_denied_management_list_receipt_allowed_decision -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Cover management-upsert allowed decisions`.
   Service replay admission already required policy-binding, project, server,
   storage-profile, and warehouse upsert authorization receipts to carry an

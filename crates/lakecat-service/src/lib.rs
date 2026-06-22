@@ -27348,87 +27348,128 @@ mod tests {
     #[tokio::test]
     async fn outbox_drain_rejects_missing_or_denied_management_list_receipt_allowed_decision() {
         let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
-        let base_receipt = json!({
-            "principal": principal,
-            "action": "server-manage",
-            "allowed": true,
-            "engine": "test",
-            "policy_hash": null,
-            "checked_at": chrono::Utc::now(),
-        });
-        let mut missing_allowed_receipt = base_receipt.clone();
-        missing_allowed_receipt
-            .as_object_mut()
-            .unwrap()
-            .remove("allowed");
-        let mut denied_receipt = base_receipt;
-        denied_receipt["allowed"] = json!(false);
-
-        for (event_id, receipt, expected_message) in [
+        for (event_type, action, payload_without_receipt) in [
             (
-                "evt-server-list-missing-receipt-allowed",
-                missing_allowed_receipt,
-                "management-list evidence must contain authorization receipt allowed decision",
+                "policy-binding.listed",
+                "policy-manage",
+                json!({
+                    "warehouse": "local",
+                    "policy-count": 1,
+                    "policy-ids": ["restricted-events"],
+                }),
             ),
             (
-                "evt-server-list-denied-receipt",
-                denied_receipt,
-                "management-list authorization receipt must allow replay projection",
+                "project.listed",
+                "project-manage",
+                json!({
+                    "project-count": 1,
+                    "project-ids": ["analytics"],
+                }),
+            ),
+            (
+                "server.listed",
+                "server-manage",
+                json!({
+                    "server-count": 1,
+                    "server-ids": ["prod-us"],
+                }),
+            ),
+            (
+                "storage-profile.listed",
+                "storage-profile-manage",
+                json!({
+                    "warehouse": "local",
+                    "storage-profile-count": 1,
+                    "storage-profile-ids": ["events-local"],
+                }),
+            ),
+            (
+                "warehouse.listed",
+                "warehouse-manage",
+                json!({
+                    "project-id": "analytics",
+                    "warehouse-count": 1,
+                    "warehouse-names": ["local"],
+                }),
             ),
         ] {
-            let store = Arc::new(RecordingOutboxStore {
-                events: Mutex::new(vec![OutboxEvent {
-                    event_id: event_id.to_string(),
-                    sink: "lakecat.lineage-and-graph".to_string(),
-                    event_type: "server.listed".to_string(),
-                    payload: json!({
-                        "audit-event-id": format!("audit-{event_id}"),
-                        "event-type": "server.listed",
-                        "payload": {
-                            "authorization-receipt": receipt,
-                            "server-count": 1,
-                            "server-ids": ["prod-us"],
-                        }
-                    }),
-                    created_at: chrono::Utc::now(),
-                    delivered_at: None,
-                }]),
-                delivered: Mutex::default(),
-            });
-            let graph = Arc::new(RecordingGraph::default());
-            let lineage = Arc::new(RecordingLineage::default());
-            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
-                .with_integrations(
-                    default_sail_engine(),
-                    AllowAllGovernanceEngine::new(),
-                    graph.clone(),
-                    lineage.clone(),
+            for (case, allowed, expected_message) in [
+                (
+                    "missing",
+                    None,
+                    "management-list evidence must contain authorization receipt allowed decision",
+                ),
+                (
+                    "denied",
+                    Some(false),
+                    "management-list authorization receipt must allow replay projection",
+                ),
+            ] {
+                let mut receipt = json!({
+                    "principal": principal,
+                    "action": action,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "checked_at": chrono::Utc::now(),
+                });
+                if let Some(allowed) = allowed {
+                    receipt["allowed"] = json!(allowed);
+                }
+                let mut payload = payload_without_receipt.clone();
+                payload["authorization-receipt"] = receipt;
+                let event_id = format!(
+                    "evt-{case}-{}-receipt-allowed",
+                    event_type.replace('.', "-")
                 );
+                let store = Arc::new(RecordingOutboxStore {
+                    events: Mutex::new(vec![OutboxEvent {
+                        event_id: event_id.clone(),
+                        sink: "lakecat.lineage-and-graph".to_string(),
+                        event_type: event_type.to_string(),
+                        payload: json!({
+                            "audit-event-id": format!("audit-{event_id}"),
+                            "event-type": event_type,
+                            "payload": payload,
+                        }),
+                        created_at: chrono::Utc::now(),
+                        delivered_at: None,
+                    }]),
+                    delivered: Mutex::default(),
+                });
+                let graph = Arc::new(RecordingGraph::default());
+                let lineage = Arc::new(RecordingLineage::default());
+                let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                    .with_integrations(
+                        default_sail_engine(),
+                        AllowAllGovernanceEngine::new(),
+                        graph.clone(),
+                        lineage.clone(),
+                    );
 
-            let err = drain_outbox_once(&state, 10)
-                .await
-                .expect_err("missing or denied management-list receipt decision should fail");
+                let err = drain_outbox_once(&state, 10)
+                    .await
+                    .expect_err("missing or denied management-list receipt decision should fail");
 
-            let message = err.to_string();
-            assert!(
-                message
-                    .contains("outbox event server.listed (lakecat.lineage-and-graph) has invalid")
-            );
-            assert!(message.contains(expected_message), "{message}");
-            assert!(message.contains("event-id-hash=sha256:"));
-            assert!(!message.contains(event_id));
-            assert!(
-                store.delivered.lock().await.is_empty(),
-                "management-list receipt decision failures must fail before acknowledgement"
-            );
-            assert!(
-                graph.events.lock().await.is_empty(),
-                "management-list receipt decision failures must fail before graph projection"
-            );
-            assert!(
-                lineage.events.lock().await.is_empty(),
-                "management-list receipt decision failures must fail before lineage projection"
-            );
+                let message = err.to_string();
+                assert!(message.contains(&format!(
+                    "outbox event {event_type} (lakecat.lineage-and-graph) has invalid"
+                )));
+                assert!(message.contains(expected_message), "{message}");
+                assert!(message.contains("event-id-hash=sha256:"));
+                assert!(!message.contains(&event_id));
+                assert!(
+                    store.delivered.lock().await.is_empty(),
+                    "{event_type} {case} receipt decision must fail before acknowledgement"
+                );
+                assert!(
+                    graph.events.lock().await.is_empty(),
+                    "{event_type} {case} receipt decision must fail before graph projection"
+                );
+                assert!(
+                    lineage.events.lock().await.is_empty(),
+                    "{event_type} {case} receipt decision must fail before lineage projection"
+                );
+            }
         }
     }
 
