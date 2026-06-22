@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Cover malformed projection OpenLineage hashes`.
+  Service replay-admission coverage now proves an outbox projection receipt
+  cannot carry malformed OpenLineage hashes before acknowledgement, graph
+  projection, or lineage projection. This makes the P2/P3 full-SHA evidence
+  invariant explicit for the OpenLineage hash side, matching the existing
+  malformed replay-event hash coverage.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service projection_receipt_evidence_rejects_malformed_openlineage_hashes -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Cover duplicate projection replay hashes`.
   Service replay-admission coverage now proves an outbox projection receipt
   cannot repeat replay event hashes before graph or OpenLineage projection.

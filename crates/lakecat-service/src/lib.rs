@@ -40004,6 +40004,40 @@ mod tests {
     }
 
     #[test]
+    fn projection_receipt_evidence_rejects_malformed_openlineage_hashes() {
+        let event = OutboxEvent {
+            event_id: "evt-malformed-openlineage-projection-receipt".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            payload: json!({
+                "audit-event-id": "audit-malformed-openlineage-projection-receipt",
+                "event-type": "credentials.vend-attempted",
+                "payload": {}
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let receipt = OutboxProjectionReceipt {
+            graph_events: 1,
+            lineage_events: 1,
+            lineage_event_hashes: vec![content_hash_bytes(b"credential-replay")],
+            open_lineage_hashes: vec!["sha256:short".to_string()],
+        };
+
+        let err = validate_projection_receipt_evidence(&event, &receipt)
+            .expect_err("projection OpenLineage hashes must be full SHA-256 evidence");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(
+            message
+                .contains("projection receipt OpenLineage hashes must contain full SHA-256 hashes")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-malformed-openlineage-projection-receipt"));
+    }
+
+    #[test]
     fn projection_receipt_evidence_rejects_duplicate_openlineage_hashes() {
         let event = OutboxEvent {
             event_id: "evt-duplicate-projection-receipt".to_string(),

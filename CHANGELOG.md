@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Added service replay-admission coverage proving projection receipts cannot
+  carry malformed OpenLineage hashes before acknowledgement, graph projection,
+  or lineage projection.
+- Added service replay-admission coverage proving projection receipts cannot
   repeat replay event hashes before graph or OpenLineage projection, matching
   the existing duplicate-free OpenLineage hash guard.
 - Expanded the LakeCat book with a concrete governed-agent workflow that maps
