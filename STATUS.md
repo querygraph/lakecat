@@ -6,6 +6,23 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require known authorization receipt actions`.
+  Service outbox replay admission now rejects authorization receipt `action`
+  values that do not deserialize as LakeCat's canonical `CatalogAction` enum
+  before acknowledgement, graph projection, or OpenLineage projection. The
+  slice also normalized stale hand-built test receipts from old generic
+  aliases to current producer actions such as `view-load`, `view-manage`, and
+  `server-manage`.
+- Local verification for this known-action replay slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib receipt_action -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib receipt -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require authorization receipt action replay evidence`.
   Service outbox replay admission now rejects missing or blank authorization
   receipt `action` evidence before acknowledgement, graph projection, or

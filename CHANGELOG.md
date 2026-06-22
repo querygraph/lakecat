@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required outbox replay admission to reject unknown authorization receipt
+  `action` values that do not deserialize as LakeCat's canonical
+  `CatalogAction` enum before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Required outbox replay admission to reject missing or blank authorization
   receipt `action` evidence before acknowledgement, graph projection, or
   OpenLineage projection, covering shared catalog receipt validation plus

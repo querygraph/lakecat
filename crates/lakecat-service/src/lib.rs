@@ -1496,6 +1496,12 @@ fn validate_authorization_receipt_action(
             &format!("{label} authorization receipt action must be non-empty"),
         ));
     }
+    serde_json::from_value::<CatalogAction>(Value::String(action.to_string())).map_err(|err| {
+        outbox_evidence_error(
+            event,
+            &format!("{label} authorization receipt action must be a known catalog action: {err}"),
+        )
+    })?;
     Ok(())
 }
 
@@ -15382,6 +15388,89 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_unknown_table_commit_receipt_action() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-unknown-commit-receipt-action".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commit".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-unknown-commit-receipt-action",
+                    "event-type": "table.commit",
+                    "table": table,
+                    "commit": {
+                        "table": table,
+                        "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+                        "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+                        "sequence_number": 7,
+                        "principal": principal,
+                        "format_version": 3,
+                        "snapshot_id": 42,
+                        "policy_hash": null,
+                        "request_hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+                        "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+                        "idempotency_key_sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+                        "committed_at": chrono::Utc::now(),
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-force-push",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("unknown table commit receipt action should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commit"));
+        assert!(
+            message.contains(
+                "table commit authorization receipt action must be a known catalog action"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-unknown-commit-receipt-action"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "unknown commit receipt action must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "unknown commit receipt action must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "unknown commit receipt action must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_missing_table_commit_receipt_engine() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),
@@ -19982,7 +20071,7 @@ mod tests {
                 json!({
                     "authorization-receipt": {
                         "principal": principal,
-                        "action": "management-list",
+                        "action": "server-manage",
                         "allowed": true,
                         "engine": "test",
                         "policy_hash": null,
@@ -20000,7 +20089,7 @@ mod tests {
                 json!({
                     "authorization-receipt": {
                         "principal": principal,
-                        "action": "management-list",
+                        "action": "server-manage",
                         "allowed": true,
                         "engine": "test",
                         "policy_hash": null,
@@ -20017,7 +20106,7 @@ mod tests {
                 json!({
                     "authorization-receipt": {
                         "principal": principal,
-                        "action": "management-list",
+                        "action": "server-manage",
                         "allowed": true,
                         "engine": "test",
                         "policy_hash": null,
@@ -20034,7 +20123,7 @@ mod tests {
                 json!({
                     "authorization-receipt": {
                         "principal": principal,
-                        "action": "management-list",
+                        "action": "server-manage",
                         "allowed": true,
                         "engine": "test",
                         "policy_hash": null,
@@ -20052,7 +20141,7 @@ mod tests {
                 json!({
                     "authorization-receipt": {
                         "principal": principal,
-                        "action": "management-list",
+                        "action": "server-manage",
                         "allowed": true,
                         "engine": "test",
                         "policy_hash": null,
@@ -20138,7 +20227,7 @@ mod tests {
                     "event-type": "server.listed",
                     "payload": {
                         "authorization-receipt": {
-                            "action": "management-list",
+                            "action": "server-manage",
                             "allowed": true,
                             "engine": "test",
                             "policy_hash": null,
@@ -20245,7 +20334,7 @@ mod tests {
                     "subject": "agent:operator",
                     "kind": "unknown",
                 },
-                "action": "management-list",
+                "action": "server-manage",
                 "allowed": true,
                 "engine": "test",
                 "policy_hash": null,
@@ -20430,7 +20519,7 @@ mod tests {
                 json!({
                     "authorization-receipt": {
                         "principal": principal,
-                        "action": "view-list",
+                        "action": "view-load",
                         "allowed": true,
                         "engine": "test",
                         "policy_hash": null,
@@ -20447,7 +20536,7 @@ mod tests {
                 json!({
                     "authorization-receipt": {
                         "principal": principal,
-                        "action": "view-list",
+                        "action": "view-load",
                         "allowed": true,
                         "engine": "test",
                         "policy_hash": null,
@@ -20465,7 +20554,7 @@ mod tests {
                 json!({
                     "authorization-receipt": {
                         "principal": principal,
-                        "action": "view-list",
+                        "action": "view-load",
                         "allowed": true,
                         "engine": "test",
                         "policy_hash": null,
@@ -20483,7 +20572,7 @@ mod tests {
                 json!({
                     "authorization-receipt": {
                         "principal": principal,
-                        "action": "view-list",
+                        "action": "view-load",
                         "allowed": true,
                         "engine": "test",
                         "policy_hash": null,
@@ -20839,7 +20928,7 @@ mod tests {
                 "view list",
                 json!({
                     "authorization-receipt": {
-                        "action": "view-list",
+                        "action": "view-load",
                         "allowed": true,
                         "engine": "test",
                         "policy_hash": null,
@@ -20856,7 +20945,7 @@ mod tests {
                 "view lifecycle",
                 json!({
                     "authorization-receipt": {
-                        "action": "view-upsert",
+                        "action": "view-manage",
                         "allowed": true,
                         "engine": "test",
                         "policy_hash": null,
@@ -21063,7 +21152,7 @@ mod tests {
                 json!({
                     "authorization-receipt": {
                         "principal": malformed_principal,
-                        "action": "view-list",
+                        "action": "view-load",
                         "allowed": true,
                         "engine": "test",
                         "policy_hash": null,
@@ -21081,7 +21170,7 @@ mod tests {
                 json!({
                     "authorization-receipt": {
                         "principal": malformed_principal,
-                        "action": "view-upsert",
+                        "action": "view-manage",
                         "allowed": true,
                         "engine": "test",
                         "policy_hash": null,
@@ -21373,7 +21462,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn outbox_drain_rejects_missing_or_blank_standard_catalog_receipt_action() {
+    async fn outbox_drain_rejects_missing_blank_or_unknown_standard_catalog_receipt_action() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let base_receipt = json!({
             "principal": principal,
@@ -21388,8 +21477,10 @@ mod tests {
             .as_object_mut()
             .unwrap()
             .remove("action");
-        let mut blank_action_receipt = base_receipt;
+        let mut blank_action_receipt = base_receipt.clone();
         blank_action_receipt["action"] = json!(" ");
+        let mut unknown_action_receipt = base_receipt;
+        unknown_action_receipt["action"] = json!("catalog-administer-everything");
 
         for (event_id, receipt, expected_message) in [
             (
@@ -21401,6 +21492,11 @@ mod tests {
                 "evt-config-blank-receipt-action",
                 blank_action_receipt,
                 "catalog config-read authorization receipt action must be non-empty",
+            ),
+            (
+                "evt-config-unknown-receipt-action",
+                unknown_action_receipt,
+                "catalog config-read authorization receipt action must be a known catalog action",
             ),
         ] {
             let store = Arc::new(RecordingOutboxStore {
@@ -25438,7 +25534,7 @@ mod tests {
         let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
         let authorization_receipt = json!({
             "principal": principal,
-            "action": "management-list",
+            "action": "server-manage",
             "allowed": true,
             "engine": "test",
             "policy_hash": null,

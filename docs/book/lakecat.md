@@ -4590,10 +4590,10 @@ table-commit replay to be internally consistent before delivery:
 `table.commit` must carry a commit object, unsigned sequence number, stable
 table identity, matching nested commit-table identity, a valid commit principal
 and a valid authorization receipt principal with matching values, an
-authorization receipt whose action is non-empty, whose `allowed` decision is
-true, whose engine is non-empty, whose `checked_at` timestamp is RFC3339, and
-whose commit hash evidence is full SHA-256 before graph or OpenLineage
-projection can start.
+authorization receipt whose action is a known LakeCat catalog action, whose
+`allowed` decision is true, whose engine is non-empty, whose `checked_at`
+timestamp is RFC3339, and whose commit hash evidence is full SHA-256 before
+graph or OpenLineage projection can start.
 The action, decision, engine, and timestamp fields are deliberately small but
 important: replay evidence must prove which catalog action was authorized,
 prove the catalog acted under an affirmative authorization decision, say which
@@ -4606,7 +4606,7 @@ Commit-history replay has the same shape:
 `table.commits-listed` event must carry a `commit-count` that matches both
 full SHA-256 commit hashes and unsigned sequence numbers, plus
 `principal-subject` and `principal-kind` fields that match the authorization
-receipt principal, a non-empty authorization receipt action, an affirmative
+receipt principal, a known authorization receipt action, an affirmative
 authorization receipt decision, and a non-empty authorization receipt engine
 with an RFC3339 `checked_at` timestamp;
 compact QGLake proof also binds that pointer-log replay to the accepted
