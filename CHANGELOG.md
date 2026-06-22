@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed QueryGraph bootstrap request-identity replay evidence over the known
+  request-identity envelope fields. `querygraph.bootstrap` now rejects
+  unexpected request-identity claims inside authorization receipt context before
+  acknowledgement, graph projection, OpenLineage projection, QGLake proof, or
+  QueryGraph import proof can inherit unverified actor, TypeDID, delegation,
+  attestation, token, or agent claims beside checked hash evidence.
 - Closed service outbox admission over top-level table commit replay payloads.
   `table.commit` now rejects unexpected sibling fields beside the checked table
   identity, optional scope hints, authorization receipt, and nested commit

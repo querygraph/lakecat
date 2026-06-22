@@ -1691,6 +1691,20 @@ const QUERYGRAPH_VIEW_RECEIPT_EVIDENCE_FIELDS: &[&str] = &[
     "receipt-hash",
     "receipt-chain-hash",
 ];
+const REQUEST_IDENTITY_EVIDENCE_FIELDS: &[&str] = &[
+    "type",
+    "principal",
+    "source",
+    "agent-did",
+    "typedid",
+    "typedid-envelope-sha256",
+    "typedid-proof-sha256",
+    "agent-delegation-sha256",
+    "agent-summary-signature-sha256",
+    "bearer-token-sha256",
+    "attestation-state",
+    "raw-secret-material",
+];
 const VIEW_RECEIPT_CHAIN_EVIDENCE_FIELDS: &[&str] = &[
     "stable-id",
     "warehouse",
@@ -5742,6 +5756,12 @@ fn validate_querygraph_bootstrap_request_identity(
     else {
         return Ok(());
     };
+    validate_object_evidence_schema(
+        event,
+        request_identity,
+        "querygraph bootstrap request-identity",
+        REQUEST_IDENTITY_EVIDENCE_FIELDS,
+    )?;
     for field in [
         "typedid-envelope-sha256",
         "typedid-proof-sha256",
@@ -31936,6 +31956,77 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "mismatched QueryGraph bootstrap action must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_querygraph_bootstrap_request_identity_fields() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let mut payload = valid_querygraph_bootstrap_payload(principal.clone());
+        payload["payload"]["authorization-receipt"]["context"] = json!({
+            "request-identity": {
+                "type": "lakecat.request-identity.v1",
+                "principal": principal,
+                "source": "x-lakecat-typedid-envelope",
+                "agent-did": null,
+                "typedid": null,
+                "typedid-envelope-sha256": content_hash_json(&json!({"typedid": "envelope"})).unwrap(),
+                "typedid-proof-sha256": content_hash_json(&json!({"typedid": "proof"})).unwrap(),
+                "agent-delegation-sha256": null,
+                "agent-summary-signature-sha256": null,
+                "bearer-token-sha256": null,
+                "attestation-state": "unverified",
+                "raw-secret-material": false,
+                "unverified-identity-claim": "agent-safe"
+            }
+        });
+        let event_id = "evt-bootstrap-extra-request-identity";
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                payload,
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra QueryGraph bootstrap request-identity fields should fail");
+
+        let message = err.to_string();
+        assert!(message.contains("querygraph.bootstrap"));
+        assert!(
+            message.contains(
+                "querygraph bootstrap request-identity contains unexpected field unverified-identity-claim"
+            ),
+            "extra QueryGraph bootstrap request identity field should be rejected: {message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(event_id));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "extra request identity evidence must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "extra request identity evidence must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "extra request identity evidence must fail before lineage projection"
         );
     }
 

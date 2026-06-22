@@ -6,6 +6,23 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close QueryGraph request-identity schemas`.
+  QueryGraph bootstrap replay now rejects unexpected request-identity fields
+  inside authorization receipt context before acknowledgement, graph projection,
+  OpenLineage projection, QGLake proof, or QueryGraph import proof can inherit
+  unverified actor, TypeDID, delegation, attestation, token, or agent claims
+  beside checked request-identity hash evidence.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_querygraph_bootstrap_request_identity_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service querygraph_bootstrap -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed.
+- Latest implementation/book slice:
   `Close service table commit schemas`.
   Service outbox admission now rejects unexpected top-level payload fields for
   `table.commit` before acknowledgement, graph projection, OpenLineage

@@ -10266,7 +10266,10 @@ timestamp fields LakeCat verifies.
 `querygraph.bootstrap` replay is closed over the checked warehouse, counts,
 verified table/view manifests, artifact hashes, view-version receipts,
 standards, bundle hash, graph hash, OpenLineage hash, QueryGraph import hash,
-and authorization receipt. That means an old or corrupted outbox row cannot add
+and authorization receipt. Its request-identity object is also closed over the
+known envelope fields for principal, source, TypeDID hashes, delegation hashes,
+token hash, attestation state, and raw-secret posture. That means an old or
+corrupted outbox row cannot add
 an unverified compatibility claim, endpoint claim, graph claim, standards claim,
 OpenLineage claim, QueryGraph claim, or application claim and have it flow into
 Grust, OpenLineage, QGLake, or QueryGraph import proof.

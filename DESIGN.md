@@ -705,6 +705,11 @@ drifts. Compact `requestIdentityProof` and captured LakeCat replay
 compares, so a summary, captured replay output, or saved self-verifier sidecar
 cannot attach unverified actor, identity-source, TypeDID, authorization, or
 drain-read action claims beside the accepted request-identity evidence.
+Raw `querygraph.bootstrap` replay must apply the same closure to the
+request-identity object carried in authorization receipt context: only the
+known request-identity envelope fields may accompany the TypeDID, delegation,
+token, attestation, and raw-secret evidence hashes before bootstrap replay can
+feed graph, OpenLineage, QGLake, or QueryGraph import proof.
 Compact `queryGraphBootstrapProof` and captured LakeCat replay
 `queryGraphBootstrap` proof objects must likewise stay closed over the fields
 LakeCat compares, so a summary, captured replay output, or saved
