@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's current catalog surface explanation with a
+  dedicated standard-vs-extension classification for the Rust service spine,
+  Turso store, REST namespace/table paths, commit CAS, idempotency, pointer
+  logs, audit/outbox, replay validation, governed scan and credential receipts,
+  QueryGraph/QGLake handoff, OpenLineage, and semantic/governance vocabularies.
+  The same slice strengthens the argument that LakeCat should push
+  table-format interpretation and proof-bearing planning into Sail so catalog
+  evidence is based on engine-shaped Iceberg facts rather than catalog-local
+  JSON shortcuts.
 - Bound `view.version-receipt-chains-listed` replay hash arrays to structural
   receipt-chain evidence, so declared chain, receipt, and drop-receipt hashes
   must exactly cover the nested verified chains before projection.

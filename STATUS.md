@@ -5,6 +5,28 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Expand current catalog surface explanation`.
+  The LakeCat book now has a dedicated current-surface chapter that classifies
+  the Rust service spine, Turso-backed store, Iceberg REST table/namespace
+  paths, commit CAS, idempotency, pointer logs, audit/outbox, replay
+  validation, governed scan/credential receipts, QueryGraph/QGLake handoff,
+  OpenLineage, and semantic/governance vocabularies as standard Iceberg
+  parlance, LakeCat implementation, additive QueryGraph/TypeSec integration,
+  or narrow future Iceberg-adjacent profile candidates. The same slice
+  strengthens the Sail argument: proof-bearing catalog evidence should be
+  based on engine-interpreted Iceberg facts such as field ids, snapshots,
+  residual predicates, delete posture, task counts, and plan hashes, not
+  catalog-local JSON shortcuts.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover and contents render;
+  the versioned EPUB symlink resolves to `lakecat.epub` and byte-compares with
+  the canonical EPUB;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation slice:
   `Bind view receipt-chain hash arrays`.
   Service replay admission now requires
