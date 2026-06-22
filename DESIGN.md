@@ -1107,7 +1107,12 @@ Service replay must also close the top-level table lifecycle payload schema
 over the fields current producers emit, so create/load/delete/restore replay
 cannot append unverified table lifecycle, storage, lineage, graph, QueryGraph,
 or application claims beside checked table identity, version, format-version,
-soft-delete, location, and authorization evidence.
+soft-delete, location, and authorization evidence. Table lifecycle
+`metadata-location`, table `location`, and `soft-delete.metadata-location`
+evidence must also remain undecorated and credential-free before projection, so
+standard table lifecycle replay cannot smuggle token-bearing paths or
+secret-like storage claims into graph, OpenLineage, QGLake, or QueryGraph
+proof.
 The nested table lifecycle `metadata-graph` summary must likewise be closed
 over the current schema/snapshot summary fields LakeCat emits for graph
 projection; reusable graph taxonomy and richer projection semantics remain

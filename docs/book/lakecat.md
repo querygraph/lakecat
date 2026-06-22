@@ -10920,6 +10920,10 @@ malformed, drifted, decorated, credential-bearing, denied, or unverifiable
 evidence before graph projection, OpenLineage projection, QGLake proof, or
 QueryGraph import can inherit it. That posture is stronger than a best-effort
 downstream filter. It treats replay admission as part of catalog correctness.
+The same rule applies to ordinary table lifecycle events: create, load,
+restore, and delete replay may carry standard table locations, but those
+locations cannot be query-decorated or credential-bearing when downstream
+proof consumes them.
 
 #### Governed Scans And Credential Receipts
 

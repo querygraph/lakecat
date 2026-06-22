@@ -2797,6 +2797,11 @@ fn validate_table_lifecycle_event_evidence(
             "metadata-location",
             "table lifecycle soft-delete",
         )?;
+        validate_optional_location_evidence(
+            event,
+            soft_delete.get("metadata-location"),
+            "table lifecycle soft-delete metadata-location",
+        )?;
     }
 
     if let Some(metadata_graph) = payload.get("metadata-graph") {
@@ -2809,6 +2814,16 @@ fn validate_table_lifecycle_event_evidence(
     }
     optional_non_empty_string_field(event, payload, "metadata-location", "table lifecycle")?;
     optional_non_empty_string_field(event, payload, "location", "table lifecycle")?;
+    validate_optional_location_evidence(
+        event,
+        payload.get("metadata-location"),
+        "table lifecycle metadata-location",
+    )?;
+    validate_optional_location_evidence(
+        event,
+        payload.get("location"),
+        "table lifecycle location",
+    )?;
     Ok(())
 }
 
@@ -34637,6 +34652,163 @@ mod tests {
             assert!(
                 lineage.events.lock().await.is_empty(),
                 "blank table lifecycle location evidence must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_decorated_table_lifecycle_location_evidence() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let checked_at = chrono::Utc::now();
+        let cases = vec![
+            (
+                "evt-decorated-table-metadata-location",
+                "table.created",
+                "table lifecycle metadata-location must not contain decorated location material",
+                json!({
+                    "audit-event-id": "audit-decorated-table-metadata-location",
+                    "event-type": "table.created",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": &principal,
+                            "action": "table-create",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": checked_at,
+                        },
+                        "metadata-location": "s3://lakecat-demo/events/metadata/00000.json?token=secret",
+                        "format-version": 3,
+                        "version": 1,
+                    }
+                }),
+            ),
+            (
+                "evt-credential-table-metadata-location",
+                "table.loaded",
+                "table lifecycle metadata-location must not contain credential material",
+                json!({
+                    "audit-event-id": "audit-credential-table-metadata-location",
+                    "event-type": "table.loaded",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": &principal,
+                            "action": "table-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": checked_at,
+                        },
+                        "metadata-location": "s3://lakecat-demo/events/metadata/session_token=secret.json",
+                        "format-version": 3,
+                        "version": 1,
+                    }
+                }),
+            ),
+            (
+                "evt-decorated-table-location",
+                "table.restored",
+                "table lifecycle location must not contain decorated location material",
+                json!({
+                    "audit-event-id": "audit-decorated-table-location",
+                    "event-type": "table.restored",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": &principal,
+                            "action": "table-restore",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": checked_at,
+                        },
+                        "location": "s3://lakecat-demo/events#raw-secret",
+                        "metadata-location": "s3://lakecat-demo/events/metadata/00000.json",
+                        "format-version": 3,
+                        "version": 1,
+                    }
+                }),
+            ),
+            (
+                "evt-credential-soft-delete-metadata-location",
+                "table.deleted",
+                "table lifecycle soft-delete metadata-location must not contain credential material",
+                json!({
+                    "audit-event-id": "audit-credential-soft-delete-metadata-location",
+                    "event-type": "table.deleted",
+                    "table": &table,
+                    "soft-delete": {
+                        "table": &table,
+                        "metadata-location": "s3://lakecat-demo/events/metadata/access_key=secret.json",
+                        "version": 1,
+                        "format-version": 3,
+                        "principal": &principal,
+                        "authorization-receipt": null,
+                        "deleted-at": checked_at,
+                    },
+                    "authorization-receipt": {
+                        "principal": &principal,
+                        "action": "table-drop",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": checked_at,
+                    },
+                }),
+            ),
+        ];
+
+        for (event_id, event_type, expected_message, payload) in cases {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("decorated table lifecycle location evidence should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(&format!(
+                "outbox event {event_type} (lakecat.lineage-and-graph) has invalid"
+            )));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"), "{message}");
+            assert!(!message.contains(event_id), "{message}");
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "decorated table lifecycle location evidence must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "decorated table lifecycle location evidence must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "decorated table lifecycle location evidence must fail before lineage projection"
             );
         }
     }

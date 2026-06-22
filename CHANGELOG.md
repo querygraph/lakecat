@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened table lifecycle replay location evidence. `table.created`,
+  `table.loaded`, `table.restored`, and `table.deleted` replay now rejects
+  decorated or credential-bearing table `metadata-location`, table `location`,
+  and `soft-delete.metadata-location` values before acknowledgement, graph
+  projection, OpenLineage projection, QGLake proof, or QueryGraph import can
+  inherit polluted standard table lifecycle evidence.
 - Hardened table-commit replay metadata-location evidence. `table.commit`
   replay now rejects decorated or credential-bearing new and previous metadata
   locations before acknowledgement, graph projection, OpenLineage projection,

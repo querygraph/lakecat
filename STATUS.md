@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden table lifecycle location replay evidence`.
+  Service replay admission now validates `table.created`, `table.loaded`,
+  `table.restored`, and `table.deleted` table `metadata-location`, table
+  `location`, and `soft-delete.metadata-location` evidence as undecorated and
+  credential-free before acknowledgement, graph projection, OpenLineage
+  projection, QGLake proof, or QueryGraph import can inherit polluted standard
+  table lifecycle evidence.
+- Local verification for this implementation/testing slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_decorated_table_lifecycle_location_evidence -- --test-threads=1`
+  passed;
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Harden table-commit metadata-location replay evidence`.
   Service replay admission now validates `table.commit` new and previous
   metadata-location evidence as undecorated and credential-free before
