@@ -9649,6 +9649,220 @@ the current pointer and durable replay state, and QueryGraph can import them
 as semantic evidence. That is the high-performance path and the compatibility
 path at the same time.
 
+## Catalog Concepts For The First Release
+
+This chapter is the release reader's map. It takes the phrases that appear in
+status reports, changelogs, and design notes and states exactly what they mean
+in Iceberg language, what LakeCat adds, what QueryGraph and TypeSec add, and
+which pieces are plausible future standards work.
+
+The first principle is that Iceberg owns the table contract. In Iceberg
+parlance, a catalog resolves namespaces and table identifiers, returns the
+current metadata location, creates and drops namespaces and tables, and accepts
+optimistic commits that move the current metadata pointer only when the stated
+requirements still hold. Iceberg tables are described by table metadata,
+schemas, field ids, partition specs, sort orders, snapshots, manifest lists,
+manifests, data files, delete files, sequence numbers, and table properties.
+These words are not LakeCat inventions. LakeCat must preserve their meaning.
+
+The second principle is that LakeCat owns the catalog control envelope around
+that table contract. When the book says that the Rust service/catalog spine
+exists, it does not mean "Rust is an Iceberg feature." It means LakeCat has a
+typed Rust authority path where REST routing, tenant and warehouse scope,
+principal identity, request hashes, TypeSec receipts, Sail planning or
+validation calls, store transactions, pointer CAS, idempotency, audit, outbox,
+redaction, and replay admission can happen in one catalog transaction. The
+standard Iceberg term is still "catalog." The LakeCat term is "Rust service
+spine."
+
+The third principle is that QueryGraph and TypeSec are additive consumers and
+governance layers, not hidden prerequisites for ordinary table access. A
+PySpark, Spark, Flink, Trino, DuckDB, PyIceberg, or Sail client should be able
+to use LakeCat through ordinary Iceberg REST namespace and table paths. Those
+clients should not need QGLake, Grust, TypeSec, Croissant, CDIF, OSI, ODRL,
+OpenLineage, or QueryGraph just to load or commit an ordinary table. QueryGraph
+and TypeSec matter because they make the catalog proof-rich for governed
+agents and semantic workflows. They do not redefine Iceberg metadata.
+
+### Standard Iceberg Terms
+
+Use these words as Iceberg words:
+
+- Catalog.
+- Namespace.
+- Table identifier.
+- Current metadata location.
+- Table metadata.
+- Schema and field id.
+- Partition spec and sort order.
+- Snapshot.
+- Manifest list.
+- Manifest.
+- Data file and delete file.
+- Sequence number.
+- Optimistic commit.
+- Commit requirement.
+- REST catalog route.
+- Credential vending when exposed as an optional catalog capability.
+
+LakeCat should not create a private meaning for any of these. If an ordinary
+Iceberg client sees a namespace, table, metadata location, snapshot, manifest,
+or commit requirement, it should behave as it would with another compatible
+catalog. LakeCat may record stronger evidence behind the scenes, but the
+client-facing table contract stays ordinary.
+
+### LakeCat Terms
+
+Use these words as LakeCat catalog-control words:
+
+- Rust service/catalog spine.
+- `CatalogStore`.
+- Turso-backed local store.
+- Memory store parity.
+- Idempotency record.
+- Pointer log.
+- Audit row.
+- Transactional outbox.
+- Replay validator.
+- Redacted conflict proof.
+- Release gate.
+- Management inventory.
+- Bootstrap bundle.
+- QGLake handoff artifact.
+
+These are not Iceberg table-format extensions. They are the discipline LakeCat
+adds around a compatible catalog. The Turso-backed local store is the clearest
+example. Iceberg needs durable catalog state and atomic metadata-pointer
+movement, but it does not prescribe Turso, SQLite, Postgres, DynamoDB, Nessie,
+or any other database. LakeCat uses the Rust `turso` crate behind
+`CatalogStore` because the local catalog spine should be Rust-native and should
+exercise real durability, transactions, row validation, idempotency, pointer
+history, audit, and outbox behavior. Turso is an implementation choice. Atomic
+CAS, exact retry, pointer history, and replayable event identity are the
+portable behaviors.
+
+### TypeSec Terms
+
+Use these words as governance words:
+
+- Capability.
+- Authorization receipt.
+- TypeDID context.
+- ODRL-derived restriction.
+- Purpose.
+- Policy hash.
+- Allowed-column set.
+- Mandatory row predicate.
+- Credential TTL cap.
+- Raw-credential posture.
+- Secure-agent proof.
+
+These words explain why a principal may act and how the action was narrowed.
+They are not required custom Iceberg metadata. TypeSec decides whether a
+principal may perform a privileged catalog action. LakeCat binds that decision
+to the current catalog state. Sail plans or validates the table-shaped work.
+The durable LakeCat evidence should point to the receipt, not copy arbitrary
+policy language into Iceberg table metadata.
+
+### QueryGraph Terms
+
+Use these words as QueryGraph and QGLake integration words:
+
+- QueryGraph bootstrap.
+- QGLake acceptance.
+- Croissant.
+- CDIF.
+- OSI.
+- OpenLineage binding.
+- Grust graph import.
+- View receipt chain.
+- Credential proof surface.
+- Commit proof surface.
+- Management proof surface.
+- Agent workflow proof.
+
+These are application and semantic integration surfaces. LakeCat should expose
+stable catalog anchors: warehouse scope, namespace scope, table identity, view
+identity, current pointers, pointer transitions, storage-profile hashes,
+policy-binding hashes, credential posture, governed scan proof, view receipt
+chains, OpenLineage hashes, graph import hashes, and replay verdicts.
+QueryGraph composes those anchors into semantic workflows. Grust owns graph
+schema, taxonomy, projection, storage, traversal, and Cypher-facing behavior.
+TypeSec owns authorization semantics. LakeCat owns the catalog-facing proof.
+
+### Claim Ledger
+
+The following ledger is the most compact way to read the first release.
+
+| Claim | Standard Iceberg parlance? | LakeCat, QueryGraph, or TypeSec meaning | Extension or future proposal? |
+| --- | --- | --- | --- |
+| Rust service/catalog spine exists | No. Iceberg specifies catalog behavior, not Rust or a process model. | LakeCat's typed Rust authority path for REST routing, identity, tenancy, Sail calls, TypeSec receipts, store transactions, CAS, audit, outbox, and replay admission. | LakeCat implementation. The portable idea is deterministic catalog proof, not Rust itself. |
+| Turso-backed local store direction is in place | No. Iceberg needs durable catalog state and atomic pointer movement, not a named database. | LakeCat's Rust-native `CatalogStore` implementation for namespaces, tables, views, projects, warehouses, storage profiles, policy bindings, idempotency, pointer logs, audit, outbox, and replay markers. | LakeCat implementation. CAS, exact retry, pointer history, and event identity may become portable profiles. |
+| Iceberg REST-compatible table and namespace paths exist | Yes. These are the compatibility floor. | LakeCat implements standard REST catalog config, namespace, table load, table create, and table commit behavior while recording optional proof behind the route. | Standard compatibility. Extra proof routes must remain additive. |
+| Commit CAS exists | Yes. Optimistic metadata-pointer movement is standard catalog behavior. | LakeCat performs store-level compare-and-swap and binds accepted transitions to idempotency, pointer logs, audit, outbox, redaction, and replay validation. | CAS is standard. The reliability envelope is a LakeCat extension and a possible optional catalog reliability profile. |
+| Idempotency, pointer logs, audit/outbox, replay validation are hardened | Mostly no, except where they protect standard commits. | LakeCat makes retries exact, pointer movement inspectable, side effects transactional, and durable evidence replay-admissible before graph, OpenLineage, or QGLake delivery. | Strong future optional profile candidates if expressed without LakeCat-specific schemas. |
+| Governed scan paths have TypeSec-style receipt evidence | No. Iceberg gives table metadata and scan-planning inputs, not TypeSec governance. | TypeSec decides the capability and restriction; LakeCat binds the receipt; Sail plans the narrowed table work. | LakeCat/TypeSec/Sail extension today. A proof-carrying scan profile is plausible if policy-engine neutral. |
+| Credential paths have TypeSec-style receipt evidence | Credential vending is catalog-adjacent, but LakeCat's governance proof is additive. | Raw credentials are deliberate audited exceptions; restricted principals should receive governed Sail-planned work with receipt evidence. | Possible governed credential-vending profile if expressed as bounded, redacted, engine-neutral proof. |
+| QueryGraph/QGLake handoff, OpenLineage, bootstrap, management, view, credential, and commit proof surfaces are broad | No. They are not ordinary table semantics. | LakeCat exports proof-bearing catalog anchors that QueryGraph composes with Croissant, CDIF, OSI, ODRL, OpenLineage, TypeDID, Grust graph state, and agent workflows. | QueryGraph integration. Only narrow proof shapes should be proposed upstream. |
+| Typed Iceberg v4 behavior is targeted | Yes, as Iceberg evolves. | Sail should own typed interpretation; LakeCat may preserve JSON passthrough only as a compatibility bridge. | Belongs in Iceberg and reusable Sail support, not LakeCat-only parsing. |
+
+This ledger answers the extension question. LakeCat has local extensions, but
+not every local extension should become an Iceberg proposal. Implementation
+choices such as Rust and Turso are not proposals. Product integrations such as
+QGLake artifact shapes are not proposals. TypeSec's exact receipt schema is not
+an Iceberg dependency. The future proposal candidates are the narrow behaviors
+that still make sense after removing the proper nouns: exact idempotent retry,
+pointer-history inspection, redacted conflict proof, transactional catalog
+event identity, replay-admissible catalog events, proof-carrying scan planning,
+governed credential-vending proof, view lifecycle proof, and lineage receipt
+binding.
+
+### Why The Engine Should Do More
+
+LakeCat's proof is only as good as the table interpretation behind it. A
+catalog can know that a principal asked for a table, that TypeSec allowed a
+purpose, and that the current metadata pointer was `N`. It cannot safely infer
+all engine facts from hand-written JSON shortcuts. Iceberg semantics are full
+of engine-shaped detail: field ids survive column renames, partition specs
+evolve, sort orders evolve, manifest metrics drive pruning, delete files change
+row visibility, residual predicates remain after pruning, and scan tasks bind
+work to snapshots, files, sequence numbers, and deletes.
+
+If LakeCat locally reimplements those details, it becomes a shadow engine. A
+shadow engine has three problems. It is slower because the same planning and
+metadata interpretation happen twice. It is less correct because catalog-local
+logic can drift from the engine that actually reads data. It is less reusable
+because fixes for manifest metrics, delete handling, metadata-as-data, or typed
+v4 support help only LakeCat instead of helping all Rust lakehouse users.
+
+Sail is the right place for reusable table work. It is Rust-native, close to
+Arrow and DataFusion, close to execution planning, and already aligned with
+Iceberg REST model generation and Iceberg table-provider work. That makes Sail
+a good engine choice for performance and for correctness. A LakeCat governed
+scan can stay in Rust from route to receipt to Sail plan to durable proof,
+without turning every request into a chain of remote adapters and lossy JSON
+translations.
+
+The operational rule is direct:
+
+| Work | LakeCat should do | Sail should do |
+| --- | --- | --- |
+| Table load | Resolve identity, tenant, warehouse, namespace, table, principal, and current pointer. | Interpret table metadata and expose typed table status. |
+| Governed scan | Bind TypeSec receipt, current pointer, request hash, and audit context. | Map projection and predicates to field ids, prune manifests and files, attach delete posture, and produce scan tasks. |
+| Fetch scan tasks | Verify that a fetch belongs to a prior governed plan. | Reapply task interpretation without widening the plan. |
+| Commit | Own idempotency, CAS, pointer log, audit, outbox, and redacted conflict proof. | Validate table metadata, commit requirements, format-version behavior, and typed v4 semantics. |
+| Metadata-as-data | Authorize who may ask and record the proof. | Expose snapshots, manifests, files, deletes, partitions, and history as engine-shaped metadata views. |
+
+That division preserves the thin catalog boundary. LakeCat keeps authority over
+catalog state and integration events. Sail keeps authority over Iceberg table
+interpretation. TypeSec keeps authority over security meaning. Grust keeps
+authority over graph behavior. QueryGraph composes the resulting proof into
+semantic workflows. The result is faster because the hot path stays Rust-first
+and avoids unnecessary indirection. It is safer because LakeCat proof names
+engine-interpreted facts instead of catalog approximations. It is more
+standard-friendly because future proposals can be phrased as engine-neutral
+profiles rather than LakeCat product dependencies.
+
 ## First Release Readiness
 
 The first LakeCat release should not try to finish every idea in this book. It

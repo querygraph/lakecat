@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Added a first-release catalog-concepts chapter to the book that explicitly
+  delineates standard Iceberg vocabulary from LakeCat implementation terms,
+  TypeSec governance terms, and QueryGraph/QGLake integration terms. The new
+  chapter classifies the Rust service spine, Turso local store direction,
+  Iceberg REST namespace/table paths, commit CAS, idempotency, pointer logs,
+  audit/outbox, replay validation, governed scan and credential receipts,
+  QueryGraph/OpenLineage/bootstrap/management/view/credential/commit proof
+  surfaces, and typed Iceberg v4 posture as standard compatibility, local
+  extension, governance/application integration, or narrow future
+  Iceberg-adjacent profile candidates. It also gives a concrete argument for
+  pushing table-format, scan-planning, metadata-as-data, commit-validation, and
+  v4 semantics into Sail.
 - Closed service outbox admission over table lifecycle identity and soft-delete
   schemas. Table lifecycle replay now rejects unexpected fields inside full
   table identity objects and soft-delete evidence before acknowledgement, graph
