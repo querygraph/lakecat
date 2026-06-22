@@ -184,6 +184,28 @@ impl QueryGraphBootstrap {
                 self.views.len()
             )));
         }
+        validate_duplicate_free_stable_ids(
+            "QueryGraph bootstrap table projections",
+            self.tables.iter().map(|table| table.stable_id.as_str()),
+        )?;
+        validate_duplicate_free_stable_ids(
+            "QueryGraph bootstrap table artifacts",
+            self.manifest
+                .table_artifacts
+                .iter()
+                .map(|artifact| artifact.stable_id.as_str()),
+        )?;
+        validate_duplicate_free_stable_ids(
+            "QueryGraph bootstrap view projections",
+            self.views.iter().map(|view| view.stable_id.as_str()),
+        )?;
+        validate_duplicate_free_stable_ids(
+            "QueryGraph bootstrap view artifacts",
+            self.manifest
+                .view_artifacts
+                .iter()
+                .map(|artifact| artifact.stable_id.as_str()),
+        )?;
 
         let open_lineage_hash = content_hash_json(&self.open_lineage)?;
         if self.manifest.open_lineage_hash != open_lineage_hash {
@@ -1535,6 +1557,21 @@ fn verify_hash(label: &str, expected: &str, value: &Value) -> LakeCatResult<()> 
     Ok(())
 }
 
+fn validate_duplicate_free_stable_ids<'a>(
+    label: &str,
+    values: impl IntoIterator<Item = &'a str>,
+) -> LakeCatResult<()> {
+    let mut seen = BTreeSet::new();
+    for value in values {
+        if !seen.insert(value) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} must be duplicate-free by stable id: {value}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1548,6 +1585,42 @@ mod tests {
             return false;
         };
         digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }
+
+    fn querygraph_test_table(name: &str) -> TableRecord {
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            Namespace::new(vec!["default".to_string()]).unwrap(),
+            TableName::new(name).unwrap(),
+        );
+        TableRecord::new(
+            ident,
+            format!("file:///tmp/{name}"),
+            Some(format!("file:///tmp/{name}/metadata/00000.json")),
+            json!({
+                "format-version": 3,
+                "current-schema-id": 1,
+                "schemas": [{
+                    "schema-id": 1,
+                    "fields": [{"id": 1, "name": "event_id", "type": "string"}]
+                }]
+            }),
+            Principal::anonymous(),
+        )
+    }
+
+    fn querygraph_test_view(name: &str) -> ViewRecord {
+        ViewRecord::new(
+            WarehouseName::new("local").unwrap(),
+            Namespace::new(vec!["default".to_string()]).unwrap(),
+            TableName::new(name).unwrap(),
+            "select event_id from events",
+            "sql",
+            Some(1),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap()
     }
 
     #[test]
@@ -2184,6 +2257,80 @@ mod tests {
 
         let err = bundle.verify_manifest().unwrap_err();
         assert!(err.to_string().contains("bundle hash mismatch"));
+    }
+
+    #[test]
+    fn verification_rejects_duplicate_table_projection_stable_ids() {
+        let table = querygraph_test_table("events");
+        let bundle = QueryGraphBootstrap::from_tables(
+            WarehouseName::new("local").unwrap(),
+            vec![table.clone(), table],
+        )
+        .unwrap();
+
+        let err = bundle.verify_manifest().unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("QueryGraph bootstrap table projections must be duplicate-free")
+        );
+    }
+
+    #[test]
+    fn verification_rejects_duplicate_table_artifact_stable_ids() {
+        let mut bundle = QueryGraphBootstrap::from_tables(
+            WarehouseName::new("local").unwrap(),
+            vec![
+                querygraph_test_table("events"),
+                querygraph_test_table("orders"),
+            ],
+        )
+        .unwrap();
+        bundle.manifest.table_artifacts[1].stable_id =
+            bundle.manifest.table_artifacts[0].stable_id.clone();
+
+        let err = bundle.verify_manifest().unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("QueryGraph bootstrap table artifacts must be duplicate-free")
+        );
+    }
+
+    #[test]
+    fn verification_rejects_duplicate_view_projection_stable_ids() {
+        let view = querygraph_test_view("active_events");
+        let bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
+            WarehouseName::new("local").unwrap(),
+            Vec::new(),
+            vec![view.clone(), view],
+        )
+        .unwrap();
+
+        let err = bundle.verify_manifest().unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("QueryGraph bootstrap view projections must be duplicate-free")
+        );
+    }
+
+    #[test]
+    fn verification_rejects_duplicate_view_artifact_stable_ids() {
+        let mut bundle = QueryGraphBootstrap::from_tables_views_with_policy_bindings(
+            WarehouseName::new("local").unwrap(),
+            Vec::new(),
+            vec![
+                querygraph_test_view("active_events"),
+                querygraph_test_view("recent_events"),
+            ],
+        )
+        .unwrap();
+        bundle.manifest.view_artifacts[1].stable_id =
+            bundle.manifest.view_artifacts[0].stable_id.clone();
+
+        let err = bundle.verify_manifest().unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("QueryGraph bootstrap view artifacts must be duplicate-free")
+        );
     }
 
     #[test]

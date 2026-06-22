@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened QueryGraph bootstrap manifest verification so table/view projections
+  and table/view artifact manifests must be duplicate-free by stable id before
+  LakeCat accepts the bundle as QGLake import proof. This prevents duplicated
+  stable IDs from satisfying counts while weakening verified table/view
+  evidence.
 - Advertised QueryGraph/OpenLineage integration endpoints in catalog config
   discovery and replay evidence. `CatalogConfigResponse` now includes
   `/querygraph/v1/bootstrap` and `/management/v1/lineage/drain`, and

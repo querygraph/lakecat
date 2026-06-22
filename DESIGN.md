@@ -528,7 +528,10 @@ action-drifted, or splice semantic artifacts and receipt chains across
 manifests. Those verified table/view manifests must also be duplicate-free at
 outbox admission and compact handoff verification, so QueryGraph bootstrap
 replay and archived handoffs cannot inflate counts by repeating accepted
-stable IDs. Scan replay must preserve the
+stable IDs. The bootstrap manifest verifier must enforce the same
+duplicate-free stable-id invariant across table projections, table artifacts,
+view projections, and view artifacts before a bundle becomes QGLake import
+proof. Scan replay must preserve the
 server-derived purpose and
 policy-derived TTL cap in both captured LakeCat replay text and compact handoff
 proof. Compact governed scan proof must also preserve the planned and fetched

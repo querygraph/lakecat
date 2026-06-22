@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Reject duplicate QueryGraph bootstrap IDs`.
+  QueryGraph bootstrap manifest verification now rejects duplicate stable IDs
+  across table projections, table artifact manifests, view projections, and
+  view artifact manifests before accepting a bundle as QGLake import proof.
+  This keeps verified table/view counts from being inflated by repeated stable
+  IDs.
+- Local verification for this QueryGraph bootstrap duplicate-ID slice is green:
+  `cargo fmt -p lakecat-querygraph -- --check`;
+  `cargo test -p lakecat-querygraph duplicate -- --test-threads=1`;
+  `cargo test -p lakecat-querygraph -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Advertise integration config endpoints`.
   Catalog config discovery now advertises `/querygraph/v1/bootstrap` and
   `/management/v1/lineage/drain`, and config-read replay requires those

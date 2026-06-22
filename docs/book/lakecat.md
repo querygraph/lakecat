@@ -5566,6 +5566,14 @@ objects with the compact request-identity and bootstrap proofs, including the
 principal, authorization hash, TypeDID hash slots, delegation and summary
 signature hashes, artifact counts, standards, replay hashes, and the accepted
 bundle, graph, OpenLineage, and QueryGraph import hashes. The compact verifier
+depends on the bootstrap manifest verifier having already rejected duplicate
+stable IDs across table projections, table artifact manifests, view
+projections, and view artifact manifests. That duplicate-free rule is not an
+Iceberg REST requirement for ordinary table reads; it is LakeCat/QGLake import
+proof. It prevents a semantic bundle from satisfying table or view counts by
+repeating the same stable ID, then letting QueryGraph believe it verified more
+catalog objects than the manifest uniquely proved.
+The compact verifier
 also requires the bootstrap proof to carry the same request-identity source and
 verification state as `requestIdentityProof`. The authorization receipt hashes
 are intentionally distinct proof slots: `requestIdentityProof` records the
