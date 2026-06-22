@@ -7950,13 +7950,14 @@ extra top-level artifact claims and extra nested captured-output claims are
 rejected instead of being carried as unverified evidence beside the accepted
 hashes. The sidecar root and `capturedOutputSemantics` object are closed over
 their known schema keys for the same reason: a saved verifier output should not
-append proof sections that no verifier compares. It is small, but it is not
-decorative. It is the acceptance story for a
-catalog that participates in the user workflow from notebook to agent. The
-summary file gives automation a single stable place to find the accepted
-table/view counts, semantic hashes, bundle, lineage drain, import plan,
-captured verifier outputs, and raw artifact hashes without scraping terminal
-text.
+append proof sections that no verifier compares. The individual LakeCat,
+QueryGraph, bundle, import-plan, and lineage-drain semantic sections are
+closed the same way. It is small, but it is not decorative. It is the
+acceptance story for a catalog that participates in the user workflow from
+notebook to agent. The summary file gives automation a single stable place to
+find the accepted table/view counts, semantic hashes, bundle, lineage drain,
+import plan, captured verifier outputs, and raw artifact hashes without
+scraping terminal text.
 
 ## Operating The Book's Example System
 

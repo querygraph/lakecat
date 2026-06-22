@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed saved QGLake self-verifier semantic sections over their compared
+  fields. LakeCat replay semantics, QueryGraph verify/import semantics, bundle
+  artifact semantics, import-plan semantics, and lineage-drain semantics now
+  reject unexpected fields so saved sidecars cannot carry unverified semantic
+  proof beside the values LakeCat actually compares.
 - Closed saved QGLake self-verifier proof schemas over their known keys. The
   verifier now rejects unexpected top-level
   `lakecatHandoffVerifyOutput` fields and unexpected

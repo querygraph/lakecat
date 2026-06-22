@@ -754,6 +754,21 @@ fn require_qglake_handoff_verify_output_semantic_sections_match_summary(
         "lakecatReplay",
         "lakecatHandoffVerifyOutput.capturedOutputSemantics",
     )?;
+    require_only_fields(
+        captured_lakecat,
+        &[
+            "requestIdentityProof",
+            "queryGraphBootstrapProof",
+            "governedScanProof",
+            "catalogConfigProof",
+            "tableCommitHistoryProof",
+            "viewReceiptChainProof",
+            "managementProof",
+            "storageProfileUpsertProof",
+            "credentialVendingProof",
+        ],
+        "lakecatHandoffVerifyOutput.capturedOutputSemantics.lakecatReplay",
+    )?;
     for field in [
         "requestIdentityProof",
         "queryGraphBootstrapProof",
@@ -772,21 +787,33 @@ fn require_qglake_handoff_verify_output_semantic_sections_match_summary(
             "lakecatHandoffVerifyOutput.capturedOutputSemantics.lakecatReplay",
         )?;
     }
+    let captured_querygraph_verify = required_object(
+        captured,
+        "querygraphVerify",
+        "lakecatHandoffVerifyOutput.capturedOutputSemantics",
+    )?;
+    require_qglake_handoff_verify_output_querygraph_semantics_fields(
+        captured_querygraph_verify,
+        "lakecatHandoffVerifyOutput.capturedOutputSemantics.querygraphVerify",
+        &[],
+    )?;
     require_qglake_handoff_verify_output_querygraph_semantics_match_summary(
-        required_object(
-            captured,
-            "querygraphVerify",
-            "lakecatHandoffVerifyOutput.capturedOutputSemantics",
-        )?,
+        captured_querygraph_verify,
         querygraph,
         "lakecatHandoffVerifyOutput.capturedOutputSemantics.querygraphVerify",
     )?;
+    let captured_querygraph_import = required_object(
+        captured,
+        "querygraphImport",
+        "lakecatHandoffVerifyOutput.capturedOutputSemantics",
+    )?;
+    require_qglake_handoff_verify_output_querygraph_semantics_fields(
+        captured_querygraph_import,
+        "lakecatHandoffVerifyOutput.capturedOutputSemantics.querygraphImport",
+        &[],
+    )?;
     require_qglake_handoff_verify_output_querygraph_semantics_match_summary(
-        required_object(
-            captured,
-            "querygraphImport",
-            "lakecatHandoffVerifyOutput.capturedOutputSemantics",
-        )?,
+        captured_querygraph_import,
         import,
         "lakecatHandoffVerifyOutput.capturedOutputSemantics.querygraphImport",
     )?;
@@ -795,6 +822,11 @@ fn require_qglake_handoff_verify_output_semantic_sections_match_summary(
         output,
         "bundleArtifactSemantics",
         "lakecatHandoffVerifyOutput",
+    )?;
+    require_qglake_handoff_verify_output_querygraph_semantics_fields(
+        bundle,
+        "lakecatHandoffVerifyOutput.bundleArtifactSemantics",
+        &["graphNodes", "graphEdges"],
     )?;
     require_qglake_handoff_verify_output_querygraph_semantics_match_summary(
         bundle,
@@ -805,6 +837,11 @@ fn require_qglake_handoff_verify_output_semantic_sections_match_summary(
         output,
         "querygraphImportPlanSemantics",
         "lakecatHandoffVerifyOutput",
+    )?;
+    require_qglake_handoff_verify_output_querygraph_semantics_fields(
+        import_plan,
+        "lakecatHandoffVerifyOutput.querygraphImportPlanSemantics",
+        &["graphNodes", "graphEdges"],
     )?;
     require_qglake_handoff_verify_output_querygraph_semantics_match_summary(
         import_plan,
@@ -829,6 +866,7 @@ fn require_qglake_handoff_verify_output_semantic_sections_match_summary(
         "lineageDrainArtifactSemantics",
         "lakecatHandoffVerifyOutput",
     )?;
+    require_qglake_handoff_verify_output_lineage_drain_semantics_fields(lineage_drain)?;
     require_qglake_handoff_verify_output_querygraph_semantics_match_summary(
         lineage_drain,
         querygraph,
@@ -866,6 +904,39 @@ fn require_qglake_handoff_verify_output_lineage_drain_semantics_match_artifact(
     Ok(())
 }
 
+fn require_qglake_handoff_verify_output_lineage_drain_semantics_fields(
+    semantics: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    require_only_fields(
+        semantics,
+        &[
+            "tableCount",
+            "viewCount",
+            "verifiedTables",
+            "verifiedViews",
+            "bundleHash",
+            "graphHash",
+            "openLineageHash",
+            "queryGraphImportHash",
+            "standards",
+            "delivered",
+            "eventTypes",
+            "graphEvents",
+            "lineageEvents",
+            "catalogConfigProof",
+            "principalSubject",
+            "principalKind",
+            "authorizationReceiptHash",
+            "authorizationReceiptAction",
+            "requestIdentitySource",
+            "requestIdentityState",
+            "typedidEnvelopeHash",
+            "typedidProofHash",
+        ],
+        "lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics",
+    )
+}
+
 fn require_qglake_handoff_verify_output_lineage_drain_identity_match_summary(
     semantics: &serde_json::Map<String, Value>,
     request_identity: &serde_json::Map<String, Value>,
@@ -892,6 +963,26 @@ fn require_qglake_handoff_verify_output_lineage_drain_identity_match_summary(
         )?;
     }
     Ok(())
+}
+
+fn require_qglake_handoff_verify_output_querygraph_semantics_fields(
+    semantics: &serde_json::Map<String, Value>,
+    label: &str,
+    extra_fields: &[&str],
+) -> lakecat_core::LakeCatResult<()> {
+    let mut allowed = vec![
+        "tableCount",
+        "viewCount",
+        "verifiedTables",
+        "verifiedViews",
+        "bundleHash",
+        "graphHash",
+        "openLineageHash",
+        "queryGraphImportHash",
+        "standards",
+    ];
+    allowed.extend_from_slice(extra_fields);
+    require_only_fields(semantics, &allowed, label)
 }
 
 fn require_qglake_handoff_verify_output_querygraph_semantics_match_summary(
@@ -16213,6 +16304,74 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_lakecat_semantics() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-extra-lakecat-semantics");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["capturedOutputSemantics"]["lakecatReplay"]["unverifiedReplayProof"] = json!({
+            "sha256": qglake_fixture_hash("unverified-replay-proof")
+        });
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject extra LakeCat semantic proof claims");
+        let err = err.to_string();
+
+        assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+        assert!(
+            err.contains("capturedOutputSemantics.lakecatReplay"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedReplayProof"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_querygraph_semantics() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-extra-querygraph-semantics");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["capturedOutputSemantics"]["querygraphVerify"]["unverifiedGraphProof"] = json!({
+            "sha256": qglake_fixture_hash("unverified-graph-proof")
+        });
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject extra QueryGraph semantic proof claims");
+        let err = err.to_string();
+
+        assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+        assert!(
+            err.contains("capturedOutputSemantics.querygraphVerify"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedGraphProof"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_management_id_drift() {
         let temp = qglake_temp_dir("handoff-artifacts-self-verify-management-id-drift");
         let summary_path = temp.join("handoff-summary.json");
@@ -16317,6 +16476,37 @@ mod tests {
         assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
         assert!(err.contains("lineageDrainArtifactSemantics"), "{err}");
         assert!(err.contains("catalogConfigProof mismatch"), "{err}");
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_lineage_semantics() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-extra-lineage-semantics");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["lineageDrainArtifactSemantics"]["unverifiedLineageProof"] = json!({
+            "sha256": qglake_fixture_hash("unverified-lineage-proof")
+        });
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject extra lineage semantic proof claims");
+        let err = err.to_string();
+
+        assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+        assert!(err.contains("lineageDrainArtifactSemantics"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedLineageProof"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -16473,6 +16663,37 @@ mod tests {
         assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
         assert!(err.contains("querygraphImportPlanSemantics"), "{err}");
         assert!(err.contains("graphEdges mismatch"), "{err}");
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_bundle_semantics() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-extra-bundle-semantics");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["bundleArtifactSemantics"]["unverifiedBundleProof"] = json!({
+            "sha256": qglake_fixture_hash("unverified-bundle-proof")
+        });
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject extra bundle semantic proof claims");
+        let err = err.to_string();
+
+        assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+        assert!(err.contains("bundleArtifactSemantics"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedBundleProof"),
+            "{err}"
+        );
     }
 
     #[test]

@@ -6,6 +6,30 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close QGLake self-verifier semantic sections`.
+  Saved QGLake self-verifier semantic sections are now closed over the fields
+  LakeCat actually compares. LakeCat replay semantics, QueryGraph
+  verify/import semantics, bundle artifact semantics, import-plan semantics,
+  and lineage-drain semantics reject unexpected fields, preventing saved
+  sidecars from carrying unverified semantic proof beside checked values.
+- Local verification for this implementation/book slice is green so far:
+  `cargo fmt -p lakecat-cli` applied formatting;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_lakecat_semantics -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_querygraph_semantics -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_lineage_semantics -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_bundle_semantics -- --test-threads=1`
+  passed;
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close QGLake self-verifier proof schemas`.
   Saved `lakecatHandoffVerifyOutput` sidecars now reject unexpected top-level
   proof fields and unexpected `capturedOutputSemantics` sections before any
