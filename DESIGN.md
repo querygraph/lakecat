@@ -680,6 +680,12 @@ Management-upsert replay for policy bindings, projects, servers, storage
 profiles, and warehouses must also carry a valid authorization receipt
 principal before projection, so tenant-root and policy mutations cannot become
 actorless catalog graph or OpenLineage facts.
+Storage-profile upsert replay and compact QGLake handoff proof must also bind
+that principal to a full authorization receipt hash and the
+`storage-profile-manage` action, beside the redacted provider, issuance mode,
+location-prefix hash, optional secret-reference hash, graph event count, replay
+hashes, and OpenLineage hashes. This keeps credential-root management proof from
+being replayed as a weaker table or lineage action.
 Policy-binding upsert replay must also bind captured ODRL material to a full
 `odrl-hash` before graph or OpenLineage projection. LakeCat validates the
 catalog scope and content anchor, while TypeSec and QueryGraph remain the

@@ -2142,6 +2142,10 @@ fn verify_lakecat_replay_storage_profile_matches_summary(
         "provider",
         "issuanceMode",
         "locationPrefixHash",
+        "principalSubject",
+        "principalKind",
+        "authorizationReceiptHash",
+        "authorizationReceiptAction",
     ] {
         require_string_match(
             captured_storage_profile,
@@ -3404,6 +3408,27 @@ fn require_storage_profile_upsert_evidence(
     require_full_hash_array(
         storage_profile,
         "openLineageHashes",
+        "storageProfileUpsertProof",
+    )?;
+    require_non_blank_str(
+        storage_profile,
+        "principalSubject",
+        "storageProfileUpsertProof",
+    )?;
+    require_non_blank_str(
+        storage_profile,
+        "principalKind",
+        "storageProfileUpsertProof",
+    )?;
+    require_full_hash_str(
+        storage_profile,
+        "authorizationReceiptHash",
+        "storageProfileUpsertProof",
+    )?;
+    require_string_eq(
+        storage_profile,
+        "authorizationReceiptAction",
+        "storage-profile-manage",
         "storageProfileUpsertProof",
     )?;
     require_positive_u64(storage_profile, "graphEvents", "storageProfileUpsertProof")?;
@@ -5010,6 +5035,22 @@ fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Optio
     let storage_profile = qglake_drain_event(drain, "storage-profile.listed")?;
     let storage_profile_upsert = qglake_drain_event(drain, "storage-profile.upserted")?;
     let policy_upsert = qglake_drain_event(drain, "policy-binding.upserted")?;
+    let storage_profile_upsert_proof = json!({
+        "profileId": storage_profile_upsert.storage_profile_id.as_deref(),
+        "provider": storage_profile_upsert.storage_profile_provider.as_deref(),
+        "issuanceMode": storage_profile_upsert.storage_profile_issuance_mode.as_deref(),
+        "locationPrefixHash": storage_profile_upsert.storage_profile_location_prefix_hash.as_deref(),
+        "principalSubject": storage_profile_upsert.principal_subject.as_deref(),
+        "principalKind": storage_profile_upsert.principal_kind.as_deref(),
+        "authorizationReceiptHash": storage_profile_upsert.authorization_receipt_hash.as_deref(),
+        "authorizationReceiptAction": storage_profile_upsert.authorization_receipt_action.as_deref(),
+        "secretRefPresent": storage_profile_upsert.storage_profile_secret_ref_present.unwrap_or_default(),
+        "secretRefProvider": storage_profile_upsert.storage_profile_secret_ref_provider.as_deref(),
+        "secretRefHash": storage_profile_upsert.storage_profile_secret_ref_hash.as_deref(),
+        "graphEvents": storage_profile_upsert.graph_events,
+        "replayEventHashes": &storage_profile_upsert.replay_event_hashes,
+        "openLineageHashes": &storage_profile_upsert.replay_open_lineage_hashes,
+    });
     Some(json!({
         "serverCount": server.server_count.unwrap_or_default(),
         "serverIds": &server.server_ids,
@@ -5048,18 +5089,7 @@ fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Optio
         "policyOpenLineageHashes": &policy.replay_open_lineage_hashes,
         "storageProfileReplayEventHashes": &storage_profile.replay_event_hashes,
         "storageProfileOpenLineageHashes": &storage_profile.replay_open_lineage_hashes,
-        "storageProfileUpsert": {
-            "profileId": storage_profile_upsert.storage_profile_id.as_deref(),
-            "provider": storage_profile_upsert.storage_profile_provider.as_deref(),
-            "issuanceMode": storage_profile_upsert.storage_profile_issuance_mode.as_deref(),
-            "locationPrefixHash": storage_profile_upsert.storage_profile_location_prefix_hash.as_deref(),
-            "secretRefPresent": storage_profile_upsert.storage_profile_secret_ref_present.unwrap_or_default(),
-            "secretRefProvider": storage_profile_upsert.storage_profile_secret_ref_provider.as_deref(),
-            "secretRefHash": storage_profile_upsert.storage_profile_secret_ref_hash.as_deref(),
-            "graphEvents": storage_profile_upsert.graph_events,
-            "replayEventHashes": &storage_profile_upsert.replay_event_hashes,
-            "openLineageHashes": &storage_profile_upsert.replay_open_lineage_hashes,
-        },
+        "storageProfileUpsert": storage_profile_upsert_proof,
     }))
 }
 
@@ -9272,6 +9302,33 @@ fn verify_qglake_storage_profile_upsert_replay(
                 .to_string(),
         ));
     }
+    if event
+        .principal_subject
+        .as_deref()
+        .map_or(true, str::is_empty)
+        || event.principal_kind.as_deref().map_or(true, str::is_empty)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain storage profile upsert replay is missing principal evidence"
+                .to_string(),
+        ));
+    }
+    if event
+        .authorization_receipt_hash
+        .as_deref()
+        .map_or(true, |hash| !is_full_sha256_hash(hash))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain storage profile upsert replay is missing authorization receipt hash evidence"
+                .to_string(),
+        ));
+    }
+    if event.authorization_receipt_action.as_deref() != Some("storage-profile-manage") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain storage profile upsert replay authorization receipt action must be storage-profile-manage"
+                .to_string(),
+        ));
+    }
     Ok(())
 }
 
@@ -10853,8 +10910,8 @@ mod tests {
                     "locationPrefixHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
                     "secretRefPresent": false,
                     "secretRefProvider": null,
-                            "secretRefHash": null,
-                        "graphEvents": 1,
+                    "secretRefHash": null,
+                    "graphEvents": 1,
                     "replayEventHashes": [qglake_fixture_hash("storage-replay")],
                     "openLineageHashes": [qglake_fixture_hash("storage-openlineage")]
                 },
@@ -10915,6 +10972,9 @@ mod tests {
         qglake_add_credential_receipt_evidence(
             &mut summary["lakecatReplayVerification"]["credentialVendingProof"],
         );
+        qglake_add_storage_profile_upsert_receipt_evidence(
+            &mut summary["lakecatReplayVerification"]["storageProfileUpsertProof"],
+        );
         qglake_add_view_receipt_chain_structures(
             &mut summary["lakecatReplayVerification"]["viewReceiptChainProof"],
         );
@@ -10932,6 +10992,14 @@ mod tests {
         credentials["trustedHuman"]["authorizationReceiptHash"] =
             json!(qglake_fixture_hash("human-credential-authorization"));
         credentials["trustedHuman"]["authorizationReceiptAction"] = json!("credentials-vend");
+    }
+
+    fn qglake_add_storage_profile_upsert_receipt_evidence(storage_profile: &mut Value) {
+        storage_profile["principalSubject"] = json!("did:example:agent");
+        storage_profile["principalKind"] = json!("agent");
+        storage_profile["authorizationReceiptHash"] =
+            json!(qglake_fixture_hash("storage-profile-upsert-authorization"));
+        storage_profile["authorizationReceiptAction"] = json!("storage-profile-manage");
     }
 
     fn qglake_add_governed_scan_identity_evidence(governed_scan: &mut Value) {
@@ -11341,6 +11409,9 @@ mod tests {
         );
         qglake_add_credential_receipt_evidence(
             &mut lakecat_replay_json["replay-evidence"]["credentials"],
+        );
+        qglake_add_storage_profile_upsert_receipt_evidence(
+            &mut lakecat_replay_json["replay-evidence"]["management"]["storageProfileUpsert"],
         );
         lakecat_replay_json["management-replay"] = json!(format!(
             "management replay servers=1 projects=1 warehouses=1 policies=1 policy_upserts=1 policy=agent-columns:odrl_hash={} storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none",
@@ -12805,6 +12876,36 @@ mod tests {
         assert!(err.to_string().contains("storageProfileUpsertProof"));
         assert!(err.to_string().contains("locationPrefixHash"));
         assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_storage_profile_authorization_hash() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["authorizationReceiptHash"] =
+            json!("sha256:short-storage-profile-authorization");
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject malformed storage-profile authorization hash",
+        );
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("authorizationReceiptHash"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_storage_profile_authorization_action() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["authorizationReceiptAction"] =
+            json!("table-load");
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject drifted storage-profile authorization action",
+        );
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("authorizationReceiptAction"));
+        assert!(err.to_string().contains("storage-profile-manage"));
     }
 
     #[test]
@@ -15953,6 +16054,30 @@ mod tests {
         assert!(
             err.to_string().contains(
                 "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert.graphEvents mismatch"
+            )
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_storage_profile_action_drift() {
+        let temp = qglake_temp_dir("handoff-captured-storage-profile-action-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["management"]["storageProfileUpsert"]["authorizationReceiptAction"] =
+            json!("table-load");
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay storage-profile action proof drift should be rejected");
+        assert!(
+            err.to_string().contains(
+                "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert.authorizationReceiptAction mismatch"
             )
         );
     }
@@ -19526,6 +19651,34 @@ mod tests {
             ) || err.contains("storage-profile evidence does not match storage profile upsert replay"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn qglake_storage_profile_upsert_replay_rejects_short_authorization_hash() {
+        let mut event = qglake_storage_profile_upsert_lineage_summary();
+        event.authorization_receipt_hash = Some("sha256:short-storage-profile-auth".to_string());
+
+        let err = verify_qglake_storage_profile_upsert_replay(&event)
+            .expect_err("storage-profile replay should reject short authorization hash evidence");
+
+        assert!(err.to_string().contains("storage profile upsert replay"));
+        assert!(err.to_string().contains("authorization receipt hash"));
+    }
+
+    #[test]
+    fn qglake_storage_profile_upsert_replay_rejects_authorization_action_drift() {
+        let mut event = qglake_storage_profile_upsert_lineage_summary();
+        event.authorization_receipt_hash =
+            Some(qglake_fixture_hash("storage-profile-upsert-authorization"));
+        event.authorization_receipt_action = Some("table-load".to_string());
+
+        let err = verify_qglake_storage_profile_upsert_replay(&event)
+            .expect_err("storage-profile replay should reject authorization action drift");
+
+        let err = err.to_string();
+        assert!(err.contains("storage profile upsert"), "{err}");
+        assert!(err.contains("authorization receipt action"), "{err}");
+        assert!(err.contains("storage-profile-manage"), "{err}");
     }
 
     #[test]
@@ -25571,9 +25724,9 @@ mod tests {
             event_type: "storage-profile.upserted".to_string(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some(
-                "sha256:storage-profile-upsert-authorization".to_string(),
-            ),
+            authorization_receipt_hash: Some(qglake_fixture_hash(
+                "storage-profile-upsert-authorization",
+            )),
             authorization_receipt_action: Some("storage-profile-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),

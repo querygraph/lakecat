@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Bound compact QGLake `storageProfileUpsertProof` to storage-profile
+  management authorization evidence, requiring principal subject/kind, full
+  authorization receipt hash, and the `storage-profile-manage` action across
+  raw lineage drains, captured LakeCat replay, and archived handoff summaries.
+  The book now explains this as LakeCat/TypeSec credential-root governance
+  evidence beside standard Iceberg, and sharpens why field-id, manifest,
+  delete, pruning, credential, and typed v4 interpretation should be pushed
+  into Sail.
 - Bound compact QGLake `policyUpsertProof` to policy-management
   authorization evidence, requiring principal subject/kind, full authorization
   receipt hash, and the `policy-manage` action across raw lineage drains,

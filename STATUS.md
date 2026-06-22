@@ -6,6 +6,29 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Bind QGLake storage-profile upsert authorization proof`.
+  Compact QGLake `storageProfileUpsertProof` now preserves the
+  storage-profile-management principal subject/kind, full authorization receipt
+  hash, and `storage-profile-manage` action beside the redacted profile id,
+  provider, issuance mode, storage-scope hash, secret-reference posture, graph
+  events, replay hashes, and OpenLineage hashes. Raw lineage-drain verification
+  and captured LakeCat replay comparison reject drifted or malformed
+  storage-profile authorization proof. The book now describes this as
+  LakeCat/TypeSec credential-root governance evidence around standard Iceberg
+  catalog behavior, and expands the argument that reusable table-format and
+  governed planning work belongs in Sail.
+- Local verification for this QGLake storage-profile authorization/book slice
+  is green:
+  `cargo fmt -p lakecat-cli -p lakecat-api -p lakecat-service -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_storage_profile_upsert_replay -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Bind QGLake policy upsert authorization proof`.
   Compact QGLake `policyUpsertProof` now preserves the policy-management
   principal subject/kind, full authorization receipt hash, and `policy-manage`

@@ -429,6 +429,14 @@ TypeSec, Grust, OpenLineage, ODRL, or QGLake exist. LakeCat may attach audit
 and outbox evidence behind that request, but those attachments cannot become
 hidden prerequisites for ordinary table access. The standard response must
 remain familiar enough that engines can keep their normal Iceberg behavior.
+That compatibility rule should be read literally. If a PySpark job creates
+`analytics.events`, the standard Iceberg concept is the namespace `analytics`,
+the table identifier `analytics.events`, the current metadata location, the
+metadata JSON, the snapshots, manifests, partition specs, schemas, and delete
+files that an engine reads. LakeCat may additionally know the warehouse's
+tenant, the caller's principal, the idempotency key hash, the pointer-log
+sequence, the audit receipt, and the outbox event id. Those extra facts are
+catalog evidence. They do not redefine the Iceberg table.
 
 Commit CAS is standard catalog behavior; LakeCat's proof envelope around it is
 catalog hardening. The Iceberg idea is optimistic pointer movement: the writer
@@ -442,6 +450,14 @@ evidence before acknowledgement, Grust projection, or OpenLineage projection.
 Only the optimistic pointer update is standard Iceberg. The surrounding ledger
 is LakeCat implementation today and a possible source of future optional REST
 catalog profiles.
+This split is important for retries. The standard catalog question is whether
+the expected pointer can move to the new metadata pointer. LakeCat's stronger
+question is whether a retry is exactly the same request, whether the stored
+response hash matches, whether the pointer log already proves the transition,
+whether the audit row names the same principal and action, and whether any
+queued graph or OpenLineage side effect can be replayed without inventing new
+evidence. That retry and replay envelope is not table metadata. It is the
+control-plane contract that makes the catalog trustworthy after failures.
 
 Governed scan and credential paths are LakeCat/TypeSec extensions around
 standard Iceberg tables. Standard Iceberg gives engines the metadata needed to
@@ -454,6 +470,15 @@ raw credentials when policy allows that exception. A restricted agent should
 receive a Sail-planned task set instead of broad object-store authority. That
 is not standard Iceberg today, but it is a strong future Iceberg-adjacent
 candidate if expressed as an optional proof-carrying access profile.
+The same distinction applies to credential roots and storage profiles. Iceberg
+clients care that a table can be read and written through compatible catalog
+and object-store behavior. LakeCat additionally records which storage profile
+selected the credential root, which provider and issuance mode were configured,
+which redacted storage-scope hash was used, whether a secret reference was
+present, and which TypeSec authorization receipt allowed management of that
+profile. Those fields are LakeCat/TypeSec governance evidence. They are useful
+for QueryGraph and operators, but they should never become required custom
+Iceberg table metadata.
 
 QueryGraph and QGLake handoff are application integration surfaces, not table
 format features. LakeCat can export bootstrap, management, view, credential,
@@ -510,6 +535,7 @@ bucket and the LakeCat implementation state.
 | Outbox and replay validation | No. The transactional outbox pattern is catalog implementation and integration infrastructure. | LakeCat refuses malformed durable evidence before graph projection, OpenLineage projection, or acknowledgement. | Strong candidate for optional catalog event-stream profiles if multiple catalogs need interoperable proof. |
 | Governed scan receipts | No for ordinary Iceberg scans; yes for the underlying metadata that enables planning. | TypeSec decides the allowed request, LakeCat records the receipt, and Sail plans the narrowed scan. | Strong candidate for optional proof-carrying scan or governed-access profiles. |
 | Credential posture and raw-credential exceptions | Iceberg REST includes credential vending, but not LakeCat's governance proof language. | Raw credentials are audited exceptions; restricted agents should receive Sail-planned work and compact receipt evidence. | Strong candidate for optional governed credential-vending profiles. |
+| Storage-profile management proof | No. Storage roots and credential issuers are catalog deployment concerns. | LakeCat records redacted provider, issuance mode, storage-scope hash, secret-reference posture, principal, receipt hash, and `storage-profile-manage` action for replay and QGLake handoff. | Maybe, as a narrow governed credential-root profile; not as Iceberg table metadata. |
 | QueryGraph and QGLake handoff | No. QueryGraph is an application and integration layer above the catalog. | LakeCat exports catalog facts, proof anchors, OpenLineage material, and bootstrap bundles for QueryGraph import. | Parts may generalize, such as event identity and lineage binding; semantic graph import should remain above Iceberg. |
 | OpenLineage projection | No as table-format parlance, yes as a common lineage ecosystem integration. | LakeCat projects committed catalog facts only after replay validation, keeping lineage tied to catalog state. | Good candidate for optional lineage-binding conventions beside Iceberg REST. |
 | Croissant, CDIF, OSI, ODRL, TypeDID | No. These are semantic, governance, and identity vocabularies. | QueryGraph and TypeSec interpret them; LakeCat stores/proves catalog-adjacent anchors and receipts. | Usually no for Iceberg itself. Some receipt bindings may become catalog profiles, but the vocabularies should remain layered. |
@@ -562,6 +588,13 @@ transactional catalog event streams, lineage receipt binding, governed
 credential-vending proof, proof-carrying scan planning, and view lifecycle
 receipts. LakeCat should prove those ideas locally first, then propose the
 portable subset only after it is clear which fields need to interoperate.
+Even then, the proposal should name behavior, not products. "A catalog event
+stream carries ordered, replayable, redacted commit receipts" is a plausible
+portable profile. "An Iceberg catalog must emit QueryGraph bootstrap bundles" is
+not. "A credential-vending response can carry governed-access proof" may become
+portable. "An Iceberg table metadata file must contain TypeDID or ODRL fields"
+would be the wrong layer. This restraint lets LakeCat be a proving ground
+without turning every local integration into a standards demand.
 
 This gives each current release claim a clear home:
 
@@ -573,6 +606,7 @@ This gives each current release claim a clear home:
 | Commit CAS is hardened | CAS is standard catalog behavior. | Idempotency, request/response hashes, pointer logs, audit, transactional outbox, replay validation, and redacted conflict evidence surround the standard pointer update. | Strong candidate for optional REST retry, conflict-proof, event, and pointer-history profiles. |
 | Governed scan receipts exist | Scan planning metadata is standard; receipt proof is not. | TypeSec decides the capability, LakeCat binds the decision to the catalog action, and Sail plans the narrowed request. | Candidate for optional proof-carrying scan and governed-access profiles. |
 | Governed credential proof exists | Credential vending exists in catalog ecosystems; LakeCat's proof language is additive. | Raw credentials are an audited exception; restricted agents receive Sail-planned work and compact receipt evidence. | Candidate for optional governed credential-vending profiles. |
+| Storage-profile upsert proof is replayable | Storage-profile management is not standard table-format parlance. | QGLake proof now binds profile id, provider, issuance mode, storage-scope hash, secret-reference posture, principal, authorization receipt hash, `storage-profile-manage` action, graph events, replay hashes, and OpenLineage hashes. | Only the narrow governed credential-root proof shape might generalize. |
 | QueryGraph/QGLake handoff is broad | Not standard Iceberg. | LakeCat exports bootstrap, management, view, credential, commit, replay, OpenLineage, and import proof; QueryGraph interprets it. | Only small pieces such as event identity or lineage receipt binding should be considered for broader profiles. |
 
 The boundary can be tested with a simple question: can a normal Iceberg engine
@@ -694,6 +728,14 @@ credentials. QueryGraph can bootstrap from LakeCat evidence whose table facts
 were interpreted by the same engine path that future Rust workflows will use.
 The standard path stays portable, and the advanced path gets stronger because
 it is built on real engine semantics rather than catalog-side approximation.
+It is also a governance strategy. Policy proof is only as strong as the data
+semantics it constrains. A receipt saying "allowed columns were narrowed" is
+weak if the narrowing was performed by catalog string matching that ignores
+field ids or schema evolution. A receipt saying "Sail planned this narrowed
+scan against the current Iceberg metadata" is much stronger. The policy remains
+TypeSec's responsibility, but the interpretation of columns, predicates,
+manifests, deletes, and snapshots should come from the engine that understands
+the table.
 
 Sail is a particularly good fit for this split because the hard problems are
 already engine-shaped. Manifest pruning depends on Iceberg metrics, null
@@ -4933,7 +4975,12 @@ hashes, and the accepted summary repeats that evidence as
 that the credential root was configured, including the provider, issuance mode,
 the configured location-prefix hash, and a full `sha256:`-prefixed 64-hex
 digest of the secret reference, without receiving the underlying secret-store
-URI or full storage prefix in the compact proof. The
+URI or full storage prefix in the compact proof. That compact proof must also
+name the principal subject and kind, carry a full authorization receipt hash,
+and prove the receipt action was `storage-profile-manage`. Captured LakeCat
+replay and the compact QGLake summary are compared field by field, so a saved
+handoff cannot turn an authorized storage-profile management action into an
+actorless credential-root fact or replay it under a weaker catalog action. The
 operator-readable management replay line now prints the same storage-scope hash
 and redacted secret-reference state, so a captured transcript cannot describe
 the credential root only by provider while omitting its redacted storage scope or
