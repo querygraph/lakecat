@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed compact and captured QGLake request-identity proof objects over their
+  compared schema. `requestIdentityProof` and captured LakeCat replay
+  `requestIdentity` evidence now reject unexpected fields before summary or
+  sidecar verification can accept unverified actor, identity-source, TypeDID,
+  authorization, or drain-read action claims beside checked identity proof.
 - Closed compact and captured QGLake catalog-config proof objects over their
   compared schema. `catalogConfigProof` and captured LakeCat replay
   `catalogConfig` evidence now reject unexpected fields before summary or

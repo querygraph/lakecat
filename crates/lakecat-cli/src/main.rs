@@ -1999,6 +1999,11 @@ fn verify_lakecat_replay_request_identity_matches_summary(
     lakecat: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
     let captured_request_identity = lakecat_replay_request_identity(capture)?;
+    require_only_fields(
+        captured_request_identity,
+        REQUEST_IDENTITY_PROOF_FIELDS,
+        "captured LakeCat replay output.replay-evidence.requestIdentity",
+    )?;
     let summary_request_identity =
         required_object(lakecat, "requestIdentityProof", "lakecatReplayVerification")?;
 
@@ -3016,6 +3021,11 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     }
     let request_identity =
         required_object(lakecat, "requestIdentityProof", "lakecatReplayVerification")?;
+    require_only_fields(
+        request_identity,
+        REQUEST_IDENTITY_PROOF_FIELDS,
+        "requestIdentityProof",
+    )?;
     require_string_match(
         request_identity,
         "principalSubject",
@@ -3398,6 +3408,17 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "requestIdentityProof": request_identity,
     }))
 }
+
+const REQUEST_IDENTITY_PROOF_FIELDS: &[&str] = &[
+    "principalSubject",
+    "principalKind",
+    "requestIdentitySource",
+    "requestIdentityState",
+    "authorizationReceiptHash",
+    "authorizationReceiptAction",
+    "typedidEnvelopeHash",
+    "typedidProofHash",
+];
 
 fn require_querygraph_verified_scope(
     querygraph: &serde_json::Map<String, Value>,
@@ -13446,6 +13467,23 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_request_identity_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["requestIdentityProof"]["unverifiedActorClaim"] =
+            json!(qglake_fixture_hash("unverified-actor-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject unverified request identity fields");
+        let err = err.to_string();
+
+        assert!(err.contains("requestIdentityProof"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedActorClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_short_typedid_hashes() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["requestIdentityProof"]["typedidEnvelopeHash"] =
@@ -17951,6 +17989,35 @@ mod tests {
             err.to_string().contains(
                 "captured LakeCat replay output.replay-evidence.requestIdentity.authorizationReceiptHash mismatch"
             )
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_request_identity_fields() {
+        let temp = qglake_temp_dir("handoff-captured-request-identity-extra-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["requestIdentity"]["unverifiedActorClaim"] =
+            json!(qglake_fixture_hash("unverified-captured-actor-claim"));
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay request-identity extra fields should be rejected");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("captured LakeCat replay output.replay-evidence.requestIdentity"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedActorClaim"),
+            "{err}"
         );
     }
 

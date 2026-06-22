@@ -6910,7 +6910,11 @@ bound back to their captured replay sections rather than forcing the receipt
 hashes to be equal. The same full-digest rule applies to the required agent
 delegation and agent summary-signature hashes in the bootstrap proof, so a
 saved handoff cannot replace those proof anchors with short readable
-placeholders.
+placeholders. The compact `requestIdentityProof` object and the captured
+LakeCat replay `requestIdentity` object are also closed over their compared
+fields. A saved summary or replay sidecar cannot append an extra unverified
+actor, identity-source, TypeDID, authorization, or drain-read action claim
+beside the accepted request-identity proof.
 The compact verifier
 also validates the TypeDID hash-slot shape directly: envelope and proof slots
 must be null or full `sha256:`-prefixed 64-hex digests, and a TypeDID proof
