@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Tightened compact QGLake handoff and raw lineage-drain credential-root
+  verification so storage-profile provider and issuance-mode proof must remain
+  compatible. Saved evidence now rejects `local-file-no-secret` on remote
+  providers and `short-lived-secret-ref` on the file provider before
+  QueryGraph handoff or replay import can accept contradictory credential-root
+  posture.
 - Expanded the LakeCat book with a front-loaded release-claims section that
   explains the Rust service spine, Turso-backed local store, Iceberg REST
   namespace/table compatibility, commit CAS, idempotency, pointer logs,

@@ -6,6 +6,28 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Validate QGLake storage-profile provider modes`.
+  Compact QGLake handoff verification and raw lineage-drain verification now
+  reject contradictory credential-root provider/issuance-mode proof:
+  `local-file-no-secret` is valid only with the file provider, and
+  `short-lived-secret-ref` is valid only with S3, GCS, or Azure-style providers.
+  The book's credential-root replay section now says that saved compact and raw
+  QGLake artifacts enforce the same rule before QueryGraph handoff/import can
+  accept storage-profile proof.
+- Local verification for this implementation/book slice is green:
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_storage_profile_provider_issuance_mismatch -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_storage_profile_provider_issuance_mismatch -- --test-threads=1`
+  passed;
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover and contents render;
+  the versioned EPUB symlink resolves to `lakecat.epub`;
+  `scripts/check-release-readiness.sh --quick` passed.
+- Latest implementation/book slice:
   `Explain release catalog concepts and require full bootstrap replay hashes`.
   The book now opens with a detailed release-claims section that separates
   standard Iceberg parlance from LakeCat implementation, QueryGraph/TypeSec

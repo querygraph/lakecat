@@ -6212,9 +6212,12 @@ Secret-reference presence must also agree with issuance mode: short-lived
 secret-ref profiles must carry redacted secret-reference proof, while governed
 and no-secret profiles cannot carry secret-reference proof.
 The drain summary lifts the same proof into compact fields alongside the
-profile id and provider. QGLake replay verification requires that compact
-storage-profile upsert evidence, which means a saved handoff can prove the
-credential root was configured without handing the next system a secret path.
+profile id and provider. QGLake replay verification now checks the provider and
+issuance-mode pair in both compact handoff summaries and raw lineage-drain
+artifacts, so a saved handoff cannot turn a local file credential root into an
+S3 root, or claim a secret-reference mode on a file provider, without being
+rejected before import. That means a saved handoff can prove the credential
+root was configured without handing the next system a secret path.
 
 ### A PySpark User Reads Iceberg
 

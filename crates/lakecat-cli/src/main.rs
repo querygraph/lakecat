@@ -3327,8 +3327,14 @@ fn require_storage_profile_upsert_evidence(
     storage_profile: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
     require_non_empty_str(storage_profile, "profileId", "storageProfileUpsertProof")?;
-    require_non_empty_str(storage_profile, "provider", "storageProfileUpsertProof")?;
-    require_non_empty_str(storage_profile, "issuanceMode", "storageProfileUpsertProof")?;
+    let provider = require_non_empty_str(storage_profile, "provider", "storageProfileUpsertProof")?;
+    let issuance_mode =
+        require_non_empty_str(storage_profile, "issuanceMode", "storageProfileUpsertProof")?;
+    require_storage_profile_provider_issuance_compatibility(
+        provider,
+        issuance_mode,
+        "storageProfileUpsertProof",
+    )?;
     require_full_hash_str(
         storage_profile,
         "locationPrefixHash",
@@ -3883,8 +3889,14 @@ fn require_credential_storage_profile_evidence(
     let storage_profile = required_object(credential, "storageProfile", label)?;
     let storage_label = format!("{label}.storageProfile");
     require_non_empty_str(storage_profile, "profileId", storage_label.as_str())?;
-    require_non_empty_str(storage_profile, "provider", storage_label.as_str())?;
-    require_non_empty_str(storage_profile, "issuanceMode", storage_label.as_str())?;
+    let provider = require_non_empty_str(storage_profile, "provider", storage_label.as_str())?;
+    let issuance_mode =
+        require_non_empty_str(storage_profile, "issuanceMode", storage_label.as_str())?;
+    require_storage_profile_provider_issuance_compatibility(
+        provider,
+        issuance_mode,
+        storage_label.as_str(),
+    )?;
     require_full_hash_str(
         storage_profile,
         "locationPrefixHash",
@@ -3899,6 +3911,29 @@ fn require_credential_storage_profile_evidence(
     }
     require_positive_u64(storage_profile, "graphEvents", storage_label.as_str())?;
     Ok(())
+}
+
+fn require_storage_profile_provider_issuance_compatibility(
+    provider: &str,
+    issuance_mode: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    match issuance_mode {
+        "local-file-no-secret" if provider != "file" => {
+            Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} local-file-no-secret issuanceMode requires file provider"
+            )))
+        }
+        "short-lived-secret-ref" if !matches!(provider, "s3" | "gcs" | "azure") => {
+            Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} short-lived-secret-ref issuanceMode requires s3, gcs, or azure provider"
+            )))
+        }
+        "local-file-no-secret" | "short-lived-secret-ref" => Ok(()),
+        _ => Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.issuanceMode must be local-file-no-secret or short-lived-secret-ref"
+        ))),
+    }
 }
 
 fn require_read_restriction_evidence(
@@ -8715,6 +8750,17 @@ fn verify_qglake_credential_storage_profile_projection(
             "qglake lineage drain {label} credential replay is missing redacted storage-profile graph evidence"
         )));
     }
+    verify_qglake_storage_profile_provider_issuance_mode(
+        event
+            .storage_profile_provider
+            .as_deref()
+            .unwrap_or_default(),
+        event
+            .storage_profile_issuance_mode
+            .as_deref()
+            .unwrap_or_default(),
+        &format!("qglake lineage drain {label} credential replay storage-profile"),
+    )?;
     if event.storage_profile_secret_ref_present == Some(false)
         && event.storage_profile_secret_ref_provider.is_some()
     {
@@ -9238,6 +9284,17 @@ fn verify_qglake_storage_profile_upsert_replay(
                 .to_string(),
         ));
     }
+    verify_qglake_storage_profile_provider_issuance_mode(
+        event
+            .storage_profile_provider
+            .as_deref()
+            .unwrap_or_default(),
+        event
+            .storage_profile_issuance_mode
+            .as_deref()
+            .unwrap_or_default(),
+        "qglake lineage drain storage profile upsert replay",
+    )?;
     if event.storage_profile_secret_ref_present == Some(true)
         && event
             .storage_profile_secret_ref_provider
@@ -9297,6 +9354,29 @@ fn verify_qglake_storage_profile_upsert_replay(
         ));
     }
     Ok(())
+}
+
+fn verify_qglake_storage_profile_provider_issuance_mode(
+    provider: &str,
+    issuance_mode: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    match issuance_mode {
+        "local-file-no-secret" if provider != "file" => {
+            Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} local-file-no-secret issuance mode requires file provider"
+            )))
+        }
+        "short-lived-secret-ref" if !matches!(provider, "s3" | "gcs" | "azure") => {
+            Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} short-lived-secret-ref issuance mode requires s3, gcs, or azure provider"
+            )))
+        }
+        "local-file-no-secret" | "short-lived-secret-ref" => Ok(()),
+        _ => Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label} issuance mode must be local-file-no-secret or short-lived-secret-ref"
+        ))),
+    }
 }
 
 fn verify_qglake_management_list_receipts(
@@ -12901,6 +12981,38 @@ mod tests {
 
         assert!(err.to_string().contains("storageProfileUpsertProof"));
         assert!(err.to_string().contains("issuanceMode"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_storage_profile_provider_issuance_mismatch() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["provider"] = json!("s3");
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["storageProfile"]
+            ["provider"] = json!("s3");
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]["storageProfile"]
+            ["provider"] = json!("s3");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject local-file-no-secret on remote provider");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("local-file-no-secret"));
+        assert!(err.to_string().contains("file provider"));
+
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["issuanceMode"] =
+            json!("short-lived-secret-ref");
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["storageProfile"]
+            ["issuanceMode"] = json!("short-lived-secret-ref");
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]["storageProfile"]
+            ["issuanceMode"] = json!("short-lived-secret-ref");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short-lived-secret-ref on file provider");
+
+        assert!(err.to_string().contains("storageProfileUpsertProof"));
+        assert!(err.to_string().contains("short-lived-secret-ref"));
+        assert!(err.to_string().contains("s3, gcs, or azure"));
     }
 
     #[test]
@@ -24717,6 +24829,45 @@ mod tests {
 
         assert!(err.to_string().contains("storage profile list replay"));
         assert!(err.to_string().contains("compact management ID evidence"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_storage_profile_provider_issuance_mismatch() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let storage_profile_upsert = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "storage-profile.upserted")
+            .expect("storage profile upsert replay fixture");
+        storage_profile_upsert.storage_profile_provider = Some("s3".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err(
+                "QGLake lineage drain should reject local-file-no-secret on remote provider",
+            );
+
+        assert!(err.to_string().contains("storage profile upsert"));
+        assert!(err.to_string().contains("local-file-no-secret"));
+        assert!(err.to_string().contains("file provider"));
+
+        let mut drain = qglake_handoff_lineage_drain();
+        let storage_profile_upsert = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "storage-profile.upserted")
+            .expect("storage profile upsert replay fixture");
+        storage_profile_upsert.storage_profile_issuance_mode =
+            Some("short-lived-secret-ref".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err(
+                "QGLake lineage drain should reject short-lived-secret-ref on file provider",
+            );
+
+        assert!(err.to_string().contains("storage profile upsert"));
+        assert!(err.to_string().contains("short-lived-secret-ref"));
+        assert!(err.to_string().contains("s3, gcs, or azure"));
     }
 
     #[test]
