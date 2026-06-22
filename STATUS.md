@@ -6,6 +6,16 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Expand catalog concepts in the book`.
+  The book now more explicitly separates standard Iceberg vocabulary from
+  LakeCat implementation choices, LakeCat/QueryGraph/TypeSec extension
+  surfaces, possible Iceberg-adjacent proposal profiles, and the reason
+  table-format interpretation should move into Sail instead of LakeCat.
+- Local verification for this book slice is green:
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Bind management upsert location hashes`.
   Service replay admission now recomputes `server.upserted` `endpoint-url-hash`
   from the redaction-bound `endpoint-url` and `warehouse.upserted`

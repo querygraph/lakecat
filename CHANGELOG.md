@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expanded the book's catalog-concepts explanation with a clearer distinction
+  between standard Iceberg parlance, LakeCat implementation, QueryGraph and
+  TypeSec extension surfaces, possible Iceberg-adjacent proposal profiles, and
+  the architectural case for pushing table-format work into Sail.
 - Hardened management upsert replay for tenant roots. `server.upserted` now
   recomputes `endpoint-url-hash` from `endpoint-url`, and
   `warehouse.upserted` recomputes `storage-root-hash` from `storage-root`,

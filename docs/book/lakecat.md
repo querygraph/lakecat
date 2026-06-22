@@ -267,6 +267,45 @@ The release vocabulary therefore looks like this:
 | Croissant, CDIF, OSI, ODRL, TypeDID | No as Iceberg metadata. | QueryGraph and TypeSec interpret semantic, governance, identity, and rights vocabularies; LakeCat persists catalog-adjacent anchors and receipt hashes. | Usually not Iceberg proposals; narrow receipt bindings may be adjacent profiles. |
 | Iceberg v4 typed interpretation | Yes, as Iceberg evolves. | Sail should own typed v4 interpretation; LakeCat stores pointers and uses compatibility bridges only until typed support is available. | Belongs in Iceberg and reusable engine support, not LakeCat-only JSON parsing. |
 
+The important rule is that the standard column in this table is not a judgment
+about importance. A concept can be non-standard and still be essential to
+LakeCat. Rust, Turso, TypeSec, Grust, QueryGraph, QGLake, Croissant, CDIF, OSI,
+ODRL, TypeDID, and OpenLineage are all important to this system, but they are
+not the portable table contract. They live in implementation, governance,
+lineage, graph, and application layers around the table. Iceberg's shared
+contract stays smaller: table metadata, current pointers, snapshots, manifests,
+delete files, schemas, partition specs, commit requirements, and catalog routes.
+
+That smaller contract is a strength. It is why multiple engines can share the
+same table. LakeCat should not weaken that by stuffing business semantics into
+Iceberg metadata or by making ordinary clients depend on QueryGraph-only
+routes. The right pattern is additive: ordinary clients use the ordinary
+catalog, while advanced clients ask for proof, governance, lineage, bootstrap,
+and graph material beside the standard path.
+
+This also explains which LakeCat ideas are plausible future Iceberg proposals.
+An implementation choice is not a proposal. "Use Rust" and "use Turso" should
+not be proposed to Iceberg. An application dependency is not a proposal.
+"Require QueryGraph" or "require TypeSec" would make Iceberg less portable.
+The proposal candidates are behavior profiles that many catalogs and engines
+might want regardless of their implementation: exact idempotent retry,
+redacted conflict evidence, pointer-history inspection, transactionally emitted
+catalog events, lineage receipt binding, governed credential-vending proof,
+and proof-carrying scan planning. Those ideas are narrow enough to improve
+interoperability without turning LakeCat's whole stack into a standard.
+
+In practice, the difference looks like this. A PySpark writer sees an Iceberg
+REST catalog and commits table metadata through normal optimistic commit rules.
+LakeCat may record the idempotency row, pointer log, audit row, and outbox row,
+but PySpark does not need to understand those rows. A governed agent sees a
+different surface: it asks for access, receives a TypeSec-backed decision, and
+gets Sail-planned bounded work rather than raw storage authority. QueryGraph
+sees another surface again: it asks LakeCat for proof-bearing catalog anchors
+that can be imported into Grust-backed graph state and correlated with
+OpenLineage, Croissant, CDIF, OSI, ODRL, and TypeSec evidence. All three
+workflows can refer to the same Iceberg table because the base table semantics
+remain ordinary.
+
 This matrix protects the compatibility story. LakeCat should prove optional
 catalog behavior without making optional behavior mandatory for ordinary
 Iceberg clients. Standard clients get standard Iceberg. Operators get durable
@@ -467,6 +506,40 @@ evidence, then hands data-shaped work to an engine built for columnar metadata,
 pruning, statistics, Arrow, DataFusion, and execution planning. LakeCat becomes
 fast because it stays thin where it should be thin and strict where it must be
 strict.
+
+The division also keeps cache and locality decisions in the right place. A
+catalog can remember the current metadata pointer and the proof that a request
+was allowed, but it should not become the owner of every manifest cache,
+partition-pruning cache, delete-planning cache, metadata-table scan, or
+statistics decoder. Those structures are valuable because the engine can use
+them repeatedly while planning and executing data work. If LakeCat builds a
+parallel cache, it pays the parsing cost twice and risks proving a plan from
+different semantics than the engine will execute. If Sail owns those structures,
+LakeCat can persist small stable facts: which pointer was current, which
+snapshot was planned, which field ids survived policy narrowing, which delete
+posture was observed, which manifests or tasks were selected, and which plan
+hash should be replayed later.
+
+This is especially important for Iceberg v4 compatibility. A v4-compatible
+catalog must not panic or reject ordinary metadata simply because the catalog
+does not yet expose every typed helper locally. But a long-lived system should
+not settle for JSON passthrough as its understanding of the format. Typed v4
+metadata trees, metadata-as-data, row-lineage-aware planning, delete semantics,
+branch and snapshot behavior, manifest evolution, and future planning rules
+need one reusable implementation. Sail is the right home because it can serve
+LakeCat, direct Rust users, QueryGraph workflows, and execution paths with the
+same interpretation. LakeCat can remain the authority for identity, tenancy,
+pointer state, and receipts while Sail becomes the authority for what the table
+metadata means.
+
+A good test for the boundary is simple. If the logic needs to understand field
+ids, partition transforms, manifests, data files, delete files, row lineage,
+metadata tables, scan tasks, or format-version-specific behavior, push it into
+Sail. If the logic needs to understand graph taxonomy, graph stores,
+projection, traversal, or Cypher, push it into Grust. If the logic needs to
+understand capabilities, TypeDID, policy composition, secure-agent semantics,
+or authorization receipts, push it into TypeSec. LakeCat should call those
+systems and persist their evidence, not absorb their domains.
 
 The same boundary makes governance stronger. A TypeSec receipt saying
 "allowed columns were narrowed" is only as strong as the interpretation of
