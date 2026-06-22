@@ -5,6 +5,16 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Add workflow catalog concept guide`.
+  The book now walks PySpark/Spark reads and commits, operator inspection,
+  governed service reads, agent access, and QueryGraph bootstrap through the
+  distinction between standard Iceberg vocabulary, LakeCat implementation
+  proof, TypeSec governance evidence, QueryGraph integration surfaces, and
+  future engine-neutral profile candidates. The added section also reinforces
+  that Sail should own field-id, manifest, delete, scan-task, metadata-as-data,
+  commit-validation, and typed v4 interpretation so LakeCat proof remains tied
+  to engine-shaped facts.
 - Latest implementation/book slice:
   `Bind config tenant-root hash evidence`.
   Service replay admission now applies hash binding to optional

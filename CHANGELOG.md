@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expanded the book with a workflow-facing catalog concept guide. The new
+  section walks PySpark/Spark reads and commits, operator inspection, governed
+  service reads, agent access, and QueryGraph bootstrap through standard
+  Iceberg vocabulary versus LakeCat implementation proof, TypeSec governance
+  evidence, QueryGraph integration surfaces, and future engine-neutral profile
+  candidates, while reinforcing that Sail should own reusable table-format
+  interpretation.
 - Bound catalog config-read tenant-root replay roots to their hash evidence.
   `catalog.config-read` replay now applies the same hash binding to optional
   `server-record.endpoint-url` and `warehouse-record.storage-root` values that
