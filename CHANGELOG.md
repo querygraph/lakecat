@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required table lifecycle replay location evidence to be non-empty when
+  present, with service admission coverage proving blank table and soft-delete
+  locations fail before acknowledgement, graph projection, or OpenLineage
+  projection; updated the book and regenerated the checked-in book artifacts.
 - Added view-list replay evidence for count-aligned, syntactically valid,
   duplicate-free `view-names`, with service admission coverage proving
   malformed view-list name evidence fails before acknowledgement, graph

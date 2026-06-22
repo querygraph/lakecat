@@ -1594,7 +1594,7 @@ fn validate_table_lifecycle_event_evidence(
                 "table lifecycle soft-delete evidence must contain unsigned version",
             ));
         }
-        optional_string_field(
+        optional_non_empty_string_field(
             event,
             &Value::Object(soft_delete.clone()),
             "metadata-location",
@@ -1602,8 +1602,8 @@ fn validate_table_lifecycle_event_evidence(
         )?;
     }
 
-    optional_string_field(event, payload, "metadata-location", "table lifecycle")?;
-    optional_string_field(event, payload, "location", "table lifecycle")?;
+    optional_non_empty_string_field(event, payload, "metadata-location", "table lifecycle")?;
+    optional_non_empty_string_field(event, payload, "location", "table lifecycle")?;
     Ok(())
 }
 
@@ -4321,6 +4321,21 @@ fn optional_string_field(
             event,
             &format!("{label} {field} must be a string when present"),
         )),
+    }
+}
+
+fn optional_non_empty_string_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+    label: &str,
+) -> Result<Option<String>, LakeCatError> {
+    match optional_string_field(event, object, field, label)? {
+        Some(value) if value.trim().is_empty() => Err(outbox_evidence_error(
+            event,
+            &format!("{label} {field} must be non-empty when present"),
+        )),
+        value => Ok(value),
     }
 }
 
@@ -22735,6 +22750,134 @@ mod tests {
             lineage.events.lock().await.is_empty(),
             "mismatched table soft-delete evidence must fail before lineage projection"
         );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_blank_table_lifecycle_location_evidence() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let checked_at = chrono::Utc::now();
+        let cases = vec![
+            (
+                "evt-blank-table-metadata-location",
+                "table.created",
+                "table lifecycle metadata-location must be non-empty when present",
+                json!({
+                    "audit-event-id": "audit-blank-table-metadata-location",
+                    "event-type": "table.created",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": &principal,
+                            "action": "table-create",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": checked_at,
+                        },
+                        "metadata-location": " ",
+                    }
+                }),
+            ),
+            (
+                "evt-blank-table-location",
+                "table.created",
+                "table lifecycle location must be non-empty when present",
+                json!({
+                    "audit-event-id": "audit-blank-table-location",
+                    "event-type": "table.created",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": &principal,
+                            "action": "table-create",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": checked_at,
+                        },
+                        "location": "\t",
+                    }
+                }),
+            ),
+            (
+                "evt-blank-soft-delete-metadata-location",
+                "table.deleted",
+                "table lifecycle soft-delete metadata-location must be non-empty when present",
+                json!({
+                    "audit-event-id": "audit-blank-soft-delete-metadata-location",
+                    "event-type": "table.deleted",
+                    "table": &table,
+                    "soft-delete": {
+                        "table": &table,
+                        "metadata-location": "\n",
+                        "version": 1,
+                        "principal": &principal,
+                        "authorization-receipt": null,
+                        "deleted-at": checked_at,
+                    },
+                    "authorization-receipt": {
+                        "principal": &principal,
+                        "action": "table-drop",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": checked_at,
+                    },
+                }),
+            ),
+        ];
+
+        for (event_id, event_type, expected_message, payload) in cases {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("blank table lifecycle location evidence should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(&format!(
+                "outbox event {event_type} (lakecat.lineage-and-graph) has invalid"
+            )));
+            assert!(message.contains(expected_message));
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "blank table lifecycle location evidence must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "blank table lifecycle location evidence must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "blank table lifecycle location evidence must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]

@@ -3697,6 +3697,12 @@ Table lifecycle replay applies the same identity discipline before delivery:
 `table.created`, `table.loaded`, `table.deleted`, and `table.restored` must
 carry a decodable table identity, optional payload scope hints must match it,
 and soft-delete evidence must point at the same table with an unsigned version.
+When those lifecycle events carry table `metadata-location`, table `location`,
+or soft-delete `metadata-location` evidence, the values must be non-empty before
+the event is acknowledged or projected. The Iceberg table operation remains the
+standard catalog action; the stricter non-empty replay evidence is LakeCat's
+control-plane proof that QueryGraph and OpenLineage did not accept an empty
+pointer or storage-location claim from a corrupted outbox record.
 Project, server, and warehouse upsert replay must carry valid
 tenant-root evidence too: project ids, server scopes, endpoint URLs, storage
 roots, identifiers, properties, and pre-redacted hash anchors are checked

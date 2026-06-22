@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Reject blank table lifecycle locations`.
+  Service replay admission now rejects blank table lifecycle `metadata-location`
+  and `location` evidence, plus blank `soft-delete.metadata-location` evidence,
+  before acknowledgement, graph projection, or OpenLineage projection. This
+  keeps standard Iceberg-compatible table lifecycle events from becoming
+  QueryGraph/OpenLineage material with empty pointer or storage-location proof.
+- Local verification for this table lifecycle location slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain_rejects_blank_table_lifecycle_location_evidence -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib table_lifecycle -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib soft_delete -- --test-threads=1`;
+  `docs/book/build.sh`.
+- Latest completed implementation slice:
   `Bind view-list replay names`.
   Standard catalog and management `view.listed` audit/outbox evidence now
   carries count-aligned `view-names`, and service replay admission rejects
