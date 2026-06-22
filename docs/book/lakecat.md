@@ -5320,8 +5320,10 @@ tenant-root evidence too: project ids, server scopes, endpoint URLs, storage
 roots, identifiers, properties, and pre-redacted hash anchors are checked
 before delivery. Policy-binding, project, server, storage-profile, and
 warehouse upsert replay must also carry a valid authorization receipt
-principal before delivery, so compact QueryGraph proof can attribute
-management mutations to the actor accepted by LakeCat. It also requires
+principal, an event-matching catalog action, an affirmative allow decision, a
+non-empty receipt engine, and an RFC3339 checked-at timestamp before delivery,
+so compact QueryGraph proof can attribute management mutations to the actor and
+TypeSec-style action accepted by LakeCat. It also requires
 planned and fetched read restrictions to match before compact proof generation,
 requires both requested/effective projection and
 requested/effective stats-field evidence, requires effective projection to be a

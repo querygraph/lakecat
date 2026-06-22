@@ -14722,6 +14722,203 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_mismatched_management_upsert_receipt_actions() {
+        let principal = Principal {
+            subject: "agent:operator".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let storage_profile_location_hash = content_hash_json(&json!({
+            "location-prefix": "file:///tmp/lakecat/events"
+        }))
+        .unwrap();
+        let cases = vec![
+            (
+                "policy-binding.upserted",
+                "policy-binding upsert",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "policy": {
+                        "policy-id": "agent-read",
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "table": "events",
+                        "enforced": true,
+                        "odrl-hash": content_hash_json(&json!({
+                            "uid": "policy:agent-read",
+                            "lakecat:read-restriction": {
+                                "allowed-columns": ["event_id"]
+                            }
+                        })).unwrap(),
+                        "odrl": {
+                            "uid": "policy:agent-read",
+                            "lakecat:read-restriction": {
+                                "allowed-columns": ["event_id"]
+                            }
+                        }
+                    }
+                }),
+            ),
+            (
+                "project.upserted",
+                "project upsert",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "project-id": "default",
+                    "project-record": {
+                        "project-id": "default",
+                        "display-name": "Default Project",
+                        "properties": {"owner": "querygraph"}
+                    }
+                }),
+            ),
+            (
+                "server.upserted",
+                "server upsert",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "server-id": "prod",
+                    "server-record": {
+                        "server-id": "prod",
+                        "display-name": "Production",
+                        "endpoint-url": "https://lakecat.example",
+                        "endpoint-url-hash": content_hash_json(&json!({
+                            "endpoint-url": "https://lakecat.example"
+                        })).unwrap(),
+                        "properties": {"region": "global"}
+                    }
+                }),
+            ),
+            (
+                "storage-profile.upserted",
+                "storage-profile upsert",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "storage-profile": {
+                        "profile-id": "file-events",
+                        "warehouse": "local",
+                        "location-prefix-hash": storage_profile_location_hash,
+                        "provider": "file",
+                        "issuance-mode": "local-file-no-secret",
+                        "secret-ref-present": false,
+                    }
+                }),
+            ),
+            (
+                "warehouse.upserted",
+                "warehouse upsert",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "warehouse-record": {
+                        "warehouse": "local",
+                        "project-id": "default",
+                        "storage-root": "file:///tmp/lakecat",
+                        "storage-root-hash": content_hash_json(&json!({
+                            "storage-root": "file:///tmp/lakecat"
+                        })).unwrap(),
+                        "properties": {"region": "local"}
+                    }
+                }),
+            ),
+        ];
+
+        for (event_type, label, payload) in cases {
+            let event_id = format!("evt-mismatched-{}-action-token", event_type);
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-mismatched-{event_type}-action"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("mismatched management-upsert receipt action should fail");
+
+            let message = err.to_string();
+            assert!(
+                message.contains(event_type),
+                "{event_type} error should include event type: {message}"
+            );
+            assert!(
+                message.contains(&format!(
+                    "{label} authorization receipt action does not match outbox event type"
+                )),
+                "{event_type} error should describe mismatched receipt action: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_short_table_commit_hash_evidence() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving policy-binding, project,
+  server, storage-profile, and warehouse upserts reject mismatched
+  authorization receipt actions before acknowledgement, graph projection, or
+  OpenLineage projection. The design and book now spell out that management
+  mutations need event-matching TypeSec-style receipt action evidence, not only
+  a principal.
 - Hardened raw QGLake management-list replay for server, project, warehouse,
   policy-binding, and storage-profile inventory: lineage drains now require
   principal subject/kind evidence, full authorization receipt hashes, and full

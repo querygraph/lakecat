@@ -684,8 +684,10 @@ non-empty profile id, valid nested warehouse matching any top-level warehouse,
 valid provider, and valid issuance mode.
 Management-upsert replay for policy bindings, projects, servers, storage
 profiles, and warehouses must also carry a valid authorization receipt
-principal before projection, so tenant-root and policy mutations cannot become
-actorless catalog graph or OpenLineage facts.
+principal plus an event-matching catalog action, affirmative allowed decision,
+non-empty engine, and RFC3339 `checked_at` timestamp before projection, so
+tenant-root and policy mutations cannot become actorless or action-drifted
+catalog graph or OpenLineage facts.
 Storage-profile upsert replay and compact QGLake handoff proof must also bind
 that principal to a full authorization receipt hash and the
 `storage-profile-manage` action, beside the redacted provider, issuance mode,
