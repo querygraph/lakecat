@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Preserved governed stats-field proof for `table.scan-tasks-fetched` events
+  by carrying the restricted fetch projection as requested, effective, and
+  compact stats-field evidence. The route and outbox tests now assert that
+  stateless task fetch replay remains non-empty and bounded for QGLake lineage
+  drain validation.
+- Made `scripts/qglake-handoff-local.sh` clean the Turso WAL/SHM files and
+  generated fixture table storage before starting a local handoff run, fail
+  fast when its bind address is already occupied, and recursively stop the
+  spawned service process tree on exit. This keeps the release-readiness gate
+  from inheriting stale QGLake metadata pointers or talking to an orphaned
+  service from a previous run.
 - Refreshed the checked-in LakeCat book artifacts after the final local book
   build so the committed EPUB, MOBI, and PDF match the current generated
   output for the expanded catalog-surface chapter.

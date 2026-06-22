@@ -31,25 +31,45 @@ METADATA_LOCATION="$LOCATION/metadata/00000.json"
 
 SERVICE_PID=""
 
+kill_process_tree() {
+  local pid="$1"
+  local child
+  while read -r child; do
+    if [[ -n "$child" ]]; then
+      kill_process_tree "$child"
+    fi
+  done < <(pgrep -P "$pid" 2>/dev/null || true)
+  kill "$pid" >/dev/null 2>&1 || true
+}
+
 cleanup() {
   if [[ -n "$SERVICE_PID" ]] && kill -0 "$SERVICE_PID" >/dev/null 2>&1; then
-    kill "$SERVICE_PID" >/dev/null 2>&1 || true
+    kill_process_tree "$SERVICE_PID"
     wait "$SERVICE_PID" >/dev/null 2>&1 || true
   fi
 }
 
 trap cleanup EXIT
 
+ensure_bind_addr_free() {
+  local port="${CATALOG_BIND##*:}"
+  if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "LakeCat handoff bind address is already in use: $CATALOG_BIND" >&2
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN >&2 || true
+    return 1
+  fi
+}
+
 wait_for_lakecat() {
   local attempts="$READY_TIMEOUT_SECONDS"
   for _ in $(seq 1 "$attempts"); do
-    if curl -fsS "$CATALOG_URL/catalog/v1/config" >/dev/null 2>&1; then
-      return 0
-    fi
     if [[ -n "$SERVICE_PID" ]] && ! kill -0 "$SERVICE_PID" >/dev/null 2>&1; then
       echo "LakeCat service exited before becoming ready. Log:" >&2
       sed -n '1,160p' "$SERVICE_LOG" >&2 || true
       return 1
+    fi
+    if curl -fsS "$CATALOG_URL/catalog/v1/config" >/dev/null 2>&1; then
+      return 0
     fi
     sleep 1
   done
@@ -1343,10 +1363,13 @@ if [[ ! -f "$QUERYGRAPH_RUST_DIR/Cargo.toml" ]]; then
   exit 1
 fi
 
+ensure_bind_addr_free
+
 mkdir -p "$RUN_DIR"
 rm -f "$BUNDLE" "$DRAIN" "$IMPORT_PLAN" "$SUMMARY" \
   "$LAKECAT_REPLAY_OUTPUT" "$LAKECAT_HANDOFF_VERIFY_OUTPUT" "$LAKECAT_HANDOFF_SELF_VERIFY_OUTPUT" "$QUERYGRAPH_VERIFY_OUTPUT" "$QUERYGRAPH_IMPORT_OUTPUT" \
-  "$TURSO_PATH" "$SERVICE_LOG"
+  "$TURSO_PATH" "$TURSO_PATH-wal" "$TURSO_PATH-shm" "$SERVICE_LOG"
+rm -rf "$RUN_DIR/events"
 
 echo "Starting LakeCat at $CATALOG_URL"
 (

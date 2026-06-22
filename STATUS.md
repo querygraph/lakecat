@@ -5,6 +5,34 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/handoff slice:
+  `Stabilize QGLake handoff release gate`.
+  The broad `scripts/check-release-readiness.sh` gate exposed two local
+  handoff blockers: stale QGLake target state could leave a Turso WAL or
+  orphaned service on `127.0.0.1:18181`, and live
+  `table.scan-tasks-fetched` replay could omit non-empty requested
+  stats-field evidence during lineage drain. The handoff script now clears the
+  Turso WAL/SHM files and generated fixture storage before each run, fails
+  fast if its bind address is already occupied, and recursively stops the
+  service process tree on exit. The service now carries the restricted fetch
+  projection as requested, effective, and compact stats-field proof for
+  stateless task fetch replay.
+- Local verification for this implementation/handoff slice is green:
+  `bash -n scripts/qglake-handoff-local.sh` passed;
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service fetch_scan_tasks_route_sends_required_policy_scope_to_sail -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service scan_planning_applies_policy_column_restriction_before_sail --features sail-local -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan_fetch_malformed_stats_field_evidence -- --test-threads=1`
+  passed;
+  `scripts/qglake-handoff-local.sh` passed and verified the QGLake bootstrap,
+  lineage drain, QueryGraph verify/import, LakeCat replay verifier, and handoff
+  summary;
+  `scripts/check-release-readiness.sh` passed, including local dependency
+  contracts, workflow-trigger checks, formatting, default workspace tests,
+  feature-matrix tests, Turso tests, all-features workspace tests, book build,
+  QGLake handoff, and `git diff --check`.
 - Latest book slice:
   `Expand current catalog surface explanation`.
   The LakeCat book now has a dedicated current-surface chapter that classifies

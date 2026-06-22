@@ -8211,7 +8211,7 @@ fn fetch_scan_tasks_extensions(
     let restriction = capability.read_restriction()?;
     let required_projection = restriction.effective_projection(&[])?;
     let required_filters = restriction.mandatory_filters();
-    let stats_fields = restriction.effective_stats_fields(&[]);
+    let stats_fields = required_projection.clone();
     Ok(json!({
         "read-restriction": restriction,
         "required-projection": required_projection.clone(),
@@ -41248,6 +41248,18 @@ mod tests {
         );
         assert_eq!(
             body["residual-filter"]["lakecat:fetch-scan-tasks"]["read-restriction"]["allowed-columns"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:fetch-scan-tasks"]["requested-stats-fields"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:fetch-scan-tasks"]["effective-stats-fields"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            body["residual-filter"]["lakecat:fetch-scan-tasks"]["stats-fields"],
             serde_json::json!(["event_id"])
         );
     }
