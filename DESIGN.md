@@ -655,10 +655,11 @@ archived QueryGraph handoff summaries can represent an empty history without
 fabricating commits and cannot inflate pointer-log evidence by repeating a
 valid commit hash.
 Raw lineage-drain replay summaries and compact handoff summaries must both keep
-replay, OpenLineage, view receipt, and view receipt-chain hash arrays
-duplicate-free as well as SHA-256-shaped, so source replay and archived proof
-cannot inflate bootstrap, scan, management, commit-history, view,
-storage-profile, or credential evidence by repeating a valid digest. Service
+replay, OpenLineage, commit-history commit, view receipt, and view
+receipt-chain hash arrays duplicate-free as well as full SHA-256-shaped, so
+source replay and archived proof cannot inflate bootstrap, scan, management,
+commit-history, view, storage-profile, or credential evidence by repeating a
+valid digest. Service
 drain should reject projection receipts whose replay/OpenLineage hash arrays
 are count-drifted, malformed, or duplicate before returning a raw
 lineage-drain summary or acknowledging delivery.

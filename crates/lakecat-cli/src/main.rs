@@ -9171,7 +9171,7 @@ fn verify_qglake_table_commit_history_replay(
     };
     if commit_count > 0
         && (commit_history.table_commit_sequence_numbers.is_empty()
-            || !qglake_has_sha256_hashes(&commit_history.table_commit_hashes))
+            || !qglake_has_full_sha256_hashes(&commit_history.table_commit_hashes))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain table commit history replay is missing compact commit summary or SHA-256 commit hash evidence"
@@ -19330,7 +19330,10 @@ mod tests {
 
         assert_eq!(
             line,
-            "table commit history commits=1 sequences=1 hashes=sha256:table-commit graph_events=1"
+            format!(
+                "table commit history commits=1 sequences=1 hashes={} graph_events=1",
+                qglake_fixture_hash("table-commit")
+            )
         );
     }
 
@@ -23545,8 +23548,7 @@ mod tests {
         ));
 
         let mut commit_history_with_malformed_hash = qglake_table_commit_history_lineage_summary();
-        commit_history_with_malformed_hash.table_commit_hashes =
-            vec!["not-a-sha256-hash".to_string()];
+        commit_history_with_malformed_hash.table_commit_hashes = vec!["sha256:short".to_string()];
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 13,
@@ -23600,7 +23602,7 @@ mod tests {
             Some("did:example:agent"),
             1,
         )
-        .expect_err("QGLake lineage drain should reject malformed table commit hashes");
+        .expect_err("QGLake lineage drain should reject short table commit hashes");
         assert!(err.to_string().contains(
             "qglake lineage drain table commit history replay is missing compact commit summary or SHA-256 commit hash evidence"
         ));
@@ -23670,8 +23672,8 @@ mod tests {
         commit_history_with_duplicate_sequence.table_commit_count = Some(2);
         commit_history_with_duplicate_sequence.table_commit_sequence_numbers = vec![1, 1];
         commit_history_with_duplicate_sequence.table_commit_hashes = vec![
-            "sha256:table-commit-one".to_string(),
-            "sha256:table-commit-two".to_string(),
+            qglake_fixture_hash("table-commit-one"),
+            qglake_fixture_hash("table-commit-two"),
         ];
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
@@ -25448,7 +25450,7 @@ mod tests {
             warehouse_names: Vec::new(),
             table_commit_count: Some(1),
             table_commit_sequence_numbers: vec![1],
-            table_commit_hashes: vec!["sha256:table-commit".to_string()],
+            table_commit_hashes: vec![qglake_fixture_hash("table-commit")],
             scan_task_count: None,
             file_scan_task_count: None,
             delete_file_count: None,

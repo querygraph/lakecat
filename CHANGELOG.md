@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened raw QGLake lineage-drain commit-history verification so
+  non-empty `table.commits-listed` commit hashes must be full SHA-256 digests,
+  matching the compact handoff verifier and route response proof while keeping
+  explicit zero-count histories valid with empty arrays.
 - Aligned QGLake compact and raw lineage-drain verification with the service's
   empty commit-history proof. `tableCommitHistoryProof` and
   `table.commits-listed` replay now accept explicit zero-count histories with

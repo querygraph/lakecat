@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Require full raw commit-history hashes`.
+  Raw QGLake lineage-drain verification now requires non-empty
+  `table.commits-listed` commit hashes to be full SHA-256 digests, matching the
+  compact handoff verifier, route response verifier, and book/design claim.
+  Zero-count histories remain valid only with empty sequence/hash arrays.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover and contents render;
+  the versioned EPUB symlink resolves to `lakecat.epub`;
+  `scripts/check-release-readiness.sh --quick` passed.
+- Latest implementation/book slice:
   `Accept empty QGLake commit-history proof`.
   The QGLake compact handoff verifier and raw lineage-drain verifier now match
   the service's empty commit-history contract: explicit `commitCount: 0` proof
