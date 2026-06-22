@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving
+  `credentials.vend-attempted` rejects a mismatched authorization receipt
+  action before acknowledgement, graph projection, or OpenLineage projection.
+  The design and book now state that credential-vend replay must prove the
+  event-matching `credentials-vend` action, not a read, commit, or other valid
+  catalog action.
 - Expanded the LakeCat book with a front-loaded release vocabulary chapter
   that thoroughly classifies the Rust service spine, Turso store, Iceberg REST
   paths, commit CAS/idempotency/pointer-log/audit/outbox/replay hardening,

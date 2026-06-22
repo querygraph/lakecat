@@ -5548,11 +5548,12 @@ must carry a
 matching credential count, full duplicate-free credential-response prefix
 hashes, a full redacted storage-profile location hash, a valid authorization
 receipt principal, a full authorization receipt hash, the `credentials-vend`
-authorization action, internally consistent secret-reference
-presence/provider/hash fields, a top-level storage-profile id that agrees with
-nested storage-profile evidence, a nested storage-profile warehouse that agrees
-with the event table warehouse, required top-level secret-reference presence
-evidence that agrees with nested storage-profile evidence, and
+authorization action that matches the outbox event type, internally consistent
+secret-reference presence/provider/hash fields, a top-level storage-profile id
+that agrees with nested storage-profile evidence, a nested storage-profile
+warehouse that agrees with the event table warehouse, required top-level
+secret-reference presence evidence that agrees with nested storage-profile
+evidence, and
 credential-response metadata that agrees with the selected storage profile and
 authorization receipt before delivery.
 Storage-profile upsert replay must likewise reject raw secret references and contradictory

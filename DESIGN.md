@@ -721,9 +721,11 @@ Blocked raw-credential replay must carry zero credentials plus a non-empty
 block reason matching the raw-credential exception receipt context before any
 graph or OpenLineage sink observes it.
 Credential-vend replay must also carry a valid authorization receipt
-principal, full authorization receipt hash, and `credentials-vend` action
-before projection, including blocked zero-credential attempts where no returned
-credential response entry exists to repeat actor evidence.
+principal, full authorization receipt hash, and the event-matching
+`credentials-vend` action before projection; valid-but-wrong actions such as
+read or commit actions must fail before acknowledgement, graph projection, or
+OpenLineage projection. This applies even to blocked zero-credential attempts
+where no returned credential response entry exists to repeat actor evidence.
 Management-list replay must carry count-aligned, syntactically valid,
 duplicate-free ID arrays plus a valid authorization receipt principal,
 event-matching catalog action, affirmative allowed decision, non-empty engine,

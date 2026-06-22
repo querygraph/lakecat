@@ -5,6 +5,21 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation/documentation slice:
+  `Cover credential-vend receipt action drift`.
+  Service outbox replay now has regression coverage proving
+  `credentials.vend-attempted` rejects a mismatched authorization receipt
+  action before acknowledgement, graph projection, or OpenLineage projection.
+  The design and book now describe credential-vend replay as a
+  `credentials-vend` proof, not a read, commit, or other valid catalog action.
+- Local verification for this credential-vend receipt action slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_mismatched_credential_vend_receipt_action -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib credential -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Expand release vocabulary and Sail boundary book chapter`.
   The book now front-loads a detailed release vocabulary for the catalog
