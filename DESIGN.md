@@ -525,6 +525,9 @@ supported operation, and preserve the expected version transition. Service
 replay must reject duplicate receipt, drop-receipt, and chain hash arrays
 before projection so later compact QGLake proof cannot inherit inflated
 view-history evidence.
+View receipt-list replay must also carry valid warehouse, namespace, view, and
+authorization receipt principal evidence before projection, so receipt hashes
+cannot become actorless or scope-free view-history facts.
 Lineage-drain replay summaries must also stay bound to the drain-level event
 type manifest: a compact QGLake handoff cannot include a replay summary for an
 event type that the drain did not declare as delivered, and repeated event

@@ -3566,6 +3566,28 @@ fn validate_view_receipt_list_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_required_warehouse_field(event, payload, "view receipt-list")?;
+    let Some(namespace) = payload.get("namespace") else {
+        return Err(outbox_evidence_error(
+            event,
+            "view receipt-list evidence must contain namespace",
+        ));
+    };
+    validate_namespace_value(event, namespace, "view receipt-list")?;
+    let Some(view) = payload
+        .get("view")
+        .and_then(Value::as_str)
+        .filter(|view| !view.trim().is_empty())
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            "view receipt-list evidence must contain view",
+        ));
+    };
+    TableName::new(view)
+        .map_err(|_| outbox_evidence_error(event, "view receipt-list evidence has invalid view"))?;
+    validate_authorization_receipt_principal(event, payload, "view receipt-list")?;
+
     let receipt_hashes = validate_required_full_hash_array_field(event, payload, "receipt-hashes")?;
     let drop_receipt_hashes =
         validate_required_full_hash_array_field(event, payload, "drop-receipt-hashes")?;
@@ -25658,7 +25680,157 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_malformed_view_receipt_list_scope_evidence() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let receipt_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "view-version": 1,
+            "operation": "upsert"
+        }))
+        .unwrap();
+        let cases = vec![
+            (
+                "evt-view-receipts-missing-namespace",
+                "view receipt-list evidence must contain namespace",
+                json!({
+                    "audit-event-id": "audit-view-receipts-missing-namespace",
+                    "event-type": "view.version-receipts-listed",
+                    "payload": {
+                        "warehouse": "local",
+                        "view": "events_view",
+                        "receipt-count": 1,
+                        "receipt-hashes": [&receipt_hash],
+                        "drop-receipt-hashes": [],
+                        "authorization-receipt": {
+                            "principal": &principal,
+                            "action": "view-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                    },
+                }),
+            ),
+            (
+                "evt-view-receipts-invalid-view",
+                "view receipt-list evidence must contain view",
+                json!({
+                    "audit-event-id": "audit-view-receipts-invalid-view",
+                    "event-type": "view.version-receipts-listed",
+                    "payload": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "view": "",
+                        "receipt-count": 1,
+                        "receipt-hashes": [&receipt_hash],
+                        "drop-receipt-hashes": [],
+                        "authorization-receipt": {
+                            "principal": &principal,
+                            "action": "view-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                    },
+                }),
+            ),
+            (
+                "evt-view-receipts-missing-principal",
+                "view receipt-list evidence must contain authorization receipt principal",
+                json!({
+                    "audit-event-id": "audit-view-receipts-missing-principal",
+                    "event-type": "view.version-receipts-listed",
+                    "payload": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "view": "events_view",
+                        "receipt-count": 1,
+                        "receipt-hashes": [&receipt_hash],
+                        "drop-receipt-hashes": [],
+                        "authorization-receipt": {
+                            "action": "view-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                    },
+                }),
+            ),
+            (
+                "evt-view-receipts-malformed-principal",
+                "view receipt-list authorization receipt principal",
+                json!({
+                    "audit-event-id": "audit-view-receipts-malformed-principal",
+                    "event-type": "view.version-receipts-listed",
+                    "payload": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "view": "events_view",
+                        "receipt-count": 1,
+                        "receipt-hashes": [&receipt_hash],
+                        "drop-receipt-hashes": [],
+                        "authorization-receipt": {
+                            "principal": {
+                                "subject": "agent:operator",
+                                "kind": "unknown"
+                            },
+                            "action": "view-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                    },
+                }),
+            ),
+        ];
+
+        for (event_id, expected_message, payload) in cases {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "view.version-receipts-listed".to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed view receipt-list scope evidence should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("view.version-receipts-listed"));
+            assert!(
+                message.contains(expected_message),
+                "{event_id} should describe malformed receipt-list scope: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(store.delivered.lock().await.is_empty());
+            assert!(graph.events.lock().await.is_empty());
+            assert!(lineage.events.lock().await.is_empty());
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_view_receipt_list_evidence() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
         let receipt_hash = content_hash_json(&json!({
             "stable-id": "lakecat:view:local:default:events_view",
             "view-version": 1,
@@ -25686,6 +25858,14 @@ mod tests {
                         "receipt-count": 1,
                         "receipt-hashes": [receipt_hash],
                         "drop-receipt-hashes": [unrelated_drop_receipt_hash],
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "view-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
                     },
                 }),
                 created_at: chrono::Utc::now(),
@@ -25716,6 +25896,7 @@ mod tests {
 
     #[tokio::test]
     async fn outbox_drain_rejects_duplicate_view_receipt_list_hashes() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
         let receipt_hash = content_hash_json(&json!({
             "stable-id": "lakecat:view:local:default:events_view",
             "view-version": 1,
@@ -25737,6 +25918,14 @@ mod tests {
                         "receipt-count": 2,
                         "receipt-hashes": [receipt_hash, receipt_hash],
                         "drop-receipt-hashes": [],
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "view-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
                     },
                 }),
                 created_at: chrono::Utc::now(),

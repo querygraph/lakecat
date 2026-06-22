@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require view receipt-list scope evidence`.
+  Service replay admission now rejects `view.version-receipts-listed` evidence
+  whose warehouse, namespace, view, or authorization receipt principal proof is
+  missing or malformed before acknowledgement, graph projection, or OpenLineage
+  projection. This binds view receipt-list replay to the same standard catalog
+  scope and actor envelope as adjacent view list/lifecycle events.
+- Local verification for this view receipt-list scope slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib view_receipt_list -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib view_receipt -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`.
+- Latest completed implementation slice:
   `Require table lifecycle version evidence`.
   Service replay admission now rejects `table.created`, `table.loaded`, and
   `table.restored` evidence whose table `version` is missing or not an unsigned

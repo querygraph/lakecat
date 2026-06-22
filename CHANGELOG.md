@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required `view.version-receipts-listed` replay evidence to carry valid
+  warehouse, namespace, view, and authorization receipt principal proof before
+  acknowledgement, graph projection, or OpenLineage projection.
 - Required `table.created`, `table.loaded`, and `table.restored` replay
   evidence to carry an unsigned table `version` before acknowledgement, graph
   projection, or OpenLineage projection, with malformed-version coverage for
