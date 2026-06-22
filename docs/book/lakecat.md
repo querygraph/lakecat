@@ -4583,6 +4583,12 @@ ordinary Iceberg REST surface. Replay validation requires the config endpoint,
 namespace list/create endpoints, table create endpoint, table load endpoint,
 and table commit endpoint for both the default and warehouse-prefixed catalog
 routes before the config read can become compatibility evidence.
+Replay validation also requires LakeCat's governed access endpoints: plan,
+fetch-scan-tasks, and credentials. Those routes are not a new table format and
+not a QueryGraph dependency for ordinary reads. They are additive catalog APIs
+that let governed clients ask LakeCat, TypeSec, and Sail for proof-carrying
+plans, task fetches, or audited credential decisions over the same standard
+Iceberg tables.
 
 The bridge is intentionally conservative, but it should not reject Iceberg
 metadata that Sail has already decoded. Manifest expansion now emits null

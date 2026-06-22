@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened config-read governed-access endpoint replay. Service replay now
+  requires advertised plan, fetch-scan-tasks, and credential endpoints for both
+  default and warehouse-prefixed catalog routes before config-read evidence can
+  reach graph/OpenLineage projection or QGLake handoff, keeping governed Sail
+  planning and audited credential decisions visible in compatibility proof.
 - Advertised standard table-create endpoints in catalog config discovery and
   replay evidence. `CatalogConfigResponse` now includes default and
   warehouse-prefixed `POST .../tables` routes, config replay requires those

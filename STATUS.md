@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Bind governed config endpoint evidence`.
+  Catalog config-read replay now requires the advertised plan,
+  fetch-scan-tasks, and credential endpoints for both default and
+  warehouse-prefixed catalog routes before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake handoff. The design and book classify these
+  as additive governed LakeCat access APIs over standard Iceberg tables, not
+  custom Iceberg metadata or QueryGraph-only requirements.
+- Local verification for this governed config endpoint slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib catalog_config -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Advertise table-create config endpoints`.
   Catalog config discovery now advertises the default and warehouse-prefixed
   `POST .../tables` table-create routes that already exist in the service.

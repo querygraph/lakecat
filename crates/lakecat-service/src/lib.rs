@@ -3092,12 +3092,18 @@ fn validate_catalog_config_endpoints(
         "POST /catalog/v1/namespaces/{namespace}/tables",
         "GET /catalog/v1/namespaces/{namespace}/tables/{table}",
         "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit",
+        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
+        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
+        "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
         "GET /catalog/v1/{warehouse}/config",
         "GET /catalog/v1/{warehouse}/namespaces",
         "POST /catalog/v1/{warehouse}/namespaces",
         "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables",
         "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}",
         "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit",
+        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
+        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
+        "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials",
     ];
     for required_endpoint in required {
         if !endpoint_set.contains(required_endpoint) {
@@ -11403,6 +11409,18 @@ mod tests {
         assert_config_endpoints_include(
             &payload["endpoints"],
             "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit",
+        );
+        assert_config_endpoints_include(
+            &payload["endpoints"],
+            "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
+        );
+        assert_config_endpoints_include(
+            &payload["endpoints"],
+            "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
+        );
+        assert_config_endpoints_include(
+            &payload["endpoints"],
+            "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
         );
     }
 
@@ -21364,6 +21382,72 @@ mod tests {
         );
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-config-missing-standard-endpoint"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_catalog_config_missing_governed_access_endpoints() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let endpoints = CatalogConfigResponse::default()
+            .endpoints
+            .into_iter()
+            .filter(|endpoint| {
+                endpoint != "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan"
+            })
+            .collect::<Vec<_>>();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-config-missing-governed-endpoint".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-config-missing-governed-endpoint",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": catalog_config_defaults_json(),
+                        "endpoints": endpoints
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("catalog config replay must preserve governed access endpoints");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(
+            message.contains(
+                "catalog config-read endpoints must include POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-config-missing-governed-endpoint"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

@@ -822,7 +822,10 @@ Catalog config-read replay must also bind the advertised endpoint list to the
 standard Iceberg REST surface: config, namespace list/create, table create,
 table load, and table commit endpoints must be present for both default and
 warehouse-prefixed routes before graph or OpenLineage projection can treat the
-config read as compatibility evidence.
+config read as compatibility evidence. The same replay evidence must preserve
+LakeCat's governed access surfaces for both route forms: plan, fetch-scan-tasks,
+and credential endpoints are additive proof-carrying catalog APIs over standard
+tables, not required custom Iceberg metadata or QueryGraph-only routes.
 The local dependency contract is the guardrail while cloud CI is manual-only:
 it must reject automatic triggers across every GitHub workflow file, not just
 the primary CI workflow, including compact, block-list, inline-map, and quoted
