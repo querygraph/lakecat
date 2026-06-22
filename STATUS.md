@@ -5,6 +5,25 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Expand catalog concepts through workflows`.
+  The release concept deep dive now traces the Rust service/catalog spine,
+  Turso-backed local store, Iceberg REST-compatible paths, commit CAS,
+  idempotency, pointer logs, audit/outbox, replay validation, governed
+  scan/credential receipts, QueryGraph/QGLake proof surfaces, and Sail-first
+  engine placement through PySpark, Rust/Sail, governed-agent, and
+  QueryGraph/QGLake workflows. The section explicitly separates standard
+  Iceberg parlance from LakeCat reliability proof, TypeSec governance, Grust
+  graph mechanics, and QueryGraph application workflow evidence, and calls out
+  which ideas are implementation details, additive extensions, or possible
+  future Iceberg-adjacent optional profiles.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/book slice:
   `Close QGLake view receipt-chain proof objects`.
   Compact `viewReceiptChainProof`, captured LakeCat replay `views`, and nested

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expanded the book's release concept deep dive with a workflow-oriented
+  explanation of the same catalog concepts across PySpark, Rust/Sail,
+  governed-agent, and QueryGraph/QGLake paths. The new section explicitly
+  separates standard Iceberg catalog/table parlance from LakeCat reliability
+  proof, TypeSec governance receipts, Sail-owned engine interpretation, Grust
+  graph mechanics, and QueryGraph application workflow evidence.
 - Closed compact and captured QGLake view receipt-chain proof objects over
   their verified schema. `viewReceiptChainProof`, captured LakeCat replay
   `views`, and nested accepted-view, tombstone, receipt-chain group,
