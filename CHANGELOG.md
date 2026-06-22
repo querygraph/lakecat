@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving `table.scan-planned` and
+  `table.scan-tasks-fetched` reject mismatched authorization receipt actions
+  before acknowledgement, graph projection, or OpenLineage projection. The
+  design and book now state that governed scan replay must prove the
+  event-matching `table-plan-scan` action, not a table-load, commit, or other
+  valid catalog action.
 - Added service replay regression coverage proving
   `credentials.vend-attempted` rejects a mismatched authorization receipt
   action before acknowledgement, graph projection, or OpenLineage projection.

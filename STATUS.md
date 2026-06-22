@@ -6,6 +6,22 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Cover governed scan receipt action drift`.
+  Service outbox replay now has table-driven regression coverage proving
+  `table.scan-planned` and `table.scan-tasks-fetched` reject mismatched
+  authorization receipt actions before acknowledgement, graph projection, or
+  OpenLineage projection. The design and book now describe governed scan
+  replay as a `table-plan-scan` proof, not a table-load, commit, or other
+  valid catalog action.
+- Local verification for this governed scan receipt action slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_mismatched_scan_receipt_actions -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib scan -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Cover credential-vend receipt action drift`.
   Service outbox replay now has regression coverage proving
   `credentials.vend-attempted` rejects a mismatched authorization receipt

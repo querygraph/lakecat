@@ -5434,14 +5434,16 @@ it becomes delivered replay material. Scan replay also requires the top-level
 read restriction to match the authorization receipt context exactly before
 delivery, so policy narrowing cannot be asserted in one replay field and absent
 from the durable receipt. Scan replay also requires the authorization receipt
-itself to be complete before delivery: a valid principal, the `table-plan-scan`
-catalog action, an affirmative allowed decision, a non-empty receipt engine, and
-an RFC3339 `checked_at` timestamp. This is LakeCat replay admission, not Sail
-planning logic; Sail remains responsible for producing reusable table-format and
-scan-planning behavior, while LakeCat refuses to turn actorless or actionless
-scan evidence into graph or lineage proof. QGLake preserves the same actor and
-action evidence in compact handoff proof: planned and fetched scan proof carry
-principal subject/kind, full authorization receipt hashes, and
+itself to be complete before delivery: a valid principal, the event-matching
+`table-plan-scan` catalog action, an affirmative allowed decision, a non-empty
+receipt engine, and an RFC3339 `checked_at` timestamp. Valid-but-wrong actions
+such as table load or commit actions are rejected before governed scan proof
+reaches graph or lineage sinks. This is LakeCat replay admission, not Sail
+planning logic; Sail remains responsible for producing reusable table-format
+and scan-planning behavior, while LakeCat refuses to turn actorless or
+action-drifted scan evidence into graph or lineage proof. QGLake preserves the
+same actor and action evidence in compact handoff proof: planned and fetched
+scan proof carry principal subject/kind, full authorization receipt hashes, and
 `table-plan-scan` actions, and captured LakeCat replay must match those fields.
 That keeps archived handoffs from retaining only the restriction and task counts
 while dropping who was authorized to perform the governed scan. Scan replay now
