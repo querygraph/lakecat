@@ -9832,6 +9832,13 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
         )
         .into());
     }
+    if matches!(explicit_kind, Some(PrincipalKind::Anonymous)) {
+        return Err(LakeCatError::InvalidArgument(
+            "x-lakecat-principal-kind cannot be anonymous; omit identity headers for anonymous access"
+                .to_string(),
+        )
+        .into());
+    }
     let agent_did = header("x-lakecat-agent-did")?;
     let explicit_typedid = header("x-lakecat-typedid")?;
     let typedid = explicit_typedid.or(agent_did);
@@ -11537,6 +11544,62 @@ mod tests {
         assert!(!message.contains("did:example:agent"));
         assert!(!message.contains("service-token"));
         assert!(!message.contains("bearer:"));
+        assert!(governance.principals.lock().await.is_empty());
+        assert!(governance.contexts.lock().await.is_empty());
+    }
+
+    #[test]
+    fn request_identity_rejects_explicit_anonymous_principal_kind() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-lakecat-principal", "alice@example.com".parse().unwrap());
+        headers.insert("x-lakecat-principal-kind", "anonymous".parse().unwrap());
+
+        let err = request_identity(&headers).expect_err("explicit anonymous kind should fail");
+        let LakeCatHttpError(inner) = err;
+        let message = inner.to_string();
+
+        assert!(message.contains(
+            "x-lakecat-principal-kind cannot be anonymous; omit identity headers for anonymous access"
+        ));
+        assert!(!message.contains("alice@example.com"));
+    }
+
+    #[tokio::test]
+    async fn config_endpoint_rejects_explicit_anonymous_principal_kind_before_governance() {
+        let governance = Arc::new(RecordingGovernance::default());
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_integrations(
+            default_sail_engine(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        ));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/config")
+                    .header("x-lakecat-principal", "alice@example.com")
+                    .header("x-lakecat-principal-kind", "anonymous")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let message = String::from_utf8(body.to_vec()).unwrap();
+        assert!(message.contains(
+            "x-lakecat-principal-kind cannot be anonymous; omit identity headers for anonymous access"
+        ));
+        assert!(!message.contains("alice@example.com"));
         assert!(governance.principals.lock().await.is_empty());
         assert!(governance.contexts.lock().await.is_empty());
     }

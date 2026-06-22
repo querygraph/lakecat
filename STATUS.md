@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Reject explicit anonymous principal kind`.
+  Request identity parsing now rejects `x-lakecat-principal-kind: anonymous`.
+  Anonymous access is represented only by omitting identity headers, so explicit
+  subjects cannot enter TypeDID verification, governance, Sail calls, audit, or
+  outbox evidence with anonymous principal semantics. The regressions prove the
+  supplied subject is not echoed and governance is not called.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib anonymous_principal_kind -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Reject mixed Authorization and LakeCat identity headers`.
   Request identity parsing now rejects `Authorization` when it is combined with
   `x-lakecat-principal`, `x-lakecat-agent-did`, or `x-lakecat-typedid`.

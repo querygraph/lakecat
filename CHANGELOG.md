@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened request identity admission so explicit `x-lakecat-principal-kind:
+  anonymous` is rejected. Anonymous access is now represented only by omitting
+  identity headers, preventing explicit subjects from entering the TypeDID,
+  governance, Sail, audit, or outbox paths with anonymous principal semantics.
 - Hardened request identity admission so `Authorization` cannot be combined
   with `x-lakecat-principal`, `x-lakecat-agent-did`, or
   `x-lakecat-typedid`. Mixed primary identity sources now fail before bearer
