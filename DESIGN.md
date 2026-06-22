@@ -241,7 +241,9 @@ The current working plan is:
    follow the same hash-only rule for storage roots, secret references,
    public-config keys, and production resolver parse failures. Guarded view
    mutations must reject invalid expected-version values before changing active
-   view state or appending view-version receipts.
+   view state or appending view-version receipts, and memory/Turso mutation
+   paths must validate the existing receipt chain before appending a new view
+   receipt so corrupted durable history cannot be extended.
 6. Keep reproducibility ahead of integration claims. Run local gates before
    commit, keep cloud CI manual/disabled until it is known green, use published
    Grust/TypeSec crates when available, and keep any Sail path/patch bridge

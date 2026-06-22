@@ -4745,6 +4745,11 @@ The lower store layer now applies the same structural guard when view receipts
 are read: both memory and Turso-backed receipt reads reject forged
 `previous-receipt-hash` links before service replay, OpenLineage projection, or
 QGLake handoff can consume the chain.
+The mutation path uses that same guard before extending history. A guarded or
+unguarded view upsert/drop first validates the existing durable receipt chain,
+then computes the latest receipt hash, and only then appends the next receipt.
+If a stored receipt has a forged `previous-receipt-hash`, LakeCat rejects the
+new mutation before changing the active view record or writing another receipt.
 
 The verifier is fail-closed on version progression too. The first receipt must
 be a version-1 upsert with no previous version or receipt hash; zero-version

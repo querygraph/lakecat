@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened memory and Turso view mutations so they validate the existing
+  durable view-version receipt chain before appending a new upsert or drop
+  receipt. A forged `previous-receipt-hash` in existing durable receipt history
+  now rejects later mutations before changing active view state or extending the
+  receipt chain.
 - Expanded the LakeCat book with a front-of-book catalog concept guide that
   explicitly classifies the Rust service spine, Turso store, Iceberg REST
   namespace/table paths, commit CAS hardening, TypeSec-governed scans and

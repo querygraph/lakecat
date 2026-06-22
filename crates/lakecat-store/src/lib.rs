@@ -926,7 +926,14 @@ fn view_receipt_hash(receipt: &ViewVersionReceipt) -> LakeCatResult<String> {
 fn latest_view_receipt_evidence<'a>(
     receipts: impl Iterator<Item = &'a ViewVersionReceipt>,
 ) -> LakeCatResult<Option<(u64, String)>> {
+    let receipts = receipts.collect::<Vec<_>>();
+    let receipt_chain = receipts
+        .iter()
+        .map(|receipt| (*receipt).clone())
+        .collect::<Vec<_>>();
+    validate_view_receipt_chains(&receipt_chain)?;
     receipts
+        .into_iter()
         .max_by(|left, right| {
             left.view_version
                 .cmp(&right.view_version)
@@ -3783,6 +3790,80 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_rejects_corrupt_view_receipt_chain_before_mutation() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let view_name = TableName::new("active_customers").unwrap();
+        let view = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            view_name.clone(),
+            "select * from customers where active",
+            "sql",
+            Some(1),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_view(view).await.unwrap();
+        let updated = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            view_name.clone(),
+            "select id from customers where active",
+            "sql",
+            Some(2),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store
+            .upsert_view_if_version(updated, Some(1))
+            .await
+            .unwrap();
+
+        let forged_hash = content_hash_json(&serde_json::json!({"forged": "previous"})).unwrap();
+        store
+            .state
+            .write()
+            .await
+            .view_version_receipts
+            .get_mut(1)
+            .unwrap()
+            .previous_receipt_hash = Some(forged_hash);
+
+        let attempted = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            view_name.clone(),
+            "select id, email from customers where active",
+            "sql",
+            Some(3),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        let err = store
+            .upsert_view_if_version(attempted, Some(2))
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("view receipt chain previous links must match")
+        ));
+
+        let state = store.state.read().await;
+        let active = state
+            .views
+            .get(&view_key_parts(&warehouse, &namespace, &view_name))
+            .unwrap();
+        assert_eq!(active.view_version, 2);
+        assert_eq!(state.view_version_receipts.len(), 2);
+    }
+
+    #[tokio::test]
     async fn memory_store_rejects_corrupt_soft_delete_records_on_restore() {
         let store = MemoryCatalogStore::new();
         let warehouse = WarehouseName::new("local").unwrap();
@@ -6138,27 +6219,20 @@ pub mod turso_store {
         tx: &turso::transaction::Transaction<'_>,
         view_key: &str,
     ) -> LakeCatResult<Option<(u64, String)>> {
-        tx.query(
-            "select receipt_json from view_version_receipts
+        let mut rows = tx
+            .query(
+                "select receipt_json from view_version_receipts
              where view_key = ?1
-             order by view_version desc,
-                      recorded_at desc,
-                      case operation when 'drop' then 1 else 0 end desc,
-                      receipt_id desc
-             limit 1",
-            (view_key,),
-        )
-        .await
-        .map_err(turso_error)?
-        .next()
-        .await
-        .map_err(turso_error)?
-        .map(|row| {
-            let receipt = decode_json::<ViewVersionReceipt>(row_string(&row, 0)?)?;
-            receipt.validate()?;
-            Ok((receipt.view_version, view_receipt_hash(&receipt)?))
-        })
-        .transpose()
+             order by view_version, recorded_at, receipt_id",
+                (view_key,),
+            )
+            .await
+            .map_err(turso_error)?;
+        let mut receipts = Vec::new();
+        while let Some(row) = rows.next().await.map_err(turso_error)? {
+            receipts.push(decode_json::<ViewVersionReceipt>(row_string(&row, 0)?)?);
+        }
+        crate::latest_view_receipt_evidence(receipts.iter())
     }
 
     async fn latest_turso_view_receipt_hash(
@@ -7002,6 +7076,84 @@ pub mod turso_store {
                 LakeCatError::Internal(message)
                     if message.contains("view receipt chain previous links must match")
             ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_corrupt_view_receipt_chain_before_mutation() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let view_name = TableName::new("active_customers").unwrap();
+            let view = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select * from customers where active",
+                "sql",
+                Some(1),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_view(view).await.unwrap();
+            let updated = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select id from customers where active",
+                "sql",
+                Some(2),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store
+                .upsert_view_if_version(updated, Some(1))
+                .await
+                .unwrap();
+
+            let mut receipts = store
+                .list_view_version_receipts(&warehouse, &namespace, &view_name)
+                .await
+                .unwrap();
+            let receipt_id = view_receipt_hash(&receipts[1]).unwrap();
+            receipts[1].previous_receipt_hash =
+                Some(content_hash_json(&serde_json::json!({"forged": "previous"})).unwrap());
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update view_version_receipts set receipt_json = ?2 where receipt_id = ?1",
+                (receipt_id, encode_json(&receipts[1]).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let attempted = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select id, email from customers where active",
+                "sql",
+                Some(3),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            let err = store
+                .upsert_view_if_version(attempted, Some(2))
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("view receipt chain previous links must match")
+            ));
+
+            let active = store
+                .load_view(&warehouse, &namespace, &view_name)
+                .await
+                .unwrap();
+            assert_eq!(active.view_version, 2);
+            assert_eq!(store.count_rows("view_version_receipts").await.unwrap(), 2);
         }
 
         #[tokio::test]

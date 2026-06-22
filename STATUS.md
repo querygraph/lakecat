@@ -5,6 +5,21 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation/documentation slice:
+  `Validate view receipt chains before mutation`.
+  Memory and Turso view upsert/drop paths now validate the existing durable
+  view-version receipt chain before computing the latest receipt hash and
+  appending a new receipt. Forged `previous-receipt-hash` evidence in existing
+  history rejects later mutations before active view state changes or the
+  receipt chain is extended.
+- Local verification for this view receipt-chain mutation slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_corrupt_view_receipt_chain_before_mutation -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_corrupt_view_receipt_chain_before_mutation -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Expand catalog concept guide in the book`.
   The book now adds a front-of-book guide that distinguishes standard Iceberg
