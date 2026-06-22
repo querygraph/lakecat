@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog concept guidance with an ownership map
+  and standards filter that delineates standard Iceberg behavior, LakeCat
+  implementation, Sail engine responsibilities, TypeSec governance,
+  Grust graph ownership, QueryGraph/QGLake integration, and narrow future
+  Iceberg-adjacent proposal candidates.
 - Required generic audit authorization receipts to carry nonblank action
   evidence before memory or Turso stores persist audit rows or enqueue outbox
   work. The regressions reject payload-hash-valid audit events whose receipts

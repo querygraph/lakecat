@@ -5,6 +5,24 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Expand catalog ownership guidance`.
+  The book now includes an ownership map and standards filter that explains
+  which catalog concepts are standard Iceberg behavior, LakeCat implementation,
+  Sail engine work, TypeSec governance, Grust graph ownership,
+  QueryGraph/QGLake integration, or narrow future Iceberg-adjacent proposal
+  candidates. The new material reinforces why Iceberg table interpretation and
+  proof-carrying planning should move into Sail while LakeCat stays a thin,
+  durable control-plane spine.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover has no standalone page
+  number and the body starts with numbered Contents;
+  the versioned EPUB symlink resolves to `lakecat.epub`;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation slice:
   `Require audit receipt actions`.
   Generic audit recording now requires every payload `authorization-receipt`
