@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened table-commit replay metadata-location evidence. `table.commit`
+  replay now rejects decorated or credential-bearing new and previous metadata
+  locations before acknowledgement, graph projection, OpenLineage projection,
+  QGLake proof, or QueryGraph import can inherit polluted pointer-transition
+  evidence.
 - Expanded the LakeCat book with a detailed catalog-concepts chapter. The new
   material explains the Rust service/catalog spine, Turso-backed local store,
   Iceberg REST namespace/table compatibility, commit CAS, idempotency, pointer

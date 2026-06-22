@@ -2280,6 +2280,13 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
             "table commit evidence must contain non-empty new metadata location",
         ));
     }
+    validate_optional_location_evidence(
+        event,
+        commit
+            .get("new_metadata_location")
+            .or_else(|| commit.get("new-metadata-location")),
+        "table commit new metadata location",
+    )?;
     if commit
         .get("previous_metadata_location")
         .or_else(|| commit.get("previous-metadata-location"))
@@ -2294,6 +2301,13 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
             "table commit evidence previous metadata location must be non-empty when present",
         ));
     }
+    validate_optional_location_evidence(
+        event,
+        commit
+            .get("previous_metadata_location")
+            .or_else(|| commit.get("previous-metadata-location")),
+        "table commit previous metadata location",
+    )?;
     for field in ["request_hash", "response_hash"] {
         validate_required_full_hash_field(event, commit, field)?;
     }
@@ -19848,6 +19862,113 @@ mod tests {
             lineage.events.lock().await.is_empty(),
             "blank previous commit metadata pointer must fail before lineage projection"
         );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_decorated_table_commit_metadata_locations() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let cases = [
+            (
+                "evt-decorated-commit-new-metadata",
+                "file:///tmp/events/metadata/00000.json",
+                "s3://lakecat-demo/events/metadata/00001.json?token=secret",
+                "table commit new metadata location must not contain decorated location material",
+            ),
+            (
+                "evt-credential-commit-new-metadata",
+                "file:///tmp/events/metadata/00000.json",
+                "s3://lakecat-demo/events/metadata/session_token=secret.json",
+                "table commit new metadata location must not contain credential material",
+            ),
+            (
+                "evt-decorated-commit-previous-metadata",
+                "s3://lakecat-demo/events/metadata/00000.json#secret",
+                "file:///tmp/events/metadata/00001.json",
+                "table commit previous metadata location must not contain decorated location material",
+            ),
+            (
+                "evt-credential-commit-previous-metadata",
+                "s3://lakecat-demo/events/metadata/access_key=secret.json",
+                "file:///tmp/events/metadata/00001.json",
+                "table commit previous metadata location must not contain credential material",
+            ),
+        ];
+
+        for (event_id, previous_metadata_location, new_metadata_location, expected) in cases {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.commit".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "table.commit",
+                        "table": table,
+                        "commit": {
+                            "table": table,
+                            "previous_metadata_location": previous_metadata_location,
+                            "new_metadata_location": new_metadata_location,
+                            "sequence_number": 7,
+                            "principal": principal,
+                            "format_version": 3,
+                            "snapshot_id": 42,
+                            "policy_hash": null,
+                            "request_hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+                            "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+                            "idempotency_key_sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+                            "committed_at": chrono::Utc::now(),
+                        },
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-commit",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed table commit metadata location should fail before delivery");
+
+            let message = err.to_string();
+            assert!(message.contains("table.commit"), "{message}");
+            assert!(message.contains(expected), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"), "{message}");
+            assert!(!message.contains(event_id), "{message}");
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "malformed commit metadata location must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "malformed commit metadata location must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "malformed commit metadata location must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]

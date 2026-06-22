@@ -874,10 +874,14 @@ number before acknowledgement or projection, matching the positive,
 strictly-increasing invariant used by commit-history replay.
 It must also carry non-empty new metadata pointer evidence, and any previous
 metadata pointer evidence must be non-empty when present, before
-acknowledgement or projection. The replay evidence must include both a valid
-commit principal and a valid authorization receipt principal, and those
-principals must match before graph or OpenLineage projection, so replay cannot
-drop or rewrite the actor associated with a committed pointer transition.
+acknowledgement or projection. New and previous metadata pointer evidence must
+also remain undecorated and credential-free, so replay cannot smuggle query
+fragments, token material, or secret-like storage claims into graph,
+OpenLineage, QGLake, or QueryGraph commit proof. The replay evidence must
+include both a valid commit principal and a valid authorization receipt
+principal, and those principals must match before graph or OpenLineage
+projection, so replay cannot drop or rewrite the actor associated with a
+committed pointer transition.
 The commit replay envelope must also include full SHA-256 request and response
 hash evidence before projection; an idempotency-key hash is optional for
 standard Iceberg commits that did not supply LakeCat's retry key, but must be

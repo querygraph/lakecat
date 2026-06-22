@@ -11324,7 +11324,10 @@ QGLake, or QueryGraph import can accept them.
 `table.commit` replay is closed over the checked table identity or scope hints,
 authorization receipt, and nested commit evidence, and the nested commit object
 is closed over the pointer transition, principal, hashes, format, snapshot, and
-timestamp fields LakeCat verifies.
+timestamp fields LakeCat verifies. The new and previous metadata-location
+evidence in that commit object must also remain undecorated and free of
+credential-like material before graph, OpenLineage, QGLake, or QueryGraph
+proof can inherit it.
 `querygraph.bootstrap` replay is closed over the checked warehouse, counts,
 verified table/view manifests, artifact hashes, view-version receipts,
 standards, bundle hash, graph hash, OpenLineage hash, QueryGraph import hash,

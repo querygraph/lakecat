@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Harden table-commit metadata-location replay evidence`.
+  Service replay admission now validates `table.commit` new and previous
+  metadata-location evidence as undecorated and credential-free before
+  acknowledgement, graph projection, OpenLineage projection, QGLake proof, or
+  QueryGraph import can inherit polluted pointer-transition evidence.
+- Local verification for this implementation/testing slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_decorated_table_commit_metadata_locations -- --test-threads=1`
+  passed;
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand detailed catalog concept guidance`.
   The book now more thoroughly explains the first-release catalog vocabulary:
