@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake eventTypes to replay order`.
+  QGLake lineage-drain verification now requires the compact `eventTypes`
+  manifest to match replay summary order, not only delivered count or event
+  type multiplicity. Archived handoff artifacts therefore prove replay
+  sequence for repeated event types such as credential vending and scan-task
+  fetching instead of accepting a reordered inventory.
+- Local verification for this QGLake event-order slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`;
+  `scripts/check-release-readiness.sh --quick`.
+- Latest completed implementation slice:
   `Bind QGLake replay summaries to receipt actions`.
   Lineage-drain responses now carry compact authorization receipt action
   evidence for the drain read and each replayed event summary. QGLake replay

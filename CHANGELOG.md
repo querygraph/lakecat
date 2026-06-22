@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required QGLake lineage-drain `eventTypes` manifests to match replay summary
+  order, not only count or multiplicity, so compact handoff artifacts prove the
+  replay sequence and cannot reorder catalog event summaries after drain.
 - Added compact lineage-drain authorization action evidence to LakeCat replay
   summaries and QGLake verification, requiring the drain read to prove
   `lineage-read` and each replayed event summary to carry the receipt action

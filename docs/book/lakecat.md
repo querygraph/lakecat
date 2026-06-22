@@ -4119,7 +4119,10 @@ summary for `storage-profile.upserted`, `querygraph.bootstrap`, or any other
 catalog event type unless the drain itself declared that event type as
 delivered. LakeCat checks this as a multiset rather than a simple set: repeated
 event types such as credential vending or scan-task fetching must appear in the
-same multiplicity in `eventTypes` and in the replay summary array.
+same multiplicity in `eventTypes` and in the replay summary array. It also
+checks order: `eventTypes[i]` must name the same event type as replay summary
+`events[i]`. That makes the manifest a compact replay sequence proof instead
+of a loose inventory that could be reordered after the fact.
 It also embeds `querygraphVerification.verifiedTables` and `verifiedViews`
 directly in the compact summary. `verifiedTables` must include the stable LakeCat
 table id derived from that scope, such as `lakecat:table:local:default:events`;
@@ -4995,8 +4998,9 @@ it parses the archived lineage-drain artifact and requires the saved
 lineage-drain semantics' delivered count, event type list, graph event count,
 and lineage event count to match before accepting the verifier-output hash.
 The archived drain itself must also reconcile those same top-level counts with
-its replay summary array, including repeated event-type multiplicity. Then it parses those captured
-JSON files and checks that the replay schema/status,
+its replay summary array, including repeated event-type multiplicity and the
+exact `eventTypes` to replay-summary order. Then it parses those captured JSON
+files and checks that the replay schema/status,
 table/view counts, semantic hashes, standards, request-identity proof,
 QueryGraph bootstrap proof, governed scan proof, storage-profile upsert proof,
 and credential-vending proof inside the captures still match the summary. It

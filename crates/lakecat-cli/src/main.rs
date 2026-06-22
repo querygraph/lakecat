@@ -7875,6 +7875,14 @@ fn require_qglake_lineage_event_types_cover_summaries(
                 .to_string(),
         ));
     }
+    for (index, (declared, summary)) in drain.event_types.iter().zip(&drain.events).enumerate() {
+        if declared != &summary.event_type {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain eventTypes order drift at index {index}: declared {declared} but replay summary is {}",
+                summary.event_type
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -11137,8 +11145,7 @@ mod tests {
             "lineageDrainArtifactSemantics": {
                 "delivered": 13,
                 "eventTypes": [
-                    "table.scan-planned",
-                    "table.scan-tasks-fetched",
+                    "querygraph.bootstrap",
                     "credentials.vend-attempted",
                     "credentials.vend-attempted",
                     "view.upserted",
@@ -11149,7 +11156,8 @@ mod tests {
                     "project.listed",
                     "warehouse.listed",
                     "table.commits-listed",
-                    "querygraph.bootstrap"
+                    "table.scan-planned",
+                    "table.scan-tasks-fetched"
                 ],
                 "graphEvents": 14,
                 "lineageEvents": 13,
@@ -11331,8 +11339,7 @@ mod tests {
         LineageDrainResponse {
             delivered: 13,
             event_types: vec![
-                "table.scan-planned".to_string(),
-                "table.scan-tasks-fetched".to_string(),
+                "querygraph.bootstrap".to_string(),
                 "credentials.vend-attempted".to_string(),
                 "credentials.vend-attempted".to_string(),
                 "view.upserted".to_string(),
@@ -11343,7 +11350,8 @@ mod tests {
                 "project.listed".to_string(),
                 "warehouse.listed".to_string(),
                 "table.commits-listed".to_string(),
-                "querygraph.bootstrap".to_string(),
+                "table.scan-planned".to_string(),
+                "table.scan-tasks-fetched".to_string(),
             ],
             graph_events: 14,
             lineage_events: 13,
@@ -22054,8 +22062,7 @@ mod tests {
             &LineageDrainResponse {
                 delivered: 16,
                 event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
+                    "querygraph.bootstrap".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
@@ -22068,7 +22075,8 @@ mod tests {
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
                     "table.commits-listed".to_string(),
-                    "querygraph.bootstrap".to_string(),
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                 ],
                 graph_events: 16,
                 lineage_events: 16,
@@ -22837,8 +22845,7 @@ mod tests {
             &LineageDrainResponse {
                 delivered: 16,
                 event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
+                    "querygraph.bootstrap".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
@@ -22851,7 +22858,8 @@ mod tests {
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
                     "table.commits-listed".to_string(),
-                    "querygraph.bootstrap".to_string(),
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                 ],
                 graph_events: 16,
                 lineage_events: 16,
@@ -22961,8 +22969,7 @@ mod tests {
             &LineageDrainResponse {
                 delivered: 16,
                 event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
+                    "querygraph.bootstrap".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
@@ -22976,7 +22983,8 @@ mod tests {
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
                     "table.commits-listed".to_string(),
-                    "querygraph.bootstrap".to_string(),
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                 ],
                 graph_events: 16,
                 lineage_events: 16,
@@ -23017,8 +23025,7 @@ mod tests {
             &LineageDrainResponse {
                 delivered: 13,
                 event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
+                    "querygraph.bootstrap".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
@@ -23029,7 +23036,8 @@ mod tests {
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
                     "table.commits-listed".to_string(),
-                    "querygraph.bootstrap".to_string(),
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                 ],
                 graph_events: 14,
                 lineage_events: 13,
@@ -23067,8 +23075,7 @@ mod tests {
             &LineageDrainResponse {
                 delivered: 12,
                 event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
+                    "querygraph.bootstrap".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
@@ -23078,7 +23085,8 @@ mod tests {
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
                     "table.commits-listed".to_string(),
-                    "querygraph.bootstrap".to_string(),
+                    "table.scan-planned".to_string(),
+                    "table.scan-tasks-fetched".to_string(),
                 ],
                 graph_events: 12,
                 lineage_events: 12,
@@ -23200,6 +23208,19 @@ mod tests {
 
         assert!(err.to_string().contains("qglake lineage drain"));
         assert!(err.to_string().contains("eventTypes multiset"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_event_type_order_drift() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        drain.event_types.swap(0, 1);
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject event type order drift");
+
+        assert!(err.to_string().contains("qglake lineage drain"));
+        assert!(err.to_string().contains("eventTypes order drift"));
     }
 
     #[test]
