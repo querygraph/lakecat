@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Reject orphan principal-kind headers`.
+  Request identity parsing now accepts `x-lakecat-principal-kind` only when
+  `x-lakecat-principal` is present. Orphan kind hints are rejected before bearer
+  identity, agent DID, TypeDID, governance, TypeSec verification, Sail calls,
+  audit, or outbox evidence can reinterpret them. The regressions keep
+  diagnostics generic and prove competing token or DID material is not echoed.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib orphan_principal_kind -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Reject empty bearer identity tokens`.
   Request identity parsing now rejects `Authorization: Bearer` headers with
   empty or whitespace-only tokens before governance, TypeSec verification, Sail

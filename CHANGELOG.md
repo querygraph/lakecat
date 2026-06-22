@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened request identity admission so `x-lakecat-principal-kind` is accepted
+  only with `x-lakecat-principal`. Orphan principal-kind hints are now rejected
+  before bearer, agent DID, TypeDID, governance, Sail, audit, or outbox paths
+  can reinterpret them, and diagnostics avoid echoing the competing token or
+  DID material.
 - Hardened bearer identity admission so `Authorization: Bearer` headers with
   empty or whitespace-only tokens are rejected before governance, TypeSec
   verification, Sail calls, audit, or outbox evidence. The regression keeps the

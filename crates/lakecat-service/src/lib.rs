@@ -9826,6 +9826,12 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
     let explicit_kind = header("x-lakecat-principal-kind")?
         .map(str::parse)
         .transpose()?;
+    if explicit_kind.is_some() && explicit_principal.is_none() {
+        return Err(LakeCatError::InvalidArgument(
+            "x-lakecat-principal-kind requires x-lakecat-principal".to_string(),
+        )
+        .into());
+    }
     let agent_did = header("x-lakecat-agent-did")?;
     let explicit_typedid = header("x-lakecat-typedid")?;
     let typedid = explicit_typedid.or(agent_did);
@@ -11403,6 +11409,59 @@ mod tests {
         let message = String::from_utf8(body.to_vec()).unwrap();
         assert!(message.contains("Authorization Bearer token must not be empty"));
         assert!(!message.contains("bearer:"));
+        assert!(governance.principals.lock().await.is_empty());
+        assert!(governance.contexts.lock().await.is_empty());
+    }
+
+    #[test]
+    fn request_identity_rejects_orphan_principal_kind() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-lakecat-principal-kind", "service".parse().unwrap());
+        headers.insert("authorization", "Bearer service-token".parse().unwrap());
+
+        let err = request_identity(&headers).expect_err("orphan principal kind should fail closed");
+        let LakeCatHttpError(inner) = err;
+        let message = inner.to_string();
+
+        assert!(message.contains("x-lakecat-principal-kind requires x-lakecat-principal"));
+        assert!(!message.contains("service-token"));
+        assert!(!message.contains("bearer:"));
+    }
+
+    #[tokio::test]
+    async fn config_endpoint_rejects_orphan_principal_kind_before_governance() {
+        let governance = Arc::new(RecordingGovernance::default());
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_integrations(
+            default_sail_engine(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        ));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/config")
+                    .header("x-lakecat-principal-kind", "agent")
+                    .header("x-lakecat-agent-did", "did:example:agent")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let message = String::from_utf8(body.to_vec()).unwrap();
+        assert!(message.contains("x-lakecat-principal-kind requires x-lakecat-principal"));
+        assert!(!message.contains("did:example:agent"));
         assert!(governance.principals.lock().await.is_empty());
         assert!(governance.contexts.lock().await.is_empty());
     }
