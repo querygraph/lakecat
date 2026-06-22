@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover blank scan row predicate types`.
+  Service replay regression coverage now proves governed `table.scan-planned`
+  and `table.scan-tasks-fetched` events reject blank `row-predicate.type`
+  read-restriction evidence before acknowledgement, graph projection, or
+  OpenLineage projection. This brings the service admission boundary up to the
+  compact QGLake row-predicate proof rule for blank predicate types.
+- Local verification for this blank scan row-predicate type slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_blank_row_predicate_type -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib row_predicate -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover empty scan row predicates`.
   Service replay regression coverage now proves governed `table.scan-planned`
   and `table.scan-tasks-fetched` events reject empty `row-predicate`
