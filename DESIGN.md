@@ -1047,6 +1047,12 @@ view mutations, so service replay and QGLake handoff action contracts stay
 aligned. View lifecycle replay must also preserve event-matching actions:
 `view.upserted` uses `view-manage`, `view.loaded` uses `view-load`, and
 `view.dropped` uses `view-drop` before graph or OpenLineage projection.
+Service replay must close the shared authorization receipt and nested principal
+objects over the fields LakeCat compares before any durable outbox row can be
+acknowledged or projected. Receipt-level or principal-level extras are rejected
+at the LakeCat boundary, so graph, OpenLineage, QGLake, and QueryGraph import
+proof cannot inherit unverified actor, TypeDID, request-identity, delegation,
+token, authorization, policy, or application claims beside a valid receipt.
 Namespace lifecycle replay must also close the top-level payload schema over
 `event-type`, `authorization-receipt`, `warehouse`, and `namespace`, so
 create/load/drop replay cannot append unverified namespace, scope, graph,

@@ -1489,6 +1489,18 @@ const READ_RESTRICTION_EVIDENCE_FIELDS: &[&str] = &[
     "max-credential-ttl-seconds",
 ];
 const ROW_PREDICATE_EVIDENCE_FIELDS: &[&str] = &["type", "term", "value"];
+const PRINCIPAL_EVIDENCE_FIELDS: &[&str] = &["subject", "kind"];
+const AUTHORIZATION_RECEIPT_EVIDENCE_FIELDS: &[&str] = &[
+    "principal",
+    "action",
+    "table",
+    "allowed",
+    "engine",
+    "policy_hash",
+    "context",
+    "request-identity",
+    "checked_at",
+];
 const SCAN_PLANNED_EVIDENCE_FIELDS: &[&str] = &[
     "event-type",
     "table",
@@ -2280,9 +2292,31 @@ fn decode_outbox_principal_value(
     principal: &Value,
     label: &str,
 ) -> Result<Principal, LakeCatError> {
+    if principal.is_object() {
+        validate_object_evidence_schema(event, principal, label, PRINCIPAL_EVIDENCE_FIELDS)?;
+    }
     serde_json::from_value(principal.clone()).map_err(|err| {
         outbox_evidence_error(event, &format!("{label} must be a valid principal: {err}"))
     })
+}
+
+fn validate_authorization_receipt_evidence_schema(
+    event: &OutboxEvent,
+    payload: &Value,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    if let Some(receipt) = payload
+        .get("authorization-receipt")
+        .filter(|receipt| receipt.is_object())
+    {
+        validate_object_evidence_schema(
+            event,
+            receipt,
+            &format!("{label} authorization receipt"),
+            AUTHORIZATION_RECEIPT_EVIDENCE_FIELDS,
+        )?;
+    }
+    Ok(())
 }
 
 fn validate_authorization_receipt_principal(
@@ -2290,6 +2324,7 @@ fn validate_authorization_receipt_principal(
     payload: &Value,
     label: &str,
 ) -> Result<(), LakeCatError> {
+    validate_authorization_receipt_evidence_schema(event, payload, label)?;
     let Some(receipt_principal) = payload
         .get("authorization-receipt")
         .and_then(|receipt| receipt.get("principal"))
@@ -28118,6 +28153,146 @@ mod tests {
                 "{event_type} must fail before lineage projection"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_authorization_receipt_fields() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let event_id = "evt-config-extra-auth-receipt-field";
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": format!("audit-{event_id}"),
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                            "unverified-receipt-claim": "allowed",
+                        },
+                        "warehouse": "local",
+                        "defaults": catalog_config_defaults_json(),
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra authorization receipt fields should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(
+            message.contains(
+                "catalog config-read authorization receipt contains unexpected field unverified-receipt-claim"
+            ),
+            "catalog config-read error should reject extra receipt fields: {message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(event_id));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "receipt schema failures must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "receipt schema failures must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "receipt schema failures must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_authorization_receipt_principal_fields() {
+        let event_id = "evt-config-extra-auth-principal-field";
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": format!("audit-{event_id}"),
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": {
+                                "subject": "agent:reader",
+                                "kind": "agent",
+                                "unverified-principal-claim": "admin",
+                            },
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": catalog_config_defaults_json(),
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra authorization receipt principal fields should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(
+            message.contains(
+                "catalog config-read authorization receipt principal contains unexpected field unverified-principal-claim"
+            ),
+            "catalog config-read error should reject extra receipt principal fields: {message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(event_id));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "receipt principal schema failures must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "receipt principal schema failures must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "receipt principal schema failures must fail before lineage projection"
+        );
     }
 
     #[tokio::test]

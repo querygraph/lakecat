@@ -154,6 +154,19 @@ ever becomes an Iceberg-adjacent proposal, the small portable topic is
 proof-carrying scan planning or governed credential vending. It is not "make
 Iceberg depend on TypeSec."
 
+Receipt shape matters as much as receipt presence. A replay payload that says
+"allowed" is not enough if it can carry an extra unverified actor claim beside
+the checked fields. LakeCat therefore treats authorization receipts and nested
+principals as closed proof objects at replay admission: the receipt may contain
+the principal, action, table context, allowed decision, engine, policy hash,
+context, request identity, and checked-at timestamp; the principal may contain
+the subject and kind. Extra receipt or principal fields are rejected before
+acknowledgement, graph projection, OpenLineage projection, QGLake proof, or
+QueryGraph import proof. That closure is a LakeCat reliability rule around
+TypeSec evidence, not a standard Iceberg table concept. The portable idea is
+narrower: proof-carrying catalog events should say exactly which fields are
+verified and reject claims outside that schema.
+
 QueryGraph and QGLake handoff, OpenLineage binding, bootstrap, management,
 view, credential, and commit proof surfaces are broader than Iceberg because
 they serve a semantic and agentic application layer. LakeCat should export

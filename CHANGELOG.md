@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed shared authorization receipt and principal replay schemas over the
+  fields LakeCat compares. Standard catalog replay now rejects unexpected
+  receipt-level or principal-level claims before acknowledgement, graph
+  projection, OpenLineage projection, QGLake proof, or QueryGraph import proof
+  can inherit unverified actor, authorization, TypeDID, delegation, token, or
+  policy evidence beside checked receipt fields.
 - Closed QueryGraph bootstrap request-identity replay evidence over the known
   request-identity envelope fields. `querygraph.bootstrap` now rejects
   unexpected request-identity claims inside authorization receipt context before
