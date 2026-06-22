@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving management-list evidence
+  rejects count-mismatched ID arrays for policy bindings, projects, servers,
+  storage profiles, and warehouses before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Added service replay regression coverage proving returned
   `credentials.vend-attempted` credential-response evidence rejects entries
   that omit catalog-derived `storage-profile-id`, `catalog-profile-id`,

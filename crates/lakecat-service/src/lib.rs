@@ -18575,6 +18575,161 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_management_list_id_count_mismatch() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            (
+                "policy-binding.listed",
+                "policy-binding",
+                "policy-ids",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "management-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "policy-count": 2,
+                    "policy-ids": ["restricted-events"],
+                }),
+            ),
+            (
+                "project.listed",
+                "project",
+                "project-ids",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "management-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "project-count": 2,
+                    "project-ids": ["analytics"],
+                }),
+            ),
+            (
+                "server.listed",
+                "server",
+                "server-ids",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "management-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "server-count": 2,
+                    "server-ids": ["prod-us"],
+                }),
+            ),
+            (
+                "storage-profile.listed",
+                "storage-profile",
+                "storage-profile-ids",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "management-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "storage-profile-count": 2,
+                    "storage-profile-ids": ["events-local"],
+                }),
+            ),
+            (
+                "warehouse.listed",
+                "warehouse",
+                "warehouse-names",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "management-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "project-id": "analytics",
+                    "warehouse-count": 2,
+                    "warehouse-names": ["local"],
+                }),
+            ),
+        ];
+
+        for (event_type, label, id_field, payload) in cases {
+            let event_id = format!("evt-{label}-list-count-mismatch");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{label}-list-count-mismatch"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("management-list ID count mismatch should fail before delivery");
+
+            let message = err.to_string();
+            assert!(
+                message.contains(&format!(
+                    "outbox event {event_type} (lakecat.lineage-and-graph) has invalid"
+                )),
+                "{event_type} should be identified in the validation error"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(
+                message.contains(&format!(
+                    "{label} list {id_field} count must match {label} list count"
+                )),
+                "{event_type} should reject count-mismatched management IDs: {message}"
+            );
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "management-list count mismatch must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "management-list count mismatch must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "management-list count mismatch must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_missing_management_list_receipt_principal() {
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {

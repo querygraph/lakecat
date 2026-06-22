@@ -6,6 +6,17 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover management-list count mismatch`.
+  Service replay regression coverage now proves management-list evidence
+  rejects count-mismatched ID arrays for policy bindings, projects, servers,
+  storage profiles, and warehouses before acknowledgement, graph projection, or
+  OpenLineage projection. This pins the service-side sibling of the compact
+  QGLake anti-inflation proof for management-list summaries.
+- Local verification for this management-list count mismatch slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain_rejects_management_list_id_count_mismatch -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib management_list -- --test-threads=1`.
+- Latest completed implementation slice:
   `Cover missing credential storage-profile proof`.
   Service replay regression coverage now proves returned
   `credentials.vend-attempted` credential-response evidence rejects entries
