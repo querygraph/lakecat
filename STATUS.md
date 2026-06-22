@@ -5,6 +5,17 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Deepen catalog concept and Sail boundary explanation`.
+  The book now more thoroughly separates standard Iceberg vocabulary from
+  LakeCat implementation and control-plane extensions, TypeSec governance
+  evidence, QueryGraph/QGLake semantic proof surfaces, and future
+  engine-neutral profile candidates. It explicitly calls out that Rust and
+  Turso are implementation choices, CAS is standard catalog behavior while
+  idempotency/pointer-log/audit/outbox/replay hardening is LakeCat's reliability
+  envelope, governed scan and credential receipts are additive proof surfaces,
+  and Sail should own reusable table-format interpretation because proofs must
+  be tied to engine-shaped facts rather than catalog approximations.
 - Latest implementation/book slice:
   `Require full QGLake view lineage hashes`.
   Raw QGLake lineage-drain verification now rejects short `sha256:`

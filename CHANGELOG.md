@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Deepened the book's catalog-concepts chapter with sharper terminology
+  boundaries for standard Iceberg parlance versus LakeCat catalog-control
+  extensions, TypeSec governance evidence, QueryGraph/QGLake semantic proof
+  surfaces, and future engine-neutral Iceberg profile candidates. The expanded
+  text now explicitly explains why Rust and Turso are implementation choices,
+  why CAS is standard but idempotency/audit/outbox/replay hardening is a
+  catalog reliability envelope, why governed scan and credential receipts must
+  stay additive, and why reusable table-format interpretation should move into
+  Sail.
 - Tightened raw QGLake lineage-drain view proof verification. View replay
   sink receipt hashes, tombstone view-receipt hashes, namespace receipt-chain
   hashes, and receipt-chain replay/OpenLineage hashes must now be full
