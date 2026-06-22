@@ -656,7 +656,12 @@ drifts. Compact table commit-history proof must preserve the same explicit
 zero-count and duplicate-free commit-hash invariants as service replay, so
 archived QueryGraph handoff summaries can represent an empty history without
 fabricating commits and cannot inflate pointer-log evidence by repeating a
-valid commit hash.
+valid commit hash. Compact `tableCommitHistoryProof` and captured LakeCat
+replay `tableCommitHistory` proof objects must also stay closed over the
+fields LakeCat compares, so a summary, captured replay output, or saved
+self-verifier sidecar cannot attach unverified pointer-log claims beside the
+accepted count, sequence, hash, principal, authorization, graph, replay, and
+OpenLineage evidence.
 Compact catalog-config proof must also preserve the same advertised defaults,
 overrides, endpoints, `catalog-config` authorization action, graph count,
 replay hashes, and OpenLineage hashes as raw `catalog.config-read` replay, so

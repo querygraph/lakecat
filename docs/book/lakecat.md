@@ -7511,11 +7511,16 @@ than a mutation action such as `table-commit`, an affirmative authorization
 receipt decision, and a non-empty authorization receipt engine with an RFC3339
 `checked_at` timestamp; compact QGLake proof also binds that pointer-log replay
 to the accepted principal subject/kind, a full authorization receipt hash, and
-the `table-load` action. The raw QGLake lineage-drain verifier checks the same
-accepted-principal, agent kind, receipt hash, and action before compact handoff
-proof is generated, so malformed, denied, actor-drifted, action-drifted,
-action-less, decision-less, engine-less, or timeless pointer-log summaries
-cannot become delivered replay evidence.
+the `table-load` action. The compact `tableCommitHistoryProof` object and the
+captured LakeCat replay `tableCommitHistory` object are closed over those
+compared fields, so a saved summary or captured replay sidecar cannot append an
+extra unverified pointer-log claim beside accepted commit count, sequence,
+hash, principal, authorization, graph, replay, and OpenLineage evidence. The
+raw QGLake lineage-drain verifier checks the same accepted-principal, agent
+kind, receipt hash, and action before compact handoff proof is generated, so
+malformed, denied, actor-drifted, action-drifted, action-less, decision-less,
+engine-less, or timeless pointer-log summaries cannot become delivered replay
+evidence.
 Individual `table.commit` replay is held to the same commit envelope before
 graph or OpenLineage delivery: it must include a positive sequence number,
 non-empty new metadata pointer evidence, non-blank previous pointer evidence

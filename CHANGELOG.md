@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed compact and captured QGLake table commit-history proof objects over
+  their compared schema. `tableCommitHistoryProof` and captured LakeCat replay
+  `tableCommitHistory` evidence now reject unexpected fields before summary or
+  sidecar verification can accept unverified pointer-log claims beside checked
+  counts, sequences, hashes, principals, authorization receipts, graph events,
+  replay hashes, and OpenLineage hashes.
 - Added a detailed release concept deep dive to the book. The new chapter
   directly delineates Rust service spine, Turso local store, Iceberg REST
   paths, commit CAS, idempotency, pointer logs, audit/outbox, replay

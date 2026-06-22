@@ -5,6 +5,26 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Close QGLake commit-history proof objects`.
+  Compact `tableCommitHistoryProof` and captured LakeCat replay
+  `tableCommitHistory` evidence are now closed over their compared schema.
+  Unexpected fields are rejected before a handoff summary, captured replay
+  output, or saved verifier sidecar can attach unverified pointer-log claims
+  beside checked counts, sequence numbers, commit hashes, principals,
+  authorization receipts, graph events, replay hashes, and OpenLineage hashes.
+- Local verification for this implementation/book slice is green so far:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_commit_history_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_extra_commit_history_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Explain release catalog concepts in detail`.
   The book now has a dedicated release concept deep dive that maps the Rust

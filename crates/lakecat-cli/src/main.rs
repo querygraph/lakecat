@@ -2251,6 +2251,11 @@ fn verify_lakecat_replay_table_commit_history_matches_summary(
     lakecat: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
     let captured_commit_history = lakecat_replay_table_commit_history(capture)?;
+    require_only_fields(
+        captured_commit_history,
+        TABLE_COMMIT_HISTORY_PROOF_FIELDS,
+        "captured LakeCat replay output.replay-evidence.tableCommitHistory",
+    )?;
     let summary_commit_history = required_object(
         lakecat,
         "tableCommitHistoryProof",
@@ -3820,6 +3825,11 @@ fn require_table_commit_history_evidence(
     principal: &str,
     principal_kind: &str,
 ) -> lakecat_core::LakeCatResult<()> {
+    require_only_fields(
+        commit_history,
+        TABLE_COMMIT_HISTORY_PROOF_FIELDS,
+        "tableCommitHistoryProof",
+    )?;
     require_string_match(
         commit_history,
         "principalSubject",
@@ -3904,6 +3914,19 @@ fn require_table_commit_history_evidence(
     )?;
     Ok(())
 }
+
+const TABLE_COMMIT_HISTORY_PROOF_FIELDS: &[&str] = &[
+    "commitCount",
+    "sequenceNumbers",
+    "commitHashes",
+    "principalSubject",
+    "principalKind",
+    "authorizationReceiptHash",
+    "authorizationReceiptAction",
+    "graphEvents",
+    "replayEventHashes",
+    "openLineageHashes",
+];
 
 fn require_catalog_config_evidence(
     config: &serde_json::Map<String, Value>,
@@ -14485,6 +14508,23 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_commit_history_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["unverifiedCommitClaim"] =
+            json!(qglake_fixture_hash("unverified-commit-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject unverified commit-history fields");
+        let err = err.to_string();
+
+        assert!(err.contains("tableCommitHistoryProof"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedCommitClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_commit_history_authorization_hash() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["authorizationReceiptHash"] =
@@ -17642,6 +17682,35 @@ mod tests {
         assert!(err.to_string().contains(
             "captured LakeCat replay output.replay-evidence.tableCommitHistory.commitCount mismatch"
         ));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_commit_history_fields() {
+        let temp = qglake_temp_dir("handoff-captured-table-commit-history-extra-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["tableCommitHistory"]["unverifiedCommitClaim"] =
+            json!(qglake_fixture_hash("unverified-captured-commit-claim"));
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay commit-history extra fields should be rejected");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("captured LakeCat replay output.replay-evidence.tableCommitHistory"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedCommitClaim"),
+            "{err}"
+        );
     }
 
     #[test]
