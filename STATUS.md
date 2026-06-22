@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest QGLake handoff slice:
+  `Reject blank handoff scope anchors`.
+  Compact QGLake handoff verification now requires `warehouse`, `namespace`,
+  and `table` scope anchors to be non-blank. The regressions mirror
+  whitespace-only scope into compact QueryGraph verified-table IDs, proving
+  blank catalog scope is rejected before QueryGraph handoff evidence can
+  accept meaningless table anchors.
+- Local verification for this QGLake handoff slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli handoff_summary_verifier_rejects_blank -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest QGLake handoff slice:
   `Reject blank handoff principal anchors`.
   Compact QGLake handoff verification now requires the top-level accepted
   `principal` to be non-blank before request identity, QueryGraph bootstrap,

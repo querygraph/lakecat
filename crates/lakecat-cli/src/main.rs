@@ -2635,9 +2635,9 @@ impl HandoffTableScope {
         warehouse: &str,
     ) -> lakecat_core::LakeCatResult<Self> {
         Ok(Self {
-            warehouse: warehouse.to_string(),
-            namespace: require_non_empty_str(summary, "namespace", "handoff summary")?.to_string(),
-            table: require_non_empty_str(summary, "table", "handoff summary")?.to_string(),
+            warehouse: require_non_blank_input(warehouse, "handoff summary.warehouse")?.to_string(),
+            namespace: require_non_blank_str(summary, "namespace", "handoff summary")?.to_string(),
+            table: require_non_blank_str(summary, "table", "handoff summary")?.to_string(),
         })
     }
 
@@ -3295,9 +3295,9 @@ fn require_handoff_scope<'a>(
     summary: &'a serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<HandoffScope<'a>> {
     let catalog_url = require_handoff_catalog_url(summary)?;
-    let warehouse = require_non_empty_str(summary, "warehouse", "handoff summary")?;
-    let namespace = require_non_empty_str(summary, "namespace", "handoff summary")?;
-    let table = require_non_empty_str(summary, "table", "handoff summary")?;
+    let warehouse = require_non_blank_str(summary, "warehouse", "handoff summary")?;
+    let namespace = require_non_blank_str(summary, "namespace", "handoff summary")?;
+    let table = require_non_blank_str(summary, "table", "handoff summary")?;
     Ok(HandoffScope {
         catalog_url,
         warehouse,
@@ -10426,9 +10426,16 @@ fn require_non_blank_str<'a>(
     label: &str,
 ) -> lakecat_core::LakeCatResult<&'a str> {
     let string = require_non_empty_str(value, field, label)?;
+    require_non_blank_input(string, format!("{label}.{field}").as_str())
+}
+
+fn require_non_blank_input<'a>(
+    string: &'a str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<&'a str> {
     if string.trim().is_empty() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "{label}.{field} must not be blank"
+            "{label} must not be blank"
         )));
     }
     Ok(string)
@@ -12088,6 +12095,37 @@ mod tests {
             .expect_err("handoff summary should reject a blank principal anchor");
 
         assert!(err.to_string().contains("handoff summary.principal"));
+        assert!(err.to_string().contains("blank"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_blank_warehouse_anchor() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["warehouse"] = json!("   ");
+        let mirrored_table = json!(["lakecat:table:   :default:events"]);
+        summary["querygraphVerification"]["verifiedTables"] = mirrored_table.clone();
+        summary["querygraphImportVerification"]["verifiedTables"] = mirrored_table;
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject a blank warehouse anchor");
+
+        assert!(err.to_string().contains("handoff summary.warehouse"));
+        assert!(err.to_string().contains("blank"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_blank_table_scope_anchors() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["namespace"] = json!("   ");
+        summary["table"] = json!("   ");
+        let mirrored_table = json!(["lakecat:table:local:   :   "]);
+        summary["querygraphVerification"]["verifiedTables"] = mirrored_table.clone();
+        summary["querygraphImportVerification"]["verifiedTables"] = mirrored_table;
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject blank namespace/table anchors");
+
+        assert!(err.to_string().contains("handoff summary.namespace"));
         assert!(err.to_string().contains("blank"));
     }
 

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Tightened compact QGLake handoff verification so `warehouse`, `namespace`,
+  and `table` scope anchors must be non-blank, not merely non-empty. The
+  regressions mirror whitespace-only scope into the compact QueryGraph
+  verified-table IDs, proving blank catalog scope is rejected before QueryGraph
+  handoff evidence can accept meaningless table anchors.
 - Tightened compact QGLake handoff verification so the top-level accepted
   `principal` must be non-blank before request identity, QueryGraph bootstrap,
   governed scan, commit-history, or credential proof can mirror it. The
