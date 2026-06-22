@@ -5,6 +5,18 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Clarify catalog concept ownership and proposal posture`.
+  The book now gives an owner-first decision rule for the first-release
+  vocabulary: standard Iceberg owns namespaces, tables, metadata pointers,
+  snapshots, manifests, deletes, and optimistic commit requirements; LakeCat
+  owns the Rust catalog-control envelope, Turso-backed store direction, CAS
+  history, idempotency, audit/outbox, redaction, and replay admission; TypeSec
+  owns governance evidence; Grust owns graph mechanics; QueryGraph owns
+  QGLake/semantic integration; and Sail owns reusable table-format
+  interpretation, metadata-as-data, governed scan planning, commit validation,
+  and typed v4 semantics. The text now more clearly separates product
+  architecture from possible future Iceberg-adjacent profiles.
 - Latest implementation/book slice:
   `Close authorization policy-binding context schemas`.
   Service outbox admission now rejects unexpected fields inside

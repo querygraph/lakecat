@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Expanded the book's first-release catalog concept explanation with an
+  owner-first decision rule: Iceberg terms stay standard, LakeCat owns the
+  catalog-control envelope, TypeSec owns governance evidence, Grust owns graph
+  mechanics, QueryGraph owns QGLake/semantic integration, and Sail owns
+  reusable table-format interpretation. The new text also distinguishes local
+  product architecture from future Iceberg-adjacent profile candidates such as
+  proof-carrying scans, replay-admissible catalog events, pointer history, and
+  governed credential proof.
 - Closed authorization receipt context policy-binding entries over the
   service-produced policy response fields. Standard catalog replay now rejects
   unexpected policy-binding context claims before acknowledgement, graph

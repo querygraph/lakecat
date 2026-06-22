@@ -240,6 +240,39 @@ argument. It avoids extra indirection on hot proof paths, and it prevents
 LakeCat from becoming a partial shadow engine whose JSON shortcuts drift from
 the engine that will actually plan or execute the table work.
 
+The working rule for the first release is to name the owner before naming the
+feature. If a behavior is about table identity, metadata locations, snapshots,
+schemas, manifests, deletes, or optimistic commit requirements, describe it in
+Iceberg language first. If it is about local durability, exact retry, CAS
+history, audit, outbox, redaction, or replay admission, describe it as LakeCat's
+catalog-control envelope around Iceberg. If it is about a principal, purpose,
+capability, TypeDID context, policy hash, ODRL-derived restriction, or
+credential posture, describe it as TypeSec-governed evidence bound by LakeCat.
+If it is about Croissant, CDIF, OSI, OpenLineage import, Grust graph state,
+agent workflows, bootstrap bundles, or QGLake acceptance, describe it as
+QueryGraph application integration over catalog proof. Only after that
+classification should the book ask whether the idea is a possible future
+Iceberg-adjacent profile.
+
+That future-profile question should be intentionally narrow. "LakeCat uses
+Turso" is not portable enough. "LakeCat can prove a pointer moved atomically,
+that an idempotent retry matched the original request hash, and that downstream
+events came from an admitted catalog transition" is portable. "QueryGraph
+imports a QGLake artifact" is product architecture. "A catalog event can carry
+stable lineage and graph delivery hashes that downstream systems can reject if
+the evidence is malformed" may be portable. "TypeSec issued this exact JSON
+receipt" is a LakeCat/TypeSec integration detail. "A governed read can carry a
+policy-engine-neutral proof of principal, purpose, effective projection,
+predicate, snapshot, delete posture, task count, and credential posture" is the
+kind of small profile worth extracting once LakeCat and Sail have proved it.
+
+This distinction keeps the design ambitious without making Iceberg carry every
+LakeCat ambition. Standard clients get the standard catalog. QueryGraph gets a
+proof-rich substrate. TypeSec can govern agents without becoming table metadata.
+Grust can receive graph projections without turning LakeCat into a graph
+database. Sail can become the shared Rust engine authority for the table facts
+that make all of those proofs trustworthy.
+
 ### A Reader's Guide To The Current Catalog Concepts
 
 The easiest way to misunderstand LakeCat is to hear "catalog" and imagine one
