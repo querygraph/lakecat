@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover credential issuer config count type`.
+  Service replay regression coverage now proves `credentials.vend-attempted`
+  rejects non-unsigned credential response `issuer-config-entry-count`
+  evidence before acknowledgement, graph projection, or OpenLineage projection.
+  This pins the typed count gate for issuer configuration evidence in
+  credential replay entries.
+- Local verification for this credential issuer config count slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_credential_response_issuer_config_count -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib credential_response -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover credential response count mismatch`.
   Service replay regression coverage now proves `credentials.vend-attempted`
   rejects `credential-count` drift from `credential-response-evidence` before

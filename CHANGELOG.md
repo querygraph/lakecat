@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Added service replay regression coverage proving `credentials.vend-attempted`
+  rejects non-unsigned credential response issuer-config entry counts before
+  acknowledgement, graph projection, or OpenLineage projection.
+- Added service replay regression coverage proving `credentials.vend-attempted`
   rejects credential-count drift from credential response evidence before
   acknowledgement, graph projection, or OpenLineage projection.
 - Added service replay regression coverage proving `credentials.vend-attempted`
