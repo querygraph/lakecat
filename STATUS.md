@@ -6,6 +6,13 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Bind scan-fetch stats-field replay evidence`.
+  Service replay admission now validates present `table.scan-tasks-fetched`
+  `stats-fields` evidence as non-empty, duplicate-free, and matching the
+  effective stats fields before acknowledgement, graph projection, OpenLineage
+  projection, QGLake proof, or QueryGraph import can inherit fetched
+  stats-field claims.
+- Latest implementation/book slice:
   `Harden scan-fetch plan-task replay evidence`.
   Service replay admission now validates optional `table.scan-tasks-fetched`
   `plan-task` evidence before acknowledgement, graph projection, OpenLineage

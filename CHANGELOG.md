@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bound fetched scan replay `stats-fields` to effective stats evidence. When
+  `table.scan-tasks-fetched` replay carries `stats-fields`, service outbox
+  admission now rejects empty, duplicate, or drifted arrays before graph,
+  OpenLineage, QGLake, or QueryGraph import can inherit unverified stats-field
+  claims.
 - Hardened fetched scan replay plan-task evidence. `table.scan-tasks-fetched`
   outbox admission now rejects non-string, non-LakeCat, decorated, or
   credential-bearing `plan-task` values before acknowledgement, graph

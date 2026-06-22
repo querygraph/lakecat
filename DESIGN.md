@@ -565,6 +565,9 @@ Fetched scan outbox admission must also treat `plan-task` as replay evidence,
 not opaque free text: when present it must be a non-empty LakeCat-issued token
 and must not carry decorated location, query/fragment, or credential material
 before graph, OpenLineage, QGLake, or QueryGraph import can inherit it.
+When fetched replay carries `stats-fields`, those fields must be non-empty,
+duplicate-free, and exactly bound to the effective stats-field evidence before
+downstream proof can accept them.
 Read-restriction `policy-hashes` must remain non-empty, full SHA-256-shaped,
 and duplicate-free at outbox admission as well as in later replay artifacts.
 Scan-planned and scan-tasks-fetched replay must also carry a complete

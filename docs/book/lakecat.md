@@ -10743,6 +10743,9 @@ and it must not contain decorated location, query/fragment, or credential
 material before graph, OpenLineage, QGLake, or QueryGraph import can inherit
 the fetch proof. That keeps governed plan/fetch receipts about Sail-planned
 work, not a carrier for raw path or token claims.
+The same fetched replay path treats `stats-fields` as checked evidence when it
+is present: the array must be non-empty, duplicate-free, and bound to the
+effective stats fields before downstream proof can use it.
 
 The QueryGraph handoff is release-blocking as an acceptance proof, not as a
 requirement for ordinary Iceberg clients. The local QGLake workflow must keep

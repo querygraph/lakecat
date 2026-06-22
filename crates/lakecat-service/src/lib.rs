@@ -3071,6 +3071,22 @@ fn validate_scan_tasks_fetched_event_evidence(
         "scan-tasks-fetched",
         &effective_stats,
     )?;
+    if payload.get("stats-fields").is_some() {
+        let stats_fields = validate_required_non_empty_string_array_field(
+            event,
+            payload,
+            "stats-fields",
+            "scan-tasks-fetched",
+        )?;
+        validate_effective_evidence_subset(
+            event,
+            "scan-tasks-fetched stats-fields",
+            &stats_fields,
+            "effective-stats-fields",
+            &effective_stats,
+            true,
+        )?;
+    }
     validate_read_restriction_evidence_schema(
         event,
         payload.get("read-restriction"),
@@ -15329,6 +15345,118 @@ mod tests {
                 "operator-facing errors must not expose raw plan-task material"
             );
             assert!(!message.contains("raw-secret"));
+            assert!(store.delivered.lock().await.is_empty());
+            assert!(graph.events.lock().await.is_empty());
+            assert!(lineage.events.lock().await.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_scan_fetch_stats_fields_evidence() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let policy_hash =
+            content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                .unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [policy_hash]
+        });
+        let cases = [
+            (
+                "evt-scan-fetch-empty-stats-fields",
+                json!([]),
+                "scan-tasks-fetched stats-fields must not be empty",
+            ),
+            (
+                "evt-scan-fetch-duplicate-stats-fields",
+                json!(["event_id", "event_id"]),
+                "scan-tasks-fetched stats-fields must be duplicate-free",
+            ),
+            (
+                "evt-scan-fetch-drifted-stats-fields",
+                json!(["payload"]),
+                "scan-tasks-fetched stats-fields must be a subset of effective-stats-fields",
+            ),
+        ];
+
+        for (event_id, stats_fields, expected_message) in cases {
+            let payload = json!({
+                "event-type": "table.scan-tasks-fetched",
+                "table": ident,
+                "authorization-receipt": {
+                    "principal": principal,
+                    "action": "table-plan-scan",
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "context": {
+                        "read-restriction": read_restriction
+                    },
+                    "checked_at": chrono::Utc::now(),
+                },
+                "planned-by": "test",
+                "snapshot-id": 1,
+                "plan-task": "lakecat:plan:abc",
+                "read-restriction": read_restriction,
+                "required-projection": ["event_id"],
+                "effective-projection": ["event_id"],
+                "requested-stats-fields": ["event_id"],
+                "effective-stats-fields": ["event_id"],
+                "stats-fields": stats_fields,
+                "required-filters": [{
+                    "type": "not-eq",
+                    "term": "severity",
+                    "value": "debug"
+                }],
+                "file-scan-task-count": 1,
+                "delete-file-count": 0,
+                "child-plan-task-count": 0,
+                "storage-location": "s3://bucket/events",
+                "metadata-location": "s3://bucket/events/metadata/v1.json"
+            });
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.scan-tasks-fetched".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "table.scan-tasks-fetched",
+                        "table": ident,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed stats-fields evidence should fail before delivery");
+
+            let message = err.to_string();
+            assert!(message.contains("table.scan-tasks-fetched"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
             assert!(store.delivered.lock().await.is_empty());
             assert!(graph.events.lock().await.is_empty());
             assert!(lineage.events.lock().await.is_empty());
