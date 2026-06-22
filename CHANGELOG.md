@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reused the QGLake bundle-local artifact resolver for semantic artifact reads.
+  Captured output, bootstrap bundle, QueryGraph import-plan, and lineage-drain
+  semantic verification now parse only artifacts that resolve under the handoff
+  summary directory, matching the hash verifier's containment rule.
 - Required QGLake handoff artifact paths to resolve inside the handoff summary
   directory before hashing or semantic verification. The CLI verifier now
   rejects absolute or relative artifact-path splices that point outside the

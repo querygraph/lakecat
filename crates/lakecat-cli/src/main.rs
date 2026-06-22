@@ -1797,13 +1797,7 @@ fn read_qglake_handoff_artifact_json(
     base_dir: &Path,
 ) -> lakecat_core::LakeCatResult<Value> {
     let artifact = required_object(artifacts, field, "handoff summary artifacts")?;
-    let path = required_str(artifact, "path", field)?;
-    let path = PathBuf::from(path);
-    let resolved_path = if path.is_absolute() {
-        path
-    } else {
-        base_dir.join(path)
-    };
+    let resolved_path = required_resolved_artifact_path(artifact, "path", base_dir)?;
     let bytes = fs::read(&resolved_path).map_err(|err| {
         lakecat_core::LakeCatError::InvalidArgument(format!(
             "failed to read captured handoff output {} at {}: {err}",
@@ -16820,6 +16814,29 @@ mod tests {
             err.to_string()
                 .contains("captured QueryGraph verify output.bundle-hash mismatch")
         );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_artifact_path_outside_summary_dir() {
+        let temp = qglake_temp_dir("handoff-captured-semantics-path-outside");
+        let outside = qglake_temp_dir("handoff-captured-semantics-path-outside-splice");
+        let outside_querygraph_verify = outside.join("querygraph-verify.json");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        fs::copy(
+            temp.join("querygraph-verify.json"),
+            &outside_querygraph_verify,
+        )
+        .expect("copy QueryGraph verify output outside bundle");
+        summary["artifacts"]["capturedOutputs"]["querygraphVerify"]["path"] =
+            json!(outside_querygraph_verify);
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured output semantics should reject paths outside summary directory");
+        let err = err.to_string();
+
+        assert!(err.contains("path"), "{err}");
+        assert!(err.contains("summary directory"), "{err}");
     }
 
     #[test]

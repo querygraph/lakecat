@@ -675,6 +675,9 @@ hashes.
 Handoff artifact paths must resolve under the handoff summary directory before
 LakeCat hashes or parses them. A saved summary must not be able to splice in an
 absolute path or `..` traversal to matching bytes outside the archived bundle.
+The same bundle-local resolver must be used by semantic artifact readers as
+well as hash verification, so captured output, bundle, import-plan, and
+lineage-drain parsers cannot drift from the public handoff verifier.
 Raw lineage-drain replay summaries and compact handoff summaries must both keep
 replay, OpenLineage, commit-history commit, view receipt, and view
 receipt-chain hash arrays duplicate-free as well as full SHA-256-shaped, so
