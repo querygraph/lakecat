@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a detailed standard-word versus
+  LakeCat-mechanism section covering the Rust service spine, Turso store,
+  Iceberg REST paths, commit CAS, pointer logs, audit/outbox, replay
+  validation, governed scan/credential proof, and QueryGraph/QGLake handoff
+  surfaces; also sharpened the Sail argument around PySpark, governed-agent,
+  and operator workflows.
 - Added service replay regression coverage proving `table.scan-planned`
   rejects duplicate effective-stats-fields evidence before acknowledgement,
   graph projection, or OpenLineage projection.

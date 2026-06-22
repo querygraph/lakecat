@@ -5,6 +5,16 @@ Updated: 2026-06-21
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Deepen catalog parlance and Sail workflow argument`.
+  The book now more clearly separates standard Iceberg terms from LakeCat
+  implementation mechanisms, optional LakeCat/QueryGraph surfaces, TypeSec
+  governance extensions, and future Iceberg-adjacent proposal candidates. It
+  also explains why PySpark, governed-agent, operator, and QueryGraph workflows
+  should push reusable Iceberg semantics into Sail while LakeCat owns trust,
+  transactions, and replayable evidence.
+- Local verification for this book slice is green:
+  `docs/book/build.sh`; `git diff --check`.
 - Latest completed implementation slice:
   `Cover duplicate planned effective stats replay`.
   Service replay regression coverage now proves `table.scan-planned` rejects
