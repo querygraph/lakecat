@@ -2778,12 +2778,12 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "agent",
         "requestIdentityProof",
     )?;
-    require_non_empty_str(
+    require_non_blank_str(
         request_identity,
         "requestIdentitySource",
         "requestIdentityProof",
     )?;
-    require_non_empty_str(
+    require_non_blank_str(
         request_identity,
         "requestIdentityState",
         "requestIdentityProof",
@@ -12648,6 +12648,22 @@ mod tests {
         assert!(err.to_string().contains("requestIdentityProof"));
         assert!(err.to_string().contains("typedidProofHash"));
         assert!(err.to_string().contains("typedidEnvelopeHash"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_blank_request_identity_provenance() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["requestIdentityProof"]["requestIdentitySource"] =
+            json!("   ");
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["requestIdentitySource"] =
+            json!("   ");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject blank request identity provenance");
+
+        assert!(err.to_string().contains("requestIdentityProof"));
+        assert!(err.to_string().contains("requestIdentitySource"));
+        assert!(err.to_string().contains("blank"));
     }
 
     #[test]

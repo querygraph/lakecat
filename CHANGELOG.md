@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened compact QGLake request-identity proof so `requestIdentitySource`
+  and `requestIdentityState` must be non-blank, not merely non-empty. The
+  regression rejects whitespace-only provenance before QueryGraph bootstrap
+  proof can mirror it into archived handoff evidence.
 - Tightened compact QGLake handoff verification so
   `queryGraphBootstrapProof.viewVersionReceiptHashes` must contain full
   SHA-256-shaped, duplicate-free receipt hashes before structural view receipt

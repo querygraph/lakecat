@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest QGLake handoff slice:
+  `Reject blank request identity provenance`.
+  Compact QGLake handoff verification now requires `requestIdentitySource` and
+  `requestIdentityState` in `requestIdentityProof` to be non-blank, not merely
+  non-empty. The regression rejects whitespace-only provenance before
+  QueryGraph bootstrap proof can mirror it into archived handoff evidence.
+- Local verification for this QGLake handoff slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli request_identity_provenance -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest QGLake handoff slice:
   `Require full bootstrap view receipt hashes`.
   Compact QGLake handoff verification now requires
   `queryGraphBootstrapProof.viewVersionReceiptHashes` to carry full
