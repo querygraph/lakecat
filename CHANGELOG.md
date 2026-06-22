@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving `table.scan-planned` and
+  `table.scan-tasks-fetched` reject duplicate governed read-restriction
+  `allowed-columns` evidence before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Expanded the LakeCat book with a detailed standard-word versus
   LakeCat-mechanism section covering the Rust service spine, Turso store,
   Iceberg REST paths, commit CAS, pointer logs, audit/outbox, replay

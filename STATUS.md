@@ -5,6 +5,20 @@ Updated: 2026-06-21
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Cover duplicate scan allowed-column replay`.
+  Service replay regression coverage now proves `table.scan-planned` and
+  `table.scan-tasks-fetched` reject duplicate governed read-restriction
+  `allowed-columns` evidence before delivery acknowledgement, graph projection,
+  or OpenLineage projection. This closes the direct allowed-column
+  duplicate-proof sibling of the existing empty allowed-column and
+  projection/stat duplicate guards.
+- Local verification for this scan allowed-column slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_planned_duplicate_allowed_columns -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_fetch_duplicate_allowed_columns -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_ -- --test-threads=1`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Deepen catalog parlance and Sail workflow argument`.
   The book now more clearly separates standard Iceberg terms from LakeCat
