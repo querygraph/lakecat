@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed compact and captured QGLake credential-vending proof objects over
+  their compared schema. `credentialVendingProof`, its restricted/trusted-human
+  branches, and their nested storage-profile anchors now reject unexpected
+  fields before summary or sidecar verification can accept unverified raw
+  credential, storage-scope, authorization, replay, or OpenLineage claims
+  beside checked TypeSec-style credential decisions.
 - Closed compact and captured QGLake storage-profile upsert proof objects over
   their compared schema. `storageProfileUpsertProof` and captured LakeCat
   replay `management.storageProfileUpsert` evidence now reject unexpected

@@ -2572,6 +2572,11 @@ fn verify_lakecat_replay_credentials_match_summary(
     lakecat: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
     let captured_credentials = lakecat_replay_credentials(capture)?;
+    require_only_fields(
+        captured_credentials,
+        CREDENTIAL_VENDING_PROOF_FIELDS,
+        "captured LakeCat replay output.replay-evidence.credentials",
+    )?;
     let summary_credentials = required_object(
         lakecat,
         "credentialVendingProof",
@@ -2583,6 +2588,17 @@ fn verify_lakecat_replay_credentials_match_summary(
             captured_credentials,
             branch,
             "captured LakeCat replay output.replay-evidence.credentials",
+        )?;
+        let captured_label =
+            format!("captured LakeCat replay output.replay-evidence.credentials.{branch}");
+        require_only_fields(
+            captured,
+            CREDENTIAL_VENDING_BRANCH_FIELDS,
+            captured_label.as_str(),
+        )?;
+        require_credential_storage_profile_schema(
+            required_object(captured, "storageProfile", captured_label.as_str())?,
+            &format!("{captured_label}.storageProfile"),
         )?;
         let summary = required_object(summary_credentials, branch, "credentialVendingProof")?;
         for field in ["principalSubject", "principalKind"] {
@@ -3993,6 +4009,35 @@ const STORAGE_PROFILE_UPSERT_PROOF_FIELDS: &[&str] = &[
     "openLineageHashes",
 ];
 
+const CREDENTIAL_VENDING_PROOF_FIELDS: &[&str] = &["restricted", "trustedHuman"];
+
+const CREDENTIAL_VENDING_BRANCH_FIELDS: &[&str] = &[
+    "principalSubject",
+    "principalKind",
+    "credentialCount",
+    "credentialPrefixHashes",
+    "rawCredentialExceptionAllowed",
+    "rawCredentialExceptionReason",
+    "blockReason",
+    "maxCredentialTtlSeconds",
+    "storageProfile",
+    "authorizationReceiptHash",
+    "authorizationReceiptAction",
+    "replayEventHashes",
+    "openLineageHashes",
+];
+
+const CREDENTIAL_STORAGE_PROFILE_FIELDS: &[&str] = &[
+    "profileId",
+    "provider",
+    "issuanceMode",
+    "locationPrefixHash",
+    "secretRefPresent",
+    "secretRefProvider",
+    "secretRefHash",
+    "graphEvents",
+];
+
 fn require_catalog_config_evidence(
     config: &serde_json::Map<String, Value>,
     principal: &str,
@@ -4153,7 +4198,17 @@ fn require_credential_vending_evidence(
     principal: &str,
     storage_profile_upsert: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
+    require_only_fields(
+        credentials,
+        CREDENTIAL_VENDING_PROOF_FIELDS,
+        "credentialVendingProof",
+    )?;
     let restricted = required_object(credentials, "restricted", "credentialVendingProof")?;
+    require_only_fields(
+        restricted,
+        CREDENTIAL_VENDING_BRANCH_FIELDS,
+        "credentialVendingProof.restricted",
+    )?;
     require_string_eq(
         restricted,
         "principalSubject",
@@ -4232,6 +4287,11 @@ fn require_credential_vending_evidence(
     )?;
 
     let trusted = required_object(credentials, "trustedHuman", "credentialVendingProof")?;
+    require_only_fields(
+        trusted,
+        CREDENTIAL_VENDING_BRANCH_FIELDS,
+        "credentialVendingProof.trustedHuman",
+    )?;
     require_non_empty_str(
         trusted,
         "principalSubject",
@@ -4375,6 +4435,7 @@ fn require_credential_storage_profile_evidence(
 ) -> lakecat_core::LakeCatResult<()> {
     let storage_profile = required_object(credential, "storageProfile", label)?;
     let storage_label = format!("{label}.storageProfile");
+    require_credential_storage_profile_schema(storage_profile, storage_label.as_str())?;
     require_non_empty_str(storage_profile, "profileId", storage_label.as_str())?;
     let provider = require_non_empty_str(storage_profile, "provider", storage_label.as_str())?;
     let issuance_mode =
@@ -4398,6 +4459,13 @@ fn require_credential_storage_profile_evidence(
     }
     require_positive_u64(storage_profile, "graphEvents", storage_label.as_str())?;
     Ok(())
+}
+
+fn require_credential_storage_profile_schema(
+    storage_profile: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    require_only_fields(storage_profile, CREDENTIAL_STORAGE_PROFILE_FIELDS, label)
 }
 
 fn require_storage_profile_provider_issuance_compatibility(
@@ -14820,6 +14888,61 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_credential_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["unverifiedCredentialClaim"] =
+            json!(qglake_fixture_hash("unverified-credential-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra credential proof fields");
+        let err = err.to_string();
+
+        assert!(err.contains("credentialVendingProof"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedCredentialClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_credential_branch_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]["unverifiedRawCredentialClaim"] =
+            json!(qglake_fixture_hash("unverified-raw-credential-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra credential branch fields");
+        let err = err.to_string();
+
+        assert!(err.contains("credentialVendingProof.trustedHuman"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedRawCredentialClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_credential_storage_profile_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["storageProfile"]
+            ["unverifiedStorageScopeClaim"] =
+            json!(qglake_fixture_hash("unverified-storage-scope-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra credential storage-profile fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("credentialVendingProof.restricted.storageProfile"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedStorageScopeClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_short_credential_replay_hashes() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["replayEventHashes"] =
@@ -18223,6 +18346,95 @@ mod tests {
             err.to_string().contains(
                 "captured LakeCat replay output.replay-evidence.credentials.restricted.blockReason mismatch"
             )
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_credential_fields() {
+        let temp = qglake_temp_dir("handoff-captured-credential-extra-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["credentials"]["unverifiedCredentialClaim"] =
+            json!(qglake_fixture_hash("unverified-credential-claim"));
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay credential proof should reject extra fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("captured LakeCat replay output.replay-evidence.credentials"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedCredentialClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_credential_branch_fields() {
+        let temp = qglake_temp_dir("handoff-captured-credential-branch-extra-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["credentials"]["trustedHuman"]["unverifiedRawCredentialClaim"] =
+            json!(qglake_fixture_hash("unverified-raw-credential-claim"));
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay credential branch should reject extra fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("captured LakeCat replay output.replay-evidence.credentials.trustedHuman"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedRawCredentialClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_credential_storage_profile_fields() {
+        let temp = qglake_temp_dir("handoff-captured-credential-storage-profile-extra-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["credentials"]["restricted"]["storageProfile"]["unverifiedStorageScopeClaim"] =
+            json!(qglake_fixture_hash("unverified-storage-scope-claim"));
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay credential storage profile should reject extra fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains(
+                "captured LakeCat replay output.replay-evidence.credentials.restricted.storageProfile"
+            ),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedStorageScopeClaim"),
+            "{err}"
         );
     }
 

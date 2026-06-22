@@ -7133,6 +7133,16 @@ That equality includes `credentialPrefixHashes`, `authorizationReceiptHash`,
 and `authorizationReceiptAction`, which closes the gap where a captured replay
 artifact could report a different redacted returned-credential set or
 authorization action while the compact summary still looked valid.
+The credential proof envelope is closed at three levels: the top-level
+`credentialVendingProof` object may only contain the restricted-agent and
+trusted-human branches; each branch may only contain the principal, credential
+count, redacted prefix hashes, raw-exception decision, TTL cap, storage-profile
+anchor, authorization receipt, replay hashes, and OpenLineage hashes LakeCat
+checks; and each nested storage-profile anchor may only contain the redacted
+profile identity, provider, issuance mode, storage-scope hash, secret-reference
+posture, and graph count. Extra raw credential or storage-scope claims are not
+Iceberg metadata, and QueryGraph should not treat them as catalog truth unless
+LakeCat promotes them into this checked proof contract.
 Both credential branches must carry a full authorization receipt hash, the
 `credentials-vend` authorization action, and replay/OpenLineage arrays whose
 entries are full `sha256:`-prefixed 64-hex digests, so the compact proof cannot

@@ -844,6 +844,12 @@ than storage-profile management would accept. The replay payload must also
 carry top-level `secret-ref-present` evidence that matches the nested storage
 profile, so compact credential proof cannot omit or contradict whether the
 selected credential root depends on an external secret reference.
+The compact `credentialVendingProof` object and captured LakeCat replay
+`credentials` object must stay closed over their compared field set at the
+top level, branch level, and nested redacted storage-profile level. Archived
+handoffs must reject unverified raw credential, storage-scope, authorization,
+replay, or OpenLineage claims before QueryGraph indexes them as accepted
+TypeSec-style credential decisions.
 Storage-profile upsert replay must be hash-only for storage roots: generated
 audit/outbox evidence records `location-prefix-hash`, and raw
 `location-prefix` values must fail before acknowledgement or projection.
