@@ -2376,6 +2376,20 @@ fn validate_table_record_scope(record: &TableRecord, ident: &TableIdent) -> Lake
     Ok(())
 }
 
+fn validate_namespace_scope(
+    namespace: &Namespace,
+    expected_warehouse: &WarehouseName,
+    row_warehouse: &WarehouseName,
+    row_namespace_path: &str,
+) -> LakeCatResult<()> {
+    if row_warehouse != expected_warehouse || namespace.path() != row_namespace_path {
+        return Err(LakeCatError::Internal(
+            "namespace row scope does not match namespace identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_policy_binding_scope(
     binding: &PolicyBinding,
     warehouse: &WarehouseName,
@@ -4696,7 +4710,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select namespace_json from namespaces
+                    "select namespace_json, warehouse, namespace_path from namespaces
                      where warehouse = ?1
                      order by namespace_path",
                     (warehouse.as_str(),),
@@ -4705,7 +4719,16 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut namespaces = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                namespaces.push(decode_namespace(row_string(&row, 0)?)?);
+                let namespace = decode_namespace(row_string(&row, 0)?)?;
+                let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+                let row_namespace_path = row_string(&row, 2)?;
+                crate::validate_namespace_scope(
+                    &namespace,
+                    warehouse,
+                    &row_warehouse,
+                    row_namespace_path.as_str(),
+                )?;
+                namespaces.push(namespace);
             }
             Ok(namespaces)
         }
@@ -4718,7 +4741,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select namespace_json from namespaces
+                    "select namespace_json, warehouse, namespace_path from namespaces
                      where warehouse = ?1 and namespace_path = ?2",
                     (warehouse.as_str(), namespace.path()),
                 )
@@ -4727,7 +4750,16 @@ pub mod turso_store {
             let Some(row) = rows.next().await.map_err(turso_error)? else {
                 return Err(namespace_not_found(namespace));
             };
-            decode_namespace(row_string(&row, 0)?)
+            let decoded = decode_namespace(row_string(&row, 0)?)?;
+            let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+            let row_namespace_path = row_string(&row, 2)?;
+            crate::validate_namespace_scope(
+                &decoded,
+                warehouse,
+                &row_warehouse,
+                row_namespace_path.as_str(),
+            )?;
+            Ok(decoded)
         }
 
         async fn drop_namespace(
@@ -7663,6 +7695,48 @@ pub mod turso_store {
                 store.drop_namespace(&warehouse, &occupied_namespace).await,
                 Err(LakeCatError::Conflict(message)) if message.contains("tables")
             ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_namespace_json_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            store
+                .create_namespace(&warehouse, namespace.clone())
+                .await
+                .unwrap();
+
+            let drifted = "other".parse::<Namespace>().unwrap();
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update namespaces set namespace_json = ?3 where warehouse = ?1 and namespace_path = ?2",
+                (
+                    warehouse.as_str(),
+                    namespace.path().as_str(),
+                    encode_json(drifted.parts()).unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            for err in [
+                store.list_namespaces(&warehouse).await.unwrap_err(),
+                store
+                    .load_namespace(&warehouse, &namespace)
+                    .await
+                    .unwrap_err(),
+                store
+                    .drop_namespace(&warehouse, &namespace)
+                    .await
+                    .unwrap_err(),
+            ] {
+                assert!(matches!(
+                    err,
+                    LakeCatError::Internal(message)
+                        if message.contains("namespace row scope does not match")
+                ));
+            }
         }
 
         #[tokio::test]

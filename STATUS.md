@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Validate Turso namespace row scope`.
+  Turso namespace reads now require decoded `namespace_json` to match the
+  selected warehouse row and namespace path before returning namespace lists,
+  loading a namespace, or dropping namespace state. Spliced durable namespace
+  JSON now fails before standard Iceberg namespace routes or QGLake bootstrap
+  can consume it.
+- Local verification for this Turso namespace row-scope slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_namespace_json_scope_drift -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Previous completed implementation/documentation slice:
   `Validate active view row scope`.
   Memory and Turso keyed active-view reads, plus Turso namespace view lists,
   now require decoded view `record_json` to match the selected warehouse,

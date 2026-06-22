@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened Turso namespace reads so decoded `namespace_json` must match the
+  selected warehouse row and namespace path before LakeCat lists, loads, or
+  drops a namespace. This keeps standard Iceberg namespace routes and QGLake
+  bootstrap from consuming namespace evidence spliced from another durable row.
 - Hardened active view reads so memory and Turso keyed reads, plus Turso
   namespace view lists, bind decoded `record_json` back to the selected
   warehouse, namespace, and view name before returning, updating, or dropping

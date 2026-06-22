@@ -614,6 +614,14 @@ create or load a table, write data, and commit new Iceberg metadata through
 QGLake exist. LakeCat may record evidence and emit events behind that path, but
 the client should still experience normal Iceberg catalog behavior.
 
+Because namespace routes are standard Iceberg surface area, LakeCat treats the
+durable namespace row as part of the compatibility contract. A Turso row
+selected as warehouse `local` and namespace path `default` must decode to that
+same namespace before LakeCat lists it, loads it, or drops it. That row/content
+check is not an Iceberg extension; it is LakeCat's local-store guard that keeps
+standard namespace responses and later QueryGraph bootstrap proof from trusting
+spliced durable JSON.
+
 Commit CAS, idempotency, pointer logs, audit/outbox, and replay validation are
 heavily hardened. The standard Iceberg concept is the optimistic pointer update:
 advance the current metadata location only when the expected requirements still
