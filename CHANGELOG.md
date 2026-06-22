@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a concrete catalog-concepts-in-practice
+  chapter. The new material walks PySpark, standard commit, Turso store,
+  governed agent scan, credential, QueryGraph/QGLake handoff, and Sail-planned
+  proof workflows while clearly separating standard Iceberg parlance from
+  LakeCat implementation, TypeSec governance extensions, QueryGraph
+  integration surfaces, and narrow future Iceberg-adjacent profile candidates.
 - Hardened Turso soft-delete restore so durable `soft_deletes` row scope,
   metadata location, version, and timestamp columns must match the decoded
   soft-delete record before a table can be restored. The regression tampers the

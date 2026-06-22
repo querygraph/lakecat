@@ -5,6 +5,14 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Expand catalog concepts in practice`.
+  The book now has a concrete catalog-concepts-in-practice chapter that walks
+  PySpark, standard commit proof, Turso store invariants, governed agent scan,
+  credential posture, QueryGraph/QGLake handoff, and Sail-planned proof
+  workflows. It explicitly delineates standard Iceberg parlance from LakeCat
+  implementation, TypeSec governance extensions, QueryGraph integration
+  surfaces, and narrow future Iceberg-adjacent optional profile candidates.
 - Latest implementation slice:
   `Reject Turso soft-delete row scope drift`.
   Turso restore now validates durable `soft_deletes` row scope, metadata
