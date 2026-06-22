@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-contract slice:
+  `Pin release ledger and standards guidance in contract`.
+  `scripts/check-local-dependency-contract.sh` now treats the living
+  first-release ledger and book taxonomy as executable contract. It requires
+  `DESIGN.md` to keep the release-blocking and release-deferred scopes, local
+  release-readiness and QGLake handoff proof commands, standard Iceberg
+  compatibility claim, and honest `typed-sail=unavailable` posture. It also
+  requires the book to keep the standard/extension/proposal taxonomy, the
+  LakeCat/Sail responsibility ledger, the first-release readiness section, and
+  the same typed Sail v4 posture.
+- Local verification for this release-contract slice is green:
+  `scripts/check-local-dependency-contract.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed.
 - Latest book slice:
   `Clarify catalog standards and Sail boundaries in the book`.
   The book now has a canonical front-of-book taxonomy for standard Iceberg

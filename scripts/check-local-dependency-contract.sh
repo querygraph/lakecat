@@ -98,6 +98,9 @@ fi
 require_file Cargo.toml
 require_file .github/workflows/ci.yml
 require_file scripts/check-release-readiness.sh
+require_file DESIGN.md
+require_file README.md
+require_file docs/book/lakecat.md
 
 require_pattern 'workflow_dispatch:' .github/workflows/ci.yml \
   "CI must remain manual-only through workflow_dispatch"
@@ -118,6 +121,31 @@ require_pattern 'cargo test -p lakecat-service --features grust-local --lib' scr
   "release-readiness gate must prove service outbox projection through the Grust feature"
 require_pattern 'scripts/qglake-handoff-local.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must include the QGLake handoff proof"
+
+require_pattern '### First-Release Ledger' DESIGN.md \
+  "DESIGN.md must keep the first-release ledger as the living release scope"
+require_pattern 'Release-blocking scope:' DESIGN.md \
+  "DESIGN.md must name the release-blocking scope"
+require_pattern 'Release-deferred scope:' DESIGN.md \
+  "DESIGN.md must name the release-deferred scope"
+require_pattern 'standard Iceberg REST surface' DESIGN.md \
+  "DESIGN.md first-release ledger must preserve the standard Iceberg compatibility claim"
+require_pattern 'typed-sail=unavailable' DESIGN.md \
+  "DESIGN.md must preserve the honest typed Sail v4 posture"
+require_pattern 'scripts/check-release-readiness.sh' DESIGN.md \
+  "DESIGN.md must name the local release-readiness proof"
+require_pattern 'scripts/qglake-handoff-local.sh' DESIGN.md \
+  "DESIGN.md must name the QGLake handoff proof"
+require_pattern 'First-release scope is intentionally narrower' README.md \
+  "README.md must preserve the first-release scope warning"
+require_pattern '### Standard, Extension, Or Proposal\?' docs/book/lakecat.md \
+  "LakeCat book must keep the standard/extension/proposal taxonomy"
+require_pattern 'The handoff between LakeCat and Sail should therefore be compact and typed' docs/book/lakecat.md \
+  "LakeCat book must keep the LakeCat/Sail responsibility ledger"
+require_pattern '## First Release Readiness' docs/book/lakecat.md \
+  "LakeCat book must keep the first-release readiness section"
+require_pattern 'typed-sail=unavailable' docs/book/lakecat.md \
+  "LakeCat book must preserve the honest typed Sail v4 posture"
 
 require_pattern 'grust-graph = \{ package = "grust-graph", version = "0\.9\.0",' Cargo.toml \
   "grust-graph must use the published 0.9.0 crate"

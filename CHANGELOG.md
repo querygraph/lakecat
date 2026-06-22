@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Pinned the first-release ledger and standards-boundary book guidance in the
+  local dependency contract. The contract now fails if `DESIGN.md` drops the
+  release-blocking/deferred scope, the local release and QGLake proof commands,
+  or the honest `typed-sail=unavailable` v4 posture, or if the book loses the
+  standard/extension/proposal taxonomy, LakeCat/Sail responsibility ledger, or
+  first-release readiness section.
 - Expanded the front-of-book catalog concept guide with a canonical
   standard/implementation/extension/proposal taxonomy. The new text
   distinguishes standard Iceberg namespace/table/CAS semantics from LakeCat's
