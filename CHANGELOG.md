@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed service outbox admission over governed read-restriction schemas.
+  `table.scan-planned`, `table.scan-tasks-fetched`, and governed
+  credential-vending replay now reject unexpected top-level
+  `read-restriction` fields and nested `row-predicate` fields before outbox
+  acknowledgement, graph projection, OpenLineage projection, or later QGLake
+  proof can inherit unverified restriction claims.
 - Added a dedicated book chapter that maps catalog concepts by boundary:
   standard Iceberg clients, LakeCat catalog authority, Sail engine
   interpretation, TypeSec governance, Grust graph mechanics, and

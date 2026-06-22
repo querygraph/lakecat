@@ -5181,7 +5181,11 @@ narrowing that the durable receipt did not capture. The same admission boundary
 requires governed scan replay to keep a nonblank `purpose` and a positive
 `max-credential-ttl-seconds` value before graph or OpenLineage projection, so a
 QGLake handoff cannot learn task evidence whose purpose or credential TTL cap
-was lost before replay.
+was lost before replay. The service now also rejects unexpected fields inside
+top-level and receipt `read-restriction` objects, and inside nested
+`row-predicate` objects, before outbox acknowledgement. That keeps graph,
+OpenLineage, and QGLake evidence from inheriting extra unverified claims beside
+the known governed restriction fields.
 
 ## The Commit Path
 
@@ -7089,7 +7093,10 @@ index it as if it were part of the Sail-planned read. The planned/fetched
 read-restriction objects are closed too, as are their row-predicate children,
 so an archived proof cannot smuggle an unverified purpose, policy, predicate,
 projection, or credential-scope claim inside a restriction object whose core
-fields happen to match. Captured
+fields happen to match. The service outbox admission path enforces the same
+closed schema before graph or OpenLineage projection, so the handoff verifier is
+confirming evidence that was already constrained at the catalog boundary rather
+than cleaning it up after delivery. Captured
 scan replay-line recomputation also reuses the governed read-restriction guard,
 so an archived replay artifact cannot make empty planned or fetched
 `allowed-columns` look like a readable operator summary. It also compares the captured

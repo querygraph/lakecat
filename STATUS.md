@@ -5,6 +5,30 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Close service read-restriction schemas`.
+  Service outbox admission now rejects unexpected governed
+  `read-restriction` fields and nested `row-predicate` fields for
+  `table.scan-planned`, `table.scan-tasks-fetched`, and governed
+  credential-vending replay before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake handoff proof can inherit unverified
+  restriction claims. The design and book now distinguish this service-side
+  closed-schema guard from the later compact handoff verifier.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan_extra_read_restriction_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan_extra_row_predicate_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service credential_vend_rejects_extra_read_restriction_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand catalog boundary concepts`.
   The book now has a dedicated boundary-map chapter that explains the Rust

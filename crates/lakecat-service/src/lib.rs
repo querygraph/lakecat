@@ -1481,6 +1481,69 @@ fn validate_read_restriction_policy_hashes(
     Ok(())
 }
 
+const READ_RESTRICTION_EVIDENCE_FIELDS: &[&str] = &[
+    "allowed-columns",
+    "row-predicate",
+    "purpose",
+    "policy-hashes",
+    "max-credential-ttl-seconds",
+];
+const ROW_PREDICATE_EVIDENCE_FIELDS: &[&str] = &["type", "term", "value"];
+
+fn validate_read_restriction_evidence_schema(
+    event: &OutboxEvent,
+    restriction: Option<&Value>,
+    evidence_label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(restriction) = restriction else {
+        return Ok(());
+    };
+    let Some(restriction) = restriction.as_object() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{evidence_label} must be an object"),
+        ));
+    };
+    for field in restriction.keys() {
+        if !READ_RESTRICTION_EVIDENCE_FIELDS.contains(&field.as_str()) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{evidence_label} contains unexpected field {field}"),
+            ));
+        }
+    }
+    if let Some(row_predicate) = restriction.get("row-predicate") {
+        validate_row_predicate_evidence_schema(
+            event,
+            row_predicate,
+            &format!("{evidence_label} row-predicate"),
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_row_predicate_evidence_schema(
+    event: &OutboxEvent,
+    row_predicate: &Value,
+    evidence_label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(row_predicate) = row_predicate.as_object() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{evidence_label} must be an object"),
+        ));
+    };
+    for field in row_predicate.keys() {
+        if !ROW_PREDICATE_EVIDENCE_FIELDS.contains(&field.as_str()) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{evidence_label} contains unexpected field {field}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn validate_required_read_restriction_policy_hashes(
     event: &OutboxEvent,
     restriction: Option<&Value>,
@@ -2204,6 +2267,16 @@ fn validate_scan_planned_event_evidence(
         "scan-planned",
         &effective_projection,
     )?;
+    validate_read_restriction_evidence_schema(
+        event,
+        payload.get("read-restriction"),
+        "scan-planned read-restriction",
+    )?;
+    validate_read_restriction_evidence_schema(
+        event,
+        authorization_receipt_read_restriction(payload),
+        "scan-planned authorization receipt read-restriction",
+    )?;
     validate_required_read_restriction_policy_hashes(
         event,
         payload.get("read-restriction"),
@@ -2313,6 +2386,16 @@ fn validate_scan_tasks_fetched_event_evidence(
         payload,
         "scan-tasks-fetched",
         &effective_stats,
+    )?;
+    validate_read_restriction_evidence_schema(
+        event,
+        payload.get("read-restriction"),
+        "scan-tasks-fetched read-restriction",
+    )?;
+    validate_read_restriction_evidence_schema(
+        event,
+        authorization_receipt_read_restriction(payload),
+        "scan-tasks-fetched authorization receipt read-restriction",
     )?;
     validate_required_read_restriction_policy_hashes(
         event,
@@ -3801,6 +3884,16 @@ fn validate_credential_vend_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_read_restriction_evidence_schema(
+        event,
+        payload.get("read-restriction"),
+        "credential-vend read-restriction",
+    )?;
+    validate_read_restriction_evidence_schema(
+        event,
+        authorization_receipt_read_restriction(payload),
+        "credential-vend authorization receipt read-restriction",
+    )?;
     validate_read_restriction_receipt_match(event, payload, "credential-vend")?;
     validate_read_restriction_purpose_and_ttl(event, payload, "credential-vend")?;
     validate_raw_credential_exception_receipt_match(event, payload)?;
@@ -26623,6 +26716,325 @@ mod tests {
                 "malformed row-predicate replay must fail before lineage projection"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_scan_extra_read_restriction_fields() {
+        let cases = [
+            (
+                "table.scan-planned",
+                "scan-planned",
+                "evt-scan-plan-extra-read-restriction",
+                "audit-scan-plan-extra-read-restriction",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "evt-scan-fetch-extra-read-restriction",
+                "audit-scan-fetch-extra-read-restriction",
+            ),
+        ];
+
+        for (event_type, label, event_id, audit_event_id) in cases {
+            let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+            let ident = table_ident("local", "default", "events").unwrap();
+            let read_restriction = json!({
+                "allowed-columns": ["event_id"],
+                "row-predicate": {
+                    "type": "not-eq",
+                    "term": "severity",
+                    "value": "debug"
+                },
+                "purpose": "qglake-agent-demo",
+                "max-credential-ttl-seconds": 300,
+                "policy-hashes": [
+                    content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                        .unwrap()
+                ],
+                "unverified-restriction-claim": "graph-import-safe"
+            });
+            let payload = if event_type == "table.scan-planned" {
+                json!({
+                    "table": ident,
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": "sha256:policy",
+                        "context": {
+                            "read-restriction": read_restriction
+                        },
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "read-restriction": read_restriction,
+                    "requested-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "scan-task-count": 1
+                })
+            } else {
+                json!({
+                    "table": ident,
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": "sha256:policy",
+                        "context": {
+                            "read-restriction": read_restriction
+                        },
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "read-restriction": read_restriction,
+                    "required-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }],
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0
+                })
+            };
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": audit_event_id,
+                        "event-type": event_type,
+                        "table": ident,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("scan read-restriction evidence should reject extra fields");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(message.contains(&format!(
+                "{label} read-restriction contains unexpected field unverified-restriction-claim"
+            )));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "extra read-restriction replay must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "extra read-restriction replay must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "extra read-restriction replay must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_scan_extra_row_predicate_fields() {
+        let cases = [
+            (
+                "table.scan-planned",
+                "scan-planned",
+                "evt-scan-plan-extra-row-predicate",
+                "audit-scan-plan-extra-row-predicate",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "evt-scan-fetch-extra-row-predicate",
+                "audit-scan-fetch-extra-row-predicate",
+            ),
+        ];
+
+        for (event_type, label, event_id, audit_event_id) in cases {
+            let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+            let ident = table_ident("local", "default", "events").unwrap();
+            let read_restriction = json!({
+                "allowed-columns": ["event_id"],
+                "row-predicate": {
+                    "type": "not-eq",
+                    "term": "severity",
+                    "value": "debug",
+                    "unverified-predicate-claim": "already-pruned"
+                },
+                "purpose": "qglake-agent-demo",
+                "max-credential-ttl-seconds": 300,
+                "policy-hashes": [
+                    content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                        .unwrap()
+                ]
+            });
+            let payload = if event_type == "table.scan-planned" {
+                json!({
+                    "table": ident,
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": "sha256:policy",
+                        "context": {
+                            "read-restriction": read_restriction
+                        },
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "read-restriction": read_restriction,
+                    "requested-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "scan-task-count": 1
+                })
+            } else {
+                json!({
+                    "table": ident,
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": "sha256:policy",
+                        "context": {
+                            "read-restriction": read_restriction
+                        },
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "read-restriction": read_restriction,
+                    "required-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug",
+                        "unverified-predicate-claim": "already-pruned"
+                    }],
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0
+                })
+            };
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": audit_event_id,
+                        "event-type": event_type,
+                        "table": ident,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("scan row-predicate evidence should reject extra fields");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(message.contains(&format!(
+                "{label} read-restriction row-predicate contains unexpected field unverified-predicate-claim"
+            )));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "extra row-predicate replay must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "extra row-predicate replay must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "extra row-predicate replay must fail before lineage projection"
+            );
+        }
+    }
+
+    #[test]
+    fn credential_vend_rejects_extra_read_restriction_fields() {
+        let event = OutboxEvent {
+            event_id: "evt-credential-extra-read-restriction".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            payload: json!({}),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "always-true"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ],
+            "unverified-restriction-claim": "credential-safe"
+        });
+        let payload = json!({
+            "authorization-receipt": {
+                "context": {
+                    "read-restriction": read_restriction
+                }
+            },
+            "read-restriction": read_restriction
+        });
+
+        let err = validate_credential_vend_event_evidence(&event, &payload)
+            .expect_err("credential read-restriction evidence should reject extra fields");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(message.contains(
+            "credential-vend read-restriction contains unexpected field unverified-restriction-claim"
+        ));
+        assert!(!message.contains("evt-credential-extra-read-restriction"));
     }
 
     #[tokio::test]

@@ -546,7 +546,13 @@ non-empty, non-blank, and duplicate-free before narrowing proof is accepted;
 present-but-empty scan proof arrays are malformed, not an implicit unrestricted
 projection.
 Service outbox admission must enforce the same field-array shape before graph
-or OpenLineage projection, not only in later CLI replay verification.
+or OpenLineage projection, not only in later CLI replay verification. The
+service boundary now also closes governed top-level and authorization-receipt
+read-restriction objects over `allowed-columns`, `row-predicate`, `purpose`,
+`policy-hashes`, and `max-credential-ttl-seconds`, and closes nested
+row-predicate objects over `type`, `term`, and `value`, so scan replay cannot
+carry unverified restriction or predicate claims into graph, OpenLineage, or
+later QGLake proof.
 Scan-planned and scan-tasks-fetched outbox admission must also reject missing
 or malformed `row-predicate` proof whenever governed read-restriction evidence
 is present, and fetched `required-filters` proof must exactly preserve that
