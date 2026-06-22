@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Validate Turso policy binding row scope`.
+  Turso policy-binding reads now require decoded `binding_json` to match the
+  row/query warehouse and policy id before returning policy lists or matching
+  policies for a table. Spliced durable policy JSON now fails before QGLake,
+  governed scan planning, or policy matching can consume it.
+- Local verification for this Turso policy-binding row-scope slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_policy_binding_json_scope_drift -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Validate Turso table record row scope`.
   Turso standard table reads, list reads, commit-row loads, soft-delete loads,
   restore loads, and idempotency replay now require decoded table JSON to

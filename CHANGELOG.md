@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened Turso policy-binding reads so decoded `binding_json` must match the
+  row/query warehouse and policy id before LakeCat lists policies or matches
+  policies for a table. This prevents QGLake and governed scan paths from
+  consuming policy evidence spliced from another durable policy row.
 - Hardened Turso table record reads and idempotency replay so decoded
   `record_json` / `response_json` must match the row/query table identity
   before LakeCat returns table records, replays idempotent commit responses,

@@ -2361,6 +2361,20 @@ fn validate_table_record_scope(record: &TableRecord, ident: &TableIdent) -> Lake
     Ok(())
 }
 
+fn validate_policy_binding_scope(
+    binding: &PolicyBinding,
+    warehouse: &WarehouseName,
+    policy_id: &str,
+) -> LakeCatResult<()> {
+    binding.validate()?;
+    if binding.warehouse != *warehouse || binding.policy_id != policy_id {
+        return Err(LakeCatError::Internal(
+            "policy binding row scope does not match binding identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn view_key(view: &ViewRecord) -> String {
     view_key_parts(&view.warehouse, &view.namespace, &view.name)
 }
@@ -6061,7 +6075,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select binding_json from policy_bindings
+                    "select binding_json, policy_id from policy_bindings
                      where warehouse = ?1
                      order by policy_id",
                     (warehouse.as_str(),),
@@ -6071,7 +6085,11 @@ pub mod turso_store {
             let mut bindings = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
                 let binding: PolicyBinding = decode_json(row_string(&row, 0)?)?;
-                binding.validate()?;
+                crate::validate_policy_binding_scope(
+                    &binding,
+                    warehouse,
+                    row_string(&row, 1)?.as_str(),
+                )?;
                 bindings.push(binding);
             }
             Ok(bindings)
@@ -9883,6 +9901,54 @@ pub mod turso_store {
                 err,
                 LakeCatError::InvalidArgument(message)
                     if message.contains("table-scoped policy binding requires namespace")
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_policy_binding_json_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let table = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("events").unwrap(),
+            );
+            let mut binding = PolicyBinding::new(
+                "table-policy",
+                warehouse.clone(),
+                Some(namespace),
+                Some(TableName::new("events").unwrap()),
+                true,
+                serde_json::json!({"uid": "policy:table-policy"}),
+            )
+            .unwrap();
+            store.upsert_policy_binding(binding.clone()).await.unwrap();
+            binding.policy_id = "other-policy".to_string();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update policy_bindings set binding_json = ?2 where policy_key = ?1",
+                (
+                    policy_binding_key(&warehouse, "table-policy"),
+                    encode_json(&binding).unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store.list_policy_bindings(&warehouse).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("policy binding row scope does not match")
+            ));
+
+            let err = store.policy_bindings_for_table(&table).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("policy binding row scope does not match")
             ));
         }
 

@@ -242,12 +242,14 @@ The current working plan is:
    redacted in replay, represented by provider labels, presence flags, and
    content hashes such as `location-prefix-hash`; validation failures should
    follow the same hash-only rule for storage roots, secret references,
-   public-config keys, and production resolver parse failures. Guarded view
-   mutations must reject invalid expected-version values before changing active
-   view state or appending view-version receipts, and memory/Turso mutation
-   paths must validate the existing receipt chain before appending a new view
-   receipt so corrupted durable history cannot be extended. Turso receipt reads
-   and mutation-chain lookups must also verify decoded receipt JSON against the
+   public-config keys, and production resolver parse failures. Turso
+   policy-binding reads must bind decoded JSON back to the row/query warehouse
+   and policy id before matching policies for tables. Guarded view mutations
+   must reject invalid expected-version values before changing active view state
+   or appending view-version receipts, and memory/Turso mutation paths must
+   validate the existing receipt chain before appending a new view receipt so
+   corrupted durable history cannot be extended. Turso receipt reads and
+   mutation-chain lookups must also verify decoded receipt JSON against the
    row/query warehouse, namespace, and view scope before returning or extending
    durable view-history evidence.
 6. Keep reproducibility ahead of integration claims. Run local gates before

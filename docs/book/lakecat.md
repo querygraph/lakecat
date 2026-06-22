@@ -664,6 +664,10 @@ captured policy material, raw lineage replay must carry the same policy id and
 ODRL hash, and compact QGLake `managementProof.policyUpsertProof` preserves the
 policy id, `odrlHash`, principal subject/kind, authorization receipt hash, the
 `policy-manage` action, graph event count, replay hash, and OpenLineage hash.
+The Turso store also binds decoded `binding_json` back to the row/query
+warehouse and policy id before listing policies or matching policies for a
+table, so a durable row for one policy cannot carry ODRL evidence for another
+policy id and still feed governed scans or QGLake proof.
 That is not standard Iceberg. It is LakeCat/TypeSec/QueryGraph governance
 evidence around a standard catalog that happens to serve Iceberg tables.
 
