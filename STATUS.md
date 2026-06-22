@@ -5,6 +5,22 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Clarify catalog standards and Sail boundaries in the book`.
+  The book now has a canonical front-of-book taxonomy for standard Iceberg
+  parlance, LakeCat implementation choices, optional LakeCat/TypeSec/QueryGraph
+  integration surfaces, and narrow future Iceberg-adjacent proposal candidates.
+  It explicitly classifies the Rust service/catalog spine, Turso-backed local
+  store, Iceberg REST namespace/table routes, commit CAS plus
+  idempotency/pointer-log/audit/outbox/replay hardening, governed scan and
+  credential receipt evidence, and QueryGraph/QGLake/OpenLineage proof
+  surfaces. The Sail section now includes a LakeCat/Sail responsibility ledger
+  for table load, governed scan, fetch-scan-task, commit, and metadata-as-data
+  work, making the engine-pushdown argument concrete.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest documentation slice:
   `Add first-release readiness ledger`.
   `DESIGN.md`, `README.md`, and the book now separate first-release blockers

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Expanded the front-of-book catalog concept guide with a canonical
+  standard/implementation/extension/proposal taxonomy. The new text
+  distinguishes standard Iceberg namespace/table/CAS semantics from LakeCat's
+  Rust/Turso/idempotency/pointer-log/audit/outbox/replay implementation,
+  TypeSec governance receipts, Grust graph ownership, QueryGraph/QGLake
+  integration, and the narrow proof behaviors that could become future
+  Iceberg-adjacent optional profiles. The Sail section now includes a compact
+  LakeCat/Sail responsibility ledger for table load, governed scan,
+  fetch-scan-task, commit, and metadata-as-data work.
 - Added a first-release readiness ledger to the living design, README, and
   book. The new text separates release-blocking catalog substrate behavior
   from deferred Sail/Grust/TypeSec/QueryGraph work, and names the local
