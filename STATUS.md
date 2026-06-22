@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover missing credential prefix hashes`.
+  Service replay regression coverage now proves returned
+  `credentials.vend-attempted` credential-response evidence rejects entries
+  that omit `prefix-hash` before acknowledgement, graph projection, or
+  OpenLineage projection. This pins the missing-field sibling of the existing
+  duplicate returned-credential prefix proof and keeps credential replay
+  evidence count-aligned around redacted storage prefixes.
+- Local verification for this credential prefix hash slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_missing_credential_response_prefix_hash -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib credential_response_prefix -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require scan receipt policy hash proof`.
   Service replay admission now requires governed `table.scan-planned` and
   `table.scan-tasks-fetched` authorization-receipt read-restriction evidence to

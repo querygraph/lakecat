@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving returned
+  `credentials.vend-attempted` credential-response evidence rejects entries
+  that omit `prefix-hash` before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Required governed scan authorization-receipt read-restriction replay evidence
   to carry `policy-hashes` at service admission, with planned and fetched scan
   regression coverage proving missing receipt-side policy digest proof fails
