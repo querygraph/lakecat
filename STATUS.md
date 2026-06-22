@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind commit-history receipt proof`.
+  Compact QGLake `tableCommitHistoryProof` and captured LakeCat replay evidence
+  now carry full authorization receipt hash proof and the read-side
+  `table-load` action for `table.commits-listed`, so archived pointer-history
+  evidence cannot keep valid commit hashes while dropping or drifting the
+  receipt action that authorized the commit-history read.
+- Local verification for this commit-history receipt-proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover handoff self-verifier action copies`.
   QGLake handoff artifact verification now has direct regression coverage for
   saved `lakecat-handoff-verify.json` top-level `requestIdentityProof` and

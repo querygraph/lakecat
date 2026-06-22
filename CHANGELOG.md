@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added compact QGLake table commit-history authorization receipt proof,
+  requiring `tableCommitHistoryProof` and captured LakeCat replay evidence to
+  carry a full authorization receipt hash and the `table-load` action before
+  archived pointer-history evidence is accepted.
 - Added QGLake handoff self-verifier regression coverage proving saved
   `lakecat-handoff-verify.json` top-level `requestIdentityProof` and
   `queryGraphBootstrapProof` copies cannot drift their authorization receipt

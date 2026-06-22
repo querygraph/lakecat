@@ -4324,18 +4324,22 @@ so an archived replay artifact cannot make empty planned or fetched
 `allowed-columns` look like a readable operator summary. It also compares the captured
 `replay-evidence.tableCommitHistory` object with
 `tableCommitHistoryProof`, including the commit count, sequence numbers, commit
-hashes, replay principal subject/kind, graph event count, replay hashes, and
-OpenLineage hashes that prove the pointer-log commit history was not rewritten
-between replay and summary and that the commit-history replay projected catalog
-graph evidence for the accepted actor. The compact verifier also requires the
-commit-history principal subject and kind to match the accepted QGLake handoff
-principal, requires the commit count to match the sequence-number and
-commit-hash arrays, requires every sequence number to be positive and strictly
-increasing, requires commit hashes to be duplicate-free, and requires positive
-graph event evidence plus replay and OpenLineage receipt hashes. Captured
+hashes, replay principal subject/kind, authorization receipt hash/action, graph
+event count, replay hashes, and OpenLineage hashes that prove the pointer-log
+commit history was not rewritten between replay and summary and that the
+commit-history replay projected catalog graph evidence for the accepted actor.
+The compact verifier also requires the commit-history principal subject and
+kind to match the accepted QGLake handoff principal, requires the authorization
+receipt hash to be a full SHA-256 digest, requires the authorization action to
+be the read-side `table-load` action for `table.commits-listed`, requires the
+commit count to match the sequence-number and commit-hash arrays, requires
+every sequence number to be positive and strictly increasing, requires commit
+hashes to be duplicate-free, and requires positive graph event evidence plus
+replay and OpenLineage receipt hashes. Captured
 raw lineage-drain regressions cover both missing and drifted commit-history
-principal subject and principal kind, so actor attribution must survive before
-the compact handoff proof exists. The service admission layer now rejects
+principal subject, principal kind, and authorization action, so actor and
+action attribution must survive before the compact handoff proof exists. The
+service admission layer now rejects
 `table.commits-listed` source replay whose authorization receipt principal is
 missing or malformed, whose top-level `principal-subject` or `principal-kind`
 is missing, or whose top-level actor summary drifts from the receipt before
@@ -4812,11 +4816,12 @@ receipt principal, a known authorization receipt action matching
 `table.commits-listed`, an affirmative authorization receipt decision, and a
 non-empty authorization receipt engine with an RFC3339 `checked_at` timestamp;
 compact QGLake proof also binds that pointer-log replay to the accepted
-principal subject/kind. The raw QGLake lineage-drain verifier checks the same
-accepted-principal and agent kind before compact handoff proof is generated, so
-malformed, denied, actor-drifted, action-drifted, action-less, decision-less,
-engine-less, or timeless pointer-log summaries cannot become delivered replay
-evidence.
+principal subject/kind, a full authorization receipt hash, and the `table-load`
+action. The raw QGLake lineage-drain verifier checks the same
+accepted-principal, agent kind, receipt hash, and action before compact handoff
+proof is generated, so malformed, denied, actor-drifted, action-drifted,
+action-less, decision-less, engine-less, or timeless pointer-log summaries
+cannot become delivered replay evidence.
 Credential-vend replay gets the same treatment: `credentials.vend-attempted`
 must carry a
 matching credential count, full duplicate-free credential-response prefix

@@ -2023,6 +2023,8 @@ fn verify_lakecat_replay_table_commit_history_matches_summary(
         "commitHashes",
         "principalSubject",
         "principalKind",
+        "authorizationReceiptHash",
+        "authorizationReceiptAction",
         "graphEvents",
         "replayEventHashes",
         "openLineageHashes",
@@ -3507,6 +3509,17 @@ fn require_table_commit_history_evidence(
         commit_history,
         "principalKind",
         principal_kind,
+        "tableCommitHistoryProof",
+    )?;
+    require_full_hash_str(
+        commit_history,
+        "authorizationReceiptHash",
+        "tableCommitHistoryProof",
+    )?;
+    require_string_eq(
+        commit_history,
+        "authorizationReceiptAction",
+        "table-load",
         "tableCommitHistoryProof",
     )?;
     let commit_count =
@@ -4997,6 +5010,8 @@ fn qglake_table_commit_history_replay_evidence_json(drain: &LineageDrainResponse
         "commitHashes": &commit_history.table_commit_hashes,
         "principalSubject": commit_history.principal_subject.as_deref(),
         "principalKind": commit_history.principal_kind.as_deref(),
+        "authorizationReceiptHash": commit_history.authorization_receipt_hash.as_deref(),
+        "authorizationReceiptAction": commit_history.authorization_receipt_action.as_deref(),
         "graphEvents": commit_history.graph_events,
         "replayEventHashes": &commit_history.replay_event_hashes,
         "openLineageHashes": &commit_history.replay_open_lineage_hashes,
@@ -8899,6 +8914,22 @@ fn verify_qglake_table_commit_history_replay(
                 .to_string(),
         ));
     }
+    if !commit_history
+        .authorization_receipt_hash
+        .as_deref()
+        .is_some_and(|hash| is_full_sha256_hash(hash))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain table commit history replay is missing authorization receipt hash evidence"
+                .to_string(),
+        ));
+    }
+    if commit_history.authorization_receipt_action.as_deref() != Some("table-load") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain table commit history replay table.commits-listed authorization receipt action does not match expected table-load"
+                .to_string(),
+        ));
+    }
     let commit_count = commit_history.table_commit_count.unwrap_or_default();
     if commit_count == 0
         || commit_history.table_commit_sequence_numbers.is_empty()
@@ -10502,6 +10533,8 @@ mod tests {
                     "commitHashes": [qglake_fixture_hash("commit")],
                     "principalSubject": "did:example:agent",
                     "principalKind": "agent",
+                    "authorizationReceiptHash": qglake_fixture_hash("table-commits-authorization"),
+                    "authorizationReceiptAction": "table-load",
                     "graphEvents": 1,
                     "replayEventHashes": [qglake_fixture_hash("commit-replay")],
                     "openLineageHashes": [qglake_fixture_hash("commit-openlineage")]
@@ -10920,6 +10953,8 @@ mod tests {
                     "commitHashes": [qglake_fixture_hash("commit")],
                     "principalSubject": "did:example:agent",
                     "principalKind": "agent",
+                    "authorizationReceiptHash": qglake_fixture_hash("table-commits-authorization"),
+                    "authorizationReceiptAction": "table-load",
                     "graphEvents": 1,
                     "replayEventHashes": [qglake_fixture_hash("commit-replay")],
                     "openLineageHashes": [qglake_fixture_hash("commit-openlineage")]
@@ -13156,6 +13191,34 @@ mod tests {
 
         assert!(err.to_string().contains("tableCommitHistoryProof"));
         assert!(err.to_string().contains("principalSubject mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_commit_history_authorization_hash() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["authorizationReceiptHash"] =
+            json!("sha256:table-commits");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short commit-history authorization hash");
+
+        assert!(err.to_string().contains("tableCommitHistoryProof"));
+        assert!(err.to_string().contains("authorizationReceiptHash"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_commit_history_authorization_action() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["authorizationReceiptAction"] =
+            json!("table-commit");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject wrong commit-history authorization action");
+
+        assert!(err.to_string().contains("tableCommitHistoryProof"));
+        assert!(err.to_string().contains("authorizationReceiptAction"));
+        assert!(err.to_string().contains("table-load"));
     }
 
     #[test]
@@ -15735,6 +15798,28 @@ mod tests {
             .expect_err("captured replay commit-history principal drift should be rejected");
         assert!(err.to_string().contains(
             "captured LakeCat replay output.replay-evidence.tableCommitHistory.principalSubject mismatch"
+        ));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_commit_history_action_drift() {
+        let temp = qglake_temp_dir("handoff-captured-table-commit-history-action-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["tableCommitHistory"]["authorizationReceiptAction"] =
+            json!("table-commit");
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay commit-history action drift should be rejected");
+        assert!(err.to_string().contains(
+            "captured LakeCat replay output.replay-evidence.tableCommitHistory.authorizationReceiptAction mismatch"
         ));
     }
 
@@ -24375,7 +24460,7 @@ mod tests {
             event_type: "table.commits-listed".to_string(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:table-commits-authorization".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("table-commits-authorization")),
             authorization_receipt_action: Some("table-load".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),

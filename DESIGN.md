@@ -602,8 +602,10 @@ admission must require a valid authorization receipt principal for every
 `principal-kind` to that receipt, and bind warehouse/namespace/table evidence
 to the durable outbox table identity, so graph and OpenLineage projection
 never observe actorless or cross-table pointer-log reads. Raw lineage-drain
-regressions continue to cover missing and drifted commit-history principal
-subject and principal kind before compact handoff proof generation.
+and compact handoff proof must also preserve a full authorization receipt hash
+and the read-side `table-load` action for `table.commits-listed`; regressions
+continue to cover missing and drifted commit-history principal subject,
+principal kind, and action proof before compact handoff proof generation.
 Pending outbox replay should stay deterministic across embedded and Turso stores, ordered by
 `created_at,event_id`, with batch limits applied after that order and with
 duplicate-safe delivery accounting. Draining should acknowledge delivery only
