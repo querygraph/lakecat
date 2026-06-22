@@ -83,6 +83,8 @@ if [[ "$mode" == "full" ]]; then
   run cargo test -p lakecat-service --features turso-local --lib -- --test-threads=1
   run cargo test -p lakecat-service --features sail-local --lib -- --test-threads=1
   run cargo test -p lakecat-service --features typesec-local --lib -- --test-threads=1
+  run cargo test -p lakecat-service --features grust-local --lib \
+    outbox_drain_projects_table_events_to_sinks -- --test-threads=1
   run cargo test -p lakecat-security --features typesec-local --lib -- --test-threads=1
   run cargo test -p lakecat-graph --features grust-local --lib -- --test-threads=1
   run cargo test -p lakecat-graph --features grust-local --lib \

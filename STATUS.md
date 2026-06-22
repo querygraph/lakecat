@@ -5,6 +5,13 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-gate slice:
+  `Add service Grust release gate`.
+  The full local `scripts/check-release-readiness.sh` gate now runs
+  `cargo test -p lakecat-service --features grust-local --lib outbox_drain_projects_table_events_to_sinks -- --test-threads=1`,
+  and `scripts/check-local-dependency-contract.sh` pins that row. This proves
+  the LakeCat service outbox boundary projects catalog events through the
+  Grust feature path, not only that the standalone graph crate compiles.
 - Latest release-readiness evidence:
   `scripts/check-release-readiness.sh` passed locally on 2026-06-22. This full
   local gate covered shell syntax checks, dependency-contract and workflow

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a service-level `grust-local` outbox projection row to the full
+  release-readiness gate and pinned it in the dependency contract, proving
+  LakeCat's service boundary still projects catalog events through the Grust
+  feature path.
 - Recorded a full local release-readiness pass, including default workspace
   tests, feature-gated Turso/Sail/TypeSec/Grust rows, all-features workspace
   library tests, book rebuild, and live QGLake handoff verification.

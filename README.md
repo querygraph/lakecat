@@ -95,7 +95,8 @@ scripts/check-release-readiness.sh
 ```
 
 The full gate runs the dependency contract, formatting, default workspace
-tests, integration feature tests, explicit all-features CLI tests,
-all-features workspace library tests, book rebuild, and QGLake handoff proof.
+tests, integration feature tests, the service-level Grust outbox projection
+row, explicit all-features CLI tests, all-features workspace library tests,
+book rebuild, and QGLake handoff proof.
 Use `--quick` for a faster script/contract smoke check while developing a
 narrow slice.
