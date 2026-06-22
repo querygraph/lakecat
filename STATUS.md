@@ -5,6 +5,25 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Clarify LakeCat catalog concepts in the book`.
+  The LakeCat book now gives the current catalog claims a sharper vocabulary:
+  standard Iceberg compatibility for REST namespace/table behavior and commit
+  CAS; LakeCat control-plane extensions for idempotency, pointer logs, audit,
+  outbox, and replay validation; TypeSec governance extensions for governed
+  scan and credential receipts; QueryGraph integration surfaces for QGLake,
+  OpenLineage, bootstrap, management, view, credential, and commit proof; and
+  narrow future Iceberg-adjacent profile candidates only after the
+  proper-noun-free portability test. The same slice adds an operational Sail
+  contract explaining why table-format interpretation, governed scan planning,
+  metadata-as-data, fetch-task revalidation, commit validation, and typed v4
+  work belong in Sail while LakeCat persists the proof envelope.
+- Local verification for this book slice is green so far:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/book slice:
   `Use bundle-local resolver for QGLake semantic reads`.
   QGLake handoff semantic artifact readers now reuse the same canonical

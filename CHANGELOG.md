@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expanded the book's catalog-concept chapter with a stricter standards
+  vocabulary for the current implementation claims. The chapter now separates
+  standard Iceberg compatibility, LakeCat control-plane extensions, TypeSec
+  governance extensions, QueryGraph integration surfaces, and narrow future
+  Iceberg-adjacent profile candidates, and adds an operational Sail contract
+  for table-format interpretation, governed scans, fetch-task revalidation,
+  metadata-as-data, commit validation, and typed v4 work.
 - Reused the QGLake bundle-local artifact resolver for semantic artifact reads.
   Captured output, bootstrap bundle, QueryGraph import-plan, and lineage-drain
   semantic verification now parse only artifacts that resolve under the handoff

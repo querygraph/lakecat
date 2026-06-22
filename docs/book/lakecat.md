@@ -8155,6 +8155,48 @@ become the place where v4 semantics are interpreted by hand. A catalog can
 record that a typed engine validated a v4 feature. It should not invent a
 parallel partial v4 engine.
 
+The practical rule is that "extension" should not mean "anything LakeCat can
+do." LakeCat has implementation extensions, governance extensions, and
+integration extensions, but only a small subset should ever be discussed as
+Iceberg-adjacent proposals. A feature belongs in a future Iceberg proposal only
+when it can be described without naming LakeCat, QueryGraph, TypeSec, Grust,
+Turso, or Sail, and when a different catalog and a different engine could
+implement it while preserving normal Iceberg behavior. That filter excludes
+the Rust service spine, the Turso store, QGLake handoff files, TypeSec receipt
+schemas, and QueryGraph graph import. It may include exact idempotent retry,
+redacted conflict proof, pointer-history inspection, replay-admissible catalog
+events, proof-carrying scan planning, governed credential-vending evidence, or
+typed v4 table interpretation. The first group is LakeCat's product and
+implementation work. The second group is the small standards-shaped material
+LakeCat can prove in production before proposing.
+
+This matters because LakeCat is intentionally trying to do two things at once.
+For the Iceberg community, it should be conservative: normal clients get
+normal namespace and table behavior, metadata stays pristine, and commits keep
+Iceberg's optimistic pointer model. For QueryGraph, it should be ambitious:
+every meaningful catalog action becomes a replayable, redacted, policy-bound,
+lineage-ready proof. Those two goals are compatible only if the proof remains
+beside the table contract rather than inside it. The book should therefore use
+precise phrases: "standard Iceberg" for the portable table/catalog behavior,
+"LakeCat control-plane extension" for additive proof around catalog actions,
+"TypeSec governance extension" for policy and secure-agent semantics,
+"QueryGraph integration surface" for semantic workflow handoff, and "possible
+Iceberg-adjacent profile" only for narrow optional behavior that has survived
+the proper-noun test.
+
+The current implementation claims line up with that vocabulary:
+
+| Claim | The phrase to use | Why |
+| --- | --- | --- |
+| Rust service/catalog spine exists. | LakeCat implementation spine. | It is how LakeCat implements catalog authority, not an Iceberg feature. |
+| Turso-backed local store direction is in place. | LakeCat durable local store. | It proves persistence and replay invariants through `CatalogStore`, but Iceberg does not care which database backs the catalog. |
+| Iceberg REST table and namespace paths exist. | Standard Iceberg compatibility. | These are the routes ordinary clients should use without knowing LakeCat-specific proof surfaces. |
+| Commit CAS is hardened. | Standard Iceberg behavior plus LakeCat reliability proof. | The pointer update model is standard; the conflict, retry, pointer-log, audit, and replay envelope is LakeCat hardening. |
+| Idempotency, pointer logs, audit/outbox, and replay validation are hardened. | LakeCat control-plane extensions; possible optional reliability/event profiles. | They are not required Iceberg metadata, but they may become portable catalog reliability ideas. |
+| Governed scan and credential paths have TypeSec-style receipt evidence. | LakeCat/TypeSec governance extension. | The table remains Iceberg; the receipt, purpose, restriction, TTL, and raw-credential posture are governance proof. |
+| QueryGraph/QGLake handoff is broad. | QueryGraph integration surface. | Bootstrap, OpenLineage, management, view, credential, commit, and graph/import proof are application workflow evidence, not table-format semantics. |
+| Typed v4 interpretation is needed. | Iceberg/Sail engine work. | v4 changes how table metadata should be interpreted, so LakeCat should consume Sail support rather than hand-roll it. |
+
 ### A PySpark User Sees Iceberg
 
 For a PySpark user, LakeCat should feel uneventful. The user configures an
@@ -8673,6 +8715,33 @@ engine work is reusable. That is the architecture: ordinary Iceberg at the
 boundary, strict catalog authority in LakeCat, table-format intelligence in
 Sail, governance in TypeSec, graph mechanics in Grust, and workflow integration
 in QueryGraph.
+
+Future code should use a simple test before adding table-shaped logic to
+LakeCat: would this code still be correct after schema evolution, partition
+evolution, delete files, manifest metric pruning, residual predicates, metadata
+tables, or typed v4 features appear? If the answer depends on those concepts,
+the code belongs in Sail. LakeCat can still initiate the operation and record
+the proof, but it should not own the interpretation.
+
+That gives LakeCat a crisp working contract with Sail:
+
+| LakeCat asks Sail for... | LakeCat records... | The user gets... |
+| --- | --- | --- |
+| A table load or validation over the current metadata pointer. | Metadata location, format version, validation status, and proof hash. | A standard Iceberg response plus stronger operator evidence. |
+| A governed scan plan for a TypeSec restriction. | Snapshot id, effective field ids, residual hash, delete posture, task count, plan hash, and receipt hash. | Bounded work instead of broad storage authority. |
+| Fetch-scan-task revalidation. | Requested and effective stats fields, restriction hash, replay event id, and outbox identity. | Proof that a later task fetch did not widen the original plan. |
+| Metadata-as-data over snapshots, manifests, files, partitions, and history. | Stable catalog anchors and replayable event hashes. | QueryGraph evidence without LakeCat scraping object storage. |
+| Commit or v4 metadata validation. | Engine validation result, pointer context, idempotency result, audit row, and outbox row. | A compatible commit path whose proof is tied to engine semantics. |
+
+Sail is a particularly good fit for this contract because it shares LakeCat's
+Rust systems posture without making LakeCat an engine. A Rust-to-Rust path can
+be in-process for hot validation and planning, typed enough to avoid local JSON
+guesswork, and close enough to Arrow and DataFusion that the same semantics can
+feed metadata-as-data, scan planning, and execution-facing surfaces. That is
+the core performance claim: parse and plan table metadata once, in the engine
+layer, and let the catalog persist compact evidence. It is also the core
+correctness claim: the proof should describe what the engine understood, not
+what a catalog handler guessed from nearby JSON.
 
 Catalog authority questions sound like this:
 
