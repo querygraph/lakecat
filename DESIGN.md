@@ -558,7 +558,10 @@ or encode them as null, but any other provider/hash value is rejected.
 Compact management proof must preserve the same duplicate-free ID invariant as
 service replay, so saved QGLake summaries and lineage-drain artifacts cannot
 inflate server, project, warehouse, policy, or storage-profile reads by
-repeating valid control-plane identities.
+repeating valid control-plane identities. It must also preserve warehouse-list
+project scope as compact `warehouseProjectId` evidence and reject malformed or
+unlisted scopes, so archived QGLake management proof cannot detach a
+project-filtered warehouse inventory from the project list it claims.
 
 ### P3 Commit Hardening
 

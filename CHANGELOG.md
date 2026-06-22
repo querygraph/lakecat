@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added QGLake compact management proof for warehouse-list `project-id` scope,
+  requiring saved handoff summaries and raw lineage-drain replay to reject
+  malformed or unlisted warehouse project scopes.
 - Required `warehouse.listed` replay evidence to reject blank or syntactically
   invalid `project-id` scope before acknowledgement, graph projection, or
   OpenLineage projection.

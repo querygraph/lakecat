@@ -4356,6 +4356,10 @@ unsigned counts, valid warehouse scope when warehouse-scoped, and valid optional
 project scope before delivery. The warehouse-list project scope is parsed as a
 project identifier, not accepted as an arbitrary string, so compact management
 proof cannot smuggle malformed project filters into QueryGraph or OpenLineage.
+QGLake preserves that scope as `warehouseProjectId` in compact
+`managementProof`, and the verifier requires it to match one of the compact
+`projectIds`. A saved handoff therefore cannot pair a project-filtered
+warehouse inventory with an unrelated or malformed project identity.
 View list and lifecycle replay must carry valid warehouse, namespace, view
 name, count, and receipt principal evidence before those view events become
 graph/OpenLineage material for QueryGraph. View-list replay also carries

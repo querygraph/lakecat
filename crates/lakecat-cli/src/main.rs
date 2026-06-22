@@ -3338,6 +3338,7 @@ fn require_management_evidence(
     let project_count = require_positive_u64(management, "projectCount", "managementProof")?;
     require_positive_u64(management, "projectGraphEvents", "managementProof")?;
     require_unique_string_array_count(management, "projectIds", project_count, "managementProof")?;
+    let project_ids = required_string_array(management, "projectIds", "managementProof")?;
     let warehouse_count = require_positive_u64(management, "warehouseCount", "managementProof")?;
     require_positive_u64(management, "warehouseGraphEvents", "managementProof")?;
     require_unique_string_array_count(
@@ -3346,6 +3347,18 @@ fn require_management_evidence(
         warehouse_count,
         "managementProof",
     )?;
+    if let Some(warehouse_project_id) =
+        optional_compact_management_id(management, "warehouseProjectId", "managementProof")?
+    {
+        if !project_ids
+            .iter()
+            .any(|project_id| project_id == warehouse_project_id)
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "managementProof.warehouseProjectId must match projectIds".to_string(),
+            ));
+        }
+    }
     require_positive_u64(management, "policyGraphEvents", "managementProof")?;
     require_unique_string_array_count(
         management,
@@ -3383,6 +3396,30 @@ fn require_management_evidence(
         require_full_hash_array(management, field, "managementProof")?;
     }
     Ok(())
+}
+
+fn optional_compact_management_id<'a>(
+    value: &'a serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<Option<&'a str>> {
+    let Some(value) = value.get(field) else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    let Some(id) = value.as_str() else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} must be a string when present"
+        )));
+    };
+    if !is_qglake_compact_management_id(id) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "{label}.{field} contains syntactically invalid compact management ID evidence"
+        )));
+    }
+    Ok(Some(id))
 }
 
 fn require_table_commit_history_evidence(
@@ -4768,6 +4805,7 @@ fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Optio
         "projectGraphEvents": project.graph_events,
         "warehouseCount": warehouse.warehouse_count.unwrap_or_default(),
         "warehouseNames": &warehouse.warehouse_names,
+        "warehouseProjectId": warehouse.management_scope_project_id.as_deref(),
         "warehouseGraphEvents": warehouse.graph_events,
         "policyBindingCount": policy.policy_binding_count,
         "policyIds": &policy.policy_ids,
@@ -8586,6 +8624,24 @@ fn verify_qglake_management_list_replay(
         warehouse_list.warehouse_count.unwrap_or_default(),
         "warehouse list",
     )?;
+    if let Some(project_id) = warehouse_list.management_scope_project_id.as_deref() {
+        if !is_qglake_compact_management_id(project_id) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain warehouse list replay contains syntactically invalid project scope evidence"
+                    .to_string(),
+            ));
+        }
+        if !project_list
+            .project_ids
+            .iter()
+            .any(|listed_project_id| listed_project_id == project_id)
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain warehouse list project scope does not match project list evidence"
+                    .to_string(),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -10300,6 +10356,7 @@ mod tests {
                     "projectGraphEvents": 1,
                     "warehouseCount": 1,
                     "warehouseNames": ["local"],
+                    "warehouseProjectId": "analytics",
                     "warehouseGraphEvents": 1,
                     "policyBindingCount": 1,
                     "policyIds": ["agent-columns"],
@@ -10698,6 +10755,7 @@ mod tests {
                     "projectCount": 1,
                     "projectGraphEvents": 1,
                     "warehouseCount": 1,
+                    "warehouseProjectId": "analytics",
                     "warehouseGraphEvents": 1,
                     "policyBindingCount": 1,
                     "policyGraphEvents": 1,
@@ -11893,6 +11951,39 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("syntactically invalid compact management ID evidence")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_invalid_warehouse_project_scope() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["warehouseProjectId"] =
+            json!("analytics/../../secret");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject invalid warehouse project scope");
+
+        assert!(err.to_string().contains("managementProof"));
+        assert!(err.to_string().contains("warehouseProjectId"));
+        assert!(
+            err.to_string()
+                .contains("syntactically invalid compact management ID evidence")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_unknown_warehouse_project_scope() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["warehouseProjectId"] =
+            json!("unlisted-project");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject unknown warehouse project scope");
+
+        assert!(err.to_string().contains("managementProof"));
+        assert!(
+            err.to_string()
+                .contains("warehouseProjectId must match projectIds")
         );
     }
 
@@ -22959,6 +23050,48 @@ mod tests {
     }
 
     #[test]
+    fn qglake_lineage_drain_verifier_rejects_invalid_warehouse_project_scope() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let warehouse_list = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "warehouse.listed")
+            .expect("warehouse list replay fixture");
+        warehouse_list.management_scope_project_id = Some("analytics/../../secret".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject malformed warehouse project scope");
+
+        assert!(err.to_string().contains("warehouse list"));
+        assert!(
+            err.to_string()
+                .contains("syntactically invalid project scope")
+        );
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_unknown_warehouse_project_scope() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let warehouse_list = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "warehouse.listed")
+            .expect("warehouse list replay fixture");
+        warehouse_list.management_scope_project_id = Some("unlisted-project".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject unlisted warehouse project scope");
+
+        assert!(err.to_string().contains("warehouse list"));
+        assert!(
+            err.to_string()
+                .contains("project scope does not match project list")
+        );
+    }
+
+    #[test]
     fn qglake_lineage_drain_verifier_rejects_duplicate_view_tombstone_receipt_hashes() {
         let verification = qglake_view_lineage_verification();
         let mut tombstone = qglake_view_tombstone_receipt_lineage_summary();
@@ -24431,7 +24564,7 @@ mod tests {
             required_filters: Vec::new(),
             requested_stats_fields: Vec::new(),
             effective_stats_fields: Vec::new(),
-            management_scope_project_id: None,
+            management_scope_project_id: Some("analytics".to_string()),
             management_scope_warehouse: None,
             standards: Vec::new(),
             credential_count: None,

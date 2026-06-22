@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake warehouse project scope`.
+  QGLake compact `managementProof` now carries warehouse-list
+  `warehouseProjectId` scope, and both saved handoff summaries and raw
+  lineage-drain verification reject malformed or unlisted warehouse project
+  scopes. This mirrors the service replay admission rule at the archived
+  QueryGraph handoff boundary.
+- Local verification for this QGLake management-scope slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-cli --features qglake-fixture qglake_fixture -- --test-threads=1`;
+  `docs/book/build.sh`.
+- Latest completed implementation slice:
   `Validate warehouse-list project scope`.
   Service replay admission now rejects `warehouse.listed` evidence whose
   optional `project-id` scope is blank or syntactically invalid before
