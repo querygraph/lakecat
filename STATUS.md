@@ -6,6 +6,24 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Cover empty commit-history proof`.
+  `table.commits-listed` now has focused service coverage for the standard
+  management case where a table exists but has no commit records yet. The
+  route emits explicit zero-count pointer-history proof, drains to lineage, and
+  does not fabricate loaded commit graph nodes; the design and book now spell
+  out that positive sequence and full-hash requirements apply to present
+  commit entries, not to an empty history.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service management_table_commits_empty_history_still_drains_zero_count_proof -- --test-threads=1`
+  passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover and contents render;
+  the versioned EPUB symlink resolves to `lakecat.epub`;
+  `scripts/check-release-readiness.sh --quick` passed.
+- Latest implementation/book slice:
   `Drain no-idempotency commits`.
   `table.commit` replay admission now keeps standard Iceberg clients
   compatible when they omit LakeCat's optional REST idempotency header:

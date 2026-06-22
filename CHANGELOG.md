@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added service coverage for the empty table commit-history path. A
+  `table.commits-listed` read over a table with no commit records now has a
+  regression proving it drains as explicit zero-count proof, emits lineage
+  evidence, and does not fabricate loaded commit graph nodes.
 - Kept standard Iceberg table commits compatible with clients that do not send
   LakeCat's REST idempotency header. `table.commit` replay admission now
   requires request/response hash evidence and validates

@@ -34232,6 +34232,110 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn management_table_commits_empty_history_still_drains_zero_count_proof() {
+        let store = MemoryCatalogStore::new();
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let app = app(
+            LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage,
+                ),
+        );
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"table-uuid":"11111111-1111-1111-1111-111111111111","location":"file:///tmp/events","last-sequence-number":7,"last-updated-ms":1710000000000,"last-column-id":1,"schemas":[{"type":"struct","schema-id":1,"fields":[{"id":1,"name":"id","type":"string","required":true}]}],"current-schema-id":1,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"current-snapshot-id":42,"snapshots":[{"snapshot-id":42,"sequence-number":7,"timestamp-ms":1710000000000,"summary":{"operation":"append"},"schema-id":1}],"snapshot-log":[{"timestamp-ms":1710000000000,"snapshot-id":42}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let list = Request::builder()
+            .method(Method::GET)
+            .uri("/management/v1/warehouses/local/namespaces/default/tables/events/commits")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(list).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["commits"], serde_json::json!([]));
+
+        let pending = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        let commit_read = pending
+            .iter()
+            .find(|event| event.event_type == "table.commits-listed")
+            .expect("empty commit history read should enter the durable outbox");
+        let commit_read_payload = &commit_read.payload["payload"];
+        assert_eq!(commit_read_payload["commit-count"], serde_json::json!(0));
+        assert_eq!(commit_read_payload["commit-hashes"], serde_json::json!([]));
+        assert_eq!(
+            commit_read_payload["sequence-numbers"],
+            serde_json::json!([])
+        );
+        assert_eq!(
+            commit_read_payload["principal-subject"],
+            serde_json::json!("operator@example.com")
+        );
+        assert_eq!(
+            commit_read_payload["principal-kind"],
+            serde_json::json!("human")
+        );
+
+        let drain = Request::builder()
+            .method(Method::POST)
+            .uri("/management/v1/lineage/drain")
+            .header("x-lakecat-principal", "operator@example.com")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(drain).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let commit_read_summary = body["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|event| event["event-type"] == "table.commits-listed")
+            .expect("drain should summarize the empty commit history read");
+        assert_eq!(commit_read_summary["graph-events"], serde_json::json!(1));
+        assert_eq!(commit_read_summary["lineage-events"], serde_json::json!(1));
+        assert_eq!(
+            commit_read_summary["table-commit-count"],
+            serde_json::json!(0)
+        );
+        assert_eq!(
+            commit_read_summary["table-commit-sequence-numbers"],
+            serde_json::json!([])
+        );
+        assert_eq!(
+            commit_read_summary["table-commit-hashes"],
+            serde_json::json!([])
+        );
+        assert!(
+            graph.events.lock().await.iter().all(|event| {
+                event.label != GraphNodeLabel::Commit || event.action != GraphAction::Loaded
+            }),
+            "empty commit history reads should not fabricate commit graph nodes"
+        );
+    }
+
+    #[tokio::test]
     async fn idempotent_commit_replay_does_not_rewrite_metadata_object() {
         let store = MemoryCatalogStore::new();
         let app = app(LakeCatState::new(

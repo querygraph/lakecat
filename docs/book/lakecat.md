@@ -7484,7 +7484,10 @@ pointer-history discipline before compact proof generation: the table commit
 count must match the sequence-number and commit-hash arrays, commit sequences
 must be positive and strictly increasing, and commit hashes must be
 SHA-256-shaped before pointer-history evidence can enter the compact handoff
-proof. Service route coverage pins the producer side too: request hashes,
+proof. A table with no recorded commit entries is still valid pointer-history
+evidence: it drains as an explicit zero-count read, emits lineage proof, and
+does not fabricate loaded commit graph nodes. Service route coverage pins the
+producer side too: request hashes,
 response hashes, idempotency-key hashes, and commit hashes are full SHA-256
 digests across the route response, pointer-log outbox payload, lineage-drain
 summary, and graph projection. The QGLake fixture verifier also checks the

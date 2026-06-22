@@ -691,8 +691,10 @@ profile root, without echoing the storage-profile id. Metadata object-store
 setup failures should likewise expose only metadata-location and backend-error
 hashes, not raw URI parse text, schemes, or backend diagnostics. Catalog state
 changes should not lose outbox side effects. Table commit-history replay must
-carry the accepted replay principal subject/kind, positive, strictly
-increasing sequence numbers, and duplicate-free commit hashes at the service
+carry the accepted replay principal subject/kind and an explicit commit count.
+An empty history is valid zero-count proof and must drain without fabricating
+commit graph nodes; present commit entries must carry positive, strictly
+increasing sequence numbers and duplicate-free commit hashes at the service
 outbox boundary, raw lineage-drain boundary, and compact handoff proof, so
 pointer-log evidence cannot drop or rewrite actor attribution, duplicate
 commits, or reorder between the catalog and QGLake proof. Service replay
