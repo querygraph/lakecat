@@ -2982,6 +2982,19 @@ fn validate_catalog_config_defaults(
             LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE,
         ),
     ];
+    let allowed_v4_keys = required
+        .iter()
+        .map(|(key, _)| *key)
+        .filter(|key| key.starts_with("lakecat.format.v4"))
+        .collect::<BTreeSet<_>>();
+    for key in default_keys {
+        if key.starts_with("lakecat.format.v4") && !allowed_v4_keys.contains(key) {
+            return Err(outbox_evidence_error(
+                event,
+                "catalog config-read defaults must not contain unsupported v4 bridge keys",
+            ));
+        }
+    }
     for (required_key, required_value) in required {
         let found = defaults.iter().any(|entry| {
             entry.get("key").and_then(Value::as_str) == Some(required_key)
@@ -21046,6 +21059,71 @@ mod tests {
         assert!(message.contains("catalog config-read defaults must not contain duplicate keys"));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-config-duplicate-default-key"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_unsupported_catalog_config_v4_defaults() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-config-unsupported-v4-default".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-config-unsupported-v4-default",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": [
+                            {"key": "lakecat.compatibility", "value": "iceberg-rest"},
+                            {"key": "lakecat.format.baseline", "value": "iceberg-v1-v3"},
+                            {"key": "lakecat.format.v4", "value": "extension-ready"},
+                            {"key": "lakecat.format.v4.bridge", "value": "json-passthrough"},
+                            {"key": "lakecat.format.v4.typed-sail", "value": "unavailable"},
+                            {"key": "lakecat.format.v4.typed-sail-preview", "value": "available"}
+                        ]
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("catalog config replay must reject unsupported v4 bridge defaults");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(
+            message.contains(
+                "catalog config-read defaults must not contain unsupported v4 bridge keys"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-config-unsupported-v4-default"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

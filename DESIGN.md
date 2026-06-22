@@ -812,6 +812,10 @@ tuples as unsupported.
 Replay evidence for those defaults must stay unambiguous: defaults are
 structured string key/value entries, duplicate keys are rejected, and stale or
 contradictory v4 bridge claims fail before graph or OpenLineage projection.
+Until typed Sail v4 support is available, `lakecat.format.v4*` defaults are a
+pinned claim namespace: replay must reject unsupported extra v4 bridge keys
+rather than letting future-looking typed-Sail claims coexist with
+`typed-sail=unavailable`.
 The local dependency contract is the guardrail while cloud CI is manual-only:
 it must reject automatic triggers across every GitHub workflow file, not just
 the primary CI workflow, including compact, block-list, inline-map, and quoted

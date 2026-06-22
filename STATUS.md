@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Reject unsupported catalog-config v4 claims`.
+  Catalog config replay now treats the `lakecat.format.v4*` defaults namespace
+  as a pinned compatibility claim set until typed Sail v4 support exists.
+  `catalog.config-read` evidence rejects unsupported extra v4 bridge keys,
+  such as preview typed-Sail claims, before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake handoff.
+- Local verification for this catalog-config v4-claim slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib catalog_config -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Require table lifecycle format evidence`.
   Table create/load/restore replay now carries and requires positive Iceberg
   `format-version` evidence alongside table version evidence. Table delete

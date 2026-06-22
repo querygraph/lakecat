@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened catalog-config v4 bridge replay: `catalog.config-read` evidence now
+  rejects unsupported extra `lakecat.format.v4*` default keys, even when the
+  required `extension-ready`, `json-passthrough`, and `typed-sail=unavailable`
+  claims are present. This keeps replay evidence from smuggling future typed
+  Sail claims before Sail exposes stable typed v4 support.
 - Hardened table lifecycle replay evidence: `table.created`, `table.loaded`,
   and `table.restored` events now carry positive Iceberg `format-version`
   evidence, and `table.deleted` carries the same table-format proof through the

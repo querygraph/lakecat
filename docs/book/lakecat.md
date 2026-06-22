@@ -4509,6 +4509,9 @@ projection. The replay defaults must also be ordinary string key/value entries
 with duplicate-free keys, so a saved outbox event cannot say both
 `lakecat.format.v4.typed-sail=unavailable` and
 `lakecat.format.v4.typed-sail=available`.
+LakeCat also rejects unsupported extra `lakecat.format.v4*` defaults, such as
+preview typed-Sail keys, because those would make the bridge posture sound more
+settled than the current Sail-owned typed v4 surface proves.
 
 The bridge is intentionally conservative, but it should not reject Iceberg
 metadata that Sail has already decoded. Manifest expansion now emits null
