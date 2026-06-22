@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed service outbox admission over top-level storage-profile upsert replay
+  payloads. `storage-profile.upserted` now rejects unexpected top-level payload
+  fields before acknowledgement, graph projection, OpenLineage projection, or
+  QGLake proof can inherit unverified storage-profile, credential-root,
+  governance, lineage, graph, QueryGraph, or application claims beside checked
+  warehouse, redacted storage-profile object, and authorization evidence.
 - Expanded the book's catalog-concepts explanation with a stricter
   standard-versus-extension-versus-future-profile decision rule. The book now
   more thoroughly separates standard Iceberg catalog/table vocabulary from

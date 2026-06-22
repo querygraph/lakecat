@@ -10026,6 +10026,17 @@ history, audit, and outbox behavior. Turso is an implementation choice. Atomic
 CAS, exact retry, pointer history, and replayable event identity are the
 portable behaviors.
 
+Storage-profile management is a concrete LakeCat control-envelope example.
+Iceberg does not define a LakeCat storage profile, but QueryGraph and governed
+agents need redacted proof of the catalog credential root that shaped a read or
+credential decision. LakeCat therefore records storage-profile upserts as
+catalog evidence with warehouse scope, provider, issuance mode, public config,
+secret-reference presence, and redacted prefix/secret hashes. Replay admission
+closes both the nested `storage-profile` object and the top-level
+`storage-profile.upserted` payload before graph, OpenLineage, or QGLake import,
+so an archived event cannot add unverified storage, governance, lineage, graph,
+or application claims beside the checked credential-root proof.
+
 ### TypeSec Terms
 
 Use these words as governance words:

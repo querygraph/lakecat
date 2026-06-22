@@ -935,6 +935,11 @@ the redacted producer schema for both `storage-profile.upserted` and
 `credentials.vend-attempted` replay. Unexpected nested storage-profile fields
 must fail before acknowledgement, graph projection, OpenLineage projection, or
 QGLake proof can inherit unverified credential-root or storage-scope claims.
+Service replay must also close the top-level `storage-profile.upserted`
+payload over the fields LakeCat actually compares, so an archived upsert cannot
+append unverified storage-profile, credential-root, governance, lineage, graph,
+QueryGraph, or application claims beside the checked warehouse, redacted
+storage-profile object, and authorization evidence.
 Management-upsert replay for policy bindings, projects, servers, storage
 profiles, and warehouses must also carry a valid authorization receipt
 principal plus an event-matching catalog action, affirmative allowed decision,
