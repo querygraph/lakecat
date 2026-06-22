@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened governed scan replay location evidence. When `table.scan-planned`
+  or `table.scan-tasks-fetched` replay carries `storage-location` or
+  `metadata-location`, service replay now rejects blank, decorated, or
+  credential-bearing values before acknowledgement, graph projection,
+  OpenLineage projection, QGLake proof, or QueryGraph import can inherit
+  drifted scan-location evidence.
 - Hardened credential-vend replay storage-location and mode evidence. When a
   `credentials.vend-attempted` event carries `storage-location`, service replay
   now rejects blank, decorated, or credential-bearing values, and any present

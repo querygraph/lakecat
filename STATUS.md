@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden governed scan location replay evidence`.
+  Service replay admission now validates optional `table.scan-planned` and
+  `table.scan-tasks-fetched` `storage-location` and `metadata-location`
+  evidence as non-empty, undecorated, credential-free strings before
+  acknowledgement, graph projection, OpenLineage projection, QGLake proof, or
+  QueryGraph import can inherit drifted governed scan-location evidence.
+- Local verification for this implementation/testing slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_scan_location_evidence -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Harden credential-vend storage-location and mode replay evidence`.
   Service replay admission now validates optional `credentials.vend-attempted`
   `storage-location` evidence as a non-empty, undecorated, credential-free

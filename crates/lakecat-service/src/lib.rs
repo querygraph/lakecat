@@ -2917,6 +2917,16 @@ fn validate_scan_planned_event_evidence(
     validate_required_payload_table_hint(event, payload, &table, "scan-planned")?;
     validate_required_unsigned_count_field(event, payload, "scan-task-count", "scan-planned")?;
     validate_authorization_receipt_principal(event, payload, "scan-planned")?;
+    validate_optional_location_evidence(
+        event,
+        payload.get("storage-location"),
+        "scan-planned storage-location",
+    )?;
+    validate_optional_location_evidence(
+        event,
+        payload.get("metadata-location"),
+        "scan-planned metadata-location",
+    )?;
 
     let requested_projection = validate_required_non_empty_string_array_field(
         event,
@@ -3018,6 +3028,16 @@ fn validate_scan_tasks_fetched_event_evidence(
         validate_required_unsigned_count_field(event, payload, field, "scan-tasks-fetched")?;
     }
     validate_plan_task_evidence(event, payload.get("plan-task"), "scan-tasks-fetched")?;
+    validate_optional_location_evidence(
+        event,
+        payload.get("storage-location"),
+        "scan-tasks-fetched storage-location",
+    )?;
+    validate_optional_location_evidence(
+        event,
+        payload.get("metadata-location"),
+        "scan-tasks-fetched metadata-location",
+    )?;
 
     let required_projection = validate_required_non_empty_string_array_field(
         event,
@@ -15896,6 +15916,190 @@ mod tests {
             assert!(
                 lineage.events.lock().await.is_empty(),
                 "{event_type} {invalid_case} receipt must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_scan_location_evidence() {
+        let cases = [
+            (
+                "table.scan-planned",
+                "scan-planned",
+                "storage-location",
+                "blank-storage-location",
+                json!(" "),
+                "scan-planned storage-location must be a non-empty string",
+            ),
+            (
+                "table.scan-planned",
+                "scan-planned",
+                "metadata-location",
+                "decorated-metadata-location",
+                json!("s3://lakecat-demo/events/metadata/00000.json?token=secret"),
+                "scan-planned metadata-location must not contain decorated location material",
+            ),
+            (
+                "table.scan-planned",
+                "scan-planned",
+                "storage-location",
+                "credential-bearing-storage-location",
+                json!("s3://lakecat-demo/events/session_token=secret"),
+                "scan-planned storage-location must not contain credential material",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "storage-location",
+                "blank-storage-location",
+                json!(" "),
+                "scan-tasks-fetched storage-location must be a non-empty string",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "metadata-location",
+                "decorated-metadata-location",
+                json!("s3://lakecat-demo/events/metadata/00000.json#secret"),
+                "scan-tasks-fetched metadata-location must not contain decorated location material",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "storage-location",
+                "credential-bearing-storage-location",
+                json!("s3://lakecat-demo/events/access_key=secret"),
+                "scan-tasks-fetched storage-location must not contain credential material",
+            ),
+        ];
+
+        for (event_type, label, field, case, value, expected_message) in cases {
+            let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+            let ident = table_ident("local", "default", "events").unwrap();
+            let policy_hash =
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap();
+            let read_restriction = json!({
+                "allowed-columns": ["event_id"],
+                "row-predicate": {
+                    "type": "not-eq",
+                    "term": "severity",
+                    "value": "debug"
+                },
+                "purpose": "qglake-agent-demo",
+                "max-credential-ttl-seconds": 300,
+                "policy-hashes": [policy_hash]
+            });
+            let mut payload = if event_type == "table.scan-planned" {
+                json!({
+                    "table": ident.clone(),
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "context": {
+                            "read-restriction": read_restriction
+                        },
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "planned-by": "lakecat-sail",
+                    "snapshot-id": 42,
+                    "scan-task-count": 1,
+                    "storage-location": "s3://lakecat-demo/events",
+                    "metadata-location": "s3://lakecat-demo/events/metadata/00000.json",
+                    "read-restriction": read_restriction,
+                    "requested-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"]
+                })
+            } else {
+                json!({
+                    "table": ident.clone(),
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "context": {
+                            "read-restriction": read_restriction
+                        },
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "planned-by": "lakecat-sail",
+                    "snapshot-id": 42,
+                    "plan-task": "lakecat:plan:abc",
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0,
+                    "storage-location": "s3://lakecat-demo/events",
+                    "metadata-location": "s3://lakecat-demo/events/metadata/00000.json",
+                    "read-restriction": read_restriction,
+                    "required-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }]
+                })
+            };
+            payload[field] = value;
+            let event_id = format!("evt-{label}-{case}");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{label}-{case}"),
+                        "event-type": event_type,
+                        "table": ident,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed scan location evidence should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(
+                message.contains(expected_message),
+                "{event_type} should reject {case}: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} {case} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} {case} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} {case} must fail before lineage projection"
             );
         }
     }
