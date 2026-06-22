@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Closed service outbox admission over top-level view receipt read payloads.
+  `view.version-receipts-listed` and
+  `view.version-receipt-chains-listed` now reject unexpected top-level payload
+  fields before acknowledgement, graph projection, OpenLineage projection, or
+  QGLake proof can inherit unverified view-history, lineage, graph,
+  QueryGraph, or application claims beside checked receipt hashes, chain hashes,
+  tombstone counts, warehouse/namespace scope, and authorization evidence.
 - Closed service outbox admission over namespace lifecycle replay payloads.
   `namespace.created`, `namespace.loaded`, and `namespace.dropped` now reject
   unexpected top-level payload fields before acknowledgement, graph projection,

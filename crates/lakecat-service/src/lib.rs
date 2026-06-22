@@ -1598,6 +1598,30 @@ const VIEW_RECEIPT_CHAIN_RECEIPT_EVIDENCE_FIELDS: &[&str] = &[
     "principal-kind",
     "recorded-at",
 ];
+const VIEW_RECEIPT_LIST_EVIDENCE_FIELDS: &[&str] = &[
+    "event-type",
+    "authorization-receipt",
+    "warehouse",
+    "namespace",
+    "view",
+    "receipt-count",
+    "receipt-hashes",
+    "drop-receipt-hashes",
+];
+const VIEW_RECEIPT_CHAIN_LIST_EVIDENCE_FIELDS: &[&str] = &[
+    "event-type",
+    "authorization-receipt",
+    "warehouse",
+    "namespace",
+    "chain-count",
+    "receipt-count",
+    "tombstone-count",
+    "chain-verified-count",
+    "view-version-receipt-chains",
+    "chain-hashes",
+    "receipt-hashes",
+    "drop-receipt-hashes",
+];
 const TABLE_IDENTITY_EVIDENCE_FIELDS: &[&str] = &["warehouse", "namespace", "name"];
 const TABLE_COMMIT_EVIDENCE_FIELDS: &[&str] = &[
     "table",
@@ -4855,6 +4879,12 @@ fn validate_view_receipt_list_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_object_evidence_schema(
+        event,
+        payload,
+        "view receipt-list",
+        VIEW_RECEIPT_LIST_EVIDENCE_FIELDS,
+    )?;
     validate_required_warehouse_field(event, payload, "view receipt-list")?;
     let Some(namespace) = payload.get("namespace") else {
         return Err(outbox_evidence_error(
@@ -4915,6 +4945,12 @@ fn validate_view_receipt_chain_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_object_evidence_schema(
+        event,
+        payload,
+        "view receipt-chain",
+        VIEW_RECEIPT_CHAIN_LIST_EVIDENCE_FIELDS,
+    )?;
     validate_required_warehouse_field(event, payload, "view receipt-chain")?;
     let Some(namespace) = payload.get("namespace") else {
         return Err(outbox_evidence_error(
@@ -34903,6 +34939,145 @@ mod tests {
             assert!(
                 message.contains(expected_message),
                 "{event_id} should describe malformed receipt-chain evidence: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(store.delivered.lock().await.is_empty());
+            assert!(graph.events.lock().await.is_empty());
+            assert!(lineage.events.lock().await.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_view_receipt_read_fields() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let receipt_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "view-version": 1,
+            "operation": "upsert"
+        }))
+        .unwrap();
+        let chain_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "receipt-hashes": [&receipt_hash]
+        }))
+        .unwrap();
+        let valid_chain = json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "warehouse": "local",
+            "namespace": ["default"],
+            "name": "events_view",
+            "chain-hash": &chain_hash,
+            "chain-verified": true,
+            "latest-view-version": 1,
+            "latest-operation": "upsert",
+            "tombstoned": false,
+            "receipt-count": 1,
+            "receipts": [{
+                "stable-id": "lakecat:view:local:default:events_view",
+                "warehouse": "local",
+                "namespace": ["default"],
+                "name": "events_view",
+                "view-version": 1,
+                "previous-view-version": null,
+                "previous-receipt-hash": null,
+                "operation": "upsert",
+                "view-hash": content_hash_json(&json!({"view": "events_view", "version": 1})).unwrap(),
+                "receipt-hash": &receipt_hash,
+                "principal-subject": "agent:operator",
+                "principal-kind": "agent",
+                "recorded-at": "2026-06-20T00:00:00Z"
+            }]
+        });
+        let cases = vec![
+            (
+                "view.version-receipts-listed",
+                "evt-view-receipts-extra-field",
+                "view receipt-list",
+                "unverified-receipt-list-claim",
+                json!({
+                    "event-type": "view.version-receipts-listed",
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": "events_view",
+                    "receipt-count": 1,
+                    "receipt-hashes": [&receipt_hash],
+                    "drop-receipt-hashes": [],
+                    "authorization-receipt": {
+                        "principal": &principal,
+                        "action": "view-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+            ),
+            (
+                "view.version-receipt-chains-listed",
+                "evt-view-receipt-chains-extra-field",
+                "view receipt-chain",
+                "unverified-receipt-chain-claim",
+                json!({
+                    "event-type": "view.version-receipt-chains-listed",
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "chain-count": 1,
+                    "receipt-count": 1,
+                    "tombstone-count": 0,
+                    "chain-verified-count": 1,
+                    "view-version-receipt-chains": [valid_chain],
+                    "chain-hashes": [&chain_hash],
+                    "receipt-hashes": [&receipt_hash],
+                    "drop-receipt-hashes": [],
+                    "authorization-receipt": {
+                        "principal": &principal,
+                        "action": "view-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+            ),
+        ];
+
+        for (event_type, event_id, label, extra_field, mut payload) in cases {
+            payload[extra_field] = json!("shadow");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("extra view receipt read fields should fail before delivery");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(
+                message.contains(&format!("{label} contains unexpected field {extra_field}")),
+                "{event_id} should reject extra view receipt read field: {message}"
             );
             assert!(message.contains("event-id-hash=sha256:"));
             assert!(!message.contains(event_id));

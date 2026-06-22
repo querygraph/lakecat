@@ -7699,19 +7699,23 @@ same fail-closed rule at the drain boundary. A
 warehouse, namespace, view, and authorization receipt principal are valid, its
 authorization receipt action is `view-load`, its `receipt-count` matches full
 SHA-256 receipt hashes, and every drop receipt hash is included in the listed
-receipts. A verified
+receipts. The receipt-list payload is also closed over the fields current
+producers emit, so an archived read cannot attach unverified view-history,
+lineage, graph, QueryGraph, or application claims beside checked receipt hashes
+and authorization evidence. A verified
 `view.version-receipt-chains-listed` event is not acknowledged unless its
 warehouse, namespace, authorization receipt principal, read-side `view-load`
 authorization action, chain count, receipt count, and tombstone count are valid
 and count-aligned, each verified chain and receipt carries full SHA-256 digest
 evidence, the first receipt is a version 1 upsert without previous links, and
 every later upsert or drop links to the previous receipt with the expected
-view-version transition. The nested receipt-chain and receipt objects are
-closed over the structural fields LakeCat verifies, so a replay sidecar cannot
-attach extra view-history, principal, lifecycle, graph, or application claims
-beside a valid chain hash or receipt hash. That keeps malformed view-history
-evidence out of both graph projection and OpenLineage replay before QueryGraph
-ever sees a compact handoff. The verifier also requires
+view-version transition. The receipt-chain summary payload plus the nested
+receipt-chain and receipt objects are closed over the fields LakeCat verifies,
+so a replay sidecar cannot attach extra view-history, principal, lifecycle,
+graph, lineage, QueryGraph, or application claims beside a valid chain hash or
+receipt hash. That keeps malformed view-history evidence out of both graph
+projection and OpenLineage replay before QueryGraph ever sees a compact
+handoff. The verifier also requires
 table-commit replay to be internally consistent before delivery:
 `table.commit` must carry a commit object, unsigned sequence number, stable
 table identity, matching nested commit-table identity, a valid commit principal
