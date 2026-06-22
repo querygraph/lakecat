@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving `table.created`,
+  `table.loaded`, `table.deleted`, and `table.restored` reject mismatched
+  authorization receipt actions before acknowledgement, graph projection, or
+  OpenLineage projection. The design and book now state that table lifecycle
+  replay is bound to the matching catalog action as well as the actor.
 - Added service replay regression coverage proving policy-binding, project,
   server, storage-profile, and warehouse management-list reads reject
   mismatched authorization receipt actions before acknowledgement, graph

@@ -3811,7 +3811,10 @@ service requires its authorization receipt action to be `view-load`; a
 `view.listed`. Table lifecycle replay now follows the same rule:
 create, load, delete, and restore events must carry a valid root table identity,
 and any payload warehouse, namespace, table-name, or soft-delete table evidence
-must agree with that identity before the event can be acknowledged.
+must agree with that identity before the event can be acknowledged. Their
+authorization receipts must also carry the matching lifecycle action:
+`table-create`, `table-load`, `table-drop`, or `table-restore`, along with an
+allow decision, engine, and checked-at timestamp.
 Server endpoint URLs are operator-visible management metadata, so LakeCat keeps
 them deliberately plain: they must be absolute `http` or `https` URLs, and they
 cannot include query strings, fragments, or URI userinfo. Rejected submissions
@@ -5307,7 +5310,7 @@ Table lifecycle replay applies the same identity discipline before delivery:
 carry a decodable table identity, optional payload scope hints must match it,
 delete replay must carry soft-delete evidence that points at the same table
 with a positive unsigned version, and the authorization receipt must carry a
-valid principal.
+valid principal plus the matching lifecycle action.
 Create, load, and restore replay must also carry the unsigned table `version`
 emitted by the catalog producer; delete replay carries that generation evidence
 inside the required positive soft-delete record.

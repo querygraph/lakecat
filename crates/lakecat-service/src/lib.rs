@@ -26502,6 +26502,116 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_mismatched_table_lifecycle_receipt_actions() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            (
+                "table.created",
+                json!({
+                    "version": 1,
+                    "metadata-location": "file:///tmp/events/metadata/00000.json",
+                }),
+            ),
+            (
+                "table.loaded",
+                json!({
+                    "version": 1,
+                    "metadata-location": "file:///tmp/events/metadata/00000.json",
+                }),
+            ),
+            (
+                "table.deleted",
+                json!({
+                    "soft-delete": {
+                        "table": &table,
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 1,
+                        "principal": &principal,
+                        "authorization-receipt": null,
+                        "deleted-at": chrono::Utc::now(),
+                    },
+                }),
+            ),
+            (
+                "table.restored",
+                json!({
+                    "version": 2,
+                    "metadata-location": "file:///tmp/events/metadata/00001.json",
+                }),
+            ),
+        ];
+
+        for (event_type, mut payload) in cases {
+            payload["authorization-receipt"] = json!({
+                "principal": &principal,
+                "action": "namespace-list",
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            });
+            let event_id = format!("evt-mismatched-{event_type}-action-token");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-mismatched-{event_type}-action"),
+                        "event-type": event_type,
+                        "table": &table,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("mismatched table lifecycle receipt action should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(
+                message.contains(
+                    "table lifecycle authorization receipt action does not match outbox event type"
+                ),
+                "{event_type} should reject mismatched receipt action: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_unknown_event_type_before_projection() {
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {

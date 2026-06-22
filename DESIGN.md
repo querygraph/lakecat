@@ -735,9 +735,11 @@ cannot become actorless graph or OpenLineage facts. View-list replay must use
 the read-side `view-load` action; `view-manage` is reserved for view mutations,
 so service replay and QGLake handoff action contracts stay aligned.
 Table lifecycle replay for create, load, delete, and restore events must carry
-the same valid authorization receipt principal before projection, so table
-lifecycle graph/OpenLineage facts cannot be actorless even when the standard
-Iceberg REST response shape remains unchanged.
+the same valid authorization receipt principal plus an event-matching catalog
+action, affirmative allowed decision, non-empty engine, and RFC3339 `checked_at`
+timestamp before projection, so table lifecycle graph/OpenLineage facts cannot
+be actorless or action-drifted even when the standard Iceberg REST response
+shape remains unchanged.
 Create, load, and restore replay must also carry the unsigned table version
 that current producers emit; delete replay carries the same pointer-generation
 evidence through required `soft-delete.version`, and `table.deleted` replay
