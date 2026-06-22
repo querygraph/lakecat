@@ -661,7 +661,10 @@ Management-list replay must carry count-aligned, syntactically valid,
 duplicate-free ID arrays and a valid authorization receipt principal before
 projection, so compact QueryGraph proof cannot inflate server, project,
 warehouse, policy, or storage-profile reads with repeated or actorless
-identities.
+identities. Warehouse-list replay must also reject blank or syntactically
+invalid `project-id` scope when that optional project filter is present, so
+project-scoped warehouse inventory cannot become malformed QueryGraph or
+OpenLineage proof.
 Standard catalog replay for catalog config reads, namespace list/lifecycle
 events, and view list/lifecycle events must carry valid authorization receipt
 principals before projection too, so Iceberg-compatible control-plane evidence

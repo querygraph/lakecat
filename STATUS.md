@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Validate warehouse-list project scope`.
+  Service replay admission now rejects `warehouse.listed` evidence whose
+  optional `project-id` scope is blank or syntactically invalid before
+  acknowledgement, graph projection, or OpenLineage projection. This keeps
+  project-scoped warehouse inventory from becoming malformed management proof
+  in QueryGraph or lineage replay.
+- Local verification for this warehouse-list scope slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_management_list_scope_evidence -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib management_list -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`.
+- Latest completed implementation slice:
   `Require management root hash evidence`.
   Service replay admission now rejects `server.upserted` and
   `warehouse.upserted` evidence that carries raw endpoint URLs or storage roots

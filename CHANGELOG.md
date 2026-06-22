@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required `warehouse.listed` replay evidence to reject blank or syntactically
+  invalid `project-id` scope before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Required `server.upserted` and `warehouse.upserted` replay evidence to carry
   full hash proof whenever endpoint URLs or storage roots are present, and
   changed live management upsert producers to persist redacted hash evidence

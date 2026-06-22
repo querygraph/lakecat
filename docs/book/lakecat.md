@@ -2971,7 +2971,8 @@ Iceberg-compatible control-plane replay remains attributable.
 Management-list replay is checked before delivery too: policy-binding,
 project, server, storage-profile, and warehouse list events must carry unsigned
 counts, warehouse-scoped lists must carry a valid warehouse, and optional
-project scope must be a string before those reads can become replay evidence.
+project scope on warehouse-list replay must be a non-empty, syntactically valid
+project identifier before those reads can become replay evidence.
 View replay is checked at the same boundary: view list events must carry valid
 warehouse, namespace, and count evidence, while view create/load/drop evidence
 must carry a valid warehouse, namespace, and non-empty view name before graph or
@@ -4352,7 +4353,9 @@ standard Iceberg control-plane activity into actorless QueryGraph facts.
 Management-list read replay applies the same rule to operational discovery:
 policy, project, server, storage-profile, and warehouse list events must carry
 unsigned counts, valid warehouse scope when warehouse-scoped, and valid optional
-project scope before delivery.
+project scope before delivery. The warehouse-list project scope is parsed as a
+project identifier, not accepted as an arbitrary string, so compact management
+proof cannot smuggle malformed project filters into QueryGraph or OpenLineage.
 View list and lifecycle replay must carry valid warehouse, namespace, view
 name, count, and receipt principal evidence before those view events become
 graph/OpenLineage material for QueryGraph. View-list replay also carries

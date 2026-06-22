@@ -3019,7 +3019,24 @@ fn validate_management_list_event_evidence(
                 "warehouse-count",
                 "warehouse list",
             )?;
-            optional_string_field(event, payload, "project-id", "warehouse list")?;
+            if let Some(project_id) =
+                optional_non_empty_string_field(event, payload, "project-id", "warehouse list")?
+            {
+                if ProjectRecord::new(
+                    &project_id,
+                    None,
+                    None,
+                    BTreeMap::new(),
+                    Principal::anonymous(),
+                )
+                .is_err()
+                {
+                    return Err(outbox_evidence_error(
+                        event,
+                        "warehouse list project-id contains an invalid identifier",
+                    ));
+                }
+            }
             validate_required_management_id_array(
                 event,
                 payload,
@@ -19086,58 +19103,80 @@ mod tests {
 
     #[tokio::test]
     async fn outbox_drain_rejects_malformed_management_list_scope_evidence() {
-        let store = Arc::new(RecordingOutboxStore {
-            events: Mutex::new(vec![OutboxEvent {
-                event_id: "evt-secret-warehouse-list-token".to_string(),
-                sink: "lakecat.lineage-and-graph".to_string(),
-                event_type: "warehouse.listed".to_string(),
-                payload: json!({
-                    "audit-event-id": "audit-corrupt-warehouse-list",
-                    "event-type": "warehouse.listed",
-                    "payload": {
-                        "project-id": 42,
-                        "warehouse-count": 1,
-                    }
-                }),
-                created_at: chrono::Utc::now(),
-                delivered_at: None,
-            }]),
-            delivered: Mutex::default(),
-        });
-        let graph = Arc::new(RecordingGraph::default());
-        let lineage = Arc::new(RecordingLineage::default());
-        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
-            .with_integrations(
-                default_sail_engine(),
-                AllowAllGovernanceEngine::new(),
-                graph.clone(),
-                lineage.clone(),
+        let cases = vec![
+            (
+                "evt-secret-warehouse-list-token",
+                json!(42),
+                "warehouse list project-id must be a string when present",
+            ),
+            (
+                "evt-blank-warehouse-list-project",
+                json!(" "),
+                "warehouse list project-id must be non-empty when present",
+            ),
+            (
+                "evt-invalid-warehouse-list-project",
+                json!("analytics/../../secret"),
+                "warehouse list project-id contains an invalid identifier",
+            ),
+        ];
+
+        for (event_id, project_id, expected_message) in cases {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "warehouse.listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": "audit-corrupt-warehouse-list",
+                        "event-type": "warehouse.listed",
+                        "payload": {
+                            "project-id": project_id,
+                            "warehouse-count": 1,
+                            "warehouse-names": ["local"],
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed management-list scope evidence should fail");
+
+            let message = err.to_string();
+            assert!(
+                message.contains(
+                    "outbox event warehouse.listed (lakecat.lineage-and-graph) has invalid"
+                )
             );
-
-        let err = drain_outbox_once(&state, 10)
-            .await
-            .expect_err("malformed management-list scope evidence should fail");
-
-        let message = err.to_string();
-        assert!(
-            message
-                .contains("outbox event warehouse.listed (lakecat.lineage-and-graph) has invalid")
-        );
-        assert!(message.contains("event-id-hash=sha256:"));
-        assert!(message.contains("warehouse list project-id must be a string when present"));
-        assert!(!message.contains("evt-secret-warehouse-list-token"));
-        assert!(
-            store.delivered.lock().await.is_empty(),
-            "malformed management-list evidence must fail before acknowledgement"
-        );
-        assert!(
-            graph.events.lock().await.is_empty(),
-            "malformed management-list evidence must fail before graph projection"
-        );
-        assert!(
-            lineage.events.lock().await.is_empty(),
-            "malformed management-list evidence must fail before lineage projection"
-        );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "malformed management-list evidence must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "malformed management-list evidence must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "malformed management-list evidence must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]
