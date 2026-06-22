@@ -22223,6 +22223,131 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_malformed_credential_vend_receipt_engine_or_checked_at() {
+        let principal = Principal {
+            subject: "human:operator".to_string(),
+            kind: PrincipalKind::Human,
+        };
+        let cases = [
+            (
+                "missing-engine",
+                "credential-vend evidence must contain authorization receipt engine",
+            ),
+            (
+                "blank-engine",
+                "credential-vend authorization receipt engine must be non-empty",
+            ),
+            (
+                "missing-checked-at",
+                "credential-vend evidence must contain authorization receipt checked_at timestamp",
+            ),
+            (
+                "malformed-checked-at",
+                "credential-vend authorization receipt checked_at timestamp must be RFC3339",
+            ),
+        ];
+
+        for (case, expected_message) in cases {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let mut authorization_receipt = json!({
+                "principal": principal.clone(),
+                "action": "credentials-vend",
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            });
+            match case {
+                "missing-engine" => {
+                    authorization_receipt
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("engine");
+                }
+                "blank-engine" => authorization_receipt["engine"] = json!("   "),
+                "missing-checked-at" => {
+                    authorization_receipt
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("checked_at");
+                }
+                "malformed-checked-at" => {
+                    authorization_receipt["checked_at"] = json!("not-a-timestamp");
+                }
+                _ => unreachable!("unexpected credential-vend receipt case"),
+            }
+            let event_id = format!("evt-credential-vend-{case}-receipt-shape");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "credentials.vend-attempted".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "credentials.vend-attempted",
+                        "table": table,
+                        "payload": {
+                            "authorization-receipt": authorization_receipt,
+                            "credential-count": 0,
+                            "credential-response-evidence": [],
+                            "storage-profile-id": "events-local",
+                            "storage-profile": {
+                                "profile-id": "events-local",
+                                "warehouse": "local",
+                                "provider": "file",
+                                "issuance-mode": "local-file-no-secret",
+                                "secret-ref-present": false,
+                                "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            },
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed credential-vend receipt shape should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("credentials.vend-attempted"));
+            assert!(
+                message.contains(expected_message),
+                "credential-vend should reject {case} receipt shape: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{case} credential-vend receipt shape must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{case} credential-vend receipt shape must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{case} credential-vend receipt shape must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_credential_vend_receipt_principal() {
         let cases = [
             (

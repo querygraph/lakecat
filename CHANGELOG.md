@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added credential-vend replay coverage for malformed authorization receipt
+  engine and timestamp evidence. `credentials.vend-attempted` now has direct
+  regressions proving missing or blank `engine` values and missing or malformed
+  `checked_at` timestamps fail before acknowledgement, graph projection,
+  OpenLineage projection, QGLake proof, or QueryGraph import can inherit
+  incomplete credential-vending receipt evidence.
 - Expanded the LakeCat book's first-release catalog concept explanation with a
   standards-reader guide. The book now more explicitly separates ordinary
   Iceberg client vocabulary from LakeCat operator proof, TypeSec/Sail governed

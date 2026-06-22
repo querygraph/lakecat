@@ -5,6 +5,21 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Cover credential-vend receipt engine and timestamp evidence`.
+  Service replay admission already required `credentials.vend-attempted`
+  authorization receipts to carry non-empty engine evidence and RFC3339
+  `checked_at` timestamps; the new regression pins that credential-vending
+  surface directly, proving missing or blank engine evidence and missing or
+  malformed timestamps fail before acknowledgement, graph projection,
+  OpenLineage projection, QGLake proof, or QueryGraph import can inherit
+  incomplete credential-vending receipt evidence.
+- Local verification for this implementation/testing slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_credential_vend_receipt_engine_or_checked_at -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand catalog standards and engine guidance`.
   The book now more thoroughly explains the first-release catalog concepts
