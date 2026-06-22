@@ -588,7 +588,12 @@ replay and archived handoffs cannot inflate counts by repeating accepted
 stable IDs. The bootstrap manifest verifier must enforce the same
 duplicate-free stable-id invariant across table projections, table artifacts,
 view projections, and view artifacts before a bundle becomes QGLake import
-proof. Scan replay must preserve the
+proof. Service replay must also close `table-artifacts`, `view-artifacts`, and
+`view-version-receipts` entries over the fields LakeCat verifies before
+acknowledgement, graph projection, OpenLineage projection, or QGLake handoff
+proof, so unverified semantic artifact, standards, graph, or view receipt
+claims cannot ride beside matched bootstrap identities and hashes. Scan replay
+must preserve the
 server-derived purpose and
 policy-derived TTL cap in both captured LakeCat replay text and compact handoff
 proof. Compact governed scan proof must also preserve the planned and fetched

@@ -1552,6 +1552,12 @@ const VIEW_RECORD_EVIDENCE_FIELDS: &[&str] = &[
     "properties",
 ];
 const CATALOG_CONFIG_ENTRY_EVIDENCE_FIELDS: &[&str] = &["key", "value"];
+const QUERYGRAPH_VIEW_RECEIPT_EVIDENCE_FIELDS: &[&str] = &[
+    "stable-id",
+    "view-version",
+    "receipt-hash",
+    "receipt-chain-hash",
+];
 
 fn validate_read_restriction_evidence_schema(
     event: &OutboxEvent,
@@ -4903,6 +4909,7 @@ fn validate_querygraph_artifacts(
     }
     let mut stable_ids = BTreeSet::new();
     for artifact in artifacts {
+        validate_querygraph_artifact_evidence_schema(event, artifact, field, hash_fields)?;
         let Some(stable_id) = artifact
             .get("stable-id")
             .and_then(Value::as_str)
@@ -4962,6 +4969,12 @@ fn validate_querygraph_view_receipts(
     }
     let mut stable_ids = BTreeSet::new();
     for receipt in receipts {
+        validate_object_evidence_schema(
+            event,
+            receipt,
+            "querygraph bootstrap view-version receipt",
+            QUERYGRAPH_VIEW_RECEIPT_EVIDENCE_FIELDS,
+        )?;
         let Some(stable_id) = receipt
             .get("stable-id")
             .and_then(Value::as_str)
@@ -5000,6 +5013,33 @@ fn validate_querygraph_view_receipts(
         validate_required_full_hash_field(event, receipt, "receipt-chain-hash")?;
     }
     Ok(stable_ids)
+}
+
+fn validate_querygraph_artifact_evidence_schema(
+    event: &OutboxEvent,
+    artifact: &Value,
+    field: &str,
+    hash_fields: &[&str],
+) -> Result<(), LakeCatError> {
+    let Some(artifact) = artifact.as_object() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("querygraph bootstrap {field} entry must be an object"),
+        ));
+    };
+    let mut allowed_fields = BTreeSet::from(["stable-id"]);
+    allowed_fields.extend(hash_fields.iter().copied());
+    for entry_field in artifact.keys() {
+        if !allowed_fields.contains(entry_field.as_str()) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!(
+                    "querygraph bootstrap {field} entry contains unexpected field {entry_field}"
+                ),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn validate_stable_id_set_matches_manifest(
@@ -29855,6 +29895,85 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_querygraph_bootstrap_entry_fields() {
+        let cases = vec![
+            (
+                "evt-bootstrap-extra-table-artifact",
+                "/payload/table-artifacts/0",
+                "unverified-table-claim",
+                "querygraph bootstrap table-artifacts entry contains unexpected field unverified-table-claim",
+            ),
+            (
+                "evt-bootstrap-extra-view-artifact",
+                "/payload/view-artifacts/0",
+                "unverified-view-claim",
+                "querygraph bootstrap view-artifacts entry contains unexpected field unverified-view-claim",
+            ),
+            (
+                "evt-bootstrap-extra-view-receipt",
+                "/payload/view-version-receipts/0",
+                "unverified-receipt-claim",
+                "querygraph bootstrap view-version receipt contains unexpected field unverified-receipt-claim",
+            ),
+        ];
+
+        for (event_id, pointer, field, expected_message) in cases {
+            let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+            let mut payload = valid_querygraph_bootstrap_payload(principal);
+            payload
+                .pointer_mut(pointer)
+                .and_then(Value::as_object_mut)
+                .expect("valid bootstrap payload should contain target entry")
+                .insert(field.to_string(), json!(true));
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("extra QueryGraph bootstrap entry field should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("querygraph.bootstrap"));
+            assert!(
+                message.contains(expected_message),
+                "{event_id} should reject extra bootstrap entry field: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_id} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_id} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_id} must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]

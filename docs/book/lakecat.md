@@ -7649,7 +7649,11 @@ the event must carry a valid warehouse, table/view counts matching the verified
 ids and artifact arrays, full SHA-256 bundle/graph/OpenLineage/import hashes,
 full table/view artifact hashes, view receipt and receipt-chain hashes for
 accepted views, the expected standards list, and full optional TypeDID or agent
-proof hashes when those slots are present. View receipt replay follows the
+proof hashes when those slots are present. The nested table artifact, view
+artifact, and view-version receipt entries are closed over their verified
+fields as well: a replay sidecar cannot attach an extra semantic artifact,
+standards, graph, lineage, or view receipt claim beside the stable id and hash
+evidence that LakeCat actually checked. View receipt replay follows the
 same fail-closed rule at the drain boundary. A
 `view.version-receipts-listed` event is not acknowledged unless its
 warehouse, namespace, view, and authorization receipt principal are valid, its

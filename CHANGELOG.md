@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed service outbox admission over QueryGraph bootstrap entry schemas.
+  `querygraph.bootstrap` replay now rejects unexpected fields inside
+  `table-artifacts`, `view-artifacts`, and `view-version-receipts` entries
+  before acknowledgement, graph projection, OpenLineage projection, or QGLake
+  handoff proof can inherit unverified semantic artifact or view receipt
+  claims.
 - Closed service outbox admission over catalog config key/value entries.
   `catalog.config-read` replay now rejects unexpected fields inside `defaults`
   and `overrides` entries before acknowledgement, graph projection,
