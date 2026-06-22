@@ -7059,7 +7059,11 @@ and credential-vending proof inside the captures still match the summary. It
 also rejects malformed TypeDID hash slots in the request-identity and
 QueryGraph bootstrap proofs before a consumer has to interpret those slots. The
 local handoff harness runs it automatically and writes the captured verifier
-output to `target/qglake-handoff/lakecat-handoff-verify.json`.
+output to `target/qglake-handoff/lakecat-handoff-verify.json`. Before the
+harness writes compact proof, it checks the replay and OpenLineage hash arrays
+it lifts from LakeCat replay evidence as full SHA-256-shaped and
+duplicate-free, so malformed compact proof is rejected before the archived
+handoff summary is treated as accepted.
 
 The end-to-end result is a chain:
 

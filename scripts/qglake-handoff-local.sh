@@ -207,9 +207,21 @@ function requireOptionalHash(value, label) {
   process.exit(1);
 }
 function requireHashArray(value, label) {
-  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
+  if (!Array.isArray(value) || value.length === 0) {
     console.error(`LakeCat QueryGraph bootstrap evidence is missing ${label}`);
     process.exit(1);
+  }
+  const seen = new Set();
+  for (const item of value) {
+    if (typeof item !== "string" || !/^sha256:[0-9a-fA-F]{64}$/.test(item)) {
+      console.error(`LakeCat QueryGraph bootstrap evidence ${label} must contain full SHA-256 hashes`);
+      process.exit(1);
+    }
+    if (seen.has(item)) {
+      console.error(`LakeCat QueryGraph bootstrap evidence ${label} must be duplicate-free`);
+      process.exit(1);
+    }
+    seen.add(item);
   }
 }
 function requireIntegerMatch(value, expected, label) {
@@ -389,9 +401,21 @@ function requirePositiveInteger(value, label) {
   }
 }
 function requireHashArray(value, label) {
-  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
+  if (!Array.isArray(value) || value.length === 0) {
     console.error(`LakeCat management replay evidence is missing ${label}`);
     process.exit(1);
+  }
+  const seen = new Set();
+  for (const item of value) {
+    if (typeof item !== "string" || !/^sha256:[0-9a-fA-F]{64}$/.test(item)) {
+      console.error(`LakeCat management replay evidence ${label} must contain full SHA-256 hashes`);
+      process.exit(1);
+    }
+    if (seen.has(item)) {
+      console.error(`LakeCat management replay evidence ${label} must be duplicate-free`);
+      process.exit(1);
+    }
+    seen.add(item);
   }
 }
 function requireStringArrayCount(value, expected, label) {
@@ -479,9 +503,21 @@ if (!evidence || typeof evidence !== "object") {
 const restricted = evidence.restricted;
 const trustedHuman = evidence.trustedHuman;
 function requireHashArray(value, label) {
-  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
+  if (!Array.isArray(value) || value.length === 0) {
     console.error(`LakeCat credential replay evidence is missing ${label}`);
     process.exit(1);
+  }
+  const seen = new Set();
+  for (const item of value) {
+    if (typeof item !== "string" || !/^sha256:[0-9a-fA-F]{64}$/.test(item)) {
+      console.error(`LakeCat credential replay evidence ${label} must contain full SHA-256 hashes`);
+      process.exit(1);
+    }
+    if (seen.has(item)) {
+      console.error(`LakeCat credential replay evidence ${label} must be duplicate-free`);
+      process.exit(1);
+    }
+    seen.add(item);
   }
 }
 function requireCredentialPrefixHashes(value, credentialCount, label) {
@@ -653,9 +689,21 @@ function requireNonNegativeInteger(value, label) {
   }
 }
 function requireHashArray(value, label) {
-  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
+  if (!Array.isArray(value) || value.length === 0) {
     console.error(`LakeCat scan replay evidence is missing ${label}`);
     process.exit(1);
+  }
+  const seen = new Set();
+  for (const item of value) {
+    if (typeof item !== "string" || !/^sha256:[0-9a-fA-F]{64}$/.test(item)) {
+      console.error(`LakeCat scan replay evidence ${label} must contain full SHA-256 hashes`);
+      process.exit(1);
+    }
+    if (seen.has(item)) {
+      console.error(`LakeCat scan replay evidence ${label} must be duplicate-free`);
+      process.exit(1);
+    }
+    seen.add(item);
   }
 }
 requirePositiveInteger(evidence.planTaskCount, "planTaskCount");
@@ -821,9 +869,17 @@ function requireArray(value, label) {
 }
 function requireHashArray(value, label) {
   requireArray(value, label);
-  if (value.some((item) => typeof item !== "string" || item.length === 0)) {
-    console.error(`LakeCat table commit-history replay evidence has invalid ${label}`);
-    process.exit(1);
+  const seen = new Set();
+  for (const item of value) {
+    if (typeof item !== "string" || !/^sha256:[0-9a-fA-F]{64}$/.test(item)) {
+      console.error(`LakeCat table commit-history replay evidence ${label} must contain full SHA-256 hashes`);
+      process.exit(1);
+    }
+    if (seen.has(item)) {
+      console.error(`LakeCat table commit-history replay evidence ${label} must be duplicate-free`);
+      process.exit(1);
+    }
+    seen.add(item);
   }
 }
 requirePositiveInteger(evidence.commitCount, "commitCount");
@@ -871,9 +927,21 @@ if (!evidence || typeof evidence !== "object") {
   process.exit(1);
 }
 function requireHashArray(value, label) {
-  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
+  if (!Array.isArray(value) || value.length === 0) {
     console.error(`LakeCat view replay evidence is missing ${label}`);
     process.exit(1);
+  }
+  const seen = new Set();
+  for (const item of value) {
+    if (typeof item !== "string" || !/^sha256:[0-9a-fA-F]{64}$/.test(item)) {
+      console.error(`LakeCat view replay evidence ${label} must contain full SHA-256 hashes`);
+      process.exit(1);
+    }
+    if (seen.has(item)) {
+      console.error(`LakeCat view replay evidence ${label} must be duplicate-free`);
+      process.exit(1);
+    }
+    seen.add(item);
   }
 }
 if (!Number.isInteger(evidence.viewCount) || evidence.viewCount < 0) {

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened the live QGLake handoff harness so compact proof extraction now
+  requires replay/OpenLineage hash arrays for QueryGraph bootstrap, management,
+  credentials, governed scans, table commit history, and view receipts to carry
+  full SHA-256-shaped values without duplicates before the archived handoff
+  summary is accepted.
 - Added a book classification test for new catalog work. The new section asks
   which layer would be wrong without a feature, then routes standard Iceberg
   compatibility to the REST/table boundary, durable catalog proof to LakeCat,

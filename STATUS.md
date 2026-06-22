@@ -5,6 +5,22 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest handoff-hardening slice:
+  `Require full handoff replay hash arrays`.
+  The live `scripts/qglake-handoff-local.sh` harness now rejects replay and
+  OpenLineage hash arrays that are missing, malformed, short, or duplicated
+  while lifting QueryGraph bootstrap, management, credential, governed scan,
+  table commit-history, and view receipt proof into the archived compact
+  handoff summary.
+- Local verification for this handoff-hardening slice is green:
+  `bash -n scripts/qglake-handoff-local.sh`;
+  `bash -n scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/check-release-readiness.sh`;
+  `scripts/qglake-handoff-local.sh`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest book slice:
   `Add catalog-work classification test`.
   The book now gives readers a direct test for new LakeCat features: route
