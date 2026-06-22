@@ -13875,6 +13875,171 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_incomplete_scan_authorization_receipts() {
+        let cases = [
+            (
+                "table.scan-planned",
+                "scan-planned",
+                "denied",
+                "authorization receipt must allow replay projection",
+            ),
+            (
+                "table.scan-planned",
+                "scan-planned",
+                "blank-engine",
+                "authorization receipt engine must be non-empty",
+            ),
+            (
+                "table.scan-planned",
+                "scan-planned",
+                "malformed-checked-at",
+                "authorization receipt checked_at timestamp must be RFC3339",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "denied",
+                "authorization receipt must allow replay projection",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "blank-engine",
+                "authorization receipt engine must be non-empty",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "malformed-checked-at",
+                "authorization receipt checked_at timestamp must be RFC3339",
+            ),
+        ];
+
+        for (event_type, label, invalid_case, expected_message) in cases {
+            let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+            let ident = table_ident("local", "default", "events").unwrap();
+            let policy_hash =
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap();
+            let read_restriction = json!({
+                "allowed-columns": ["event_id"],
+                "row-predicate": {
+                    "type": "not-eq",
+                    "term": "severity",
+                    "value": "debug"
+                },
+                "purpose": "qglake-agent-demo",
+                "max-credential-ttl-seconds": 300,
+                "policy-hashes": [policy_hash]
+            });
+            let mut payload = if event_type == "table.scan-planned" {
+                json!({
+                    "table": ident.clone(),
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "context": {
+                            "read-restriction": read_restriction
+                        },
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "read-restriction": read_restriction,
+                    "requested-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "scan-task-count": 1
+                })
+            } else {
+                json!({
+                    "table": ident.clone(),
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "context": {
+                            "read-restriction": read_restriction
+                        },
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "read-restriction": read_restriction,
+                    "required-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }],
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0
+                })
+            };
+            match invalid_case {
+                "denied" => payload["authorization-receipt"]["allowed"] = json!(false),
+                "blank-engine" => payload["authorization-receipt"]["engine"] = json!("   "),
+                "malformed-checked-at" => {
+                    payload["authorization-receipt"]["checked_at"] = json!("not-a-timestamp")
+                }
+                _ => unreachable!("unexpected scan authorization receipt invalid case"),
+            }
+            let event_id = format!("evt-{label}-{invalid_case}");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{label}-{invalid_case}"),
+                        "event-type": event_type,
+                        "table": ident,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("incomplete scan authorization receipt should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(message.contains(&format!("{label} {expected_message}")));
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} {invalid_case} receipt must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} {invalid_case} receipt must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} {invalid_case} receipt must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_scan_missing_read_restriction_policy_hashes() {
         let cases = [
             (

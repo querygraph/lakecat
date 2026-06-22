@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added governed scan replay regressions that prove `table.scan-planned` and
+  `table.scan-tasks-fetched` outbox admission rejects denied authorization
+  receipts, blank receipt engines, and malformed receipt timestamps before
+  acknowledgement, graph projection, or OpenLineage projection.
 - Expanded the LakeCat book's catalog concept guidance with an ownership map
   and standards filter that delineates standard Iceberg behavior, LakeCat
   implementation, Sail engine responsibilities, TypeSec governance,

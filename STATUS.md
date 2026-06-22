@@ -5,6 +5,20 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation slice:
+  `Cover incomplete scan receipts`.
+  Service outbox-drain coverage now proves `table.scan-planned` and
+  `table.scan-tasks-fetched` governed scan replay rejects denied authorization
+  receipts, blank receipt engines, and malformed `checked_at` timestamps before
+  acknowledgement, graph projection, or OpenLineage projection. This locks down
+  the P1 invariant that governed scan replay must carry complete
+  TypeSec-style receipt evidence at the LakeCat boundary.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_incomplete_scan_authorization_receipts -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand catalog ownership guidance`.
   The book now includes an ownership map and standards filter that explains
