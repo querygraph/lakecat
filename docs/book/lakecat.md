@@ -7334,12 +7334,15 @@ Each returned credential entry must also agree with the catalog-derived
 storage-profile id, catalog profile id, storage provider, credential mode,
 authorization principal, receipt principal, governed-read marker, and any
 policy-derived TTL cap. Returned credential entries must be duplicate-free by
-`prefix-hash`, so a replay event cannot count the same redacted credential
-twice. LakeCat carries those redacted prefix hashes into the raw lineage-drain
-summary as `credentialPrefixHashes`, and the QGLake verifier rejects the drain
-before compact proof generation if the prefix hashes are missing, count-drifted,
-short, or duplicated. A malformed credential replay event therefore remains
-pending instead of becoming graph or OpenLineage evidence.
+`prefix-hash`, and service replay now rejects unexpected fields inside each
+credential-response entry, so a replay event cannot count the same redacted
+credential twice or attach an unverified credential-scope claim beside the
+catalog-derived proof. LakeCat carries those redacted prefix hashes into the raw
+lineage-drain summary as `credentialPrefixHashes`, and the QGLake verifier
+rejects the drain before compact proof generation if the prefix hashes are
+missing, count-drifted, short, or duplicated. A malformed credential replay
+event therefore remains pending instead of becoming graph or OpenLineage
+evidence.
 Credential replay also rejects a governed `read-restriction` that is missing
 from, or different from, the authorization receipt context, so credential TTL
 and blocked-agent evidence cannot drift away from the receipt that authorized

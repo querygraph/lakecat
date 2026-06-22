@@ -6,6 +6,28 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close credential-response evidence schemas`.
+  Service outbox admission now rejects unexpected fields inside each
+  `credential-response-evidence` entry for `credentials.vend-attempted` replay
+  before acknowledgement, graph projection, OpenLineage projection, or QGLake
+  credential proof can inherit unverified credential-scope claims. The design
+  and book now state this closed-entry invariant beside the existing
+  prefix-hash, issuer-config-hash, storage-profile, principal, governed-read,
+  TTL, and secret-ref replay checks.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_credential_response_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service credential_response -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close service read-restriction schemas`.
   Service outbox admission now rejects unexpected governed
   `read-restriction` fields and nested `row-predicate` fields for

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over credential-response evidence entries.
+  Governed credential-vending replay now rejects unexpected fields inside each
+  `credential-response-evidence` entry before acknowledgement, graph
+  projection, OpenLineage projection, or QGLake credential proof can inherit
+  unverified credential-scope claims.
 - Closed service outbox admission over governed read-restriction schemas.
   `table.scan-planned`, `table.scan-tasks-fetched`, and governed
   credential-vending replay now reject unexpected top-level

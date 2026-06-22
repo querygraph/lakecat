@@ -615,7 +615,11 @@ principal, governed-read, and TTL fields. Returned credential replay evidence
 must also surface redacted `credentialPrefixHashes` and keep them
 count-aligned, full SHA-256-shaped, and duplicate-free by `prefix-hash` in both
 raw lineage drains and compact handoff summaries, so credential counts cannot
-be inflated with repeated redacted credential entries. Captured LakeCat replay
+be inflated with repeated redacted credential entries. Service outbox admission
+must also close each `credential-response-evidence` entry over the
+catalog-derived credential fields it validates, so replay cannot attach
+unverified credential-scope, issuer, storage, authorization, or secret-ref
+claims beside an otherwise valid redacted prefix proof. Captured LakeCat replay
 JSON must then match the compact credential proof for those prefix hashes, so
 an archived handoff cannot pair a valid summary with drifted credential replay
 output.

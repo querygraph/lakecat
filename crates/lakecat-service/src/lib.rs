@@ -1489,6 +1489,21 @@ const READ_RESTRICTION_EVIDENCE_FIELDS: &[&str] = &[
     "max-credential-ttl-seconds",
 ];
 const ROW_PREDICATE_EVIDENCE_FIELDS: &[&str] = &["type", "term", "value"];
+const CREDENTIAL_RESPONSE_EVIDENCE_FIELDS: &[&str] = &[
+    "prefix-hash",
+    "storage-profile-id",
+    "storage-provider",
+    "credential-mode",
+    "authorization-principal",
+    "governed-read-required",
+    "max-credential-ttl-seconds",
+    "secret-ref-provider",
+    "secret-ref-hash",
+    "issuer-config-entry-count",
+    "issuer-config-hash",
+    "catalog-profile-id",
+    "receipt-principal",
+];
 
 fn validate_read_restriction_evidence_schema(
     event: &OutboxEvent,
@@ -4071,6 +4086,7 @@ fn validate_credential_response_entry_evidence(
     storage_profile: &Value,
     entry: &Value,
 ) -> Result<String, LakeCatError> {
+    validate_credential_response_entry_schema(event, entry)?;
     validate_required_full_hash_field(event, entry, "prefix-hash")?;
     validate_required_full_hash_field(event, entry, "issuer-config-hash")?;
     let prefix_hash = required_string_field(
@@ -4237,6 +4253,27 @@ fn validate_credential_response_entry_evidence(
     }
 
     Ok(prefix_hash.to_string())
+}
+
+fn validate_credential_response_entry_schema(
+    event: &OutboxEvent,
+    entry: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(entry) = entry.as_object() else {
+        return Err(outbox_evidence_error(
+            event,
+            "credential-vend credential-response must be an object",
+        ));
+    };
+    for field in entry.keys() {
+        if !CREDENTIAL_RESPONSE_EVIDENCE_FIELDS.contains(&field.as_str()) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("credential-vend credential-response contains unexpected field {field}"),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn validate_raw_credential_exception_receipt_match(
@@ -20364,6 +20401,101 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "missing credential prefix hash must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_credential_response_fields() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "human:operator".to_string(),
+            kind: PrincipalKind::Human,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-response-extra-field".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-response-extra-field",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "credential-count": 1,
+                        "credential-response-evidence": [{
+                            "prefix-hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                            "issuer-config-hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                            "storage-profile-id": "events-local",
+                            "catalog-profile-id": "events-local",
+                            "storage-provider": "file",
+                            "credential-mode": "local-file-no-secret",
+                            "authorization-principal": "human:operator",
+                            "governed-read-required": "false",
+                            "max-credential-ttl-seconds": null,
+                            "issuer-config-entry-count": 0,
+                            "receipt-principal": "human:operator",
+                            "unverified-credential-scope": "all-objects"
+                        }],
+                        "storage-profile-id": "events-local",
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("credential response entries should reject extra fields");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains(
+            "credential-vend credential-response contains unexpected field unverified-credential-scope"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-credential-response-extra-field"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "extra credential response fields must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "extra credential response fields must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "extra credential response fields must fail before lineage projection"
         );
     }
 
