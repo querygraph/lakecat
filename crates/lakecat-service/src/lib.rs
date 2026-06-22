@@ -37747,6 +37747,136 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_missing_or_denied_view_receipt_chain_allowed_decision() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let receipt_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "view-version": 1,
+            "operation": "upsert"
+        }))
+        .unwrap();
+        let chain_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "receipt-hashes": [&receipt_hash]
+        }))
+        .unwrap();
+        let valid_chain = json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "warehouse": "local",
+            "namespace": ["default"],
+            "name": "events_view",
+            "chain-hash": &chain_hash,
+            "chain-verified": true,
+            "latest-view-version": 1,
+            "latest-operation": "upsert",
+            "tombstoned": false,
+            "receipt-count": 1,
+            "receipts": [{
+                "stable-id": "lakecat:view:local:default:events_view",
+                "warehouse": "local",
+                "namespace": ["default"],
+                "name": "events_view",
+                "view-version": 1,
+                "previous-view-version": null,
+                "previous-receipt-hash": null,
+                "operation": "upsert",
+                "view-hash": content_hash_json(&json!({"view": "events_view", "version": 1})).unwrap(),
+                "receipt-hash": &receipt_hash,
+                "principal-subject": "agent:operator",
+                "principal-kind": "agent",
+                "recorded-at": "2026-06-20T00:00:00Z"
+            }]
+        });
+        let base_receipt = json!({
+            "principal": principal,
+            "action": "view-load",
+            "allowed": true,
+            "engine": "test",
+            "policy_hash": null,
+            "checked_at": chrono::Utc::now(),
+        });
+        let mut missing_allowed_receipt = base_receipt.clone();
+        missing_allowed_receipt
+            .as_object_mut()
+            .unwrap()
+            .remove("allowed");
+        let mut denied_receipt = base_receipt;
+        denied_receipt["allowed"] = json!(false);
+
+        for (event_id, receipt, expected_message) in [
+            (
+                "evt-view-chain-missing-receipt-allowed",
+                missing_allowed_receipt,
+                "view receipt-chain evidence must contain authorization receipt allowed decision",
+            ),
+            (
+                "evt-view-chain-denied-receipt",
+                denied_receipt,
+                "view receipt-chain authorization receipt must allow replay projection",
+            ),
+        ] {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "view.version-receipt-chains-listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "view.version-receipt-chains-listed",
+                        "payload": {
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "chain-count": 1,
+                            "receipt-count": 1,
+                            "tombstone-count": 0,
+                            "chain-verified-count": 1,
+                            "view-version-receipt-chains": [valid_chain],
+                            "chain-hashes": [&chain_hash],
+                            "receipt-hashes": [&receipt_hash],
+                            "drop-receipt-hashes": [],
+                            "authorization-receipt": receipt,
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("missing or denied view receipt-chain decision should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("view.version-receipt-chains-listed"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "view receipt-chain decision failures must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "view receipt-chain decision failures must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "view receipt-chain decision failures must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_mismatched_view_receipt_read_actions() {
         let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
         let receipt_hash = content_hash_json(&json!({
