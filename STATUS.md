@@ -6,6 +6,17 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden QGLake TypeDID proof hashes`.
+  The live `scripts/qglake-handoff-local.sh` helper now requires optional
+  request-identity and QueryGraph bootstrap TypeDID envelope/proof hashes to be
+  full SHA-256 values, not merely `sha256:`-prefixed strings, before writing
+  compact handoff evidence for QueryGraph verification/import.
+- Local verification for this handoff-helper slice is green:
+  `bash -n scripts/qglake-handoff-local.sh` passed;
+  `scripts/check-local-dependency-contract.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Harden commit-history policy hash evidence`.
   Store-level table commit-history validation now rejects malformed optional
   commit `policy_hash` evidence in both memory and Turso paths before

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened the local QGLake handoff proof helper for TypeDID evidence. The
+  live handoff script now requires optional request-identity and QueryGraph
+  bootstrap TypeDID hashes to be full SHA-256 values instead of accepting any
+  `sha256:` prefix before summarizing the handoff for QueryGraph import.
 - Hardened store-level commit-history policy-hash validation. Memory and Turso
   commit-history reads now reject malformed optional table commit
   `policy_hash` evidence before management reads, graph projection,

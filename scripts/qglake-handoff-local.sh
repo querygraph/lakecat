@@ -158,10 +158,10 @@ function requireOptionalHash(value, label) {
   if (value == null) {
     return false;
   }
-  if (typeof value === "string" && value.startsWith("sha256:")) {
+  if (typeof value === "string" && /^sha256:[0-9a-fA-F]{64}$/.test(value)) {
     return true;
   }
-  console.error(`LakeCat request identity evidence ${label} must be null or a sha256 hash`);
+  console.error(`LakeCat request identity evidence ${label} must be null or a full sha256 hash`);
   process.exit(1);
 }
 const hasTypedIdEnvelope = requireOptionalHash(evidence.typedidEnvelopeHash, "typedidEnvelopeHash");
@@ -224,10 +224,10 @@ function requireOptionalHash(value, label) {
   if (value == null) {
     return false;
   }
-  if (typeof value === "string" && value.startsWith("sha256:")) {
+  if (typeof value === "string" && /^sha256:[0-9a-fA-F]{64}$/.test(value)) {
     return true;
   }
-  console.error(`LakeCat QueryGraph bootstrap evidence ${label} must be null or a sha256 hash`);
+  console.error(`LakeCat QueryGraph bootstrap evidence ${label} must be null or a full sha256 hash`);
   process.exit(1);
 }
 function requireHashArray(value, label) {
