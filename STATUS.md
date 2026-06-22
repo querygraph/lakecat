@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require scan receipt policy hash proof`.
+  Service replay admission now requires governed `table.scan-planned` and
+  `table.scan-tasks-fetched` authorization-receipt read-restriction evidence to
+  carry `policy-hashes`; missing receipt-side policy digest proof fails before
+  acknowledgement, graph projection, or OpenLineage projection. This preserves
+  the same policy-hash evidence strength on the top-level and receipt scan
+  restrictions before their equality check.
+- Local verification for this scan receipt policy hash proof slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_missing_receipt_read_restriction_policy_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib policy_hashes -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover planned termless row predicates`.
   Service replay regression coverage now proves governed `table.scan-planned`
   events reject term-based `row-predicate` read-restriction evidence that omits

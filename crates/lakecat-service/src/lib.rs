@@ -1743,12 +1743,17 @@ fn validate_scan_planned_event_evidence(
         "scan-planned",
         &effective_projection,
     )?;
-    validate_read_restriction_receipt_match(event, payload, "scan-planned")?;
     validate_required_read_restriction_policy_hashes(
         event,
         payload.get("read-restriction"),
         "scan-planned read-restriction",
     )?;
+    validate_required_read_restriction_policy_hashes(
+        event,
+        authorization_receipt_read_restriction(payload),
+        "scan-planned authorization receipt read-restriction",
+    )?;
+    validate_read_restriction_receipt_match(event, payload, "scan-planned")?;
     validate_scan_read_restriction_row_predicate(event, payload, "scan-planned")?;
 
     let requested_stats = validate_required_non_empty_string_array_field(
@@ -1821,12 +1826,17 @@ fn validate_scan_tasks_fetched_event_evidence(
         "scan-tasks-fetched",
         &effective_projection,
     )?;
-    validate_read_restriction_receipt_match(event, payload, "scan-tasks-fetched")?;
     validate_required_read_restriction_policy_hashes(
         event,
         payload.get("read-restriction"),
         "scan-tasks-fetched read-restriction",
     )?;
+    validate_required_read_restriction_policy_hashes(
+        event,
+        authorization_receipt_read_restriction(payload),
+        "scan-tasks-fetched authorization receipt read-restriction",
+    )?;
+    validate_read_restriction_receipt_match(event, payload, "scan-tasks-fetched")?;
     validate_scan_read_restriction_row_predicate(event, payload, "scan-tasks-fetched")?;
     let Some(required_filters) = payload.get("required-filters") else {
         return Err(outbox_evidence_error(
@@ -12380,6 +12390,150 @@ mod tests {
             assert!(
                 lineage.events.lock().await.is_empty(),
                 "missing policy-hashes replay must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_scan_missing_receipt_read_restriction_policy_hashes() {
+        let cases = [
+            (
+                "table.scan-planned",
+                "scan-planned",
+                "evt-scan-plan-missing-receipt-policy-hashes",
+                "audit-scan-plan-missing-receipt-policy-hashes",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "evt-scan-fetch-missing-receipt-policy-hashes",
+                "audit-scan-fetch-missing-receipt-policy-hashes",
+            ),
+        ];
+
+        for (event_type, label, event_id, audit_event_id) in cases {
+            let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+            let ident = table_ident("local", "default", "events").unwrap();
+            let policy_hash =
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap();
+            let read_restriction = json!({
+                "allowed-columns": ["event_id"],
+                "row-predicate": {
+                    "type": "not-eq",
+                    "term": "severity",
+                    "value": "debug"
+                },
+                "purpose": "qglake-agent-demo",
+                "max-credential-ttl-seconds": 300,
+                "policy-hashes": [policy_hash]
+            });
+            let receipt_read_restriction = json!({
+                "allowed-columns": ["event_id"],
+                "row-predicate": {
+                    "type": "not-eq",
+                    "term": "severity",
+                    "value": "debug"
+                },
+                "purpose": "qglake-agent-demo",
+                "max-credential-ttl-seconds": 300
+            });
+            let payload = if event_type == "table.scan-planned" {
+                json!({
+                    "table": ident,
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "context": {
+                            "read-restriction": receipt_read_restriction
+                        },
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "read-restriction": read_restriction,
+                    "requested-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "scan-task-count": 1
+                })
+            } else {
+                json!({
+                    "table": ident,
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "context": {
+                            "read-restriction": receipt_read_restriction
+                        },
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "read-restriction": read_restriction,
+                    "required-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }],
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0
+                })
+            };
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": audit_event_id,
+                        "event-type": event_type,
+                        "table": ident,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("scan receipt read restriction policy hashes should be required");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(message.contains(&format!(
+                "{label} authorization receipt read-restriction must contain policy-hashes"
+            )));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "missing receipt policy-hashes replay must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "missing receipt policy-hashes replay must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "missing receipt policy-hashes replay must fail before lineage projection"
             );
         }
     }
