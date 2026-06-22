@@ -1558,6 +1558,34 @@ const QUERYGRAPH_VIEW_RECEIPT_EVIDENCE_FIELDS: &[&str] = &[
     "receipt-hash",
     "receipt-chain-hash",
 ];
+const VIEW_RECEIPT_CHAIN_EVIDENCE_FIELDS: &[&str] = &[
+    "stable-id",
+    "warehouse",
+    "namespace",
+    "name",
+    "chain-hash",
+    "chain-verified",
+    "latest-view-version",
+    "latest-operation",
+    "tombstoned",
+    "receipt-count",
+    "receipts",
+];
+const VIEW_RECEIPT_CHAIN_RECEIPT_EVIDENCE_FIELDS: &[&str] = &[
+    "stable-id",
+    "warehouse",
+    "namespace",
+    "name",
+    "view-version",
+    "previous-view-version",
+    "previous-receipt-hash",
+    "operation",
+    "view-hash",
+    "receipt-hash",
+    "principal-subject",
+    "principal-kind",
+    "recorded-at",
+];
 
 fn validate_read_restriction_evidence_schema(
     event: &OutboxEvent,
@@ -4668,6 +4696,28 @@ fn validate_view_receipt_chain_event_evidence(
     let mut structural_receipt_hashes = BTreeSet::new();
     let mut structural_drop_receipt_hashes = BTreeSet::new();
     for chain in chains {
+        validate_object_evidence_schema(
+            event,
+            chain,
+            "view receipt-chain chain",
+            VIEW_RECEIPT_CHAIN_EVIDENCE_FIELDS,
+        )?;
+        if let Some(receipts) = chain.get("receipts") {
+            let Some(receipts) = receipts.as_array() else {
+                return Err(outbox_evidence_error(
+                    event,
+                    "view receipt-chain receipts must be an array when present",
+                ));
+            };
+            for receipt in receipts {
+                validate_object_evidence_schema(
+                    event,
+                    receipt,
+                    "view receipt-chain receipt",
+                    VIEW_RECEIPT_CHAIN_RECEIPT_EVIDENCE_FIELDS,
+                )?;
+            }
+        }
         let Some(chain_receipt_count) = chain.get("receipt-count").and_then(Value::as_u64) else {
             return Err(outbox_evidence_error(
                 event,
@@ -33881,6 +33931,132 @@ mod tests {
             assert!(
                 message.contains(expected_message),
                 "{event_id} should describe malformed receipt-list scope: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(store.delivered.lock().await.is_empty());
+            assert!(graph.events.lock().await.is_empty());
+            assert!(lineage.events.lock().await.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_view_receipt_chain_fields() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let receipt_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "view-version": 1,
+            "operation": "upsert"
+        }))
+        .unwrap();
+        let chain_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "receipt-hashes": [&receipt_hash]
+        }))
+        .unwrap();
+        let valid_chain = json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "warehouse": "local",
+            "namespace": ["default"],
+            "name": "events_view",
+            "chain-hash": &chain_hash,
+            "chain-verified": true,
+            "latest-view-version": 1,
+            "latest-operation": "upsert",
+            "tombstoned": false,
+            "receipt-count": 1,
+            "receipts": [{
+                "stable-id": "lakecat:view:local:default:events_view",
+                "warehouse": "local",
+                "namespace": ["default"],
+                "name": "events_view",
+                "view-version": 1,
+                "previous-view-version": null,
+                "previous-receipt-hash": null,
+                "operation": "upsert",
+                "view-hash": content_hash_json(&json!({"view": "events_view", "version": 1})).unwrap(),
+                "receipt-hash": &receipt_hash,
+                "principal-subject": "agent:operator",
+                "principal-kind": "agent",
+                "recorded-at": "2026-06-20T00:00:00Z"
+            }]
+        });
+        let base_payload = json!({
+            "warehouse": "local",
+            "namespace": ["default"],
+            "chain-count": 1,
+            "receipt-count": 1,
+            "tombstone-count": 0,
+            "chain-verified-count": 1,
+            "view-version-receipt-chains": [valid_chain],
+            "chain-hashes": [&chain_hash],
+            "receipt-hashes": [&receipt_hash],
+            "drop-receipt-hashes": [],
+            "authorization-receipt": {
+                "principal": &principal,
+                "action": "view-load",
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            },
+        });
+        let cases = vec![
+            (
+                "evt-view-chain-extra-chain-field",
+                "/view-version-receipt-chains/0",
+                "unverified-chain-claim",
+                "view receipt-chain chain contains unexpected field unverified-chain-claim",
+            ),
+            (
+                "evt-view-chain-extra-receipt-field",
+                "/view-version-receipt-chains/0/receipts/0",
+                "unverified-receipt-claim",
+                "view receipt-chain receipt contains unexpected field unverified-receipt-claim",
+            ),
+        ];
+
+        for (event_id, pointer, field, expected_message) in cases {
+            let mut payload = base_payload.clone();
+            payload
+                .pointer_mut(pointer)
+                .and_then(Value::as_object_mut)
+                .expect("valid receipt-chain payload should contain target object")
+                .insert(field.to_string(), json!(true));
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "view.version-receipt-chains-listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "view.version-receipt-chains-listed",
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("extra view receipt-chain fields should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("view.version-receipt-chains-listed"));
+            assert!(
+                message.contains(expected_message),
+                "{event_id} should reject extra receipt-chain field: {message}"
             );
             assert!(message.contains("event-id-hash=sha256:"));
             assert!(!message.contains(event_id));

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over view receipt-chain entry schemas.
+  `view.version-receipt-chains-listed` replay now rejects unexpected fields
+  inside nested receipt-chain and receipt objects before acknowledgement, graph
+  projection, OpenLineage projection, or QGLake proof can inherit unverified
+  view-history claims.
 - Closed service outbox admission over QueryGraph bootstrap entry schemas.
   `querygraph.bootstrap` replay now rejects unexpected fields inside
   `table-artifacts`, `view-artifacts`, and `view-version-receipts` entries

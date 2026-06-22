@@ -654,6 +654,10 @@ authorization receipt principal, the read-side `view-load` action, and
 count-aligned chain, receipt, and tombstone totals before projection, so
 namespace-level view-history evidence cannot inflate chains, shed chains, or
 reuse a mutation receipt by drifting the summary counts or action.
+Service replay must close nested receipt-chain and receipt objects over the
+fields LakeCat verifies before acknowledgement, graph projection, OpenLineage
+projection, or QGLake proof, so unverified view-history, principal, lifecycle,
+or graph claims cannot ride beside structural receipt-chain evidence.
 Compact `viewReceiptChainProof`, captured replay `views`, and every nested
 accepted-view, tombstone, receipt-chain group, structural chain, and receipt
 object must be closed over the fields LakeCat verifies. A handoff or captured

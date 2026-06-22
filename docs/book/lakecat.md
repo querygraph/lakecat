@@ -7666,9 +7666,12 @@ authorization action, chain count, receipt count, and tombstone count are valid
 and count-aligned, each verified chain and receipt carries full SHA-256 digest
 evidence, the first receipt is a version 1 upsert without previous links, and
 every later upsert or drop links to the previous receipt with the expected
-view-version transition. That keeps malformed view-history evidence out of both
-graph projection and OpenLineage replay before QueryGraph ever sees a compact
-handoff. The verifier also requires
+view-version transition. The nested receipt-chain and receipt objects are
+closed over the structural fields LakeCat verifies, so a replay sidecar cannot
+attach extra view-history, principal, lifecycle, graph, or application claims
+beside a valid chain hash or receipt hash. That keeps malformed view-history
+evidence out of both graph projection and OpenLineage replay before QueryGraph
+ever sees a compact handoff. The verifier also requires
 table-commit replay to be internally consistent before delivery:
 `table.commit` must carry a commit object, unsigned sequence number, stable
 table identity, matching nested commit-table identity, a valid commit principal
