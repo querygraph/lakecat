@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving namespace and view standard
+  catalog events reject malformed authorization-receipt principals before
+  acknowledgement, graph projection, or OpenLineage projection.
 - Added TypeSec-local credential issuer regression coverage proving blank
   config keys in environment and Vault secret payloads fail after authorization
   with hash-only diagnostics before any secret-backed credential is returned.

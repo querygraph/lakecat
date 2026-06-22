@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover malformed standard catalog principals`.
+  Service replay regression coverage now proves namespace list/lifecycle and
+  view list/lifecycle events reject malformed authorization-receipt principals
+  before delivery acknowledgement, graph projection, or OpenLineage projection.
+  This closes the malformed-principal sibling of the existing missing-principal
+  coverage for Iceberg-compatible standard catalog replay.
+- Local verification for this standard catalog principal slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_standard_catalog_receipt_principal -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib standard_catalog_receipt_principal -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover malformed secret credential config`.
   TypeSec-local credential issuer regression coverage now proves environment
   and Vault secret payloads with blank credential config keys fail after

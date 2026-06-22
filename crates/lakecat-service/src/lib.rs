@@ -16960,6 +16960,214 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_malformed_standard_catalog_receipt_principal() {
+        let malformed_principal = json!({
+            "subject": "agent:reader",
+            "kind": "unknown"
+        });
+        let cases = vec![
+            (
+                "namespace.listed",
+                "namespace list",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "namespace-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace-count": 1,
+                }),
+            ),
+            (
+                "namespace.created",
+                "namespace lifecycle",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "namespace-create",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                }),
+            ),
+            (
+                "namespace.loaded",
+                "namespace lifecycle",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "namespace-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                }),
+            ),
+            (
+                "namespace.dropped",
+                "namespace lifecycle",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "namespace-drop",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace": ["archived"],
+                }),
+            ),
+            (
+                "view.listed",
+                "view list",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "view-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view-count": 1,
+                }),
+            ),
+            (
+                "view.upserted",
+                "view lifecycle",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "view-upsert",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "active_customers",
+                    }
+                }),
+            ),
+            (
+                "view.loaded",
+                "view lifecycle",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "view-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "active_customers",
+                    }
+                }),
+            ),
+            (
+                "view.dropped",
+                "view lifecycle",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "view-drop",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "active_customers",
+                    }
+                }),
+            ),
+        ];
+
+        for (event_type, label, payload) in cases {
+            let event_id = format!("evt-malformed-{}-principal-token", event_type);
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-malformed-{event_type}-principal"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed standard catalog receipt principal should fail");
+
+            let message = err.to_string();
+            assert!(
+                message.contains(event_type),
+                "{event_type} error should include event type: {message}"
+            );
+            assert!(
+                message.contains(&format!("{label} authorization receipt principal")),
+                "{event_type} error should describe malformed receipt principal: {message}"
+            );
+            assert!(
+                message.contains("must be a valid principal"),
+                "{event_type} error should reject malformed principal shape: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_scan_planned_evidence() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let ident = table_ident("local", "default", "events").unwrap();
