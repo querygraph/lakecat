@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over nested policy-binding upsert evidence.
+  `policy-binding.upserted` replay now rejects unexpected fields inside the
+  nested `policy` object before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake proof can inherit unverified ODRL,
+  governance, scope, or enforcement claims.
 - Closed service outbox admission over nested storage-profile evidence.
   `storage-profile.upserted` replay and `credentials.vend-attempted` replay
   now reject unexpected fields inside their nested `storage-profile` object

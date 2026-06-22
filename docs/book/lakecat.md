@@ -6058,7 +6058,11 @@ evidence must carry a valid policy id, warehouse, optional namespace/table
 scope, an enforcement flag, the captured ODRL material, and an `odrl-hash`
 that matches that material. LakeCat does not reason over that ODRL during
 replay, but malformed binding shape or drifted ODRL content proof fails closed
-before the policy anchor can be delivered to graph or lineage sinks. Those
+before the policy anchor can be delivered to graph or lineage sinks. Service
+admission also closes the nested `policy` object over the route-produced
+fields, so unexpected ODRL, governance, scope, or enforcement claims fail
+before acknowledgement, graph projection, OpenLineage projection, or QGLake
+proof can inherit them. Those
 management upserts must also carry a valid authorization receipt principal, so
 the catalog graph and OpenLineage stream never accept actorless tenant-root,
 storage-profile, or policy mutations.

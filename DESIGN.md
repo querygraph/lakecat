@@ -916,6 +916,10 @@ Policy-binding upsert replay must also bind captured ODRL material to a full
 `odrl-hash` before graph or OpenLineage projection. LakeCat validates the
 catalog scope and content anchor, while TypeSec and QueryGraph remain the
 places for policy interpretation and semantic composition.
+Service outbox admission must also close the nested policy-binding `policy`
+object over the route-produced fields, so replay rejects unexpected ODRL,
+governance, scope, or enforcement claims before acknowledgement, graph
+projection, OpenLineage projection, or QGLake proof.
 Server and warehouse upsert replay must also treat endpoint URLs and storage
 roots as sensitive management roots. Generated audit/outbox evidence should
 persist `endpoint-url-hash` and `storage-root-hash` instead of raw roots, and

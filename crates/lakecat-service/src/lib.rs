@@ -1515,6 +1515,15 @@ const STORAGE_PROFILE_EVIDENCE_FIELDS: &[&str] = &[
     "secret-ref-provider",
     "secret-ref-hash",
 ];
+const POLICY_BINDING_EVIDENCE_FIELDS: &[&str] = &[
+    "policy-id",
+    "warehouse",
+    "namespace",
+    "table",
+    "enforced",
+    "odrl",
+    "odrl-hash",
+];
 
 fn validate_read_restriction_evidence_schema(
     event: &OutboxEvent,
@@ -1586,6 +1595,27 @@ fn validate_storage_profile_evidence_schema(
             return Err(outbox_evidence_error(
                 event,
                 &format!("{evidence_label} contains unexpected field {field}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_policy_binding_evidence_schema(
+    event: &OutboxEvent,
+    policy: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(policy) = policy.as_object() else {
+        return Err(outbox_evidence_error(
+            event,
+            "policy-binding upsert policy must be an object",
+        ));
+    };
+    for field in policy.keys() {
+        if !POLICY_BINDING_EVIDENCE_FIELDS.contains(&field.as_str()) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("policy-binding upsert policy contains unexpected field {field}"),
             ));
         }
     }
@@ -2949,6 +2979,7 @@ fn validate_policy_binding_upsert_event_evidence(
             "policy-binding upsert evidence must contain policy",
         ));
     };
+    validate_policy_binding_evidence_schema(event, policy)?;
     let Some(policy_id) = policy
         .get("policy-id")
         .and_then(Value::as_str)
@@ -15783,6 +15814,84 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "mismatched ODRL hash must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_policy_binding_upsert_fields() {
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let odrl = json!({
+            "uid": "policy:agent-read",
+            "lakecat:read-restriction": {
+                "allowed-columns": ["event_id"]
+            }
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-policy-extra-field".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "policy-binding.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-policy-extra-field",
+                    "event-type": "policy-binding.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "policy-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "policy": {
+                            "policy-id": "agent-read",
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "table": "events",
+                            "enforced": true,
+                            "odrl-hash": content_hash_json(&odrl).unwrap(),
+                            "odrl": odrl,
+                            "unverified-governance-claim": true,
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra policy-binding fields should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("policy-binding.upserted"));
+        assert!(message.contains(
+            "policy-binding upsert policy contains unexpected field unverified-governance-claim"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-policy-extra-field"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "extra policy fields must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "extra policy fields must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "extra policy fields must fail before lineage projection"
         );
     }
 
