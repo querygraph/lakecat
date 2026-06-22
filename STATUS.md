@@ -5,6 +5,24 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Expand detailed catalog concept guidance`.
+  The book now more thoroughly explains the first-release catalog vocabulary:
+  Rust service/catalog spine and Turso are LakeCat implementation choices;
+  REST namespace/table paths and optimistic commit CAS are Iceberg
+  compatibility; idempotency, pointer logs, audit/outbox, and replay admission
+  are LakeCat reliability proof; governed scan and credential receipts are
+  TypeSec/Sail-governed extensions; and QueryGraph/QGLake/OpenLineage
+  bootstrap, management, view, credential, and commit proofs are integration
+  surfaces. The added section also makes the argument that Sail should own
+  manifest, pruning, delete, metadata-as-data, scan-task, commit-validation,
+  and typed v4 interpretation so LakeCat proof remains bound to engine facts.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/testing slice:
   `Harden governed scan location replay evidence`.
   Service replay admission now validates optional `table.scan-planned` and

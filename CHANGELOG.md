@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a detailed catalog-concepts chapter. The new
+  material explains the Rust service/catalog spine, Turso-backed local store,
+  Iceberg REST namespace/table compatibility, commit CAS, idempotency, pointer
+  logs, audit/outbox, replay validation, governed scan and credential
+  receipts, and QueryGraph/QGLake proof surfaces as standard Iceberg terms,
+  LakeCat implementation choices, TypeSec/QueryGraph extensions, or future
+  optional profile candidates. It also deepens the case for pushing
+  table-format and scan-planning work into Sail so LakeCat proof stays tied to
+  engine truth.
 - Hardened governed scan replay location evidence. When `table.scan-planned`
   or `table.scan-tasks-fetched` replay carries `storage-location` or
   `metadata-location`, service replay now rejects blank, decorated, or
