@@ -5,6 +5,15 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Bind config tenant-root hash evidence`.
+  Service replay admission now applies hash binding to optional
+  `catalog.config-read` tenant-root records: a raw
+  `server-record.endpoint-url` requires matching full `endpoint-url-hash`
+  evidence, and a raw `warehouse-record.storage-root` requires matching full
+  `storage-root-hash` evidence before acknowledgement, graph projection,
+  OpenLineage projection, QGLake proof, or QueryGraph import can treat config
+  discovery as accepted tenant-root evidence.
 - Latest verification slice:
   `Refresh quick release gate evidence`.
   `scripts/check-release-readiness.sh --quick` passed after the catalog

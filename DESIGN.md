@@ -990,6 +990,11 @@ source value when that value is present: `endpoint-url-hash` must recompute
 from `endpoint-url`, and `storage-root-hash` must recompute from
 `storage-root`, before graph, OpenLineage, or QGLake proof accepts the
 management event.
+Catalog config-read replay must apply the same binding to optional tenant-root
+records it carries for discovery: a raw `server-record.endpoint-url` or
+`warehouse-record.storage-root` is admissible only with the matching full hash
+evidence before config discovery reaches graph, OpenLineage, QGLake, or
+QueryGraph import proof.
 Storage-profile upsert replay and compact QGLake handoff proof must also bind
 that principal to a full authorization receipt hash and the
 `storage-profile-manage` action, beside the redacted provider, issuance mode,

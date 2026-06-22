@@ -6393,6 +6393,12 @@ archiving a captured replay file whose config proof differs from the summary.
 That makes the config proof replayable outside the service process. QueryGraph
 can trust that the compatibility and integration contract it imports is the
 same contract LakeCat admitted before graph and OpenLineage projection.
+When config evidence carries optional tenant-root records, the same admission
+rule applies to sensitive roots: a raw `server-record.endpoint-url` must carry
+the matching full `endpoint-url-hash`, and a raw
+`warehouse-record.storage-root` must carry the matching full
+`storage-root-hash` before config discovery can be projected or archived as
+QGLake proof.
 
 The bridge is intentionally conservative, but it should not reject Iceberg
 metadata that Sail has already decoded. Manifest expansion now emits null
@@ -10709,7 +10715,10 @@ For this release, replay admission is part of that local proof rather than a
 best-effort projection filter. `catalog.config-read` replay is closed over the
 checked warehouse, defaults, overrides, advertised endpoints, and authorization
 receipt, with defaults and overrides closed again as `key`/`value` entries and
-tenant-root records closed over their known record fields.
+tenant-root records closed over their known record fields. Optional raw server
+endpoint and warehouse storage-root values in those config tenant records are
+also bound back to matching full hash evidence before graph, OpenLineage,
+QGLake, or QueryGraph import can accept them.
 `table.commit` replay is closed over the checked table identity or scope hints,
 authorization receipt, and nested commit evidence, and the nested commit object
 is closed over the pointer transition, principal, hashes, format, snapshot, and

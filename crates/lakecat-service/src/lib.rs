@@ -4006,6 +4006,13 @@ fn validate_catalog_config_tenant_records(
             "catalog config-read warehouse-record",
             WAREHOUSE_RECORD_EVIDENCE_FIELDS,
         )?;
+        validate_sensitive_record_hash_binding(
+            event,
+            warehouse_record,
+            "storage-root",
+            "storage-root-hash",
+            "catalog config-read warehouse-record",
+        )?;
     }
     if let Some(project_record) = payload.get("project-record") {
         validate_object_evidence_schema(
@@ -4022,6 +4029,29 @@ fn validate_catalog_config_tenant_records(
             "catalog config-read server-record",
             SERVER_RECORD_EVIDENCE_FIELDS,
         )?;
+        validate_sensitive_record_hash_binding(
+            event,
+            server_record,
+            "endpoint-url",
+            "endpoint-url-hash",
+            "catalog config-read server-record",
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_sensitive_record_hash_binding(
+    event: &OutboxEvent,
+    record: &Value,
+    value_field: &str,
+    hash_field: &str,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    if record.get(value_field).is_some() {
+        validate_required_full_hash_field(event, record, hash_field)?;
+        validate_string_content_hash_matches_field(event, record, value_field, hash_field, label)?;
+    } else {
+        validate_optional_full_hash_field(event, record, hash_field)?;
     }
     Ok(())
 }
@@ -25255,6 +25285,106 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_unbound_catalog_config_tenant_roots() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            (
+                "evt-config-unhashed-server-record",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "catalog-config",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "defaults": catalog_config_defaults_json(),
+                    "endpoints": catalog_config_endpoints_json(),
+                    "server-record": {
+                        "server-id": "prod",
+                        "display-name": "Production",
+                        "endpoint-url": "https://lakecat.example?token=raw-secret",
+                        "properties": {"region": "global"}
+                    }
+                }),
+                "endpoint-url-hash must contain full SHA-256 digest evidence",
+            ),
+            (
+                "evt-config-storage-root-hash-drift",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "catalog-config",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "defaults": catalog_config_defaults_json(),
+                    "endpoints": catalog_config_endpoints_json(),
+                    "warehouse-record": {
+                        "warehouse": "local",
+                        "project-id": "default",
+                        "storage-root": "file:///tmp/lakecat/config?token=raw-secret",
+                        "storage-root-hash": content_hash_json(&json!({
+                            "storage-root": "file:///tmp/lakecat/other"
+                        })).unwrap(),
+                        "properties": {"purpose": "config-read"}
+                    }
+                }),
+                "catalog config-read warehouse-record storage-root-hash must match storage-root",
+            ),
+        ];
+
+        for (event_id, payload, expected_message) in cases {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "catalog.config-read".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "catalog.config-read",
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("catalog config tenant roots must be hash-bound before projection");
+
+            let message = err.to_string();
+            assert!(message.contains("catalog.config-read"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                !message.contains("raw-secret"),
+                "config tenant-root replay errors must not expose decorated roots"
+            );
+            assert!(store.delivered.lock().await.is_empty());
+            assert!(graph.events.lock().await.is_empty());
+            assert!(lineage.events.lock().await.is_empty());
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_stale_catalog_config_typed_sail_default() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let store = Arc::new(RecordingOutboxStore {
@@ -34045,6 +34175,9 @@ mod tests {
                             "warehouse": "local",
                             "project-id": "default",
                             "storage-root": "file:///tmp/lakecat/config",
+                            "storage-root-hash": content_hash_json(&json!({
+                                "storage-root": "file:///tmp/lakecat/config"
+                            })).unwrap(),
                             "properties": {"purpose": "config-read"}
                         }
                     }

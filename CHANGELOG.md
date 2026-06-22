@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bound catalog config-read tenant-root replay roots to their hash evidence.
+  `catalog.config-read` replay now applies the same hash binding to optional
+  `server-record.endpoint-url` and `warehouse-record.storage-root` values that
+  management-upsert replay already applies, so config discovery evidence cannot
+  project raw tenant roots unless the matching full hash proof is present.
 - Refreshed the release-readiness record after the latest book and handoff
   slices. The quick local gate is green for dependency-contract shell syntax,
   workflow trigger syntax, QGLake handoff script syntax, release script syntax,
