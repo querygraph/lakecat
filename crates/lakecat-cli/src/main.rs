@@ -24745,6 +24745,25 @@ mod tests {
     }
 
     #[test]
+    fn qglake_lineage_drain_verifier_rejects_missing_scan_authorization_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let scan_fetch = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.scan-tasks-fetched")
+            .expect("scan fetch replay fixture");
+        scan_fetch.authorization_receipt_hash = None;
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject missing scan authorization hashes");
+
+        assert!(err
+            .to_string()
+            .contains("qglake lineage drain scan task fetch replay is missing compact file/delete task or SHA-256 receipt evidence"));
+    }
+
+    #[test]
     fn qglake_lineage_drain_verifier_rejects_short_scan_policy_hashes() {
         let verification = qglake_handoff_lineage_verification();
         let mut drain = qglake_handoff_lineage_drain();

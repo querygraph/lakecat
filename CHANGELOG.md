@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added QGLake lineage-drain verifier coverage for missing governed scan
+  authorization receipt hashes, proving fetched scan replay cannot shed the
+  TypeSec-style receipt digest before compact handoff proof is accepted.
 - Added QGLake lineage-drain verifier coverage for malformed governed scan
   authorization receipt hashes, proving compact scan replay cannot preserve a
   short receipt digest even when replay/OpenLineage hashes are well-shaped.
