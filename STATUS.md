@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Validate Turso management row scope`.
+  Turso server, project, and warehouse reads now require decoded `record_json`
+  to match the selecting row identity before returning tenant-root inventory,
+  loading a warehouse, or listing project warehouses. Spliced durable
+  management JSON now fails before QueryGraph/QGLake bootstrap, management
+  proof, or tenant-spine projection can consume it.
+- Local verification for this Turso management row-scope slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local record_json_scope_drift -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Previous completed implementation/documentation slice:
   `Validate Turso storage profile row scope`.
   Turso storage-profile reads now require decoded `profile_json` to match the
   row/query warehouse and profile id before returning profile lists or matching

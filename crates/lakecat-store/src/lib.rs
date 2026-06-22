@@ -2389,6 +2389,40 @@ fn validate_storage_profile_scope(
     Ok(())
 }
 
+fn validate_server_record_scope(server: &ServerRecord, server_id: &str) -> LakeCatResult<()> {
+    server.validate()?;
+    if server.server_id != server_id {
+        return Err(LakeCatError::Internal(
+            "server row scope does not match server identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_project_record_scope(project: &ProjectRecord, project_id: &str) -> LakeCatResult<()> {
+    project.validate()?;
+    if project.project_id != project_id {
+        return Err(LakeCatError::Internal(
+            "project row scope does not match project identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_warehouse_record_scope(
+    record: &WarehouseRecord,
+    warehouse: &WarehouseName,
+    project_id: Option<&str>,
+) -> LakeCatResult<()> {
+    record.validate()?;
+    if record.warehouse != *warehouse || project_id.is_some_and(|id| record.project_id != id) {
+        return Err(LakeCatError::Internal(
+            "warehouse row scope does not match warehouse identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn view_key(view: &ViewRecord) -> String {
     view_key_parts(&view.warehouse, &view.namespace, &view.name)
 }
@@ -5351,7 +5385,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select record_json from servers
+                    "select record_json, server_id from servers
                      order by server_id",
                     (),
                 )
@@ -5360,7 +5394,7 @@ pub mod turso_store {
             let mut servers = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
                 let server: ServerRecord = decode_json(row_string(&row, 0)?)?;
-                server.validate()?;
+                crate::validate_server_record_scope(&server, &row_string(&row, 1)?)?;
                 servers.push(server);
             }
             Ok(servers)
@@ -5409,7 +5443,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select record_json from projects
+                    "select record_json, project_id from projects
                      order by project_id",
                     (),
                 )
@@ -5418,7 +5452,7 @@ pub mod turso_store {
             let mut projects = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
                 let project: ProjectRecord = decode_json(row_string(&row, 0)?)?;
-                project.validate()?;
+                crate::validate_project_record_scope(&project, &row_string(&row, 1)?)?;
                 projects.push(project);
             }
             Ok(projects)
@@ -5476,7 +5510,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select record_json from warehouses
+                    "select record_json, warehouse from warehouses
                      where warehouse = ?1",
                     (warehouse.as_str(),),
                 )
@@ -5486,9 +5520,10 @@ pub mod turso_store {
                 .await
                 .map_err(turso_error)?
                 .map(|row| {
-                    let warehouse: WarehouseRecord = decode_json(row_string(&row, 0)?)?;
-                    warehouse.validate()?;
-                    Ok(warehouse)
+                    let record: WarehouseRecord = decode_json(row_string(&row, 0)?)?;
+                    let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+                    crate::validate_warehouse_record_scope(&record, &row_warehouse, None)?;
+                    Ok(record)
                 })
                 .transpose()?
                 .ok_or_else(|| LakeCatError::NotFound {
@@ -5501,7 +5536,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select record_json from warehouses
+                    "select record_json, warehouse from warehouses
                      order by warehouse",
                     (),
                 )
@@ -5509,9 +5544,10 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut warehouses = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                let warehouse: WarehouseRecord = decode_json(row_string(&row, 0)?)?;
-                warehouse.validate()?;
-                warehouses.push(warehouse);
+                let record: WarehouseRecord = decode_json(row_string(&row, 0)?)?;
+                let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+                crate::validate_warehouse_record_scope(&record, &row_warehouse, None)?;
+                warehouses.push(record);
             }
             Ok(warehouses)
         }
@@ -5540,7 +5576,7 @@ pub mod turso_store {
             }
             let mut rows = conn
                 .query(
-                    "select record_json from warehouses
+                    "select record_json, warehouse, project_id from warehouses
                      where project_id = ?1
                      order by warehouse",
                     (project_id,),
@@ -5549,9 +5585,14 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut warehouses = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                let warehouse: WarehouseRecord = decode_json(row_string(&row, 0)?)?;
-                warehouse.validate()?;
-                warehouses.push(warehouse);
+                let record: WarehouseRecord = decode_json(row_string(&row, 0)?)?;
+                let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+                crate::validate_warehouse_record_scope(
+                    &record,
+                    &row_warehouse,
+                    Some(&row_string(&row, 2)?),
+                )?;
+                warehouses.push(record);
             }
             Ok(warehouses)
         }
@@ -6542,6 +6583,36 @@ pub mod turso_store {
         }
 
         #[tokio::test]
+        async fn turso_store_rejects_server_record_json_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let mut record = ServerRecord::new(
+                "lakecat-local",
+                Some("Local LakeCat".to_string()),
+                Some("http://127.0.0.1:8181".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_server(record.clone()).await.unwrap();
+            record.server_id = "lakecat-other".to_string();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update servers set record_json = ?2 where server_id = ?1",
+                ("lakecat-local", encode_json(&record).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store.list_servers().await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("server row scope does not match")
+            ));
+        }
+
+        #[tokio::test]
         async fn turso_store_persists_warehouse_records() {
             let store = TursoCatalogStore::in_memory().await.unwrap();
             assert_eq!(store.list_warehouses().await.unwrap(), vec![]);
@@ -6663,6 +6734,51 @@ pub mod turso_store {
         }
 
         #[tokio::test]
+        async fn turso_store_rejects_warehouse_record_json_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let project = ProjectRecord::new(
+                "default",
+                None,
+                Some("Default Project".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_project(project).await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let mut record = WarehouseRecord::new(
+                warehouse.clone(),
+                "default",
+                Some("file:///tmp/lakecat".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_warehouse(record.clone()).await.unwrap();
+            record.warehouse = WarehouseName::new("other").unwrap();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update warehouses set record_json = ?2 where warehouse = ?1",
+                ("local", encode_json(&record).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            for err in [
+                store.load_warehouse(&warehouse).await.unwrap_err(),
+                store.list_warehouses().await.unwrap_err(),
+                store.list_project_warehouses("default").await.unwrap_err(),
+            ] {
+                assert!(matches!(
+                    err,
+                    LakeCatError::Internal(message)
+                        if message.contains("warehouse row scope does not match")
+                ));
+            }
+        }
+
+        #[tokio::test]
         async fn turso_store_persists_project_records() {
             let store = TursoCatalogStore::in_memory().await.unwrap();
             assert_eq!(store.list_projects().await.unwrap(), vec![]);
@@ -6760,6 +6876,36 @@ pub mod turso_store {
                     if message.contains("project") || message.contains("identifier")
             ));
             assert!(!message.contains("token=secret"));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_project_record_json_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let mut project = ProjectRecord::new(
+                "default",
+                None,
+                Some("QueryGraph Project".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_project(project.clone()).await.unwrap();
+            project.project_id = "other-project".to_string();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update projects set record_json = ?2 where project_id = ?1",
+                ("default", encode_json(&project).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store.list_projects().await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("project row scope does not match")
+            ));
         }
 
         #[tokio::test]

@@ -655,6 +655,15 @@ durable events. That behavior is not Iceberg parlance. It is LakeCat's
 redaction and replay contract for management state that will later feed Grust,
 OpenLineage, and QueryGraph.
 
+The durable management rows themselves also need row/content proof. Iceberg
+does not define servers, projects, or the QueryGraph tenant spine; those are
+LakeCat/QueryGraph control-plane concepts. But once LakeCat uses those rows to
+bootstrap QueryGraph or prove management inventory, a row selected as
+`server-a`, `project-a`, or warehouse `local` must not decode into a different
+tenant root. Turso therefore binds decoded server, project, and warehouse
+`record_json` back to the selecting row identity before returning lists,
+warehouse loads, or project warehouse inventories.
+
 Policy roots need content proof too. Listing a policy binding proves that a
 policy id was visible, but it does not prove which ODRL material the catalog
 recorded for that id. LakeCat therefore treats `policy-binding.upserted` as a

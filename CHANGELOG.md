@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened Turso server, project, and warehouse management-row reads so decoded
+  `record_json` must match the selecting row identity before LakeCat returns
+  tenant roots or warehouse inventory. This prevents QueryGraph/QGLake
+  bootstrap and management proof paths from consuming tenant evidence spliced
+  from another durable management row.
 - Hardened Turso storage-profile reads so decoded `profile_json` must match the
   row/query warehouse and profile id before LakeCat lists profiles or matches a
   table to a credential root. This prevents governed credential and QGLake

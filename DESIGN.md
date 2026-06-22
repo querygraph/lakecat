@@ -243,6 +243,9 @@ The current working plan is:
    content hashes such as `location-prefix-hash`; validation failures should
    follow the same hash-only rule for storage roots, secret references,
    public-config keys, and production resolver parse failures. Turso
+   server/project/warehouse reads must bind decoded JSON back to the selecting
+   row identity before returning tenant-root inventory for QueryGraph
+   bootstrap or management proof. Turso
    policy-binding reads must bind decoded JSON back to the row/query warehouse
    and policy id before matching policies for tables. Turso storage-profile
    reads must likewise bind decoded JSON back to the row/query warehouse and
