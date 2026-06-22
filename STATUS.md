@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover missing fetch row predicates`.
+  Service replay regression coverage now proves governed
+  `table.scan-tasks-fetched` events reject read-restriction evidence that omits
+  `row-predicate` before acknowledgement, graph projection, or OpenLineage
+  projection. This closes the fetched sibling of the governed scan
+  row-predicate replay rule.
+- Local verification for this missing fetch row-predicate slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_fetch_missing_row_predicate -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib row_predicate -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover malformed scan restriction TTL`.
   Service replay regression coverage now proves governed `table.scan-planned`
   and `table.scan-tasks-fetched` events reject non-integer
