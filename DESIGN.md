@@ -1053,6 +1053,13 @@ acknowledged or projected. Receipt-level or principal-level extras are rejected
 at the LakeCat boundary, so graph, OpenLineage, QGLake, and QueryGraph import
 proof cannot inherit unverified actor, TypeDID, request-identity, delegation,
 token, authorization, policy, or application claims beside a valid receipt.
+Service replay must also close any shared authorization receipt `context`
+object over `warehouse`, `policy-bindings`, `read-restriction`,
+`lakecat:raw-credential-exception`, and `request-identity` before
+acknowledgement or projection. Context-level extras are rejected at the LakeCat
+boundary, so a receipt cannot carry unverified tenant, policy, restriction,
+raw-credential, request-identity, delegation, or application claims beside the
+nested proof objects that LakeCat actually compares.
 Namespace lifecycle replay must also close the top-level payload schema over
 `event-type`, `authorization-receipt`, `warehouse`, and `namespace`, so
 create/load/drop replay cannot append unverified namespace, scope, graph,

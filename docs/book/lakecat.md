@@ -167,6 +167,16 @@ TypeSec evidence, not a standard Iceberg table concept. The portable idea is
 narrower: proof-carrying catalog events should say exactly which fields are
 verified and reject claims outside that schema.
 
+The same rule applies one level down. The receipt context is not an open bag
+of assertions. LakeCat currently admits the context keys it knows how to check:
+`warehouse`, `policy-bindings`, `read-restriction`,
+`lakecat:raw-credential-exception`, and `request-identity`. Unknown context
+siblings are rejected before projection, because otherwise a valid receipt
+could smuggle an unchecked tenant, delegation, credential, policy, or agent
+claim into QueryGraph evidence. That is still not standard Iceberg parlance.
+It is LakeCat's proof-admission rule for keeping TypeSec and QueryGraph
+evidence honest around ordinary Iceberg catalog actions.
+
 QueryGraph and QGLake handoff, OpenLineage binding, bootstrap, management,
 view, credential, and commit proof surfaces are broader than Iceberg because
 they serve a semantic and agentic application layer. LakeCat should export

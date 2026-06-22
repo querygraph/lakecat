@@ -1501,6 +1501,13 @@ const AUTHORIZATION_RECEIPT_EVIDENCE_FIELDS: &[&str] = &[
     "request-identity",
     "checked_at",
 ];
+const AUTHORIZATION_RECEIPT_CONTEXT_EVIDENCE_FIELDS: &[&str] = &[
+    "warehouse",
+    "policy-bindings",
+    "read-restriction",
+    "lakecat:raw-credential-exception",
+    "request-identity",
+];
 const SCAN_PLANNED_EVIDENCE_FIELDS: &[&str] = &[
     "event-type",
     "table",
@@ -2315,6 +2322,14 @@ fn validate_authorization_receipt_evidence_schema(
             &format!("{label} authorization receipt"),
             AUTHORIZATION_RECEIPT_EVIDENCE_FIELDS,
         )?;
+        if let Some(context) = receipt.get("context") {
+            validate_object_evidence_schema(
+                event,
+                context,
+                &format!("{label} authorization receipt context"),
+                AUTHORIZATION_RECEIPT_CONTEXT_EVIDENCE_FIELDS,
+            )?;
+        }
     }
     Ok(())
 }
@@ -28221,6 +28236,77 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "receipt schema failures must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_authorization_receipt_context_fields() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let event_id = "evt-config-extra-auth-context-field";
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": format!("audit-{event_id}"),
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                            "context": {
+                                "unverified-context-claim": "delegated-admin",
+                            },
+                        },
+                        "warehouse": "local",
+                        "defaults": catalog_config_defaults_json(),
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra authorization receipt context fields should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(
+            message.contains(
+                "catalog config-read authorization receipt context contains unexpected field unverified-context-claim"
+            ),
+            "catalog config-read error should reject extra receipt context fields: {message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(event_id));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "receipt context schema failures must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "receipt context schema failures must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "receipt context schema failures must fail before lineage projection"
         );
     }
 

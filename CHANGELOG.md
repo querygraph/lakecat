@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed shared authorization receipt context replay schemas over the context
+  keys LakeCat compares. Standard catalog replay now rejects unexpected
+  context-level claims before acknowledgement, graph projection, OpenLineage
+  projection, QGLake proof, or QueryGraph import proof can inherit unverified
+  restriction, raw-credential, request-identity, delegation, or application
+  evidence beside checked authorization receipt context.
 - Closed shared authorization receipt and principal replay schemas over the
   fields LakeCat compares. Standard catalog replay now rejects unexpected
   receipt-level or principal-level claims before acknowledgement, graph
