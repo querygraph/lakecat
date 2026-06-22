@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over nested storage-profile evidence.
+  `storage-profile.upserted` replay and `credentials.vend-attempted` replay
+  now reject unexpected fields inside their nested `storage-profile` object
+  before acknowledgement, graph projection, OpenLineage projection, or QGLake
+  proof can inherit unverified credential-root or storage-scope claims.
 - Expanded the book's catalog-boundary chapter with a detailed concept ledger
   that classifies the Rust service spine, Turso local store, Iceberg REST
   routes, commit CAS, idempotency, pointer logs, audit/outbox, replay

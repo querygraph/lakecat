@@ -5,6 +5,30 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Close service storage-profile schemas`.
+  Service outbox admission now rejects unexpected fields inside nested
+  `storage-profile` evidence for both `storage-profile.upserted` and
+  `credentials.vend-attempted` replay before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake proof can inherit unverified credential-root
+  or storage-scope claims. The design and book now state this service-side
+  closed-schema guard beside the existing redacted root, provider/mode,
+  secret-reference, and credential-vend replay checks.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_storage_profile_upsert_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_credential_storage_profile_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service storage_profile -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand catalog concept ledger`.
   The book's catalog-boundary chapter now gives a detailed concept ledger for

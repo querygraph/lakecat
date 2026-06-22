@@ -6337,7 +6337,12 @@ presence is true, the replay evidence must carry a provider and full
 absent. The same admission check validates the credential-root identity before
 projection: profile id must be non-empty, the nested warehouse must be valid
 and match any top-level warehouse field, and provider plus issuance mode must
-use LakeCat's supported storage-profile vocabulary.
+use LakeCat's supported storage-profile vocabulary. Service admission also
+closes the nested `storage-profile` object over the redacted producer schema
+for both `storage-profile.upserted` and `credentials.vend-attempted` replay.
+Unexpected nested storage-profile fields fail before acknowledgement, graph
+projection, OpenLineage projection, or QGLake proof can inherit unverified
+credential-root or storage-scope claims.
 Provider and issuance-mode compatibility is replay-checked as well:
 `local-file-no-secret` is only valid for the file provider, and
 `short-lived-secret-ref` is only valid for cloud object providers.

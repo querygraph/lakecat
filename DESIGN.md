@@ -885,6 +885,11 @@ audit/outbox evidence records `location-prefix-hash`, and raw
 Storage-profile replay must also carry unambiguous credential-root identity:
 non-empty profile id, valid nested warehouse matching any top-level warehouse,
 valid provider, and valid issuance mode.
+Service outbox admission must close the nested `storage-profile` object over
+the redacted producer schema for both `storage-profile.upserted` and
+`credentials.vend-attempted` replay. Unexpected nested storage-profile fields
+must fail before acknowledgement, graph projection, OpenLineage projection, or
+QGLake proof can inherit unverified credential-root or storage-scope claims.
 Management-upsert replay for policy bindings, projects, servers, storage
 profiles, and warehouses must also carry a valid authorization receipt
 principal plus an event-matching catalog action, affirmative allowed decision,

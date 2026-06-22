@@ -1504,6 +1504,17 @@ const CREDENTIAL_RESPONSE_EVIDENCE_FIELDS: &[&str] = &[
     "catalog-profile-id",
     "receipt-principal",
 ];
+const STORAGE_PROFILE_EVIDENCE_FIELDS: &[&str] = &[
+    "profile-id",
+    "warehouse",
+    "location-prefix-hash",
+    "provider",
+    "issuance-mode",
+    "secret-ref-present",
+    "public-config",
+    "secret-ref-provider",
+    "secret-ref-hash",
+];
 
 fn validate_read_restriction_evidence_schema(
     event: &OutboxEvent,
@@ -1550,6 +1561,28 @@ fn validate_row_predicate_evidence_schema(
     };
     for field in row_predicate.keys() {
         if !ROW_PREDICATE_EVIDENCE_FIELDS.contains(&field.as_str()) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{evidence_label} contains unexpected field {field}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_storage_profile_evidence_schema(
+    event: &OutboxEvent,
+    storage_profile: &Value,
+    evidence_label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(storage_profile) = storage_profile.as_object() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{evidence_label} must be an object"),
+        ));
+    };
+    for field in storage_profile.keys() {
+        if !STORAGE_PROFILE_EVIDENCE_FIELDS.contains(&field.as_str()) {
             return Err(outbox_evidence_error(
                 event,
                 &format!("{evidence_label} contains unexpected field {field}"),
@@ -2895,6 +2928,11 @@ fn validate_storage_profile_upsert_event_evidence(
             "storage-profile upsert evidence must not contain raw location-prefix",
         ));
     }
+    validate_storage_profile_evidence_schema(
+        event,
+        storage_profile,
+        "storage-profile upsert storage-profile",
+    )?;
     validate_required_full_hash_field(event, storage_profile, "location-prefix-hash")?;
     validate_secret_ref_evidence(event, storage_profile, "storage-profile upsert")?;
     validate_authorization_receipt_principal(event, payload, "storage-profile upsert")?;
@@ -3951,6 +3989,11 @@ fn validate_credential_vend_event_evidence(
             "credential-vend evidence must contain storage-profile",
         ));
     };
+    validate_storage_profile_evidence_schema(
+        event,
+        storage_profile,
+        "credential-vend storage-profile",
+    )?;
     validate_required_full_hash_field(event, storage_profile, "location-prefix-hash")?;
     validate_secret_ref_evidence(event, storage_profile, "credential-vend storage-profile")?;
     validate_storage_profile_provider_mode_evidence(
@@ -21194,6 +21237,81 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_extra_credential_storage_profile_fields() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-storage-profile-extra-field".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-storage-profile-extra-field",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "storage-profile-id": "events-local",
+                        "secret-ref-present": false,
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                            "unverified-storage-claim": true,
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra credential storage-profile fields should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains(
+            "credential-vend storage-profile contains unexpected field unverified-storage-claim"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-credential-storage-profile-extra-field"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_credential_storage_profile_warehouse_drift() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),
@@ -31735,6 +31853,70 @@ mod tests {
         assert!(message.contains("secret-ref-present must match issuance-mode"));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-storage-profile-secret-ref-mode-missing-ref"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_storage_profile_upsert_fields() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-storage-profile-extra-field".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-storage-profile-extra-field",
+                    "event-type": "storage-profile.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "storage-profile-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "storage-profile": {
+                            "profile-id": "file-events",
+                            "warehouse": "local",
+                            "location-prefix-hash": content_hash_json(&json!({
+                                "location-prefix": "file:///tmp/lakecat/events"
+                            })).unwrap(),
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "unverified-storage-claim": true,
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra storage-profile upsert fields should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("storage-profile.upserted"));
+        assert!(message.contains(
+            "storage-profile upsert storage-profile contains unexpected field unverified-storage-claim"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-storage-profile-extra-field"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
