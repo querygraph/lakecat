@@ -5,6 +5,24 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed book/documentation slice:
+  `Expand catalog concept field guide`.
+  The LakeCat book now front-loads a detailed concept map for the Rust service
+  spine, Turso-backed store, Iceberg REST namespace/table paths, commit CAS,
+  idempotency, pointer logs, audit/outbox, replay validation, governed scan and
+  credential receipt evidence, QueryGraph/QGLake handoff, OpenLineage, and
+  management/view proof. The section explicitly separates standard Iceberg
+  parlance from LakeCat implementation, optional LakeCat/QueryGraph extension
+  surfaces, TypeSec governance proof, and future Iceberg-adjacent candidates,
+  while reinforcing that reusable table-format semantics and governed planning
+  should move into Sail.
+- Local verification for this book concept slice is green:
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `readlink "docs/book/dist/$kindle_link"`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Cover malformed management upsert principals`.
   Service replay regression coverage now proves policy-binding, project,

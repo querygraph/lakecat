@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a front-loaded catalog concept field guide
+  explaining which concepts are standard Iceberg parlance, LakeCat
+  implementation, optional LakeCat/QueryGraph extensions, TypeSec governance
+  proof, or possible future Iceberg-adjacent profiles, with a stronger argument
+  for pushing table-format semantics and governed planning into Sail.
 - Added service replay regression coverage proving management upsert events
   reject malformed authorization receipt principals before acknowledgement,
   graph projection, or OpenLineage projection.
