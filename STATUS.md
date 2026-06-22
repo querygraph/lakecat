@@ -5,6 +5,26 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-readiness evidence:
+  `scripts/check-release-readiness.sh` passed locally on 2026-06-22. This full
+  local gate covered shell syntax checks, dependency-contract and workflow
+  trigger contracts, formatting, default workspace tests, `lakecat-api`,
+  `lakecat-sail --features sail-local`, `lakecat-cli --features qglake-fixture`
+  fixture tests, `lakecat-store --features turso-local`, `lakecat-service`
+  with `turso-local`, `sail-local`, and `typesec-local`, all-features CLI
+  verifier coverage, all-features workspace library tests including Grust
+  graph/Cypher integration, `docs/book/build.sh`, the live
+  `scripts/qglake-handoff-local.sh` harness, and final `git diff --check`.
+  The QGLake handoff run drained 26 events, verified the LakeCat replay JSON,
+  verified the bundle with QueryGraph, generated a QueryGraph import plan, and
+  accepted the compact handoff summary.
+- Latest documentation/book slice:
+  `Clarify LakeCat catalog concept standards`.
+  The book now has a dedicated standards-position section distinguishing
+  implementation details, optional LakeCat/QueryGraph control-plane extensions,
+  and possible future Iceberg-adjacent profiles, with a stronger argument that
+  reusable table-format proof must come through Sail rather than a
+  LakeCat-local partial engine.
 - Latest completed implementation slice:
   `Bind QGLake warehouse project scope`.
   QGLake compact `managementProof` now carries warehouse-list

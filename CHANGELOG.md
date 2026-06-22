@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Recorded a full local release-readiness pass, including default workspace
+  tests, feature-gated Turso/Sail/TypeSec/Grust rows, all-features workspace
+  library tests, book rebuild, and live QGLake handoff verification.
 - Expanded the LakeCat book's catalog-concepts guidance with a dedicated
   standards position that separates implementation details, optional
   LakeCat/QueryGraph control-plane extensions, and future Iceberg-adjacent
