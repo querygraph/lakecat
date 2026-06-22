@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Validate active view row scope`.
+  Memory and Turso keyed active-view reads, plus Turso namespace view lists,
+  now require decoded view `record_json` to match the selected warehouse,
+  namespace, and view name before returning, updating, or dropping active view
+  state. Spliced durable active-view JSON now fails before QGLake view proof,
+  view reads, or later view mutations can consume it.
+- Local verification for this active-view row-scope slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_view_record_json_scope_drift -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Previous completed implementation/documentation slice:
   `Validate Turso management row scope`.
   Turso server, project, and warehouse reads now require decoded `record_json`
   to match the selecting row identity before returning tenant-root inventory,

@@ -4254,6 +4254,14 @@ service requires its authorization receipt action to be `view-load`; a
 requires `view-manage`, `view.loaded` requires `view-load`, and `view.dropped`
 requires `view-drop` before LakeCat emits graph or OpenLineage evidence. Table
 lifecycle replay now follows the same rule:
+
+Active view state is protected before replay as well. A Turso row selected as
+warehouse `local`, namespace `default`, and view `active_customers` must decode
+to that same view before LakeCat returns it, lists it, updates it, or drops it.
+The memory store applies the same check to keyed active-view reads. This is not
+an Iceberg view extension; it is LakeCat's durable row/content guard around the
+control-plane view state that later produces view receipt chains and QGLake
+proof.
 create, load, delete, and restore events must carry a valid root table identity,
 and any payload warehouse, namespace, table-name, or soft-delete table evidence
 must agree with that identity before the event can be acknowledged. Their

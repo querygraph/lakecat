@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened active view reads so memory and Turso keyed reads, plus Turso
+  namespace view lists, bind decoded `record_json` back to the selected
+  warehouse, namespace, and view name before returning, updating, or dropping
+  view state. This prevents active-view JSON spliced from another durable view
+  row from feeding QGLake view proof or later view mutations.
 - Hardened Turso server, project, and warehouse management-row reads so decoded
   `record_json` must match the selecting row identity before LakeCat returns
   tenant roots or warehouse inventory. This prevents QueryGraph/QGLake

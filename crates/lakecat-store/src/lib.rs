@@ -1042,6 +1042,21 @@ fn validate_view_receipt_scope(
     Ok(())
 }
 
+fn validate_view_record_scope(
+    record: &ViewRecord,
+    warehouse: &WarehouseName,
+    namespace: &Namespace,
+    view: &TableName,
+) -> LakeCatResult<()> {
+    record.validate()?;
+    if record.warehouse != *warehouse || record.namespace != *namespace || record.name != *view {
+        return Err(LakeCatError::Internal(
+            "view record row scope does not match view identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn view_version_operation_order(operation: &ViewVersionOperation) -> u8 {
     match operation {
         ViewVersionOperation::Upsert => 0,
@@ -2134,7 +2149,7 @@ impl CatalogStore for MemoryCatalogStore {
                 name: view.as_str().to_string(),
             })
             .and_then(|record| {
-                record.validate()?;
+                validate_view_record_scope(&record, warehouse, namespace, view)?;
                 Ok(record)
             })
     }
@@ -2170,7 +2185,7 @@ impl CatalogStore for MemoryCatalogStore {
                 object: "view",
                 name: view.as_str().to_string(),
             })?;
-        current.validate()?;
+        validate_view_record_scope(current, warehouse, namespace, view)?;
         if let Some(expected) = expected_view_version {
             require_expected_view_version(Some(current), expected)?;
         }
@@ -2202,7 +2217,7 @@ impl CatalogStore for MemoryCatalogStore {
             .collect::<Vec<_>>();
         views.sort_by(|left, right| left.name.as_str().cmp(right.name.as_str()));
         for view in &views {
-            view.validate()?;
+            validate_view_record_scope(view, warehouse, namespace, &view.name)?;
         }
         Ok(views)
     }
@@ -5616,7 +5631,7 @@ pub mod turso_store {
             let principal = view.created.principal.clone();
             let previous = tx
                 .query(
-                    "select record_json from views
+                    "select record_json, warehouse, namespace_path, view_name from views
                      where view_key = ?1
                      limit 1",
                     (view_key.as_str(),),
@@ -5628,7 +5643,15 @@ pub mod turso_store {
                 .map_err(turso_error)?
                 .map(|row| {
                     let view = decode_json::<ViewRecord>(row_string(&row, 0)?)?;
-                    view.validate()?;
+                    let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+                    let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
+                    let row_view = TableName::new(row_string(&row, 3)?)?;
+                    crate::validate_view_record_scope(
+                        &view,
+                        &row_warehouse,
+                        &row_namespace,
+                        &row_view,
+                    )?;
                     Ok(view)
                 })
                 .transpose()?;
@@ -5780,7 +5803,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let view_key = view_key_parts(warehouse, namespace, view);
             conn.query(
-                "select record_json from views
+                "select record_json, warehouse, namespace_path, view_name from views
                  where view_key = ?1
                  limit 1",
                 (view_key.as_str(),),
@@ -5792,7 +5815,15 @@ pub mod turso_store {
             .map_err(turso_error)?
             .map(|row| {
                 let view = decode_json::<ViewRecord>(row_string(&row, 0)?)?;
-                view.validate()?;
+                let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+                let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
+                let row_view = TableName::new(row_string(&row, 3)?)?;
+                crate::validate_view_record_scope(
+                    &view,
+                    &row_warehouse,
+                    &row_namespace,
+                    &row_view,
+                )?;
                 Ok(view)
             })
             .transpose()?
@@ -5829,7 +5860,7 @@ pub mod turso_store {
             let tx = conn.transaction().await.map_err(turso_error)?;
             let record = tx
                 .query(
-                    "select record_json from views
+                    "select record_json, warehouse, namespace_path, view_name from views
                      where view_key = ?1
                      limit 1",
                     (view_key.as_str(),),
@@ -5841,7 +5872,15 @@ pub mod turso_store {
                 .map_err(turso_error)?
                 .map(|row| {
                     let view = decode_json::<ViewRecord>(row_string(&row, 0)?)?;
-                    view.validate()?;
+                    let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+                    let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
+                    let row_view = TableName::new(row_string(&row, 3)?)?;
+                    crate::validate_view_record_scope(
+                        &view,
+                        &row_warehouse,
+                        &row_namespace,
+                        &row_view,
+                    )?;
                     Ok(view)
                 })
                 .transpose()?
@@ -5903,7 +5942,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select record_json from views
+                    "select record_json, warehouse, namespace_path, view_name from views
                      where warehouse = ?1 and namespace_path = ?2
                      order by view_name",
                     (warehouse.as_str(), namespace.path().as_str()),
@@ -5913,7 +5952,15 @@ pub mod turso_store {
             let mut views = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
                 let view: ViewRecord = decode_json(row_string(&row, 0)?)?;
-                view.validate()?;
+                let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+                let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
+                let row_view = TableName::new(row_string(&row, 3)?)?;
+                crate::validate_view_record_scope(
+                    &view,
+                    &row_warehouse,
+                    &row_namespace,
+                    &row_view,
+                )?;
                 views.push(view);
             }
             Ok(views)
@@ -7201,6 +7248,69 @@ pub mod turso_store {
                 LakeCatError::InvalidArgument(message)
                     if message.contains("view SQL must not be empty")
             ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_view_record_json_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let view_name = TableName::new("active_customers").unwrap();
+            let view = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select * from customers where active",
+                "sql",
+                Some(1),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            let mut view = store.upsert_view(view).await.unwrap();
+            let original_view_key = view_key(&view);
+            view.name = TableName::new("other_view").unwrap();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update views set record_json = ?2 where view_key = ?1",
+                (original_view_key.as_str(), encode_json(&view).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let replacement = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select id from customers where active",
+                "sql",
+                Some(2),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            for err in [
+                store
+                    .load_view(&warehouse, &namespace, &view_name)
+                    .await
+                    .unwrap_err(),
+                store.list_views(&warehouse, &namespace).await.unwrap_err(),
+                store
+                    .upsert_view_if_version(replacement, Some(1))
+                    .await
+                    .unwrap_err(),
+                store
+                    .drop_view(&warehouse, &namespace, &view_name, Principal::anonymous())
+                    .await
+                    .unwrap_err(),
+            ] {
+                assert!(matches!(
+                    err,
+                    LakeCatError::Internal(message)
+                        if message.contains("view record row scope does not match")
+                ));
+            }
         }
 
         #[tokio::test]
