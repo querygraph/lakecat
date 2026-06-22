@@ -5337,7 +5337,10 @@ snapshot-id evidence, and full `sha256:`-prefixed 64-hex request, response,
 idempotency-key, and present policy hashes. A prefix-shaped placeholder,
 contradictory commit identity, missing receipt principal, missing
 table-format evidence, or drifted principal cannot become delivered commit
-replay evidence.
+replay evidence. LakeCat also closes the nested `commit` object over those
+verified fields before projection, so an outbox event cannot attach an
+unverified pointer-transition, policy, storage, or graph claim beside an
+otherwise valid table commit.
 
 Operators and QueryGraph can read that pointer-log evidence through a governed
 management endpoint:
@@ -7748,7 +7751,10 @@ hashes. The store path now supplies explicit `snapshot_id: 0` proof for
 metadata with no current snapshot, keeping empty-table or schema-only commits
 compatible with the replay contract. The policy hash is the only optional hash
 in that envelope, because some standard commits do not pass through a policy
-binding.
+binding. The nested `commit` object is also closed over the exact fields
+LakeCat verifies, so replay cannot smuggle an extra unverified commit, policy,
+storage, graph, or QueryGraph claim into the sidecar before QGLake proof is
+generated.
 Credential-vend replay gets the same treatment: `credentials.vend-attempted`
 must carry a
 matching credential count, full duplicate-free credential-response prefix

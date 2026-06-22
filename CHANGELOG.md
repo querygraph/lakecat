@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over individual table commit evidence.
+  `table.commit` replay now rejects unexpected fields inside the nested
+  `commit` object before acknowledgement, graph projection, OpenLineage
+  projection, or QGLake commit proof can inherit unverified pointer-transition
+  claims.
 - Closed service outbox admission over raw credential exception evidence.
   Governed credential-vending replay now rejects unexpected fields inside
   top-level `lakecat:raw-credential-exception` and the matching authorization

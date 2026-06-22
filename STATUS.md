@@ -6,6 +6,29 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close service table commit schemas`.
+  Individual `table.commit` replay now rejects unexpected fields inside the
+  nested `commit` object before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake commit proof can inherit unverified
+  pointer-transition claims. The design and book now state this service-side
+  closed-schema guard beside the existing table identity, principal,
+  authorization receipt, sequence, metadata-location, format-version,
+  snapshot-id, timestamp, request/response hash, idempotency, and policy-hash
+  replay checks.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_table_commit_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service table_commit -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close service raw credential exception schemas`.
   Governed credential-vending replay now rejects unexpected fields inside both
   the top-level `lakecat:raw-credential-exception` object and the matching

@@ -836,7 +836,12 @@ full SHA-256 evidence whenever present. The policy hash remains optional when
 no policy participated. It must also carry
 positive Iceberg format-version evidence and non-negative snapshot-id evidence,
 so graph and OpenLineage projections cannot lose the table-format summary that
-the pointer-log path exposes later. The store producer now rejects table and
+the pointer-log path exposes later. Service replay admission must also close
+the nested `commit` object over the pointer-transition, identity, authorization,
+hash, format, snapshot, and timestamp fields LakeCat actually verifies, so a
+durable `table.commit` event cannot append unverified commit, policy, storage,
+or graph claims beside an otherwise valid pointer transition. The store
+producer now rejects table and
 commit metadata that lacks positive `format-version` evidence before producing
 durable commit records, and it emits explicit `snapshot_id: 0` evidence for
 commits where the Iceberg metadata has no current snapshot, so a schema-only or
