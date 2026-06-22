@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened `view.version-receipt-chains-listed` replay admission so verified
+  view receipt chains must bind declared `receipt-count`, latest view version,
+  latest operation, and tombstone state back to the actual receipt array before
+  acknowledgement, graph projection, or OpenLineage projection.
 - Expanded the LakeCat book's catalog-concepts chapter with an explicit
   concept ledger for standard Iceberg, LakeCat, Sail, and
   QueryGraph/TypeSec/Grust responsibilities. The chapter now classifies the

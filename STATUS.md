@@ -5,6 +5,26 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation slice:
+  `Bind view receipt-chain heads`.
+  Service replay admission now rejects
+  `view.version-receipt-chains-listed` evidence whose verified chain declares a
+  `receipt-count`, latest view version, latest operation, or tombstone flag
+  that does not match the actual receipt array. This closes another P2/QGLake
+  receipt-chain replay gap before acknowledgement, graph projection, or
+  OpenLineage projection can inherit inflated or forged chain-head evidence.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_view_receipt_chain_scope_and_counts -- --test-threads=1`
+  passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover and contents render;
+  the versioned EPUB symlink resolves to `lakecat.epub` and byte-compares with
+  the canonical EPUB;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand catalog concept ledger`.
   The LakeCat book now has a reader-facing concept ledger that separates

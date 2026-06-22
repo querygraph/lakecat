@@ -4777,6 +4777,18 @@ fn validate_view_receipt_chain_structure_evidence(
             "verified view receipt-chain must contain at least one receipt",
         ));
     }
+    let Some(chain_receipt_count) = chain.get("receipt-count").and_then(Value::as_u64) else {
+        return Err(outbox_evidence_error(
+            event,
+            "verified view receipt-chain must contain receipt-count",
+        ));
+    };
+    if chain_receipt_count != receipts.len() as u64 {
+        return Err(outbox_evidence_error(
+            event,
+            "verified view receipt-chain receipt-count must match receipts",
+        ));
+    }
 
     for (index, receipt) in receipts.iter().enumerate() {
         let Some(view_version) = receipt.get("view-version").and_then(Value::as_u64) else {
@@ -4867,6 +4879,53 @@ fn validate_view_receipt_chain_structure_evidence(
                 "verified view receipt-chain receipt-hash must contain full SHA-256 digest evidence",
             ));
         }
+    }
+
+    let latest_receipt = receipts.last().expect("receipts is non-empty");
+    let latest_view_version = latest_receipt
+        .get("view-version")
+        .and_then(Value::as_u64)
+        .expect("receipt view-version was validated");
+    let latest_operation = latest_receipt
+        .get("operation")
+        .and_then(Value::as_str)
+        .expect("receipt operation was validated");
+    let Some(chain_latest_view_version) = chain.get("latest-view-version").and_then(Value::as_u64)
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            "verified view receipt-chain must contain latest-view-version",
+        ));
+    };
+    if chain_latest_view_version != latest_view_version {
+        return Err(outbox_evidence_error(
+            event,
+            "verified view receipt-chain latest-view-version must match the last receipt",
+        ));
+    }
+    let Some(chain_latest_operation) = chain.get("latest-operation").and_then(Value::as_str) else {
+        return Err(outbox_evidence_error(
+            event,
+            "verified view receipt-chain must contain latest-operation",
+        ));
+    };
+    if chain_latest_operation != latest_operation {
+        return Err(outbox_evidence_error(
+            event,
+            "verified view receipt-chain latest-operation must match the last receipt",
+        ));
+    }
+    let Some(chain_tombstoned) = chain.get("tombstoned").and_then(Value::as_bool) else {
+        return Err(outbox_evidence_error(
+            event,
+            "verified view receipt-chain must contain tombstoned",
+        ));
+    };
+    if chain_tombstoned != (latest_operation == "drop") {
+        return Err(outbox_evidence_error(
+            event,
+            "verified view receipt-chain tombstoned flag must match the last receipt operation",
+        ));
     }
 
     Ok(())
@@ -32118,6 +32177,42 @@ mod tests {
             "evt-view-chain-missing-chain-receipt-count",
             "view receipt-chain chain evidence must contain receipt-count",
             chain_receipt_count_missing,
+        ));
+
+        let mut chain_receipt_count_drift = base_payload.clone();
+        chain_receipt_count_drift["receipt-count"] = json!(2);
+        chain_receipt_count_drift["view-version-receipt-chains"][0]["receipt-count"] = json!(2);
+        cases.push((
+            "evt-view-chain-chain-receipt-count-drift",
+            "verified view receipt-chain receipt-count must match receipts",
+            chain_receipt_count_drift,
+        ));
+
+        let mut chain_latest_version_drift = base_payload.clone();
+        chain_latest_version_drift["view-version-receipt-chains"][0]["latest-view-version"] =
+            json!(2);
+        cases.push((
+            "evt-view-chain-latest-version-drift",
+            "verified view receipt-chain latest-view-version must match the last receipt",
+            chain_latest_version_drift,
+        ));
+
+        let mut chain_latest_operation_drift = base_payload.clone();
+        chain_latest_operation_drift["view-version-receipt-chains"][0]["latest-operation"] =
+            json!("drop");
+        cases.push((
+            "evt-view-chain-latest-operation-drift",
+            "verified view receipt-chain latest-operation must match the last receipt",
+            chain_latest_operation_drift,
+        ));
+
+        let mut chain_tombstoned_drift = base_payload.clone();
+        chain_tombstoned_drift["view-version-receipt-chains"][0]["tombstoned"] = json!(true);
+        chain_tombstoned_drift["tombstone-count"] = json!(1);
+        cases.push((
+            "evt-view-chain-tombstoned-drift",
+            "verified view receipt-chain tombstoned flag must match the last receipt operation",
+            chain_tombstoned_drift,
         ));
 
         for (event_id, expected_message, payload) in cases {

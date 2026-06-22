@@ -6354,6 +6354,12 @@ version, and keep `view-version` equal to the accepted version that was deleted.
 Unsupported operations and forged `previous-receipt-hash` links fail the same
 check. That lets QueryGraph reject a chain that is cryptographically linked but
 lies about how the catalog view advanced.
+Replay admission also binds the chain header back to the receipt body. A
+verified chain cannot claim a larger `receipt-count`, a different
+`latest-view-version`, a different `latest-operation`, or a tombstone flag that
+does not agree with the last receipt. That prevents namespace-level
+receipt-chain evidence from shedding receipts or presenting a forged head while
+keeping individually plausible receipt links.
 
 QueryGraph and operators can also read the compact receipt chain directly from
 the governed management surface:
