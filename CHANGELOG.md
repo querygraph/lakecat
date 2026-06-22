@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound compact QGLake `policyUpsertProof` to policy-management
+  authorization evidence, requiring principal subject/kind, full authorization
+  receipt hash, and the `policy-manage` action across raw lineage drains,
+  captured LakeCat replay, and archived handoff summaries.
 - Bound compact QGLake management proof to `policy-binding.upserted` content
   evidence: lineage drains and captured LakeCat replay now require
   `policyUpsertProof` with a listed policy id, full ODRL content hash, graph

@@ -3482,6 +3482,32 @@ fn require_management_evidence(
         "odrlHash",
         "managementProof.policyUpsertProof",
     )?;
+    require_non_blank_str(
+        policy_upsert,
+        "principalSubject",
+        "managementProof.policyUpsertProof",
+    )?;
+    require_non_blank_str(
+        policy_upsert,
+        "principalKind",
+        "managementProof.policyUpsertProof",
+    )?;
+    require_full_hash_str(
+        policy_upsert,
+        "authorizationReceiptHash",
+        "managementProof.policyUpsertProof",
+    )?;
+    let policy_upsert_action = require_non_empty_str(
+        policy_upsert,
+        "authorizationReceiptAction",
+        "managementProof.policyUpsertProof",
+    )?;
+    if policy_upsert_action != "policy-manage" {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "managementProof.policyUpsertProof.authorizationReceiptAction must be policy-manage"
+                .to_string(),
+        ));
+    }
     require_positive_u64(
         policy_upsert,
         "graphEvents",
@@ -5001,6 +5027,10 @@ fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Optio
         "policyUpsertProof": {
             "policyId": policy_upsert.policy_id.as_deref(),
             "odrlHash": policy_upsert.policy_odrl_hash.as_deref(),
+            "principalSubject": policy_upsert.principal_subject.as_deref(),
+            "principalKind": policy_upsert.principal_kind.as_deref(),
+            "authorizationReceiptHash": policy_upsert.authorization_receipt_hash.as_deref(),
+            "authorizationReceiptAction": policy_upsert.authorization_receipt_action.as_deref(),
             "graphEvents": policy_upsert.graph_events,
             "replayEventHashes": &policy_upsert.replay_event_hashes,
             "openLineageHashes": &policy_upsert.replay_open_lineage_hashes,
@@ -8992,6 +9022,33 @@ fn verify_qglake_policy_binding_upsert_replay(
                 .to_string(),
         ));
     }
+    if event
+        .principal_subject
+        .as_deref()
+        .map_or(true, str::is_empty)
+        || event.principal_kind.as_deref().map_or(true, str::is_empty)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain policy binding upsert replay is missing principal evidence"
+                .to_string(),
+        ));
+    }
+    if event
+        .authorization_receipt_hash
+        .as_deref()
+        .map_or(true, |hash| !is_full_sha256_hash(hash))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain policy binding upsert replay is missing authorization receipt hash evidence"
+                .to_string(),
+        ));
+    }
+    if event.authorization_receipt_action.as_deref() != Some("policy-manage") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain policy binding upsert replay authorization receipt action must be policy-manage"
+                .to_string(),
+        ));
+    }
     if event.graph_events == 0 || event.lineage_events == 0 {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain policy binding upsert replay emitted no graph or lineage projection"
@@ -10563,6 +10620,10 @@ mod tests {
         management["policyUpsertProof"] = json!({
             "policyId": "agent-columns",
             "odrlHash": qglake_fixture_hash("policy-odrl"),
+            "principalSubject": "did:example:agent",
+            "principalKind": "agent",
+            "authorizationReceiptHash": qglake_fixture_hash("policy-upsert-authorization"),
+            "authorizationReceiptAction": "policy-manage",
             "graphEvents": 1,
             "replayEventHashes": [qglake_fixture_hash("policy-upsert-replay")],
             "openLineageHashes": [qglake_fixture_hash("policy-upsert-openlineage")]
@@ -10744,13 +10805,6 @@ mod tests {
                     "policyBindingCount": 1,
                     "policyIds": ["agent-columns"],
                     "policyGraphEvents": 1,
-                    "policyUpsertProof": {
-                        "policyId": "agent-columns",
-                        "odrlHash": qglake_fixture_hash("policy-odrl"),
-                        "graphEvents": 1,
-                        "replayEventHashes": [qglake_fixture_hash("policy-upsert-replay")],
-                        "openLineageHashes": [qglake_fixture_hash("policy-upsert-openlineage")]
-                    },
                     "storageProfileCount": 1,
                     "storageProfileIds": ["events-local"],
                     "storageProfileGraphEvents": 1
@@ -12345,6 +12399,40 @@ mod tests {
                 .contains("managementProof.policyUpsertProof")
         );
         assert!(err.to_string().contains("policyId must match policyIds"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_policy_upsert_authorization_hash() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["policyUpsertProof"]["authorizationReceiptHash"] =
+            json!("sha256:short-policy-authorization");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject malformed policy upsert authorization hash");
+
+        assert!(
+            err.to_string()
+                .contains("managementProof.policyUpsertProof")
+        );
+        assert!(err.to_string().contains("authorizationReceiptHash"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_policy_upsert_authorization_action() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["policyUpsertProof"]["authorizationReceiptAction"] =
+            json!("table-load");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject drifted policy upsert authorization action");
+
+        assert!(
+            err.to_string()
+                .contains("managementProof.policyUpsertProof")
+        );
+        assert!(err.to_string().contains("authorizationReceiptAction"));
+        assert!(err.to_string().contains("policy-manage"));
     }
 
     #[test]
@@ -16393,6 +16481,31 @@ mod tests {
             err.to_string()
                 .contains("captured LakeCat replay output.management-replay mismatch")
         );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_policy_upsert_action_drift() {
+        let temp = qglake_temp_dir("handoff-captured-policy-upsert-action-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["management"]["policyUpsertProof"]["authorizationReceiptAction"] =
+            json!("table-load");
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay should reject policy upsert action drift");
+
+        assert!(
+            err.to_string()
+                .contains("captured LakeCat replay output.replay-evidence.management")
+        );
+        assert!(err.to_string().contains("policyUpsertProof mismatch"));
     }
 
     #[test]
@@ -23958,6 +24071,42 @@ mod tests {
 
         assert!(err.to_string().contains("policy binding upsert replay"));
         assert!(err.to_string().contains("ODRL hash"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_policy_upsert_authorization_action_drift() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let policy_upsert = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "policy-binding.upserted")
+            .expect("policy upsert replay fixture");
+        policy_upsert.authorization_receipt_action = Some("table-load".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject policy upsert action drift");
+
+        assert!(err.to_string().contains("policy binding upsert replay"));
+        assert!(err.to_string().contains("policy-manage"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_policy_upsert_authorization_hash_drift() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let policy_upsert = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "policy-binding.upserted")
+            .expect("policy upsert replay fixture");
+        policy_upsert.authorization_receipt_hash = Some("sha256:short-policy-auth".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject malformed policy upsert receipt hash");
+
+        assert!(err.to_string().contains("policy binding upsert replay"));
+        assert!(err.to_string().contains("authorization receipt hash"));
     }
 
     #[test]

@@ -287,7 +287,8 @@ separate evidence event: the producer records an `odrl-hash` over the captured
 ODRL policy document, service replay admission requires that hash to match the
 captured policy material, raw lineage replay must carry the same policy id and
 ODRL hash, and compact QGLake `managementProof.policyUpsertProof` preserves the
-policy id, `odrlHash`, graph event count, replay hash, and OpenLineage hash.
+policy id, `odrlHash`, principal subject/kind, authorization receipt hash, the
+`policy-manage` action, graph event count, replay hash, and OpenLineage hash.
 That is not standard Iceberg. It is LakeCat/TypeSec/QueryGraph governance
 evidence around a standard catalog that happens to serve Iceberg tables.
 
@@ -5051,12 +5052,15 @@ Policy binding upserts add a content anchor to that management proof. A policy
 list can prove that `agent-columns` was listed; it cannot prove which ODRL
 document `agent-columns` meant. LakeCat now carries a compact
 `policyUpsertProof` with `policyId`, `odrlHash`, graph event count, replay
-hashes, and OpenLineage hashes. The raw lineage-drain verifier requires a
-matching `policy-binding.upserted` replay event, requires the policy id to be
-present in the policy list, and requires the ODRL hash to be a full SHA-256
-digest. Captured replay agreement compares the same object against the saved
-summary. That keeps QueryGraph from accepting a management proof that preserved
-the policy name but lost or swapped the policy document anchor.
+hashes, OpenLineage hashes, principal subject/kind, a full authorization
+receipt hash, and the `policy-manage` action. The raw lineage-drain verifier
+requires a matching `policy-binding.upserted` replay event, requires the policy
+id to be present in the policy list, requires the ODRL hash to be a full
+SHA-256 digest, and rejects action drift away from `policy-manage`. Captured
+replay agreement compares the same object against the saved summary. That keeps
+QueryGraph from accepting a management proof that preserved the policy name but
+lost or swapped the policy document anchor or the authority under which it was
+recorded.
 The QGLake acceptance workflow now
 establishes its server/project/warehouse tenant spine, performs governed
 server, project, warehouse, policy-list, policy-upsert, storage-profile-list,

@@ -583,10 +583,11 @@ unlisted scopes, so archived QGLake management proof cannot detach a
 project-filtered warehouse inventory from the project list it claims.
 Policy-list proof must be paired with policy-upsert content proof: compact
 `managementProof.policyUpsertProof` must carry a policy id listed in
-`policyIds`, a full ODRL content hash, graph event proof, replay hashes, and
-OpenLineage hashes, and raw lineage replay must reject missing or malformed
-`policy-binding.upserted` evidence before QueryGraph/QGLake handoff is
-accepted.
+`policyIds`, a full ODRL content hash, principal subject/kind, full
+authorization receipt hash, `policy-manage` action proof, graph event proof,
+replay hashes, and OpenLineage hashes, and raw lineage replay must reject
+missing or malformed `policy-binding.upserted` evidence before
+QueryGraph/QGLake handoff is accepted.
 
 ### P3 Commit Hardening
 

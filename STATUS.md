@@ -6,6 +6,27 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Bind QGLake policy upsert authorization proof`.
+  Compact QGLake `policyUpsertProof` now preserves the policy-management
+  principal subject/kind, full authorization receipt hash, and `policy-manage`
+  action beside the policy id and ODRL content hash. Raw lineage-drain
+  verification rejects missing, malformed, or drifted policy-upsert
+  authorization evidence, and captured LakeCat replay agreement rejects saved
+  replay output whose policy-upsert receipt proof differs from the archived
+  compact summary. The book and design now describe this as
+  LakeCat/TypeSec/QueryGraph governance evidence around standard Iceberg, not
+  as an Iceberg metadata extension.
+- Local verification for this QGLake policy-upsert authorization slice is
+  green:
+  `cargo fmt -p lakecat-cli -p lakecat-api -p lakecat-service -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Bind QGLake policy upsert proof and catalog concept ledger`.
   Compact QGLake management proof now requires `policyUpsertProof` for
   `policy-binding.upserted` evidence, binding the listed policy id to the full
