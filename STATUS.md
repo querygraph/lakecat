@@ -5,6 +5,17 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Add front-loaded catalog concept contract`.
+  The book now opens with a practitioner-facing concept chapter that separates
+  standard Iceberg terms from LakeCat's Rust/Turso catalog-control
+  implementation, TypeSec-governed scan and credential receipts,
+  QueryGraph/QGLake/OpenLineage integration proof, and Sail-owned engine
+  interpretation. The chapter also answers which items are local
+  implementation choices, which are additive extensions, and which narrow
+  behaviors could become future Iceberg-adjacent optional profiles, then walks
+  the same boundaries through PySpark, operator, governed-service, and agentic
+  QueryGraph workflows.
 - Latest release-planning slice:
   `Record first-release remaining-work estimate`.
   The canonical design, status, changelog, and book now answer the approximate

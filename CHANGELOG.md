@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added a front-loaded catalog concepts chapter to the LakeCat book. The new
+  chapter gives readers a concise owner map for standard Iceberg vocabulary,
+  LakeCat's Rust/Turso catalog-control spine, TypeSec-governed scan and
+  credential receipts, QueryGraph/QGLake/OpenLineage proof surfaces, and
+  Sail-owned engine interpretation. It also states which ideas are local
+  implementation, which are additive LakeCat/QueryGraph/TypeSec extensions,
+  and which narrow behaviors may become future Iceberg-adjacent optional
+  profiles.
 - Added a first-release remaining-work estimate to the canonical design,
   status, and book. The release ledger now records that the LakeCat catalog
   substrate is roughly four-fifths complete for a first release, with the
