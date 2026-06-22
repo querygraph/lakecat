@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind namespace-list replay paths`.
+  Standard catalog `namespace.listed` audit/outbox evidence now carries
+  count-aligned `namespace-paths`, and service replay admission rejects missing,
+  count-mismatched, invalid, or duplicate namespace path evidence before
+  acknowledgement, graph projection, or OpenLineage projection. This gives
+  namespace listing the same anti-inflation proof shape as management-list
+  replay while preserving the Iceberg REST response shape.
+- Local verification for this namespace-list replay path slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib namespace_list -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain_projects_namespace_reads_to_graph_and_lineage -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib list_namespaces -- --test-threads=1`;
+  `docs/book/build.sh`.
+- Latest completed implementation slice:
   `Cover management-list count mismatch`.
   Service replay regression coverage now proves management-list evidence
   rejects count-mismatched ID arrays for policy bindings, projects, servers,

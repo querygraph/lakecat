@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added namespace-list replay evidence for count-aligned, syntactically valid,
+  duplicate-free `namespace-paths`, with service admission coverage proving
+  malformed namespace-list path evidence fails before acknowledgement, graph
+  projection, or OpenLineage projection; updated the book and regenerated the
+  checked-in book artifacts.
 - Added service replay regression coverage proving management-list evidence
   rejects count-mismatched ID arrays for policy bindings, projects, servers,
   storage profiles, and warehouses before acknowledgement, graph projection, or

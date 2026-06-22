@@ -3675,12 +3675,13 @@ warehouse, optional namespace/table scope, enforcement state, and captured ODRL
 material. Namespace lifecycle replay must carry a valid warehouse and namespace
 path or component array before create/load/drop events can be delivered.
 Catalog config and namespace-list read replay must likewise carry a valid
-warehouse, and namespace listing must preserve an unsigned namespace count,
-before those standard catalog reads become delivered graph/OpenLineage
-evidence. Catalog config, namespace list, namespace lifecycle, view list, and
-view lifecycle replay must also carry valid authorization receipt principals,
-so saved replay cannot turn standard Iceberg control-plane activity into
-actorless QueryGraph facts.
+warehouse, and namespace listing must preserve both an unsigned namespace count
+and count-aligned `namespace-paths` evidence. Those paths are parsed as
+namespace identities and must be non-empty and duplicate-free before standard
+catalog reads become delivered graph/OpenLineage evidence. Catalog config,
+namespace list, namespace lifecycle, view list, and view lifecycle replay must
+also carry valid authorization receipt principals, so saved replay cannot turn
+standard Iceberg control-plane activity into actorless QueryGraph facts.
 Management-list read replay applies the same rule to operational discovery:
 policy, project, server, storage-profile, and warehouse list events must carry
 unsigned counts, valid warehouse scope when warehouse-scoped, and valid optional

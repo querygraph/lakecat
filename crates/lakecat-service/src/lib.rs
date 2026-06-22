@@ -2700,17 +2700,61 @@ fn validate_namespace_list_event_evidence(
     payload: &Value,
 ) -> Result<(), LakeCatError> {
     validate_required_warehouse_field(event, payload, "namespace list")?;
-    if payload
-        .get("namespace-count")
-        .and_then(Value::as_u64)
-        .is_none()
-    {
+    let count = validate_required_unsigned_count_field(
+        event,
+        payload,
+        "namespace-count",
+        "namespace list",
+    )?;
+    validate_required_namespace_path_array(event, payload, count)?;
+    validate_authorization_receipt_principal(event, payload, "namespace list")?;
+    Ok(())
+}
+
+fn validate_required_namespace_path_array(
+    event: &OutboxEvent,
+    payload: &Value,
+    expected_count: u64,
+) -> Result<(), LakeCatError> {
+    let Some(paths) = payload.get("namespace-paths") else {
         return Err(outbox_evidence_error(
             event,
-            "namespace list evidence must contain unsigned namespace-count",
+            "namespace list evidence must contain namespace-paths",
+        ));
+    };
+    let Some(paths) = paths.as_array() else {
+        return Err(outbox_evidence_error(
+            event,
+            "namespace list namespace-paths must be an array",
+        ));
+    };
+    if paths.len() as u64 != expected_count {
+        return Err(outbox_evidence_error(
+            event,
+            "namespace list namespace-paths count must match namespace list count",
         ));
     }
-    validate_authorization_receipt_principal(event, payload, "namespace list")?;
+    let mut unique_paths = BTreeSet::new();
+    for path in paths {
+        let Some(path) = path.as_str().filter(|path| !path.trim().is_empty()) else {
+            return Err(outbox_evidence_error(
+                event,
+                "namespace list namespace-paths must contain non-empty strings",
+            ));
+        };
+        path.parse::<Namespace>().map_err(|_| {
+            outbox_evidence_error(
+                event,
+                "namespace list namespace-paths contains an invalid namespace",
+            )
+        })?;
+        if !unique_paths.insert(path) {
+            return Err(outbox_evidence_error(
+                event,
+                "namespace list namespace-paths must not contain duplicate namespaces",
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -4921,6 +4965,7 @@ async fn list_namespaces_in_warehouse(
 ) -> Result<Json<ListNamespacesResponse>, LakeCatHttpError> {
     let capability = authorize_namespace_list(&state, request_identity(&headers)?).await?;
     let namespaces = state.store.list_namespaces(&warehouse).await?;
+    let namespace_paths: Vec<String> = namespaces.iter().map(Namespace::path).collect();
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -4932,6 +4977,7 @@ async fn list_namespaces_in_warehouse(
                 "authorization-receipt": capability.receipt(),
                 "warehouse": warehouse.as_str(),
                 "namespace-count": namespaces.len(),
+                "namespace-paths": namespace_paths,
             }),
         )?)
         .await?;
@@ -18405,6 +18451,130 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_malformed_namespace_list_path_evidence() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            (
+                "missing-paths",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "namespace-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace-count": 1,
+                }),
+                "namespace list evidence must contain namespace-paths",
+            ),
+            (
+                "count-mismatch",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "namespace-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace-count": 2,
+                    "namespace-paths": ["default"],
+                }),
+                "namespace list namespace-paths count must match namespace list count",
+            ),
+            (
+                "invalid-path",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "namespace-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace-count": 1,
+                    "namespace-paths": ["analytics/../../secret"],
+                }),
+                "namespace list namespace-paths contains an invalid namespace",
+            ),
+            (
+                "duplicate-path",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "namespace-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace-count": 2,
+                    "namespace-paths": ["default", "default"],
+                }),
+                "namespace list namespace-paths must not contain duplicate namespaces",
+            ),
+        ];
+
+        for (label, payload, expected_message) in cases {
+            let event_id = format!("evt-namespace-list-{label}");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "namespace.listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-namespace-list-{label}"),
+                        "event-type": "namespace.listed",
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed namespace-list path evidence should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("namespace.listed"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "malformed namespace-list path evidence must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "malformed namespace-list path evidence must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "malformed namespace-list path evidence must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_management_list_count_evidence() {
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {
@@ -19113,6 +19283,7 @@ mod tests {
                     },
                     "warehouse": "local",
                     "namespace-count": 1,
+                    "namespace-paths": ["default"],
                 }),
             ),
             (
@@ -19328,6 +19499,7 @@ mod tests {
                     },
                     "warehouse": "local",
                     "namespace-count": 1,
+                    "namespace-paths": ["default"],
                 }),
             ),
             (
@@ -23070,6 +23242,7 @@ mod tests {
                             },
                             "warehouse": "local",
                             "namespace-count": 2,
+                            "namespace-paths": ["default", "analytics"],
                         }
                     }),
                     created_at: chrono::Utc::now(),
@@ -23175,6 +23348,10 @@ mod tests {
         assert_eq!(
             lineage_events[0].payload["namespace-count"],
             serde_json::json!(2)
+        );
+        assert_eq!(
+            lineage_events[0].payload["namespace-paths"],
+            serde_json::json!(["default", "analytics"])
         );
         assert_eq!(
             lineage_events[1].event_type,
