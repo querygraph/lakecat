@@ -7026,6 +7026,11 @@ LakeCat replay `requestIdentity` object are also closed over their compared
 fields. A saved summary or replay sidecar cannot append an extra unverified
 actor, identity-source, TypeDID, authorization, or drain-read action claim
 beside the accepted request-identity proof.
+The compact `queryGraphBootstrapProof` object and captured LakeCat replay
+`queryGraphBootstrap` object are closed the same way. A saved summary or
+replay sidecar cannot append extra unverified bundle/import, artifact-count,
+standards, identity, TypeDID, authorization, delegation, view-receipt, replay,
+or OpenLineage claims beside the accepted bootstrap proof.
 The compact verifier
 also validates the TypeDID hash-slot shape directly: envelope and proof slots
 must be null or full `sha256:`-prefixed 64-hex digests, and a TypeDID proof

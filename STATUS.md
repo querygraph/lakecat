@@ -5,6 +5,28 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Close QGLake QueryGraph bootstrap proof objects`.
+  Compact `queryGraphBootstrapProof` and captured LakeCat replay
+  `queryGraphBootstrap` evidence are now closed over their compared schema.
+  Unexpected fields are rejected before a handoff summary, captured replay
+  output, or saved verifier sidecar can attach unverified bundle/import,
+  artifact-count, standards, identity, TypeDID, authorization, delegation,
+  view-receipt, replay, or OpenLineage claims beside checked QueryGraph
+  bootstrap proof. The design and book now state this closed-schema invariant
+  for bootstrap proof.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_querygraph_bootstrap_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_extra_querygraph_bootstrap_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand catalog concepts through workflows`.
   The release concept deep dive now traces the Rust service/catalog spine,

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed compact and captured QGLake QueryGraph bootstrap proof objects over
+  their compared schema. `queryGraphBootstrapProof` and captured LakeCat
+  replay `queryGraphBootstrap` evidence now reject unexpected fields before
+  summary or sidecar verification can accept unverified bundle/import,
+  artifact-count, standards, identity, TypeDID, authorization, delegation,
+  view-receipt, replay, or OpenLineage claims beside checked bootstrap proof.
 - Expanded the book's release concept deep dive with a workflow-oriented
   explanation of the same catalog concepts across PySpark, Rust/Sail,
   governed-agent, and QueryGraph/QGLake paths. The new section explicitly

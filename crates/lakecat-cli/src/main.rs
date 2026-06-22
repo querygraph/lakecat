@@ -2050,6 +2050,11 @@ fn verify_lakecat_replay_querygraph_bootstrap_matches_summary(
     lakecat: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
     let captured_bootstrap = lakecat_replay_querygraph_bootstrap(capture)?;
+    require_only_fields(
+        captured_bootstrap,
+        QUERYGRAPH_BOOTSTRAP_PROOF_FIELDS,
+        "captured LakeCat replay output.replay-evidence.queryGraphBootstrap",
+    )?;
     let summary_bootstrap = required_object(
         lakecat,
         "queryGraphBootstrapProof",
@@ -3062,6 +3067,11 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "queryGraphBootstrapProof",
         "lakecatReplayVerification",
     )?;
+    require_only_fields(
+        bootstrap,
+        QUERYGRAPH_BOOTSTRAP_PROOF_FIELDS,
+        "queryGraphBootstrapProof",
+    )?;
     require_core_querygraph_hash_evidence(
         bootstrap,
         "queryGraphImportHash",
@@ -3419,6 +3429,30 @@ const REQUEST_IDENTITY_PROOF_FIELDS: &[&str] = &[
     "authorizationReceiptAction",
     "typedidEnvelopeHash",
     "typedidProofHash",
+];
+
+const QUERYGRAPH_BOOTSTRAP_PROOF_FIELDS: &[&str] = &[
+    "bundleHash",
+    "graphHash",
+    "openLineageHash",
+    "queryGraphImportHash",
+    "tableArtifactCount",
+    "viewArtifactCount",
+    "policyBindingCount",
+    "standards",
+    "principalSubject",
+    "principalKind",
+    "requestIdentitySource",
+    "requestIdentityState",
+    "authorizationReceiptHash",
+    "authorizationReceiptAction",
+    "agentDelegationHash",
+    "agentSummarySignatureHash",
+    "typedidEnvelopeHash",
+    "typedidProofHash",
+    "viewVersionReceiptHashes",
+    "replayEventHashes",
+    "openLineageHashes",
 ];
 
 fn require_querygraph_verified_scope(
@@ -13525,6 +13559,23 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_querygraph_bootstrap_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["unverifiedBootstrapClaim"] =
+            json!(qglake_fixture_hash("unverified-bootstrap-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra QueryGraph bootstrap fields");
+        let err = err.to_string();
+
+        assert!(err.contains("queryGraphBootstrapProof"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedBootstrapClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_required_standards() {
         let mut summary = qglake_handoff_summary_json();
         let incomplete = json!([
@@ -18859,6 +18910,35 @@ mod tests {
             err.to_string().contains(
                 "captured LakeCat replay output.replay-evidence.queryGraphBootstrap.agentDelegationHash mismatch"
             )
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_querygraph_bootstrap_fields() {
+        let temp = qglake_temp_dir("handoff-captured-querygraph-bootstrap-extra-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["queryGraphBootstrap"]["unverifiedBootstrapClaim"] =
+            json!(qglake_fixture_hash("unverified-captured-bootstrap-claim"));
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay QueryGraph bootstrap proof should reject extra fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("captured LakeCat replay output.replay-evidence.queryGraphBootstrap"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedBootstrapClaim"),
+            "{err}"
         );
     }
 

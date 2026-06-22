@@ -668,6 +668,12 @@ drifts. Compact `requestIdentityProof` and captured LakeCat replay
 compares, so a summary, captured replay output, or saved self-verifier sidecar
 cannot attach unverified actor, identity-source, TypeDID, authorization, or
 drain-read action claims beside the accepted request-identity evidence.
+Compact `queryGraphBootstrapProof` and captured LakeCat replay
+`queryGraphBootstrap` proof objects must likewise stay closed over the fields
+LakeCat compares, so a summary, captured replay output, or saved
+self-verifier sidecar cannot attach unverified bundle/import, artifact-count,
+standards, identity, TypeDID, authorization, delegation, view-receipt, replay,
+or OpenLineage claims beside the accepted QueryGraph bootstrap proof.
 Compact table commit-history proof must preserve the same explicit
 zero-count and duplicate-free commit-hash invariants as service replay, so
 archived QueryGraph handoff summaries can represent an empty history without
