@@ -15,6 +15,12 @@
   tenant-root, endpoint, storage-root, lineage, graph, QueryGraph, or
   application claims beside checked route identity, nested record, optional
   project scope, and authorization evidence.
+- Closed service outbox admission over top-level policy-binding upsert replay
+  payloads. `policy-binding.upserted` now rejects unexpected top-level payload
+  fields before acknowledgement, graph projection, OpenLineage projection, or
+  QGLake proof can inherit unverified ODRL, governance, scope, lineage, graph,
+  QueryGraph, or application claims beside checked warehouse, policy object,
+  ODRL content hash, enforcement state, and authorization evidence.
 - Closed service outbox admission over top-level table commit-history replay
   payloads. `table.commits-listed` now rejects unexpected top-level payload
   fields before acknowledgement, graph projection, OpenLineage projection, or

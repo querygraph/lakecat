@@ -6,6 +6,27 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close service policy-binding upsert schemas`.
+  Service outbox admission now rejects unexpected top-level payload fields for
+  `policy-binding.upserted` before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake proof can inherit unverified ODRL,
+  governance, scope, lineage, graph, QueryGraph, or application claims beside
+  checked warehouse, policy object, ODRL content hash, enforcement state, and
+  authorization evidence. The design and book now describe both top-level
+  policy-binding upsert payload closure and nested policy-object closure.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_top_level_policy_binding_upsert_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service policy_binding -- --test-threads=1` passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close service management upsert schemas`.
   Service outbox admission now rejects unexpected top-level payload fields for
   `project.upserted`, `server.upserted`, and `warehouse.upserted` before

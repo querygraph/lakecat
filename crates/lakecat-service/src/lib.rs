@@ -1573,6 +1573,8 @@ const POLICY_BINDING_EVIDENCE_FIELDS: &[&str] = &[
     "odrl",
     "odrl-hash",
 ];
+const POLICY_BINDING_UPSERT_EVIDENCE_FIELDS: &[&str] =
+    &["event-type", "authorization-receipt", "warehouse", "policy"];
 const PROJECT_RECORD_EVIDENCE_FIELDS: &[&str] =
     &["project-id", "server-id", "display-name", "properties"];
 const PROJECT_UPSERT_EVIDENCE_FIELDS: &[&str] = &[
@@ -3376,6 +3378,12 @@ fn validate_policy_binding_upsert_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_object_evidence_schema(
+        event,
+        payload,
+        "policy-binding upsert",
+        POLICY_BINDING_UPSERT_EVIDENCE_FIELDS,
+    )?;
     let Some(policy) = payload.get("policy") else {
         return Err(outbox_evidence_error(
             event,
@@ -16629,6 +16637,87 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "extra policy fields must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_top_level_policy_binding_upsert_fields() {
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let odrl = json!({
+            "uid": "policy:agent-read",
+            "lakecat:read-restriction": {
+                "allowed-columns": ["event_id"]
+            }
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-policy-extra-top-field".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "policy-binding.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-policy-extra-top-field",
+                    "event-type": "policy-binding.upserted",
+                    "payload": {
+                        "event-type": "policy-binding.upserted",
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "policy-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "policy": {
+                            "policy-id": "agent-read",
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "table": "events",
+                            "enforced": true,
+                            "odrl-hash": content_hash_json(&odrl).unwrap(),
+                            "odrl": odrl,
+                        },
+                        "unverified-policy-claim": "shadow"
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra top-level policy-binding fields should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("policy-binding.upserted"));
+        assert!(
+            message.contains(
+                "policy-binding upsert contains unexpected field unverified-policy-claim"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-policy-extra-top-field"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "extra top-level policy fields must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "extra top-level policy fields must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "extra top-level policy fields must fail before lineage projection"
         );
     }
 

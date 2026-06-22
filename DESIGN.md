@@ -974,6 +974,11 @@ Service outbox admission must also close the nested policy-binding `policy`
 object over the route-produced fields, so replay rejects unexpected ODRL,
 governance, scope, or enforcement claims before acknowledgement, graph
 projection, OpenLineage projection, or QGLake proof.
+Service replay must also close the top-level `policy-binding.upserted` payload
+over the fields current producers emit, so policy management replay cannot
+append unverified ODRL, governance, scope, lineage, graph, QueryGraph, or
+application claims beside checked warehouse, policy object, ODRL content hash,
+enforcement state, and authorization evidence.
 Server and warehouse upsert replay must also treat endpoint URLs and storage
 roots as sensitive management roots. Generated audit/outbox evidence should
 persist `endpoint-url-hash` and `storage-root-hash` instead of raw roots, and

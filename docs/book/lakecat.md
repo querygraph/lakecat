@@ -6262,10 +6262,14 @@ before the policy anchor can be delivered to graph or lineage sinks. Service
 admission also closes the nested `policy` object over the route-produced
 fields, so unexpected ODRL, governance, scope, or enforcement claims fail
 before acknowledgement, graph projection, OpenLineage projection, or QGLake
-proof can inherit them. Those
-management upserts must also carry a valid authorization receipt principal, so
-the catalog graph and OpenLineage stream never accept actorless tenant-root,
-storage-profile, or policy mutations.
+proof can inherit them. It also closes the top-level
+`policy-binding.upserted` payload, so a replay sidecar cannot append
+unverified ODRL, governance, scope, lineage, graph, QueryGraph, or application
+claims beside checked warehouse, policy object, ODRL content hash, enforcement
+state, and authorization evidence. Those management upserts must also carry a
+valid authorization receipt principal, so the catalog graph and OpenLineage
+stream never accept actorless tenant-root, storage-profile, or policy
+mutations.
 Namespace lifecycle replay is checked before projection as well: create, load,
 and drop events must carry a valid warehouse and either a valid namespace path
 or non-empty namespace component array. A malformed namespace lifecycle event
