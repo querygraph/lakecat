@@ -3017,6 +3017,7 @@ fn validate_scan_tasks_fetched_event_evidence(
     ] {
         validate_required_unsigned_count_field(event, payload, field, "scan-tasks-fetched")?;
     }
+    validate_plan_task_evidence(event, payload.get("plan-task"), "scan-tasks-fetched")?;
 
     let required_projection = validate_required_non_empty_string_array_field(
         event,
@@ -3106,6 +3107,54 @@ fn validate_scan_tasks_fetched_event_evidence(
     }
     validate_scan_required_filters_match_row_predicate(event, payload, "scan-tasks-fetched")?;
     validate_read_restriction_purpose_and_ttl(event, payload, "scan-tasks-fetched")?;
+    Ok(())
+}
+
+fn validate_plan_task_evidence(
+    event: &OutboxEvent,
+    plan_task: Option<&Value>,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(plan_task) = plan_task else {
+        return Ok(());
+    };
+    let Some(plan_task) = plan_task
+        .as_str()
+        .filter(|plan_task| !plan_task.trim().is_empty())
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} plan-task must be a non-empty string"),
+        ));
+    };
+    if !plan_task.starts_with("lakecat:") {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} plan-task must be LakeCat-issued evidence"),
+        ));
+    }
+    if plan_task.contains(['?', '#']) || plan_task.contains("://") {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} plan-task must not contain decorated location material"),
+        ));
+    }
+    let normalized = plan_task.to_ascii_lowercase();
+    for marker in [
+        "token=",
+        "secret=",
+        "credential=",
+        "password=",
+        "access_key=",
+        "session_token=",
+    ] {
+        if normalized.contains(marker) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} plan-task must not contain credential material"),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -15163,6 +15212,123 @@ mod tests {
             );
             assert!(message.contains("event-id-hash=sha256:"));
             assert!(!message.contains(event_id));
+            assert!(store.delivered.lock().await.is_empty());
+            assert!(graph.events.lock().await.is_empty());
+            assert!(lineage.events.lock().await.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_scan_fetch_plan_task_evidence() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let policy_hash =
+            content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                .unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [policy_hash]
+        });
+        let cases = [
+            (
+                "evt-scan-fetch-foreign-plan-task",
+                "foreign:plan:abc",
+                "scan-tasks-fetched plan-task must be LakeCat-issued evidence",
+            ),
+            (
+                "evt-scan-fetch-decorated-plan-task",
+                "lakecat:plan:abc?token=raw-secret",
+                "scan-tasks-fetched plan-task must not contain decorated location material",
+            ),
+            (
+                "evt-scan-fetch-credential-plan-task",
+                "lakecat:plan:abc:session_token=raw-secret",
+                "scan-tasks-fetched plan-task must not contain credential material",
+            ),
+        ];
+
+        for (event_id, plan_task, expected_message) in cases {
+            let payload = json!({
+                "event-type": "table.scan-tasks-fetched",
+                "table": ident,
+                "authorization-receipt": {
+                    "principal": principal,
+                    "action": "table-plan-scan",
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "context": {
+                        "read-restriction": read_restriction
+                    },
+                    "checked_at": chrono::Utc::now(),
+                },
+                "planned-by": "test",
+                "snapshot-id": 1,
+                "plan-task": plan_task,
+                "read-restriction": read_restriction,
+                "required-projection": ["event_id"],
+                "effective-projection": ["event_id"],
+                "requested-stats-fields": ["event_id"],
+                "effective-stats-fields": ["event_id"],
+                "stats-fields": ["event_id"],
+                "required-filters": [{
+                    "type": "not-eq",
+                    "term": "severity",
+                    "value": "debug"
+                }],
+                "file-scan-task-count": 1,
+                "delete-file-count": 0,
+                "child-plan-task-count": 0,
+                "storage-location": "s3://bucket/events",
+                "metadata-location": "s3://bucket/events/metadata/v1.json"
+            });
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.scan-tasks-fetched".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "table.scan-tasks-fetched",
+                        "table": ident,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed plan-task evidence should fail before delivery");
+
+            let message = err.to_string();
+            assert!(message.contains("table.scan-tasks-fetched"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                !message.contains(plan_task),
+                "operator-facing errors must not expose raw plan-task material"
+            );
+            assert!(!message.contains("raw-secret"));
             assert!(store.delivered.lock().await.is_empty());
             assert!(graph.events.lock().await.is_empty());
             assert!(lineage.events.lock().await.is_empty());

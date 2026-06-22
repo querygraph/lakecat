@@ -10737,6 +10737,12 @@ read, receive a TypeSec-style receipt, get Sail-planned work instead of broad
 storage authority, and leave behind replayable scan, fetch, credential,
 management, view, and commit-history evidence. Trusted raw credential vending
 can exist only as an audited exception with redacted storage-scope proof.
+Fetched scan replay treats the returned `plan-task` as evidence rather than
+arbitrary text: if it is present, it must be a non-empty LakeCat-issued token
+and it must not contain decorated location, query/fragment, or credential
+material before graph, OpenLineage, QGLake, or QueryGraph import can inherit
+the fetch proof. That keeps governed plan/fetch receipts about Sail-planned
+work, not a carrier for raw path or token claims.
 
 The QueryGraph handoff is release-blocking as an acceptance proof, not as a
 requirement for ordinary Iceberg clients. The local QGLake workflow must keep

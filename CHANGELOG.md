@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened fetched scan replay plan-task evidence. `table.scan-tasks-fetched`
+  outbox admission now rejects non-string, non-LakeCat, decorated, or
+  credential-bearing `plan-task` values before acknowledgement, graph
+  projection, OpenLineage projection, QGLake proof, or QueryGraph import can
+  inherit token/path claims.
 - Expanded the book with a workflow-facing catalog concept guide. The new
   section walks PySpark/Spark reads and commits, operator inspection, governed
   service reads, agent access, and QueryGraph bootstrap through standard

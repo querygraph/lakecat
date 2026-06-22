@@ -5,6 +5,14 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Harden scan-fetch plan-task replay evidence`.
+  Service replay admission now validates optional `table.scan-tasks-fetched`
+  `plan-task` evidence before acknowledgement, graph projection, OpenLineage
+  projection, QGLake proof, or QueryGraph import can inherit it. Fetched scan
+  replay rejects non-string, non-LakeCat-issued, decorated location-like, or
+  credential-bearing plan-task values while redacting the raw token material
+  from operator-facing errors.
 - Latest book slice:
   `Add workflow catalog concept guide`.
   The book now walks PySpark/Spark reads and commits, operator inspection,
