@@ -6,6 +6,12 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden commit-history policy hash evidence`.
+  Store-level table commit-history validation now rejects malformed optional
+  commit `policy_hash` evidence in both memory and Turso paths before
+  management reads, graph projection, OpenLineage projection, QGLake proof, or
+  QueryGraph import can inherit corrupt policy evidence.
+- Latest implementation/testing slice:
   `Harden REST commit idempotency-header side effects`.
   The REST commit regression for invalid or duplicate
   `x-lakecat-idempotency-key` headers now proves those requests fail before

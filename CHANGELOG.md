@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened store-level commit-history policy-hash validation. Memory and Turso
+  commit-history reads now reject malformed optional table commit
+  `policy_hash` evidence before management reads, graph projection,
+  OpenLineage projection, QGLake proof, or QueryGraph import can inherit
+  corrupt policy evidence.
 - Strengthened REST commit idempotency-header coverage. Invalid or duplicate
   `x-lakecat-idempotency-key` headers are now pinned as failing before
   authorization, Sail commit preparation, and durable outbox side effects.
