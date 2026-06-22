@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Closed service outbox admission over top-level table lifecycle replay
+  payloads. `table.created`, `table.loaded`, `table.deleted`, and
+  `table.restored` now reject unexpected top-level payload fields before
+  acknowledgement, graph projection, OpenLineage projection, or QGLake proof can
+  inherit unverified lifecycle, storage, lineage, graph, QueryGraph, or
+  application claims beside checked table identity, version, format-version,
+  location, soft-delete, metadata-graph summary, and authorization evidence.
 - Closed service outbox admission over top-level storage-profile upsert replay
   payloads. `storage-profile.upserted` now rejects unexpected top-level payload
   fields before acknowledgement, graph projection, OpenLineage projection, or

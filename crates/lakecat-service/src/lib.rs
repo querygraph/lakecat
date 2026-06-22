@@ -1732,6 +1732,26 @@ const TABLE_COMMIT_EVIDENCE_FIELDS: &[&str] = &[
     "committed_at",
     "committed-at",
 ];
+const TABLE_LIFECYCLE_EVIDENCE_FIELDS: &[&str] = &[
+    "audit-event-id",
+    "event-type",
+    "authorization-receipt",
+    "warehouse",
+    "namespace",
+    "table",
+    "metadata-location",
+    "location",
+    "format-version",
+    "version",
+    "soft-delete",
+    "metadata-graph",
+];
+const TABLE_METADATA_GRAPH_EVIDENCE_FIELDS: &[&str] = &[
+    "current-schema-id",
+    "fields",
+    "current-snapshot-id",
+    "current-snapshot",
+];
 const TABLE_LIFECYCLE_SOFT_DELETE_EVIDENCE_FIELDS: &[&str] = &[
     "table",
     "metadata-location",
@@ -2502,6 +2522,12 @@ fn validate_table_lifecycle_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_object_evidence_schema(
+        event,
+        payload,
+        "table lifecycle",
+        TABLE_LIFECYCLE_EVIDENCE_FIELDS,
+    )?;
     let Some(table_value) = event.payload.get("table") else {
         return Err(outbox_evidence_error(
             event,
@@ -2594,6 +2620,14 @@ fn validate_table_lifecycle_event_evidence(
         )?;
     }
 
+    if let Some(metadata_graph) = payload.get("metadata-graph") {
+        validate_object_evidence_schema(
+            event,
+            metadata_graph,
+            "table lifecycle metadata-graph",
+            TABLE_METADATA_GRAPH_EVIDENCE_FIELDS,
+        )?;
+    }
     optional_non_empty_string_field(event, payload, "metadata-location", "table lifecycle")?;
     optional_non_empty_string_field(event, payload, "location", "table lifecycle")?;
     Ok(())
@@ -32365,6 +32399,18 @@ mod tests {
             "deleted-at": checked_at,
         });
         soft_delete_with_extra["unverified-soft-delete-claim"] = json!(true);
+        let mut metadata_graph_with_extra = json!({
+            "current-schema-id": 1,
+            "fields": [{
+                "id": 1,
+                "name": "event_id",
+                "type": "string",
+                "required": true,
+            }],
+            "current-snapshot-id": null,
+            "current-snapshot": null,
+        });
+        metadata_graph_with_extra["unverified-metadata-graph-claim"] = json!(true);
         let cases = vec![
             (
                 "evt-created-extra-table-identity",
@@ -32392,6 +32438,23 @@ mod tests {
                     "table": &table,
                     "soft-delete": soft_delete_with_extra,
                     "authorization-receipt": receipt("table-drop"),
+                }),
+            ),
+            (
+                "evt-created-extra-metadata-graph",
+                "table.created",
+                "table lifecycle metadata-graph contains unexpected field unverified-metadata-graph-claim",
+                json!({
+                    "audit-event-id": "audit-created-extra-metadata-graph",
+                    "event-type": "table.created",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": receipt("table-create"),
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "format-version": 3,
+                        "metadata-graph": metadata_graph_with_extra,
+                        "version": 1,
+                    }
                 }),
             ),
         ];
@@ -32440,6 +32503,74 @@ mod tests {
                 "{event_type} must fail before lineage projection"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_top_level_table_lifecycle_fields() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-table-created-extra-top-level-field".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.created".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-table-created-extra-top-level-field",
+                    "event-type": "table.created",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-create",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "format-version": 3,
+                        "version": 1,
+                        "unverified-table-lifecycle-claim": "shadow",
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra top-level table lifecycle fields should fail");
+        let message = err.to_string();
+        assert!(message.contains("table.created"), "{message}");
+        assert!(
+            message.contains(
+                "table lifecycle contains unexpected field unverified-table-lifecycle-claim"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"), "{message}");
+        assert!(
+            !message.contains("evt-table-created-extra-top-level-field"),
+            "{message}"
+        );
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
     }
 
     #[tokio::test]

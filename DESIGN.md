@@ -1038,6 +1038,15 @@ action, affirmative allowed decision, non-empty engine, and RFC3339 `checked_at`
 timestamp before projection, so table lifecycle graph/OpenLineage facts cannot
 be actorless or action-drifted even when the standard Iceberg REST response
 shape remains unchanged.
+Service replay must also close the top-level table lifecycle payload schema
+over the fields current producers emit, so create/load/delete/restore replay
+cannot append unverified table lifecycle, storage, lineage, graph, QueryGraph,
+or application claims beside checked table identity, version, format-version,
+soft-delete, location, and authorization evidence.
+The nested table lifecycle `metadata-graph` summary must likewise be closed
+over the current schema/snapshot summary fields LakeCat emits for graph
+projection; reusable graph taxonomy and richer projection semantics remain
+Grust-owned.
 Create, load, and restore replay must also carry both the unsigned table
 version that current producers emit and positive Iceberg `format-version`
 evidence. Delete replay carries the same pointer-generation and table-format

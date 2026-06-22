@@ -8035,6 +8035,15 @@ namespace, and name, and soft-delete evidence is closed over the durable
 delete-proof fields LakeCat verifies. A replay sidecar cannot attach extra
 table-scope, delete-state, principal, storage, or application claims beside the
 checked lifecycle identity or soft-delete record.
+LakeCat also closes the top-level table lifecycle payload before delivery.
+That means an otherwise valid `table.created`, `table.loaded`,
+`table.deleted`, or `table.restored` replay cannot append unverified lifecycle,
+storage, lineage, graph, QueryGraph, or application claims beside checked table
+identity, version, format-version, location, soft-delete, and authorization
+evidence. The nested `metadata-graph` summary used for graph projection is
+closed over its current schema and snapshot summary fields as well; richer
+graph taxonomy and query behavior still belong in Grust, not in the catalog
+validator.
 When those lifecycle events carry table `metadata-location`, table `location`,
 or soft-delete `metadata-location` evidence, the values must be non-empty before
 the event is acknowledged or projected. The Iceberg table operation remains the
