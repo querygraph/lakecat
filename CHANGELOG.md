@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Refreshed the release-readiness record after the latest book and handoff
+  slices. The quick local gate is green for dependency-contract shell syntax,
+  workflow trigger syntax, QGLake handoff script syntax, release script syntax,
+  the local dependency contract, manual workflow trigger contract, workspace
+  formatting, and `git diff --check`.
 - Added a front-loaded book chapter on catalog concepts, standards, and engine
   ownership. It now directly classifies the Rust service spine, Turso store,
   Iceberg REST paths, commit CAS, idempotency/pointer-log/audit/outbox replay

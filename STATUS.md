@@ -5,6 +5,14 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest verification slice:
+  `Refresh quick release gate evidence`.
+  `scripts/check-release-readiness.sh --quick` passed after the catalog
+  standards/book update. The quick gate revalidated shell syntax for the local
+  dependency contract, workflow trigger contract, QGLake handoff script, and
+  release-readiness script; re-ran the local dependency contract and manual
+  workflow trigger self-test; checked workspace formatting for the LakeCat
+  crates; and finished with `git diff --check`.
 - Latest book slice:
   `Clarify catalog standards and Sail ownership`.
   The book now has a front-loaded chapter on catalog concepts, standards, and
