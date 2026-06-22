@@ -6,6 +6,17 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover credential response count mismatch`.
+  Service replay regression coverage now proves `credentials.vend-attempted`
+  rejects `credential-count` drift from `credential-response-evidence` before
+  acknowledgement, graph projection, or OpenLineage projection. This pins the
+  count-alignment gate for credential replay evidence.
+- Local verification for this credential response count slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_credential_response_count_mismatch -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib credential_response -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover blocked credential evidence with credentials`.
   Service replay regression coverage now proves `credentials.vend-attempted`
   rejects blocked raw-credential replay evidence that still carries credential
