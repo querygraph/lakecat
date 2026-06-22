@@ -6,6 +6,25 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest book slice:
+  `Expand catalog concepts and Sail boundary guidance`.
+  The book now gives a stricter standard/extension/proposal classification for
+  the first-release catalog concepts: Rust service and Turso-backed local store
+  are LakeCat implementation choices; REST namespace/table routes and commit
+  CAS remain standard Iceberg compatibility; idempotency, pointer logs,
+  audit/outbox, replay admission, governed scan and credential receipts, and
+  QueryGraph/QGLake proof are additive LakeCat/TypeSec/QueryGraph surfaces; and
+  only small product-neutral behaviors should be considered future
+  Iceberg-adjacent optional profiles. The Sail section now more explicitly
+  argues that table-format truth, governed read planning, commit validation,
+  metadata-as-data, and typed v4 interpretation belong in Sail so LakeCat proof
+  stays tied to engine facts.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`
+  passed with `expected_title` read from `docs/book/dist/VERSION.md`;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest book slice:
   `Clarify catalog standards and Sail engine posture`.
   The book now adds a sharper standard-versus-extension proposal posture and a
   workflow matrix covering PySpark/Spark load and commit, operator management,

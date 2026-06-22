@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog concept guidance with a stricter
+  standard/extension/proposal classification and a deeper Sail engine-boundary
+  argument. The new material explains why Rust service and Turso store choices
+  are LakeCat implementation, why REST namespace/table paths and commit CAS
+  remain standard Iceberg compatibility, why idempotency, pointer logs,
+  audit/outbox, replay validation, governed scans, credential receipts, and
+  QueryGraph/QGLake proof are additive surfaces, and why table-format truth,
+  read planning, commit validation, metadata-as-data, and typed v4 behavior
+  should be pushed into Sail.
 - Updated LakeCat's published Grust dependency contract to the current
   `grust-graph`/`grust-cypher` 0.9.1 crates. The local dependency-contract
   guard, lockfile, README, and book now agree that `grust-local` resolves
