@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Cover missing scan row predicate values`.
+  Service replay regression coverage now proves governed `table.scan-planned`
+  and `table.scan-tasks-fetched` events reject `eq` row-predicate
+  read-restriction evidence that omits the required `value` before
+  acknowledgement, graph projection, or OpenLineage projection. This brings the
+  service admission boundary up to the compact QGLake row-predicate proof rule
+  for required term/value evidence.
+- Local verification for this missing scan row-predicate value slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_missing_row_predicate_value -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib row_predicate -- --test-threads=1`;
+  `git diff --check`.
 - Latest completed book/documentation slice:
   `Expand workflow catalog concepts`.
   The LakeCat book now has a dedicated workflow-focused catalog concepts
