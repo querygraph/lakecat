@@ -3354,7 +3354,10 @@ warehouse, namespace, and count evidence, while view create/load/drop evidence
 must carry a valid warehouse, namespace, and non-empty view name before graph or
 OpenLineage projection. View list and lifecycle replay must also carry a valid
 authorization receipt principal before delivery, preserving actor evidence for
-QueryGraph view proofs. Table lifecycle replay now follows the same rule:
+QueryGraph view proofs. A view list is read-side catalog evidence, so the
+service requires its authorization receipt action to be `view-load`; a
+`view-manage` receipt is valid for mutations but not for replaying
+`view.listed`. Table lifecycle replay now follows the same rule:
 create, load, delete, and restore events must carry a valid root table identity,
 and any payload warehouse, namespace, table-name, or soft-delete table evidence
 must agree with that identity before the event can be acknowledged.
@@ -4774,7 +4777,9 @@ graph/OpenLineage material for QueryGraph. View-list replay also carries
 count-aligned `view-names` evidence. Each name must parse as a valid catalog
 view/table name and the array must be duplicate-free, so an archived
 `view.listed` event cannot inflate view discovery by repeating or forging view
-identities.
+identities. The receipt action must be `view-load`, matching the compact
+QGLake action contract; `view-manage` remains mutation proof for
+`view.upserted`.
 Table lifecycle replay applies the same identity discipline before delivery:
 `table.created`, `table.loaded`, `table.deleted`, and `table.restored` must
 carry a decodable table identity, optional payload scope hints must match it,

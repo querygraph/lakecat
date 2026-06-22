@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened service replay admission for `view.listed` events to require the
+  read-side `view-load` authorization receipt action, aligning the durable
+  outbox boundary with QGLake handoff verification and reserving `view-manage`
+  for view mutations.
 - Bound saved `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics`
   authorization receipt actions to the compact request-identity proof, so a
   rehashed handoff self-verifier artifact cannot drift the drain read away from

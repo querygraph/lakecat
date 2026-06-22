@@ -674,7 +674,9 @@ OpenLineage proof.
 Standard catalog replay for catalog config reads, namespace list/lifecycle
 events, and view list/lifecycle events must carry valid authorization receipt
 principals before projection too, so Iceberg-compatible control-plane evidence
-cannot become actorless graph or OpenLineage facts.
+cannot become actorless graph or OpenLineage facts. View-list replay must use
+the read-side `view-load` action; `view-manage` is reserved for view mutations,
+so service replay and QGLake handoff action contracts stay aligned.
 Table lifecycle replay for create, load, delete, and restore events must carry
 the same valid authorization receipt principal before projection, so table
 lifecycle graph/OpenLineage facts cannot be actorless even when the standard

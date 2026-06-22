@@ -6,6 +6,22 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require view-list load action`.
+  Service outbox replay admission now rejects `view.listed` evidence whose
+  authorization receipt action is `view-manage`; view listing must prove the
+  read-side `view-load` action before acknowledgement, graph projection, or
+  OpenLineage projection. This aligns the durable replay boundary with the
+  QGLake compact action contract.
+- Local verification for this view-list action slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib view_list -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib receipt_action -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind handoff self-verifier lineage action`.
   Saved `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics` now binds
   `authorizationReceiptAction` to the compact request-identity proof, so a

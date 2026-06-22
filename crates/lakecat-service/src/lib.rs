@@ -1541,7 +1541,7 @@ fn authorization_receipt_action_matches_event(event_type: &str, action: &Catalog
             matches!(action, CatalogAction::TablePlanScan)
         }
         "view.dropped" => matches!(action, CatalogAction::ViewDrop),
-        "view.listed" => matches!(action, CatalogAction::ViewLoad | CatalogAction::ViewManage),
+        "view.listed" => matches!(action, CatalogAction::ViewLoad),
         "view.loaded" | "view.version-receipts-listed" | "view.version-receipt-chains-listed" => {
             matches!(action, CatalogAction::ViewLoad)
         }
@@ -20775,6 +20775,75 @@ mod tests {
                 "malformed view-list name evidence must fail before lineage projection"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_view_list_manage_receipt_action() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let event_id = "evt-view-list-manage-receipt-action";
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "view.listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-view-list-manage-receipt-action",
+                    "event-type": "view.listed",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "view-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "view-count": 1,
+                        "view-names": ["active_customers"],
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("view.listed replay should require view-load receipt action");
+
+        let message = err.to_string();
+        assert!(message.contains("view.listed"));
+        assert!(
+            message.contains(
+                "view list authorization receipt action does not match outbox event type"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(event_id));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "mismatched view-list receipt action must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "mismatched view-list receipt action must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "mismatched view-list receipt action must fail before lineage projection"
+        );
     }
 
     #[tokio::test]
