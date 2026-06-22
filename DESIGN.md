@@ -654,6 +654,11 @@ zero-count and duplicate-free commit-hash invariants as service replay, so
 archived QueryGraph handoff summaries can represent an empty history without
 fabricating commits and cannot inflate pointer-log evidence by repeating a
 valid commit hash.
+Compact catalog-config proof must also preserve the same advertised defaults,
+overrides, endpoints, `catalog-config` authorization action, graph count,
+replay hashes, and OpenLineage hashes as raw `catalog.config-read` replay, so
+archived QGLake summaries and captured replay sidecars cannot drop the v4 bridge
+posture or integration discovery contract after source replay accepted it.
 Raw lineage-drain replay summaries and compact handoff summaries must both keep
 replay, OpenLineage, commit-history commit, view receipt, and view
 receipt-chain hash arrays duplicate-free as well as full SHA-256-shaped, so
@@ -915,6 +920,10 @@ are not standard Iceberg REST table-access requirements; they are additive
 LakeCat/QueryGraph/OpenLineage control-plane surfaces that let QGLake imports
 and lineage drains prove which integration contract was advertised when the
 config read entered graph or lineage projection.
+Compact QGLake handoff proof must carry that config-read contract forward as
+`catalogConfigProof`, and captured LakeCat replay sidecars must match it
+exactly, so saved handoffs cannot accept weaker v4, endpoint, or
+integration-discovery evidence than the raw lineage drain proved.
 The local dependency contract is the guardrail while cloud CI is manual-only:
 it must reject automatic triggers across every GitHub workflow file, not just
 the primary CI workflow, including compact, block-list, inline-map, and quoted

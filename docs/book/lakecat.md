@@ -5857,17 +5857,23 @@ endpoints. Their presence in config evidence proves that a QGLake import,
 OpenLineage replay, or agentic management workflow saw the same integration
 contract that LakeCat later projects into graph and lineage systems.
 
-That proof now survives into saved lineage-drain artifacts, not only service
-admission. A `catalog.config-read` drain summary carries three compact fields:
-the advertised config defaults, config overrides, and endpoint list. QGLake
-verification checks those fields again when reading the saved drain. A handoff
-cannot keep the `catalog.config-read` event while dropping
+That proof now survives into saved lineage-drain artifacts and compact QGLake
+handoff summaries, not only service admission. A `catalog.config-read` drain
+summary carries three compact fields: the advertised config defaults, config
+overrides, and endpoint list. The compact handoff summary then promotes the
+same evidence into `lakecatReplayVerification.catalogConfigProof`, alongside
+the principal, authorization action, graph count, replay hashes, and
+OpenLineage hashes for the config-read event. QGLake verification checks those
+fields again when reading the saved drain, when reading the compact summary,
+and when comparing captured LakeCat replay sidecars. A handoff cannot keep the
+`catalog.config-read` event while dropping
 `lakecat.format.v4.typed-sail=unavailable`, adding a preview
-`lakecat.format.v4*` key, using an override to rewrite v4 posture, or omitting
-the standard REST, governed access, bootstrap, or lineage-drain endpoints. That
-makes the config proof replayable outside the service process. QueryGraph can
-trust that the compatibility and integration contract it imports is the same
-contract LakeCat admitted before graph and OpenLineage projection.
+`lakecat.format.v4*` key, using an override to rewrite v4 posture, omitting the
+standard REST, governed access, bootstrap, or lineage-drain endpoints, or
+archiving a captured replay file whose config proof differs from the summary.
+That makes the config proof replayable outside the service process. QueryGraph
+can trust that the compatibility and integration contract it imports is the
+same contract LakeCat admitted before graph and OpenLineage projection.
 
 The bridge is intentionally conservative, but it should not reject Iceberg
 metadata that Sail has already decoded. Manifest expansion now emits null
@@ -6786,6 +6792,14 @@ restriction. The compact verifier requires the catalog URL to be an absolute HTT
 endpoint and requires warehouse, namespace, and table scope to be present before
 accepting the summary. It rejects captured QueryGraph verify/import output
 whose warehouse no longer matches the summary.
+The compact handoff also carries `catalogConfigProof`, so the compatibility
+contract advertised by `/catalog/v1/config` remains present beside bootstrap,
+scan, management, credential, view, and commit-history proof. That object must
+preserve the same v4 bridge defaults, endpoint list, `catalog-config`
+authorization action, graph count, replay hashes, and OpenLineage hashes as the
+captured LakeCat replay output. A saved handoff therefore cannot pass raw drain
+verification and then silently drop or rewrite the config-read contract in the
+summary or sidecar.
 The lineage-drain replay summaries are bound back to the drain-level
 `eventTypes` manifest as well. A saved handoff cannot add a compact replay
 summary for `storage-profile.upserted`, `querygraph.bootstrap`, or any other
@@ -8691,6 +8705,52 @@ The practical design rule for future development is therefore:
 | Capability semantics, TypeDID context, policy composition, ODRL interpretation, credential risk, or secure-agent proof | TypeSec | Decision request, receipt hash, redacted context, action binding, and replay evidence. |
 | Croissant, CDIF, OSI, OpenLineage correlation, QGLake acceptance, and user workflow composition | QueryGraph | Bootstrap, replay, and handoff artifacts with stable hashes. |
 | Namespace/table REST compatibility, CAS, idempotency, pointer logs, audit, outbox, and local durable store contracts | LakeCat | The catalog implementation itself. |
+
+The most useful standards posture is to separate extension, profile, and
+proposal. A LakeCat extension is something a LakeCat deployment can expose
+without changing the meaning of an Iceberg table: management inventory,
+pointer-history proof, replay verification, governed credential proof,
+OpenLineage receipt binding, and QGLake handoff. An optional profile is the
+portable subset of that extension that another catalog could implement without
+adopting LakeCat: exact idempotent retry semantics, redacted conflict proof,
+catalog event identity, replay-admissible outbox delivery, proof-carrying scan
+planning, or governed credential-vending receipts. An Iceberg proposal should
+come only after that optional profile has been tested against several clients
+and can be expressed in Iceberg vocabulary. "Use Turso" is not a proposal.
+"Run TypeSec" is not a proposal. "Import QueryGraph" is not a proposal. "A
+catalog can return a stable proof that this scan was planned against snapshot
+N with these effective field ids, residual predicates, delete posture, and
+credential bounds" might be.
+
+That framing keeps LakeCat ambitious without making interoperability brittle.
+The implementation may use Rust, Turso, TypeSec receipts, Grust graph sinks,
+and QGLake handoff files. The interoperable idea, if one exists, must survive
+after those proper nouns are removed. This is why the book names CAS as
+standard Iceberg, names idempotency and pointer logs as LakeCat hardening,
+names governed scans as LakeCat/TypeSec extension work, and names
+proof-carrying scan planning as the possible future profile. The future
+profile is not the implementation; it is the smallest behavior worth sharing.
+
+Sail is what makes that future profile plausible. Consider a governed request:
+"the agent may read `customer_id` and `amount` for customers in California."
+LakeCat can authenticate the principal, bind the purpose, store the receipt,
+and make the result replayable. TypeSec can decide the rule. But only an
+engine should translate that rule onto the current Iceberg table after schema
+evolution, nested-field changes, partition evolution, equality deletes,
+position deletes, manifest metrics, residual predicates, and snapshot
+selection. If LakeCat does the translation itself, the proof is only a
+catalog-local promise. If Sail does it, LakeCat can record an
+engine-interpreted proof: snapshot id, format version, effective field ids,
+restriction hash, residual hash, delete posture, task count, and plan hash.
+Those are the kinds of facts another engine or catalog can reason about later.
+
+The same logic applies to Iceberg v4. LakeCat can advertise a conservative JSON
+passthrough bridge while typed Sail support is unavailable, and it can preserve
+that advertised posture in `catalogConfigProof`. But typed v4 semantics should
+land in Sail. A future v4 proof is useful only if it says an engine understood
+the table-format feature, not that a catalog preserved unknown JSON. LakeCat's
+job is to bind the engine's validation to identity, pointer state, policy,
+audit, outbox, and replay. Sail's job is to understand the table.
 
 That is the core architecture of LakeCat. It is ordinary where Iceberg needs
 ordinary behavior, strict where catalog authority must be strict, and ambitious

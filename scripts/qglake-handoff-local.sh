@@ -331,6 +331,33 @@ process.stdout.write(JSON.stringify({
 ' "$file" "$expected_principal" "$expected_table_count" "$expected_view_count" "$expected_bundle_hash" "$expected_graph_hash" "$expected_open_lineage_hash" "$expected_querygraph_import_hash" "$expected_standards_json"
 }
 
+catalog_config_evidence_json() {
+  local file="$1"
+  node -e '
+const fs = require("fs");
+const [file] = process.argv.slice(1);
+const replay = JSON.parse(fs.readFileSync(file, "utf8"));
+const evidence = replay["replay-evidence"]?.catalogConfig;
+if (!evidence || typeof evidence !== "object") {
+  console.error("LakeCat replay evidence is missing catalogConfig");
+  process.exit(1);
+}
+if (!Array.isArray(evidence.defaults) || evidence.defaults.length === 0) {
+  console.error("LakeCat catalog config evidence is missing defaults");
+  process.exit(1);
+}
+if (!Array.isArray(evidence.overrides)) {
+  console.error("LakeCat catalog config evidence is missing overrides");
+  process.exit(1);
+}
+if (!Array.isArray(evidence.endpoints) || evidence.endpoints.length === 0) {
+  console.error("LakeCat catalog config evidence is missing endpoints");
+  process.exit(1);
+}
+process.stdout.write(JSON.stringify(evidence));
+' "$file"
+}
+
 storage_profile_upsert_evidence_json() {
   local file="$1"
   node -e '
@@ -1147,7 +1174,7 @@ write_summary() {
   local verified_tables verified_views verified_table_ids verified_view_ids verified_warehouse bundle_hash graph_hash open_lineage_hash querygraph_import_hash
   local verified_standards
   local lakecat_schema lakecat_status lakecat_tables lakecat_views lakecat_bundle_hash lakecat_graph_hash lakecat_open_lineage_hash lakecat_querygraph_import_hash lakecat_standards lakecat_replay_evidence
-  local lakecat_request_identity_evidence lakecat_querygraph_bootstrap_evidence lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence lakecat_table_commit_history_evidence lakecat_management_evidence lakecat_view_receipt_chain_evidence
+  local lakecat_request_identity_evidence lakecat_querygraph_bootstrap_evidence lakecat_catalog_config_evidence lakecat_storage_profile_upsert_evidence lakecat_credential_vending_evidence lakecat_governed_scan_evidence lakecat_table_commit_history_evidence lakecat_management_evidence lakecat_view_receipt_chain_evidence
   local imported_tables imported_views imported_warehouse imported_bundle_hash imported_graph_hash imported_open_lineage_hash imported_querygraph_import_hash
   local imported_standards imported_table_ids imported_view_ids
   local expected_verified_table
@@ -1169,6 +1196,7 @@ write_summary() {
   lakecat_standards="$(json_value_field "$LAKECAT_REPLAY_OUTPUT" "standards")"
   lakecat_replay_evidence="$(json_value_field "$LAKECAT_REPLAY_OUTPUT" "replay-evidence")"
   lakecat_request_identity_evidence="$(request_identity_evidence_json "$LAKECAT_REPLAY_OUTPUT" "$PRINCIPAL")"
+  lakecat_catalog_config_evidence="$(catalog_config_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_storage_profile_upsert_evidence="$(storage_profile_upsert_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_credential_vending_evidence="$(credential_vending_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
   lakecat_governed_scan_evidence="$(governed_scan_evidence_json "$LAKECAT_REPLAY_OUTPUT")"
@@ -1218,6 +1246,7 @@ write_summary() {
   required_summary_field "replay-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_replay_evidence"
   required_summary_field "request-identity-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_request_identity_evidence"
   required_summary_field "querygraph-bootstrap-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_querygraph_bootstrap_evidence"
+  required_summary_field "catalog-config-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_catalog_config_evidence"
   required_summary_field "storage-profile-upsert-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_storage_profile_upsert_evidence"
   required_summary_field "credential-vending-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_credential_vending_evidence"
   required_summary_field "governed-scan-evidence" "$LAKECAT_REPLAY_OUTPUT" "$lakecat_governed_scan_evidence"
@@ -1296,6 +1325,7 @@ write_summary() {
     "matchesQueryGraph": true,
     "requestIdentityProof": $lakecat_request_identity_evidence,
     "queryGraphBootstrapProof": $lakecat_querygraph_bootstrap_evidence,
+    "catalogConfigProof": $lakecat_catalog_config_evidence,
     "governedScanProof": $lakecat_governed_scan_evidence,
     "tableCommitHistoryProof": $lakecat_table_commit_history_evidence,
     "managementProof": $lakecat_management_evidence,

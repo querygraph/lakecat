@@ -6,6 +6,48 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Bind compact QGLake catalog-config proof`.
+  Compact QGLake handoff summaries now carry
+  `lakecatReplayVerification.catalogConfigProof` beside the raw
+  lineage-drain config proof. The compact verifier requires the advertised
+  defaults, overrides, endpoints, principal/action receipt proof, graph count,
+  replay hashes, and OpenLineage hashes, and it rejects missing proof,
+  unsupported `lakecat.format.v4*` defaults, v4 overrides, omitted standard,
+  governed, QueryGraph, or OpenLineage endpoints, and captured LakeCat replay
+  sidecars whose catalog-config proof drifts from the summary.
+  The book also now gives a stricter reader-facing explanation of the catalog
+  concepts: Rust/Turso as LakeCat implementation, REST paths and commit CAS as
+  Iceberg compatibility, idempotency/pointer-log/audit/outbox/replay proof as
+  LakeCat hardening, governed scan/credential receipts as LakeCat/TypeSec
+  extensions, QueryGraph/QGLake/OpenLineage handoff as application integration,
+  and proof-carrying scan or credential profiles as the narrow future
+  Iceberg-adjacent proposal candidates. It explicitly argues that Sail should
+  be the engine of record for field-id binding, pruning, delete handling,
+  typed v4 interpretation, and proof-bearing planning.
+- Local verification for this implementation/book slice is green:
+  `bash -n scripts/qglake-handoff-local.sh` passed;
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_lineage_drain_artifact_semantics_accept_matching_drain -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_accepts_handoff_verify_output_hash -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_catalog_config_proof -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_unsupported_config_v4_default -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_missing_config_endpoint -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_catalog_config_drift -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Bind QGLake config-read proof`.
   `catalog.config-read` lineage-drain event summaries now carry the advertised
   config defaults, overrides, and endpoint list after service replay admission.

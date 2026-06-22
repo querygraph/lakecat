@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Bound catalog config-read proof into compact QGLake handoff verification.
+  `lakecatReplayVerification.catalogConfigProof` now carries advertised config
+  defaults, overrides, endpoints, principal/action receipt proof, graph counts,
+  replay hashes, and OpenLineage hashes. Compact handoff summaries and captured
+  LakeCat replay sidecars now reject missing config proof, unsupported
+  `lakecat.format.v4*` defaults, v4 overrides, missing standard/governed/
+  QueryGraph/OpenLineage endpoints, or captured replay drift.
+- Expanded the book's catalog-concepts discussion with a stricter extension/
+  optional-profile/proposal distinction and a governed-read example showing why
+  Sail must be the engine of record for proof-bearing scan planning and typed
+  Iceberg v4 interpretation while LakeCat keeps identity, pointer state,
+  policy binding, audit, outbox, and replay evidence.
 - Added QGLake lineage-drain summary proof for catalog config reads. The API
   summary now carries config defaults, overrides, and advertised endpoints for
   `catalog.config-read` events; the service emits those fields after replay

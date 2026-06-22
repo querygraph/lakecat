@@ -723,6 +723,7 @@ fn require_qglake_handoff_verify_output_semantic_sections_match_summary(
         "requestIdentityProof",
         "queryGraphBootstrapProof",
         "governedScanProof",
+        "catalogConfigProof",
         "tableCommitHistoryProof",
         "viewReceiptChainProof",
         "managementProof",
@@ -1098,6 +1099,7 @@ fn verify_qglake_handoff_captured_output_semantics(
     let querygraph_bootstrap =
         Value::Object(lakecat_replay_querygraph_bootstrap(lakecat_replay)?.clone());
     let governed_scan = Value::Object(lakecat_replay_scan(lakecat_replay)?.clone());
+    let catalog_config = Value::Object(lakecat_replay_catalog_config(lakecat_replay)?.clone());
     let table_commit_history =
         Value::Object(lakecat_replay_table_commit_history(lakecat_replay)?.clone());
     let view_receipt_chain = Value::Object(lakecat_replay_views(lakecat_replay)?.clone());
@@ -1120,6 +1122,7 @@ fn verify_qglake_handoff_captured_output_semantics(
             "requestIdentityProof": request_identity,
             "queryGraphBootstrapProof": querygraph_bootstrap,
             "governedScanProof": governed_scan,
+            "catalogConfigProof": catalog_config,
             "tableCommitHistoryProof": table_commit_history,
             "viewReceiptChainProof": view_receipt_chain,
             "managementProof": management,
@@ -1790,6 +1793,7 @@ fn verify_lakecat_replay_capture_matches_summary(
     )?;
     verify_lakecat_replay_request_identity_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_querygraph_bootstrap_matches_summary(capture, lakecat)?;
+    verify_lakecat_replay_catalog_config_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_scan_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_table_commit_history_matches_summary(capture, lakecat)?;
     verify_lakecat_replay_views_match_summary(capture, lakecat)?;
@@ -1905,6 +1909,47 @@ fn lakecat_replay_querygraph_bootstrap(
     required_object(
         lakecat_replay_evidence(capture)?,
         "queryGraphBootstrap",
+        "captured LakeCat replay output.replay-evidence",
+    )
+}
+
+fn verify_lakecat_replay_catalog_config_matches_summary(
+    capture: &serde_json::Map<String, Value>,
+    lakecat: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let captured_config = lakecat_replay_catalog_config(capture)?;
+    let summary_config =
+        required_object(lakecat, "catalogConfigProof", "lakecatReplayVerification")?;
+
+    for field in [
+        "defaults",
+        "overrides",
+        "endpoints",
+        "principalSubject",
+        "principalKind",
+        "authorizationReceiptHash",
+        "authorizationReceiptAction",
+        "graphEvents",
+        "replayEventHashes",
+        "openLineageHashes",
+    ] {
+        require_value_match(
+            captured_config,
+            field,
+            required_value(summary_config, field, "catalogConfigProof")?,
+            "captured LakeCat replay output.replay-evidence.catalogConfig",
+        )?;
+    }
+
+    Ok(())
+}
+
+fn lakecat_replay_catalog_config(
+    capture: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<&serde_json::Map<String, Value>> {
+    required_object(
+        lakecat_replay_evidence(capture)?,
+        "catalogConfig",
         "captured LakeCat replay output.replay-evidence",
     )
 }
@@ -2911,6 +2956,10 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     require_full_hash_array(bootstrap, "replayEventHashes", "queryGraphBootstrapProof")?;
     require_full_hash_array(bootstrap, "openLineageHashes", "queryGraphBootstrapProof")?;
 
+    let catalog_config =
+        required_object(lakecat, "catalogConfigProof", "lakecatReplayVerification")?;
+    require_catalog_config_evidence(catalog_config, principal)?;
+
     let governed_scan = required_object(lakecat, "governedScanProof", "lakecatReplayVerification")?;
     require_positive_u64(governed_scan, "planTaskCount", "governedScanProof")?;
     require_positive_u64(governed_scan, "planGraphEvents", "governedScanProof")?;
@@ -3661,6 +3710,147 @@ fn require_table_commit_history_evidence(
         "openLineageHashes",
         "tableCommitHistoryProof",
     )?;
+    Ok(())
+}
+
+fn require_catalog_config_evidence(
+    config: &serde_json::Map<String, Value>,
+    principal: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    require_config_defaults(config)?;
+    require_config_overrides(config)?;
+    require_config_endpoints(config)?;
+    require_string_match(config, "principalSubject", principal, "catalogConfigProof")?;
+    require_string_eq(config, "principalKind", "agent", "catalogConfigProof")?;
+    require_full_hash_str(config, "authorizationReceiptHash", "catalogConfigProof")?;
+    require_string_eq(
+        config,
+        "authorizationReceiptAction",
+        "catalog-config",
+        "catalogConfigProof",
+    )?;
+    require_positive_u64(config, "graphEvents", "catalogConfigProof")?;
+    require_full_hash_array(config, "replayEventHashes", "catalogConfigProof")?;
+    require_full_hash_array(config, "openLineageHashes", "catalogConfigProof")?;
+    Ok(())
+}
+
+fn require_config_defaults(
+    config: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let defaults = required_config_entries(config, "defaults", "catalogConfigProof")?;
+    let required = [
+        (LAKECAT_COMPATIBILITY_KEY, LAKECAT_COMPATIBILITY_VALUE),
+        (LAKECAT_FORMAT_BASELINE_KEY, LAKECAT_FORMAT_BASELINE_VALUE),
+        (LAKECAT_FORMAT_V4_KEY, LAKECAT_FORMAT_V4_VALUE),
+        (LAKECAT_FORMAT_V4_BRIDGE_KEY, LAKECAT_FORMAT_V4_BRIDGE_VALUE),
+        (
+            LAKECAT_FORMAT_V4_TYPED_SAIL_KEY,
+            LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE,
+        ),
+    ];
+    let allowed_v4_keys = required
+        .iter()
+        .map(|(key, _)| *key)
+        .filter(|key| key.starts_with("lakecat.format.v4"))
+        .collect::<BTreeSet<_>>();
+    for entry in &defaults {
+        if entry.key.starts_with("lakecat.format.v4")
+            && !allowed_v4_keys.contains(entry.key.as_str())
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "catalogConfigProof.defaults contain unsupported v4 bridge keys".to_string(),
+            ));
+        }
+    }
+    for (required_key, required_value) in required {
+        if !defaults
+            .iter()
+            .any(|entry| entry.key == required_key && entry.value == required_value)
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "catalogConfigProof.defaults must include {required_key}={required_value}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn require_config_overrides(
+    config: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    for entry in required_config_entries(config, "overrides", "catalogConfigProof")? {
+        if entry.key.starts_with("lakecat.format.v4") {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "catalogConfigProof.overrides must not contain v4 bridge keys".to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn required_config_entries(
+    config: &serde_json::Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> lakecat_core::LakeCatResult<Vec<ConfigEntry>> {
+    let entries = required_array(config, field, label)?;
+    let mut seen = BTreeSet::new();
+    entries
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| {
+            let entry = entry.as_object().ok_or_else(|| {
+                lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "{label}.{field}[{index}] must be an object"
+                ))
+            })?;
+            let key = require_non_blank_str(entry, "key", &format!("{label}.{field}[]"))?;
+            let value = require_non_blank_str(entry, "value", &format!("{label}.{field}[]"))?;
+            if !seen.insert(key.to_string()) {
+                return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "{label}.{field} must not contain duplicate keys"
+                )));
+            }
+            Ok(ConfigEntry::new(key, value))
+        })
+        .collect()
+}
+
+fn require_config_endpoints(
+    config: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<()> {
+    let endpoints = required_string_array(config, "endpoints", "catalogConfigProof")?;
+    require_non_empty_unique_strings(&endpoints, "catalogConfigProof.endpoints")?;
+    let required = [
+        "GET /catalog/v1/config",
+        "GET /catalog/v1/{warehouse}/config",
+        "GET /catalog/v1/namespaces",
+        "GET /catalog/v1/{warehouse}/namespaces",
+        "POST /catalog/v1/namespaces",
+        "POST /catalog/v1/{warehouse}/namespaces",
+        "POST /catalog/v1/namespaces/{namespace}/tables",
+        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables",
+        "GET /catalog/v1/namespaces/{namespace}/tables/{table}",
+        "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}",
+        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit",
+        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit",
+        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
+        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
+        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
+        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
+        "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
+        "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials",
+        "POST /management/v1/lineage/drain",
+        "GET /querygraph/v1/bootstrap",
+    ];
+    for endpoint in required {
+        if !endpoints.iter().any(|candidate| candidate == endpoint) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "catalogConfigProof.endpoints must include {endpoint}"
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -4946,6 +5136,7 @@ fn qglake_replay_evidence_json(
     json!({
         "requestIdentity": qglake_request_identity_replay_evidence_json(drain),
         "queryGraphBootstrap": qglake_querygraph_bootstrap_replay_evidence_json(drain),
+        "catalogConfig": qglake_catalog_config_replay_evidence_json(drain),
         "scan": qglake_scan_replay_evidence_json(drain),
         "management": qglake_management_replay_evidence_json(drain),
         "credentials": qglake_credential_replay_evidence_json(drain, principal),
@@ -4991,6 +5182,22 @@ fn qglake_querygraph_bootstrap_replay_evidence_json(drain: &LineageDrainResponse
         "viewVersionReceiptHashes": &bootstrap.view_version_receipt_hashes,
         "replayEventHashes": &bootstrap.replay_event_hashes,
         "openLineageHashes": &bootstrap.replay_open_lineage_hashes,
+    }))
+}
+
+fn qglake_catalog_config_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Value> {
+    let config = qglake_drain_event(drain, "catalog.config-read")?;
+    Some(json!({
+        "defaults": &config.catalog_config_defaults,
+        "overrides": &config.catalog_config_overrides,
+        "endpoints": &config.catalog_config_endpoints,
+        "principalSubject": config.principal_subject.as_deref(),
+        "principalKind": config.principal_kind.as_deref(),
+        "authorizationReceiptHash": config.authorization_receipt_hash.as_deref(),
+        "authorizationReceiptAction": config.authorization_receipt_action.as_deref(),
+        "graphEvents": config.graph_events,
+        "replayEventHashes": &config.replay_event_hashes,
+        "openLineageHashes": &config.replay_open_lineage_hashes,
     }))
 }
 
@@ -11181,6 +11388,8 @@ mod tests {
                 "replayEvidence": {}
             }
         });
+        summary["lakecatReplayVerification"]["catalogConfigProof"] =
+            qglake_catalog_config_proof_json();
         qglake_add_management_receipt_hashes(
             &mut summary["lakecatReplayVerification"]["managementProof"],
         );
@@ -11201,6 +11410,22 @@ mod tests {
             ["viewReceiptChainProof"]["views"][0]["acceptedReceiptHash"]
             .clone()]);
         summary
+    }
+
+    fn qglake_catalog_config_proof_json() -> Value {
+        let config = CatalogConfigResponse::default();
+        json!({
+            "defaults": config.defaults,
+            "overrides": config.overrides,
+            "endpoints": config.endpoints,
+            "principalSubject": "did:example:agent",
+            "principalKind": "agent",
+            "authorizationReceiptHash": qglake_fixture_hash("catalog-config-authorization"),
+            "authorizationReceiptAction": "catalog-config",
+            "graphEvents": 2,
+            "replayEventHashes": [qglake_fixture_hash("catalog-config-replay")],
+            "openLineageHashes": [qglake_fixture_hash("catalog-config-openlineage")]
+        })
     }
 
     fn qglake_add_credential_receipt_evidence(credentials: &mut Value) {
@@ -11618,6 +11843,8 @@ mod tests {
                 }
             }
         });
+        lakecat_replay_json["replay-evidence"]["catalogConfig"] =
+            qglake_catalog_config_proof_json();
         lakecat_replay_json["replay-evidence"]["requestIdentity"]["authorizationReceiptAction"] =
             json!("lineage-read");
         lakecat_replay_json["replay-evidence"]["queryGraphBootstrap"]["authorizationReceiptAction"] =
@@ -11685,8 +11912,9 @@ mod tests {
             serde_json::to_vec_pretty(&querygraph_capture_json).expect("verify JSON bytes");
         let querygraph_import_bytes =
             serde_json::to_vec_pretty(&querygraph_capture_json).expect("import JSON bytes");
-        let lineage_drain_bytes = serde_json::to_vec_pretty(&qglake_handoff_lineage_drain())
-            .expect("lineage drain JSON bytes");
+        let lineage_drain_bytes =
+            serde_json::to_vec_pretty(&qglake_handoff_lineage_drain_with_config())
+                .expect("lineage drain JSON bytes");
         fs::write(&bundle, b"bundle").expect("write bundle");
         fs::write(&drain, &lineage_drain_bytes).expect("write drain");
         fs::write(&import_plan, b"import-plan").expect("write import plan");
@@ -11777,6 +12005,7 @@ mod tests {
                     "requestIdentityProof": summary["lakecatReplayVerification"]["requestIdentityProof"].clone(),
                     "queryGraphBootstrapProof": summary["lakecatReplayVerification"]["queryGraphBootstrapProof"].clone(),
                     "governedScanProof": summary["lakecatReplayVerification"]["governedScanProof"].clone(),
+                    "catalogConfigProof": summary["lakecatReplayVerification"]["catalogConfigProof"].clone(),
                     "tableCommitHistoryProof": summary["lakecatReplayVerification"]["tableCommitHistoryProof"].clone(),
                     "viewReceiptChainProof": summary["lakecatReplayVerification"]["viewReceiptChainProof"].clone(),
                     "managementProof": summary["lakecatReplayVerification"]["managementProof"].clone(),
@@ -11833,7 +12062,7 @@ mod tests {
                 "graphEdges": 7
             },
             "lineageDrainArtifactSemantics": {
-                "delivered": 14,
+                "delivered": 15,
                 "eventTypes": [
                     "querygraph.bootstrap",
                     "credentials.vend-attempted",
@@ -11848,10 +12077,11 @@ mod tests {
                     "warehouse.listed",
                     "table.commits-listed",
                     "table.scan-planned",
-                    "table.scan-tasks-fetched"
+                    "table.scan-tasks-fetched",
+                    "catalog.config-read"
                 ],
-                "graphEvents": 15,
-                "lineageEvents": 14,
+                "graphEvents": 17,
+                "lineageEvents": 15,
                 "principalSubject": summary["lakecatReplayVerification"]["requestIdentityProof"]["principalSubject"].clone(),
                 "principalKind": summary["lakecatReplayVerification"]["requestIdentityProof"]["principalKind"].clone(),
                 "authorizationReceiptHash": summary["lakecatReplayVerification"]["requestIdentityProof"]["authorizationReceiptHash"].clone(),
@@ -12139,6 +12369,7 @@ mod tests {
             "matchesQueryGraph": true,
             "requestIdentityProof": replay["replay-evidence"]["requestIdentity"],
             "queryGraphBootstrapProof": replay["replay-evidence"]["queryGraphBootstrap"],
+            "catalogConfigProof": replay["replay-evidence"]["catalogConfig"],
             "governedScanProof": replay["replay-evidence"]["scan"],
             "tableCommitHistoryProof": replay["replay-evidence"]["tableCommitHistory"],
             "viewReceiptChainProof": replay["replay-evidence"]["views"],
@@ -13115,6 +13346,54 @@ mod tests {
 
         assert!(err.to_string().contains("queryGraphBootstrapProof"));
         assert!(err.to_string().contains("requestIdentityState mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_catalog_config_proof() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]
+            .as_object_mut()
+            .expect("lakecat replay object")
+            .remove("catalogConfigProof");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing catalog config proof");
+
+        assert!(err.to_string().contains("lakecatReplayVerification"));
+        assert!(err.to_string().contains("catalogConfigProof"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_unsupported_config_v4_default() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["catalogConfigProof"]["defaults"]
+            .as_array_mut()
+            .expect("config defaults")
+            .push(json!({
+                "key": "lakecat.format.v4.typed-sail.preview",
+                "value": "available"
+            }));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject unsupported compact config v4 defaults");
+
+        assert!(err.to_string().contains("catalogConfigProof"));
+        assert!(err.to_string().contains("unsupported v4 bridge keys"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_missing_config_endpoint() {
+        let mut summary = qglake_handoff_summary_json();
+        let endpoints = summary["lakecatReplayVerification"]["catalogConfigProof"]["endpoints"]
+            .as_array_mut()
+            .expect("config endpoints");
+        endpoints.retain(|endpoint| endpoint != "GET /querygraph/v1/bootstrap");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing compact config endpoint");
+
+        assert!(err.to_string().contains("catalogConfigProof"));
+        assert!(err.to_string().contains("GET /querygraph/v1/bootstrap"));
     }
 
     #[test]
@@ -15920,6 +16199,10 @@ mod tests {
             json!(qglake_fixture_hash("delegation"))
         );
         assert_eq!(
+            semantics["lakecatReplay"]["catalogConfigProof"]["authorizationReceiptAction"],
+            json!("catalog-config")
+        );
+        assert_eq!(
             semantics["lakecatReplay"]["governedScanProof"]["planTaskCount"],
             json!(1)
         );
@@ -15943,6 +16226,27 @@ mod tests {
             semantics["lakecatReplay"]["credentialVendingProof"]["restricted"]["blockReason"],
             json!(QGLAKE_RESTRICTED_CREDENTIAL_BLOCK_REASON)
         );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_catalog_config_drift() {
+        let temp = qglake_temp_dir("handoff-captured-catalog-config-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut replay = read_json_file(&temp.join("lakecat-replay.txt")).expect("replay JSON");
+        replay["replay-evidence"]["catalogConfig"]["authorizationReceiptAction"] =
+            json!("lineage-read");
+        fs::write(
+            temp.join("lakecat-replay.txt"),
+            serde_json::to_vec_pretty(&replay).expect("drifted replay JSON"),
+        )
+        .expect("write drifted replay");
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay catalog config proof drift should be rejected");
+
+        assert!(err.to_string().contains("catalogConfig"));
+        assert!(err.to_string().contains("authorizationReceiptAction"));
     }
 
     #[test]
@@ -16136,14 +16440,14 @@ mod tests {
         let temp = qglake_temp_dir("handoff-lineage-drain-semantics-ok");
         let summary_path = temp.join("handoff-summary.json");
         let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
-        let drain = qglake_handoff_lineage_drain();
+        let drain = qglake_handoff_lineage_drain_with_config();
         qglake_write_handoff_lineage_drain_artifact(&temp, &mut summary, &drain);
 
         let semantics =
             verify_qglake_handoff_lineage_drain_artifact_semantics(&summary_path, &summary)
                 .expect("lineage drain artifact semantics should verify");
 
-        assert_eq!(semantics["delivered"], json!(14));
+        assert_eq!(semantics["delivered"], json!(15));
         assert_eq!(
             semantics["verifiedViews"],
             json!(["lakecat:view:local:default:active_customers_view"])
@@ -16166,7 +16470,7 @@ mod tests {
         let temp = qglake_temp_dir("handoff-lineage-drain-semantics-replay-drift");
         let summary_path = temp.join("handoff-summary.json");
         let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
-        let mut drain = qglake_handoff_lineage_drain();
+        let mut drain = qglake_handoff_lineage_drain_with_config();
         qglake_write_handoff_lineage_drain_artifact(&temp, &mut summary, &drain);
         let bootstrap = drain
             .events
