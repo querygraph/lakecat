@@ -705,7 +705,10 @@ broader than the LakeCat storage profile that selected it; scope-rejection
 evidence should stay hash-only and must not emit credential replay records.
 Secret-manager payload parsing must also fail closed on malformed credential
 config shapes, including blank config keys, before any secret-backed
-credential response is issued.
+credential response is issued. Configured cloud-style provider backend
+failures must also stay hash-only: provider label, `secret-ref-hash`, and
+`error-detail-hash` are admissible diagnostics; raw secret refs, account paths,
+tokens, ARNs, backend exception text, or secret names are not.
 Credential responses should carry catalog-derived secret-ref provider and
 secret-ref hash evidence when a storage profile uses an external secret
 reference, and backend-supplied provider/hash evidence must be replaced rather

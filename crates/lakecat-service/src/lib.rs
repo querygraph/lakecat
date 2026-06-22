@@ -378,7 +378,14 @@ pub mod typesec_credential_issuer {
                     let Some(backend) = self.provider_backends.get(&provider) else {
                         return Err(provider_not_configured(provider, secret_ref));
                     };
-                    backend.resolve(request).await
+                    backend.resolve(request).await.map_err(|err| {
+                        LakeCatError::InvalidArgument(format!(
+                            "failed to resolve {} credential secret; {}; {}",
+                            provider.as_str(),
+                            secret_ref_hash_context(secret_ref),
+                            error_detail_hash_context(err),
+                        ))
+                    })
                 }
             }
         }
@@ -10774,6 +10781,35 @@ mod tests {
                     format!("{}-short-lived", self.provider_label),
                 )],
             }])
+        }
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[derive(Debug)]
+    struct FailingProductionSecretRefResolver {
+        error: &'static str,
+        requests: Mutex<Vec<(String, Option<u64>)>>,
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[async_trait]
+    impl crate::typesec_credential_issuer::SecretRefCredentialResolver
+        for FailingProductionSecretRefResolver
+    {
+        async fn resolve(
+            &self,
+            request: &CredentialIssuanceRequest,
+        ) -> lakecat_core::LakeCatResult<Vec<StorageCredential>> {
+            let secret_ref = request.profile.secret_ref.clone().ok_or_else(|| {
+                LakeCatError::InvalidArgument(
+                    "mock production resolver missing secret ref".to_string(),
+                )
+            })?;
+            self.requests
+                .lock()
+                .await
+                .push((secret_ref, request.max_credential_ttl_seconds));
+            Err(LakeCatError::InvalidArgument(self.error.to_string()))
         }
     }
 
@@ -36620,6 +36656,58 @@ mod tests {
             *backend.requests.lock().await,
             vec![("aws-sm://lakecat/s3-events".to_string(), Some(300))],
             "authorized backend dispatch is allowed, but returned credentials must stay scoped"
+        );
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_redacts_configured_provider_backend_failures() {
+        use crate::typesec_credential_issuer::{
+            ExternalSecretRefCredentialResolver, SecretRefCredentialResolver, SecretRefProvider,
+            TypeSecCredentialIssuer,
+        };
+
+        let secret_ref = "aws-sm://lakecat/s3-events";
+        let backend = Arc::new(FailingProductionSecretRefResolver {
+            error: "aws request failed for aws-sm://lakecat/s3-events with token raw-token-123 and arn arn:aws:secretsmanager:us-west-2:123456789012:secret:lakecat/s3-events",
+            requests: Mutex::new(Vec::new()),
+        });
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:agent".to_string(),
+                resource: secret_ref.to_string(),
+            }),
+            ExternalSecretRefCredentialResolver::with_provider_backends(BTreeMap::from([(
+                SecretRefProvider::AwsSecretsManager,
+                backend.clone() as Arc<dyn SecretRefCredentialResolver>,
+            )])),
+        );
+
+        let err = issuer
+            .issue(production_secret_credential_request(secret_ref))
+            .await
+            .unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("failed to resolve aws-secrets-manager credential secret"));
+        assert!(message.contains("secret-ref-hash=sha256:"));
+        assert!(message.contains("error-detail-hash=sha256:"));
+        for forbidden in [
+            secret_ref,
+            "raw-token-123",
+            "arn:aws:secretsmanager",
+            "123456789012",
+            "s3-events",
+            "aws request failed",
+        ] {
+            assert!(
+                !message.contains(forbidden),
+                "configured provider failures must not expose {forbidden}"
+            );
+        }
+        assert_eq!(
+            *backend.requests.lock().await,
+            vec![(secret_ref.to_string(), None)],
+            "allowed TypeSec decisions may dispatch, but backend failures must be redacted"
         );
     }
 

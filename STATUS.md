@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Redact configured production secret-ref backend failures`.
+  TypeSec-gated external secret resolvers now wrap configured cloud-style
+  provider backend failures with provider label, `secret-ref-hash`, and
+  `error-detail-hash` evidence only, so raw secret refs, account paths, tokens,
+  ARNs, and backend exception text cannot cross LakeCat's credential boundary
+  after authorization dispatch.
+- Local verification for this production secret-ref failure slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features typesec-local --lib typesec_credential_issuer_redacts_configured_provider_backend_failures -- --test-threads=1`;
+  `cargo test -p lakecat-service --features typesec-local --lib typesec_credential_issuer -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Expand catalog concepts and Sail engine rationale in the book`.
   The book now has a claim-by-claim delineation for the Rust service/catalog
   spine, Turso local store, standard Iceberg REST paths, commit CAS hardening,

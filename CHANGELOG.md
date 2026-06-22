@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Redacted configured production secret-ref backend failures. TypeSec-gated
+  external secret resolvers now wrap configured AWS/GCP/Azure-style backend
+  errors with only the provider label, `secret-ref-hash`, and
+  `error-detail-hash`, preventing raw secret refs, account paths, tokens, ARNs,
+  or backend exception text from crossing LakeCat's credential boundary.
 - Expanded the LakeCat book's catalog-concepts explanation with a
   claim-by-claim delineation of what is standard Iceberg parlance, what is
   LakeCat implementation, what belongs to TypeSec/QueryGraph extensions, and

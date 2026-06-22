@@ -5223,7 +5223,10 @@ resolver diagnostics. Once a configured
 resolver is authorized to run, backend lookup and secret payload parse failures
 still stay hash-only: LakeCat returns the secret-reference hash and an
 error-detail hash instead of the environment variable name, Vault path, token,
-namespace, backend exception text, or malformed secret fields.
+namespace, backend exception text, cloud secret-manager ARN or account path, or
+malformed secret fields. That rule applies both to the built-in Vault and
+environment resolvers and to explicitly configured AWS Secrets Manager, GCP
+Secret Manager, and Azure Key Vault style backend seams.
 Secret payload parsing also rejects malformed credential configuration before
 issuance, including blank config keys in either object-shaped secrets,
 ConfigEntry-array secrets, or Vault's nested data object. That keeps
