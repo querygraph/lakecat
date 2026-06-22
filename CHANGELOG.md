@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a release-claim ledger that explicitly
+  classifies the Rust service spine, Turso store, Iceberg REST paths, commit
+  CAS/idempotency/pointer logs/audit/outbox/replay validation, governed
+  scan/credential receipts, and QueryGraph/QGLake handoff as standard Iceberg
+  parlance, LakeCat implementation, TypeSec/QueryGraph extensions, or future
+  Iceberg-adjacent profile candidates, and strengthened the argument for
+  pushing Iceberg-heavy planning and validation into Sail.
 - Added a service-level `grust-local` outbox projection row to the full
   release-readiness gate and pinned it in the dependency contract, proving
   LakeCat's service boundary still projects catalog events through the Grust
