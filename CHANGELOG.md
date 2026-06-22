@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's release-claim ledger with workflow-specific
+  guidance for PySpark users, operators, governed agents, QueryGraph importers,
+  standards readers, and Iceberg v4 compatibility, clarifying that LakeCat's
+  proof surfaces live beside standard Iceberg while reusable table-format
+  semantics should move into Sail.
 - Bound QGLake governed scan proof to compact planned/fetched scan receipt
   identity evidence, requiring principal subject/kind, full authorization
   receipt hashes, and `table-plan-scan` actions to survive source replay,

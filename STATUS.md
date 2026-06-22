@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Expand catalog concept ledger`.
+  The book now explains the release claims as a reader-facing catalog concept
+  ledger, separating standard Iceberg parlance from LakeCat implementation,
+  LakeCat/QueryGraph optional extensions, TypeSec governance receipts, and
+  future Iceberg-adjacent profile candidates. It also adds workflow-specific
+  guidance for PySpark users, operators, governed agents, QueryGraph importers,
+  standards readers, and Iceberg v4 compatibility, with Sail identified as the
+  long-term home for reusable table-format and planning semantics.
+- Local verification for this book slice is green:
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Bind QGLake scan receipt proof`.
   QGLake governed scan proof now preserves planned and fetched scan receipt
