@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed service outbox admission over top-level view lifecycle replay
+  payloads. `view.upserted`, `view.loaded`, and `view.dropped` now reject
+  unexpected top-level payload fields before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake proof can inherit unverified view lifecycle,
+  lineage, graph, QueryGraph, or application claims beside checked view scope,
+  version, expected-version, interface, and authorization evidence.
 - Closed service outbox admission over top-level table commit-history replay
   payloads. `table.commits-listed` now rejects unexpected top-level payload
   fields before acknowledgement, graph projection, OpenLineage projection, or

@@ -6,6 +6,27 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close service view lifecycle schemas`.
+  Service outbox admission now rejects unexpected top-level payload fields for
+  `view.upserted`, `view.loaded`, and `view.dropped` before acknowledgement,
+  graph projection, OpenLineage projection, or QGLake proof can inherit
+  unverified view lifecycle, lineage, graph, QueryGraph, or application claims
+  beside checked view scope, version, expected-version, interface, and
+  authorization evidence. The design and book now describe both top-level view
+  lifecycle payload closure and nested view-object closure.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_top_level_view_lifecycle_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service view_lifecycle -- --test-threads=1` passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close service commit history schemas`.
   Service outbox admission now rejects unexpected top-level payload fields for
   `table.commits-listed` before acknowledgement, graph projection, OpenLineage

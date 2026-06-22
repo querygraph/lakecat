@@ -6718,12 +6718,13 @@ single-view changes and reads to catalog-facing View graph events plus
 LakeCat OpenLineage view dataset receipts. QueryGraph bootstrap can then
 include views with OSI hashes, store-assigned view versions, view-aware graph
 edges, and OpenLineage view counts. Before any view lifecycle event is
-acknowledged from replay, LakeCat checks that the nested `view` object contains
-only the catalog's view fields: warehouse, namespace, name, `view-version`,
-SQL, dialect, schema version, columns, and properties. That keeps a replay
-bundle from smuggling unverified graph, lineage, policy, or application facts
-inside view lifecycle evidence. The lineage-drain summary also carries compact
-view replay identity:
+acknowledged from replay, LakeCat closes the top-level lifecycle payload over
+the fields current producers emit and checks that the nested `view` object
+contains only the catalog's view fields: warehouse, namespace, name,
+`view-version`, SQL, dialect, schema version, columns, and properties. That
+keeps a replay bundle from smuggling unverified graph, lineage, policy,
+QueryGraph, or application facts beside or inside view lifecycle evidence. The
+lineage-drain summary also carries compact view replay identity:
 
 ```json
 {
@@ -8002,8 +8003,12 @@ identities. The receipt action must be `view-load`, matching the compact
 QGLake action contract; `view-manage` remains mutation proof for
 `view.upserted`, while `view.loaded` uses `view-load` and `view.dropped` uses
 `view-drop`. View lifecycle replay with a drifted action is rejected before
-graph or OpenLineage projection, so QueryGraph cannot accept a view mutation or
-read under the wrong catalog permission.
+graph or OpenLineage projection, and top-level view lifecycle payloads are
+closed over the checked event type, optional interface, warehouse, namespace,
+view, expected-version, and authorization evidence. QueryGraph cannot accept a
+view mutation or read under the wrong catalog permission, nor can a replay
+sidecar append unverified view lifecycle, lineage, graph, or application claims
+beside otherwise valid view evidence.
 Table lifecycle replay applies the same identity discipline before delivery:
 `table.created`, `table.loaded`, `table.deleted`, and `table.restored` must
 carry a decodable table identity, optional payload scope hints must match it,
