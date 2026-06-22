@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened Turso idempotency replay so `idempotency_records.table_key` must
+  match the requested table before either direct replay probing or the normal
+  idempotent commit path can return a stored response. The regression tampers
+  only the durable idempotency row scope while leaving the replay response JSON
+  valid, proving LakeCat rejects row-scope drift before replay.
 - Tightened compact QGLake handoff verification so `warehouse`, `namespace`,
   and `table` scope anchors must be non-blank, not merely non-empty. The
   regressions mirror whitespace-only scope into the compact QueryGraph

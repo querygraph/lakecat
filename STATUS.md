@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation slice:
+  `Reject Turso idempotency row scope drift`.
+  Turso idempotency replay now validates `idempotency_records.table_key`
+  against the requested table before direct replay probing or normal
+  idempotent commit replay can return a stored response. The regression
+  tampers only the durable idempotency row scope while leaving response JSON
+  valid, proving replay rejects row-scope drift.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_table_idempotency_row_scope_drift -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest QGLake handoff slice:
   `Reject blank handoff scope anchors`.
   Compact QGLake handoff verification now requires `warehouse`, `namespace`,

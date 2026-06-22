@@ -2486,6 +2486,19 @@ fn validate_table_record_scope(record: &TableRecord, ident: &TableIdent) -> Lake
 }
 
 #[cfg(feature = "turso-local")]
+fn validate_idempotency_record_table_key(
+    row_table_key: &str,
+    ident: &TableIdent,
+) -> LakeCatResult<()> {
+    if row_table_key != table_key(ident) {
+        return Err(LakeCatError::Internal(
+            "idempotency record row scope does not match requested table".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(feature = "turso-local")]
 fn validate_namespace_scope(
     namespace: &Namespace,
     expected_warehouse: &WarehouseName,
@@ -5193,20 +5206,21 @@ pub mod turso_store {
                 let idem_key = idempotency_record_key(ident, idempotency_key);
                 let mut rows = tx
                     .query(
-                        "select request_hash, response_json from idempotency_records where idem_key = ?1",
+                        "select table_key, request_hash, response_json from idempotency_records where idem_key = ?1",
                         (idem_key,),
                     )
                     .await
                     .map_err(turso_error)?;
                 if let Some(row) = rows.next().await.map_err(turso_error)? {
-                    let replay_hash = row_string(&row, 0)?;
+                    crate::validate_idempotency_record_table_key(&row_string(&row, 0)?, ident)?;
+                    let replay_hash = row_string(&row, 1)?;
                     if replay_hash != idempotency_request_hash {
                         return Err(LakeCatError::Conflict(format!(
                             "idempotency key reused with different commit request for {}",
                             ident.stable_id()
                         )));
                     }
-                    let table = decode_json(row_string(&row, 1)?)?;
+                    let table = decode_json(row_string(&row, 2)?)?;
                     crate::validate_table_record_scope(&table, ident)?;
                     tx.commit().await.map_err(turso_error)?;
                     return Ok(table);
@@ -5402,7 +5416,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select request_hash, response_json from idempotency_records where idem_key = ?1",
+                    "select table_key, request_hash, response_json from idempotency_records where idem_key = ?1",
                     (idempotency_record_key(ident, idempotency_key),),
                 )
                 .await
@@ -5410,14 +5424,15 @@ pub mod turso_store {
             let Some(row) = rows.next().await.map_err(turso_error)? else {
                 return Ok(None);
             };
-            let replay_hash = row_string(&row, 0)?;
+            crate::validate_idempotency_record_table_key(&row_string(&row, 0)?, ident)?;
+            let replay_hash = row_string(&row, 1)?;
             if replay_hash != idempotency_request_hash {
                 return Err(LakeCatError::Conflict(format!(
                     "idempotency key reused with different commit request for {}",
                     ident.stable_id()
                 )));
             }
-            let table = decode_json(row_string(&row, 1)?)?;
+            let table = decode_json(row_string(&row, 2)?)?;
             crate::validate_table_record_scope(&table, ident)?;
             Ok(Some(table))
         }
@@ -8795,6 +8810,83 @@ pub mod turso_store {
                 err,
                 LakeCatError::Internal(message)
                     if message.contains("table record row scope does not match")
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_table_idempotency_row_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("events").unwrap(),
+            );
+            store
+                .create_namespace(&warehouse, namespace.clone())
+                .await
+                .unwrap();
+            store
+                .create_table(TableRecord::new(
+                    ident.clone(),
+                    "file:///tmp/events".to_string(),
+                    Some("file:///tmp/events/metadata/00000.json".to_string()),
+                    serde_json::json!({"format-version": 3}),
+                    Principal::anonymous(),
+                ))
+                .await
+                .unwrap();
+            let commit = TableCommit {
+                requirements: vec![],
+                updates: vec![serde_json::json!({"action": "noop"})],
+                expected_previous_metadata_location: Some(
+                    "file:///tmp/events/metadata/00000.json".to_string(),
+                ),
+                new_metadata_location: Some("file:///tmp/events/metadata/00001.json".to_string()),
+                new_metadata: Some(serde_json::json!({"format-version": 3})),
+                idempotency_key: Some("commit-1".to_string()),
+                idempotency_request_hash: None,
+                principal: Principal::anonymous(),
+                authorization_receipt: None,
+            };
+            store.commit_table(&ident, commit.clone()).await.unwrap();
+            let record = store
+                .table_commit_records(&ident, 1, Some(1))
+                .await
+                .unwrap()
+                .pop()
+                .unwrap();
+            let other_ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("other_events").unwrap(),
+            );
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update idempotency_records set table_key = ?2 where idem_key = ?1",
+                (
+                    idempotency_record_key(&ident, "commit-1"),
+                    crate::table_key(&other_ident),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .replay_table_commit(&ident, "commit-1", &record.request_hash)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("idempotency record row scope does not match")
+            ));
+            let err = store.commit_table(&ident, commit).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("idempotency record row scope does not match")
             ));
         }
 
