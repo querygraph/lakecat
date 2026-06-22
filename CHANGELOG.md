@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog-concepts guidance with a dedicated
+  standards position that separates implementation details, optional
+  LakeCat/QueryGraph control-plane extensions, and future Iceberg-adjacent
+  profile candidates, and sharpened the argument for keeping reusable Iceberg
+  semantics in Sail.
 - Added QGLake compact management proof for warehouse-list `project-id` scope,
   requiring saved handoff summaries and raw lineage-drain replay to reject
   malformed or unlisted warehouse project scopes.

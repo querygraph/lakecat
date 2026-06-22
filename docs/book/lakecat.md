@@ -1553,6 +1553,91 @@ catalog that supports them can be more governable. A catalog that does not
 support them can still be a valid Iceberg catalog. That is the balance LakeCat
 should preserve.
 
+### The Standards Position
+
+LakeCat should be precise when it talks about "extensions." The word can mean
+three different things, and only one of them is a standards proposal.
+
+The first meaning is an implementation extension. LakeCat's Rust service spine,
+Turso-backed local store, crate layout, trait boundaries, local release gates,
+and replay-validator internals extend the implementation, not Iceberg. They
+make a standard catalog more durable and observable. They should be documented
+for LakeCat operators, but they should not be described as Iceberg features.
+Nobody should have to run Rust or Turso to interoperate with LakeCat as an
+Iceberg catalog.
+
+The second meaning is a catalog-control extension. QueryGraph bootstrap,
+QGLake handoff, management inventory, commit-history proof, view receipt
+chains, credential-root posture, replay verification, and OpenLineage
+projection are additive APIs beside the standard REST catalog path. They are
+real LakeCat features. They are also optional. A Spark, PySpark, Flink, Trino,
+or PyIceberg client can ignore them and still use the table through ordinary
+Iceberg catalog operations.
+
+The third meaning is a future Iceberg-adjacent profile. A LakeCat feature
+should move into this category only when it satisfies four tests:
+
+1. It is useful across more than one catalog or engine.
+2. It can be expressed without private table metadata.
+3. A client that does not understand it can still use the standard catalog.
+4. Its proof shape is stable enough to test independently of LakeCat.
+
+That test eliminates some tempting overreach. Rust is not a future Iceberg
+proposal. Turso is not a future Iceberg proposal. QueryGraph's semantic graph is
+not a future Iceberg proposal. TypeSec's complete policy model is not a future
+Iceberg proposal. Those are valuable system choices, but they are not portable
+table-format or REST-catalog obligations.
+
+The strongest proposal candidates are narrower:
+
+- idempotent commit replay, because clients need retry safety without duplicate
+  side effects;
+- pointer-history inspection, because operators need to explain which catalog
+  transaction advanced a metadata pointer;
+- redacted conflict proof, because failed commits should be debuggable without
+  leaking storage paths or credentials;
+- transactional catalog event streams, because graph and lineage consumers need
+  committed facts rather than best-effort handler callbacks;
+- lineage receipt binding, because OpenLineage and similar consumers need to
+  know which catalog state produced an event;
+- governed credential vending proof, because catalogs increasingly mediate
+  storage access for humans, services, and agents;
+- proof-carrying scan planning, because policy-restricted scans need a way to
+  prove the effective projection, predicate, purpose, and TTL;
+- view lifecycle proof, because views are catalog objects and QueryGraph-style
+  import needs to verify their version and deletion history.
+
+Each candidate should remain a profile. A profile can say, "if a catalog
+supports this proof, here is the interoperable shape." It should not say,
+"every Iceberg table must carry this governance log." That is the architectural
+line LakeCat has to defend. The Iceberg table remains the portable truth. The
+catalog profile explains how the control plane acted around that truth.
+
+### Why The Engine Boundary Matters To Standards
+
+The standards position depends on the Sail boundary. If LakeCat implements its
+own manifest parser, delete-file planner, field-id binder, partition evaluator,
+and v4 metadata-tree logic, then any proof it emits risks becoming
+LakeCat-specific table semantics. A future proposal based on that proof would
+be suspect because it would encode the behavior of a partial catalog engine.
+
+If Sail owns that work, the proof has a better foundation. LakeCat can say:
+TypeSec authorized this principal, these columns, this predicate, this purpose,
+and this TTL; Sail planned that effective request against the current Iceberg
+metadata; LakeCat committed this receipt, pointer state, audit row, and outbox
+event. The proof is then layered. Iceberg supplies the portable metadata model.
+Sail supplies reusable engine interpretation. TypeSec supplies policy meaning.
+LakeCat supplies transaction and replay evidence. QueryGraph supplies semantic
+application import.
+
+That layering is why Sail is not just an implementation convenience. It is what
+keeps LakeCat's extensions credible. A proof-carrying scan profile is useful
+only if the scan proof came from an engine path that understands the table. A
+governed credential profile is useful only if the alternative to raw credentials
+is a real engine-planned task set. A commit-history profile is useful only if
+commit validation follows the same Iceberg semantics that execution will
+respect. Sail gives LakeCat that shared Rust engine truth.
+
 ## The Current Catalog State
 
 The current lakehouse catalog market is converging on a simple fact: the catalog
