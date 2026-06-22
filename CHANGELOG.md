@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Extended governed fetch-scan-task proof so returned residual extensions and
+  durable audit/outbox replay carry requested and effective stats-field
+  evidence. Service admission now rejects missing, widened, or duplicate
+  fetched stats-field proof before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Added catalog config replay coverage for duplicate advertised endpoint
   entries, proving malformed config-read evidence fails before acknowledgement,
   graph projection, or OpenLineage projection.

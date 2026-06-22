@@ -5,6 +5,30 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Preserve fetched scan stats proof`.
+  Governed `table.scan-tasks-fetched` now carries requested and effective
+  stats-field proof in the returned residual extension and the durable
+  audit/outbox payload. Service replay rejects missing, widened, or duplicate
+  fetched stats-field evidence before acknowledgement, graph projection, or
+  OpenLineage projection. The book now calls out that fetched scan-task replay
+  keeps the same bounded metrics proof as scan planning, so QGLake can prove a
+  fetched task did not widen stats evidence after the original Sail-planned
+  work.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_scan_fetch_malformed_stats_field_evidence -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service scan_tasks_fetched_audit_payload_surfaces_policy_context -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service -- --test-threads=1` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover has no standalone page
+  number and the body starts with numbered Contents;
+  the versioned EPUB symlink resolves to `lakecat.epub`;
+  `scripts/check-release-readiness.sh --quick` passed.
 - Latest implementation slice:
   `Reject duplicate config endpoints`.
   Service outbox-drain coverage now proves `catalog.config-read` replay

@@ -2287,6 +2287,32 @@ fn validate_scan_tasks_fetched_event_evidence(
         "scan-tasks-fetched",
         &effective_projection,
     )?;
+    let requested_stats = validate_required_non_empty_string_array_field(
+        event,
+        payload,
+        "requested-stats-fields",
+        "scan-tasks-fetched",
+    )?;
+    let effective_stats = validate_required_non_empty_string_array_field(
+        event,
+        payload,
+        "effective-stats-fields",
+        "scan-tasks-fetched",
+    )?;
+    validate_effective_evidence_subset(
+        event,
+        "scan-tasks-fetched effective-stats-fields",
+        &effective_stats,
+        "requested-stats-fields",
+        &requested_stats,
+        true,
+    )?;
+    validate_effective_stats_matches_read_restriction(
+        event,
+        payload,
+        "scan-tasks-fetched",
+        &effective_stats,
+    )?;
     validate_required_read_restriction_policy_hashes(
         event,
         payload.get("read-restriction"),
@@ -6466,6 +6492,7 @@ fn table_scan_tasks_fetched_audit_payload(
     table: &TableRecord,
     receipt: &AuthorizationReceipt,
     fetched: &lakecat_sail::FetchScanTasksPlan,
+    fetch_extensions: &Value,
 ) -> Value {
     let mut audit_payload = json!({
         "event-type": "table.scan-tasks-fetched",
@@ -6483,6 +6510,15 @@ fn table_scan_tasks_fetched_audit_payload(
     if let Some(restriction) = receipt.context.get("read-restriction") {
         audit_payload["read-restriction"] = restriction.clone();
         append_read_restriction_requirements(&mut audit_payload, restriction);
+    }
+    for field in [
+        "requested-stats-fields",
+        "effective-stats-fields",
+        "stats-fields",
+    ] {
+        if let Some(value) = fetch_extensions.get(field) {
+            audit_payload[field] = value.clone();
+        }
     }
     audit_payload
 }
@@ -7958,8 +7994,14 @@ async fn fetch_scan_tasks_in_warehouse(
     let table = state.store.load_table(capability.table()).await?;
     let fetched = fetch_scan_tasks_with_capability(&state, &capability, &table, request).await?;
     let ident = capability.table().clone();
-    let audit_payload =
-        table_scan_tasks_fetched_audit_payload(&ident, &table, capability.receipt(), &fetched);
+    let fetch_extensions = fetch_scan_tasks_extensions(&capability)?;
+    let audit_payload = table_scan_tasks_fetched_audit_payload(
+        &ident,
+        &table,
+        capability.receipt(),
+        &fetched,
+        &fetch_extensions,
+    );
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -7980,7 +8022,7 @@ async fn fetch_scan_tasks_in_warehouse(
         lakecat_plan_tasks: fetched.plan_tasks,
         residual_filter: merge_fetch_scan_tasks_extensions(
             fetched.residual_filter,
-            fetch_scan_tasks_extensions(&capability)?,
+            fetch_extensions,
         ),
     }))
 }
@@ -8052,11 +8094,15 @@ fn fetch_scan_tasks_extensions(
     let restriction = capability.read_restriction()?;
     let required_projection = restriction.effective_projection(&[])?;
     let required_filters = restriction.mandatory_filters();
+    let stats_fields = restriction.effective_stats_fields(&[]);
     Ok(json!({
         "read-restriction": restriction,
         "required-projection": required_projection.clone(),
         "effective-projection": required_projection,
         "required-filters": required_filters,
+        "requested-stats-fields": stats_fields.clone(),
+        "effective-stats-fields": stats_fields.clone(),
+        "stats-fields": stats_fields,
     }))
 }
 
@@ -12543,6 +12589,8 @@ mod tests {
                             },
                             "required-projection": ["event_id"],
                             "effective-projection": ["event_id"],
+                            "requested-stats-fields": ["event_id"],
+                            "effective-stats-fields": ["event_id"],
                             "required-filters": [{
                                 "type": "not-eq",
                                 "term": "severity",
@@ -13554,6 +13602,8 @@ mod tests {
                         },
                         "required-projection": ["event_id"],
                         "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
                         "required-filters": [{
                             "type": "not-eq",
                             "term": "severity",
@@ -13812,6 +13862,8 @@ mod tests {
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -14018,6 +14070,8 @@ mod tests {
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -14179,6 +14233,8 @@ mod tests {
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -14323,6 +14379,8 @@ mod tests {
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -14735,6 +14793,8 @@ mod tests {
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -14866,6 +14926,8 @@ mod tests {
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -14998,6 +15060,8 @@ mod tests {
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -15130,6 +15194,8 @@ mod tests {
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -25908,6 +25974,8 @@ mod tests {
                         "read-restriction": read_restriction,
                         "required-projection": ["event_id"],
                         "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
                         "required-filters": [],
                         "file-scan-task-count": 1,
                         "delete-file-count": 0,
@@ -26022,6 +26090,8 @@ mod tests {
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
                     "required-filters": [],
                     "file-scan-task-count": 1,
                     "delete-file-count": 0,
@@ -26148,6 +26218,8 @@ mod tests {
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
                     "required-filters": ["always-true"],
                     "file-scan-task-count": 1,
                     "delete-file-count": 0,
@@ -26278,6 +26350,8 @@ mod tests {
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
                     "required-filters": [{
                         "type": " ",
                         "term": "severity",
@@ -26411,6 +26485,8 @@ mod tests {
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
                     "required-filters": [{
                         "type": "eq",
                         "term": "severity"
@@ -26961,6 +27037,8 @@ mod tests {
                         "read-restriction": read_restriction,
                         "required-projection": ["event_id"],
                         "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
                         "required-filters": [],
                         "file-scan-task-count": 1,
                         "delete-file-count": 0,
@@ -27046,6 +27124,8 @@ mod tests {
                         "read-restriction": read_restriction,
                         "required-projection": ["event_id"],
                         "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
                         "required-filters": [],
                         "file-scan-task-count": 1,
                         "delete-file-count": 0,
@@ -27305,6 +27385,8 @@ mod tests {
                         "read-restriction": read_restriction,
                         "required-projection": ["event_id", "event_id"],
                         "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
                         "required-filters": [],
                         "file-scan-task-count": 1,
                         "delete-file-count": 0,
@@ -27445,6 +27527,126 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_scan_fetch_malformed_stats_field_evidence() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let ident = table_ident("local", "default", "events").unwrap();
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "not-eq",
+                "term": "severity",
+                "value": "debug"
+            },
+            "purpose": "qglake-agent-demo",
+            "max-credential-ttl-seconds": 300,
+            "policy-hashes": [
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap()
+            ]
+        });
+        let required_filter = json!({
+            "type": "not-eq",
+            "term": "severity",
+            "value": "debug"
+        });
+        let base_payload = || {
+            json!({
+                "table": ident,
+                "authorization-receipt": {
+                    "principal": principal,
+                    "action": "table-plan-scan",
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": "sha256:policy",
+                    "context": {
+                        "read-restriction": read_restriction
+                    },
+                    "checked_at": chrono::Utc::now(),
+                },
+                "read-restriction": read_restriction,
+                "required-projection": ["event_id"],
+                "effective-projection": ["event_id"],
+                "requested-stats-fields": ["event_id"],
+                "effective-stats-fields": ["event_id"],
+                "required-filters": [required_filter],
+                "file-scan-task-count": 1,
+                "delete-file-count": 0,
+                "child-plan-task-count": 0
+            })
+        };
+        let mut missing_requested = base_payload();
+        missing_requested
+            .as_object_mut()
+            .unwrap()
+            .remove("requested-stats-fields");
+        let mut duplicate_effective = base_payload();
+        duplicate_effective["effective-stats-fields"] = json!(["event_id", "event_id"]);
+
+        for (event_id, payload, expected_message) in [
+            (
+                "evt-scan-fetch-missing-requested-stats-fields",
+                missing_requested,
+                "scan-tasks-fetched evidence must contain requested-stats-fields",
+            ),
+            (
+                "evt-scan-fetch-duplicate-effective-stats-fields",
+                duplicate_effective,
+                "scan-tasks-fetched effective-stats-fields must be duplicate-free",
+            ),
+        ] {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.scan-tasks-fetched".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "table.scan-tasks-fetched",
+                        "table": ident,
+                        "payload": payload
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed fetched stats-field evidence should fail closed");
+
+            let message = err.to_string();
+            assert!(message.contains(
+                "outbox event table.scan-tasks-fetched (lakecat.lineage-and-graph) has invalid"
+            ));
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "malformed fetched stats-field replay must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "malformed fetched stats-field replay must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "malformed fetched stats-field replay must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_scan_fetch_termless_row_predicate() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let ident = table_ident("local", "default", "events").unwrap();
@@ -27484,6 +27686,8 @@ mod tests {
                         "read-restriction": read_restriction,
                         "required-projection": ["event_id"],
                         "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
                         "required-filters": [{
                             "type": "not-eq",
                             "value": "debug"
@@ -27574,6 +27778,8 @@ mod tests {
                         "read-restriction": read_restriction,
                         "required-projection": ["event_id"],
                         "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
                         "required-filters": [],
                         "file-scan-task-count": 1,
                         "delete-file-count": 0,
@@ -27663,6 +27869,8 @@ mod tests {
                         "read-restriction": read_restriction,
                         "required-projection": ["event_id"],
                         "effective-projection": ["event_id"],
+                        "requested-stats-fields": ["event_id"],
+                        "effective-stats-fields": ["event_id"],
                         "required-filters": [{
                             "type": "eq",
                             "term": "severity",
@@ -27788,6 +27996,8 @@ mod tests {
                     "read-restriction": read_restriction,
                     "required-projection": ["event_id"],
                     "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
                     "required-filters": [{
                         "type": "not-eq",
                         "term": "severity",
@@ -39762,7 +39972,18 @@ mod tests {
             residual_filter: None,
         };
 
-        let payload = table_scan_tasks_fetched_audit_payload(&ident, &table, &receipt, &fetched);
+        let fetch_extensions = serde_json::json!({
+            "requested-stats-fields": ["event_id"],
+            "effective-stats-fields": ["event_id"],
+            "stats-fields": ["event_id"],
+        });
+        let payload = table_scan_tasks_fetched_audit_payload(
+            &ident,
+            &table,
+            &receipt,
+            &fetched,
+            &fetch_extensions,
+        );
         assert_eq!(
             payload["storage-location"],
             serde_json::json!("file:///tmp/events")
@@ -39795,6 +40016,15 @@ mod tests {
                 "value": "evt-1"
             })
         );
+        assert_eq!(
+            payload["requested-stats-fields"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(
+            payload["effective-stats-fields"],
+            serde_json::json!(["event_id"])
+        );
+        assert_eq!(payload["stats-fields"], serde_json::json!(["event_id"]));
         assert_eq!(payload["file-scan-task-count"], serde_json::json!(1));
         assert_eq!(payload["delete-file-count"], serde_json::json!(1));
         assert_eq!(payload["child-plan-task-count"], serde_json::json!(1));

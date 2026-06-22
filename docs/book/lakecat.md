@@ -7876,6 +7876,13 @@ and schema evolution. A predicate is only useful if the engine knows how it
 interacts with partition transforms, manifest metrics, delete files, and
 residual filtering. LakeCat should not prove a catalog-local approximation of
 those facts. It should persist proof that Sail planned the actual table work.
+The same rule now carries through fetch-scan-tasks replay: the returned
+residual extension and durable `table.scan-tasks-fetched` audit/outbox payload
+preserve requested stats fields, effective stats fields, and the compact
+`stats-fields` alias. That is LakeCat/QueryGraph proof, not standard Iceberg
+parlance, but it is built from the engine-owned restriction over the real
+Iceberg table so QGLake can prove a fetched task did not widen metrics evidence
+after the original Sail-planned work.
 
 This is a LakeCat/TypeSec governance extension today. It could become an
 Iceberg-adjacent optional profile if the profile stays small: proof-carrying
