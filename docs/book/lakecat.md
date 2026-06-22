@@ -6935,13 +6935,14 @@ index the verified drain boundary without reparsing the raw drain artifact.
 Before that boundary is accepted, the verifier reconciles the drain artifact's
 top-level delivered count, `eventTypes` list, graph event count, and lineage
 event count against the replay summary array. If
-a saved `lakecatHandoffVerifyOutput` artifact is present, LakeCat binds those
-saved drain identity semantics back to the compact `requestIdentityProof`, so a
-rehash cannot disguise drift in principal, authorization receipt, source/state,
-or TypeDID hash-slot evidence. The same self-verification pass compares the
-saved verifier output's delivered count, `eventTypes`, graph event count, and
-lineage event count with the archived lineage-drain artifact, so a rehashed
-verifier output cannot rewrite the drain manifest while keeping the artifact
+a saved `lakecatHandoffVerifyOutput` artifact is named, LakeCat first requires
+its full `lakecatHandoffVerifyOutputHash`, then binds those saved drain
+identity semantics back to the compact `requestIdentityProof`, so a rehash
+cannot disguise drift in principal, authorization receipt, source/state, or
+TypeDID hash-slot evidence. The same self-verification pass compares the saved
+verifier output's delivered count, `eventTypes`, graph event count, and lineage
+event count with the archived lineage-drain artifact, so a rehashed verifier
+output cannot rewrite the drain manifest while keeping the artifact
 hash set intact. It compares captured
 `replay-evidence.scan` with `governedScanProof`, requiring positive plan task,
 scan-plan graph event, file task, delete file, and child plan task counts plus
@@ -7796,9 +7797,11 @@ captures with the hashed `capturedOutputs` paths they duplicate. It also hashes
 the service log through a full-digest `serviceLogHash`, so archived operational
 logs cannot drift behind a stable path or a short placeholder hash. The final
 local summary also binds the first LakeCat handoff-verifier capture with a
-full-digest `lakecatHandoffVerifyOutputHash`. Because that output can only
-exist after a successful verifier run, the harness performs a second sidecar
-self-check: first it writes
+required full-digest `lakecatHandoffVerifyOutputHash`. A saved handoff that
+names `lakecat-handoff-verify.json` but omits that hash, sets it to `null`, or
+uses a short placeholder is rejected. Because that output can only exist after
+a successful verifier run, the harness performs a second sidecar self-check:
+first it writes
 `target/qglake-handoff/lakecat-handoff-verify.json`, then it records the file's
 hash in the summary, then it verifies the summary again without overwriting the
 declared artifact. The verifier checks that saved JSON is a

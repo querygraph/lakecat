@@ -643,7 +643,10 @@ actual replay summary array before the handoff can be treated as verified.
 Saved `lakecatHandoffVerifyOutput` artifacts must stay bound to the archived
 lineage-drain artifact as well, including delivered count, event type manifest,
 graph event count, lineage event count, and the drain-read authorization action
-from the compact request-identity proof. Compact request-identity and
+from the compact request-identity proof. A saved handoff must carry a full
+`lakecatHandoffVerifyOutputHash`; missing, null, or short self-verifier hashes
+are rejected instead of treating the self-verifier sidecar as optional once the
+artifact path is present. Compact request-identity and
 QueryGraph-bootstrap proofs must also preserve their expected authorization
 actions directly: `requestIdentityProof` is a `lineage-read` proof for the
 drain read, while `queryGraphBootstrapProof` is a `graph-read` proof for the

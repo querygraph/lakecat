@@ -613,17 +613,16 @@ fn verify_qglake_handoff_verify_output_artifact(
     lineage_drain_semantics: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<Value> {
     let Some(expected_sha256) = artifacts.get("lakecatHandoffVerifyOutputHash") else {
-        return Ok(Value::Null);
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "handoff summary artifacts.lakecatHandoffVerifyOutputHash is required".to_string(),
+        ));
     };
-    if expected_sha256.is_null() {
-        return Ok(Value::Null);
-    }
     let Some(expected_sha256) = expected_sha256
         .as_str()
         .filter(|value| is_full_sha256_hash(value))
     else {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "handoff summary artifacts.lakecatHandoffVerifyOutputHash must be null or a full SHA-256 hash"
+            "handoff summary artifacts.lakecatHandoffVerifyOutputHash must be a full SHA-256 hash"
                 .to_string(),
         ));
     };
@@ -15578,7 +15577,8 @@ mod tests {
     fn qglake_handoff_artifact_verifier_accepts_matching_files() {
         let temp = qglake_temp_dir("handoff-artifacts-ok");
         let summary_path = temp.join("handoff-summary.json");
-        let summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
         fs::write(
             &summary_path,
             serde_json::to_vec_pretty(&summary).expect("summary JSON"),
@@ -15626,6 +15626,7 @@ mod tests {
         let summary_path = temp.join("handoff-summary.json");
         let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
         summary["artifacts"]["serviceLogHash"] = json!("sha256:service-log");
+        qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
 
         let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
             .expect_err("artifact verifier should reject short service-log hashes");
@@ -15653,6 +15654,39 @@ mod tests {
             verification["pathAliases"]["lakecatHandoffVerifyOutputHash"],
             summary["artifacts"]["lakecatHandoffVerifyOutputHash"]
         );
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_requires_handoff_verify_output_hash() {
+        let temp = qglake_temp_dir("handoff-artifacts-missing-self-verify-hash");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        summary["artifacts"]
+            .as_object_mut()
+            .expect("artifacts object")
+            .remove("lakecatHandoffVerifyOutputHash");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should require handoff verifier hashes");
+
+        assert!(err.to_string().contains("lakecatHandoffVerifyOutputHash"));
+        assert!(err.to_string().contains("required"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_null_handoff_verify_output_hash() {
+        let temp = qglake_temp_dir("handoff-artifacts-null-self-verify-hash");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = Value::Null;
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject null handoff verifier hashes");
+
+        assert!(err.to_string().contains("lakecatHandoffVerifyOutputHash"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
@@ -16188,7 +16222,8 @@ mod tests {
     fn qglake_handoff_artifact_verifier_rejects_service_log_hash_drift() {
         let temp = qglake_temp_dir("handoff-artifacts-service-log-drift");
         let summary_path = temp.join("handoff-summary.json");
-        let summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
         fs::write(temp.join("lakecat-service.log"), b"tampered service log")
             .expect("tamper service log");
         fs::write(

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required saved QGLake self-verification output to be hash-bound. Handoff
+  artifact verification now rejects missing, null, or short
+  `lakecatHandoffVerifyOutputHash` values instead of treating the
+  self-verifier artifact as optional once a path is present.
 - Bound raw lineage-drain catalog config proof into saved QGLake
   self-verification output. `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics`
   now carries `catalogConfigProof` from the raw drain artifact, and artifact

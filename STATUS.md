@@ -6,6 +6,35 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Require QGLake self-verifier hash`.
+  QGLake handoff artifact verification now requires a full
+  `lakecatHandoffVerifyOutputHash` whenever the saved handoff names
+  `lakecat-handoff-verify.json`. Missing, null, or short self-verifier hashes
+  are rejected instead of treating the sidecar as optional after a path is
+  present. This keeps the saved self-verification output hash-bound before its
+  artifact, captured-output, service-log, lineage-drain, QueryGraph, and
+  LakeCat replay semantics can be trusted.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_requires_handoff_verify_output_hash -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_null_handoff_verify_output_hash -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_accepts_handoff_verify_output_hash -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_accepts_matching_files -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_short_service_log_hash -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_service_log_hash_drift -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Bind self-verifier lineage config proof`.
   Saved QGLake handoff verifier output now carries the raw lineage-drain
   `catalog.config-read` proof under
