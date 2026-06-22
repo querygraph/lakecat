@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added a front-loaded book chapter on catalog concepts, standards, and engine
+  ownership. It now directly classifies the Rust service spine, Turso store,
+  Iceberg REST paths, commit CAS, idempotency/pointer-log/audit/outbox replay
+  hardening, governed scan and credential receipts, QueryGraph/QGLake proof
+  surfaces, and typed Iceberg v4 posture as standard Iceberg vocabulary,
+  LakeCat implementation, TypeSec/QueryGraph extension, or possible future
+  optional profile material. The chapter also makes the detailed case for
+  pushing table-format interpretation, planning, metadata-as-data, commit
+  validation, and v4 behavior into Sail.
 - Aligned the README with the latest QGLake handoff contract. It now points
   readers to the LakeCat book for expanded workflow guidance and documents that
   saved handoff artifact manifests are both bundle-local and schema-closed

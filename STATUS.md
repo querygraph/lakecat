@@ -5,6 +5,20 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Clarify catalog standards and Sail ownership`.
+  The book now has a front-loaded chapter on catalog concepts, standards, and
+  engine ownership. It directly classifies the Rust service/catalog spine,
+  Turso-backed local store, Iceberg REST namespace/table paths, commit CAS,
+  idempotency/pointer-log/audit/outbox replay hardening, governed scan and
+  credential receipt evidence, QueryGraph/QGLake/OpenLineage/bootstrap/
+  management/view/commit proof surfaces, and typed Iceberg v4 posture as
+  standard Iceberg vocabulary, LakeCat implementation, TypeSec/QueryGraph
+  extension, or possible future optional profile material. It also makes the
+  detailed argument that LakeCat should push table-format interpretation,
+  scan planning, metadata-as-data, commit validation, and v4 behavior into
+  Sail so catalog proof binds engine-shaped facts rather than catalog-local
+  approximations.
 - Latest docs slice:
   `Align README with QGLake artifact manifest contract`.
   The README now links the LakeCat book as the expanded workflow guide and
