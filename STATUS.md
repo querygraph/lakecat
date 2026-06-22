@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover blocked credential evidence with credentials`.
+  Service replay regression coverage now proves `credentials.vend-attempted`
+  rejects blocked raw-credential replay evidence that still carries credential
+  response entries before acknowledgement, graph projection, or OpenLineage
+  projection. This pins the zero-credentials half of the blocked
+  raw-credential replay rule.
+- Local verification for this blocked credential evidence slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_blocked_credential_evidence_with_credentials -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib credential_block_reason -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover blocked raw credential exception reason`.
   Service replay regression coverage now proves `credentials.vend-attempted`
   rejects blocked raw-credential exception evidence whose `allowed=false` proof
