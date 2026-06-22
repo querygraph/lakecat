@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened Turso storage-profile reads so decoded `profile_json` must match the
+  row/query warehouse and profile id before LakeCat lists profiles or matches a
+  table to a credential root. This prevents governed credential and QGLake
+  proof paths from consuming storage-profile evidence spliced from another
+  durable profile row.
 - Hardened Turso policy-binding reads so decoded `binding_json` must match the
   row/query warehouse and policy id before LakeCat lists policies or matches
   policies for a table. This prevents QGLake and governed scan paths from

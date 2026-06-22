@@ -671,6 +671,14 @@ policy id and still feed governed scans or QGLake proof.
 That is not standard Iceberg. It is LakeCat/TypeSec/QueryGraph governance
 evidence around a standard catalog that happens to serve Iceberg tables.
 
+Storage-profile roots now follow the same row/content proof rule. Iceberg
+clients still see ordinary table metadata locations and catalog credentials,
+but LakeCat's Turso store refuses to list a storage profile or match a table to
+a credential root unless the decoded `profile_json` agrees with the selected
+warehouse row and profile id. A durable row for one credential root therefore
+cannot carry the location prefix, issuance mode, provider, or secret-reference
+posture from another profile and still become QGLake proof.
+
 ### Four Workflows, One Catalog Boundary
 
 The cleanest way to see the boundary is to follow a request through the system.

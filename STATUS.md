@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Validate Turso storage profile row scope`.
+  Turso storage-profile reads now require decoded `profile_json` to match the
+  row/query warehouse and profile id before returning profile lists or matching
+  a table to a credential root. Spliced durable profile JSON now fails before
+  governed credential paths, QGLake proof, or storage-profile matching can
+  consume it.
+- Local verification for this Turso storage-profile row-scope slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_storage_profile_json_scope_drift -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Previous completed implementation/documentation slice:
   `Validate Turso policy binding row scope`.
   Turso policy-binding reads now require decoded `binding_json` to match the
   row/query warehouse and policy id before returning policy lists or matching

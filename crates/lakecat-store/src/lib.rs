@@ -2375,6 +2375,20 @@ fn validate_policy_binding_scope(
     Ok(())
 }
 
+fn validate_storage_profile_scope(
+    profile: &StorageProfile,
+    warehouse: &WarehouseName,
+    profile_id: &str,
+) -> LakeCatResult<()> {
+    profile.validate()?;
+    if profile.warehouse != *warehouse || profile.profile_id != profile_id {
+        return Err(LakeCatError::Internal(
+            "storage profile row scope does not match profile identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn view_key(view: &ViewRecord) -> String {
     view_key_parts(&view.warehouse, &view.namespace, &view.name)
 }
@@ -6009,7 +6023,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select profile_json from storage_profiles
+                    "select profile_json, profile_id from storage_profiles
                      where warehouse = ?1
                      order by profile_id",
                     (warehouse.as_str(),),
@@ -6019,7 +6033,7 @@ pub mod turso_store {
             let mut profiles = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
                 let profile: StorageProfile = decode_json(row_string(&row, 0)?)?;
-                profile.validate()?;
+                crate::validate_storage_profile_scope(&profile, warehouse, &row_string(&row, 1)?)?;
                 profiles.push(profile);
             }
             Ok(profiles)
@@ -8752,6 +8766,60 @@ pub mod turso_store {
             let message = err.to_string();
             assert!(message.contains("storage-profile-id-hash=sha256:"));
             assert!(!message.contains("token=secret"));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_storage_profile_json_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let table = TableRecord::new(
+                TableIdent::new(
+                    warehouse.clone(),
+                    "default".parse::<Namespace>().unwrap(),
+                    TableName::new("events").unwrap(),
+                ),
+                "s3://lakecat-demo/events/table".to_string(),
+                None,
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            );
+            let mut profile = StorageProfile::new(
+                "s3-events",
+                warehouse.clone(),
+                "s3://lakecat-demo/events",
+                StorageProvider::S3,
+                CredentialIssuanceMode::ShortLivedSecretRef,
+                Some("typesec://lakecat/local/s3-events".to_string()),
+                BTreeMap::new(),
+            )
+            .unwrap();
+            store.upsert_storage_profile(profile.clone()).await.unwrap();
+            profile.profile_id = "other-profile".to_string();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update storage_profiles set profile_json = ?2 where profile_key = ?1",
+                (
+                    storage_profile_key(&warehouse, "s3-events"),
+                    encode_json(&profile).unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store.list_storage_profiles(&warehouse).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("storage profile row scope does not match")
+            ));
+
+            let err = store.storage_profile_for_table(&table).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("storage profile row scope does not match")
+            ));
         }
 
         #[tokio::test]

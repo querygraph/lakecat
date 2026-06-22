@@ -244,7 +244,9 @@ The current working plan is:
    follow the same hash-only rule for storage roots, secret references,
    public-config keys, and production resolver parse failures. Turso
    policy-binding reads must bind decoded JSON back to the row/query warehouse
-   and policy id before matching policies for tables. Guarded view mutations
+   and policy id before matching policies for tables. Turso storage-profile
+   reads must likewise bind decoded JSON back to the row/query warehouse and
+   profile id before credential-root matching. Guarded view mutations
    must reject invalid expected-version values before changing active view state
    or appending view-version receipts, and memory/Turso mutation paths must
    validate the existing receipt chain before appending a new view receipt so
