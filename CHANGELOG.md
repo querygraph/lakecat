@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Extended standard catalog replay coverage for denied or incomplete
+  authorization receipt decisions. `namespace.listed`, `namespace.created`,
+  `namespace.loaded`, and `namespace.dropped` now have direct coverage in the
+  standard catalog allowed-decision regression before acknowledgement, graph
+  projection, OpenLineage projection, QGLake proof, or QueryGraph import can
+  inherit unauthorized namespace evidence.
 - Added QueryGraph bootstrap replay coverage for denied or incomplete
   authorization receipt decisions. `querygraph.bootstrap` outbox admission now
   has a direct regression proving a missing or false `allowed` decision fails

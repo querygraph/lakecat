@@ -29099,47 +29099,97 @@ mod tests {
     #[tokio::test]
     async fn outbox_drain_rejects_missing_or_denied_standard_catalog_receipt_allowed_decision() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
-        let base_receipt = json!({
-            "principal": principal,
-            "action": "catalog-config",
-            "allowed": true,
-            "engine": "test",
-            "policy_hash": null,
-            "checked_at": chrono::Utc::now(),
-        });
-        let mut missing_allowed_receipt = base_receipt.clone();
-        missing_allowed_receipt
-            .as_object_mut()
-            .unwrap()
-            .remove("allowed");
-        let mut denied_receipt = base_receipt;
-        denied_receipt["allowed"] = json!(false);
+        let receipt = |action: &str| {
+            json!({
+                "principal": &principal,
+                "action": action,
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            })
+        };
+        let missing_allowed = |mut receipt: Value| {
+            receipt.as_object_mut().unwrap().remove("allowed");
+            receipt
+        };
+        let denied = |mut receipt: Value| {
+            receipt["allowed"] = json!(false);
+            receipt
+        };
 
-        for (event_id, receipt, expected_message) in [
+        for (event_type, event_id, payload, expected_message) in [
             (
+                "catalog.config-read",
                 "evt-config-missing-receipt-allowed",
-                missing_allowed_receipt,
+                json!({
+                    "authorization-receipt": missing_allowed(receipt("catalog-config")),
+                    "warehouse": "local",
+                    "defaults": catalog_config_defaults_json(),
+                }),
                 "catalog config-read evidence must contain authorization receipt allowed decision",
             ),
             (
+                "catalog.config-read",
                 "evt-config-denied-receipt",
-                denied_receipt,
+                json!({
+                    "authorization-receipt": denied(receipt("catalog-config")),
+                    "warehouse": "local",
+                    "defaults": catalog_config_defaults_json(),
+                }),
                 "catalog config-read authorization receipt must allow replay projection",
+            ),
+            (
+                "namespace.listed",
+                "evt-namespace-list-missing-receipt-allowed",
+                json!({
+                    "authorization-receipt": missing_allowed(receipt("namespace-list")),
+                    "warehouse": "local",
+                    "namespace-count": 1,
+                    "namespace-paths": ["default"],
+                }),
+                "namespace list evidence must contain authorization receipt allowed decision",
+            ),
+            (
+                "namespace.created",
+                "evt-namespace-created-denied-receipt",
+                json!({
+                    "authorization-receipt": denied(receipt("namespace-create")),
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                }),
+                "namespace lifecycle authorization receipt must allow replay projection",
+            ),
+            (
+                "namespace.loaded",
+                "evt-namespace-loaded-missing-receipt-allowed",
+                json!({
+                    "authorization-receipt": missing_allowed(receipt("namespace-load")),
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                }),
+                "namespace lifecycle evidence must contain authorization receipt allowed decision",
+            ),
+            (
+                "namespace.dropped",
+                "evt-namespace-dropped-denied-receipt",
+                json!({
+                    "authorization-receipt": denied(receipt("namespace-drop")),
+                    "warehouse": "local",
+                    "namespace": ["archived"],
+                }),
+                "namespace lifecycle authorization receipt must allow replay projection",
             ),
         ] {
             let store = Arc::new(RecordingOutboxStore {
                 events: Mutex::new(vec![OutboxEvent {
                     event_id: event_id.to_string(),
                     sink: "lakecat.lineage-and-graph".to_string(),
-                    event_type: "catalog.config-read".to_string(),
+                    event_type: event_type.to_string(),
                     payload: json!({
                         "audit-event-id": format!("audit-{event_id}"),
-                        "event-type": "catalog.config-read",
-                        "payload": {
-                            "authorization-receipt": receipt,
-                            "warehouse": "local",
-                            "defaults": catalog_config_defaults_json(),
-                        }
+                        "event-type": event_type,
+                        "payload": payload
                     }),
                     created_at: chrono::Utc::now(),
                     delivered_at: None,
@@ -29161,10 +29211,10 @@ mod tests {
                 .expect_err("missing or denied receipt decision should fail before delivery");
 
             let message = err.to_string();
-            assert!(message.contains("catalog.config-read"));
+            assert!(message.contains(event_type), "{message}");
             assert!(
                 message.contains(expected_message),
-                "catalog config-read error should describe receipt decision failure: {message}"
+                "{event_type} error should describe receipt decision failure: {message}"
             );
             assert!(message.contains("event-id-hash=sha256:"));
             assert!(!message.contains(event_id));

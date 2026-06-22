@@ -6,6 +6,15 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Cover namespace allowed decisions`.
+  Service replay admission already required `namespace.listed`,
+  `namespace.created`, `namespace.loaded`, and `namespace.dropped`
+  authorization receipts to carry an affirmative allow decision; the standard
+  catalog allowed-decision regression now pins those namespace read/lifecycle
+  surfaces directly before acknowledgement, graph projection, OpenLineage
+  projection, QGLake proof, or QueryGraph import can inherit unauthorized
+  namespace evidence.
+- Latest implementation/testing slice:
   `Cover QueryGraph bootstrap allowed decisions`.
   Service replay admission already required `querygraph.bootstrap`
   authorization receipts to carry an affirmative allow decision; the new
