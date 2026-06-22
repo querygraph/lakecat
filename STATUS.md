@@ -5,6 +5,14 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Require view lifecycle version evidence`.
+  Service replay admission now rejects `view.upserted`, `view.loaded`, and
+  `view.dropped` evidence whose view name is invalid, whose `view-version` is
+  missing or non-positive, or whose guarded `expected-view-version` is
+  non-positive before acknowledgement, graph projection, or OpenLineage
+  projection. This binds view lifecycle replay to the same durable
+  store-assigned version evidence that QueryGraph receipt chains depend on.
 - Latest documentation/book slice:
   `Clarify catalog concepts and Sail engine boundary`.
   The book now adds a dedicated release-facing chapter that delineates standard

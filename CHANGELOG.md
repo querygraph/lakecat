@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required `view.upserted`, `view.loaded`, and `view.dropped` replay evidence
+  to carry a valid view name and positive `view-version`, and required guarded
+  lifecycle replay to reject non-positive `expected-view-version` values before
+  acknowledgement, graph projection, or OpenLineage projection.
 - Expanded the LakeCat book with a detailed catalog-concept chapter that
   separates standard Iceberg parlance from LakeCat implementation,
   LakeCat/QueryGraph optional surfaces, TypeSec governance receipts, and

@@ -3225,7 +3225,10 @@ it removes the view or appends a tombstone receipt. Accepted guarded mutations
 also carry their `expected-view-version` into the audit/outbox payload. During
 lineage drain, LakeCat turns that into compact replay evidence, so QueryGraph
 can distinguish "the replacement happened at version 2" from "the replacement
-was guarded by version 1 and then produced version 2."
+was guarded by version 1 and then produced version 2." Replay admission rejects
+view lifecycle evidence that omits the positive store-assigned `view-version`
+or carries a non-positive guarded `expected-view-version`, so graph and
+OpenLineage sinks never observe a versionless view lifecycle fact.
 
 LakeCat also writes a compact view-version receipt in the durable store. The
 receipt records the stable view id, assigned version, previous version,

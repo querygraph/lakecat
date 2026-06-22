@@ -667,8 +667,10 @@ Create, load, and restore replay must also carry the unsigned table version
 that current producers emit; delete replay carries the same pointer-generation
 evidence through required `soft-delete.version`.
 
-View mutation guards must remain positive, store-assigned version checks so
-QueryGraph receipt chains cannot be extended by invalid guarded requests.
+View lifecycle replay must carry valid view names and positive store-assigned
+`view-version` values before projection, and guarded view lifecycle replay must
+reject non-positive `expected-view-version` values, so QueryGraph receipt chains
+cannot be extended by invalid or versionless guarded requests.
 
 ### P6 Reproducibility And V4
 

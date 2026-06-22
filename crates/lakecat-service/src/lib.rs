@@ -2876,15 +2876,38 @@ fn validate_view_lifecycle_event_evidence(
         ));
     };
     validate_namespace_value(event, namespace, "view lifecycle")?;
-    if view
+    let Some(view_name) = view
         .get("name")
         .and_then(Value::as_str)
         .filter(|name| !name.is_empty())
-        .is_none()
-    {
+    else {
         return Err(outbox_evidence_error(
             event,
             "view lifecycle evidence must contain view name",
+        ));
+    };
+    TableName::new(view_name).map_err(|_| {
+        outbox_evidence_error(event, "view lifecycle evidence has invalid view name")
+    })?;
+    let Some(view_version) = view.get("view-version").and_then(Value::as_u64) else {
+        return Err(outbox_evidence_error(
+            event,
+            "view lifecycle evidence must contain positive view-version",
+        ));
+    };
+    if view_version == 0 {
+        return Err(outbox_evidence_error(
+            event,
+            "view lifecycle evidence must contain positive view-version",
+        ));
+    }
+    if let Some(expected) = payload.get("expected-view-version")
+        && !expected.is_null()
+        && expected.as_u64().filter(|version| *version > 0).is_none()
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "view lifecycle expected-view-version must be positive when present",
         ));
     }
     validate_authorization_receipt_principal(event, payload, "view lifecycle")?;
@@ -19779,6 +19802,154 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_malformed_view_lifecycle_version_evidence() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            (
+                "view.upserted",
+                json!({
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "active_customers",
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "view-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    }
+                }),
+                "view lifecycle evidence must contain positive view-version",
+            ),
+            (
+                "view.loaded",
+                json!({
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "active_customers",
+                        "view-version": 0,
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "view-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    }
+                }),
+                "view lifecycle evidence must contain positive view-version",
+            ),
+            (
+                "view.dropped",
+                json!({
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "active_customers",
+                        "view-version": 1,
+                    },
+                    "expected-view-version": 0,
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "view-drop",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    }
+                }),
+                "view lifecycle expected-view-version must be positive when present",
+            ),
+            (
+                "view.upserted",
+                json!({
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "bad name",
+                        "view-version": 1,
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "view-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    }
+                }),
+                "view lifecycle evidence has invalid view name",
+            ),
+        ];
+
+        for (event_type, payload, expected_message) in cases {
+            let event_id = format!("evt-secret-{event_type}-version-token");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-malformed-{event_type}-version"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed view lifecycle version evidence should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(
+                message.contains(expected_message),
+                "{event_type} error should describe malformed version evidence: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_missing_standard_catalog_receipt_principal() {
         let cases = vec![
             (
@@ -19889,6 +20060,7 @@ mod tests {
                         "warehouse": "local",
                         "namespace": ["default"],
                         "name": "active_customers",
+                        "view-version": 1,
                     }
                 }),
             ),
@@ -19907,6 +20079,7 @@ mod tests {
                         "warehouse": "local",
                         "namespace": ["default"],
                         "name": "active_customers",
+                        "view-version": 1,
                     }
                 }),
             ),
@@ -19925,6 +20098,7 @@ mod tests {
                         "warehouse": "local",
                         "namespace": ["default"],
                         "name": "active_customers",
+                        "view-version": 1,
                     }
                 }),
             ),
@@ -20111,6 +20285,7 @@ mod tests {
                         "warehouse": "local",
                         "namespace": ["default"],
                         "name": "active_customers",
+                        "view-version": 1,
                     }
                 }),
             ),
@@ -20130,6 +20305,7 @@ mod tests {
                         "warehouse": "local",
                         "namespace": ["default"],
                         "name": "active_customers",
+                        "view-version": 1,
                     }
                 }),
             ),
@@ -20149,6 +20325,7 @@ mod tests {
                         "warehouse": "local",
                         "namespace": ["default"],
                         "name": "active_customers",
+                        "view-version": 1,
                     }
                 }),
             ),
