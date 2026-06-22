@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bound generic audit authorization receipts back to the top-level audit
+  principal before memory or Turso stores persist audit rows or enqueue outbox
+  work. The regressions create payload-hash-valid audit events whose receipt
+  principal differs from the event principal and prove audit/outbox state stays
+  empty.
 - Required string-form table scopes in generic audit payloads to carry
   warehouse and namespace anchors before memory or Turso stores persist audit
   rows or enqueue outbox work. The regressions reject table-scoped audit

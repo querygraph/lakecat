@@ -1630,6 +1630,7 @@ impl CatalogAuditEvent {
                 "audit event request hash does not match payload".to_string(),
             ));
         }
+        validate_audit_payload_authorization_principal(&self.payload, &self.principal)?;
         if let Some(table) = &self.table {
             validate_audit_payload_table_scope(&self.payload, table)?;
         }
@@ -2664,6 +2665,31 @@ fn audit_outbox_payload(event_id: &str, event: &CatalogAuditEvent) -> Value {
         "table": &event.table,
         "payload": &event.payload,
     })
+}
+
+fn validate_audit_payload_authorization_principal(
+    payload: &Value,
+    principal: &Principal,
+) -> LakeCatResult<()> {
+    let Some(receipt_principal) = payload
+        .get("authorization-receipt")
+        .and_then(|receipt| receipt.get("principal"))
+    else {
+        return Ok(());
+    };
+    let receipt_principal = serde_json::from_value::<Principal>(receipt_principal.clone())
+        .map_err(|_| {
+            LakeCatError::InvalidArgument(
+                "audit event authorization receipt principal is malformed".to_string(),
+            )
+        })?;
+    if &receipt_principal != principal {
+        return Err(LakeCatError::InvalidArgument(
+            "audit event authorization receipt principal does not match event principal"
+                .to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn validate_audit_payload_table_scope(payload: &Value, table: &TableIdent) -> LakeCatResult<()> {
@@ -4572,6 +4598,43 @@ mod memory_tests {
             err,
             LakeCatError::InvalidArgument(message)
                 if message.contains("audit event payload missing warehouse scope for table")
+        ));
+        let state = store.state.read().await;
+        assert!(state.audit_events.is_empty());
+        assert!(state.outbox_events.is_empty());
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_audit_authorization_principal_drift() {
+        let store = MemoryCatalogStore::new();
+        let event_principal =
+            Principal::new("did:example:agent", lakecat_core::PrincipalKind::Agent).unwrap();
+        let receipt_principal =
+            Principal::new("human:operator", lakecat_core::PrincipalKind::Human).unwrap();
+        let event = CatalogAuditEvent::new(
+            "querygraph.bootstrap",
+            None,
+            event_principal,
+            serde_json::json!({
+                "event-type": "querygraph.bootstrap",
+                "authorization-receipt": {
+                    "engine": "typesec",
+                    "allowed": true,
+                    "principal": receipt_principal,
+                    "action": "querygraph.bootstrap"
+                },
+                "manifest-hash": "lakecat:test"
+            }),
+        )
+        .unwrap();
+
+        let err = store.record_audit_event(event).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains(
+                    "audit event authorization receipt principal does not match event principal"
+                )
         ));
         let state = store.state.read().await;
         assert!(state.audit_events.is_empty());
@@ -9442,6 +9505,42 @@ pub mod turso_store {
                 err,
                 LakeCatError::InvalidArgument(message)
                     if message.contains("audit event payload missing warehouse scope for table")
+            ));
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
+            assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_audit_authorization_principal_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let event_principal =
+                Principal::new("did:example:agent", lakecat_core::PrincipalKind::Agent).unwrap();
+            let receipt_principal =
+                Principal::new("human:operator", lakecat_core::PrincipalKind::Human).unwrap();
+            let event = CatalogAuditEvent::new(
+                "querygraph.bootstrap",
+                None,
+                event_principal,
+                serde_json::json!({
+                    "event-type": "querygraph.bootstrap",
+                    "authorization-receipt": {
+                        "engine": "typesec",
+                        "allowed": true,
+                        "principal": receipt_principal,
+                        "action": "querygraph.bootstrap"
+                    },
+                    "manifest-hash": "lakecat:test"
+                }),
+            )
+            .unwrap();
+
+            let err = store.record_audit_event(event).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains(
+                        "audit event authorization receipt principal does not match event principal"
+                    )
             ));
             assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
             assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);

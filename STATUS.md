@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Bind audit receipt principals`.
+  Generic audit recording now validates any payload
+  `authorization-receipt.principal` against the top-level audit event principal
+  before memory or Turso stores persist audit rows or enqueue outbox work. The
+  regressions create payload-hash-valid audit events whose receipt principal
+  differs from the event principal and prove audit/outbox state stays empty.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local audit_authorization_principal_drift -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Require audit table scope anchors`.
   String-form table scopes in generic audit payloads must now carry warehouse
   and namespace anchors before memory or Turso stores persist audit rows or
