@@ -6,6 +6,23 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Advertise table-create config endpoints`.
+  Catalog config discovery now advertises the default and warehouse-prefixed
+  `POST .../tables` table-create routes that already exist in the service.
+  Config-read replay now treats those endpoints as required standard Iceberg
+  REST compatibility evidence before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake handoff. The book and design now describe
+  table-create endpoint proof as part of compatibility discovery, not a
+  LakeCat-specific extension.
+- Local verification for this table-create endpoint slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -- --check`;
+  `cargo test -p lakecat-api catalog_config -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib catalog_config -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Bind config-read endpoint evidence`.
   Catalog config-read audit payloads now carry the advertised endpoint list,
   and service replay validates that endpoints are duplicate-free non-empty

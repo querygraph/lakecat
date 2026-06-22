@@ -42,6 +42,7 @@ impl Default for CatalogConfigResponse {
                 "POST /catalog/v1/namespaces".to_string(),
                 "GET /catalog/v1/namespaces/{namespace}".to_string(),
                 "DELETE /catalog/v1/namespaces/{namespace}".to_string(),
+                "POST /catalog/v1/namespaces/{namespace}/tables".to_string(),
                 "GET /catalog/v1/namespaces/{namespace}/tables/{table}".to_string(),
                 "DELETE /catalog/v1/namespaces/{namespace}/tables/{table}".to_string(),
                 "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit".to_string(),
@@ -54,6 +55,7 @@ impl Default for CatalogConfigResponse {
                 "POST /catalog/v1/{warehouse}/namespaces".to_string(),
                 "GET /catalog/v1/{warehouse}/namespaces/{namespace}".to_string(),
                 "DELETE /catalog/v1/{warehouse}/namespaces/{namespace}".to_string(),
+                "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables".to_string(),
                 "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}".to_string(),
                 "DELETE /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}"
                     .to_string(),
@@ -156,6 +158,17 @@ mod tests {
                 .map(String::as_str),
             Some(LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE)
         );
+    }
+
+    #[test]
+    fn catalog_config_endpoints_advertise_table_create_routes() {
+        let endpoints = CatalogConfigResponse::default()
+            .endpoints
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>();
+
+        assert!(endpoints.contains("POST /catalog/v1/namespaces/{namespace}/tables"));
+        assert!(endpoints.contains("POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables"));
     }
 }
 

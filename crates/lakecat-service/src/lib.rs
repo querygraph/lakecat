@@ -3089,11 +3089,13 @@ fn validate_catalog_config_endpoints(
         "GET /catalog/v1/config",
         "GET /catalog/v1/namespaces",
         "POST /catalog/v1/namespaces",
+        "POST /catalog/v1/namespaces/{namespace}/tables",
         "GET /catalog/v1/namespaces/{namespace}/tables/{table}",
         "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit",
         "GET /catalog/v1/{warehouse}/config",
         "GET /catalog/v1/{warehouse}/namespaces",
         "POST /catalog/v1/{warehouse}/namespaces",
+        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables",
         "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}",
         "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit",
     ];
@@ -11389,6 +11391,14 @@ mod tests {
         assert_config_endpoints_include(
             &payload["endpoints"],
             "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit",
+        );
+        assert_config_endpoints_include(
+            &payload["endpoints"],
+            "POST /catalog/v1/namespaces/{namespace}/tables",
+        );
+        assert_config_endpoints_include(
+            &payload["endpoints"],
+            "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables",
         );
         assert_config_endpoints_include(
             &payload["endpoints"],
@@ -21301,9 +21311,7 @@ mod tests {
         let endpoints = CatalogConfigResponse::default()
             .endpoints
             .into_iter()
-            .filter(|endpoint| {
-                endpoint != "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit"
-            })
+            .filter(|endpoint| endpoint != "POST /catalog/v1/namespaces/{namespace}/tables")
             .collect::<Vec<_>>();
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {
@@ -21350,7 +21358,7 @@ mod tests {
         assert!(message.contains("catalog.config-read"));
         assert!(
             message.contains(
-                "catalog config-read endpoints must include POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit"
+                "catalog config-read endpoints must include POST /catalog/v1/namespaces/{namespace}/tables"
             ),
             "{message}"
         );

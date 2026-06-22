@@ -4580,9 +4580,9 @@ Catalog config replay now also preserves the advertised endpoint list. That is
 not a new protocol requirement for standard clients; it is proof that the
 configuration LakeCat projected to graph and OpenLineage still contained the
 ordinary Iceberg REST surface. Replay validation requires the config endpoint,
-namespace list/create endpoints, table load endpoint, and table commit endpoint
-for both the default and warehouse-prefixed catalog routes before the config
-read can become compatibility evidence.
+namespace list/create endpoints, table create endpoint, table load endpoint,
+and table commit endpoint for both the default and warehouse-prefixed catalog
+routes before the config read can become compatibility evidence.
 
 The bridge is intentionally conservative, but it should not reject Iceberg
 metadata that Sail has already decoded. Manifest expansion now emits null

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Advertised standard table-create endpoints in catalog config discovery and
+  replay evidence. `CatalogConfigResponse` now includes default and
+  warehouse-prefixed `POST .../tables` routes, config replay requires those
+  endpoints before graph/OpenLineage projection or QGLake handoff, and tests
+  pin the route list so standard Iceberg table creation is not under-reported.
 - Hardened catalog-config endpoint replay: `catalog.config-read` audit payloads
   now record the advertised endpoint list, service replay validates endpoint
   arrays as non-empty duplicate-free strings, and replay rejects config evidence
