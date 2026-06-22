@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a workflow-focused catalog concepts chapter
+  that traces PySpark, notebook/service, governed-agent, operator, lineage,
+  graph, and QueryGraph bootstrap flows while separating standard Iceberg
+  parlance from LakeCat implementation, TypeSec governance proof,
+  LakeCat/QueryGraph extensions, and future Iceberg-adjacent proposal
+  candidates; regenerated the checked-in PDF, EPUB, and MOBI artifacts.
 - Added service replay regression coverage proving governed scan replay rejects
   blank `row-predicate.type` read-restriction evidence for both planned and
   fetched scan events before acknowledgement, graph projection, or OpenLineage

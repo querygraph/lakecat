@@ -5,6 +5,22 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed book/documentation slice:
+  `Expand workflow catalog concepts`.
+  The LakeCat book now has a dedicated workflow-focused catalog concepts
+  chapter tracing PySpark, notebook/service, governed-agent, operator, lineage,
+  graph, and QueryGraph bootstrap flows. The chapter explicitly delineates
+  standard Iceberg parlance, LakeCat implementation details, TypeSec governance
+  proof, optional LakeCat/QueryGraph extensions, and possible future
+  Iceberg-adjacent proposal candidates, while making the argument that reusable
+  table-format semantics and governed planning belong in Sail.
+- Local verification for this workflow catalog concepts slice is green:
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`;
+  `pdftotext -f 1 -l 1 docs/book/dist/lakecat.pdf -`;
+  `pdftotext -f 2 -l 2 docs/book/dist/lakecat.pdf -`;
+  `readlink "docs/book/dist/$kindle_link"`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Cover blank scan row predicate types`.
   Service replay regression coverage now proves governed `table.scan-planned`
