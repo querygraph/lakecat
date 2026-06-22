@@ -5,6 +5,26 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Expand catalog boundary concepts`.
+  The book now has a dedicated boundary-map chapter that explains the Rust
+  service/catalog spine, Turso-backed local store, Iceberg REST namespace/table
+  paths, commit CAS, idempotency, pointer logs, audit/outbox, replay
+  validation, governed scan and credential receipts, and QueryGraph/QGLake
+  proof surfaces by ownership boundary. It explicitly separates standard
+  Iceberg parlance from LakeCat implementation, LakeCat/TypeSec governance
+  extensions, QueryGraph application integration, Grust graph mechanics, and
+  narrow future Iceberg-adjacent optional profile candidates. It also gives a
+  stronger reader-facing argument for pushing reusable table-format,
+  scan-planning, metadata-as-data, commit-validation, and typed v4 work into
+  Sail so LakeCat remains a thin, fast Rust catalog authority.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/book slice:
   `Close governed-scan restriction proof objects`.
   Compact and captured planned/fetched read-restriction proof now reject

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added a dedicated book chapter that maps catalog concepts by boundary:
+  standard Iceberg clients, LakeCat catalog authority, Sail engine
+  interpretation, TypeSec governance, Grust graph mechanics, and
+  QueryGraph/QGLake workflow composition. The chapter gives a durable ASCII
+  concept diagram, explains why Rust and Turso are implementation choices
+  rather than Iceberg extensions, distinguishes commit CAS from LakeCat's
+  idempotency/pointer-log/audit/outbox/replay envelope, and sharpens the
+  argument that reusable table-format, scan-planning, metadata-as-data, commit
+  validation, and typed v4 work belongs in Sail.
 - Closed nested QGLake governed-scan restriction proof objects over their
   verified schema. Compact and captured planned/fetched read restrictions now
   reject unexpected fields, and their row-predicate children reject unexpected
