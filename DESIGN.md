@@ -624,7 +624,12 @@ be inflated with repeated redacted credential entries. Service outbox admission
 must also close each `credential-response-evidence` entry over the
 catalog-derived credential fields it validates, so replay cannot attach
 unverified credential-scope, issuer, storage, authorization, or secret-ref
-claims beside an otherwise valid redacted prefix proof. Captured LakeCat replay
+claims beside an otherwise valid redacted prefix proof. Service outbox admission
+must also close the top-level and authorization-receipt-context
+`lakecat:raw-credential-exception` objects over the raw exception fields
+LakeCat actually compares, so replay cannot attach unverified raw-credential
+posture claims beside an otherwise matching blocked-agent or trusted-human
+exception. Captured LakeCat replay
 JSON must then match the compact credential proof for those prefix hashes, so
 an archived handoff cannot pair a valid summary with drifted credential replay
 output.

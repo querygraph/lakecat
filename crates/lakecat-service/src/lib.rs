@@ -1504,6 +1504,7 @@ const CREDENTIAL_RESPONSE_EVIDENCE_FIELDS: &[&str] = &[
     "catalog-profile-id",
     "receipt-principal",
 ];
+const RAW_CREDENTIAL_EXCEPTION_EVIDENCE_FIELDS: &[&str] = &["requested", "allowed", "reason"];
 const STORAGE_PROFILE_EVIDENCE_FIELDS: &[&str] = &[
     "profile-id",
     "warehouse",
@@ -4113,6 +4114,16 @@ fn validate_credential_vend_event_evidence(
         authorization_receipt_read_restriction(payload),
         "credential-vend authorization receipt read-restriction",
     )?;
+    validate_raw_credential_exception_evidence_schema(
+        event,
+        payload.get("lakecat:raw-credential-exception"),
+        "credential-vend raw-credential exception",
+    )?;
+    validate_raw_credential_exception_evidence_schema(
+        event,
+        authorization_receipt_raw_credential_exception(payload),
+        "credential-vend authorization receipt raw-credential exception",
+    )?;
     validate_read_restriction_receipt_match(event, payload, "credential-vend")?;
     validate_read_restriction_purpose_and_ttl(event, payload, "credential-vend")?;
     validate_raw_credential_exception_receipt_match(event, payload)?;
@@ -4483,6 +4494,22 @@ fn validate_credential_response_entry_schema(
         }
     }
     Ok(())
+}
+
+fn validate_raw_credential_exception_evidence_schema(
+    event: &OutboxEvent,
+    raw_exception: Option<&Value>,
+    evidence_label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(raw_exception) = raw_exception else {
+        return Ok(());
+    };
+    validate_object_evidence_schema(
+        event,
+        raw_exception,
+        evidence_label,
+        RAW_CREDENTIAL_EXCEPTION_EVIDENCE_FIELDS,
+    )
 }
 
 fn validate_raw_credential_exception_receipt_match(
@@ -22591,6 +22618,124 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_raw_credential_exception_fields() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let top_level_exception = json!({
+            "requested": true,
+            "allowed": false,
+            "reason": "fine-grained read restriction requires Sail-planned reads",
+            "unverified-raw-credential-claim": "credential-safe"
+        });
+        let receipt_exception = json!({
+            "requested": true,
+            "allowed": false,
+            "reason": "fine-grained read restriction requires Sail-planned reads",
+            "unverified-receipt-raw-credential-claim": "credential-safe"
+        });
+        let clean_exception = json!({
+            "requested": true,
+            "allowed": false,
+            "reason": "fine-grained read restriction requires Sail-planned reads"
+        });
+
+        for (event_id, top_exception, receipt_exception, expected_message) in [
+            (
+                "evt-extra-raw-credential-exception",
+                top_level_exception.clone(),
+                top_level_exception,
+                "credential-vend raw-credential exception contains unexpected field unverified-raw-credential-claim",
+            ),
+            (
+                "evt-extra-receipt-raw-credential-exception",
+                clean_exception,
+                receipt_exception,
+                "credential-vend authorization receipt raw-credential exception contains unexpected field unverified-receipt-raw-credential-claim",
+            ),
+        ] {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "credentials.vend-attempted".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "credentials.vend-attempted",
+                        "table": table.clone(),
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal.clone(),
+                                "action": "credentials-vend",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                                "context": {
+                                    "lakecat:raw-credential-exception": receipt_exception
+                                }
+                            },
+                            "credential-count": 0,
+                            "credential-response-evidence": [],
+                            "storage-profile-id": "events-local",
+                            "storage-profile": {
+                                "profile-id": "events-local",
+                                "warehouse": "local",
+                                "provider": "file",
+                                "issuance-mode": "local-file-no-secret",
+                                "secret-ref-present": false,
+                                "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            },
+                            "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
+                            "lakecat:raw-credential-exception": top_exception
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("raw credential exception evidence should reject extra fields");
+
+            let message = err.to_string();
+            assert!(message.contains("credentials.vend-attempted"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "extra raw credential exception replay must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "extra raw credential exception replay must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "extra raw credential exception replay must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]

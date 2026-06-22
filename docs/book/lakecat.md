@@ -5585,6 +5585,10 @@ evidence inside the durable receipt. Raw credential exceptions follow the same
 rule: the top-level `lakecat:raw-credential-exception` object must match
 `authorization-receipt.context.lakecat:raw-credential-exception` exactly, so
 trusted-human exceptions and blocked-agent denials cannot drift during replay.
+Replay admission also closes both raw-credential exception objects over the
+fields LakeCat actually verifies: requested posture, allowed/blocked posture,
+and reason. Extra raw-credential claims are rejected before acknowledgement,
+graph projection, OpenLineage projection, or QGLake credential proof.
 
 ## Rust-First Engines And The V3 To V4 Path
 
@@ -7305,6 +7309,12 @@ profile identity, provider, issuance mode, storage-scope hash, secret-reference
 posture, and graph count. Extra raw credential or storage-scope claims are not
 Iceberg metadata, and QueryGraph should not treat them as catalog truth unless
 LakeCat promotes them into this checked proof contract.
+The raw-exception decision itself is also closed in raw replay before compact
+handoff proof can inherit it: both the top-level and authorization receipt
+context `lakecat:raw-credential-exception` objects may carry only the requested
+posture, allowed/blocked posture, and reason that LakeCat compares. A captured
+replay artifact cannot smuggle an additional raw-credential entitlement beside
+an otherwise valid blocked-agent or trusted-human branch.
 Both credential branches must carry a full authorization receipt hash, the
 `credentials-vend` authorization action, and replay/OpenLineage arrays whose
 entries are full `sha256:`-prefixed 64-hex digests, so the compact proof cannot

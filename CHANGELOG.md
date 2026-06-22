@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed service outbox admission over raw credential exception evidence.
+  Governed credential-vending replay now rejects unexpected fields inside
+  top-level `lakecat:raw-credential-exception` and the matching authorization
+  receipt context object before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake credential proof can inherit unverified
+  raw-credential claims.
 - Added a first-release catalog-concepts chapter to the book that explicitly
   delineates standard Iceberg vocabulary from LakeCat implementation terms,
   TypeSec governance terms, and QueryGraph/QGLake integration terms. The new

@@ -5,6 +5,29 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Close service raw credential exception schemas`.
+  Governed credential-vending replay now rejects unexpected fields inside both
+  the top-level `lakecat:raw-credential-exception` object and the matching
+  authorization receipt context object before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake credential proof can inherit unverified raw
+  credential posture claims. The design and book now state this service-side
+  closed-schema guard beside the existing raw-exception receipt-match, blocked
+  reason, credential-response, storage-profile, TTL, and governed-read proof
+  checks.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_raw_credential_exception_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service raw_credential -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Document first-release catalog concepts`.
   The book now has a first-release catalog-concepts chapter that explicitly
