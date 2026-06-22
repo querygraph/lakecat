@@ -4,7 +4,8 @@ LakeCat is a Rust-native Iceberg REST catalog and QueryGraph foundation.
 
 The implementation keeps Iceberg compatibility at the service boundary while
 pushing engine-heavy metadata planning, pruning, and commit validation toward
-Sail. See [ARCHITECTURE.md](ARCHITECTURE.md) for the system design.
+Sail. See [ARCHITECTURE.md](ARCHITECTURE.md) for the system design and
+[docs/book/lakecat.md](docs/book/lakecat.md) for the longer workflow guide.
 
 The current implementation exposes an Iceberg REST-compatible catalog surface
 under `/catalog/v1` and a QueryGraph bootstrap bundle at
@@ -91,8 +92,13 @@ replay, `lakecat-verify`, and `lakecat-import` agree, structured
 scan/management/credential/commit replay evidence, artifact paths, raw file
 hashes, captured LakeCat replay output, QueryGraph verify output, QueryGraph
 import output, and service log path for automation. Handoff verification keeps
-those artifacts bundle-local: paths must resolve under the handoff summary
-directory before LakeCat hashes or parses them.
+those artifacts bundle-local and schema-closed: paths must resolve under the
+handoff summary directory before LakeCat hashes or parses them, and the primary
+`artifacts` manifest, nested `capturedOutputs` manifest, and individual
+bundle/lineage/import/captured-output artifact objects reject unexpected fields
+beside the checked `path` and `sha256` evidence. A saved handoff summary cannot
+attach alternate hashes, mirror artifacts, or unverified captured-output claims
+beside otherwise valid files.
 
 For first-release readiness, run the local release gate instead of relying on
 cloud CI:

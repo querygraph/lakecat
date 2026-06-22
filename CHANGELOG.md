@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Aligned the README with the latest QGLake handoff contract. It now points
+  readers to the LakeCat book for expanded workflow guidance and documents that
+  saved handoff artifact manifests are both bundle-local and schema-closed
+  before archived artifact hashes or captured-output semantics are trusted.
 - Closed QGLake handoff summary artifact manifests in the CLI verifier. The
   primary `artifacts` object, its nested `capturedOutputs` manifest, and each
   bundle/lineage/import/captured-output artifact object now reject unexpected

@@ -5,6 +5,14 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest docs slice:
+  `Align README with QGLake artifact manifest contract`.
+  The README now links the LakeCat book as the expanded workflow guide and
+  describes the current QGLake handoff artifact contract: archived artifact
+  paths must stay bundle-local, the primary `artifacts` and nested
+  `capturedOutputs` manifests are schema-closed, and individual archived
+  artifact objects reject unexpected fields beside checked `path`/`sha256`
+  evidence.
 - Latest implementation/book slice:
   `Close QGLake handoff artifact manifests`.
   The CLI handoff verifier now closes the primary `artifacts` manifest, nested
