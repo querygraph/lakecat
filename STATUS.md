@@ -6,6 +6,32 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Explain release catalog concepts and require full bootstrap replay hashes`.
+  The book now opens with a detailed release-claims section that separates
+  standard Iceberg parlance from LakeCat implementation, QueryGraph/TypeSec
+  additions, and narrow future Iceberg-adjacent profile candidates. It covers
+  the Rust service spine, Turso-backed local store, REST namespace/table
+  compatibility, commit CAS, idempotency, pointer logs, audit/outbox, replay
+  validation, governed scan and credential receipts, QueryGraph/QGLake
+  handoff, OpenLineage, bootstrap, management, view, credential, and commit
+  proof surfaces, and makes the argument for pushing table-format
+  interpretation and proof-bearing planning into Sail. Raw QGLake
+  `querygraph.bootstrap` replay and OpenLineage receipt hashes now must be
+  full SHA-256 digests.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_short_bootstrap_replay_hashes -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_duplicate_bootstrap_replay_hashes -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover and contents render;
+  the versioned EPUB symlink resolves to `lakecat.epub`;
+  `scripts/check-release-readiness.sh --quick` passed.
+- Latest implementation/book slice:
   `Require full raw commit-history hashes`.
   Raw QGLake lineage-drain verification now requires non-empty
   `table.commits-listed` commit hashes to be full SHA-256 digests, matching the

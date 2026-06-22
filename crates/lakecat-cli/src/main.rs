@@ -7896,11 +7896,11 @@ fn verify_qglake_lineage_drain(
             "qglake lineage drain bootstrap replay emitted no lineage projection".to_string(),
         ));
     }
-    if !qglake_has_sha256_hashes(&bootstrap.replay_event_hashes)
-        || !qglake_has_sha256_hashes(&bootstrap.replay_open_lineage_hashes)
+    if !qglake_has_full_sha256_hashes(&bootstrap.replay_event_hashes)
+        || !qglake_has_full_sha256_hashes(&bootstrap.replay_open_lineage_hashes)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
-            "qglake lineage drain replay evidence is missing SHA-256 sink receipt hashes"
+            "qglake lineage drain querygraph.bootstrap replayEventHashes and replayOpenLineageHashes must contain full SHA-256 sink receipt hashes"
                 .to_string(),
         ));
     }
@@ -15887,7 +15887,7 @@ mod tests {
             .iter_mut()
             .find(|event| event.event_type == "querygraph.bootstrap")
             .expect("bootstrap replay event");
-        bootstrap.replay_event_hashes = vec!["sha256:drifted-bootstrap-replay".to_string()];
+        bootstrap.replay_event_hashes = vec![qglake_fixture_hash("drifted-bootstrap-replay")];
         let bytes = serde_json::to_vec_pretty(&drain).expect("drifted lineage drain JSON");
         fs::write(temp.join("lineage-drain.json"), &bytes).expect("write drifted lineage drain");
         summary["artifacts"]["lineageDrain"]["sha256"] = json!(content_hash_bytes(&bytes));
@@ -20196,9 +20196,11 @@ mod tests {
             1,
         )
         .expect_err("QGLake lineage drain should require sink receipt evidence");
-        assert!(err.to_string().contains(
-            "qglake lineage drain replay evidence is missing SHA-256 sink receipt hashes"
-        ));
+        assert!(
+            err.to_string()
+                .contains("querygraph.bootstrap replayEventHashes")
+        );
+        assert!(err.to_string().contains("full SHA-256"));
 
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
@@ -24477,10 +24479,12 @@ mod tests {
             .iter_mut()
             .find(|event| event.event_type == "querygraph.bootstrap")
             .expect("bootstrap replay fixture");
-        bootstrap.replay_event_hashes = vec![
-            "sha256:bootstrap-replay".to_string(),
-            "sha256:bootstrap-replay".to_string(),
-        ];
+        let duplicate_hash = bootstrap
+            .replay_event_hashes
+            .first()
+            .expect("bootstrap replay hash")
+            .clone();
+        bootstrap.replay_event_hashes.push(duplicate_hash);
 
         let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
             .expect_err("QGLake lineage drain should reject duplicate bootstrap replay hashes");
@@ -24488,6 +24492,25 @@ mod tests {
         assert!(err.to_string().contains("querygraph.bootstrap"));
         assert!(err.to_string().contains("replayEventHashes"));
         assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_short_bootstrap_replay_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let bootstrap = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "querygraph.bootstrap")
+            .expect("bootstrap replay fixture");
+        bootstrap.replay_event_hashes = vec!["sha256:short".to_string()];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short bootstrap replay hashes");
+
+        assert!(err.to_string().contains("querygraph.bootstrap"));
+        assert!(err.to_string().contains("replayEventHashes"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
@@ -25185,8 +25208,8 @@ mod tests {
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
-            replay_event_hashes: vec!["sha256:replay-event".to_string()],
-            replay_open_lineage_hashes: vec!["sha256:replay-openlineage".to_string()],
+            replay_event_hashes: vec![qglake_fixture_hash("bootstrap-replay")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash("bootstrap-openlineage")],
         }
     }
 

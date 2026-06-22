@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a front-loaded release-claims section that
+  explains the Rust service spine, Turso-backed local store, Iceberg REST
+  namespace/table compatibility, commit CAS, idempotency, pointer logs,
+  audit/outbox, replay validation, governed scan and credential receipts,
+  QueryGraph/QGLake handoff, OpenLineage, bootstrap, management, view,
+  credential, and commit proof surfaces. The new material explicitly separates
+  standard Iceberg parlance from LakeCat implementation, QueryGraph/TypeSec
+  additions, and narrow future Iceberg-adjacent profile candidates, while
+  making the case for pushing table-format interpretation and proof-bearing
+  planning into Sail.
+- Tightened raw QGLake bootstrap replay verification so
+  `querygraph.bootstrap` replay and OpenLineage receipt hashes must be full
+  SHA-256 digests, matching the compact handoff verifier and the book/design
+  claim that captured QGLake replay evidence cannot use prefix-only
+  placeholders.
 - Tightened raw QGLake lineage-drain commit-history verification so
   non-empty `table.commits-listed` commit hashes must be full SHA-256 digests,
   matching the compact handoff verifier and route response proof while keeping
