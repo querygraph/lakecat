@@ -3,6 +3,12 @@
 ## Unreleased
 
 - Added service replay regression coverage proving policy-binding, project,
+  server, storage-profile, and warehouse management-list reads reject
+  mismatched authorization receipt actions before acknowledgement, graph
+  projection, or OpenLineage projection. The design and book now describe
+  management-list proof as ID/count evidence plus an event-matching receipt
+  action, not just actor evidence.
+- Added service replay regression coverage proving policy-binding, project,
   server, storage-profile, and warehouse upserts reject mismatched
   authorization receipt actions before acknowledgement, graph projection, or
   OpenLineage projection. The design and book now spell out that management

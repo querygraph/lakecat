@@ -720,13 +720,14 @@ principal, full authorization receipt hash, and `credentials-vend` action
 before projection, including blocked zero-credential attempts where no returned
 credential response entry exists to repeat actor evidence.
 Management-list replay must carry count-aligned, syntactically valid,
-duplicate-free ID arrays and a valid authorization receipt principal before
-projection, so compact QueryGraph proof cannot inflate server, project,
-warehouse, policy, or storage-profile reads with repeated or actorless
-identities. Warehouse-list replay must also reject blank or syntactically
-invalid `project-id` scope when that optional project filter is present, so
-project-scoped warehouse inventory cannot become malformed QueryGraph or
-OpenLineage proof.
+duplicate-free ID arrays plus a valid authorization receipt principal,
+event-matching catalog action, affirmative allowed decision, non-empty engine,
+and RFC3339 `checked_at` timestamp before projection, so compact QueryGraph
+proof cannot inflate server, project, warehouse, policy, or storage-profile
+reads with repeated, actorless, or action-drifted identities. Warehouse-list
+replay must also reject blank or syntactically invalid `project-id` scope when
+that optional project filter is present, so project-scoped warehouse inventory
+cannot become malformed QueryGraph or OpenLineage proof.
 Standard catalog replay for catalog config reads, namespace list/lifecycle
 events, and view list/lifecycle events must carry valid authorization receipt
 principals before projection too, so Iceberg-compatible control-plane evidence

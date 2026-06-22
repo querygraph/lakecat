@@ -5061,8 +5061,10 @@ storage-profile ids, and warehouse names. Before projection, LakeCat rejects a
 management-list event when the required ID array is missing, malformed,
 contains an invalid identifier, repeats an identifier, or no longer matches the
 recorded count. LakeCat also requires the authorization receipt to carry a
-valid principal before acknowledging the event, so QueryGraph never has to
-accept actorless management inventory replay. The drain response lifts their
+valid principal, the event-matching catalog action, an affirmative allow
+decision, a non-empty engine, and an RFC3339 checked-at timestamp before
+acknowledging the event, so QueryGraph never has to accept actorless or
+action-drifted management inventory replay. The drain response lifts their
 counts, ID arrays, and management scope into compact fields, so QueryGraph can
 verify the control-plane read evidence without opening the raw lineage payload.
 It also carries replay and OpenLineage hash arrays for those management-list
