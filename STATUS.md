@@ -5,6 +5,16 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/book slice:
+  `Expand catalog concepts contract`.
+  The book now front-loads a detailed contract for reading LakeCat concepts:
+  Rust and Turso are implementation choices, Iceberg REST namespace/table paths
+  and commit CAS are standard catalog parlance, audit/outbox/replay proof is a
+  LakeCat control-plane extension, TypeSec governed scan and credential
+  receipts are governance extensions, and QueryGraph/QGLake handoff is an
+  application integration surface above the catalog. The same section explains
+  which proof shapes may become future optional Iceberg-adjacent profiles and
+  why reusable table-format interpretation belongs in Sail.
 - Latest completed implementation slice:
   `Require authorization receipt timestamp replay evidence`.
   Service outbox replay admission now rejects missing, blank, or malformed

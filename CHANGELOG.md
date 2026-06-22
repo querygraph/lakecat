@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a front-loaded catalog-concepts contract
+  explaining why the Rust service spine and Turso store are implementation
+  choices, Iceberg REST namespace/table paths and commit CAS are standard
+  catalog parlance, LakeCat audit/outbox/replay surfaces are optional
+  control-plane extensions, TypeSec governed scan and credential receipts are
+  governance extensions, and QueryGraph/QGLake handoff belongs above the
+  catalog as an integration surface.
 - Required outbox replay admission to reject missing, blank, or malformed
   authorization receipt `checked_at` timestamps before acknowledgement, graph
   projection, or OpenLineage projection, covering shared catalog receipt
