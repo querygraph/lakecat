@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover malformed catalog config principals`.
+  Service replay regression coverage now includes `catalog.config-read` in the
+  malformed standard-catalog authorization receipt principal matrix, proving
+  catalog config reads fail before acknowledgement, graph projection, or
+  OpenLineage projection when the receipt principal shape is invalid.
+- Local verification for this malformed catalog config principal slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_standard_catalog_receipt_principal -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib standard_catalog_receipt_principal -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover malformed management list principals`.
   Service replay regression coverage now proves policy-binding, project,
   server, storage-profile, and warehouse list events reject malformed

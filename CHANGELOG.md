@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expanded service replay regression coverage proving malformed standard
+  catalog authorization receipt principals are rejected for catalog config
+  reads before acknowledgement, graph projection, or OpenLineage projection.
 - Added service replay regression coverage proving management list events
   reject malformed authorization receipt principals before acknowledgement,
   graph projection, or OpenLineage projection.

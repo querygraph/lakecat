@@ -18272,6 +18272,22 @@ mod tests {
         });
         let cases = vec![
             (
+                "catalog.config-read",
+                "catalog config-read",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "catalog-config",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "defaults": catalog_config_defaults_json(),
+                }),
+            ),
+            (
                 "namespace.listed",
                 "namespace list",
                 json!({
