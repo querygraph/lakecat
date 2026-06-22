@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Extended standard catalog replay coverage for denied or incomplete view
+  authorization receipt decisions. `view.listed`, `view.upserted`,
+  `view.loaded`, and `view.dropped` now have direct coverage in the standard
+  catalog allowed-decision regression before acknowledgement, graph projection,
+  OpenLineage projection, QGLake proof, or QueryGraph import can inherit
+  unauthorized view evidence.
 - Extended standard catalog replay coverage for denied or incomplete
   authorization receipt decisions. `namespace.listed`, `namespace.created`,
   `namespace.loaded`, and `namespace.dropped` now have direct coverage in the

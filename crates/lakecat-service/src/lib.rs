@@ -29180,6 +29180,60 @@ mod tests {
                 }),
                 "namespace lifecycle authorization receipt must allow replay projection",
             ),
+            (
+                "view.listed",
+                "evt-view-list-missing-receipt-allowed",
+                json!({
+                    "authorization-receipt": missing_allowed(receipt("view-load")),
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view-count": 1,
+                    "view-names": ["active_customers"],
+                }),
+                "view list evidence must contain authorization receipt allowed decision",
+            ),
+            (
+                "view.upserted",
+                "evt-view-upserted-denied-receipt",
+                json!({
+                    "authorization-receipt": denied(receipt("view-manage")),
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "active_customers",
+                        "view-version": 1,
+                    }
+                }),
+                "view lifecycle authorization receipt must allow replay projection",
+            ),
+            (
+                "view.loaded",
+                "evt-view-loaded-missing-receipt-allowed",
+                json!({
+                    "authorization-receipt": missing_allowed(receipt("view-load")),
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "active_customers",
+                        "view-version": 1,
+                    }
+                }),
+                "view lifecycle evidence must contain authorization receipt allowed decision",
+            ),
+            (
+                "view.dropped",
+                "evt-view-dropped-denied-receipt",
+                json!({
+                    "authorization-receipt": denied(receipt("view-drop")),
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "active_customers",
+                        "view-version": 1,
+                    }
+                }),
+                "view lifecycle authorization receipt must allow replay projection",
+            ),
         ] {
             let store = Arc::new(RecordingOutboxStore {
                 events: Mutex::new(vec![OutboxEvent {
