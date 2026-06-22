@@ -17442,6 +17442,38 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_lineage_config_field() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-extra-lineage-config-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["lineageDrainArtifactSemantics"]["catalogConfigProof"]
+            .as_object_mut()
+            .expect("lineage drain catalog config proof should be an object")
+            .insert(
+                "unverifiedEndpointClaim".to_string(),
+                json!("GET /catalog/v1/unverified"),
+            );
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject extra lineage config proof fields");
+        let err = err.to_string();
+
+        assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+        assert!(err.contains("lineageDrainArtifactSemantics"), "{err}");
+        assert!(err.contains("catalogConfigProof mismatch"), "{err}");
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_lineage_semantics() {
         let temp = qglake_temp_dir("handoff-artifacts-self-verify-extra-lineage-semantics");
         let summary_path = temp.join("handoff-summary.json");

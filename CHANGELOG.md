@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened lineage-drain catalog-config proof closure in QGLake handoff
+  self-verification. Saved `lakecatHandoffVerifyOutput` artifacts now have
+  direct regression coverage proving extra unverified fields inside
+  `lineageDrainArtifactSemantics.catalogConfigProof` are rejected instead of
+  becoming accepted endpoint or compatibility claims.
 - Hardened QGLake handoff verifier self-proof coverage. The CLI handoff
   artifact verifier now has a direct regression proving saved
   `lakecatHandoffVerifyOutput` artifacts are rejected when

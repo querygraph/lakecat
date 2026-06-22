@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Close QGLake lineage catalog-config proof fields`.
+  The CLI handoff artifact verifier now has direct regression coverage proving
+  saved `lakecatHandoffVerifyOutput` artifacts reject extra unverified fields
+  inside `lineageDrainArtifactSemantics.catalogConfigProof`, so archived
+  verifier output cannot append unvalidated endpoint or compatibility claims
+  beside the catalog-config proof repeated from the raw lineage-drain artifact.
+- Local verification for this implementation/testing slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_lineage_config_field -- --test-threads=1`
+  passed;
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Cover missing QGLake handoff lineage config proof`.
   The CLI handoff artifact verifier now has direct regression coverage proving
   saved `lakecatHandoffVerifyOutput` artifacts are rejected when

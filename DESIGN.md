@@ -1197,7 +1197,10 @@ Saved handoff verifier output must also repeat that same proof under
 claim about the raw drain artifact to the config-read evidence it actually
 validated. Omitted proof is not acceptable: a saved verifier artifact that
 contains lineage-drain semantics without the catalog-config proof must fail in
-the same way as a drifted proof.
+the same way as a drifted proof. The repeated proof is closed over the same
+catalog-config field set, so unverified endpoint, v4, compatibility, or
+integration-discovery claims cannot be appended inside the lineage-drain
+semantics branch.
 The local dependency contract is the guardrail while cloud CI is manual-only:
 it must reject automatic triggers across every GitHub workflow file, not just
 the primary CI workflow, including compact, block-list, inline-map, and quoted
