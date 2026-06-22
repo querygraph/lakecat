@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog-concepts chapter with an explicit
+  concept ledger for standard Iceberg, LakeCat, Sail, and
+  QueryGraph/TypeSec/Grust responsibilities. The chapter now classifies the
+  Rust service spine, Turso-backed store, REST paths, commit CAS, idempotency,
+  pointer logs, audit/outbox, replay validation, governed scan/credential
+  receipts, and QGLake handoff as standard behavior, LakeCat implementation,
+  additive governance/integration proof, or narrow future Iceberg-adjacent
+  profile candidates. It also adds a stronger performance and correctness
+  argument for pushing table-format and planning work into Sail.
 - Added service replay-admission coverage proving projection receipts cannot
   carry malformed OpenLineage hashes before acknowledgement, graph projection,
   or lineage projection.
