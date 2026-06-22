@@ -2161,36 +2161,14 @@ fn verify_lakecat_replay_scan_matches_summary(
     lakecat: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
     let captured_scan = lakecat_replay_scan(capture)?;
+    require_only_fields(
+        captured_scan,
+        GOVERNED_SCAN_PROOF_FIELDS,
+        "captured LakeCat replay output.replay-evidence.scan",
+    )?;
     let summary_scan = required_object(lakecat, "governedScanProof", "lakecatReplayVerification")?;
 
-    for field in [
-        "planTaskCount",
-        "fileTaskCount",
-        "deleteFileCount",
-        "childPlanTaskCount",
-        "planGraphEvents",
-        "plannedPrincipalSubject",
-        "plannedPrincipalKind",
-        "plannedAuthorizationReceiptHash",
-        "plannedAuthorizationReceiptAction",
-        "fetchedPrincipalSubject",
-        "fetchedPrincipalKind",
-        "fetchedAuthorizationReceiptHash",
-        "fetchedAuthorizationReceiptAction",
-        "plannedReadRestriction",
-        "fetchedReadRestriction",
-        "plannedRequestedProjection",
-        "plannedEffectiveProjection",
-        "plannedRequestedStatsFields",
-        "plannedEffectiveStatsFields",
-        "fetchedRequiredProjection",
-        "fetchedEffectiveProjection",
-        "fetchedRequiredFilters",
-        "plannedReplayEventHashes",
-        "fetchedReplayEventHashes",
-        "plannedOpenLineageHashes",
-        "fetchedOpenLineageHashes",
-    ] {
+    for field in GOVERNED_SCAN_PROOF_FIELDS {
         require_value_match(
             captured_scan,
             field,
@@ -3173,6 +3151,11 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     require_catalog_config_evidence(catalog_config, principal)?;
 
     let governed_scan = required_object(lakecat, "governedScanProof", "lakecatReplayVerification")?;
+    require_only_fields(
+        governed_scan,
+        GOVERNED_SCAN_PROOF_FIELDS,
+        "governedScanProof",
+    )?;
     require_positive_u64(governed_scan, "planTaskCount", "governedScanProof")?;
     require_positive_u64(governed_scan, "planGraphEvents", "governedScanProof")?;
     require_positive_u64(governed_scan, "fileTaskCount", "governedScanProof")?;
@@ -3952,6 +3935,35 @@ const TABLE_COMMIT_HISTORY_PROOF_FIELDS: &[&str] = &[
     "graphEvents",
     "replayEventHashes",
     "openLineageHashes",
+];
+
+const GOVERNED_SCAN_PROOF_FIELDS: &[&str] = &[
+    "planTaskCount",
+    "fileTaskCount",
+    "deleteFileCount",
+    "childPlanTaskCount",
+    "planGraphEvents",
+    "plannedPrincipalSubject",
+    "plannedPrincipalKind",
+    "plannedAuthorizationReceiptHash",
+    "plannedAuthorizationReceiptAction",
+    "fetchedPrincipalSubject",
+    "fetchedPrincipalKind",
+    "fetchedAuthorizationReceiptHash",
+    "fetchedAuthorizationReceiptAction",
+    "plannedReadRestriction",
+    "fetchedReadRestriction",
+    "plannedRequestedProjection",
+    "plannedEffectiveProjection",
+    "plannedRequestedStatsFields",
+    "plannedEffectiveStatsFields",
+    "fetchedRequiredProjection",
+    "fetchedEffectiveProjection",
+    "fetchedRequiredFilters",
+    "plannedReplayEventHashes",
+    "fetchedReplayEventHashes",
+    "plannedOpenLineageHashes",
+    "fetchedOpenLineageHashes",
 ];
 
 fn require_catalog_config_evidence(
@@ -14038,6 +14050,23 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_governed_scan_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["unverifiedScanClaim"] =
+            json!(qglake_fixture_hash("unverified-scan-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra governed scan proof fields");
+        let err = err.to_string();
+
+        assert!(err.contains("governedScanProof"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedScanClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_scan_delete_file_count() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["governedScanProof"]
@@ -17624,6 +17653,35 @@ mod tests {
         assert!(err.to_string().contains(
             "captured LakeCat replay output.replay-evidence.scan.planTaskCount mismatch"
         ));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_governed_scan_fields() {
+        let temp = qglake_temp_dir("handoff-captured-scan-extra-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["scan"]["unverifiedScanClaim"] =
+            json!(qglake_fixture_hash("unverified-scan-claim"));
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay governed scan proof should reject extra fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("captured LakeCat replay output.replay-evidence.scan"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedScanClaim"),
+            "{err}"
+        );
     }
 
     #[test]

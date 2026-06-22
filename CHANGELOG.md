@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed compact and captured QGLake governed-scan proof objects over their
+  compared schema. `governedScanProof` and captured LakeCat replay `scan`
+  evidence now reject unexpected fields before summary or sidecar verification
+  can accept unverified scan-planning, restriction, projection, stats,
+  replay-hash, or OpenLineage claims beside checked Sail-planned read proof.
 - Closed compact and captured QGLake request-identity proof objects over their
   compared schema. `requestIdentityProof` and captured LakeCat replay
   `requestIdentity` evidence now reject unexpected fields before summary or

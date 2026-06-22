@@ -6962,7 +6962,14 @@ columns, row predicate, and policy hashes alongside the planned/fetched replay
 and OpenLineage hashes that prove the Sail-planned read path. The compact Rust
 verifier requires both planned and fetched replay/OpenLineage arrays to contain
 full `sha256:`-prefixed 64-hex digests, so automation can reject incomplete or
-placeholder scan lineage without falling back to the shell harness. Captured
+placeholder scan lineage without falling back to the shell harness. The compact
+`governedScanProof` object and the captured LakeCat replay
+`replay-evidence.scan` object are also closed over the fields LakeCat compares:
+counts, principal and authorization receipt evidence, read restrictions,
+requested and effective projection, stats-field evidence, fetch filters,
+replay hashes, and OpenLineage hashes. A handoff therefore cannot attach an
+extra unverified scan claim beside the checked proof and ask QueryGraph to
+index it as if it were part of the Sail-planned read. Captured
 scan replay-line recomputation also reuses the governed read-restriction guard,
 so an archived replay artifact cannot make empty planned or fetched
 `allowed-columns` look like a readable operator summary. It also compares the captured

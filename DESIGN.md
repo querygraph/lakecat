@@ -588,7 +588,12 @@ policy-derived TTL cap in both captured LakeCat replay text and compact handoff
 proof. Compact governed scan proof must also preserve the planned and fetched
 scan receipt identities: principal subject/kind, full authorization receipt
 hashes, and the `table-plan-scan` action from source replay through captured
-LakeCat replay and archived handoff summary verification. Credential replay
+LakeCat replay and archived handoff summary verification.
+The compact `governedScanProof` object and captured LakeCat replay `scan`
+object must be closed over the fields LakeCat actually compares, so archived
+handoffs cannot append unverified scan-planning, restriction, projection,
+stats-field, replay-hash, or OpenLineage claims beside the Sail-planned read
+proof. Credential replay
 must preserve the policy-derived TTL cap, full authorization receipt hash, the
 `credentials-vend` authorization action, and redacted storage-scope hash in
 raw lineage drains, captured LakeCat replay evidence, and compact handoff
