@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover QGLake graph edge count drift`.
+  QGLake handoff artifact and import-plan regression coverage now proves
+  QueryGraph graph-edge counts reject drift the same way graph-node counts
+  already do, including saved `lakecatHandoffVerifyOutput` artifacts, saved
+  import-plan artifacts, and the direct import-plan/bundle cross-check helper.
+- Local verification for this QGLake graph-edge count slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_graph_edge_count_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_semantics_reject_saved_import_plan_graph_edge_count_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_rejects_import_plan_graph_edge_count_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover duplicate bootstrap OpenLineage proof`.
   Compact QGLake handoff-summary and raw lineage-drain regression coverage now
   proves duplicate bootstrap OpenLineage receipt hashes are rejected before

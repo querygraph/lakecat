@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added QGLake handoff artifact and import-plan verifier regression coverage
+  proving QueryGraph graph-edge counts reject drift the same way graph-node
+  counts already do.
 - Added compact QGLake handoff-summary and raw lineage-drain verifier
   regression coverage proving duplicate bootstrap OpenLineage receipt hashes
   are rejected before archived QueryGraph proof can inflate bootstrap evidence.
