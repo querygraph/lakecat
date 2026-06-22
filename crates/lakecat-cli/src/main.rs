@@ -909,6 +909,11 @@ fn require_qglake_handoff_verify_output_artifact_hashes_match_summary(
         )?;
         let summary_artifact =
             required_object(summary_artifacts, field, "handoff summary artifacts")?;
+        require_full_hash_str(
+            output_artifact,
+            "sha256",
+            "lakecatHandoffVerifyOutput.artifactFiles",
+        )?;
         require_value_match(
             output_artifact,
             "sha256",
@@ -937,6 +942,11 @@ fn require_qglake_handoff_verify_output_artifact_hashes_match_summary(
             field,
             "handoff summary artifacts.capturedOutputs",
         )?;
+        require_full_hash_str(
+            output_capture,
+            "sha256",
+            "lakecatHandoffVerifyOutput.artifactFiles.capturedOutputs",
+        )?;
         require_value_match(
             output_capture,
             "sha256",
@@ -948,6 +958,11 @@ fn require_qglake_handoff_verify_output_artifact_hashes_match_summary(
             "lakecatHandoffVerifyOutput.artifactFiles.capturedOutputs",
         )?;
     }
+    require_full_hash_str(
+        output_artifacts,
+        "serviceLogHash",
+        "lakecatHandoffVerifyOutput.artifactFiles",
+    )?;
     require_value_match(
         output_artifacts,
         "serviceLogHash",
@@ -15861,7 +15876,7 @@ mod tests {
         let summary_path = temp.join("handoff-summary.json");
         let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
         let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
-        output["artifactFiles"]["bundle"]["sha256"] = json!("sha256:other-bundle-bytes");
+        output["artifactFiles"]["bundle"]["sha256"] = json!(qglake_fixture_hash("other-bundle"));
         let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
         fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
             .expect("write drifted handoff verify output");
@@ -15881,13 +15896,39 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_short_artifact_hash() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-short-artifact-hash");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["artifactFiles"]["bundle"]["sha256"] = json!("sha256:bundle");
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject short sidecar artifact hashes");
+        let err = err.to_string();
+
+        assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+        assert!(err.contains("artifactFiles"), "{err}");
+        assert!(err.contains("full SHA-256"), "{err}");
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_capture_hash_drift() {
         let temp = qglake_temp_dir("handoff-artifacts-self-verify-capture-hash-drift");
         let summary_path = temp.join("handoff-summary.json");
         let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
         let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
         output["artifactFiles"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
-            json!("sha256:other-replay-capture");
+            json!(qglake_fixture_hash("other-replay-capture"));
         let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
         fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
             .expect("write drifted handoff verify output");
@@ -15904,6 +15945,33 @@ mod tests {
         assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
         assert!(err.to_string().contains("capturedOutputs"));
         assert!(err.to_string().contains("sha256 mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_short_capture_hash() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-short-capture-hash");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["artifactFiles"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!("sha256:replay-capture");
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject short sidecar capture hashes");
+        let err = err.to_string();
+
+        assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+        assert!(err.contains("capturedOutputs"), "{err}");
+        assert!(err.contains("full SHA-256"), "{err}");
     }
 
     #[test]

@@ -666,6 +666,12 @@ Saved `lakecatHandoffVerifyOutput` sidecars must bind their own
 `lineageDrainArtifactSemantics.catalogConfigProof` to the raw lineage-drain
 artifact too, so a self-verification artifact cannot claim verified drain
 semantics while omitting or rewriting the config-read compatibility proof.
+Saved `lakecatHandoffVerifyOutput.artifactFiles` must also use full SHA-256
+digests for its nested bundle, lineage-drain, QueryGraph import-plan, captured
+LakeCat/QueryGraph output, and service-log hashes before those values are
+compared with the compact handoff summary. Equality to the summary is not
+enough if the saved self-verifier artifact can carry placeholder or prefix-only
+hashes.
 Raw lineage-drain replay summaries and compact handoff summaries must both keep
 replay, OpenLineage, commit-history commit, view receipt, and view
 receipt-chain hash arrays duplicate-free as well as full SHA-256-shaped, so

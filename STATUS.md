@@ -6,6 +6,29 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Require full QGLake sidecar artifact hashes`.
+  QGLake handoff artifact verification now requires the saved
+  `lakecatHandoffVerifyOutput.artifactFiles` object to use full SHA-256
+  digests for nested bootstrap bundle, lineage-drain, QueryGraph import-plan,
+  captured LakeCat/QueryGraph output, and service-log hashes before comparing
+  the values with the compact handoff summary. The book now makes that sidecar
+  proof explicit while preserving the standard-Iceberg versus
+  LakeCat/QueryGraph/TypeSec distinction.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_short_artifact_hash -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_short_capture_hash -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_artifact_hash_drift -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Require QGLake self-verifier hash`.
   QGLake handoff artifact verification now requires a full
   `lakecatHandoffVerifyOutputHash` whenever the saved handoff names

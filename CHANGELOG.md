@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Required saved QGLake self-verification artifact hashes to be full SHA-256
+  digests. `lakecatHandoffVerifyOutput.artifactFiles` now rejects short nested
+  bundle, lineage-drain, QueryGraph import-plan, captured LakeCat/QueryGraph
+  output, and service-log hashes before comparing them with the compact
+  handoff summary. The book and design now spell out that this sidecar proof is
+  part of the catalog-control evidence, not standard Iceberg metadata.
 - Required saved QGLake self-verification output to be hash-bound. Handoff
   artifact verification now rejects missing, null, or short
   `lakecatHandoffVerifyOutputHash` values instead of treating the

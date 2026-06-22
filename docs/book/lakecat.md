@@ -7935,12 +7935,16 @@ QueryGraph bootstrap artifacts, drains the outbox, and proves the resulting
 bundle through QueryGraph's Rust verifier/importer. It then asks LakeCat to
 verify its own compact handoff summary and recompute the raw artifact file
 hashes, making the summary a first-class acceptance artifact rather than an
-unchecked convenience file. It is small, but
-it is not decorative. It is the acceptance story for a catalog that participates
-in the user workflow from notebook to agent. The summary file gives automation
-a single stable place to find the accepted table/view counts, semantic hashes,
-bundle, lineage drain, import plan, captured verifier outputs, and raw artifact
-hashes without scraping terminal text.
+unchecked convenience file. The saved self-verifier output is checked too: its
+internal `artifactFiles` entries for the bootstrap bundle, lineage drain,
+QueryGraph import plan, captured LakeCat and QueryGraph outputs, and service
+log must carry full SHA-256 digests before they are compared with the compact
+summary. It is small, but it is not decorative. It is the acceptance story for a
+catalog that participates in the user workflow from notebook to agent. The
+summary file gives automation a single stable place to find the accepted
+table/view counts, semantic hashes, bundle, lineage drain, import plan,
+captured verifier outputs, and raw artifact hashes without scraping terminal
+text.
 
 ## Operating The Book's Example System
 
@@ -8096,6 +8100,18 @@ should never propose "adopt LakeCat's whole stack" as an Iceberg feature. It
 should propose narrow behaviors only when independent catalogs and engines can
 benefit from them without adopting LakeCat, QueryGraph, TypeSec, Grust, or
 Turso.
+
+The naming is easiest to keep honest with four labels. Standard Iceberg means
+the behavior a normal Iceberg client already expects. A LakeCat extension means
+an additive catalog-control surface that can sit beside standard access without
+changing table metadata. A QueryGraph or TypeSec integration means application,
+security, graph, lineage, or agent workflow meaning above the table contract. A
+future Iceberg-adjacent profile means a smaller behavior LakeCat has proven
+locally and can describe without requiring LakeCat, Turso, TypeSec, Grust,
+QueryGraph, or Sail. Most of LakeCat's current innovation is not yet in the
+fourth category. It becomes a candidate only after the proper nouns can be
+removed and the remaining behavior is useful to independent engines and
+catalogs.
 
 LakeCat is easiest to understand if every concept is placed on one of four
 ledgers:
