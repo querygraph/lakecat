@@ -5,6 +5,23 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Restore full local release gate`.
+  The full local release-readiness gate is green again after repairing QGLake
+  fixture and handoff proof drift. The CLI fixture tests now use full
+  deterministic view receipt hashes instead of stale short placeholders, and
+  `scripts/qglake-handoff-local.sh` now binds readiness `catalog.config-read`
+  proof to the QGLake agent, emits the canonical handoff-verifier output
+  artifact before verification, keeps `managementProof` separate from
+  `storageProfileUpsertProof`, and carries nested policy-upsert proof inside
+  management evidence.
+- Local verification for this implementation/book slice is green:
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_requires_delivered_events -- --test-threads=1`
+  passed;
+  `scripts/qglake-handoff-local.sh` passed;
+  `scripts/check-release-readiness.sh` passed.
 - Latest book slice:
   `Deepen catalog concept and Sail boundary explanation`.
   The book now more thoroughly separates standard Iceberg vocabulary from

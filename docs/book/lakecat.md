@@ -10415,6 +10415,18 @@ manual-only until that local proof is boring. A release should be cut from the
 state those commands prove, not from a hope that a remote runner will discover
 the truth later.
 
+The current gate also proves a subtle QGLake contract that is easy to miss.
+The handoff readiness probe reads `GET /catalog/v1/config`, and that read is a
+catalog event. It must therefore carry the same QGLake agent identity as the
+rest of the handoff, otherwise a harmless-looking readiness curl becomes an
+anonymous `catalog.config-read` proof in the drained evidence. The handoff
+script binds that config-read proof to the agent, writes a canonical
+handoff-verifier output artifact, hashes it into the summary before strict
+verification, and keeps management list proof, policy-upsert proof, and
+storage-profile upsert proof in the distinct sections the verifier compares.
+That is the local substitute for cloud hope: the artifact graph is checked
+before the summary is accepted.
+
 For this release, replay admission is part of that local proof rather than a
 best-effort projection filter. `catalog.config-read` replay is closed over the
 checked warehouse, defaults, overrides, advertised endpoints, and authorization

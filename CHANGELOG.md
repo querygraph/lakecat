@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Restored the full local release-readiness gate. QGLake CLI fixture tests now
+  use full deterministic view receipt hashes instead of stale short
+  `sha256:` placeholders, and the handoff script now binds readiness
+  `catalog.config-read` proof to the QGLake agent, writes the canonical
+  handoff-verifier output artifact before verification, keeps
+  `managementProof` and `storageProfileUpsertProof` separated, and preserves
+  nested policy-upsert proof in the management summary. The full
+  `scripts/check-release-readiness.sh` gate passes locally again.
 - Deepened the book's catalog-concepts chapter with sharper terminology
   boundaries for standard Iceberg parlance versus LakeCat catalog-control
   extensions, TypeSec governance evidence, QueryGraph/QGLake semantic proof

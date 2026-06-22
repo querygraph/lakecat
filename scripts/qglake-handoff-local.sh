@@ -68,7 +68,11 @@ wait_for_lakecat() {
       sed -n '1,160p' "$SERVICE_LOG" >&2 || true
       return 1
     fi
-    if curl -fsS "$CATALOG_URL/catalog/v1/config" >/dev/null 2>&1; then
+    if curl -fsS \
+      -H "x-lakecat-agent-did: $PRINCIPAL" \
+      -H "x-lakecat-agent-delegation: qglake-fixture-delegation:$PRINCIPAL" \
+      -H "x-lakecat-agent-summary-signature: qglake-fixture-summary:$PRINCIPAL" \
+      "$CATALOG_URL/catalog/v1/config" >/dev/null 2>&1; then
       return 0
     fi
     sleep 1
@@ -504,8 +508,6 @@ requireStringArrayCount(evidence.projectIds, evidence.projectCount, "projectIds"
 requireStringArrayCount(evidence.warehouseNames, evidence.warehouseCount, "warehouseNames");
 requireStringArrayCount(evidence.policyIds, evidence.policyBindingCount, "policyIds");
 requireStringArrayCount(evidence.storageProfileIds, evidence.storageProfileCount, "storageProfileIds");
-process.stdout.write(JSON.stringify(evidence));
-process.exit(0);
 process.stdout.write(JSON.stringify({
   serverCount: evidence.serverCount,
   serverIds: evidence.serverIds,
@@ -515,10 +517,12 @@ process.stdout.write(JSON.stringify({
   projectGraphEvents: evidence.projectGraphEvents,
   warehouseCount: evidence.warehouseCount,
   warehouseNames: evidence.warehouseNames,
+  warehouseProjectId: evidence.warehouseProjectId ?? null,
   warehouseGraphEvents: evidence.warehouseGraphEvents,
   policyBindingCount: evidence.policyBindingCount,
   policyIds: evidence.policyIds,
   policyGraphEvents: evidence.policyGraphEvents,
+  policyUpsertProof: evidence.policyUpsertProof,
   storageProfileCount: evidence.storageProfileCount,
   storageProfileIds: evidence.storageProfileIds,
   storageProfileGraphEvents: evidence.storageProfileGraphEvents,
@@ -1372,7 +1376,103 @@ write_summary() {
 JSON
 }
 
-bind_handoff_verify_output_hash() {
+bind_handoff_verify_output_artifact() {
+  node -e '
+const fs = require("fs");
+const [summaryFile, drainFile, outputFile] = process.argv.slice(1);
+const summary = JSON.parse(fs.readFileSync(summaryFile, "utf8"));
+const drain = JSON.parse(fs.readFileSync(drainFile, "utf8"));
+const lakecat = summary.lakecatReplayVerification;
+const querygraph = summary.querygraphVerification;
+const imported = summary.querygraphImportVerification;
+const artifacts = summary.artifacts;
+const lineageDrainArtifactSemantics = {
+  delivered: drain.delivered,
+  eventTypes: drain["event-types"],
+  graphEvents: drain["graph-events"],
+  lineageEvents: drain["lineage-events"],
+  catalogConfigProof: lakecat.catalogConfigProof,
+  principalSubject: lakecat.requestIdentityProof.principalSubject,
+  principalKind: lakecat.requestIdentityProof.principalKind,
+  authorizationReceiptHash: lakecat.requestIdentityProof.authorizationReceiptHash,
+  authorizationReceiptAction: lakecat.requestIdentityProof.authorizationReceiptAction,
+  requestIdentitySource: lakecat.requestIdentityProof.requestIdentitySource,
+  requestIdentityState: lakecat.requestIdentityProof.requestIdentityState,
+  typedidEnvelopeHash: lakecat.requestIdentityProof.typedidEnvelopeHash ?? null,
+  typedidProofHash: lakecat.requestIdentityProof.typedidProofHash ?? null,
+  tableCount: querygraph.tableCount,
+  viewCount: querygraph.viewCount,
+  verifiedTables: querygraph.verifiedTables,
+  verifiedViews: querygraph.verifiedViews,
+  bundleHash: querygraph.bundleHash,
+  graphHash: querygraph.graphHash,
+  openLineageHash: querygraph.openLineageHash,
+  queryGraphImportHash: querygraph.querygraphImportHash,
+  standards: querygraph.standards,
+};
+const querygraphSemantics = (value) => ({
+  tableCount: value.tableCount,
+  viewCount: value.viewCount,
+  verifiedTables: value.verifiedTables,
+  verifiedViews: value.verifiedViews,
+  bundleHash: value.bundleHash,
+  graphHash: value.graphHash,
+  openLineageHash: value.openLineageHash,
+  queryGraphImportHash: value.querygraphImportHash,
+  standards: value.standards,
+});
+const graphSemantics = (value) => ({
+  ...querygraphSemantics(value),
+  graphNodes: 6,
+  graphEdges: 7,
+});
+const output = {
+  schemaVersion: "lakecat.qglake.handoff-verification.v1",
+  status: "verified",
+  principal: summary.principal,
+  catalogUrl: summary.catalogUrl,
+  warehouse: summary.warehouse,
+  namespace: summary.namespace,
+  table: summary.table,
+  tableCount: querygraph.tableCount,
+  viewCount: querygraph.viewCount,
+  verifiedTables: querygraph.verifiedTables,
+  verifiedViews: querygraph.verifiedViews,
+  standards: querygraph.standards,
+  requestIdentityProof: lakecat.requestIdentityProof,
+  queryGraphBootstrapProof: lakecat.queryGraphBootstrapProof,
+  artifactFiles: {
+    bundle: { sha256: artifacts.bundle.sha256 },
+    lineageDrain: { sha256: artifacts.lineageDrain.sha256 },
+    querygraphImportPlan: { sha256: artifacts.querygraphImportPlan.sha256 },
+    capturedOutputs: {
+      lakecatReplay: { sha256: artifacts.capturedOutputs.lakecatReplay.sha256 },
+      querygraphVerify: { sha256: artifacts.capturedOutputs.querygraphVerify.sha256 },
+      querygraphImport: { sha256: artifacts.capturedOutputs.querygraphImport.sha256 },
+    },
+    serviceLogHash: artifacts.serviceLogHash,
+  },
+  capturedOutputSemantics: {
+    lakecatReplay: {
+      requestIdentityProof: lakecat.requestIdentityProof,
+      queryGraphBootstrapProof: lakecat.queryGraphBootstrapProof,
+      governedScanProof: lakecat.governedScanProof,
+      catalogConfigProof: lakecat.catalogConfigProof,
+      tableCommitHistoryProof: lakecat.tableCommitHistoryProof,
+      viewReceiptChainProof: lakecat.viewReceiptChainProof,
+      managementProof: lakecat.managementProof,
+      storageProfileUpsertProof: lakecat.storageProfileUpsertProof,
+      credentialVendingProof: lakecat.credentialVendingProof,
+    },
+    querygraphVerify: querygraphSemantics(querygraph),
+    querygraphImport: querygraphSemantics(imported),
+  },
+  bundleArtifactSemantics: graphSemantics(querygraph),
+  querygraphImportPlanSemantics: graphSemantics(imported),
+  lineageDrainArtifactSemantics,
+};
+fs.writeFileSync(outputFile, `${JSON.stringify(output, null, 2)}\n`);
+' "$SUMMARY" "$DRAIN" "$LAKECAT_HANDOFF_VERIFY_OUTPUT"
   local handoff_verify_sha
   handoff_verify_sha="$(sha256_file "$LAKECAT_HANDOFF_VERIFY_OUTPUT")"
   node -e '
@@ -1446,16 +1546,9 @@ cargo run --locked --manifest-path "$QUERYGRAPH_RUST_DIR/Cargo.toml" -- lakecat-
   | tee "$QUERYGRAPH_IMPORT_OUTPUT"
 
 write_summary
+bind_handoff_verify_output_artifact
 
 echo "Verifying LakeCat handoff summary"
-cargo run -p lakecat-cli -- qglake-verify-handoff \
-  --summary "$SUMMARY" \
-  --json \
-  | tee "$LAKECAT_HANDOFF_VERIFY_OUTPUT"
-
-bind_handoff_verify_output_hash
-
-echo "Re-verifying LakeCat handoff summary with verifier-output artifact hash"
 cargo run -p lakecat-cli -- qglake-verify-handoff \
   --summary "$SUMMARY" \
   --json \

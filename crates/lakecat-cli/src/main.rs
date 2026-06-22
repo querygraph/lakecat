@@ -20304,10 +20304,10 @@ mod tests {
         let mut bootstrap_with_view = qglake_bootstrap_lineage_summary();
         bootstrap_with_view.view_artifact_count = 1;
         bootstrap_with_view.view_version_receipt_hashes =
-            vec!["sha256:view-version-receipt".to_string()];
+            vec![qglake_fixture_hash("view-version-receipt")];
         let mut namespace_receipt_chain = qglake_view_receipt_chain_lineage_summary();
         namespace_receipt_chain.view_version_receipt_chain_hashes =
-            vec!["sha256:namespace-receipt-chain".to_string()];
+            vec![qglake_fixture_hash("namespace-receipt-chain")];
         namespace_receipt_chain.view_version_receipt_chain_verified_count = 1;
         let view_drain = LineageDrainResponse {
             delivered: 15,
@@ -20373,11 +20373,11 @@ mod tests {
         );
         assert_eq!(
             view_replay_json["views"]["views"][0]["acceptedReceiptHash"],
-            json!("sha256:view-version-receipt")
+            json!(qglake_fixture_hash("view-version-receipt"))
         );
         assert_eq!(
             view_replay_json["views"]["views"][0]["acceptedReceiptChainHash"],
-            json!("sha256:view-receipt-chain")
+            json!(qglake_fixture_hash("view-receipt-chain"))
         );
         assert_eq!(
             view_replay_json["views"]["tombstoneReceipts"][0]["expectedViewVersion"],
@@ -20385,13 +20385,13 @@ mod tests {
         );
         assert_eq!(
             view_replay_json["views"]["tombstoneReceipts"][0]["receiptHashes"],
-            json!(["sha256:view-drop-receipt"])
+            json!([qglake_fixture_hash("view-drop-receipt")])
         );
         assert_eq!(
             view_replay_json["views"]["receiptChains"][0]["chainHashes"],
             json!([
-                "sha256:namespace-receipt-chain",
-                "sha256:view-receipt-chain"
+                qglake_fixture_hash("namespace-receipt-chain"),
+                qglake_fixture_hash("view-receipt-chain")
             ])
         );
         assert_eq!(
@@ -20404,7 +20404,7 @@ mod tests {
         );
         assert_eq!(
             view_replay_json["views"]["receiptChains"][0]["chains"][0]["receipts"][2]["previousReceiptHash"],
-            json!("sha256:view-version-receipt")
+            json!(qglake_fixture_hash("view-version-receipt"))
         );
     }
 
@@ -24653,7 +24653,7 @@ mod tests {
         let mut bootstrap_with_view = qglake_bootstrap_lineage_summary();
         bootstrap_with_view.view_artifact_count = 1;
         bootstrap_with_view.view_version_receipt_hashes =
-            vec!["sha256:view-version-receipt".to_string()];
+            vec![qglake_fixture_hash("view-version-receipt")];
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 4,
@@ -24800,7 +24800,7 @@ mod tests {
 
         let mut bootstrap_drifted_view_receipt = bootstrap_with_view.clone();
         bootstrap_drifted_view_receipt.view_version_receipt_hashes =
-            vec!["sha256:other-view-version-receipt".to_string()];
+            vec![qglake_fixture_hash("other-view-version-receipt")];
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 9,
@@ -25452,109 +25452,56 @@ mod tests {
         ));
 
         let err = verify_qglake_lineage_drain(
-            &LineageDrainResponse {
-                delivered: 10,
-                event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "view.upserted".to_string(),
-                    "view.dropped".to_string(),
-                    "policy-binding.listed".to_string(),
-                    "policy-binding.upserted".to_string(),
-                    "storage-profile.listed".to_string(),
-                    "server.listed".to_string(),
-                    "project.listed".to_string(),
-                    "warehouse.listed".to_string(),
-                    "querygraph.bootstrap".to_string(),
-                ],
-                graph_events: 16,
-                lineage_events: 11,
-                principal_subject: Some("did:example:agent".to_string()),
-                principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
-            authorization_receipt_action: Some("lineage-read".to_string()),
-                request_identity_state: Some("verified".to_string()),
-                request_identity_source: Some("x-lakecat-agent-did".to_string()),
-                typedid_envelope_hash: None,
-                typedid_proof_hash: None,
-                events: vec![
-                    bootstrap_with_view.clone(),
-                    qglake_restricted_credential_summary(),
-                    qglake_human_credential_summary(),
-                    qglake_view_lineage_summary(),
-                    qglake_view_drop_lineage_summary(),
-                    qglake_policy_list_lineage_summary(),
-                    qglake_policy_upsert_lineage_summary(),
-                    qglake_storage_profile_list_lineage_summary(),
-                    qglake_storage_profile_upsert_lineage_summary(),
-                    qglake_server_list_lineage_summary(),
-                    qglake_project_list_lineage_summary(),
-                    qglake_warehouse_list_lineage_summary(),
-                ],
-            },
+            &qglake_lineage_drain_from_summaries(vec![
+                bootstrap_with_view.clone(),
+                qglake_restricted_credential_summary(),
+                qglake_human_credential_summary(),
+                qglake_view_lineage_summary(),
+                qglake_view_drop_lineage_summary(),
+                qglake_policy_list_lineage_summary(),
+                qglake_policy_upsert_lineage_summary(),
+                qglake_storage_profile_list_lineage_summary(),
+                qglake_storage_profile_upsert_lineage_summary(),
+                qglake_server_list_lineage_summary(),
+                qglake_project_list_lineage_summary(),
+                qglake_warehouse_list_lineage_summary(),
+            ]),
             &view_verification,
             Some("did:example:agent"),
             1,
         )
         .expect_err("QGLake lineage drain should require tombstone receipt evidence for dropped accepted views");
-        assert!(err.to_string().contains(
-            "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing SHA-256 tombstone receipt evidence"
-        ));
+        let err = err.to_string();
+        assert!(
+            err.contains(
+                "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing full SHA-256 tombstone receipt evidence"
+            ),
+            "{err}"
+        );
 
         let err = verify_qglake_lineage_drain(
-            &LineageDrainResponse {
-                delivered: 12,
-                event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "view.upserted".to_string(),
-                    "view.dropped".to_string(),
-                    "view.version-receipts-listed".to_string(),
-                    "policy-binding.listed".to_string(),
-                    "policy-binding.upserted".to_string(),
-                    "storage-profile.listed".to_string(),
-                    "server.listed".to_string(),
-                    "project.listed".to_string(),
-                    "warehouse.listed".to_string(),
-                    "querygraph.bootstrap".to_string(),
-                ],
-                graph_events: 16,
-                lineage_events: 12,
-                principal_subject: Some("did:example:agent".to_string()),
-                principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
-            authorization_receipt_action: Some("lineage-read".to_string()),
-                request_identity_state: Some("verified".to_string()),
-                request_identity_source: Some("x-lakecat-agent-did".to_string()),
-                typedid_envelope_hash: None,
-                typedid_proof_hash: None,
-                events: vec![
-                    bootstrap_with_view.clone(),
-                    qglake_restricted_credential_summary(),
-                    qglake_human_credential_summary(),
-                    qglake_view_lineage_summary(),
-                    qglake_view_drop_lineage_summary(),
-                    qglake_view_tombstone_receipt_lineage_summary(),
-                    qglake_policy_list_lineage_summary(),
-                    qglake_policy_upsert_lineage_summary(),
-                    qglake_storage_profile_list_lineage_summary(),
-                    qglake_storage_profile_upsert_lineage_summary(),
-                    qglake_server_list_lineage_summary(),
-                    qglake_project_list_lineage_summary(),
-                    qglake_warehouse_list_lineage_summary(),
-                ],
-            },
+            &qglake_lineage_drain_from_summaries(vec![
+                bootstrap_with_view.clone(),
+                qglake_restricted_credential_summary(),
+                qglake_human_credential_summary(),
+                qglake_view_lineage_summary(),
+                qglake_view_drop_lineage_summary(),
+                qglake_view_tombstone_receipt_lineage_summary(),
+                qglake_policy_list_lineage_summary(),
+                qglake_policy_upsert_lineage_summary(),
+                qglake_storage_profile_list_lineage_summary(),
+                qglake_storage_profile_upsert_lineage_summary(),
+                qglake_server_list_lineage_summary(),
+                qglake_project_list_lineage_summary(),
+                qglake_warehouse_list_lineage_summary(),
+            ]),
             &view_verification,
             Some("did:example:agent"),
             1,
         )
         .expect_err("QGLake lineage drain should require namespace receipt-chain evidence for dropped accepted views");
         assert!(err.to_string().contains(
-            "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing SHA-256 namespace receipt-chain evidence"
+            "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing full SHA-256 namespace receipt-chain evidence"
         ));
 
         let mut drifted_receipt_chain = qglake_view_receipt_chain_lineage_summary();
@@ -25613,7 +25560,7 @@ mod tests {
         )
         .expect_err("QGLake lineage drain should reject receipt-chain namespace drift");
         assert!(err.to_string().contains(
-            "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing SHA-256 namespace receipt-chain evidence for the accepted view namespace"
+            "qglake lineage drain view drop replay for lakecat:view:local:default:active_customers is missing full SHA-256 namespace receipt-chain evidence for the accepted view namespace"
         ));
 
         let mut receipt_chain_count_drift = qglake_view_receipt_chain_lineage_summary();
@@ -25677,7 +25624,7 @@ mod tests {
 
         let mut uncovered_tombstone_chain = qglake_view_receipt_chain_lineage_summary();
         uncovered_tombstone_chain.view_version_receipt_hashes =
-            vec!["sha256:other-view-receipt".to_string()];
+            vec![qglake_fixture_hash("other-view-receipt")];
         let err = verify_qglake_lineage_drain(
             &LineageDrainResponse {
                 delivered: 12,
