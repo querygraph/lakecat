@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Added service replay regression coverage proving `credentials.vend-attempted`
+  rejects credential block-reason evidence when the raw-credential exception
+  receipt says raw credentials were allowed.
+- Added service replay regression coverage proving `credentials.vend-attempted`
   rejects object-shaped nested storage-profile secret-ref provider evidence
   when `secret-ref-present` is false before acknowledgement, graph projection,
   or OpenLineage projection.
