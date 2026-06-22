@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation slice:
+  `Reject empty bearer identity tokens`.
+  Request identity parsing now rejects `Authorization: Bearer` headers with
+  empty or whitespace-only tokens before governance, TypeSec verification, Sail
+  calls, audit, or outbox evidence. The regression keeps diagnostics generic
+  and proves LakeCat does not mint a service principal from the SHA-256 hash of
+  an empty token.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib empty_bearer -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand catalog concept ledger`.
   The book now gives a claim-by-claim classification for the Rust service

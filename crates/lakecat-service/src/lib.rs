@@ -9865,6 +9865,12 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
         )
     } else if let Some(authorization) = authorization {
         if let Some(token) = authorization.strip_prefix("Bearer ") {
+            if token.trim().is_empty() {
+                return Err(LakeCatError::InvalidArgument(
+                    "Authorization Bearer token must not be empty".to_string(),
+                )
+                .into());
+            }
             let token_sha256 = content_hash_bytes(token.as_bytes());
             (
                 Principal::new(format!("bearer:{token_sha256}"), PrincipalKind::Service)?,
@@ -11346,6 +11352,57 @@ mod tests {
         assert!(message.contains("x-lakecat-agent-did header must appear at most once"));
         assert!(!message.contains("did:example:agent-a"));
         assert!(!message.contains("did:example:agent-b"));
+        assert!(governance.principals.lock().await.is_empty());
+        assert!(governance.contexts.lock().await.is_empty());
+    }
+
+    #[test]
+    fn request_identity_rejects_empty_bearer_token() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer    ".parse().unwrap());
+
+        let err = request_identity(&headers).expect_err("empty bearer token should fail closed");
+        let LakeCatHttpError(inner) = err;
+        let message = inner.to_string();
+
+        assert!(message.contains("Authorization Bearer token must not be empty"));
+        assert!(!message.contains("bearer:"));
+        assert!(!message.contains(content_hash_bytes("".as_bytes()).as_str()));
+    }
+
+    #[tokio::test]
+    async fn config_endpoint_rejects_empty_bearer_token_before_governance() {
+        let governance = Arc::new(RecordingGovernance::default());
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_integrations(
+            default_sail_engine(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        ));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/config")
+                    .header("authorization", "Bearer    ")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let message = String::from_utf8(body.to_vec()).unwrap();
+        assert!(message.contains("Authorization Bearer token must not be empty"));
+        assert!(!message.contains("bearer:"));
         assert!(governance.principals.lock().await.is_empty());
         assert!(governance.contexts.lock().await.is_empty());
     }

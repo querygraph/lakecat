@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened bearer identity admission so `Authorization: Bearer` headers with
+  empty or whitespace-only tokens are rejected before governance, TypeSec
+  verification, Sail calls, audit, or outbox evidence. The regression keeps the
+  error generic and proves LakeCat does not mint a service principal from the
+  hash of an empty token.
 - Expanded the LakeCat book with a claim-by-claim catalog concept ledger. The
   new section classifies the Rust service spine, Turso store, Iceberg REST
   namespace/table paths, commit CAS plus idempotency/pointer-log/audit/outbox
