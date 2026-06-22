@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving `catalog.config-read`
+  rejects stale structured v4 typed-Sail defaults before acknowledgement,
+  graph projection, or OpenLineage projection.
 - Added service replay regression coverage proving blocked credential-vend
   events reject blank credential block reasons before acknowledgement, graph
   projection, or OpenLineage projection.

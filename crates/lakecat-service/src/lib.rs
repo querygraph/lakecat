@@ -16395,6 +16395,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_stale_catalog_config_typed_sail_default() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-config-stale-typed-sail-default".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-config-stale-typed-sail-default",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": [
+                            {"key": "lakecat.compatibility", "value": "iceberg-rest"},
+                            {"key": "lakecat.format.baseline", "value": "iceberg-v1-v3"},
+                            {"key": "lakecat.format.v4", "value": "extension-ready"},
+                            {"key": "lakecat.format.v4.bridge", "value": "json-passthrough"},
+                            {"key": "lakecat.format.v4.typed-sail", "value": "available"}
+                        ]
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("catalog config replay must reject stale typed Sail v4 defaults");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(
+            message.contains(
+                "catalog config-read defaults must include lakecat.format.v4.typed-sail=unavailable"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-config-stale-typed-sail-default"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_duplicate_catalog_config_default_keys() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let store = Arc::new(RecordingOutboxStore {
