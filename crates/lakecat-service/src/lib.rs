@@ -1540,6 +1540,17 @@ const WAREHOUSE_RECORD_EVIDENCE_FIELDS: &[&str] = &[
     "storage-root-hash",
     "properties",
 ];
+const VIEW_RECORD_EVIDENCE_FIELDS: &[&str] = &[
+    "warehouse",
+    "namespace",
+    "name",
+    "view-version",
+    "sql",
+    "dialect",
+    "schema-version",
+    "columns",
+    "properties",
+];
 
 fn validate_read_restriction_evidence_schema(
     event: &OutboxEvent,
@@ -3701,6 +3712,12 @@ fn validate_view_lifecycle_event_evidence(
             "view lifecycle evidence must contain view",
         ));
     };
+    validate_object_evidence_schema(
+        event,
+        view,
+        "view lifecycle view",
+        VIEW_RECORD_EVIDENCE_FIELDS,
+    )?;
     let Some(warehouse_name) = view
         .get("warehouse")
         .or_else(|| payload.get("warehouse"))
@@ -25166,6 +25183,90 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "malformed view lifecycle evidence must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_view_lifecycle_fields() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-secret-view-extra-token".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "view.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-view-extra",
+                    "event-type": "view.upserted",
+                    "payload": {
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "view": {
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "name": "events_view",
+                            "sql": "select event_id from default.events",
+                            "dialect": "spark-sql",
+                            "schema-version": 1,
+                            "view-version": 1,
+                            "columns": [{
+                                "name": "event_id",
+                                "data-type": {"type": "long"},
+                                "nullable": false,
+                                "comment": null
+                            }],
+                            "properties": {},
+                            "unverified-querygraph-claim": true
+                        },
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "view-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra view lifecycle fields should fail");
+
+        let message = err.to_string();
+        assert!(message.contains("view.upserted"));
+        assert!(
+            message.contains(
+                "view lifecycle view contains unexpected field unverified-querygraph-claim"
+            ),
+            "extra view lifecycle field should be rejected: {message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-secret-view-extra-token"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "extra view lifecycle evidence must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "extra view lifecycle evidence must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "extra view lifecycle evidence must fail before lineage projection"
         );
     }
 

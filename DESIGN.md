@@ -986,7 +986,11 @@ OpenLineage projection.
 View lifecycle replay must carry valid view names and positive store-assigned
 `view-version` values before projection, and guarded view lifecycle replay must
 reject non-positive `expected-view-version` values, so QueryGraph receipt chains
-cannot be extended by invalid or versionless guarded requests.
+cannot be extended by invalid or versionless guarded requests. Service replay
+also closes the nested `view` object over the route-produced view schema before
+acknowledgement, graph projection, OpenLineage projection, or QGLake proof, so
+unverified view lifecycle claims cannot ride beside the validated view identity,
+SQL dialect/schema, columns, properties, and store-assigned version.
 
 ### P6 Reproducibility And V4
 

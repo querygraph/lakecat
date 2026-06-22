@@ -6095,8 +6095,13 @@ service requires its authorization receipt action to be `view-load`; a
 `view-manage` receipt is valid for mutations but not for replaying
 `view.listed`. View lifecycle replay is action-bound too: `view.upserted`
 requires `view-manage`, `view.loaded` requires `view-load`, and `view.dropped`
-requires `view-drop` before LakeCat emits graph or OpenLineage evidence. Table
-lifecycle replay now follows the same rule:
+requires `view-drop` before LakeCat emits graph or OpenLineage evidence. The
+nested `view` evidence is closed over the catalog route's view shape too:
+warehouse, namespace, name, store-assigned `view-version`, SQL, dialect, schema
+version, columns, and properties. A replay sidecar cannot add an extra
+QueryGraph, lineage, governance, or application claim inside that view object
+and have it acknowledged as catalog evidence. Table lifecycle replay now
+follows the same rule:
 
 Active view state is protected before replay as well. A Turso row selected as
 warehouse `local`, namespace `default`, and view `active_customers` must decode
@@ -6514,8 +6519,13 @@ reads to namespace-scoped graph and OpenLineage evidence, and projects
 single-view changes and reads to catalog-facing View graph events plus
 LakeCat OpenLineage view dataset receipts. QueryGraph bootstrap can then
 include views with OSI hashes, store-assigned view versions, view-aware graph
-edges, and OpenLineage view counts. The lineage-drain summary also carries
-compact view replay identity:
+edges, and OpenLineage view counts. Before any view lifecycle event is
+acknowledged from replay, LakeCat checks that the nested `view` object contains
+only the catalog's view fields: warehouse, namespace, name, `view-version`,
+SQL, dialect, schema version, columns, and properties. That keeps a replay
+bundle from smuggling unverified graph, lineage, policy, or application facts
+inside view lifecycle evidence. The lineage-drain summary also carries compact
+view replay identity:
 
 ```json
 {

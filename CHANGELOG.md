@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over nested view lifecycle evidence.
+  `view.upserted`, `view.loaded`, and `view.dropped` replay now reject
+  unexpected fields inside their nested `view` object before acknowledgement,
+  graph projection, OpenLineage projection, or QGLake proof can inherit
+  unverified view lifecycle claims.
 - Closed service outbox admission over nested management record evidence.
   `project.upserted`, `server.upserted`, and `warehouse.upserted` replay now
   reject unexpected fields inside their nested record objects before
