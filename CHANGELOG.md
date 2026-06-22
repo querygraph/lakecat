@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Renamed the default allow-all governance receipt engine to
+  `lakecat-allow-all-local`, replacing stale placeholder wording with an
+  explicit local compatibility-engine label, and added regression coverage
+  proving default receipts no longer advertise placeholder policy semantics.
 - Expanded the LakeCat book with a release-claim ledger that explicitly
   classifies the Rust service spine, Turso store, Iceberg REST paths, commit
   CAS/idempotency/pointer logs/audit/outbox/replay validation, governed

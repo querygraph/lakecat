@@ -5,6 +5,20 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Rename allow-all governance receipt engine`.
+  The default embedded compatibility governance engine now emits
+  `lakecat-allow-all-local` in authorization receipts instead of stale
+  placeholder wording, keeping local/default proof output distinct from real
+  `typesec-local` receipt semantics.
+- Local verification for this governance receipt slice is green:
+  `cargo fmt -p lakecat-security -- --check`;
+  `cargo test -p lakecat-security allow_all_governance_receipt_names_local_engine -- --test-threads=1`;
+  `cargo test -p lakecat-security --lib -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`;
+  obsolete local-engine placeholder wording search across docs and crates
+  returned no matches;
+  `git diff --check`.
 - Latest release-gate slice:
   `Add service Grust release gate`.
   The full local `scripts/check-release-readiness.sh` gate now runs
@@ -9902,7 +9916,7 @@ Updated: 2026-06-22
   errors on invalid policy documents.
 - Added `LAKECAT_TYPESEC_RBAC_POLICY` support to the service binary so local
   deployments can boot with a real RBAC fallback policy instead of the
-  allow-all placeholder.
+  local allow-all compatibility engine.
 - Added focused tests proving RBAC policy loading authorizes matching table
   scan requests and missing/invalid policy files fail closed.
 - Extended `ReadRestriction::from_odrl_policies` to parse max credential TTLs

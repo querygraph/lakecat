@@ -12,6 +12,8 @@ pub trait GovernanceEngine: Send + Sync + 'static {
     -> LakeCatResult<AuthorizationReceipt>;
 }
 
+pub const ALLOW_ALL_LOCAL_ENGINE: &str = "lakecat-allow-all-local";
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AuthorizationRequest {
     pub principal: Principal,
@@ -1881,6 +1883,25 @@ mod tests {
             policy_hash
         );
     }
+
+    #[tokio::test]
+    async fn allow_all_governance_receipt_names_local_engine() {
+        let engine = AllowAllGovernanceEngine::new();
+        let receipt = engine
+            .authorize(AuthorizationRequest {
+                principal: Principal::anonymous(),
+                action: CatalogAction::CatalogConfig,
+                table: None,
+                context: json!({"warehouse": "local"}),
+            })
+            .await
+            .expect("allow-all governance should authorize");
+
+        assert!(receipt.allowed);
+        assert_eq!(receipt.engine, ALLOW_ALL_LOCAL_ENGINE);
+        assert!(!receipt.engine.contains("placeholder"));
+        assert_eq!(receipt.context["warehouse"], "local");
+    }
 }
 
 #[derive(Debug, Default)]
@@ -1903,7 +1924,7 @@ impl GovernanceEngine for AllowAllGovernanceEngine {
             action: request.action,
             table: request.table,
             allowed: true,
-            engine: "lakecat-allow-all-typesec-placeholder".to_string(),
+            engine: ALLOW_ALL_LOCAL_ENGINE.to_string(),
             policy_hash: None,
             context: request.context,
             checked_at: Utc::now(),
