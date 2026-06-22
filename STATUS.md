@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind view-list replay names`.
+  Standard catalog and management `view.listed` audit/outbox evidence now
+  carries count-aligned `view-names`, and service replay admission rejects
+  missing, count-mismatched, invalid, or duplicate view-name evidence before
+  acknowledgement, graph projection, or OpenLineage projection. This gives view
+  listing the same anti-inflation proof shape as namespace and management-list
+  replay while preserving the REST response shape.
+- Local verification for this view-list replay name slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_view_list_name_evidence -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib view_list -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain_projects_view_events_to_graph_and_lineage -- --test-threads=1`;
+  `docs/book/build.sh`.
+- Latest completed implementation slice:
   `Bind namespace-list replay paths`.
   Standard catalog `namespace.listed` audit/outbox evidence now carries
   count-aligned `namespace-paths`, and service replay admission rejects missing,

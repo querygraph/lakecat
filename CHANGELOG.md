@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added view-list replay evidence for count-aligned, syntactically valid,
+  duplicate-free `view-names`, with service admission coverage proving
+  malformed view-list name evidence fails before acknowledgement, graph
+  projection, or OpenLineage projection; updated the book and regenerated the
+  checked-in book artifacts.
 - Added namespace-list replay evidence for count-aligned, syntactically valid,
   duplicate-free `namespace-paths`, with service admission coverage proving
   malformed namespace-list path evidence fails before acknowledgement, graph

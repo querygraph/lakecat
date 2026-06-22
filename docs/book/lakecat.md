@@ -3688,7 +3688,11 @@ unsigned counts, valid warehouse scope when warehouse-scoped, and valid optional
 project scope before delivery.
 View list and lifecycle replay must carry valid warehouse, namespace, view
 name, count, and receipt principal evidence before those view events become
-graph/OpenLineage material for QueryGraph.
+graph/OpenLineage material for QueryGraph. View-list replay also carries
+count-aligned `view-names` evidence. Each name must parse as a valid catalog
+view/table name and the array must be duplicate-free, so an archived
+`view.listed` event cannot inflate view discovery by repeating or forging view
+identities.
 Table lifecycle replay applies the same identity discipline before delivery:
 `table.created`, `table.loaded`, `table.deleted`, and `table.restored` must
 carry a decodable table identity, optional payload scope hints must match it,

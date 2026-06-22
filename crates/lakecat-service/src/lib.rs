@@ -2770,8 +2770,53 @@ fn validate_view_list_event_evidence(
         ));
     };
     validate_namespace_value(event, namespace, "view list")?;
-    validate_required_unsigned_count_field(event, payload, "view-count", "view list")?;
+    let count = validate_required_unsigned_count_field(event, payload, "view-count", "view list")?;
+    validate_required_view_name_array(event, payload, count)?;
     validate_authorization_receipt_principal(event, payload, "view list")?;
+    Ok(())
+}
+
+fn validate_required_view_name_array(
+    event: &OutboxEvent,
+    payload: &Value,
+    expected_count: u64,
+) -> Result<(), LakeCatError> {
+    let Some(names) = payload.get("view-names") else {
+        return Err(outbox_evidence_error(
+            event,
+            "view list evidence must contain view-names",
+        ));
+    };
+    let Some(names) = names.as_array() else {
+        return Err(outbox_evidence_error(
+            event,
+            "view list view-names must be an array",
+        ));
+    };
+    if names.len() as u64 != expected_count {
+        return Err(outbox_evidence_error(
+            event,
+            "view list view-names count must match view list count",
+        ));
+    }
+    let mut unique_names = BTreeSet::new();
+    for name in names {
+        let Some(name) = name.as_str().filter(|name| !name.trim().is_empty()) else {
+            return Err(outbox_evidence_error(
+                event,
+                "view list view-names must contain non-empty strings",
+            ));
+        };
+        TableName::new(name).map_err(|_| {
+            outbox_evidence_error(event, "view list view-names contains an invalid view name")
+        })?;
+        if !unique_names.insert(name) {
+            return Err(outbox_evidence_error(
+                event,
+                "view list view-names must not contain duplicate view names",
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -5954,6 +5999,10 @@ async fn list_views(
     let namespace = namespace.parse::<Namespace>()?;
     let capability = authorize_view_manage(&state, request_identity(&headers)?).await?;
     let views = state.store.list_views(&warehouse, &namespace).await?;
+    let view_names: Vec<String> = views
+        .iter()
+        .map(|view| view.name.as_str().to_string())
+        .collect();
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -5965,6 +6014,7 @@ async fn list_views(
                 "warehouse": warehouse.as_str(),
                 "namespace": namespace.parts(),
                 "view-count": views.len(),
+                "view-names": view_names,
                 "authorization-receipt": capability.receipt(),
             }),
         )?)
@@ -5983,6 +6033,10 @@ async fn catalog_list_views(
     let namespace = namespace.parse::<Namespace>()?;
     let capability = authorize_view_load(&state, request_identity(&headers)?).await?;
     let views = state.store.list_views(&warehouse, &namespace).await?;
+    let view_names: Vec<String> = views
+        .iter()
+        .map(|view| view.name.as_str().to_string())
+        .collect();
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -5995,6 +6049,7 @@ async fn catalog_list_views(
                 "warehouse": warehouse.as_str(),
                 "namespace": namespace.parts(),
                 "view-count": views.len(),
+                "view-names": view_names,
                 "authorization-receipt": capability.receipt(),
             }),
         )?)
@@ -19195,6 +19250,134 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_malformed_view_list_name_evidence() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            (
+                "missing-names",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "view-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view-count": 1,
+                }),
+                "view list evidence must contain view-names",
+            ),
+            (
+                "count-mismatch",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "view-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view-count": 2,
+                    "view-names": ["active_customers"],
+                }),
+                "view list view-names count must match view list count",
+            ),
+            (
+                "invalid-name",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "view-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view-count": 1,
+                    "view-names": ["../secret"],
+                }),
+                "view list view-names contains an invalid view name",
+            ),
+            (
+                "duplicate-name",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "view-list",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view-count": 2,
+                    "view-names": ["active_customers", "active_customers"],
+                }),
+                "view list view-names must not contain duplicate view names",
+            ),
+        ];
+
+        for (label, payload, expected_message) in cases {
+            let event_id = format!("evt-view-list-{label}");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "view.listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-view-list-{label}"),
+                        "event-type": "view.listed",
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed view-list name evidence should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("view.listed"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "malformed view-list name evidence must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "malformed view-list name evidence must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "malformed view-list name evidence must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_view_lifecycle_evidence() {
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {
@@ -19345,6 +19528,7 @@ mod tests {
                     "warehouse": "local",
                     "namespace": ["default"],
                     "view-count": 1,
+                    "view-names": ["active_customers"],
                 }),
             ),
             (
@@ -19565,6 +19749,7 @@ mod tests {
                     "warehouse": "local",
                     "namespace": ["default"],
                     "view-count": 1,
+                    "view-names": ["active_customers"],
                 }),
             ),
             (
@@ -24556,6 +24741,7 @@ mod tests {
                             "warehouse": "local",
                             "namespace": ["default"],
                             "view-count": 1,
+                            "view-names": ["events_view"],
                             "authorization-receipt": {
                                 "principal": principal,
                                 "action": "view-load",
@@ -24804,6 +24990,10 @@ mod tests {
         let lineage_events = lineage.events.lock().await;
         assert_eq!(lineage_events.len(), 6);
         assert_eq!(lineage_events[0].event_type, LineageEventType::ViewListed);
+        assert_eq!(
+            lineage_events[0].payload["view-names"],
+            serde_json::json!(["events_view"])
+        );
         assert_eq!(lineage_events[1].event_type, LineageEventType::ViewUpserted);
         assert_eq!(lineage_events[2].event_type, LineageEventType::ViewLoaded);
         assert_eq!(lineage_events[3].event_type, LineageEventType::ViewDropped);
