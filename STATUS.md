@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover malformed management upsert principals`.
+  Service replay regression coverage now proves policy-binding, project,
+  server, storage-profile, and warehouse upsert events reject malformed
+  authorization receipt principals before acknowledgement, graph projection, or
+  OpenLineage projection. This closes the malformed-principal sibling of the
+  actor attribution rule for management mutations.
+- Local verification for this malformed management upsert principal slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_management_upsert_receipt_principal -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib management_upsert_receipt_principal -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover credential response TTL drift`.
   Service replay regression coverage now proves `credentials.vend-attempted`
   rejects credential response `max-credential-ttl-seconds` drift from the

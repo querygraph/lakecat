@@ -13307,6 +13307,193 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_malformed_management_upsert_receipt_principal() {
+        let malformed_principal = json!({
+            "subject": "agent:operator",
+            "kind": "unknown"
+        });
+        let storage_profile_location_hash = content_hash_json(&json!({
+            "location-prefix": "file:///tmp/lakecat/events"
+        }))
+        .unwrap();
+        let cases = vec![
+            (
+                "policy-binding.upserted",
+                "policy-binding upsert",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "policy-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "policy": {
+                        "policy-id": "agent-read",
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "table": "events",
+                        "enforced": true,
+                        "odrl": {
+                            "uid": "policy:agent-read",
+                            "lakecat:read-restriction": {
+                                "allowed-columns": ["event_id"]
+                            }
+                        }
+                    }
+                }),
+            ),
+            (
+                "project.upserted",
+                "project upsert",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "project-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "project-id": "default",
+                    "project-record": {
+                        "project-id": "default",
+                        "display-name": "Default Project",
+                        "properties": {"owner": "querygraph"}
+                    }
+                }),
+            ),
+            (
+                "server.upserted",
+                "server upsert",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "server-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "server-id": "prod",
+                    "server-record": {
+                        "server-id": "prod",
+                        "display-name": "Production",
+                        "endpoint-url": "https://lakecat.example",
+                        "properties": {"region": "global"}
+                    }
+                }),
+            ),
+            (
+                "storage-profile.upserted",
+                "storage-profile upsert",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "storage-profile-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "storage-profile": {
+                        "profile-id": "file-events",
+                        "warehouse": "local",
+                        "location-prefix-hash": storage_profile_location_hash,
+                        "provider": "file",
+                        "issuance-mode": "local-file-no-secret",
+                        "secret-ref-present": false,
+                    }
+                }),
+            ),
+            (
+                "warehouse.upserted",
+                "warehouse upsert",
+                json!({
+                    "authorization-receipt": {
+                        "principal": malformed_principal,
+                        "action": "warehouse-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "warehouse-record": {
+                        "warehouse": "local",
+                        "project-id": "default",
+                        "storage-root": "file:///tmp/lakecat",
+                        "properties": {"region": "local"}
+                    }
+                }),
+            ),
+        ];
+
+        for (event_type, label, payload) in cases {
+            let event_id = format!("evt-malformed-{}-principal-token", event_type);
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-malformed-{event_type}-principal"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed management-upsert receipt principal should fail");
+
+            let message = err.to_string();
+            assert!(
+                message.contains(event_type),
+                "{event_type} error should include event type: {message}"
+            );
+            assert!(
+                message.contains(&format!("{label} authorization receipt principal")),
+                "{event_type} error should describe malformed receipt principal: {message}"
+            );
+            assert!(
+                message.contains("must be a valid principal"),
+                "{event_type} error should reject malformed principal shape: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_short_table_commit_hash_evidence() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),

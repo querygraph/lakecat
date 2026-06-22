@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving management upsert events
+  reject malformed authorization receipt principals before acknowledgement,
+  graph projection, or OpenLineage projection.
 - Added service replay regression coverage proving `credentials.vend-attempted`
   rejects credential response `max-credential-ttl-seconds` drift from the
   read-restriction receipt before acknowledgement, graph projection, or
