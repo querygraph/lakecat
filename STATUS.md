@@ -6,6 +6,35 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close QGLake management proof objects and expand catalog concept guide`.
+  Compact `managementProof`, captured LakeCat replay `management`, and nested
+  `policyUpsertProof` evidence are now closed over their compared schema.
+  Captured `warehouseProjectId` is matched with compact scope evidence, while
+  captured-only `storageProfileUpsert` remains verified by the sibling
+  storage-profile proof. The book now has a clearer reader-facing walkthrough
+  that separates standard Iceberg parlance from LakeCat implementation,
+  TypeSec governance, QueryGraph/QGLake integration, and narrow future
+  Iceberg-adjacent optional-profile candidates, with a stronger Sail-first
+  engine argument.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_management_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_policy_upsert_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_extra_management_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_extra_policy_upsert_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_management_scope_drift -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close QGLake credential proof objects`.
   Compact `credentialVendingProof`, captured LakeCat replay `credentials`,
   their restricted/trusted-human branches, and their nested redacted

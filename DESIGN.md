@@ -737,6 +737,10 @@ authorization receipt hash, `policy-manage` action proof, graph event proof,
 replay hashes, and OpenLineage hashes, and raw lineage replay must reject
 missing or malformed `policy-binding.upserted` evidence before
 QueryGraph/QGLake handoff is accepted.
+Compact `managementProof`, captured replay `management`, and nested
+`policyUpsertProof` must also be closed over their compared fields. Captured
+`warehouseProjectId` must match compact scope evidence, while captured-only
+`storageProfileUpsert` remains verified by the sibling storage-profile proof.
 
 ### P3 Commit Hardening
 

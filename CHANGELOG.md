@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Closed compact and captured QGLake management proof objects over their
+  compared schema. `managementProof`, captured LakeCat replay `management`,
+  and nested `policyUpsertProof` evidence now reject unexpected fields before
+  summary or sidecar verification can accept unverified tenant, project,
+  warehouse, policy, storage-profile list, policy-upsert, authorization,
+  replay, or OpenLineage claims beside checked management proof. Captured
+  `warehouseProjectId` is now matched with compact summary scope evidence.
+- Expanded the book's catalog concept guide with a reader-facing walkthrough
+  of the Rust service spine, Turso local store, Iceberg REST compatibility,
+  commit CAS, idempotency, pointer logs, audit/outbox, replay validation,
+  TypeSec-governed scan and credential receipts, QueryGraph/QGLake proof
+  surfaces, and the exact line between LakeCat extensions and possible future
+  Iceberg-adjacent optional profiles. The same section makes the Sail-first
+  engine argument explicit for table-format interpretation, governed scan
+  planning, commit validation, metadata-as-data, and typed v4 behavior.
 - Closed compact and captured QGLake credential-vending proof objects over
   their compared schema. `credentialVendingProof`, its restricted/trusted-human
   branches, and their nested storage-profile anchors now reject unexpected

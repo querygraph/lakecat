@@ -2423,37 +2423,24 @@ fn verify_lakecat_replay_management_matches_summary(
     lakecat: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
     let captured_management = lakecat_replay_management(capture)?;
+    require_only_fields(
+        captured_management,
+        CAPTURED_MANAGEMENT_PROOF_FIELDS,
+        "captured LakeCat replay output.replay-evidence.management",
+    )?;
+    require_only_fields(
+        required_object(
+            captured_management,
+            "policyUpsertProof",
+            "captured LakeCat replay output.replay-evidence.management",
+        )?,
+        MANAGEMENT_POLICY_UPSERT_PROOF_FIELDS,
+        "captured LakeCat replay output.replay-evidence.management.policyUpsertProof",
+    )?;
     let summary_management =
         required_object(lakecat, "managementProof", "lakecatReplayVerification")?;
 
-    for field in [
-        "serverCount",
-        "serverIds",
-        "serverGraphEvents",
-        "projectCount",
-        "projectIds",
-        "projectGraphEvents",
-        "warehouseCount",
-        "warehouseNames",
-        "warehouseGraphEvents",
-        "policyBindingCount",
-        "policyIds",
-        "policyGraphEvents",
-        "storageProfileCount",
-        "storageProfileIds",
-        "storageProfileGraphEvents",
-        "serverReplayEventHashes",
-        "serverOpenLineageHashes",
-        "projectReplayEventHashes",
-        "projectOpenLineageHashes",
-        "warehouseReplayEventHashes",
-        "warehouseOpenLineageHashes",
-        "policyReplayEventHashes",
-        "policyOpenLineageHashes",
-        "policyUpsertProof",
-        "storageProfileReplayEventHashes",
-        "storageProfileOpenLineageHashes",
-    ] {
+    for field in MANAGEMENT_REQUIRED_PROOF_FIELDS {
         require_value_match(
             captured_management,
             field,
@@ -2461,6 +2448,12 @@ fn verify_lakecat_replay_management_matches_summary(
             "captured LakeCat replay output.replay-evidence.management",
         )?;
     }
+    require_optional_null_value_match(
+        captured_management,
+        "warehouseProjectId",
+        summary_management.get("warehouseProjectId"),
+        "captured LakeCat replay output.replay-evidence.management",
+    )?;
     let expected_management_replay =
         expected_management_replay_line_from_summary(summary_management, lakecat)?;
     require_string_match(
@@ -3704,6 +3697,7 @@ fn require_management_evidence(
     management: &serde_json::Map<String, Value>,
     expected_policy_binding_count: u64,
 ) -> lakecat_core::LakeCatResult<()> {
+    require_only_fields(management, MANAGEMENT_PROOF_FIELDS, "managementProof")?;
     let server_count = require_positive_u64(management, "serverCount", "managementProof")?;
     require_positive_u64(management, "serverGraphEvents", "managementProof")?;
     require_unique_string_array_count(management, "serverIds", server_count, "managementProof")?;
@@ -3740,6 +3734,11 @@ fn require_management_evidence(
     )?;
     let policy_ids = required_string_array(management, "policyIds", "managementProof")?;
     let policy_upsert = required_object(management, "policyUpsertProof", "managementProof")?;
+    require_only_fields(
+        policy_upsert,
+        MANAGEMENT_POLICY_UPSERT_PROOF_FIELDS,
+        "managementProof.policyUpsertProof",
+    )?;
     let policy_upsert_id = require_non_blank_str(
         policy_upsert,
         "policyId",
@@ -4036,6 +4035,108 @@ const CREDENTIAL_STORAGE_PROFILE_FIELDS: &[&str] = &[
     "secretRefProvider",
     "secretRefHash",
     "graphEvents",
+];
+
+const MANAGEMENT_REQUIRED_PROOF_FIELDS: &[&str] = &[
+    "serverCount",
+    "serverIds",
+    "serverGraphEvents",
+    "projectCount",
+    "projectIds",
+    "projectGraphEvents",
+    "warehouseCount",
+    "warehouseNames",
+    "warehouseGraphEvents",
+    "policyBindingCount",
+    "policyIds",
+    "policyGraphEvents",
+    "storageProfileCount",
+    "storageProfileIds",
+    "storageProfileGraphEvents",
+    "serverReplayEventHashes",
+    "serverOpenLineageHashes",
+    "projectReplayEventHashes",
+    "projectOpenLineageHashes",
+    "warehouseReplayEventHashes",
+    "warehouseOpenLineageHashes",
+    "policyReplayEventHashes",
+    "policyOpenLineageHashes",
+    "policyUpsertProof",
+    "storageProfileReplayEventHashes",
+    "storageProfileOpenLineageHashes",
+];
+
+const MANAGEMENT_PROOF_FIELDS: &[&str] = &[
+    "serverCount",
+    "serverIds",
+    "serverGraphEvents",
+    "projectCount",
+    "projectIds",
+    "projectGraphEvents",
+    "warehouseCount",
+    "warehouseNames",
+    "warehouseProjectId",
+    "warehouseGraphEvents",
+    "policyBindingCount",
+    "policyIds",
+    "policyGraphEvents",
+    "storageProfileCount",
+    "storageProfileIds",
+    "storageProfileGraphEvents",
+    "serverReplayEventHashes",
+    "serverOpenLineageHashes",
+    "projectReplayEventHashes",
+    "projectOpenLineageHashes",
+    "warehouseReplayEventHashes",
+    "warehouseOpenLineageHashes",
+    "policyReplayEventHashes",
+    "policyOpenLineageHashes",
+    "policyUpsertProof",
+    "storageProfileReplayEventHashes",
+    "storageProfileOpenLineageHashes",
+];
+
+const CAPTURED_MANAGEMENT_PROOF_FIELDS: &[&str] = &[
+    "serverCount",
+    "serverIds",
+    "serverGraphEvents",
+    "projectCount",
+    "projectIds",
+    "projectGraphEvents",
+    "warehouseCount",
+    "warehouseNames",
+    "warehouseProjectId",
+    "warehouseGraphEvents",
+    "policyBindingCount",
+    "policyIds",
+    "policyGraphEvents",
+    "storageProfileCount",
+    "storageProfileIds",
+    "storageProfileGraphEvents",
+    "serverReplayEventHashes",
+    "serverOpenLineageHashes",
+    "projectReplayEventHashes",
+    "projectOpenLineageHashes",
+    "warehouseReplayEventHashes",
+    "warehouseOpenLineageHashes",
+    "policyReplayEventHashes",
+    "policyOpenLineageHashes",
+    "policyUpsertProof",
+    "storageProfileUpsert",
+    "storageProfileReplayEventHashes",
+    "storageProfileOpenLineageHashes",
+];
+
+const MANAGEMENT_POLICY_UPSERT_PROOF_FIELDS: &[&str] = &[
+    "policyId",
+    "odrlHash",
+    "principalSubject",
+    "principalKind",
+    "authorizationReceiptHash",
+    "authorizationReceiptAction",
+    "graphEvents",
+    "replayEventHashes",
+    "openLineageHashes",
 ];
 
 fn require_catalog_config_evidence(
@@ -13324,6 +13425,40 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_management_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["unverifiedManagementClaim"] =
+            json!(qglake_fixture_hash("unverified-management-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra management proof fields");
+        let err = err.to_string();
+
+        assert!(err.contains("managementProof"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedManagementClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_policy_upsert_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["policyUpsertProof"]["unverifiedPolicyClaim"] =
+            json!(qglake_fixture_hash("unverified-policy-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra policy-upsert proof fields");
+        let err = err.to_string();
+
+        assert!(err.contains("managementProof.policyUpsertProof"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedPolicyClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_management_graph_events() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["managementProof"]["serverGraphEvents"] = json!(0);
@@ -17829,6 +17964,88 @@ mod tests {
             .expect_err("captured replay management ID proof drift should be rejected");
         assert!(err.to_string().contains(
             "captured LakeCat replay output.replay-evidence.management.serverIds mismatch"
+        ));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_management_fields() {
+        let temp = qglake_temp_dir("handoff-captured-management-extra-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["management"]["unverifiedManagementClaim"] =
+            json!(qglake_fixture_hash("unverified-management-claim"));
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay management proof should reject extra fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("captured LakeCat replay output.replay-evidence.management"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedManagementClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_policy_upsert_fields() {
+        let temp = qglake_temp_dir("handoff-captured-policy-upsert-extra-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["management"]["policyUpsertProof"]["unverifiedPolicyClaim"] =
+            json!(qglake_fixture_hash("unverified-policy-claim"));
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay policy-upsert proof should reject extra fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains(
+                "captured LakeCat replay output.replay-evidence.management.policyUpsertProof"
+            ),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedPolicyClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_management_scope_drift() {
+        let temp = qglake_temp_dir("handoff-captured-management-scope-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["management"]["warehouseProjectId"] = json!("other-project");
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay management scope drift should be rejected");
+
+        assert!(err.to_string().contains(
+            "captured LakeCat replay output.replay-evidence.management.warehouseProjectId mismatch"
         ));
     }
 
