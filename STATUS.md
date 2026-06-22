@@ -6,6 +6,22 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Add pending outbox hash diagnostics`.
+  Memory and Turso `pending_outbox_events` validation now reports hash-only
+  `event-id-hash`, `payload-hash`, and event-type hash evidence for corrupt
+  pending rows without echoing raw corrupt event IDs or payload event-type
+  strings before graph or lineage projection can observe the batch.
+- Local verification for this implementation/testing slice is green:
+  `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store memory_store_rejects_corrupt_pending_outbox_event_ids -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_corrupt_pending_outbox_payloads -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Harden table lifecycle location replay evidence`.
   Service replay admission now validates `table.created`, `table.loaded`,
   `table.restored`, and `table.deleted` table `metadata-location`, table

@@ -863,7 +863,11 @@ Pending outbox replay should stay deterministic across embedded and Turso
 stores, ordered by `created_at,event_id`, with batch limits applied after that
 order and with duplicate-safe delivery accounting. Draining should acknowledge
 delivery only after every projection in the batch succeeds, leaving events
-pending for retry when graph or lineage projection fails.
+pending for retry when graph or lineage projection fails. Store-level pending
+row validation should return hash-only event-id, payload, and event-type
+evidence for corrupt pending rows, so operators can identify the damaged
+durable record without echoing raw event IDs or corrupt payload strings before
+graph or lineage projection observes the batch.
 Store-level commit idempotency evidence must also be shaped before a durable
 mutation starts, not only at the REST header boundary: blank or malformed keys,
 caller-provided request hashes without keys, and non-SHA-256 request hashes

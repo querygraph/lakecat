@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added hash-only pending outbox validation diagnostics. Memory and Turso
+  `pending_outbox_events` reads now report `event-id-hash`, `payload-hash`,
+  and event-type hash evidence for corrupt pending rows without echoing raw
+  corrupt event IDs or payload event-type strings before graph or lineage
+  projection can observe the batch.
 - Hardened table lifecycle replay location evidence. `table.created`,
   `table.loaded`, `table.restored`, and `table.deleted` replay now rejects
   decorated or credential-bearing table `metadata-location`, table `location`,

@@ -1481,32 +1481,38 @@ pub struct OutboxEvent {
 
 impl OutboxEvent {
     pub fn validate_pending(&self) -> LakeCatResult<()> {
+        let event_id_hash = content_hash_bytes(self.event_id.as_bytes());
+        let payload_hash = content_hash_json(&self.payload)?;
         if self.delivered_at.is_some() {
-            return Err(LakeCatError::Internal(
-                "pending outbox event must not already be delivered".to_string(),
-            ));
+            return Err(LakeCatError::Internal(format!(
+                "pending outbox event must not already be delivered; event-id-hash={event_id_hash}; payload-hash={payload_hash}"
+            )));
         }
         if self.sink.trim().is_empty() {
-            return Err(LakeCatError::Internal(
-                "pending outbox event sink must not be empty".to_string(),
-            ));
+            return Err(LakeCatError::Internal(format!(
+                "pending outbox event sink must not be empty; event-id-hash={event_id_hash}; payload-hash={payload_hash}"
+            )));
         }
         let payload_event_type = self
             .payload
             .get("event-type")
             .and_then(Value::as_str)
             .ok_or_else(|| {
-                LakeCatError::Internal("pending outbox payload missing event-type".to_string())
+                LakeCatError::Internal(format!(
+                    "pending outbox payload missing event-type; event-id-hash={event_id_hash}; payload-hash={payload_hash}"
+                ))
             })?;
         if payload_event_type != self.event_type {
-            return Err(LakeCatError::Internal(
-                "pending outbox event type does not match payload".to_string(),
-            ));
+            return Err(LakeCatError::Internal(format!(
+                "pending outbox event type does not match payload; event-id-hash={event_id_hash}; event-type-hash={}; payload-event-type-hash={}; payload-hash={payload_hash}",
+                content_hash_bytes(self.event_type.as_bytes()),
+                content_hash_bytes(payload_event_type.as_bytes())
+            )));
         }
-        if self.event_id != content_hash_json(&self.payload)? {
-            return Err(LakeCatError::Internal(
-                "pending outbox event id does not match payload hash".to_string(),
-            ));
+        if self.event_id != payload_hash {
+            return Err(LakeCatError::Internal(format!(
+                "pending outbox event id does not match payload hash; event-id-hash={event_id_hash}; payload-hash={payload_hash}"
+            )));
         }
         Ok(())
     }
@@ -4483,6 +4489,9 @@ mod memory_tests {
             err,
             LakeCatError::Internal(message)
                 if message.contains("pending outbox event id does not match payload hash")
+                    && message.contains("event-id-hash=sha256:")
+                    && message.contains("payload-hash=sha256:")
+                    && !message.contains("sha256:short")
         ));
     }
 
@@ -10103,12 +10112,20 @@ pub mod turso_store {
                 .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
                 .await
                 .unwrap_err();
-            assert!(matches!(
-                err,
-                LakeCatError::Internal(message)
-                    if message.contains("pending outbox event type does not match payload")
-                        || message.contains("pending outbox event id does not match payload hash")
-            ));
+            let LakeCatError::Internal(message) = err else {
+                panic!("expected internal pending outbox validation error");
+            };
+            assert!(
+                message.contains("pending outbox event type does not match payload")
+                    || message.contains("pending outbox event id does not match payload hash"),
+                "{message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"), "{message}");
+            assert!(message.contains("payload-hash=sha256:"), "{message}");
+            assert!(
+                !message.contains("querygraph.bootstrap.drifted"),
+                "{message}"
+            );
         }
 
         #[tokio::test]

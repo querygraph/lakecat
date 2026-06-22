@@ -10907,6 +10907,10 @@ envelope around it:
 - **Replay validation** proves that durable evidence is still well formed
   before it is acknowledged, projected, drained, or imported.
 
+Even corrupt pending outbox rows should fail with hash-only diagnostics, so an
+operator can identify the damaged durable record without leaking raw event IDs
+or payload strings into graph, lineage, or logs.
+
 The boundary is important. CAS is standard. LakeCat's exact idempotency table,
 pointer-log schema, audit schema, and outbox payload schema are local. The
 possible future Iceberg-adjacent proposal is not "adopt LakeCat's schema." It
