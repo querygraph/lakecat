@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed service outbox admission over top-level governed scan replay payloads.
+  `table.scan-planned` and `table.scan-tasks-fetched` now reject unexpected
+  top-level payload fields before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake proof can inherit unverified scan, lineage,
+  graph, QueryGraph, or application claims beside checked restriction,
+  projection, stats, filter, task-count, and authorization evidence.
 - Closed service outbox admission over top-level view receipt read payloads.
   `view.version-receipts-listed` and
   `view.version-receipt-chains-listed` now reject unexpected top-level payload

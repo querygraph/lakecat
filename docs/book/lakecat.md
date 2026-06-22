@@ -5200,7 +5200,12 @@ was lost before replay. The service now also rejects unexpected fields inside
 top-level and receipt `read-restriction` objects, and inside nested
 `row-predicate` objects, before outbox acknowledgement. That keeps graph,
 OpenLineage, and QGLake evidence from inheriting extra unverified claims beside
-the known governed restriction fields.
+the known governed restriction fields. The scan replay payloads themselves are
+closed over the fields LakeCat producers emit for `table.scan-planned` and
+`table.scan-tasks-fetched`, so an archived governed read cannot attach
+unverified scan, lineage, graph, QueryGraph, or application claims beside the
+checked restriction, projection, stats, filter, task-count, and authorization
+evidence.
 
 ## The Commit Path
 

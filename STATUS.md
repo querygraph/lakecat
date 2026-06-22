@@ -6,6 +6,26 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close service scan replay schemas`.
+  Service outbox admission now rejects unexpected top-level payload fields for
+  `table.scan-planned` and `table.scan-tasks-fetched` before acknowledgement,
+  graph projection, OpenLineage projection, or QGLake proof can inherit
+  unverified scan, lineage, graph, QueryGraph, or application claims beside
+  checked restriction, projection, stats, filter, task-count, and authorization
+  evidence.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_scan_payload_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service scan_ -- --test-threads=1` passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close service view receipt read schemas`.
   Service outbox admission now rejects unexpected top-level payload fields for
   `view.version-receipts-listed` and
