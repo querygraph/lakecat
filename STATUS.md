@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require credential-vend receipt principals`.
+  Service `credentials.vend-attempted` replay admission now rejects missing or
+  malformed authorization receipt principals before acknowledgement, graph
+  projection, or OpenLineage projection, including zero-credential blocked
+  credential decisions whose response-entry checks never run.
+- Local verification for this credential-vend receipt-principal slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo check -p lakecat-service --lib`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_credential_vend_receipt_principal -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib credential_vend -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`.
+- Latest completed implementation slice:
   `Bind commit-history principal summary`.
   Service `table.commits-listed` audit/outbox payloads now carry
   `principal-subject` and `principal-kind`, and replay admission rejects

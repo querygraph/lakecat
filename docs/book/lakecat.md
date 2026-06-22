@@ -3495,7 +3495,10 @@ LakeCat now applies the same discipline before the outbox event is delivered:
 `credentials.vend-attempted` must carry a `credential-count` that matches its
 credential-response evidence, full SHA-256 prefix and issuer-config hashes for
 each returned credential, a full storage-profile `location-prefix-hash`, and
-non-contradictory secret-reference state. The top-level `storage-profile-id`
+non-contradictory secret-reference state. The event must also carry a valid
+authorization receipt principal before delivery, including blocked
+zero-credential attempts where no returned credential entry exists to repeat
+actor evidence. The top-level `storage-profile-id`
 must match the nested `storage-profile.profile-id`, even when no raw
 credentials were returned, and the nested `storage-profile.warehouse` must
 match the event table warehouse. The replay payload's `table` hint must also
@@ -3762,10 +3765,11 @@ is generated, so malformed or actor-drifted pointer-log summaries cannot
 become delivered replay evidence. Credential-vend
 replay gets the same treatment: `credentials.vend-attempted` must carry a
 matching credential count, full duplicate-free credential-response prefix
-hashes, a full redacted storage-profile location hash, internally consistent secret-reference
-presence/provider/hash fields, a top-level storage-profile id that agrees with
-nested storage-profile evidence, a nested storage-profile warehouse that agrees
-with the event table warehouse, any top-level secret-reference presence value
+hashes, a full redacted storage-profile location hash, a valid authorization
+receipt principal, internally consistent secret-reference presence/provider/hash
+fields, a top-level storage-profile id that agrees with nested storage-profile
+evidence, a nested storage-profile warehouse that agrees with the event table
+warehouse, any top-level secret-reference presence value
 that agrees with nested storage-profile evidence, and credential-response
 metadata that agrees with the selected storage profile and authorization receipt
 before delivery.

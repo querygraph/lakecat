@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Required `credentials.vend-attempted` replay evidence to carry a valid
+  authorization receipt principal before acknowledgement, graph projection, or
+  OpenLineage projection, with zero-credential missing/malformed-principal
+  coverage proving blocked credential decisions cannot become actorless
+  credential-root evidence.
 - Required service `table.commits-listed` replay evidence to carry
   `principal-subject` and `principal-kind` fields that match the authorization
   receipt principal before acknowledgement, graph projection, or OpenLineage

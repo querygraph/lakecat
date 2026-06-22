@@ -3141,6 +3141,7 @@ fn validate_credential_vend_event_evidence(
 ) -> Result<(), LakeCatError> {
     validate_read_restriction_receipt_match(event, payload, "credential-vend")?;
     validate_raw_credential_exception_receipt_match(event, payload)?;
+    validate_authorization_receipt_principal(event, payload, "credential-vend")?;
     let table = validate_required_outbox_table_identity(event, "credential-vend")?;
     if let Some(payload_table) = payload.get("table") {
         validate_table_lifecycle_table_hint(
@@ -15901,6 +15902,106 @@ mod tests {
             lineage.events.lock().await.is_empty(),
             "mismatched credential-vend table identity must fail before lineage projection"
         );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_credential_vend_receipt_principal() {
+        let cases = [
+            (
+                "evt-credential-vend-missing-receipt-principal",
+                None,
+                "credential-vend evidence must contain authorization receipt principal",
+            ),
+            (
+                "evt-credential-vend-malformed-receipt-principal",
+                Some(json!({
+                    "subject": "agent:reader",
+                    "kind": "unknown"
+                })),
+                "credential-vend authorization receipt principal must be a valid principal",
+            ),
+        ];
+
+        for (event_id, principal, expected_message) in cases {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let mut authorization_receipt = json!({
+                "action": "credentials-vend",
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            });
+            if let Some(principal) = principal {
+                authorization_receipt["principal"] = principal;
+            }
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "credentials.vend-attempted".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "credentials.vend-attempted",
+                        "table": table,
+                        "payload": {
+                            "authorization-receipt": authorization_receipt,
+                            "credential-count": 0,
+                            "credential-response-evidence": [],
+                            "storage-profile-id": "events-local",
+                            "storage-profile": {
+                                "profile-id": "events-local",
+                                "warehouse": "local",
+                                "provider": "file",
+                                "issuance-mode": "local-file-no-secret",
+                                "secret-ref-present": false,
+                                "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            },
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed credential-vend receipt principal should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("credentials.vend-attempted"));
+            assert!(
+                message.contains(expected_message),
+                "{event_id} should reject malformed receipt principal: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_id} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_id} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_id} must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]
