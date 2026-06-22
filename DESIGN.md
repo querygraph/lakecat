@@ -667,6 +667,11 @@ overrides, endpoints, `catalog-config` authorization action, graph count,
 replay hashes, and OpenLineage hashes as raw `catalog.config-read` replay, so
 archived QGLake summaries and captured replay sidecars cannot drop the v4 bridge
 posture or integration discovery contract after source replay accepted it.
+Compact `catalogConfigProof` and captured LakeCat replay `catalogConfig` proof
+objects must also stay closed over those compared fields, so a summary,
+captured replay output, or saved self-verifier sidecar cannot attach unverified
+v4 bridge, endpoint, authorization, graph, replay, or OpenLineage compatibility
+claims beside checked config-read proof.
 Saved `lakecatHandoffVerifyOutput` sidecars must bind their own
 `lineageDrainArtifactSemantics.catalogConfigProof` to the raw lineage-drain
 artifact too, so a self-verification artifact cannot claim verified drain

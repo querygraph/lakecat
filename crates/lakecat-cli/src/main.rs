@@ -2110,6 +2110,11 @@ fn verify_lakecat_replay_catalog_config_matches_summary(
     lakecat: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
     let captured_config = lakecat_replay_catalog_config(capture)?;
+    require_only_fields(
+        captured_config,
+        CATALOG_CONFIG_PROOF_FIELDS,
+        "captured LakeCat replay output.replay-evidence.catalogConfig",
+    )?;
     let summary_config =
         required_object(lakecat, "catalogConfigProof", "lakecatReplayVerification")?;
 
@@ -3932,6 +3937,7 @@ fn require_catalog_config_evidence(
     config: &serde_json::Map<String, Value>,
     principal: &str,
 ) -> lakecat_core::LakeCatResult<()> {
+    require_only_fields(config, CATALOG_CONFIG_PROOF_FIELDS, "catalogConfigProof")?;
     require_config_defaults(config)?;
     require_config_overrides(config)?;
     require_config_endpoints(config)?;
@@ -3949,6 +3955,19 @@ fn require_catalog_config_evidence(
     require_full_hash_array(config, "openLineageHashes", "catalogConfigProof")?;
     Ok(())
 }
+
+const CATALOG_CONFIG_PROOF_FIELDS: &[&str] = &[
+    "defaults",
+    "overrides",
+    "endpoints",
+    "principalSubject",
+    "principalKind",
+    "authorizationReceiptHash",
+    "authorizationReceiptAction",
+    "graphEvents",
+    "replayEventHashes",
+    "openLineageHashes",
+];
 
 fn require_config_defaults(
     config: &serde_json::Map<String, Value>,
@@ -13598,6 +13617,23 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_catalog_config_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["catalogConfigProof"]["unverifiedEndpointClaim"] =
+            json!(qglake_fixture_hash("unverified-config-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject unverified catalog config fields");
+        let err = err.to_string();
+
+        assert!(err.contains("catalogConfigProof"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedEndpointClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_unsupported_config_v4_default() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["catalogConfigProof"]["defaults"]
@@ -16937,6 +16973,34 @@ mod tests {
 
         assert!(err.to_string().contains("catalogConfig"));
         assert!(err.to_string().contains("authorizationReceiptAction"));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_catalog_config_fields() {
+        let temp = qglake_temp_dir("handoff-captured-catalog-config-extra-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut replay = read_json_file(&temp.join("lakecat-replay.txt")).expect("replay JSON");
+        replay["replay-evidence"]["catalogConfig"]["unverifiedEndpointClaim"] =
+            json!(qglake_fixture_hash("unverified-captured-config-claim"));
+        fs::write(
+            temp.join("lakecat-replay.txt"),
+            serde_json::to_vec_pretty(&replay).expect("drifted replay JSON"),
+        )
+        .expect("write drifted replay");
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay catalog config extra fields should be rejected");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("captured LakeCat replay output.replay-evidence.catalogConfig"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedEndpointClaim"),
+            "{err}"
+        );
     }
 
     #[test]

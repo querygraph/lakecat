@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed compact and captured QGLake catalog-config proof objects over their
+  compared schema. `catalogConfigProof` and captured LakeCat replay
+  `catalogConfig` evidence now reject unexpected fields before summary or
+  sidecar verification can accept unverified v4 bridge, endpoint, authorization,
+  graph, replay, or OpenLineage compatibility claims beside checked config-read
+  proof.
 - Closed compact and captured QGLake table commit-history proof objects over
   their compared schema. `tableCommitHistoryProof` and captured LakeCat replay
   `tableCommitHistory` evidence now reject unexpected fields before summary or

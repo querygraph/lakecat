@@ -6799,10 +6799,14 @@ preserve the same v4 bridge defaults, endpoint list, `catalog-config`
 authorization action, graph count, replay hashes, and OpenLineage hashes as the
 captured LakeCat replay output. A saved handoff therefore cannot pass raw drain
 verification and then silently drop or rewrite the config-read contract in the
-summary or sidecar. The saved LakeCat handoff verifier output repeats that
-same object under `lineageDrainArtifactSemantics.catalogConfigProof`, binding
-the verifier's statement about the raw drain artifact to the config proof
-actually carried by that artifact.
+summary or sidecar. Both the compact `catalogConfigProof` object and the
+captured LakeCat replay `catalogConfig` object are closed over those compared
+fields, so neither can append an extra unverified v4 bridge, endpoint,
+authorization, graph, replay, or OpenLineage claim beside the accepted
+config-read proof. The saved LakeCat handoff verifier output repeats that same
+object under `lineageDrainArtifactSemantics.catalogConfigProof`, binding the
+verifier's statement about the raw drain artifact to the config proof actually
+carried by that artifact.
 The lineage-drain replay summaries are bound back to the drain-level
 `eventTypes` manifest as well. A saved handoff cannot add a compact replay
 summary for `storage-profile.upserted`, `querygraph.bootstrap`, or any other
