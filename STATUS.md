@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Pin QGLake verifier drain count drift`.
+  QGLake handoff artifact regression coverage now proves saved
+  `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics` rejects drifted
+  delivered and graph-event counts even when the verifier-output artifact hash
+  is updated. This closes the direct delivered/graphEvents siblings of the
+  existing eventTypes and lineageEvents artifact-binding coverage.
+- Local verification for this QGLake artifact count slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_delivered_count_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_graph_event_count_drift -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover malformed standard catalog principals`.
   Service replay regression coverage now proves namespace list/lifecycle and
   view list/lifecycle events reject malformed authorization-receipt principals

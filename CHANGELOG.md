@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added QGLake handoff artifact verifier regression coverage proving saved
+  `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics` rejects drifted
+  delivered and graph-event counts even when the verifier-output artifact hash
+  is updated.
 - Added service replay regression coverage proving namespace and view standard
   catalog events reject malformed authorization-receipt principals before
   acknowledgement, graph projection, or OpenLineage projection.
