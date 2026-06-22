@@ -746,6 +746,12 @@ Saved `lakecatHandoffVerifyOutput` sidecars must bind their own
 `lineageDrainArtifactSemantics.catalogConfigProof` to the raw lineage-drain
 artifact too, so a self-verification artifact cannot claim verified drain
 semantics while omitting or rewriting the config-read compatibility proof.
+Saved QGLake handoff summaries must close the primary `artifacts` manifest,
+the nested `capturedOutputs` manifest, and every bundle, lineage-drain,
+QueryGraph import-plan, and captured-output artifact object before hashing or
+parsing archived files. Artifact objects may carry only the bundle-local path
+and full SHA-256 hash fields LakeCat verifies; extra artifact claims or
+alternate hash fields are rejected beside otherwise valid evidence.
 Saved `lakecatHandoffVerifyOutput.artifactFiles` must also use full SHA-256
 digests for its nested bundle, lineage-drain, QueryGraph import-plan, captured
 LakeCat/QueryGraph output, and service-log hashes before those values are

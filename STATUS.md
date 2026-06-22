@@ -5,6 +5,28 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Close QGLake handoff artifact manifests`.
+  The CLI handoff verifier now closes the primary `artifacts` manifest, nested
+  `capturedOutputs` manifest, and individual bundle, lineage-drain,
+  QueryGraph import-plan, and captured-output artifact objects before hashing
+  or parsing archived files. A saved QGLake summary can no longer attach
+  unverified artifact or alternate-hash claims beside otherwise valid
+  bundle-local `path`/`sha256` proof.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_extra_artifact_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_extra_captured_output_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_relative_artifact_path_traversal -- --test-threads=1`
+  passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `scripts/qglake-handoff-local.sh` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand catalog concepts with workflow translation`.
   The book now walks the same catalog state through a PySpark Iceberg client,

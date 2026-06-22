@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed QGLake handoff summary artifact manifests in the CLI verifier. The
+  primary `artifacts` object, its nested `capturedOutputs` manifest, and each
+  bundle/lineage/import/captured-output artifact object now reject unexpected
+  sibling fields before hashing or parsing archived files, preventing a saved
+  handoff summary from carrying unverified artifact or alternate-hash claims
+  beside otherwise valid bundle-local `path`/`sha256` evidence.
 - Expanded the LakeCat book's catalog-concepts chapter with workflow-focused
   explanations for PySpark clients, platform operators, governed agents, and
   QueryGraph/QGLake import. The new text more explicitly separates standard

@@ -10499,7 +10499,12 @@ Archived handoff file paths are part of that proof. LakeCat resolves artifact
 paths under the handoff summary directory before hashing or parsing them, and
 the verifier rejects relative traversal outside that bundle for both hash
 verification and captured-output semantic reads. A matching hash from another
-directory is not accepted as QGLake evidence.
+directory is not accepted as QGLake evidence. The artifact manifest itself is
+also closed: the primary `artifacts` object, nested `capturedOutputs` object,
+and individual bundle, lineage-drain, QueryGraph import-plan, and captured
+output artifact objects may carry only the path and SHA-256 evidence LakeCat
+checks. A saved summary cannot add an alternate hash, mirror artifact, or
+unverified capture beside an otherwise valid handoff bundle.
 The same release gate treats raw view-lineage proof hashes as real digests,
 not placeholders: view replay receipts, tombstone view receipts, namespace
 receipt-chain hashes, and receipt-chain replay/OpenLineage hashes must be full
