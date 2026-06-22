@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving blocked credential-vend
+  events reject blank credential block reasons before acknowledgement, graph
+  projection, or OpenLineage projection.
 - Added service replay regression coverage proving `table.commit` rejects blank
   new metadata pointer evidence before acknowledgement, graph projection, or
   OpenLineage projection.

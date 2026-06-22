@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover blank credential block reason`.
+  Service replay regression coverage now proves blocked credential-vend events
+  reject blank `lakecat:credential-block-reason` evidence before
+  acknowledgement, graph projection, or OpenLineage projection. This closes
+  the blank-value sibling of the existing missing and drifted credential block
+  reason replay guards for raw-credential exceptions.
+- Local verification for this credential block-reason slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_blank_credential_block_reason -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib credential_block_reason -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover blank table commit new metadata`.
   Service replay regression coverage now proves `table.commit` rejects blank
   new metadata pointer evidence before acknowledgement, graph projection, or
