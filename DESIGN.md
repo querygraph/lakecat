@@ -726,9 +726,11 @@ acknowledgement or projection. The replay evidence must include both a valid
 commit principal and a valid authorization receipt principal, and those
 principals must match before graph or OpenLineage projection, so replay cannot
 drop or rewrite the actor associated with a committed pointer transition.
-The commit replay envelope must also include full SHA-256 request hash,
-response hash, and idempotency-key hash evidence before projection; only the
-policy hash remains optional when no policy participated. It must also carry
+The commit replay envelope must also include full SHA-256 request and response
+hash evidence before projection; an idempotency-key hash is optional for
+standard Iceberg commits that did not supply LakeCat's retry key, but must be
+full SHA-256 evidence whenever present. The policy hash remains optional when
+no policy participated. It must also carry
 positive Iceberg format-version evidence and non-negative snapshot-id evidence,
 so graph and OpenLineage projections cannot lose the table-format summary that
 the pointer-log path exposes later. The store producer now rejects table and

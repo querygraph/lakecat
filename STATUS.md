@@ -5,6 +5,32 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Drain no-idempotency commits`.
+  `table.commit` replay admission now keeps standard Iceberg clients
+  compatible when they omit LakeCat's optional REST idempotency header:
+  request and response hashes remain required, `idempotency_key_sha256` is
+  validated only when present, and malformed idempotency hashes still fail
+  before acknowledgement, graph projection, or OpenLineage projection. The
+  design and book now say the same thing: idempotency is retry hardening, not
+  a hidden requirement for ordinary commits.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_missing_table_commit_hash_evidence -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_table_commit_idempotency_hash -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service commit_without_rest_idempotency_key_still_drains_replay_evidence -- --test-threads=1`
+  passed;
+  `cargo test --workspace --all-features --no-run` passed;
+  `scripts/check-local-dependency-contract.sh` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover and contents render;
+  the versioned EPUB symlink resolves to `lakecat.epub`;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Add catalog vocabulary guide`.
   The LakeCat book now opens with a clear vocabulary guide that separates

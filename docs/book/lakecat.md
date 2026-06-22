@@ -5196,9 +5196,12 @@ read. Planned and fetched scan replay must also carry nonblank purpose evidence
 and a positive policy-derived credential TTL cap before the outbox event can be
 acknowledged or projected. Table
 commit events receive the same treatment for compact
-commit receipt evidence: `request_hash`, `response_hash`,
-`idempotency_key_sha256`, and any present `policy_hash` must be full digests
-before the event can be projected or acknowledged.
+commit receipt evidence: `request_hash` and `response_hash` must be full
+digests, `idempotency_key_sha256` must be a full digest when a retry key was
+present, and any present `policy_hash` must be a full digest before the event
+can be projected or acknowledged. Ordinary Iceberg clients can still commit
+without LakeCat's idempotency header; they just do not produce idempotent
+replay proof for that commit.
 
 ## Grust For Graph Concepts
 

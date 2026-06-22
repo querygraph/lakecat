@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Kept standard Iceberg table commits compatible with clients that do not send
+  LakeCat's REST idempotency header. `table.commit` replay admission now
+  requires request/response hash evidence and validates
+  `idempotency_key_sha256` only when present, while retaining fail-closed
+  coverage for malformed idempotency hashes. The service now has a regression
+  proving a no-idempotency commit still drains to graph and OpenLineage.
 - Added an early book vocabulary guide that cleanly separates standard Iceberg
   terms from LakeCat implementation machinery, TypeSec governance semantics,
   and QueryGraph integration surfaces. The guide explicitly answers which

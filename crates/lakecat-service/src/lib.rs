@@ -1650,9 +1650,10 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
             "table commit evidence previous metadata location must be non-empty when present",
         ));
     }
-    for field in ["request_hash", "response_hash", "idempotency_key_sha256"] {
+    for field in ["request_hash", "response_hash"] {
         validate_required_full_hash_field(event, commit, field)?;
     }
+    validate_optional_full_hash_field(event, commit, "idempotency_key_sha256")?;
     validate_optional_full_hash_field(event, commit, "policy_hash")?;
     Ok(())
 }
@@ -16550,7 +16551,7 @@ mod tests {
 
     #[tokio::test]
     async fn outbox_drain_rejects_missing_table_commit_hash_evidence() {
-        for field in ["request_hash", "response_hash", "idempotency_key_sha256"] {
+        for field in ["request_hash", "response_hash"] {
             let table = TableIdent::new(
                 WarehouseName::new("local").unwrap(),
                 "default".parse::<Namespace>().unwrap(),
@@ -16624,6 +16625,78 @@ mod tests {
             assert!(graph.events.lock().await.is_empty());
             assert!(lineage.events.lock().await.is_empty());
         }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_table_commit_idempotency_hash() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-malformed-commit-idempotency-hash".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commit".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-malformed-commit-idempotency-hash",
+                    "event-type": "table.commit",
+                    "table": table,
+                    "commit": {
+                        "table": table,
+                        "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+                        "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+                        "sequence_number": 7,
+                        "principal": principal,
+                        "format_version": 3,
+                        "snapshot_id": 42,
+                        "policy_hash": null,
+                        "request_hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+                        "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+                        "idempotency_key_sha256": "sha256:short",
+                        "committed_at": chrono::Utc::now(),
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-commit",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("malformed table commit idempotency hash should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commit"));
+        assert!(message.contains("idempotency_key_sha256"));
+        assert!(message.contains("full SHA-256"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
     }
 
     #[tokio::test]
@@ -33711,6 +33784,86 @@ mod tests {
             "idempotent replay and mismatch conflicts must not enqueue extra commit outbox events"
         );
         assert_eq!(store.load_table(&ident).await.unwrap().version, 1);
+    }
+
+    #[tokio::test]
+    async fn commit_without_rest_idempotency_key_still_drains_replay_evidence() {
+        let store = MemoryCatalogStore::new();
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let app = app(
+            LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                ),
+        );
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"name":"events","location":"file:///tmp/events","metadata-location":"file:///tmp/events/metadata/00000.json","metadata":{"format-version":3,"table-uuid":"11111111-1111-1111-1111-111111111111","location":"file:///tmp/events","last-sequence-number":7,"last-updated-ms":1710000000000,"last-column-id":1,"schemas":[{"type":"struct","schema-id":1,"fields":[{"id":1,"name":"id","type":"string","required":true}]}],"current-schema-id":1,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"current-snapshot-id":42,"snapshots":[{"snapshot-id":42,"sequence-number":7,"timestamp-ms":1710000000000,"summary":{"operation":"append"},"schema-id":1}],"snapshot-log":[{"timestamp-ms":1710000000000,"snapshot-id":42}]}}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(create).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let commit = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/commit")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"requirements":[],"updates":[]}"#))
+            .unwrap();
+        let response = app.clone().oneshot(commit).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let ident = table_ident("local", "default".to_string(), "events".to_string()).unwrap();
+        let records = store.table_commit_records(&ident, 0, None).await.unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].idempotency_key_sha256, None);
+
+        let drain = Request::builder()
+            .method(Method::POST)
+            .uri("/management/v1/lineage/drain")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(drain).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(
+            payload["event-types"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|event_type| event_type == "table.commit")
+        );
+        let summaries = payload["events"].as_array().unwrap();
+        let commit_summary = summaries
+            .iter()
+            .find(|event| event["event-type"] == "table.commit")
+            .expect("standard commit should be included in drained replay");
+        assert_eq!(commit_summary["lineage-events"], serde_json::json!(1));
+        assert!(
+            graph.events.lock().await.iter().any(|event| {
+                event.label == GraphNodeLabel::Commit && event.action == GraphAction::Committed
+            }),
+            "standard no-idempotency commits must still project commit graph evidence"
+        );
+        assert!(
+            lineage
+                .events
+                .lock()
+                .await
+                .iter()
+                .any(|event| event.event_type == LineageEventType::TableCommitted),
+            "standard no-idempotency commits must still project OpenLineage evidence"
+        );
     }
 
     #[tokio::test]
