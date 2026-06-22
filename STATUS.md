@@ -5,6 +5,27 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation/documentation slice:
+  `Bind QGLake policy upsert proof and catalog concept ledger`.
+  Compact QGLake management proof now requires `policyUpsertProof` for
+  `policy-binding.upserted` evidence, binding the listed policy id to the full
+  ODRL content hash, graph proof, replay hashes, and OpenLineage hashes across
+  raw lineage drains, captured LakeCat replay, and archived handoff summaries.
+  The book now includes a release-claim ledger that separates standard Iceberg
+  parlance, LakeCat Rust/Turso implementation choices, optional
+  LakeCat/QueryGraph/TypeSec proof surfaces, and future Iceberg-adjacent
+  proposal candidates, with a stronger engine-boundary argument for moving
+  field-id, manifest, delete, pruning, task-lineage, and typed v4 semantics
+  into Sail.
+- Local verification for this QGLake policy-upsert/book slice is green:
+  `cargo fmt -p lakecat-cli -p lakecat-api -p lakecat-service -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Require policy ODRL hash proof`.
   `policy-binding.upserted` producers now persist `odrl-hash` evidence beside

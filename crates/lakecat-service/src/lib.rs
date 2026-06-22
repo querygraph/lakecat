@@ -5063,6 +5063,7 @@ fn lineage_drain_event_summary(
                 .collect()
         })
         .unwrap_or_default();
+    let policy = payload.get("policy");
     LineageDrainEventSummary {
         event_id: event.event_id.clone(),
         event_type: event.event_type.clone(),
@@ -5148,6 +5149,14 @@ fn lineage_drain_event_summary(
             .and_then(|count| usize::try_from(count).ok())
             .unwrap_or_default(),
         policy_ids: string_array_summary(payload.get("policy-ids")),
+        policy_id: policy
+            .and_then(|policy| policy.get("policy-id"))
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        policy_odrl_hash: policy
+            .and_then(|policy| policy.get("odrl-hash"))
+            .and_then(Value::as_str)
+            .map(str::to_string),
         project_count: payload
             .get("project-count")
             .and_then(Value::as_u64)

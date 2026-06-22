@@ -163,6 +163,54 @@ extension. TypeSec receipts are governance extensions. Some proof shapes may
 eventually become Iceberg-adjacent proposals if multiple engines and catalogs
 need the same optional language.
 
+### A Release-Claim Ledger
+
+LakeCat should be precise about release claims because the same word can mean
+different things to different readers. An Iceberg user hears "catalog" and
+expects REST compatibility. An operator hears "catalog" and expects durable
+state, audit, and recovery. A governed-agent designer hears "catalog" and
+expects a policy decision to constrain what the agent can actually do. A
+QueryGraph reader hears "catalog" and expects stable semantic anchors. A
+standards reader asks whether any of this belongs in Iceberg itself.
+
+The current implementation should be described this way.
+
+| Claim | Standard Iceberg? | LakeCat implementation? | LakeCat/QueryGraph/TypeSec extension? | Future Iceberg-adjacent candidate? |
+|---|---:|---:|---:|---:|
+| Rust service/catalog spine exists | No | Yes | No | No |
+| Turso-backed local store direction is in place | No | Yes | No | No |
+| REST namespace and table paths exist | Yes | Yes | No | No |
+| Current metadata pointer CAS exists | Yes | Yes | No | No |
+| Idempotent commit replay | Not required by the table format | Yes | Optional management proof | Possibly |
+| Pointer logs | Related to snapshot history, but not a standard catalog endpoint | Yes | Optional inspection proof | Possibly |
+| Audit rows | No | Yes | Optional control-plane evidence | Possibly, only as profile language |
+| Transactional outbox | No | Yes | Optional graph/lineage delivery contract | Possibly |
+| Replay validation before graph/OpenLineage delivery | No | Yes | Optional evidence hardening | Possibly |
+| Governed scan receipts | No | Yes, as catalog gate | TypeSec governance extension | Possibly, as proof-carrying scan planning |
+| Credential-vending receipt evidence | Some Iceberg REST deployments vend credentials | Yes | TypeSec governance extension | Possibly, as governed credential profile |
+| Raw credential exception proof | No | Yes | TypeSec governance extension | Maybe, if catalogs converge on audited exceptions |
+| QueryGraph/QGLake bootstrap and handoff | No | Produces artifacts | QueryGraph application extension | No, except narrow portable proof shapes |
+| OpenLineage projection | No | Produces events | LakeCat/QueryGraph integration extension | Possibly, as optional event binding |
+| Croissant, CDIF, OSI, ODRL semantic handoff | No | Carries anchors | QueryGraph/TypeSec extension | No for core Iceberg; maybe adjacent profiles |
+| Grust-backed graph import | No | Emits graph-facing events | QueryGraph/Grust extension | No |
+| Typed v4 interpretation | Emerging Iceberg work | Not claimed complete | Should be Sail-owned | Yes, through Iceberg itself |
+
+That table is intentionally conservative. It keeps the Iceberg compatibility
+claim clean. LakeCat should not say "Iceberg has TypeSec receipts" or "Iceberg
+has QGLake handoff." It should say that LakeCat is an Iceberg-compatible
+catalog that adds optional proof surfaces around catalog actions. Those proof
+surfaces may produce evidence useful for future standards work, but they do not
+change what a standard client must do to read or write a table.
+
+The important standards argument is not "make LakeCat mandatory." It is "prove
+small, portable optional profiles." Idempotent commit replay, redacted conflict
+proof, pointer-history inspection, transactional catalog event streams,
+OpenLineage receipt binding, governed credential-vending evidence, and
+proof-carrying scan planning are all candidates for that treatment. They are
+not table-format semantics. They are interoperable catalog-adjacent behaviors
+that become valuable when more than one engine, catalog, or governance system
+needs to compare evidence.
+
 ### The Current Pieces In Plain Terms
 
 The Rust service/catalog spine exists. Iceberg does not prescribe an
@@ -231,6 +279,17 @@ payloads, and replay admission requires `endpoint-url-hash` or
 durable events. That behavior is not Iceberg parlance. It is LakeCat's
 redaction and replay contract for management state that will later feed Grust,
 OpenLineage, and QueryGraph.
+
+Policy roots need content proof too. Listing a policy binding proves that a
+policy id was visible, but it does not prove which ODRL material the catalog
+recorded for that id. LakeCat therefore treats `policy-binding.upserted` as a
+separate evidence event: the producer records an `odrl-hash` over the captured
+ODRL policy document, service replay admission requires that hash to match the
+captured policy material, raw lineage replay must carry the same policy id and
+ODRL hash, and compact QGLake `managementProof.policyUpsertProof` preserves the
+policy id, `odrlHash`, graph event count, replay hash, and OpenLineage hash.
+That is not standard Iceberg. It is LakeCat/TypeSec/QueryGraph governance
+evidence around a standard catalog that happens to serve Iceberg tables.
 
 ### Four Workflows, One Catalog Boundary
 
@@ -3280,6 +3339,45 @@ metadata extension preservation, and future metadata-tree planning without
 forking Iceberg. The catalog can become more intelligent while the table remains
 portable. The standard path stays boring. The governed Sail path becomes richer.
 
+The reason to push work into the engine is not architectural tidiness. It is
+correctness. Iceberg semantics are field-id semantics, snapshot semantics,
+manifest semantics, delete semantics, and metrics semantics. A catalog can
+guard the pointer, but it cannot safely become a second planner without
+reimplementing the engine. The moment LakeCat starts doing its own file pruning,
+delete application, partition tuple decoding, field-id projection, residual
+filter evaluation, or v4 metadata interpretation, it risks drifting from the
+engine that will actually read the files.
+
+Sail is a strong engine choice because it is already close to the representation
+LakeCat needs to trust. It is Rust-native, it speaks Arrow and DataFusion, it
+has Iceberg REST model generation and catalog-provider seams, and it can expose
+metadata-as-data without routing everything through a JVM adapter. That means
+LakeCat can keep the catalog transaction small and ask Sail questions that
+belong to an engine:
+
+- Which Iceberg field ids satisfy this requested projection?
+- Which required filters are enforceable at planning time?
+- Which manifests and files survive partition and statistics pruning?
+- Which delete files must accompany the selected data files?
+- Which manifest metrics are trustworthy enough for stats-field proof?
+- Which scan tasks are children of a governed parent plan?
+- Which v4 fields are known, which are preserved as passthrough, and which are
+  not yet safe to interpret?
+
+Those answers should come from Sail because they require table-format knowledge
+and execution-plan discipline. LakeCat should persist the request, the TypeSec
+decision, the effective restriction, the plan/fetch receipts, and the replay
+evidence. Sail should own the reusable mechanics that turn current Iceberg
+metadata into tasks and validation. QueryGraph should consume the proof and
+project it into graph, lineage, and agent workflows.
+
+This division also makes standards work easier. A future optional Iceberg
+profile for proof-carrying scan planning should be engine-shaped: field ids,
+snapshot ids, manifest-list anchors, projection evidence, filter evidence,
+delete-file evidence, and task lineage. If LakeCat proves that profile by
+calling Sail, another Rust engine can reuse the same semantics. If LakeCat
+hand-rolls it, the proof becomes a LakeCat-specific story.
+
 The current v4 bridge is intentionally narrow and tested as such. When LakeCat
 sees `format-version: 4`, it does not pretend that Sail already has a settled
 typed v4 model. Instead, `lakecat-sail` extracts the stable JSON envelope
@@ -4949,14 +5047,26 @@ server/project/warehouse, policy, and storage-profile facts visible to
 QueryGraph through Grust-facing graph events. Compact `managementProof` carries
 those graph event counts too, and captured replay agreement checks them, so the
 graph evidence cannot disappear between source replay and handoff verification.
+Policy binding upserts add a content anchor to that management proof. A policy
+list can prove that `agent-columns` was listed; it cannot prove which ODRL
+document `agent-columns` meant. LakeCat now carries a compact
+`policyUpsertProof` with `policyId`, `odrlHash`, graph event count, replay
+hashes, and OpenLineage hashes. The raw lineage-drain verifier requires a
+matching `policy-binding.upserted` replay event, requires the policy id to be
+present in the policy list, and requires the ODRL hash to be a full SHA-256
+digest. Captured replay agreement compares the same object against the saved
+summary. That keeps QueryGraph from accepting a management proof that preserved
+the policy name but lost or swapped the policy document anchor.
 The QGLake acceptance workflow now
 establishes its server/project/warehouse tenant spine, performs governed
-server, project, warehouse, policy-list, storage-profile-list, scan-planning,
-scan-task-fetch, and table commit-history reads before bootstrap, and rejects a
+server, project, warehouse, policy-list, policy-upsert, storage-profile-list,
+scan-planning, scan-task-fetch, and table commit-history reads before bootstrap,
+and rejects a
 drain that does not replay matching `server.listed`, `project.listed`,
-`warehouse.listed`, `policy-binding.listed`, `storage-profile.listed`,
-`table.scan-planned`, `table.scan-tasks-fetched`, and `table.commits-listed`
-evidence. Request-identity and bootstrap replay are checked before any compact
+`warehouse.listed`, `policy-binding.listed`, `policy-binding.upserted`,
+`storage-profile.listed`, `table.scan-planned`, `table.scan-tasks-fetched`, and
+`table.commits-listed` evidence. Request-identity and bootstrap replay are
+checked before any compact
 handoff proof is built: the drain authorization, bootstrap authorization,
 QueryGraph bundle/import hashes, agent delegation hash, agent summary signature
 hash, and TypeDID envelope/proof hashes must be full `sha256:`-prefixed 64-hex

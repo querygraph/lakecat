@@ -551,6 +551,10 @@ pub struct LineageDrainEventSummary {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub policy_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_odrl_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_count: Option<usize>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_ids: Vec<String>,

@@ -2208,6 +2208,7 @@ fn verify_lakecat_replay_management_matches_summary(
         "warehouseOpenLineageHashes",
         "policyReplayEventHashes",
         "policyOpenLineageHashes",
+        "policyUpsertProof",
         "storageProfileReplayEventHashes",
         "storageProfileOpenLineageHashes",
     ] {
@@ -2239,15 +2240,36 @@ fn expected_management_replay_line_from_summary(
         "storageProfileUpsertProof",
         "lakecatReplayVerification",
     )?;
+    let policy_upsert = required_object(management, "policyUpsertProof", "managementProof")?;
     Ok(format!(
-        "management replay servers={} projects={} warehouses={} policies={} storage_profiles={} storage_profile_upserts={} credential_root={}",
+        "management replay servers={} projects={} warehouses={} policies={} policy_upserts={} policy={} storage_profiles={} storage_profile_upserts={} credential_root={}",
         required_u64(management, "serverCount", "managementProof")?,
         required_u64(management, "projectCount", "managementProof")?,
         required_u64(management, "warehouseCount", "managementProof")?,
         required_u64(management, "policyBindingCount", "managementProof")?,
+        1,
+        expected_management_policy_upsert_line_from_summary(policy_upsert)?,
         required_u64(management, "storageProfileCount", "managementProof")?,
         1,
         expected_management_storage_profile_upsert_line_from_summary(storage_profile)?,
+    ))
+}
+
+fn expected_management_policy_upsert_line_from_summary(
+    policy_upsert: &serde_json::Map<String, Value>,
+) -> lakecat_core::LakeCatResult<String> {
+    Ok(format!(
+        "{}:odrl_hash={}",
+        require_non_blank_str(
+            policy_upsert,
+            "policyId",
+            "managementProof.policyUpsertProof"
+        )?,
+        require_full_hash_str(
+            policy_upsert,
+            "odrlHash",
+            "managementProof.policyUpsertProof"
+        )?,
     ))
 }
 
@@ -3439,6 +3461,41 @@ fn require_management_evidence(
         "policyIds",
         expected_policy_binding_count,
         "managementProof",
+    )?;
+    let policy_ids = required_string_array(management, "policyIds", "managementProof")?;
+    let policy_upsert = required_object(management, "policyUpsertProof", "managementProof")?;
+    let policy_upsert_id = require_non_blank_str(
+        policy_upsert,
+        "policyId",
+        "managementProof.policyUpsertProof",
+    )?;
+    if !policy_ids
+        .iter()
+        .any(|policy_id| policy_id == policy_upsert_id)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "managementProof.policyUpsertProof.policyId must match policyIds".to_string(),
+        ));
+    }
+    require_full_hash_str(
+        policy_upsert,
+        "odrlHash",
+        "managementProof.policyUpsertProof",
+    )?;
+    require_positive_u64(
+        policy_upsert,
+        "graphEvents",
+        "managementProof.policyUpsertProof",
+    )?;
+    require_full_hash_array(
+        policy_upsert,
+        "replayEventHashes",
+        "managementProof.policyUpsertProof",
+    )?;
+    require_full_hash_array(
+        policy_upsert,
+        "openLineageHashes",
+        "managementProof.policyUpsertProof",
     )?;
     let storage_profile_count =
         require_positive_u64(management, "storageProfileCount", "managementProof")?;
@@ -4731,8 +4788,10 @@ fn view_receipt_chain_hash_from_compact_structure(
 fn qglake_management_replay_line(drain: &LineageDrainResponse) -> Option<String> {
     let storage_profile_upsert = qglake_drain_event(drain, "storage-profile.upserted")?;
     let credential_root = qglake_storage_profile_upsert_line(storage_profile_upsert)?;
+    let policy_upsert = qglake_drain_event(drain, "policy-binding.upserted")?;
+    let policy = qglake_policy_upsert_line(policy_upsert)?;
     Some(format!(
-        "management replay servers={} projects={} warehouses={} policies={} storage_profiles={} storage_profile_upserts={} credential_root={}",
+        "management replay servers={} projects={} warehouses={} policies={} policy_upserts={} policy={} storage_profiles={} storage_profile_upserts={} credential_root={}",
         qglake_drain_event(drain, "server.listed")?
             .server_count
             .unwrap_or_default(),
@@ -4743,12 +4802,23 @@ fn qglake_management_replay_line(drain: &LineageDrainResponse) -> Option<String>
             .warehouse_count
             .unwrap_or_default(),
         qglake_drain_event(drain, "policy-binding.listed")?.policy_binding_count,
+        usize::from(policy_upsert.policy_id.is_some()),
+        policy,
         qglake_drain_event(drain, "storage-profile.listed")?
             .storage_profile_count
             .unwrap_or_default(),
         usize::from(storage_profile_upsert.storage_profile_id.is_some()),
         credential_root
     ))
+}
+
+fn qglake_policy_upsert_line(event: &LineageDrainEventSummary) -> Option<String> {
+    let policy_id = event.policy_id.as_deref()?.trim();
+    let odrl_hash = event.policy_odrl_hash.as_deref()?.trim();
+    if policy_id.is_empty() || !is_full_sha256_hash(odrl_hash) {
+        return None;
+    }
+    Some(format!("{policy_id}:odrl_hash={odrl_hash}"))
 }
 
 fn qglake_storage_profile_upsert_line(event: &LineageDrainEventSummary) -> Option<String> {
@@ -4913,6 +4983,7 @@ fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Optio
     let policy = qglake_drain_event(drain, "policy-binding.listed")?;
     let storage_profile = qglake_drain_event(drain, "storage-profile.listed")?;
     let storage_profile_upsert = qglake_drain_event(drain, "storage-profile.upserted")?;
+    let policy_upsert = qglake_drain_event(drain, "policy-binding.upserted")?;
     Some(json!({
         "serverCount": server.server_count.unwrap_or_default(),
         "serverIds": &server.server_ids,
@@ -4927,6 +4998,13 @@ fn qglake_management_replay_evidence_json(drain: &LineageDrainResponse) -> Optio
         "policyBindingCount": policy.policy_binding_count,
         "policyIds": &policy.policy_ids,
         "policyGraphEvents": policy.graph_events,
+        "policyUpsertProof": {
+            "policyId": policy_upsert.policy_id.as_deref(),
+            "odrlHash": policy_upsert.policy_odrl_hash.as_deref(),
+            "graphEvents": policy_upsert.graph_events,
+            "replayEventHashes": &policy_upsert.replay_event_hashes,
+            "openLineageHashes": &policy_upsert.replay_open_lineage_hashes,
+        },
         "storageProfileCount": storage_profile.storage_profile_count.unwrap_or_default(),
         "storageProfileIds": &storage_profile.storage_profile_ids,
         "storageProfileGraphEvents": storage_profile.graph_events,
@@ -8746,6 +8824,16 @@ fn verify_qglake_management_list_replay(
         policy_list.policy_binding_count,
         "policy list",
     )?;
+    let Some(policy_upsert) = drain
+        .events
+        .iter()
+        .find(|event| event.event_type == "policy-binding.upserted")
+    else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain did not replay policy binding upsert evidence".to_string(),
+        ));
+    };
+    verify_qglake_policy_binding_upsert_replay(policy_upsert, &policy_list.policy_ids)?;
     let Some(storage_profile_list) = drain
         .events
         .iter()
@@ -8860,6 +8948,55 @@ fn verify_qglake_management_list_replay(
                     .to_string(),
             ));
         }
+    }
+    Ok(())
+}
+
+fn verify_qglake_policy_binding_upsert_replay(
+    event: &LineageDrainEventSummary,
+    policy_ids: &[String],
+) -> lakecat_core::LakeCatResult<()> {
+    verify_qglake_management_list_receipts(event, "policy binding upsert", true)?;
+    let Some(policy_id) = event
+        .policy_id
+        .as_deref()
+        .filter(|policy_id| !policy_id.trim().is_empty())
+    else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain policy binding upsert replay is missing policy id evidence"
+                .to_string(),
+        ));
+    };
+    if !is_qglake_compact_management_id(policy_id) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain policy binding upsert replay contains syntactically invalid policy id evidence"
+                .to_string(),
+        ));
+    }
+    if !policy_ids
+        .iter()
+        .any(|listed_policy_id| listed_policy_id == policy_id)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain policy binding upsert policy id does not match policy list evidence"
+                .to_string(),
+        ));
+    }
+    if event
+        .policy_odrl_hash
+        .as_deref()
+        .map_or(true, |hash| !is_full_sha256_hash(hash))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain policy binding upsert replay is missing ODRL hash evidence"
+                .to_string(),
+        ));
+    }
+    if event.graph_events == 0 || event.lineage_events == 0 {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain policy binding upsert replay emitted no graph or lineage projection"
+                .to_string(),
+        ));
     }
     Ok(())
 }
@@ -10423,6 +10560,13 @@ mod tests {
             json!([qglake_fixture_hash("policy-list-replay-event")]);
         management["policyOpenLineageHashes"] =
             json!([qglake_fixture_hash("policy-list-openlineage")]);
+        management["policyUpsertProof"] = json!({
+            "policyId": "agent-columns",
+            "odrlHash": qglake_fixture_hash("policy-odrl"),
+            "graphEvents": 1,
+            "replayEventHashes": [qglake_fixture_hash("policy-upsert-replay")],
+            "openLineageHashes": [qglake_fixture_hash("policy-upsert-openlineage")]
+        });
         management["storageProfileReplayEventHashes"] =
             json!([qglake_fixture_hash("storage-profile-list-replay-event")]);
         management["storageProfileOpenLineageHashes"] =
@@ -10600,6 +10744,13 @@ mod tests {
                     "policyBindingCount": 1,
                     "policyIds": ["agent-columns"],
                     "policyGraphEvents": 1,
+                    "policyUpsertProof": {
+                        "policyId": "agent-columns",
+                        "odrlHash": qglake_fixture_hash("policy-odrl"),
+                        "graphEvents": 1,
+                        "replayEventHashes": [qglake_fixture_hash("policy-upsert-replay")],
+                        "openLineageHashes": [qglake_fixture_hash("policy-upsert-openlineage")]
+                    },
                     "storageProfileCount": 1,
                     "storageProfileIds": ["events-local"],
                     "storageProfileGraphEvents": 1
@@ -11137,9 +11288,10 @@ mod tests {
         qglake_add_credential_receipt_evidence(
             &mut lakecat_replay_json["replay-evidence"]["credentials"],
         );
-        lakecat_replay_json["management-replay"] = json!(
-            "management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none"
-        );
+        lakecat_replay_json["management-replay"] = json!(format!(
+            "management replay servers=1 projects=1 warehouses=1 policies=1 policy_upserts=1 policy=agent-columns:odrl_hash={} storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none",
+            qglake_fixture_hash("policy-odrl")
+        ));
         lakecat_replay_json["table-commit-history-replay"] = json!(table_commit_history_replay);
         lakecat_replay_json["replay-evidence"]["management"]["serverIds"] =
             json!(["qglake-server"]);
@@ -11532,13 +11684,14 @@ mod tests {
         view.replay_open_lineage_hashes = vec!["sha256:view-openlineage".to_string()];
 
         LineageDrainResponse {
-            delivered: 13,
+            delivered: 14,
             event_types: vec![
                 "querygraph.bootstrap".to_string(),
                 "credentials.vend-attempted".to_string(),
                 "credentials.vend-attempted".to_string(),
                 "view.upserted".to_string(),
                 "policy-binding.listed".to_string(),
+                "policy-binding.upserted".to_string(),
                 "storage-profile.listed".to_string(),
                 "storage-profile.upserted".to_string(),
                 "server.listed".to_string(),
@@ -11548,8 +11701,8 @@ mod tests {
                 "table.scan-planned".to_string(),
                 "table.scan-tasks-fetched".to_string(),
             ],
-            graph_events: 14,
-            lineage_events: 13,
+            graph_events: 15,
+            lineage_events: 14,
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:identity".to_string()),
@@ -11564,6 +11717,7 @@ mod tests {
                 qglake_human_credential_summary(),
                 view,
                 qglake_policy_list_lineage_summary(),
+                qglake_policy_upsert_lineage_summary(),
                 qglake_storage_profile_list_lineage_summary(),
                 qglake_storage_profile_upsert_lineage_summary(),
                 qglake_server_list_lineage_summary(),
@@ -12158,6 +12312,39 @@ mod tests {
         assert!(err.to_string().contains("managementProof"));
         assert!(err.to_string().contains("serverGraphEvents"));
         assert!(err.to_string().contains("positive"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_policy_upsert_odrl_hash_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["policyUpsertProof"]["odrlHash"] =
+            json!("sha256:short-policy-odrl");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject malformed policy ODRL proof");
+
+        assert!(
+            err.to_string()
+                .contains("managementProof.policyUpsertProof")
+        );
+        assert!(err.to_string().contains("odrlHash"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_policy_upsert_id_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["policyUpsertProof"]["policyId"] =
+            json!("unlisted-policy");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject policy upsert id drift");
+
+        assert!(
+            err.to_string()
+                .contains("managementProof.policyUpsertProof")
+        );
+        assert!(err.to_string().contains("policyId must match policyIds"));
     }
 
     #[test]
@@ -19102,6 +19289,7 @@ mod tests {
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                 ],
                 graph_events: 0,
@@ -19119,6 +19307,7 @@ mod tests {
                     qglake_project_list_lineage_summary(),
                     qglake_warehouse_list_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     upsert_without_location_hash,
                 ],
@@ -19139,6 +19328,7 @@ mod tests {
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                 ],
                 graph_events: 0,
@@ -19156,6 +19346,7 @@ mod tests {
                     qglake_project_list_lineage_summary(),
                     qglake_warehouse_list_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     upsert_with_contradictory_secret_ref,
                 ],
@@ -19178,6 +19369,7 @@ mod tests {
                     "project.listed".to_string(),
                     "warehouse.listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                 ],
                 graph_events: 0,
@@ -19195,6 +19387,7 @@ mod tests {
                     qglake_project_list_lineage_summary(),
                     qglake_warehouse_list_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     upsert_with_short_secret_ref_hash,
                 ],
@@ -19599,6 +19792,8 @@ mod tests {
                     expected_view_version: None,
                     policy_binding_count: 1,
                     policy_ids: Vec::new(),
+                    policy_id: None,
+                    policy_odrl_hash: None,
                     project_count: None,
                     project_ids: Vec::new(),
                     server_count: None,
@@ -19696,6 +19891,8 @@ mod tests {
                     expected_view_version: None,
                     policy_binding_count: 1,
                     policy_ids: Vec::new(),
+                    policy_id: None,
+                    policy_odrl_hash: None,
                     project_count: None,
                     project_ids: Vec::new(),
                     server_count: None,
@@ -19795,6 +19992,8 @@ mod tests {
                     expected_view_version: None,
                     policy_binding_count: 1,
                     policy_ids: Vec::new(),
+                    policy_id: None,
+                    policy_odrl_hash: None,
                     project_count: None,
                     project_ids: Vec::new(),
                     server_count: None,
@@ -19892,6 +20091,8 @@ mod tests {
                     expected_view_version: None,
                     policy_binding_count: 1,
                     policy_ids: Vec::new(),
+                    policy_id: None,
+                    policy_odrl_hash: None,
                     project_count: None,
                     project_ids: Vec::new(),
                     server_count: None,
@@ -19989,6 +20190,8 @@ mod tests {
                     expected_view_version: None,
                     policy_binding_count: 1,
                     policy_ids: Vec::new(),
+                    policy_id: None,
+                    policy_odrl_hash: None,
                     project_count: None,
                     project_ids: Vec::new(),
                     server_count: None,
@@ -20086,6 +20289,8 @@ mod tests {
                     expected_view_version: None,
                     policy_binding_count: 1,
                     policy_ids: Vec::new(),
+                    policy_id: None,
+                    policy_odrl_hash: None,
                     project_count: None,
                     project_ids: Vec::new(),
                     server_count: None,
@@ -20183,6 +20388,8 @@ mod tests {
                     expected_view_version: None,
                     policy_binding_count: 1,
                     policy_ids: Vec::new(),
+                    policy_id: None,
+                    policy_odrl_hash: None,
                     project_count: None,
                     project_ids: Vec::new(),
                     server_count: None,
@@ -20280,6 +20487,8 @@ mod tests {
                     expected_view_version: None,
                     policy_binding_count: 1,
                     policy_ids: Vec::new(),
+                    policy_id: None,
+                    policy_odrl_hash: None,
                     project_count: None,
                     project_ids: Vec::new(),
                     server_count: None,
@@ -20377,6 +20586,8 @@ mod tests {
                     expected_view_version: None,
                     policy_binding_count: 1,
                     policy_ids: Vec::new(),
+                    policy_id: None,
+                    policy_odrl_hash: None,
                     project_count: None,
                     project_ids: Vec::new(),
                     server_count: None,
@@ -20474,6 +20685,8 @@ mod tests {
                     expected_view_version: None,
                     policy_binding_count: 1,
                     policy_ids: Vec::new(),
+                    policy_id: None,
+                    policy_odrl_hash: None,
                     project_count: None,
                     project_ids: Vec::new(),
                     server_count: None,
@@ -20571,6 +20784,8 @@ mod tests {
                     expected_view_version: None,
                     policy_binding_count: 1,
                     policy_ids: Vec::new(),
+                    policy_id: None,
+                    policy_odrl_hash: None,
                     project_count: None,
                     project_ids: Vec::new(),
                     server_count: None,
@@ -20668,6 +20883,8 @@ mod tests {
                     expected_view_version: None,
                     policy_binding_count: 0,
                     policy_ids: Vec::new(),
+                    policy_id: None,
+                    policy_odrl_hash: None,
                     project_count: None,
                     project_ids: Vec::new(),
                     server_count: None,
@@ -20769,6 +20986,8 @@ mod tests {
                         expected_view_version: None,
                         policy_binding_count: 1,
                         policy_ids: Vec::new(),
+                        policy_id: None,
+                        policy_odrl_hash: None,
                         project_count: None,
                         project_ids: Vec::new(),
                         server_count: None,
@@ -21511,6 +21730,7 @@ mod tests {
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -21534,6 +21754,7 @@ mod tests {
                     qglake_human_credential_summary(),
                     qglake_view_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -21563,6 +21784,7 @@ mod tests {
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -21586,6 +21808,7 @@ mod tests {
                     qglake_human_credential_summary(),
                     qglake_view_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -21615,6 +21838,7 @@ mod tests {
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -21638,6 +21862,7 @@ mod tests {
                     qglake_human_credential_summary(),
                     qglake_view_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -21666,6 +21891,7 @@ mod tests {
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -21688,6 +21914,7 @@ mod tests {
                     qglake_human_credential_summary(),
                     mismatched_view_replay,
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -21746,14 +21973,13 @@ mod tests {
             &LineageDrainResponse {
                 delivered: 5,
                 event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
+                    "querygraph.bootstrap".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
-                    "querygraph.bootstrap".to_string(),
+                    "policy-binding.upserted".to_string(),
                 ],
-                graph_events: 1,
+                graph_events: 2,
                 lineage_events: 5,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
@@ -21805,6 +22031,7 @@ mod tests {
                     qglake_restricted_credential_summary(),
                     qglake_human_credential_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                 ],
             },
             &verification,
@@ -21820,35 +22047,14 @@ mod tests {
         let mut empty_storage_profile_list = qglake_storage_profile_list_lineage_summary();
         empty_storage_profile_list.storage_profile_count = Some(0);
         let err = verify_qglake_lineage_drain(
-            &LineageDrainResponse {
-                delivered: 6,
-                event_types: vec![
-                    "table.scan-planned".to_string(),
-                    "table.scan-tasks-fetched".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "credentials.vend-attempted".to_string(),
-                    "policy-binding.listed".to_string(),
-                    "storage-profile.listed".to_string(),
-                    "querygraph.bootstrap".to_string(),
-                ],
-                graph_events: 1,
-                lineage_events: 6,
-                principal_subject: Some("did:example:agent".to_string()),
-                principal_kind: Some("agent".to_string()),
-                authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
-                authorization_receipt_action: Some("lineage-read".to_string()),
-                request_identity_state: Some("verified".to_string()),
-                request_identity_source: Some("x-lakecat-agent-did".to_string()),
-                typedid_envelope_hash: None,
-                typedid_proof_hash: None,
-                events: vec![
-                    qglake_bootstrap_lineage_summary(),
-                    qglake_restricted_credential_summary(),
-                    qglake_human_credential_summary(),
-                    qglake_policy_list_lineage_summary(),
-                    empty_storage_profile_list,
-                ],
-            },
+            &qglake_lineage_drain_from_summaries(vec![
+                qglake_bootstrap_lineage_summary(),
+                qglake_restricted_credential_summary(),
+                qglake_human_credential_summary(),
+                qglake_policy_list_lineage_summary(),
+                qglake_policy_upsert_lineage_summary(),
+                empty_storage_profile_list,
+            ]),
             &verification,
             Some("did:example:agent"),
             1,
@@ -21870,6 +22076,7 @@ mod tests {
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -21892,6 +22099,7 @@ mod tests {
                     qglake_restricted_credential_summary(),
                     qglake_human_credential_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     malformed_storage_profile_upsert,
                 ],
@@ -21921,6 +22129,7 @@ mod tests {
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -21943,6 +22152,7 @@ mod tests {
                     qglake_restricted_credential_summary(),
                     qglake_human_credential_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     short_storage_profile_upsert,
                 ],
@@ -21978,6 +22188,7 @@ mod tests {
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -22000,6 +22211,7 @@ mod tests {
                     qglake_restricted_credential_summary(),
                     qglake_human_credential_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     short_secret_ref_storage_profile_upsert,
                 ],
@@ -22026,6 +22238,7 @@ mod tests {
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -22048,6 +22261,7 @@ mod tests {
                     qglake_restricted_credential_summary(),
                     qglake_human_credential_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     contradictory_storage_profile_upsert,
                 ],
@@ -22072,6 +22286,7 @@ mod tests {
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -22094,6 +22309,7 @@ mod tests {
                     restricted_profile_drift,
                     qglake_human_credential_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -22128,6 +22344,7 @@ mod tests {
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -22150,6 +22367,7 @@ mod tests {
                     qglake_restricted_credential_summary(),
                     qglake_human_credential_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     upsert_secret_ref_drift,
                     qglake_server_list_lineage_summary(),
@@ -22175,6 +22393,7 @@ mod tests {
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "querygraph.bootstrap".to_string(),
                 ],
@@ -22193,6 +22412,7 @@ mod tests {
                     qglake_restricted_credential_summary(),
                     qglake_human_credential_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                 ],
@@ -22218,6 +22438,7 @@ mod tests {
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -22240,6 +22461,7 @@ mod tests {
                     qglake_restricted_credential_summary(),
                     qglake_human_credential_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     server_list_without_graph,
@@ -22267,6 +22489,7 @@ mod tests {
                     "view.upserted".to_string(),
                     "view.dropped".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -22290,6 +22513,7 @@ mod tests {
                     qglake_view_lineage_summary(),
                     qglake_view_drop_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -22318,6 +22542,7 @@ mod tests {
                     "view.dropped".to_string(),
                     "view.version-receipts-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -22342,6 +22567,7 @@ mod tests {
                     qglake_view_drop_lineage_summary(),
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -22373,6 +22599,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -22399,6 +22626,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     drifted_receipt_chain,
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -22430,6 +22658,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -22456,6 +22685,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     receipt_chain_count_drift,
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -22488,6 +22718,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -22514,6 +22745,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     uncovered_tombstone_chain,
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -22546,6 +22778,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -22573,6 +22806,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -22605,6 +22839,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -22631,6 +22866,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -22667,6 +22903,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -22693,6 +22930,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -22725,6 +22963,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -22751,6 +22990,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -22784,6 +23024,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -22810,6 +23051,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -22843,6 +23085,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -22869,6 +23112,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -22902,6 +23146,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -22928,6 +23173,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -22961,6 +23207,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -22987,6 +23234,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -23019,6 +23267,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -23045,6 +23294,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -23083,6 +23333,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -23109,6 +23360,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -23145,6 +23397,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -23171,6 +23424,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -23203,6 +23457,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -23229,6 +23484,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -23260,6 +23516,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -23286,6 +23543,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -23329,6 +23587,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -23356,6 +23615,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -23396,6 +23656,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "server.listed".to_string(),
                     "project.listed".to_string(),
@@ -23422,6 +23683,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -23443,7 +23705,7 @@ mod tests {
 
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 16,
+                delivered: 17,
                 event_types: vec![
                     "querygraph.bootstrap".to_string(),
                     "credentials.vend-attempted".to_string(),
@@ -23453,6 +23715,7 @@ mod tests {
                     "view.version-receipts-listed".to_string(),
                     "view.version-receipt-chains-listed".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -23462,12 +23725,12 @@ mod tests {
                     "table.scan-planned".to_string(),
                     "table.scan-tasks-fetched".to_string(),
                 ],
-                graph_events: 16,
-                lineage_events: 16,
+                graph_events: 17,
+                lineage_events: 17,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
-            authorization_receipt_action: Some("lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -23481,6 +23744,7 @@ mod tests {
                     qglake_view_tombstone_receipt_lineage_summary(),
                     qglake_view_receipt_chain_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -23499,13 +23763,14 @@ mod tests {
 
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 13,
+                delivered: 14,
                 event_types: vec![
                     "querygraph.bootstrap".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "view.upserted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -23515,8 +23780,8 @@ mod tests {
                     "table.scan-planned".to_string(),
                     "table.scan-tasks-fetched".to_string(),
                 ],
-                graph_events: 14,
-                lineage_events: 13,
+                graph_events: 15,
+                lineage_events: 14,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
@@ -23531,6 +23796,7 @@ mod tests {
                     qglake_human_credential_summary(),
                     qglake_view_lineage_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -23549,12 +23815,13 @@ mod tests {
 
         verify_qglake_lineage_drain(
             &LineageDrainResponse {
-                delivered: 12,
+                delivered: 13,
                 event_types: vec![
                     "querygraph.bootstrap".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "credentials.vend-attempted".to_string(),
                     "policy-binding.listed".to_string(),
+                    "policy-binding.upserted".to_string(),
                     "storage-profile.listed".to_string(),
                     "storage-profile.upserted".to_string(),
                     "server.listed".to_string(),
@@ -23564,8 +23831,8 @@ mod tests {
                     "table.scan-planned".to_string(),
                     "table.scan-tasks-fetched".to_string(),
                 ],
-                graph_events: 12,
-                lineage_events: 12,
+                graph_events: 13,
+                lineage_events: 13,
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
@@ -23579,6 +23846,7 @@ mod tests {
                     qglake_restricted_credential_summary(),
                     qglake_human_credential_summary(),
                     qglake_policy_list_lineage_summary(),
+                    qglake_policy_upsert_lineage_summary(),
                     qglake_storage_profile_list_lineage_summary(),
                     qglake_storage_profile_upsert_lineage_summary(),
                     qglake_server_list_lineage_summary(),
@@ -23652,6 +23920,44 @@ mod tests {
 
         assert!(err.to_string().contains("policy list replay"));
         assert!(err.to_string().contains("SHA-256 receipt hashes"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_missing_policy_upsert() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        drain
+            .events
+            .retain(|event| event.event_type != "policy-binding.upserted");
+        drain
+            .event_types
+            .retain(|event_type| event_type != "policy-binding.upserted");
+        drain.delivered = drain.events.len();
+        drain.graph_events = drain.events.iter().map(|event| event.graph_events).sum();
+        drain.lineage_events = drain.events.iter().map(|event| event.lineage_events).sum();
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject missing policy upsert proof");
+
+        assert!(err.to_string().contains("policy binding upsert evidence"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_policy_upsert_odrl_hash_drift() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let policy_upsert = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "policy-binding.upserted")
+            .expect("policy upsert replay fixture");
+        policy_upsert.policy_odrl_hash = Some("sha256:short-policy-odrl".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject malformed policy ODRL proof");
+
+        assert!(err.to_string().contains("policy binding upsert replay"));
+        assert!(err.to_string().contains("ODRL hash"));
     }
 
     #[test]
@@ -23846,6 +24152,7 @@ mod tests {
             tombstone,
             qglake_view_receipt_chain_lineage_summary(),
             qglake_policy_list_lineage_summary(),
+            qglake_policy_upsert_lineage_summary(),
             qglake_storage_profile_list_lineage_summary(),
             qglake_storage_profile_upsert_lineage_summary(),
             qglake_server_list_lineage_summary(),
@@ -23888,6 +24195,7 @@ mod tests {
             qglake_view_tombstone_receipt_lineage_summary(),
             chain,
             qglake_policy_list_lineage_summary(),
+            qglake_policy_upsert_lineage_summary(),
             qglake_storage_profile_list_lineage_summary(),
             qglake_storage_profile_upsert_lineage_summary(),
             qglake_server_list_lineage_summary(),
@@ -24339,6 +24647,8 @@ mod tests {
             expected_view_version: None,
             policy_binding_count: 1,
             policy_ids: vec!["agent-columns".to_string()],
+            policy_id: None,
+            policy_odrl_hash: None,
             project_count: None,
             project_ids: Vec::new(),
             server_count: None,
@@ -24436,6 +24746,8 @@ mod tests {
             expected_view_version: Some(1),
             policy_binding_count: 0,
             policy_ids: Vec::new(),
+            policy_id: None,
+            policy_odrl_hash: None,
             project_count: None,
             project_ids: Vec::new(),
             server_count: None,
@@ -24620,6 +24932,8 @@ mod tests {
             expected_view_version: None,
             policy_binding_count: 0,
             policy_ids: Vec::new(),
+            policy_id: None,
+            policy_odrl_hash: None,
             project_count: None,
             project_ids: Vec::new(),
             server_count: None,
@@ -24714,6 +25028,8 @@ mod tests {
             expected_view_version: None,
             policy_binding_count: 0,
             policy_ids: Vec::new(),
+            policy_id: None,
+            policy_odrl_hash: None,
             project_count: None,
             project_ids: Vec::new(),
             server_count: None,
@@ -24808,6 +25124,8 @@ mod tests {
             expected_view_version: None,
             policy_binding_count: 0,
             policy_ids: Vec::new(),
+            policy_id: None,
+            policy_odrl_hash: None,
             project_count: None,
             project_ids: Vec::new(),
             server_count: None,
@@ -24896,6 +25214,8 @@ mod tests {
             expected_view_version: None,
             policy_binding_count: 1,
             policy_ids: vec!["agent-columns".to_string()],
+            policy_id: None,
+            policy_odrl_hash: None,
             project_count: None,
             project_ids: Vec::new(),
             server_count: None,
@@ -24938,6 +25258,84 @@ mod tests {
         }
     }
 
+    fn qglake_policy_upsert_lineage_summary() -> LineageDrainEventSummary {
+        LineageDrainEventSummary {
+            event_id: "evt-policy-upsert".to_string(),
+            event_type: "policy-binding.upserted".to_string(),
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("policy-upsert-authorization")),
+            authorization_receipt_action: Some("policy-manage".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            request_identity_source: Some("x-lakecat-agent-did".to_string()),
+            typedid_envelope_hash: None,
+            typedid_proof_hash: None,
+            agent_delegation_hash: Some("sha256:delegation".to_string()),
+            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            graph_events: 1,
+            lineage_events: 1,
+            bundle_hash: None,
+            graph_hash: None,
+            open_lineage_hash: None,
+            querygraph_import_hash: None,
+            table_artifact_count: 0,
+            view_artifact_count: 0,
+            view_version_receipt_hashes: Vec::new(),
+            view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
+            view_warehouse: None,
+            view_namespace: Vec::new(),
+            view_name: None,
+            view_stable_id: None,
+            view_version: None,
+            expected_view_version: None,
+            policy_binding_count: 0,
+            policy_ids: Vec::new(),
+            policy_id: Some("agent-columns".to_string()),
+            policy_odrl_hash: Some(qglake_fixture_hash("policy-odrl")),
+            project_count: None,
+            project_ids: Vec::new(),
+            server_count: None,
+            server_ids: Vec::new(),
+            storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
+            storage_profile_id: None,
+            storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
+            storage_profile_location_prefix_hash: None,
+            storage_profile_secret_ref_present: None,
+            storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
+            warehouse_count: None,
+            warehouse_names: Vec::new(),
+            table_commit_count: None,
+            table_commit_sequence_numbers: Vec::new(),
+            table_commit_hashes: Vec::new(),
+            scan_task_count: None,
+            file_scan_task_count: None,
+            delete_file_count: None,
+            child_plan_task_count: None,
+            read_restriction: None,
+            required_projection: Vec::new(),
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
+            required_filters: Vec::new(),
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
+            management_scope_project_id: None,
+            management_scope_warehouse: Some("local".to_string()),
+            standards: Vec::new(),
+            credential_count: None,
+            credential_prefix_hashes: Vec::new(),
+            credential_block_reason: None,
+            raw_credential_exception_allowed: None,
+            raw_credential_exception_reason: None,
+            replay_event_hashes: vec![qglake_fixture_hash("policy-upsert-replay")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash("policy-upsert-openlineage")],
+        }
+    }
+
     fn qglake_storage_profile_list_lineage_summary() -> LineageDrainEventSummary {
         LineageDrainEventSummary {
             event_id: "evt-storage-profile-list".to_string(),
@@ -24974,6 +25372,8 @@ mod tests {
             expected_view_version: None,
             policy_binding_count: 0,
             policy_ids: Vec::new(),
+            policy_id: None,
+            policy_odrl_hash: None,
             project_count: None,
             project_ids: Vec::new(),
             server_count: None,
@@ -25052,6 +25452,8 @@ mod tests {
             expected_view_version: None,
             policy_binding_count: 0,
             policy_ids: Vec::new(),
+            policy_id: None,
+            policy_odrl_hash: None,
             project_count: None,
             project_ids: Vec::new(),
             server_count: None,
@@ -25133,6 +25535,8 @@ mod tests {
             expected_view_version: None,
             policy_binding_count: 0,
             policy_ids: Vec::new(),
+            policy_id: None,
+            policy_odrl_hash: None,
             project_count: None,
             project_ids: Vec::new(),
             server_count: Some(1),
@@ -25209,6 +25613,8 @@ mod tests {
             expected_view_version: None,
             policy_binding_count: 0,
             policy_ids: Vec::new(),
+            policy_id: None,
+            policy_odrl_hash: None,
             project_count: Some(1),
             project_ids: vec!["analytics".to_string()],
             server_count: None,
@@ -25285,6 +25691,8 @@ mod tests {
             expected_view_version: None,
             policy_binding_count: 0,
             policy_ids: Vec::new(),
+            policy_id: None,
+            policy_odrl_hash: None,
             project_count: None,
             project_ids: Vec::new(),
             server_count: None,
@@ -25363,6 +25771,8 @@ mod tests {
             expected_view_version: None,
             policy_binding_count: 0,
             policy_ids: Vec::new(),
+            policy_id: None,
+            policy_odrl_hash: None,
             project_count: None,
             project_ids: Vec::new(),
             server_count: None,
@@ -25444,6 +25854,8 @@ mod tests {
             expected_view_version: None,
             policy_binding_count: 0,
             policy_ids: Vec::new(),
+            policy_id: None,
+            policy_odrl_hash: None,
             project_count: None,
             project_ids: Vec::new(),
             server_count: None,

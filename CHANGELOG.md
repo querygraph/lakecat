@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Bound compact QGLake management proof to `policy-binding.upserted` content
+  evidence: lineage drains and captured LakeCat replay now require
+  `policyUpsertProof` with a listed policy id, full ODRL content hash, graph
+  proof, replay hashes, and OpenLineage hashes before archived handoff proof is
+  accepted.
+- Expanded the LakeCat book with a release-claim ledger that separates
+  standard Iceberg parlance, LakeCat Rust/Turso implementation choices,
+  optional LakeCat/QueryGraph/TypeSec extensions, and future
+  Iceberg-adjacent proposal candidates, plus a stronger argument that
+  field-id, manifest, delete, pruning, task-lineage, and typed v4 semantics
+  belong in Sail.
 - Required `policy-binding.upserted` producers and replay admission to carry an
   `odrl-hash` matching the captured ODRL policy material before
   acknowledgement, graph projection, or OpenLineage projection, so QueryGraph
