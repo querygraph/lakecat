@@ -6,6 +6,16 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Expand catalog concepts and Sail engine rationale in the book`.
+  The book now has a claim-by-claim delineation for the Rust service/catalog
+  spine, Turso local store, standard Iceberg REST paths, commit CAS hardening,
+  governed scan and credential receipt evidence, and QueryGraph/QGLake handoff
+  surfaces. It also sharpens the argument that reusable Iceberg table-format
+  interpretation belongs in Sail while LakeCat persists catalog authority,
+  compact proof, and replayable integration evidence.
+- Local verification for this book slice is green:
+  `docs/book/build.sh`.
+- Latest completed implementation/documentation slice:
   `Preserve QGLake handoff proof surfaces`.
   The local QGLake handoff script now preserves authorization receipt actions
   for request identity and QueryGraph bootstrap proof, passes validated LakeCat

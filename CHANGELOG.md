@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog-concepts explanation with a
+  claim-by-claim delineation of what is standard Iceberg parlance, what is
+  LakeCat implementation, what belongs to TypeSec/QueryGraph extensions, and
+  what might become a future optional Iceberg-adjacent profile. The book now
+  makes the Sail argument more explicit: generated Iceberg REST models, schema
+  and field-id interpretation, manifests, metrics, deletes, metadata-as-data,
+  scan tasks, commit validation, and v3/v4 table-format interpretation belong
+  in Sail so LakeCat can persist compact proof instead of becoming a shadow
+  engine.
 - Preserved full QGLake handoff proof surfaces in the local acceptance loop.
   The handoff script now requires and carries authorization receipt actions
   for request identity and QueryGraph bootstrap evidence, passes validated
