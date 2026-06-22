@@ -6,6 +6,27 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Require credential restriction purpose and TTL`.
+  Service replay admission now rejects `credentials.vend-attempted` events
+  whose governed `read-restriction` proof omits a nonblank purpose or positive
+  `max-credential-ttl-seconds`, even when the authorization receipt context
+  matches and no raw credentials were returned. The book now records that
+  credential replay preserves the same policy purpose and TTL cap as scan
+  proof before graph, OpenLineage, or QGLake handoff evidence can inherit the
+  decision.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_credential_restriction_malformed_purpose_and_ttl -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service -- --test-threads=1` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover has no standalone page
+  number and the body starts with numbered Contents;
+  the versioned EPUB symlink resolves to `lakecat.epub`;
+  `scripts/check-release-readiness.sh --quick` passed.
+- Latest implementation/book slice:
   `Preserve fetched scan stats proof`.
   Governed `table.scan-tasks-fetched` now carries requested and effective
   stats-field proof in the returned residual extension and the durable

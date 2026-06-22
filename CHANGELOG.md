@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required `credentials.vend-attempted` replay with governed
+  `read-restriction` evidence to carry nonblank purpose and positive
+  `max-credential-ttl-seconds` proof before acknowledgement, graph projection,
+  or OpenLineage projection.
 - Extended governed fetch-scan-task proof so returned residual extensions and
   durable audit/outbox replay carry requested and effective stats-field
   evidence. Service admission now rejects missing, widened, or duplicate

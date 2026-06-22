@@ -6896,7 +6896,12 @@ pending instead of becoming graph or OpenLineage evidence.
 Credential replay also rejects a governed `read-restriction` that is missing
 from, or different from, the authorization receipt context, so credential TTL
 and blocked-agent evidence cannot drift away from the receipt that authorized
-the decision.
+the decision. The credential replay boundary now also treats a governed
+restriction without a nonblank purpose or a positive
+`max-credential-ttl-seconds` cap as malformed before acknowledgement, graph
+projection, or OpenLineage projection. That keeps a blocked zero-credential
+agent decision from becoming QGLake evidence unless it still proves the policy
+purpose and TTL cap that made raw credential vending inappropriate.
 Source replay and compact handoff verification both reserve
 `rawCredentialExceptionReason` for the audited trusted-human path; a restricted
 agent proof must be blocked with `blockReason` and cannot carry a raw

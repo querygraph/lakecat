@@ -2242,7 +2242,7 @@ fn validate_scan_planned_event_evidence(
         "scan-planned",
         &effective_stats,
     )?;
-    validate_scan_read_restriction_purpose_and_ttl(event, payload, "scan-planned")?;
+    validate_read_restriction_purpose_and_ttl(event, payload, "scan-planned")?;
     Ok(())
 }
 
@@ -2338,7 +2338,7 @@ fn validate_scan_tasks_fetched_event_evidence(
         ));
     }
     validate_scan_required_filters_match_row_predicate(event, payload, "scan-tasks-fetched")?;
-    validate_scan_read_restriction_purpose_and_ttl(event, payload, "scan-tasks-fetched")?;
+    validate_read_restriction_purpose_and_ttl(event, payload, "scan-tasks-fetched")?;
     Ok(())
 }
 
@@ -2374,7 +2374,7 @@ fn validate_scan_required_filters_match_row_predicate(
     Ok(())
 }
 
-fn validate_scan_read_restriction_purpose_and_ttl(
+fn validate_read_restriction_purpose_and_ttl(
     event: &OutboxEvent,
     payload: &Value,
     label: &str,
@@ -3801,6 +3801,7 @@ fn validate_credential_vend_event_evidence(
     payload: &Value,
 ) -> Result<(), LakeCatError> {
     validate_read_restriction_receipt_match(event, payload, "credential-vend")?;
+    validate_read_restriction_purpose_and_ttl(event, payload, "credential-vend")?;
     validate_raw_credential_exception_receipt_match(event, payload)?;
     validate_authorization_receipt_principal(event, payload, "credential-vend")?;
     let table = validate_required_outbox_table_identity(event, "credential-vend")?;
@@ -21398,6 +21399,148 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_credential_restriction_malformed_purpose_and_ttl() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let base_restriction = || {
+            json!({
+                "allowed-columns": ["event_id"],
+                "row-predicate": {
+                    "type": "eq",
+                    "term": "event_id",
+                    "value": "evt-1"
+                },
+                "purpose": "qglake-agent-demo",
+                "max-credential-ttl-seconds": 300,
+                "policy-hashes": [
+                    "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                ]
+            })
+        };
+        let mut missing_purpose = base_restriction();
+        missing_purpose.as_object_mut().unwrap().remove("purpose");
+        let mut blank_purpose = base_restriction();
+        blank_purpose["purpose"] = json!(" ");
+        let mut missing_ttl = base_restriction();
+        missing_ttl
+            .as_object_mut()
+            .unwrap()
+            .remove("max-credential-ttl-seconds");
+        let mut zero_ttl = base_restriction();
+        zero_ttl["max-credential-ttl-seconds"] = json!(0);
+        let mut string_ttl = base_restriction();
+        string_ttl["max-credential-ttl-seconds"] = json!("300");
+
+        for (event_id, read_restriction, expected_message) in [
+            (
+                "evt-credential-restriction-missing-purpose",
+                missing_purpose,
+                "credential-vend read-restriction purpose must not be blank",
+            ),
+            (
+                "evt-credential-restriction-blank-purpose",
+                blank_purpose,
+                "credential-vend read-restriction purpose must not be blank",
+            ),
+            (
+                "evt-credential-restriction-missing-ttl",
+                missing_ttl,
+                "credential-vend read-restriction max-credential-ttl-seconds must be a positive integer",
+            ),
+            (
+                "evt-credential-restriction-zero-ttl",
+                zero_ttl,
+                "credential-vend read-restriction max-credential-ttl-seconds must be positive",
+            ),
+            (
+                "evt-credential-restriction-string-ttl",
+                string_ttl,
+                "credential-vend read-restriction max-credential-ttl-seconds must be a positive integer",
+            ),
+        ] {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "credentials.vend-attempted".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "credentials.vend-attempted",
+                        "table": table.clone(),
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal.clone(),
+                                "action": "credentials-vend",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                                "context": {
+                                    "read-restriction": read_restriction.clone()
+                                }
+                            },
+                            "read-restriction": read_restriction,
+                            "credential-count": 0,
+                            "credential-response-evidence": [],
+                            "storage-profile-id": "events-local",
+                            "storage-profile": {
+                                "profile-id": "events-local",
+                                "warehouse": "local",
+                                "provider": "file",
+                                "issuance-mode": "local-file-no-secret",
+                                "secret-ref-present": false,
+                                "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            },
+                            "secret-ref-present": false
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed credential read restriction should fail before delivery");
+
+            let message = err.to_string();
+            assert!(message.contains("credentials.vend-attempted"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "malformed credential read restriction must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "malformed credential read restriction must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "malformed credential read restriction must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]
