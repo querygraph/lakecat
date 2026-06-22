@@ -9921,9 +9921,16 @@ fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpE
 }
 
 fn request_idempotency_key(headers: &HeaderMap) -> Result<Option<String>, LakeCatHttpError> {
-    let Some(value) = headers.get("x-lakecat-idempotency-key") else {
+    let mut values = headers.get_all("x-lakecat-idempotency-key").iter();
+    let Some(value) = values.next() else {
         return Ok(None);
     };
+    if values.next().is_some() {
+        return Err(LakeCatError::InvalidArgument(
+            "x-lakecat-idempotency-key must appear at most once".to_string(),
+        )
+        .into());
+    }
     let key_bytes = value.as_bytes();
     if key_bytes.is_empty() || key_bytes.len() > 128 || !key_bytes.iter().all(u8::is_ascii) {
         return Err(LakeCatError::InvalidArgument(
@@ -32561,6 +32568,28 @@ mod tests {
             let message = String::from_utf8_lossy(&body);
             assert!(message.contains(expected_message), "{message}");
         }
+
+        let duplicate = Request::builder()
+            .method(Method::POST)
+            .uri("/catalog/v1/namespaces/default/tables/events/commit")
+            .header("content-type", "application/json")
+            .header("x-lakecat-idempotency-key", "commit:events:0001")
+            .header("x-lakecat-idempotency-key", "commit:events:0002")
+            .body(Body::from(r#"{"requirements":[],"updates":[]}"#))
+            .unwrap();
+        let response = app.clone().oneshot(duplicate).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let message = String::from_utf8_lossy(&body);
+        assert!(
+            message.contains("x-lakecat-idempotency-key must appear at most once"),
+            "{message}"
+        );
+        assert!(!message.contains("commit:events:0001"));
+        assert!(!message.contains("commit:events:0002"));
+
         assert_eq!(*sail.commit_prepare_count.lock().await, 0);
         assert!(
             governance.principals.lock().await.is_empty(),

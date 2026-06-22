@@ -5,6 +5,17 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation slice:
+  `Reject duplicate REST idempotency keys`.
+  Commit requests now reject duplicate `x-lakecat-idempotency-key` headers at
+  the REST edge before identity, authorization, Sail commit preparation,
+  pointer movement, audit, or outbox evidence. The regression keeps diagnostics
+  generic so conflicting retry keys are not echoed back to callers.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib commit_rejects_invalid_rest_idempotency_keys -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed.
 - Latest release-contract slice:
   `Pin release ledger and standards guidance in contract`.
   `scripts/check-local-dependency-contract.sh` now treats the living

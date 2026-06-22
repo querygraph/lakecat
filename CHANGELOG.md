@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened REST commit idempotency key admission so duplicate
+  `x-lakecat-idempotency-key` headers are rejected before identity,
+  authorization, Sail commit preparation, pointer movement, audit, or outbox
+  evidence. The regression keeps the diagnostic generic and proves duplicate
+  retry keys do not leak raw key values.
 - Pinned the first-release ledger and standards-boundary book guidance in the
   local dependency contract. The contract now fails if `DESIGN.md` drops the
   release-blocking/deferred scope, the local release and QGLake proof commands,
