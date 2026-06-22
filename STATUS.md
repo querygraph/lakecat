@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden credential-vend storage-location and mode replay evidence`.
+  Service replay admission now validates optional `credentials.vend-attempted`
+  `storage-location` evidence as a non-empty, undecorated, credential-free
+  string and binds any present top-level `mode` back to the nested
+  storage-profile issuance mode before acknowledgement, graph projection,
+  OpenLineage projection, QGLake proof, or QueryGraph import can inherit
+  drifted credential-root evidence.
+- Local verification for this implementation/testing slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_credential_vend_location_or_mode_evidence -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Cover credential-vend receipt engine and timestamp evidence`.
   Service replay admission already required `credentials.vend-attempted`
   authorization receipts to carry non-empty engine evidence and RFC3339

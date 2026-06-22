@@ -3174,6 +3174,48 @@ fn validate_plan_task_evidence(
     Ok(())
 }
 
+fn validate_optional_location_evidence(
+    event: &OutboxEvent,
+    location: Option<&Value>,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(location) = location else {
+        return Ok(());
+    };
+    let Some(location) = location
+        .as_str()
+        .filter(|location| !location.trim().is_empty())
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} must be a non-empty string"),
+        ));
+    };
+    if location.contains(['?', '#']) {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} must not contain decorated location material"),
+        ));
+    }
+    let normalized = location.to_ascii_lowercase();
+    for marker in [
+        "token=",
+        "secret=",
+        "credential=",
+        "password=",
+        "access_key=",
+        "session_token=",
+    ] {
+        if normalized.contains(marker) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} must not contain credential material"),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn validate_scan_required_filters_match_row_predicate(
     event: &OutboxEvent,
     payload: &Value,
@@ -4900,6 +4942,11 @@ fn validate_credential_vend_event_evidence(
         storage_profile,
         "credential-vend storage-profile",
     )?;
+    validate_optional_location_evidence(
+        event,
+        payload.get("storage-location"),
+        "credential-vend storage-location",
+    )?;
     let profile_id = required_string_field(
         event,
         storage_profile,
@@ -4920,6 +4967,21 @@ fn validate_credential_vend_event_evidence(
         profile_id,
         "credential-vend evidence",
     )?;
+    if payload.get("mode").is_some() {
+        let issuance_mode = required_string_field(
+            event,
+            storage_profile,
+            "issuance-mode",
+            "credential-vend storage-profile",
+        )?;
+        validate_string_field_equals(
+            event,
+            payload,
+            "mode",
+            issuance_mode,
+            "credential-vend evidence",
+        )?;
+    }
     let secret_ref_present = storage_profile
         .get("secret-ref-present")
         .and_then(Value::as_bool)
@@ -21948,6 +22010,124 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_credential_vend_location_or_mode_evidence() {
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let cases = [
+            (
+                "blank-storage-location",
+                "storage-location",
+                json!(" "),
+                "credential-vend storage-location must be a non-empty string",
+            ),
+            (
+                "decorated-storage-location",
+                "storage-location",
+                json!("s3://lakecat-demo/events?token=secret"),
+                "credential-vend storage-location must not contain decorated location material",
+            ),
+            (
+                "credential-bearing-storage-location",
+                "storage-location",
+                json!("s3://lakecat-demo/events/access_key=secret"),
+                "credential-vend storage-location must not contain credential material",
+            ),
+            (
+                "mode-drift",
+                "mode",
+                json!("short-lived-secret-ref"),
+                "credential-vend evidence mode must match catalog evidence",
+            ),
+        ];
+
+        for (case, field, value, expected_message) in cases {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let mut payload = json!({
+                "authorization-receipt": {
+                    "principal": principal.clone(),
+                    "action": "credentials-vend",
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "checked_at": chrono::Utc::now(),
+                },
+                "storage-location": "s3://lakecat-demo/events",
+                "storage-profile-id": "events-local",
+                "storage-profile": {
+                    "profile-id": "events-local",
+                    "warehouse": "local",
+                    "provider": "file",
+                    "issuance-mode": "local-file-no-secret",
+                    "secret-ref-present": false,
+                    "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                },
+                "secret-ref-present": false,
+                "credential-count": 0,
+                "credential-response-evidence": [],
+                "mode": "local-file-no-secret",
+            });
+            payload[field] = value;
+            let event_id = format!("evt-credential-vend-{case}");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "credentials.vend-attempted".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "credentials.vend-attempted",
+                        "table": table,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed credential-vend location or mode proof should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("credentials.vend-attempted"));
+            assert!(
+                message.contains(expected_message),
+                "credential-vend should reject {case}: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{case} credential-vend evidence must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{case} credential-vend evidence must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{case} credential-vend evidence must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]

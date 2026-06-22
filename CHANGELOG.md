@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened credential-vend replay storage-location and mode evidence. When a
+  `credentials.vend-attempted` event carries `storage-location`, service replay
+  now rejects blank, decorated, or credential-bearing values, and any present
+  top-level `mode` must match the nested storage-profile issuance mode before
+  acknowledgement, graph projection, OpenLineage projection, QGLake proof, or
+  QueryGraph import can inherit drifted credential-root evidence.
 - Added credential-vend replay coverage for malformed authorization receipt
   engine and timestamp evidence. `credentials.vend-attempted` now has direct
   regressions proving missing or blank `engine` values and missing or malformed
