@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bound compact QGLake credential-vending proof to branch-level authorization
+  receipt evidence, requiring restricted-agent and trusted-human credential
+  branches plus captured LakeCat replay JSON to carry full authorization
+  receipt hashes and the `credentials-vend` action before archived handoff
+  proof is accepted.
 - Expanded the LakeCat book's concept guidance with audience-specific language
   for Iceberg users, operators, governed-agent designers, QueryGraph readers,
   and standards readers, including a direct "what to say / what not to say"

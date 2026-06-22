@@ -512,9 +512,10 @@ proof. Compact governed scan proof must also preserve the planned and fetched
 scan receipt identities: principal subject/kind, full authorization receipt
 hashes, and the `table-plan-scan` action from source replay through captured
 LakeCat replay and archived handoff summary verification. Credential replay
-must preserve the policy-derived TTL cap and redacted
-storage-scope hash in both the captured LakeCat replay evidence and compact
-handoff summary. Credential-vend replay should fail when top-level
+must preserve the policy-derived TTL cap, full authorization receipt hash, the
+`credentials-vend` authorization action, and redacted storage-scope hash in
+raw lineage drains, captured LakeCat replay evidence, and compact handoff
+summaries. Credential-vend replay should fail when top-level
 read-restriction evidence or `lakecat:raw-credential-exception` evidence drifts
 from the authorization receipt context, or when returned credential evidence
 or nested storage-profile warehouse / top-level storage-profile id /
@@ -677,7 +678,8 @@ when `secret-ref-present` is false, regardless of JSON type.
 Blocked raw-credential replay must carry zero credentials plus a non-empty
 block reason matching the raw-credential exception receipt context before any
 graph or OpenLineage sink observes it.
-Credential-vend replay must also carry a valid authorization receipt principal
+Credential-vend replay must also carry a valid authorization receipt
+principal, full authorization receipt hash, and `credentials-vend` action
 before projection, including blocked zero-credential attempts where no returned
 credential response entry exists to repeat actor evidence.
 Management-list replay must carry count-aligned, syntactically valid,

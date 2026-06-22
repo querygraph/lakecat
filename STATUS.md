@@ -5,6 +5,22 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Bind credential receipt proof`.
+  Compact QGLake `credentialVendingProof` branches and captured LakeCat replay
+  evidence now carry branch-level full authorization receipt hashes and the
+  `credentials-vend` action for both restricted-agent denial and trusted-human
+  audited raw-credential exception proof. Raw lineage-drain credential replay
+  also requires the same full receipt hash and action before compact handoff
+  proof can be generated.
+- Local verification for this credential receipt-proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Expand audience catalog concept guidance`.
   The book now adds audience-specific guidance for standard Iceberg readers,

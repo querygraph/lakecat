@@ -2372,6 +2372,8 @@ fn verify_lakecat_replay_credentials_match_summary(
             "credentialCount",
             "credentialPrefixHashes",
             "maxCredentialTtlSeconds",
+            "authorizationReceiptHash",
+            "authorizationReceiptAction",
             "replayEventHashes",
             "openLineageHashes",
         ] {
@@ -3608,6 +3610,17 @@ fn require_credential_vending_evidence(
         "credentialVendingProof.restricted",
     )?;
     require_credential_prefix_hash_evidence(restricted, "credentialVendingProof.restricted")?;
+    require_full_hash_str(
+        restricted,
+        "authorizationReceiptHash",
+        "credentialVendingProof.restricted",
+    )?;
+    require_string_eq(
+        restricted,
+        "authorizationReceiptAction",
+        "credentials-vend",
+        "credentialVendingProof.restricted",
+    )?;
     if required_bool(
         restricted,
         "rawCredentialExceptionAllowed",
@@ -3673,6 +3686,17 @@ fn require_credential_vending_evidence(
         "credentialVendingProof.trustedHuman",
     )?;
     require_credential_prefix_hash_evidence(trusted, "credentialVendingProof.trustedHuman")?;
+    require_full_hash_str(
+        trusted,
+        "authorizationReceiptHash",
+        "credentialVendingProof.trustedHuman",
+    )?;
+    require_string_eq(
+        trusted,
+        "authorizationReceiptAction",
+        "credentials-vend",
+        "credentialVendingProof.trustedHuman",
+    )?;
     if required_bool(
         trusted,
         "rawCredentialExceptionAllowed",
@@ -4952,6 +4976,8 @@ fn qglake_credential_replay_evidence_json(
             "rawCredentialExceptionAllowed": restricted.raw_credential_exception_allowed.unwrap_or_default(),
             "blockReason": restricted.credential_block_reason.as_deref(),
             "maxCredentialTtlSeconds": qglake_event_max_credential_ttl_seconds(restricted),
+            "authorizationReceiptHash": restricted.authorization_receipt_hash.as_deref(),
+            "authorizationReceiptAction": restricted.authorization_receipt_action.as_deref(),
             "storageProfile": qglake_credential_storage_profile_evidence_json(restricted),
             "replayEventHashes": &restricted.replay_event_hashes,
             "openLineageHashes": &restricted.replay_open_lineage_hashes,
@@ -4965,6 +4991,8 @@ fn qglake_credential_replay_evidence_json(
             "rawCredentialExceptionReason": human.raw_credential_exception_reason.as_deref(),
             "blockReason": human.credential_block_reason.as_deref(),
             "maxCredentialTtlSeconds": qglake_event_max_credential_ttl_seconds(human),
+            "authorizationReceiptHash": human.authorization_receipt_hash.as_deref(),
+            "authorizationReceiptAction": human.authorization_receipt_action.as_deref(),
             "storageProfile": qglake_credential_storage_profile_evidence_json(human),
             "replayEventHashes": &human.replay_event_hashes,
             "openLineageHashes": &human.replay_open_lineage_hashes,
@@ -8468,6 +8496,25 @@ fn verify_qglake_credential_lineage_projection(
             "qglake lineage drain {label} credential replay is missing max credential TTL evidence"
         )));
     }
+    let Some(authorization_receipt_hash) = event
+        .authorization_receipt_hash
+        .as_deref()
+        .filter(|hash| is_full_sha256_hash(hash))
+    else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} credential replay is missing full SHA-256 authorization receipt hash evidence"
+        )));
+    };
+    if authorization_receipt_hash.trim().is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} credential replay authorization receipt hash must be non-empty"
+        )));
+    }
+    if event.authorization_receipt_action.as_deref() != Some("credentials-vend") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} credential replay authorization receipt action must be credentials-vend"
+        )));
+    }
     let restriction = qglake_lineage_drain_read_restriction(event, &format!("{label} credential"))?;
     require_read_restriction_evidence(
         restriction,
@@ -10660,6 +10707,9 @@ mod tests {
         qglake_add_governed_scan_identity_evidence(
             &mut summary["lakecatReplayVerification"]["governedScanProof"],
         );
+        qglake_add_credential_receipt_evidence(
+            &mut summary["lakecatReplayVerification"]["credentialVendingProof"],
+        );
         qglake_add_view_receipt_chain_structures(
             &mut summary["lakecatReplayVerification"]["viewReceiptChainProof"],
         );
@@ -10668,6 +10718,15 @@ mod tests {
             ["viewReceiptChainProof"]["views"][0]["acceptedReceiptHash"]
             .clone()]);
         summary
+    }
+
+    fn qglake_add_credential_receipt_evidence(credentials: &mut Value) {
+        credentials["restricted"]["authorizationReceiptHash"] =
+            json!(qglake_fixture_hash("restricted-credential-authorization"));
+        credentials["restricted"]["authorizationReceiptAction"] = json!("credentials-vend");
+        credentials["trustedHuman"]["authorizationReceiptHash"] =
+            json!(qglake_fixture_hash("human-credential-authorization"));
+        credentials["trustedHuman"]["authorizationReceiptAction"] = json!("credentials-vend");
     }
 
     fn qglake_add_governed_scan_identity_evidence(governed_scan: &mut Value) {
@@ -11074,6 +11133,9 @@ mod tests {
             json!("graph-read");
         qglake_add_governed_scan_identity_evidence(
             &mut lakecat_replay_json["replay-evidence"]["scan"],
+        );
+        qglake_add_credential_receipt_evidence(
+            &mut lakecat_replay_json["replay-evidence"]["credentials"],
         );
         lakecat_replay_json["management-replay"] = json!(
             "management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none"
@@ -13353,6 +13415,49 @@ mod tests {
         assert!(err.to_string().contains("credentialVendingProof"));
         assert!(err.to_string().contains("replayEventHashes"));
         assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_credential_authorization_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]
+            .as_object_mut()
+            .unwrap()
+            .remove("authorizationReceiptHash");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing credential authorization hash");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("authorizationReceiptHash"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_short_credential_authorization_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["trustedHuman"]["authorizationReceiptHash"] =
+            json!("sha256:credential-auth");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject short credential authorization hash");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("authorizationReceiptHash"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_credential_authorization_actions() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["authorizationReceiptAction"] =
+            json!("table-load");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject credential authorization action drift");
+
+        assert!(err.to_string().contains("credentialVendingProof"));
+        assert!(err.to_string().contains("authorizationReceiptAction"));
+        assert!(err.to_string().contains("credentials-vend"));
     }
 
     #[test]
@@ -16050,6 +16155,33 @@ mod tests {
                 .contains("captured LakeCat replay output.replay-evidence.credentials")
         );
         assert!(err.to_string().contains("credentialPrefixHashes mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_credential_authorization_action_drift() {
+        let temp = qglake_temp_dir("handoff-captured-credential-authorization-action-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["credentials"]["trustedHuman"]["authorizationReceiptAction"] =
+            json!("table-load");
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay credential authorization action drift should be rejected");
+        assert!(
+            err.to_string()
+                .contains("captured LakeCat replay output.replay-evidence.credentials")
+        );
+        assert!(
+            err.to_string()
+                .contains("authorizationReceiptAction mismatch")
+        );
     }
 
     #[test]
@@ -25201,7 +25333,9 @@ mod tests {
             event_type: "credentials.vend-attempted".to_string(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:agent-credential-authorization".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash(
+                "restricted-credential-authorization",
+            )),
             authorization_receipt_action: Some("credentials-vend".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25282,7 +25416,7 @@ mod tests {
             event_type: "credentials.vend-attempted".to_string(),
             principal_subject: Some("human:qglake-operator".to_string()),
             principal_kind: Some("human".to_string()),
-            authorization_receipt_hash: Some("sha256:human-credential-authorization".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("human-credential-authorization")),
             authorization_receipt_action: Some("credentials-vend".to_string()),
             request_identity_state: Some("header-principal".to_string()),
             request_identity_source: Some("x-lakecat-principal".to_string()),

@@ -4530,16 +4530,19 @@ the captured `replay-evidence.credentials` restricted-agent and trusted-human
 branches with the compact `credentialVendingProof`, so a saved handoff cannot
 claim that agents were blocked onto Sail-planned reads or that humans used an
 audited exception unless the captured LakeCat replay proves the same decision.
-That equality includes `credentialPrefixHashes`, which closes the gap where a
-captured replay artifact could report a different redacted returned-credential
-set while the compact summary still looked valid.
-Both credential branches must carry replay and OpenLineage arrays whose entries
-are full `sha256:`-prefixed 64-hex digests, so the compact proof cannot replace
-credential receipt evidence with prefix-shaped placeholders. They also carry
-`credentialPrefixHashes`: the restricted-agent branch must prove the array is
-empty when zero credentials were returned, while the trusted-human branch must
-prove the array length matches `credentialCount`, every entry is a full
-SHA-256 digest, and no prefix hash is repeated.
+That equality includes `credentialPrefixHashes`, `authorizationReceiptHash`,
+and `authorizationReceiptAction`, which closes the gap where a captured replay
+artifact could report a different redacted returned-credential set or
+authorization action while the compact summary still looked valid.
+Both credential branches must carry a full authorization receipt hash, the
+`credentials-vend` authorization action, and replay/OpenLineage arrays whose
+entries are full `sha256:`-prefixed 64-hex digests, so the compact proof cannot
+replace credential receipt evidence with prefix-shaped placeholders or a
+different catalog action. They also carry `credentialPrefixHashes`: the
+restricted-agent branch must prove the array is empty when zero credentials
+were returned, while the trusted-human branch must prove the array length
+matches `credentialCount`, every entry is a full SHA-256 digest, and no prefix
+hash is repeated.
 The verifier also binds the operator-facing replay text back to the same
 proof fields. The captured top-level `scan-replay` line is recomputed from
 `governedScanProof`, including plan/fetch task counts, the policy-derived
@@ -4888,10 +4891,11 @@ Credential-vend replay gets the same treatment: `credentials.vend-attempted`
 must carry a
 matching credential count, full duplicate-free credential-response prefix
 hashes, a full redacted storage-profile location hash, a valid authorization
-receipt principal, internally consistent secret-reference presence/provider/hash
-fields, a top-level storage-profile id that agrees with nested storage-profile
-evidence, a nested storage-profile warehouse that agrees with the event table
-warehouse, any top-level secret-reference presence value
+receipt principal, a full authorization receipt hash, the `credentials-vend`
+authorization action, internally consistent secret-reference
+presence/provider/hash fields, a top-level storage-profile id that agrees with
+nested storage-profile evidence, a nested storage-profile warehouse that agrees
+with the event table warehouse, any top-level secret-reference presence value
 that agrees with nested storage-profile evidence, and credential-response
 metadata that agrees with the selected storage profile and authorization receipt
 before delivery.
