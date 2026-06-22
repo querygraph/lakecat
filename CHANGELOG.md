@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required outbox replay admission to reject missing or denied authorization
+  receipt `allowed` decisions before acknowledgement, graph projection, or
+  OpenLineage projection, covering shared catalog receipt validation plus
+  specialized table commit and commit-history replay paths.
 - Required outbox replay admission to reject missing or blank authorization
   receipt engines before acknowledgement, graph projection, or OpenLineage
   projection, covering shared catalog receipt validation plus specialized

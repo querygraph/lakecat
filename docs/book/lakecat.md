@@ -4481,21 +4481,25 @@ replay before QueryGraph ever sees a compact handoff. The verifier also requires
 table-commit replay to be internally consistent before delivery:
 `table.commit` must carry a commit object, unsigned sequence number, stable
 table identity, matching nested commit-table identity, a valid commit principal
-and a valid authorization receipt principal with matching values, a non-empty
+and a valid authorization receipt principal with matching values, an
+authorization receipt whose `allowed` decision is true, a non-empty
 authorization receipt engine, and full SHA-256 commit hash evidence before
-graph or OpenLineage projection can start. That engine field is deliberately
-small but important: local/default receipts identify the local allow-all
-compatibility engine, while real TypeSec-backed receipts identify TypeSec, so
-replay evidence cannot become actorful but engine-less proof.
+graph or OpenLineage projection can start. The decision and engine fields are
+deliberately small but important: replay evidence must prove the catalog acted
+under an affirmative authorization decision, local/default receipts identify
+the local allow-all compatibility engine, and real TypeSec-backed receipts
+identify TypeSec. That keeps replay evidence from becoming actorful but
+decision-less or engine-less proof.
 Commit-history replay has the same shape:
 `table.commits-listed` event must carry a `commit-count` that matches both
 full SHA-256 commit hashes and unsigned sequence numbers, plus
 `principal-subject` and `principal-kind` fields that match the authorization
-receipt principal, and a non-empty authorization receipt engine; compact QGLake
-proof also binds that pointer-log replay to the accepted principal subject/kind.
-The raw QGLake lineage-drain verifier checks the same accepted-principal and
-agent kind before compact handoff proof is generated, so malformed,
-actor-drifted, or engine-less pointer-log summaries cannot become delivered
+receipt principal, an affirmative authorization receipt decision, and a
+non-empty authorization receipt engine; compact QGLake proof also binds that
+pointer-log replay to the accepted principal subject/kind. The raw QGLake
+lineage-drain verifier checks the same accepted-principal and agent kind before
+compact handoff proof is generated, so malformed, denied, actor-drifted,
+decision-less, or engine-less pointer-log summaries cannot become delivered
 replay evidence. Credential-vend
 replay gets the same treatment: `credentials.vend-attempted` must carry a
 matching credential count, full duplicate-free credential-response prefix
