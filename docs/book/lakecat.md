@@ -6040,6 +6040,14 @@ replay agreement compares the same object against the saved summary. That keeps
 QueryGraph from accepting a management proof that preserved the policy name but
 lost or swapped the policy document anchor or the authority under which it was
 recorded.
+Tenant-root upserts get the same hash-binding treatment. When a server replay
+event carries an `endpoint-url`, LakeCat recomputes `endpoint-url-hash` from
+that value before projection. When a warehouse replay event carries a
+`storage-root`, LakeCat recomputes `storage-root-hash` from that value before
+projection. This is not an Iceberg table-access rule; it is LakeCat/QGLake
+management proof. It keeps a replay event from pairing one raw endpoint or
+storage root with a valid-looking hash for another value, then asking Grust,
+OpenLineage, or QueryGraph to trust the mismatched tenant-root evidence.
 The QGLake acceptance workflow now
 establishes its server/project/warehouse tenant spine, performs governed
 server, project, warehouse, policy-list, policy-upsert, storage-profile-list,

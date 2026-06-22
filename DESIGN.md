@@ -725,6 +725,11 @@ principal plus an event-matching catalog action, affirmative allowed decision,
 non-empty engine, and RFC3339 `checked_at` timestamp before projection, so
 tenant-root and policy mutations cannot become actorless or action-drifted
 catalog graph or OpenLineage facts.
+Server and warehouse upsert replay must also bind redaction hashes back to the
+source value when that value is present: `endpoint-url-hash` must recompute
+from `endpoint-url`, and `storage-root-hash` must recompute from
+`storage-root`, before graph, OpenLineage, or QGLake proof accepts the
+management event.
 Storage-profile upsert replay and compact QGLake handoff proof must also bind
 that principal to a full authorization receipt hash and the
 `storage-profile-manage` action, beside the redacted provider, issuance mode,

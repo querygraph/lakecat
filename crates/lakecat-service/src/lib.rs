@@ -2813,6 +2813,13 @@ fn validate_server_upsert_event_evidence(
         optional_string_field(event, server_record, "endpoint-url", "server upsert")?;
     if endpoint_url.is_some() {
         validate_required_full_hash_field(event, server_record, "endpoint-url-hash")?;
+        validate_string_content_hash_matches_field(
+            event,
+            server_record,
+            "endpoint-url",
+            "endpoint-url-hash",
+            "server upsert",
+        )?;
     } else {
         validate_optional_full_hash_field(event, server_record, "endpoint-url-hash")?;
     }
@@ -2883,6 +2890,13 @@ fn validate_warehouse_upsert_event_evidence(
         optional_string_field(event, warehouse_record, "storage-root", "warehouse upsert")?;
     if storage_root.is_some() {
         validate_required_full_hash_field(event, warehouse_record, "storage-root-hash")?;
+        validate_string_content_hash_matches_field(
+            event,
+            warehouse_record,
+            "storage-root",
+            "storage-root-hash",
+            "warehouse upsert",
+        )?;
     } else {
         validate_optional_full_hash_field(event, warehouse_record, "storage-root-hash")?;
     }
@@ -4663,6 +4677,30 @@ fn required_string_field<'a>(
                 &format!("{label} {field} must be a non-empty string"),
             )
         })
+}
+
+fn validate_string_content_hash_matches_field(
+    event: &OutboxEvent,
+    object: &Value,
+    value_field: &str,
+    hash_field: &str,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let value = required_string_field(event, object, value_field, label)?;
+    let recorded_hash = required_string_field(event, object, hash_field, label)?;
+    let computed_hash = content_hash_json(&json!({ value_field: value })).map_err(|_| {
+        outbox_evidence_error(
+            event,
+            &format!("{label} {hash_field} could not be recomputed"),
+        )
+    })?;
+    if recorded_hash != computed_hash {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} {hash_field} must match {value_field}"),
+        ));
+    }
+    Ok(())
 }
 
 fn required_pointer_string<'a>(
@@ -14611,6 +14649,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_server_upsert_endpoint_hash_drift() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-server-endpoint-hash-drift".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "server.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-server-endpoint-hash-drift",
+                    "event-type": "server.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "server-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "server-id": "prod",
+                        "server-record": {
+                            "server-id": "prod",
+                            "display-name": "Production",
+                            "endpoint-url": "https://lakecat.example",
+                            "endpoint-url-hash": content_hash_json(&json!({
+                                "endpoint-url": "https://shadow.example"
+                            })).unwrap(),
+                            "properties": {"region": "global"}
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("server endpoint hash drift should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("server.upserted"));
+        assert!(message.contains("server upsert endpoint-url-hash must match endpoint-url"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-server-endpoint-hash-drift"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_warehouse_upsert_storage_root_evidence() {
         let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
         let store = Arc::new(RecordingOutboxStore {
@@ -14665,6 +14763,66 @@ mod tests {
         assert!(message.contains("invalid storage root"));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("raw-secret"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_warehouse_upsert_storage_root_hash_drift() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-warehouse-storage-root-hash-drift".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "warehouse.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-warehouse-storage-root-hash-drift",
+                    "event-type": "warehouse.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "warehouse-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "warehouse-record": {
+                            "warehouse": "local",
+                            "project-id": "default",
+                            "storage-root": "file:///tmp/lakecat",
+                            "storage-root-hash": content_hash_json(&json!({
+                                "storage-root": "file:///tmp/shadow"
+                            })).unwrap(),
+                            "properties": {"region": "local"}
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("warehouse storage-root hash drift should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("warehouse.upserted"));
+        assert!(message.contains("warehouse upsert storage-root-hash must match storage-root"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-warehouse-storage-root-hash-drift"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

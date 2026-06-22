@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened management upsert replay for tenant roots. `server.upserted` now
+  recomputes `endpoint-url-hash` from `endpoint-url`, and
+  `warehouse.upserted` recomputes `storage-root-hash` from `storage-root`,
+  before acknowledgement, graph projection, OpenLineage projection, or QGLake
+  handoff can accept those management events.
 - Hardened QueryGraph bootstrap manifest verification so table/view projections
   and table/view artifact manifests must be duplicate-free by stable id before
   LakeCat accepts the bundle as QGLake import proof. This prevents duplicated

@@ -6,6 +6,22 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Bind management upsert location hashes`.
+  Service replay admission now recomputes `server.upserted` `endpoint-url-hash`
+  from the redaction-bound `endpoint-url` and `warehouse.upserted`
+  `storage-root-hash` from the redaction-bound `storage-root` before
+  acknowledgement, graph projection, OpenLineage projection, or QGLake handoff.
+  This prevents tenant-root replay from pairing one raw endpoint/root with a
+  valid-looking hash for another value.
+- Local verification for this management upsert hash-binding slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_server_upsert_endpoint_hash_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_warehouse_upsert_storage_root_hash_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`.
+- Latest completed implementation/documentation slice:
   `Reject duplicate QueryGraph bootstrap IDs`.
   QueryGraph bootstrap manifest verification now rejects duplicate stable IDs
   across table projections, table artifact manifests, view projections, and
