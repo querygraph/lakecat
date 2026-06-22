@@ -516,6 +516,12 @@ pub struct LineageDrainResponse {
 pub struct LineageDrainEventSummary {
     pub event_id: String,
     pub event_type: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub catalog_config_defaults: Vec<ConfigEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub catalog_config_overrides: Vec<ConfigEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub catalog_config_endpoints: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub principal_subject: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

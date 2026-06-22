@@ -5857,6 +5857,18 @@ endpoints. Their presence in config evidence proves that a QGLake import,
 OpenLineage replay, or agentic management workflow saw the same integration
 contract that LakeCat later projects into graph and lineage systems.
 
+That proof now survives into saved lineage-drain artifacts, not only service
+admission. A `catalog.config-read` drain summary carries three compact fields:
+the advertised config defaults, config overrides, and endpoint list. QGLake
+verification checks those fields again when reading the saved drain. A handoff
+cannot keep the `catalog.config-read` event while dropping
+`lakecat.format.v4.typed-sail=unavailable`, adding a preview
+`lakecat.format.v4*` key, using an override to rewrite v4 posture, or omitting
+the standard REST, governed access, bootstrap, or lineage-drain endpoints. That
+makes the config proof replayable outside the service process. QueryGraph can
+trust that the compatibility and integration contract it imports is the same
+contract LakeCat admitted before graph and OpenLineage projection.
+
 The bridge is intentionally conservative, but it should not reject Iceberg
 metadata that Sail has already decoded. Manifest expansion now emits null
 partition slots as JSON `null` and recursively encodes nested Sail partition

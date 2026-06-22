@@ -5609,6 +5609,9 @@ fn lineage_drain_event_summary(
     LineageDrainEventSummary {
         event_id: event.event_id.clone(),
         event_type: event.event_type.clone(),
+        catalog_config_defaults: config_entries_summary(payload.get("defaults")),
+        catalog_config_overrides: config_entries_summary(payload.get("overrides")),
+        catalog_config_endpoints: string_array_summary(payload.get("endpoints")),
         principal_subject: payload
             .pointer("/authorization-receipt/principal/subject")
             .and_then(Value::as_str)
@@ -5872,6 +5875,18 @@ fn lineage_drain_event_summary(
         replay_event_hashes: receipt.lineage_event_hashes.clone(),
         replay_open_lineage_hashes: receipt.open_lineage_hashes.clone(),
     }
+}
+
+fn config_entries_summary(value: Option<&Value>) -> Vec<ConfigEntry> {
+    value
+        .and_then(Value::as_array)
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|entry| serde_json::from_value::<ConfigEntry>(entry.clone()).ok())
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn namespace_summary_parts(value: Option<&Value>) -> Vec<String> {
@@ -29973,6 +29988,15 @@ mod tests {
         assert_eq!(drain.events.len(), 1);
         assert_eq!(drain.events[0].graph_events, 2);
         assert_eq!(drain.events[0].lineage_events, 1);
+        assert_config_defaults_include(
+            &serde_json::to_value(&drain.events[0].catalog_config_defaults).unwrap(),
+            "lakecat.format.v4.typed-sail",
+            "unavailable",
+        );
+        assert_config_endpoints_include(
+            &serde_json::to_value(&drain.events[0].catalog_config_endpoints).unwrap(),
+            "GET /querygraph/v1/bootstrap",
+        );
 
         let graph_events = graph.events.lock().await;
         assert_eq!(graph_events.len(), 2);

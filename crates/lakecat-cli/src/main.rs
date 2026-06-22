@@ -8,10 +8,13 @@ use std::{
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use lakecat_api::{
-    CatalogConfigResponse, LineageDrainEventSummary, LineageDrainResponse,
-    ListPolicyBindingsResponse, ListStorageProfilesResponse, PolicyBindingResponse,
-    StorageProfileResponse, UpsertPolicyBindingRequest, UpsertStorageProfileRequest,
-    ViewVersionReceiptChainResponse, ViewVersionReceiptResponse,
+    CatalogConfigResponse, ConfigEntry, LAKECAT_COMPATIBILITY_KEY, LAKECAT_COMPATIBILITY_VALUE,
+    LAKECAT_FORMAT_BASELINE_KEY, LAKECAT_FORMAT_BASELINE_VALUE, LAKECAT_FORMAT_V4_BRIDGE_KEY,
+    LAKECAT_FORMAT_V4_BRIDGE_VALUE, LAKECAT_FORMAT_V4_KEY, LAKECAT_FORMAT_V4_TYPED_SAIL_KEY,
+    LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE, LAKECAT_FORMAT_V4_VALUE, LineageDrainEventSummary,
+    LineageDrainResponse, ListPolicyBindingsResponse, ListStorageProfilesResponse,
+    PolicyBindingResponse, StorageProfileResponse, UpsertPolicyBindingRequest,
+    UpsertStorageProfileRequest, ViewVersionReceiptChainResponse, ViewVersionReceiptResponse,
 };
 #[cfg(feature = "qglake-fixture")]
 use lakecat_api::{
@@ -7942,6 +7945,7 @@ fn verify_qglake_lineage_drain(
     verify_qglake_view_replay(drain, verification)?;
     verify_qglake_credential_replay(drain, principal)?;
     verify_qglake_management_list_replay(drain, expected_policy_binding_count)?;
+    verify_qglake_catalog_config_replay(drain)?;
     verify_qglake_credential_replay_matches_storage_profile_upsert(drain, principal)?;
     verify_qglake_table_commit_history_replay(drain, principal)?;
     verify_qglake_scan_replay(drain)?;
@@ -7950,6 +7954,165 @@ fn verify_qglake_lineage_drain(
     require_qglake_lineage_drain_counts_match_summaries(drain)?;
     require_qglake_lineage_drain_sink_hashes_duplicate_free(drain)?;
     Ok(())
+}
+
+fn verify_qglake_catalog_config_replay(
+    drain: &LineageDrainResponse,
+) -> lakecat_core::LakeCatResult<()> {
+    for event in drain
+        .events
+        .iter()
+        .filter(|event| event.event_type == "catalog.config-read")
+    {
+        verify_qglake_catalog_config_defaults(event)?;
+        verify_qglake_catalog_config_overrides(event)?;
+        verify_qglake_catalog_config_endpoints(event)?;
+    }
+    Ok(())
+}
+
+fn verify_qglake_catalog_config_defaults(
+    event: &LineageDrainEventSummary,
+) -> lakecat_core::LakeCatResult<()> {
+    if event.catalog_config_defaults.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain catalog config replay is missing config defaults".to_string(),
+        ));
+    }
+    let mut keys = BTreeSet::new();
+    for entry in &event.catalog_config_defaults {
+        if entry.key.trim().is_empty() || entry.value.trim().is_empty() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain catalog config replay defaults must contain non-empty string key/value entries".to_string(),
+            ));
+        }
+        if !keys.insert(entry.key.as_str()) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain catalog config replay defaults must not contain duplicate keys"
+                    .to_string(),
+            ));
+        }
+    }
+    let required = [
+        (LAKECAT_COMPATIBILITY_KEY, LAKECAT_COMPATIBILITY_VALUE),
+        (LAKECAT_FORMAT_BASELINE_KEY, LAKECAT_FORMAT_BASELINE_VALUE),
+        (LAKECAT_FORMAT_V4_KEY, LAKECAT_FORMAT_V4_VALUE),
+        (LAKECAT_FORMAT_V4_BRIDGE_KEY, LAKECAT_FORMAT_V4_BRIDGE_VALUE),
+        (
+            LAKECAT_FORMAT_V4_TYPED_SAIL_KEY,
+            LAKECAT_FORMAT_V4_TYPED_SAIL_VALUE,
+        ),
+    ];
+    let allowed_v4_keys = required
+        .iter()
+        .map(|(key, _)| *key)
+        .filter(|key| key.starts_with("lakecat.format.v4"))
+        .collect::<BTreeSet<_>>();
+    for key in &keys {
+        if key.starts_with("lakecat.format.v4") && !allowed_v4_keys.contains(key) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain catalog config replay defaults contain unsupported v4 bridge keys"
+                    .to_string(),
+            ));
+        }
+    }
+    for (required_key, required_value) in required {
+        if !event
+            .catalog_config_defaults
+            .iter()
+            .any(|entry| entry.key == required_key && entry.value == required_value)
+        {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain catalog config replay defaults must include {required_key}={required_value}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn verify_qglake_catalog_config_overrides(
+    event: &LineageDrainEventSummary,
+) -> lakecat_core::LakeCatResult<()> {
+    let mut keys = BTreeSet::new();
+    for entry in &event.catalog_config_overrides {
+        if entry.key.trim().is_empty() || entry.value.trim().is_empty() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain catalog config replay overrides must contain non-empty string key/value entries".to_string(),
+            ));
+        }
+        if !keys.insert(entry.key.as_str()) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain catalog config replay overrides must not contain duplicate keys"
+                    .to_string(),
+            ));
+        }
+        if entry.key.starts_with("lakecat.format.v4") {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain catalog config replay overrides must not contain v4 bridge keys"
+                    .to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn verify_qglake_catalog_config_endpoints(
+    event: &LineageDrainEventSummary,
+) -> lakecat_core::LakeCatResult<()> {
+    if event.catalog_config_endpoints.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain catalog config replay is missing advertised endpoints"
+                .to_string(),
+        ));
+    }
+    let mut endpoints = BTreeSet::new();
+    for endpoint in &event.catalog_config_endpoints {
+        if endpoint.trim().is_empty() {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain catalog config replay endpoints must contain non-empty strings"
+                    .to_string(),
+            ));
+        }
+        if !endpoints.insert(endpoint.as_str()) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(
+                "qglake lineage drain catalog config replay endpoints must not contain duplicates"
+                    .to_string(),
+            ));
+        }
+    }
+    for required in required_qglake_catalog_config_endpoints() {
+        if !endpoints.contains(required) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain catalog config replay endpoints must include {required}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn required_qglake_catalog_config_endpoints() -> [&'static str; 20] {
+    [
+        "GET /catalog/v1/config",
+        "GET /catalog/v1/namespaces",
+        "POST /catalog/v1/namespaces",
+        "POST /catalog/v1/namespaces/{namespace}/tables",
+        "GET /catalog/v1/namespaces/{namespace}/tables/{table}",
+        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit",
+        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/plan",
+        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
+        "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
+        "GET /catalog/v1/{warehouse}/config",
+        "GET /catalog/v1/{warehouse}/namespaces",
+        "POST /catalog/v1/{warehouse}/namespaces",
+        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables",
+        "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}",
+        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit",
+        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
+        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
+        "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials",
+        "POST /management/v1/lineage/drain",
+        "GET /querygraph/v1/bootstrap",
+    ]
 }
 
 fn require_qglake_lineage_authorization_actions_match_events(
@@ -11909,6 +12072,17 @@ mod tests {
                 qglake_scan_tasks_fetched_lineage_summary(),
             ],
         }
+    }
+
+    fn qglake_handoff_lineage_drain_with_config() -> LineageDrainResponse {
+        let mut drain = qglake_handoff_lineage_drain();
+        let config = qglake_catalog_config_lineage_summary();
+        drain.delivered += 1;
+        drain.graph_events += config.graph_events;
+        drain.lineage_events += config.lineage_events;
+        drain.event_types.push(config.event_type.clone());
+        drain.events.push(config);
+        drain
     }
 
     fn qglake_lineage_drain_from_summaries(
@@ -20230,6 +20404,9 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    catalog_config_defaults: Vec::new(),
+                    catalog_config_overrides: Vec::new(),
+                    catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
@@ -20331,6 +20508,9 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    catalog_config_defaults: Vec::new(),
+                    catalog_config_overrides: Vec::new(),
+                    catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
@@ -20432,6 +20612,9 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    catalog_config_defaults: Vec::new(),
+                    catalog_config_overrides: Vec::new(),
+                    catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
@@ -20531,6 +20714,9 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    catalog_config_defaults: Vec::new(),
+                    catalog_config_overrides: Vec::new(),
+                    catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:other".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
@@ -20630,6 +20816,9 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    catalog_config_defaults: Vec::new(),
+                    catalog_config_overrides: Vec::new(),
+                    catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("human".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
@@ -20729,6 +20918,9 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    catalog_config_defaults: Vec::new(),
+                    catalog_config_overrides: Vec::new(),
+                    catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: None,
@@ -20828,6 +21020,9 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    catalog_config_defaults: Vec::new(),
+                    catalog_config_overrides: Vec::new(),
+                    catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
@@ -20927,6 +21122,9 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    catalog_config_defaults: Vec::new(),
+                    catalog_config_overrides: Vec::new(),
+                    catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
@@ -21026,6 +21224,9 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    catalog_config_defaults: Vec::new(),
+                    catalog_config_overrides: Vec::new(),
+                    catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
@@ -21125,6 +21326,9 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    catalog_config_defaults: Vec::new(),
+                    catalog_config_overrides: Vec::new(),
+                    catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
@@ -21224,6 +21428,9 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    catalog_config_defaults: Vec::new(),
+                    catalog_config_overrides: Vec::new(),
+                    catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
@@ -21323,6 +21530,9 @@ mod tests {
                 events: vec![LineageDrainEventSummary {
                     event_id: "evt-bootstrap".to_string(),
                     event_type: "querygraph.bootstrap".to_string(),
+                    catalog_config_defaults: Vec::new(),
+                    catalog_config_overrides: Vec::new(),
+                    catalog_config_endpoints: Vec::new(),
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
@@ -21426,6 +21636,9 @@ mod tests {
                     LineageDrainEventSummary {
                         event_id: "evt-bootstrap".to_string(),
                         event_type: "querygraph.bootstrap".to_string(),
+                        catalog_config_defaults: Vec::new(),
+                        catalog_config_overrides: Vec::new(),
+                        catalog_config_endpoints: Vec::new(),
                         principal_subject: Some("did:example:agent".to_string()),
                         principal_kind: Some("agent".to_string()),
                         authorization_receipt_hash: Some("sha256:authorization".to_string()),
@@ -24648,6 +24861,68 @@ mod tests {
     }
 
     #[test]
+    fn qglake_lineage_drain_verifier_rejects_missing_config_defaults() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain_with_config();
+        let config = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "catalog.config-read")
+            .expect("catalog config replay fixture");
+        config.catalog_config_defaults.clear();
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject missing config defaults");
+
+        assert!(err.to_string().contains("catalog config replay"));
+        assert!(err.to_string().contains("missing config defaults"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_unsupported_config_v4_default() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain_with_config();
+        let config = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "catalog.config-read")
+            .expect("catalog config replay fixture");
+        config.catalog_config_defaults.push(ConfigEntry::new(
+            "lakecat.format.v4.typed-sail.preview",
+            "available",
+        ));
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject unsupported config v4 defaults");
+
+        assert!(err.to_string().contains("catalog config replay"));
+        assert!(err.to_string().contains("unsupported v4 bridge keys"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_missing_config_endpoint() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain_with_config();
+        let config = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "catalog.config-read")
+            .expect("catalog config replay fixture");
+        config
+            .catalog_config_endpoints
+            .retain(|endpoint| endpoint != "GET /querygraph/v1/bootstrap");
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject missing config endpoints");
+
+        assert!(err.to_string().contains("catalog config replay"));
+        assert!(
+            err.to_string()
+                .contains("endpoints must include GET /querygraph/v1/bootstrap")
+        );
+    }
+
+    #[test]
     fn qglake_lineage_drain_verifier_rejects_duplicate_scan_openlineage_hashes() {
         let verification = qglake_handoff_lineage_verification();
         let mut drain = qglake_handoff_lineage_drain();
@@ -25290,6 +25565,9 @@ mod tests {
         LineageDrainEventSummary {
             event_id: "evt-bootstrap".to_string(),
             event_type: "querygraph.bootstrap".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:authorization".to_string()),
@@ -25385,10 +25663,94 @@ mod tests {
         summary
     }
 
+    fn qglake_catalog_config_lineage_summary() -> LineageDrainEventSummary {
+        LineageDrainEventSummary {
+            event_id: "evt-config-read".to_string(),
+            event_type: "catalog.config-read".to_string(),
+            catalog_config_defaults: CatalogConfigResponse::default().defaults,
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: CatalogConfigResponse::default().endpoints,
+            principal_subject: Some("did:example:agent".to_string()),
+            principal_kind: Some("agent".to_string()),
+            authorization_receipt_hash: Some("sha256:config-authorization".to_string()),
+            authorization_receipt_action: Some("catalog-config".to_string()),
+            request_identity_state: Some("verified".to_string()),
+            request_identity_source: Some("x-lakecat-agent-did".to_string()),
+            typedid_envelope_hash: None,
+            typedid_proof_hash: None,
+            agent_delegation_hash: Some("sha256:delegation".to_string()),
+            agent_summary_signature_hash: Some("sha256:summary".to_string()),
+            graph_events: 2,
+            lineage_events: 1,
+            bundle_hash: None,
+            graph_hash: None,
+            open_lineage_hash: None,
+            querygraph_import_hash: None,
+            table_artifact_count: 0,
+            view_artifact_count: 0,
+            view_version_receipt_hashes: Vec::new(),
+            view_version_receipt_chain_hashes: Vec::new(),
+            view_version_receipt_chain_verified_count: 0,
+            view_version_receipt_chains: Vec::new(),
+            view_warehouse: None,
+            view_namespace: Vec::new(),
+            view_name: None,
+            view_stable_id: None,
+            view_version: None,
+            expected_view_version: None,
+            policy_binding_count: 0,
+            policy_ids: Vec::new(),
+            policy_id: None,
+            policy_odrl_hash: None,
+            project_count: None,
+            project_ids: Vec::new(),
+            server_count: None,
+            server_ids: Vec::new(),
+            storage_profile_count: None,
+            storage_profile_ids: Vec::new(),
+            storage_profile_id: None,
+            storage_profile_provider: None,
+            storage_profile_issuance_mode: None,
+            storage_profile_location_prefix_hash: None,
+            storage_profile_secret_ref_present: None,
+            storage_profile_secret_ref_provider: None,
+            storage_profile_secret_ref_hash: None,
+            warehouse_count: None,
+            warehouse_names: Vec::new(),
+            table_commit_count: None,
+            table_commit_sequence_numbers: Vec::new(),
+            table_commit_hashes: Vec::new(),
+            scan_task_count: None,
+            file_scan_task_count: None,
+            delete_file_count: None,
+            child_plan_task_count: None,
+            read_restriction: None,
+            required_projection: Vec::new(),
+            requested_projection: Vec::new(),
+            effective_projection: Vec::new(),
+            required_filters: Vec::new(),
+            requested_stats_fields: Vec::new(),
+            effective_stats_fields: Vec::new(),
+            management_scope_project_id: None,
+            management_scope_warehouse: Some("local".to_string()),
+            standards: Vec::new(),
+            credential_count: None,
+            credential_prefix_hashes: Vec::new(),
+            credential_block_reason: None,
+            raw_credential_exception_allowed: None,
+            raw_credential_exception_reason: None,
+            replay_event_hashes: vec![qglake_fixture_hash("catalog-config-replay")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash("catalog-config-openlineage")],
+        }
+    }
+
     fn qglake_view_lineage_summary() -> LineageDrainEventSummary {
         LineageDrainEventSummary {
             event_id: "evt-view".to_string(),
             event_type: "view.upserted".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:view-authorization".to_string()),
@@ -25575,6 +25937,9 @@ mod tests {
         LineageDrainEventSummary {
             event_id: "evt-table-commits".to_string(),
             event_type: "table.commits-listed".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some(qglake_fixture_hash("table-commits-authorization")),
@@ -25671,6 +26036,9 @@ mod tests {
         LineageDrainEventSummary {
             event_id: "evt-scan-planned".to_string(),
             event_type: "table.scan-planned".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some(qglake_fixture_hash("scan-planned-authorization")),
@@ -25767,6 +26135,9 @@ mod tests {
         LineageDrainEventSummary {
             event_id: "evt-scan-tasks-fetched".to_string(),
             event_type: "table.scan-tasks-fetched".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some(qglake_fixture_hash("scan-fetch-authorization")),
@@ -25857,6 +26228,9 @@ mod tests {
         LineageDrainEventSummary {
             event_id: "evt-policy-list".to_string(),
             event_type: "policy-binding.listed".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some(qglake_fixture_hash("policy-list-authorization")),
@@ -25935,6 +26309,9 @@ mod tests {
         LineageDrainEventSummary {
             event_id: "evt-policy-upsert".to_string(),
             event_type: "policy-binding.upserted".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some(qglake_fixture_hash("policy-upsert-authorization")),
@@ -26013,6 +26390,9 @@ mod tests {
         LineageDrainEventSummary {
             event_id: "evt-storage-profile-list".to_string(),
             event_type: "storage-profile.listed".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some(qglake_fixture_hash(
@@ -26095,6 +26475,9 @@ mod tests {
         LineageDrainEventSummary {
             event_id: "evt-storage-profile-upsert".to_string(),
             event_type: "storage-profile.upserted".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some(qglake_fixture_hash(
@@ -26180,6 +26563,9 @@ mod tests {
         LineageDrainEventSummary {
             event_id: "evt-server-list".to_string(),
             event_type: "server.listed".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some(qglake_fixture_hash("server-list-authorization")),
@@ -26258,6 +26644,9 @@ mod tests {
         LineageDrainEventSummary {
             event_id: "evt-project-list".to_string(),
             event_type: "project.listed".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some(qglake_fixture_hash("project-list-authorization")),
@@ -26336,6 +26725,9 @@ mod tests {
         LineageDrainEventSummary {
             event_id: "evt-warehouse-list".to_string(),
             event_type: "warehouse.listed".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some(qglake_fixture_hash("warehouse-list-authorization")),
@@ -26414,6 +26806,9 @@ mod tests {
         LineageDrainEventSummary {
             event_id: "evt-agent-credentials".to_string(),
             event_type: "credentials.vend-attempted".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some(qglake_fixture_hash(
@@ -26499,6 +26894,9 @@ mod tests {
         LineageDrainEventSummary {
             event_id: "evt-human-credentials".to_string(),
             event_type: "credentials.vend-attempted".to_string(),
+            catalog_config_defaults: Vec::new(),
+            catalog_config_overrides: Vec::new(),
+            catalog_config_endpoints: Vec::new(),
             principal_subject: Some("human:qglake-operator".to_string()),
             principal_kind: Some("human".to_string()),
             authorization_receipt_hash: Some(qglake_fixture_hash("human-credential-authorization")),

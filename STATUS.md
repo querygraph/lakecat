@@ -6,6 +6,33 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Bind QGLake config-read proof`.
+  `catalog.config-read` lineage-drain event summaries now carry the advertised
+  config defaults, overrides, and endpoint list after service replay admission.
+  The QGLake raw lineage-drain verifier rejects saved config-read proof that
+  drops the pinned v4 bridge defaults, adds unsupported `lakecat.format.v4*`
+  defaults, uses v4 overrides, duplicates config keys/endpoints, or omits the
+  required standard Iceberg REST, governed plan/fetch/credential, and
+  QueryGraph/OpenLineage integration endpoints. This keeps saved QGLake
+  artifacts from accepting a config-read compatibility claim weaker than the
+  service already requires before graph or lineage projection.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`
+  passed;
+  `cargo test -p lakecat-api` passed;
+  `cargo test -p lakecat-cli config_ -- --test-threads=1` passed;
+  `cargo test -p lakecat-service outbox_drain_projects_catalog_config_reads_to_graph_and_lineage -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `cargo test -p lakecat-service` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover and contents render;
+  the versioned EPUB symlink resolves to `lakecat.epub`;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Validate QGLake storage-profile provider modes`.
   Compact QGLake handoff verification and raw lineage-drain verification now
   reject contradictory credential-root provider/issuance-mode proof:

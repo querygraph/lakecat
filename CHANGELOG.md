@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added QGLake lineage-drain summary proof for catalog config reads. The API
+  summary now carries config defaults, overrides, and advertised endpoints for
+  `catalog.config-read` events; the service emits those fields after replay
+  admission; and the CLI verifier rejects saved drains whose config proof drops
+  the pinned v4 bridge defaults, introduces unsupported `lakecat.format.v4*`
+  claims, carries v4 overrides, or omits required standard, governed-access, or
+  QueryGraph/OpenLineage integration endpoints.
 - Tightened compact QGLake handoff and raw lineage-drain credential-root
   verification so storage-profile provider and issuance-mode proof must remain
   compatible. Saved evidence now rejects `local-file-no-secret` on remote
