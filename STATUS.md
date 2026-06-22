@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Reject malformed outbox delivery IDs`.
+  Memory and Turso outbox delivery acknowledgement now rejects malformed event
+  IDs before marking rows delivered. The regressions try to acknowledge
+  `sha256:short` after creating a real pending outbox event and prove the event
+  remains pending.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local malformed_outbox_delivery_ids -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Require audit event request hashes`.
   Memory and Turso generic audit recording now require request-hash evidence
   before persisting audit rows or enqueueing outbox work. The regressions

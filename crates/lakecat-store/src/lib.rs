@@ -427,6 +427,20 @@ fn validate_idempotency_request_hash_shape(value: &str) -> LakeCatResult<()> {
     Ok(())
 }
 
+fn validate_outbox_event_id_shape(value: &str) -> LakeCatResult<()> {
+    let Some(digest) = value.strip_prefix("sha256:") else {
+        return Err(LakeCatError::InvalidArgument(
+            "outbox event id must be full SHA-256 evidence".to_string(),
+        ));
+    };
+    if digest.len() != 64 || !digest.as_bytes().iter().all(u8::is_ascii_hexdigit) {
+        return Err(LakeCatError::InvalidArgument(
+            "outbox event id must be full SHA-256 evidence".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TableCommitRecord {
     pub table: TableIdent,
@@ -2453,6 +2467,9 @@ impl CatalogStore for MemoryCatalogStore {
         if event_ids.is_empty() {
             return Ok(0);
         }
+        for event_id in event_ids {
+            validate_outbox_event_id_shape(event_id)?;
+        }
         let event_ids = event_ids.iter().collect::<BTreeSet<_>>();
         let mut state = self.state.write().await;
         let delivered_at = Utc::now();
@@ -4274,6 +4291,48 @@ mod memory_tests {
                 .is_empty()
         );
         assert_eq!(store.mark_outbox_delivered(&event_ids).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_malformed_outbox_delivery_ids() {
+        let store = MemoryCatalogStore::new();
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        store
+            .record_audit_event(
+                CatalogAuditEvent::new(
+                    "querygraph.bootstrap",
+                    Some(ident.clone()),
+                    Principal::anonymous(),
+                    serde_json::json!({
+                        "event-type": "querygraph.bootstrap",
+                        "table": ident,
+                        "manifest-hash": "lakecat:test"
+                    }),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let err = store
+            .mark_outbox_delivered(&["sha256:short".to_string()])
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("outbox event id must be full SHA-256 evidence")
+        ));
+        let pending = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        assert_eq!(pending.len(), 1);
+        assert!(pending[0].delivered_at.is_none());
     }
 
     #[tokio::test]
@@ -6462,6 +6521,9 @@ pub mod turso_store {
         async fn mark_outbox_delivered(&self, event_ids: &[String]) -> LakeCatResult<usize> {
             if event_ids.is_empty() {
                 return Ok(0);
+            }
+            for event_id in event_ids {
+                crate::validate_outbox_event_id_shape(event_id)?;
             }
             let event_ids = event_ids.iter().collect::<BTreeSet<_>>();
             let mut conn = self.connect()?;
@@ -9073,6 +9135,48 @@ pub mod turso_store {
                     .unwrap(),
                 1
             );
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_malformed_outbox_delivery_ids() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            store
+                .record_audit_event(
+                    CatalogAuditEvent::new(
+                        "querygraph.bootstrap",
+                        Some(ident.clone()),
+                        Principal::anonymous(),
+                        serde_json::json!({
+                            "event-type": "querygraph.bootstrap",
+                            "table": ident,
+                            "manifest-hash": "lakecat:test"
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            let err = store
+                .mark_outbox_delivered(&["sha256:short".to_string()])
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("outbox event id must be full SHA-256 evidence")
+            ));
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 1);
+            assert!(pending[0].delivered_at.is_none());
         }
 
         #[tokio::test]

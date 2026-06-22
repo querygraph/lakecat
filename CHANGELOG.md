@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened outbox delivery acknowledgement so memory and Turso stores reject
+  malformed delivery event IDs before marking rows delivered. The regressions
+  attempt to acknowledge `sha256:short` after creating a real pending outbox
+  event and prove the event remains pending.
 - Required generic audit events to carry request-hash evidence before memory
   or Turso stores can persist audit rows or enqueue outbox work. The new
   regressions mutate constructor-valid audit events to remove `request_hash`
