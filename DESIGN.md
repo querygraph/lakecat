@@ -486,6 +486,11 @@ read-restriction evidence whose purpose is missing/blank or whose
 boundary enforces the purpose/TTL proof QGLake later verifies.
 Read-restriction `policy-hashes` must remain non-empty, full SHA-256-shaped,
 and duplicate-free at outbox admission as well as in later replay artifacts.
+Scan-planned and scan-tasks-fetched replay must also carry a complete
+authorization receipt at the LakeCat boundary: valid principal, event-matching
+catalog action, affirmative decision, non-empty engine, and RFC3339
+`checked_at` timestamp before acknowledgement, graph projection, or OpenLineage
+projection.
 Prefer upstream Sail APIs for any reusable planner or manifest work.
 
 ### P2 QGLake Acceptance

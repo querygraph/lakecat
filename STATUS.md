@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require scan receipt identity evidence`.
+  Service outbox replay admission now rejects `table.scan-planned` and
+  `table.scan-tasks-fetched` evidence unless the authorization receipt carries
+  a valid principal, matching catalog action, affirmative decision, non-empty
+  engine, and RFC3339 `checked_at` timestamp before acknowledgement, graph
+  projection, or OpenLineage projection.
+- Local verification for this scan receipt slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib scan_replay -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib scan -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require view-list load action`.
   Service outbox replay admission now rejects `view.listed` evidence whose
   authorization receipt action is `view-manage`; view listing must prove the

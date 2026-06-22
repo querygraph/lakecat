@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required `table.scan-planned` and `table.scan-tasks-fetched` outbox replay
+  admission to carry valid authorization receipt principal, action, allowed,
+  engine, and checked-at evidence before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Tightened service replay admission for `view.listed` events to require the
   read-side `view-load` authorization receipt action, aligning the durable
   outbox boundary with QGLake handoff verification and reserving `view-manage`

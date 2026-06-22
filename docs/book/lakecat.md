@@ -4658,8 +4658,15 @@ authorization receipt context, so malformed source evidence is stopped before
 it becomes delivered replay material. Scan replay also requires the top-level
 read restriction to match the authorization receipt context exactly before
 delivery, so policy narrowing cannot be asserted in one replay field and absent
-from the durable receipt. Scan replay now gets the same drain-side admission
-check before Grust or OpenLineage projection: planned-scan events must carry
+from the durable receipt. Scan replay also requires the authorization receipt
+itself to be complete before delivery: a valid principal, the `table-plan-scan`
+catalog action, an affirmative allowed decision, a non-empty receipt engine, and
+an RFC3339 `checked_at` timestamp. This is LakeCat replay admission, not Sail
+planning logic; Sail remains responsible for producing reusable table-format and
+scan-planning behavior, while LakeCat refuses to turn actorless or actionless
+scan evidence into graph or lineage proof. Scan replay now gets the same
+drain-side admission check before Grust or OpenLineage projection:
+planned-scan events must carry
 matching table identity, unsigned task counts,
 requested/effective projection arrays, and requested/effective stats-field
 arrays; fetched-task events must carry matching table identity, fetched
