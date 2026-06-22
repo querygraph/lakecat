@@ -5,6 +5,22 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Clarify catalog standards and Sail engine posture`.
+  The book now adds a sharper standard-versus-extension proposal posture and a
+  workflow matrix covering PySpark/Spark load and commit, operator management,
+  governed service reads, agentic access, and QueryGraph/QGLake handoff. The
+  added material separates standard Iceberg compatibility from LakeCat
+  Rust/Turso reliability implementation, TypeSec/Sail governed proof,
+  QueryGraph/QGLake semantic integration, and narrow future Iceberg-adjacent
+  profile candidates, while reinforcing why table-format and v4 interpretation
+  should move into Sail.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/testing slice:
   `Close QGLake lineage catalog-config proof fields`.
   The CLI handoff artifact verifier now has direct regression coverage proving

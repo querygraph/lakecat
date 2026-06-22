@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's standard-versus-extension guidance with a
+  sharper proposal posture and workflow matrix. The book now more explicitly
+  distinguishes standard Iceberg compatibility, LakeCat Rust/Turso reliability
+  implementation, TypeSec/Sail governed read proof, QueryGraph/QGLake semantic
+  integration, and narrow future Iceberg-adjacent profile candidates, while
+  making the Sail-first engine argument concrete across PySpark, operator,
+  governed-agent, and QueryGraph workflows.
 - Hardened lineage-drain catalog-config proof closure in QGLake handoff
   self-verification. Saved `lakecatHandoffVerifyOutput` artifacts now have
   direct regression coverage proving extra unverified fields inside
