@@ -945,6 +945,11 @@ Service outbox admission must close nested project, server, and warehouse
 record objects over their route-produced fields, so replay rejects unexpected
 tenant-root, endpoint, or storage-root claims before acknowledgement, graph
 projection, OpenLineage projection, or QGLake proof.
+Service replay must also close the top-level project/server/warehouse upsert
+payloads over the fields current producers emit, so tenant-root management
+replay cannot append unverified endpoint, storage-root, project-scope, lineage,
+graph, QueryGraph, or application claims beside checked route identity, nested
+record, optional project scope, and authorization evidence.
 Server and warehouse upsert replay must also bind redaction hashes back to the
 source value when that value is present: `endpoint-url-hash` must recompute
 from `endpoint-url`, and `storage-root-hash` must recompute from

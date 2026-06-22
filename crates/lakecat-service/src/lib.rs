@@ -1575,6 +1575,12 @@ const POLICY_BINDING_EVIDENCE_FIELDS: &[&str] = &[
 ];
 const PROJECT_RECORD_EVIDENCE_FIELDS: &[&str] =
     &["project-id", "server-id", "display-name", "properties"];
+const PROJECT_UPSERT_EVIDENCE_FIELDS: &[&str] = &[
+    "event-type",
+    "authorization-receipt",
+    "project-id",
+    "project-record",
+];
 const SERVER_RECORD_EVIDENCE_FIELDS: &[&str] = &[
     "server-id",
     "display-name",
@@ -1582,12 +1588,25 @@ const SERVER_RECORD_EVIDENCE_FIELDS: &[&str] = &[
     "endpoint-url-hash",
     "properties",
 ];
+const SERVER_UPSERT_EVIDENCE_FIELDS: &[&str] = &[
+    "event-type",
+    "authorization-receipt",
+    "server-id",
+    "server-record",
+];
 const WAREHOUSE_RECORD_EVIDENCE_FIELDS: &[&str] = &[
     "warehouse",
     "project-id",
     "storage-root",
     "storage-root-hash",
     "properties",
+];
+const WAREHOUSE_UPSERT_EVIDENCE_FIELDS: &[&str] = &[
+    "event-type",
+    "authorization-receipt",
+    "project-id",
+    "warehouse",
+    "warehouse-record",
 ];
 const VIEW_RECORD_EVIDENCE_FIELDS: &[&str] = &[
     "warehouse",
@@ -3496,6 +3515,12 @@ fn validate_project_upsert_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_object_evidence_schema(
+        event,
+        payload,
+        "project upsert",
+        PROJECT_UPSERT_EVIDENCE_FIELDS,
+    )?;
     let Some(project_record) = payload.get("project-record") else {
         return Err(outbox_evidence_error(
             event,
@@ -3552,6 +3577,12 @@ fn validate_server_upsert_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_object_evidence_schema(
+        event,
+        payload,
+        "server upsert",
+        SERVER_UPSERT_EVIDENCE_FIELDS,
+    )?;
     let Some(server_record) = payload.get("server-record") else {
         return Err(outbox_evidence_error(
             event,
@@ -3621,6 +3652,12 @@ fn validate_warehouse_upsert_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_object_evidence_schema(
+        event,
+        payload,
+        "warehouse upsert",
+        WAREHOUSE_UPSERT_EVIDENCE_FIELDS,
+    )?;
     let Some(warehouse_record) = payload.get("warehouse-record") else {
         return Err(outbox_evidence_error(
             event,
@@ -16764,6 +16801,126 @@ mod tests {
             assert!(
                 lineage.events.lock().await.is_empty(),
                 "{event_type} extra record fields must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_top_level_management_upsert_fields() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let cases = [
+            (
+                "project.upserted",
+                "project-manage",
+                "evt-project-extra-top-field",
+                json!({
+                    "project-id": "default",
+                    "project-record": {
+                        "project-id": "default",
+                        "display-name": "Default Project",
+                        "properties": {"owner": "querygraph"}
+                    },
+                    "unverified-management-claim": "shadow",
+                }),
+                "project upsert contains unexpected field unverified-management-claim",
+            ),
+            (
+                "server.upserted",
+                "server-manage",
+                "evt-server-extra-top-field",
+                json!({
+                    "server-id": "prod",
+                    "server-record": {
+                        "server-id": "prod",
+                        "display-name": "Production",
+                        "endpoint-url-hash": content_hash_json(&json!({
+                            "endpoint-url": "https://lakecat.example"
+                        })).unwrap(),
+                        "properties": {"region": "global"}
+                    },
+                    "unverified-management-claim": "shadow",
+                }),
+                "server upsert contains unexpected field unverified-management-claim",
+            ),
+            (
+                "warehouse.upserted",
+                "warehouse-manage",
+                "evt-warehouse-extra-top-field",
+                json!({
+                    "project-id": "default",
+                    "warehouse": "local",
+                    "warehouse-record": {
+                        "warehouse": "local",
+                        "project-id": "default",
+                        "storage-root-hash": content_hash_json(&json!({
+                            "storage-root": "file:///tmp/lakecat"
+                        })).unwrap(),
+                        "properties": {"environment": "demo"}
+                    },
+                    "unverified-management-claim": "shadow",
+                }),
+                "warehouse upsert contains unexpected field unverified-management-claim",
+            ),
+        ];
+
+        for (event_type, action, event_id, mut payload, expected_message) in cases {
+            let payload = payload.as_object_mut().expect("payload should be object");
+            payload.insert(
+                "authorization-receipt".to_string(),
+                json!({
+                    "principal": principal,
+                    "action": action,
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "checked_at": chrono::Utc::now(),
+                }),
+            );
+            payload.insert("event-type".to_string(), json!(event_type));
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("extra top-level management upsert fields should fail");
+            let message = err.to_string();
+            assert!(message.contains(event_type), "{message}");
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"), "{message}");
+            assert!(!message.contains(event_id), "{message}");
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} extra top-level fields must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} extra top-level fields must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} extra top-level fields must fail before lineage projection"
             );
         }
     }

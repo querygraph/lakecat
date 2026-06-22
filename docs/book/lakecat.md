@@ -6247,6 +6247,12 @@ properties. Service admission also closes those nested project, server, and
 warehouse record objects over their route-produced fields, so unexpected
 tenant-root, endpoint, or storage-root claims fail before acknowledgement,
 graph projection, OpenLineage projection, or QGLake proof can inherit them.
+LakeCat also closes the top-level management upsert payloads for
+`project.upserted`, `server.upserted`, and `warehouse.upserted`, so a replay
+sidecar cannot append unverified endpoint, storage-root, project-scope,
+lineage, graph, QueryGraph, or application claims beside checked route
+identity, nested record evidence, optional project scope, and authorization
+receipt evidence.
 Policy-binding upsert replay is checked before projection too: the
 evidence must carry a valid policy id, warehouse, optional namespace/table
 scope, an enforcement flag, the captured ODRL material, and an `odrl-hash`
