@@ -621,12 +621,14 @@ never observe actorless or cross-table pointer-log reads. Raw lineage-drain
 and compact handoff proof must also preserve a full authorization receipt hash
 and the read-side `table-load` action for `table.commits-listed`; regressions
 continue to cover missing and drifted commit-history principal subject,
-principal kind, and action proof before compact handoff proof generation.
-Pending outbox replay should stay deterministic across embedded and Turso stores, ordered by
-`created_at,event_id`, with batch limits applied after that order and with
-duplicate-safe delivery accounting. Draining should acknowledge delivery only
-after every projection in the batch succeeds, leaving events pending for retry
-when graph or lineage projection fails.
+principal kind, and action proof before compact handoff proof generation, and
+service replay admission must reject a valid mutation action such as
+`table-commit` on a commit-history read before graph or OpenLineage projection.
+Pending outbox replay should stay deterministic across embedded and Turso
+stores, ordered by `created_at,event_id`, with batch limits applied after that
+order and with duplicate-safe delivery accounting. Draining should acknowledge
+delivery only after every projection in the batch succeeds, leaving events
+pending for retry when graph or lineage projection fails.
 Individual `table.commit` replay evidence must carry a positive sequence
 number before acknowledgement or projection, matching the positive,
 strictly-increasing invariant used by commit-history replay.

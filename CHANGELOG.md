@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving `table.commits-listed`
+  rejects a mismatched authorization receipt action before acknowledgement,
+  graph projection, or OpenLineage projection. The design and book now state
+  that commit-history reads must prove the read-side `table-load` action, not a
+  mutation action such as `table-commit`.
 - Added service replay regression coverage proving
   `view.version-receipts-listed` and
   `view.version-receipt-chains-listed` reject mismatched authorization receipt

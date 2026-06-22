@@ -5352,11 +5352,12 @@ Commit-history replay has the same shape:
 full SHA-256 commit hashes and unsigned sequence numbers, plus
 `principal-subject` and `principal-kind` fields that match the authorization
 receipt principal, a known authorization receipt action matching
-`table.commits-listed`, an affirmative authorization receipt decision, and a
-non-empty authorization receipt engine with an RFC3339 `checked_at` timestamp;
-compact QGLake proof also binds that pointer-log replay to the accepted
-principal subject/kind, a full authorization receipt hash, and the `table-load`
-action. The raw QGLake lineage-drain verifier checks the same
+`table.commits-listed`, specifically the read-side `table-load` action rather
+than a mutation action such as `table-commit`, an affirmative authorization
+receipt decision, and a non-empty authorization receipt engine with an RFC3339
+`checked_at` timestamp; compact QGLake proof also binds that pointer-log replay
+to the accepted principal subject/kind, a full authorization receipt hash, and
+the `table-load` action. The raw QGLake lineage-drain verifier checks the same
 accepted-principal, agent kind, receipt hash, and action before compact handoff
 proof is generated, so malformed, denied, actor-drifted, action-drifted,
 action-less, decision-less, engine-less, or timeless pointer-log summaries
