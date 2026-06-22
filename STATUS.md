@@ -5,6 +5,24 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation/documentation slice:
+  `Require table lifecycle format evidence`.
+  Table create/load/restore replay now carries and requires positive Iceberg
+  `format-version` evidence alongside table version evidence. Table delete
+  replay carries the same proof through the durable soft-delete record, and
+  service replay admission rejects missing, non-integer, or non-positive
+  lifecycle format-version evidence before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake handoff. This extends the commit
+  format-proof discipline into table lifecycle proof while keeping table-format
+  interpretation in Sail.
+- Local verification for this table-lifecycle format-evidence slice is green:
+  `cargo fmt -p lakecat-store -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib table_lifecycle -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local soft_delete -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Expand catalog concept map in the book`.
   The book now gives a detailed reader-facing explanation of which concepts are

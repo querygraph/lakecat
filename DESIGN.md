@@ -782,11 +782,14 @@ action, affirmative allowed decision, non-empty engine, and RFC3339 `checked_at`
 timestamp before projection, so table lifecycle graph/OpenLineage facts cannot
 be actorless or action-drifted even when the standard Iceberg REST response
 shape remains unchanged.
-Create, load, and restore replay must also carry the unsigned table version
-that current producers emit; delete replay carries the same pointer-generation
-evidence through required `soft-delete.version`, and `table.deleted` replay
-must reject missing soft-delete objects or non-positive soft-delete versions
-before acknowledgement, graph projection, or OpenLineage projection.
+Create, load, and restore replay must also carry both the unsigned table
+version that current producers emit and positive Iceberg `format-version`
+evidence. Delete replay carries the same pointer-generation and table-format
+evidence through required `soft-delete.version` and `soft-delete.format_version`
+or `soft-delete.format-version`, and `table.deleted` replay must reject missing
+soft-delete objects, non-positive soft-delete versions, or missing/non-positive
+soft-delete format versions before acknowledgement, graph projection, or
+OpenLineage projection.
 
 View lifecycle replay must carry valid view names and positive store-assigned
 `view-version` values before projection, and guarded view lifecycle replay must

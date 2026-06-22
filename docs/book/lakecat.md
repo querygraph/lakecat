@@ -6149,14 +6149,17 @@ delete replay must carry soft-delete evidence that points at the same table
 with a positive unsigned version, and the authorization receipt must carry a
 valid principal plus the matching lifecycle action.
 Create, load, and restore replay must also carry the unsigned table `version`
-emitted by the catalog producer; delete replay carries that generation evidence
-inside the required positive soft-delete record.
+emitted by the catalog producer plus positive Iceberg `format-version`
+evidence. Delete replay carries the same generation and table-format evidence
+inside the required positive soft-delete record, accepting the durable Rust
+record spelling `format_version` and the Iceberg-style proof spelling
+`format-version`.
 When those lifecycle events carry table `metadata-location`, table `location`,
 or soft-delete `metadata-location` evidence, the values must be non-empty before
 the event is acknowledged or projected. The Iceberg table operation remains the
 standard catalog action; the stricter non-empty replay evidence is LakeCat's
 control-plane proof that QueryGraph and OpenLineage did not accept an empty
-pointer or storage-location claim from a corrupted outbox record.
+pointer, table-format, or storage-location claim from a corrupted outbox record.
 Project, server, and warehouse upsert replay must carry valid
 tenant-root evidence too: project ids, server scopes, endpoint URLs, storage
 roots, identifiers, properties, and pre-redacted hash anchors are checked

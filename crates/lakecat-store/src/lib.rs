@@ -1138,6 +1138,8 @@ pub struct SoftDeleteRecord {
     pub table: TableIdent,
     pub metadata_location: Option<String>,
     pub version: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format_version: Option<i32>,
     pub principal: Principal,
     pub authorization_receipt: Option<Value>,
     pub deleted_at: DateTime<Utc>,
@@ -1173,6 +1175,21 @@ impl SoftDeleteRecord {
         if self.version != table.version {
             return Err(LakeCatError::InvalidArgument(
                 "soft-delete version does not match table record".to_string(),
+            ));
+        }
+        let Some(format_version) = self.format_version else {
+            return Err(LakeCatError::InvalidArgument(
+                "soft-delete format version must be present".to_string(),
+            ));
+        };
+        if format_version <= 0 {
+            return Err(LakeCatError::InvalidArgument(
+                "soft-delete format version must be positive".to_string(),
+            ));
+        }
+        if self.format_version != table_commit_format_version(table) {
+            return Err(LakeCatError::InvalidArgument(
+                "soft-delete format version does not match table record".to_string(),
             ));
         }
         if let Some(receipt) = &self.authorization_receipt
@@ -2001,6 +2018,7 @@ impl CatalogStore for MemoryCatalogStore {
             table: ident.clone(),
             metadata_location: table.metadata_location.clone(),
             version: table.version,
+            format_version: table_commit_format_version(&table),
             principal,
             authorization_receipt,
             deleted_at: Utc::now(),
@@ -5313,6 +5331,7 @@ pub mod turso_store {
                 table: ident.clone(),
                 metadata_location: table.metadata_location.clone(),
                 version: table.version,
+                format_version: crate::table_commit_format_version(&table),
                 principal: principal.clone(),
                 authorization_receipt,
                 deleted_at,
@@ -5443,6 +5462,7 @@ pub mod turso_store {
                 "table": ident,
                 "authorization-receipt": authorization_receipt,
                 "metadata-location": table.metadata_location,
+                "format-version": crate::table_commit_format_version(&table),
                 "version": table.version,
             });
             let audit_event_id = content_hash_json(&audit_payload)?;
@@ -10705,6 +10725,7 @@ pub mod turso_store {
                 table: ident.clone(),
                 metadata_location: Some("file:///tmp/events/metadata/00000.json".to_string()),
                 version: 1,
+                format_version: Some(3),
                 principal: Principal::anonymous(),
                 authorization_receipt: Some(serde_json::json!({
                     "engine": "typesec",

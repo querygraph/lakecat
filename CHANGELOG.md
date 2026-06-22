@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Hardened table lifecycle replay evidence: `table.created`, `table.loaded`,
+  and `table.restored` events now carry positive Iceberg `format-version`
+  evidence, and `table.deleted` carries the same table-format proof through the
+  durable soft-delete record. Service replay admission rejects missing,
+  non-integer, or non-positive lifecycle format-version evidence before
+  acknowledgement, graph projection, OpenLineage projection, or QGLake handoff,
+  while leaving actual format interpretation to Sail.
 - Expanded the LakeCat book with a detailed catalog concept map that explains
   the Rust service/catalog spine, Turso-backed local store, Iceberg
   REST-compatible namespace/table paths, commit CAS hardening, governed

@@ -1804,12 +1804,14 @@ fn validate_table_lifecycle_event_evidence(
     if matches!(
         event.event_type.as_str(),
         "table.created" | "table.loaded" | "table.restored"
-    ) && payload.get("version").and_then(Value::as_u64).is_none()
-    {
-        return Err(outbox_evidence_error(
-            event,
-            "table lifecycle evidence must contain unsigned version",
-        ));
+    ) {
+        require_positive_i64_field(event, payload, "format-version", "table lifecycle")?;
+        if payload.get("version").and_then(Value::as_u64).is_none() {
+            return Err(outbox_evidence_error(
+                event,
+                "table lifecycle evidence must contain unsigned version",
+            ));
+        }
     }
 
     if let Some(payload_table) = payload.get("table") {
@@ -1862,6 +1864,12 @@ fn validate_table_lifecycle_event_evidence(
                 "table lifecycle soft-delete version must be positive",
             ));
         }
+        require_positive_i64_field(
+            event,
+            &Value::Object(soft_delete.clone()),
+            "format-version",
+            "table lifecycle soft-delete",
+        )?;
         optional_non_empty_string_field(
             event,
             &Value::Object(soft_delete.clone()),
@@ -4765,6 +4773,37 @@ fn optional_non_empty_string_field(
     }
 }
 
+fn require_positive_i64_field(
+    event: &OutboxEvent,
+    object: &Value,
+    field: &str,
+    label: &str,
+) -> Result<i64, LakeCatError> {
+    let alternate_field = field.replace('-', "_");
+    let value = object
+        .get(field)
+        .or_else(|| object.get(alternate_field.as_str()));
+    let Some(value) = value else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} evidence must contain positive {field}"),
+        ));
+    };
+    let Some(value) = value.as_i64() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} {field} must be a positive integer"),
+        ));
+    };
+    if value <= 0 {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} {field} must be positive"),
+        ));
+    }
+    Ok(value)
+}
+
 fn optional_string_map_field(
     event: &OutboxEvent,
     object: &Value,
@@ -5633,6 +5672,7 @@ async fn create_table_in_warehouse(
                 "authorization-receipt": capability.receipt(),
                 "metadata-location": table.metadata_location,
                 "location": table.location,
+                "format-version": table_metadata_format_version(&table.metadata),
                 "metadata-graph": table_metadata_graph_summary(&table.metadata),
                 "version": table.version,
             }),
@@ -5682,6 +5722,7 @@ async fn load_table_in_warehouse(
                 "table": ident,
                 "authorization-receipt": capability.receipt(),
                 "metadata-location": table.metadata_location,
+                "format-version": table_metadata_format_version(&table.metadata),
                 "metadata-graph": table_metadata_graph_summary(&table.metadata),
                 "version": table.version,
             }),
@@ -6098,6 +6139,10 @@ fn table_metadata_graph_summary(metadata: &Value) -> Value {
         "current-snapshot-id": metadata.get("current-snapshot-id").cloned().unwrap_or(Value::Null),
         "current-snapshot": metadata_current_snapshot(metadata).cloned().unwrap_or(Value::Null),
     })
+}
+
+fn table_metadata_format_version(metadata: &Value) -> Option<i64> {
+    metadata.get("format-version").and_then(Value::as_i64)
 }
 
 fn metadata_current_schema_fields(metadata: &Value) -> Vec<Value> {
@@ -11610,6 +11655,7 @@ mod tests {
                                 "checked_at": chrono::Utc::now(),
                             },
                             "metadata-location": "file:///tmp/events/metadata/00000.json",
+                            "format-version": 3,
                             "version": 0,
                             "metadata-graph": {
                                 "current-schema-id": 1,
@@ -12368,6 +12414,7 @@ mod tests {
                             "checked_at": chrono::Utc::now(),
                         },
                         "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "format-version": 3,
                         "version": 0,
                     }
                 }),
@@ -12434,6 +12481,7 @@ mod tests {
                                 "checked_at": first_created_at,
                             },
                             "metadata-location": "file:///tmp/events/metadata/00000.json",
+                            "format-version": 3,
                             "version": 0,
                         }
                     }),
@@ -12458,6 +12506,7 @@ mod tests {
                                 "checked_at": second_created_at,
                             },
                             "metadata-location": "file:///tmp/events/metadata/00001.json",
+                            "format-version": 3,
                             "version": 0,
                         }
                     }),
@@ -12527,6 +12576,7 @@ mod tests {
                             "checked_at": chrono::Utc::now(),
                         },
                         "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "format-version": 3,
                         "version": 0,
                     }
                 }),
@@ -12590,6 +12640,7 @@ mod tests {
                             "checked_at": chrono::Utc::now(),
                         },
                         "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "format-version": 3,
                         "version": 0,
                     }
                 }),
@@ -26613,6 +26664,7 @@ mod tests {
                             "checked_at": checked_at,
                         },
                         "metadata-location": " ",
+                        "format-version": 3,
                         "version": 0,
                     }
                 }),
@@ -26635,6 +26687,7 @@ mod tests {
                             "checked_at": checked_at,
                         },
                         "location": "\t",
+                        "format-version": 3,
                         "version": 0,
                     }
                 }),
@@ -26651,6 +26704,7 @@ mod tests {
                         "table": &table,
                         "metadata-location": "\n",
                         "version": 1,
+                        "format-version": 3,
                         "principal": &principal,
                         "authorization-receipt": null,
                         "deleted-at": checked_at,
@@ -26742,6 +26796,7 @@ mod tests {
                             "checked_at": chrono::Utc::now(),
                         },
                         "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "format-version": 3,
                     }
                 }),
             ),
@@ -26763,6 +26818,7 @@ mod tests {
                             "checked_at": chrono::Utc::now(),
                         },
                         "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "format-version": 3,
                         "version": "0",
                     }
                 }),
@@ -26785,6 +26841,7 @@ mod tests {
                             "checked_at": chrono::Utc::now(),
                         },
                         "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "format-version": 3,
                     }
                 }),
             ),
@@ -26818,6 +26875,7 @@ mod tests {
                         "table": &table,
                         "metadata-location": "file:///tmp/events/metadata/00000.json",
                         "version": 0,
+                        "format-version": 3,
                         "principal": &principal,
                         "authorization-receipt": null,
                         "deleted-at": chrono::Utc::now(),
@@ -26859,6 +26917,160 @@ mod tests {
             let err = drain_outbox_once(&state, 10)
                 .await
                 .expect_err("malformed table lifecycle version evidence should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(message.contains(expected_message), "{event_id}: {message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_table_lifecycle_format_version_evidence() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let checked_at = chrono::Utc::now();
+        let receipt = |action: &str| {
+            json!({
+                "principal": &principal,
+                "action": action,
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": checked_at,
+            })
+        };
+        let cases = vec![
+            (
+                "evt-created-missing-format-version",
+                "table.created",
+                "table lifecycle evidence must contain positive format-version",
+                json!({
+                    "audit-event-id": "audit-created-missing-format-version",
+                    "event-type": "table.created",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": receipt("table-create"),
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 0,
+                    }
+                }),
+            ),
+            (
+                "evt-loaded-string-format-version",
+                "table.loaded",
+                "table lifecycle format-version must be a positive integer",
+                json!({
+                    "audit-event-id": "audit-loaded-string-format-version",
+                    "event-type": "table.loaded",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": receipt("table-load"),
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "format-version": "3",
+                        "version": 0,
+                    }
+                }),
+            ),
+            (
+                "evt-restored-zero-format-version",
+                "table.restored",
+                "table lifecycle format-version must be positive",
+                json!({
+                    "audit-event-id": "audit-restored-zero-format-version",
+                    "event-type": "table.restored",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": receipt("table-restore"),
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "format-version": 0,
+                        "version": 1,
+                    }
+                }),
+            ),
+            (
+                "evt-deleted-missing-soft-delete-format-version",
+                "table.deleted",
+                "table lifecycle soft-delete evidence must contain positive format-version",
+                json!({
+                    "audit-event-id": "audit-deleted-missing-soft-delete-format-version",
+                    "event-type": "table.deleted",
+                    "table": &table,
+                    "soft-delete": {
+                        "table": &table,
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 1,
+                        "principal": &principal,
+                        "authorization-receipt": null,
+                        "deleted-at": checked_at,
+                    },
+                    "authorization-receipt": receipt("table-drop"),
+                }),
+            ),
+            (
+                "evt-deleted-zero-soft-delete-format-version",
+                "table.deleted",
+                "table lifecycle soft-delete format-version must be positive",
+                json!({
+                    "audit-event-id": "audit-deleted-zero-soft-delete-format-version",
+                    "event-type": "table.deleted",
+                    "table": &table,
+                    "soft-delete": {
+                        "table": &table,
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 1,
+                        "format-version": 0,
+                        "principal": &principal,
+                        "authorization-receipt": null,
+                        "deleted-at": checked_at,
+                    },
+                    "authorization-receipt": receipt("table-drop"),
+                }),
+            ),
+        ];
+
+        for (event_id, event_type, expected_message, payload) in cases {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed table lifecycle format-version evidence should fail");
 
             let message = err.to_string();
             assert!(message.contains(event_type));
@@ -27539,6 +27751,7 @@ mod tests {
                         "namespace": ["default"],
                         "table": "events",
                         "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "format-version": 3,
                         "version": 0,
                     }
                 }),
