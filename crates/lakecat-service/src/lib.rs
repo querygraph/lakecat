@@ -1377,6 +1377,7 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
         receipt_principal,
         "table commit authorization receipt principal",
     )?;
+    validate_authorization_receipt_engine(event, payload, "table commit")?;
     if commit_principal != receipt_principal {
         return Err(outbox_evidence_error(
             event,
@@ -1464,6 +1465,31 @@ fn validate_authorization_receipt_principal(
         receipt_principal,
         &format!("{label} authorization receipt principal"),
     )?;
+    validate_authorization_receipt_engine(event, payload, label)?;
+    Ok(())
+}
+
+fn validate_authorization_receipt_engine(
+    event: &OutboxEvent,
+    payload: &Value,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(engine) = payload
+        .get("authorization-receipt")
+        .and_then(|receipt| receipt.get("engine"))
+        .and_then(Value::as_str)
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} evidence must contain authorization receipt engine"),
+        ));
+    };
+    if engine.trim().is_empty() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} authorization receipt engine must be non-empty"),
+        ));
+    }
     Ok(())
 }
 
@@ -1488,6 +1514,7 @@ fn validate_table_commit_history_event_evidence(
         receipt_principal,
         "table commit-history authorization receipt principal",
     )?;
+    validate_authorization_receipt_engine(event, payload, "table commit-history")?;
     let commit_hashes = validate_required_full_hash_array_field(event, payload, "commit-hashes")?;
     validate_unique_hash_array(event, &commit_hashes, "table commit-history commit-hashes")?;
     let sequence_numbers = payload
@@ -15190,6 +15217,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_missing_table_commit_receipt_engine() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-missing-commit-receipt-engine".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commit".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-missing-commit-receipt-engine",
+                    "event-type": "table.commit",
+                    "table": table,
+                    "commit": {
+                        "table": table,
+                        "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+                        "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+                        "sequence_number": 7,
+                        "principal": principal,
+                        "format_version": 3,
+                        "snapshot_id": 42,
+                        "policy_hash": null,
+                        "request_hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+                        "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+                        "idempotency_key_sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+                        "committed_at": chrono::Utc::now(),
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-commit",
+                        "allowed": true,
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("missing table commit receipt engine should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commit"));
+        assert!(
+            message.contains("table commit evidence must contain authorization receipt engine")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-missing-commit-receipt-engine"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "missing commit receipt engine must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "missing commit receipt engine must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "missing commit receipt engine must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_table_commit_history_evidence() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),
@@ -15703,6 +15809,82 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "malformed commit-history receipt principal must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_blank_table_commit_history_receipt_engine() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-commit-history-blank-receipt-engine".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commits-listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-commit-history-blank-receipt-engine",
+                    "event-type": "table.commits-listed",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-load",
+                            "allowed": true,
+                            "engine": " ",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "table": "events",
+                        "commit-count": 1,
+                        "commit-hashes": [
+                            content_hash_json(&json!({"commit": 1})).unwrap()
+                        ],
+                        "sequence-numbers": [1],
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("blank commit-history receipt engine should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commits-listed"));
+        assert!(
+            message.contains("table commit-history authorization receipt engine must be non-empty")
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-commit-history-blank-receipt-engine"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "blank commit-history receipt engine must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "blank commit-history receipt engine must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "blank commit-history receipt engine must fail before lineage projection"
         );
     }
 
@@ -20457,6 +20639,93 @@ mod tests {
             assert!(
                 lineage.events.lock().await.is_empty(),
                 "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_missing_or_blank_standard_catalog_receipt_engine() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let base_receipt = json!({
+            "principal": principal,
+            "action": "catalog-config",
+            "allowed": true,
+            "engine": "test",
+            "policy_hash": null,
+            "checked_at": chrono::Utc::now(),
+        });
+        let mut missing_engine_receipt = base_receipt.clone();
+        missing_engine_receipt
+            .as_object_mut()
+            .unwrap()
+            .remove("engine");
+        let mut blank_engine_receipt = base_receipt;
+        blank_engine_receipt["engine"] = json!(" ");
+
+        for (event_id, receipt, expected_message) in [
+            (
+                "evt-config-missing-receipt-engine",
+                missing_engine_receipt,
+                "catalog config-read evidence must contain authorization receipt engine",
+            ),
+            (
+                "evt-config-blank-receipt-engine",
+                blank_engine_receipt,
+                "catalog config-read authorization receipt engine must be non-empty",
+            ),
+        ] {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "catalog.config-read".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": "catalog.config-read",
+                        "payload": {
+                            "authorization-receipt": receipt,
+                            "warehouse": "local",
+                            "defaults": catalog_config_defaults_json(),
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("missing or blank receipt engine should fail before delivery");
+
+            let message = err.to_string();
+            assert!(message.contains("catalog.config-read"));
+            assert!(
+                message.contains(expected_message),
+                "catalog config-read error should describe receipt engine failure: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "receipt engine failures must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "receipt engine failures must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "receipt engine failures must fail before lineage projection"
             );
         }
     }

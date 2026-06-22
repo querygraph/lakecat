@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require authorization receipt engine evidence`.
+  Service outbox replay admission now rejects missing or blank authorization
+  receipt engines before acknowledgement, graph projection, or OpenLineage
+  projection. The rule covers shared standard catalog receipt validation and
+  specialized `table.commit` / `table.commits-listed` replay paths, keeping
+  local allow-all and real `typesec-local` proof distinguishable at replay
+  time.
+- Local verification for this receipt-engine replay slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib receipt_engine -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`.
+- Latest completed implementation slice:
   `Rename allow-all governance receipt engine`.
   The default embedded compatibility governance engine now emits
   `lakecat-allow-all-local` in authorization receipts instead of stale

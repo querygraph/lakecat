@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required outbox replay admission to reject missing or blank authorization
+  receipt engines before acknowledgement, graph projection, or OpenLineage
+  projection, covering shared catalog receipt validation plus specialized
+  table commit and commit-history replay paths.
 - Renamed the default allow-all governance receipt engine to
   `lakecat-allow-all-local`, replacing stale placeholder wording with an
   explicit local compatibility-engine label, and added regression coverage
