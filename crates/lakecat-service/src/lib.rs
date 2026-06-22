@@ -13880,6 +13880,30 @@ mod tests {
             (
                 "table.scan-planned",
                 "scan-planned",
+                "missing-action",
+                "evidence must contain authorization receipt action",
+            ),
+            (
+                "table.scan-planned",
+                "scan-planned",
+                "missing-allowed",
+                "evidence must contain authorization receipt allowed decision",
+            ),
+            (
+                "table.scan-planned",
+                "scan-planned",
+                "missing-engine",
+                "evidence must contain authorization receipt engine",
+            ),
+            (
+                "table.scan-planned",
+                "scan-planned",
+                "missing-checked-at",
+                "evidence must contain authorization receipt checked_at timestamp",
+            ),
+            (
+                "table.scan-planned",
+                "scan-planned",
                 "denied",
                 "authorization receipt must allow replay projection",
             ),
@@ -13894,6 +13918,30 @@ mod tests {
                 "scan-planned",
                 "malformed-checked-at",
                 "authorization receipt checked_at timestamp must be RFC3339",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "missing-action",
+                "evidence must contain authorization receipt action",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "missing-allowed",
+                "evidence must contain authorization receipt allowed decision",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "missing-engine",
+                "evidence must contain authorization receipt engine",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "missing-checked-at",
+                "evidence must contain authorization receipt checked_at timestamp",
             ),
             (
                 "table.scan-tasks-fetched",
@@ -13981,6 +14029,30 @@ mod tests {
                 })
             };
             match invalid_case {
+                "missing-action" => {
+                    payload["authorization-receipt"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("action");
+                }
+                "missing-allowed" => {
+                    payload["authorization-receipt"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("allowed");
+                }
+                "missing-engine" => {
+                    payload["authorization-receipt"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("engine");
+                }
+                "missing-checked-at" => {
+                    payload["authorization-receipt"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("checked_at");
+                }
                 "denied" => payload["authorization-receipt"]["allowed"] = json!(false),
                 "blank-engine" => payload["authorization-receipt"]["engine"] = json!("   "),
                 "malformed-checked-at" => {

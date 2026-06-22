@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Extended governed scan replay regressions so `table.scan-planned` and
+  `table.scan-tasks-fetched` outbox admission also rejects authorization
+  receipts missing action, allowed decision, engine, or `checked_at` evidence
+  before acknowledgement, graph projection, or OpenLineage projection.
 - Added governed scan replay regressions that prove `table.scan-planned` and
   `table.scan-tasks-fetched` outbox admission rejects denied authorization
   receipts, blank receipt engines, and malformed receipt timestamps before

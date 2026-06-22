@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Cover missing scan receipt fields`.
+  Service outbox-drain coverage now also proves `table.scan-planned` and
+  `table.scan-tasks-fetched` governed scan replay rejects authorization
+  receipts missing `action`, `allowed`, `engine`, or `checked_at` evidence
+  before acknowledgement, graph projection, or OpenLineage projection. This
+  complements the malformed-value receipt coverage and keeps the P1
+  governed-read receipt completeness invariant explicit.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_incomplete_scan_authorization_receipts -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Cover incomplete scan receipts`.
   Service outbox-drain coverage now proves `table.scan-planned` and
   `table.scan-tasks-fetched` governed scan replay rejects denied authorization
