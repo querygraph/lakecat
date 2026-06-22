@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required `table.deleted` replay admission to carry a soft-delete object with
+  positive version evidence before acknowledgement, graph projection, or
+  OpenLineage projection, so delete replay cannot drop the catalog
+  pointer-generation proof.
 - Required `credentials.vend-attempted` replay admission to carry top-level
   boolean `secret-ref-present` evidence matching the nested storage-profile
   proof before acknowledgement, graph projection, or OpenLineage projection,

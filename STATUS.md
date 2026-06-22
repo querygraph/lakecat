@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require table delete soft-delete version evidence`.
+  Service `table.deleted` replay admission now rejects delete replay unless a
+  soft-delete object is present and carries positive version evidence before
+  acknowledgement, graph projection, or OpenLineage projection. This keeps
+  table delete replay bound to the catalog pointer-generation proof that
+  current producers emit.
+- Local verification for this table delete soft-delete version slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib table_lifecycle -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require credential secret-ref presence evidence`.
   Service `credentials.vend-attempted` replay admission now rejects credential
   replay unless the top-level boolean `secret-ref-present` field is present

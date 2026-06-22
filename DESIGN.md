@@ -714,7 +714,9 @@ lifecycle graph/OpenLineage facts cannot be actorless even when the standard
 Iceberg REST response shape remains unchanged.
 Create, load, and restore replay must also carry the unsigned table version
 that current producers emit; delete replay carries the same pointer-generation
-evidence through required `soft-delete.version`.
+evidence through required `soft-delete.version`, and `table.deleted` replay
+must reject missing soft-delete objects or non-positive soft-delete versions
+before acknowledgement, graph projection, or OpenLineage projection.
 
 View lifecycle replay must carry valid view names and positive store-assigned
 `view-version` values before projection, and guarded view lifecycle replay must

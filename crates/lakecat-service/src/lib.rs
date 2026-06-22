@@ -1820,10 +1820,16 @@ fn validate_table_lifecycle_event_evidence(
             "table lifecycle payload table",
         )?;
     }
-    if let Some(soft_delete) = payload
+    let soft_delete = payload
         .get("soft-delete")
-        .or_else(|| event.payload.get("soft-delete"))
-    {
+        .or_else(|| event.payload.get("soft-delete"));
+    if event.event_type == "table.deleted" && soft_delete.is_none() {
+        return Err(outbox_evidence_error(
+            event,
+            "table lifecycle delete evidence must contain soft-delete",
+        ));
+    }
+    if let Some(soft_delete) = soft_delete {
         let Some(soft_delete) = soft_delete.as_object() else {
             return Err(outbox_evidence_error(
                 event,
@@ -1846,6 +1852,14 @@ fn validate_table_lifecycle_event_evidence(
             return Err(outbox_evidence_error(
                 event,
                 "table lifecycle soft-delete evidence must contain unsigned version",
+            ));
+        }
+        if event.event_type == "table.deleted"
+            && soft_delete.get("version").and_then(Value::as_u64) == Some(0)
+        {
+            return Err(outbox_evidence_error(
+                event,
+                "table lifecycle soft-delete version must be positive",
             ));
         }
         optional_non_empty_string_field(
@@ -25620,6 +25634,7 @@ mod tests {
             (
                 "evt-created-missing-version",
                 "table.created",
+                "table lifecycle evidence must contain unsigned version",
                 json!({
                     "audit-event-id": "audit-created-missing-version",
                     "event-type": "table.created",
@@ -25640,6 +25655,7 @@ mod tests {
             (
                 "evt-loaded-string-version",
                 "table.loaded",
+                "table lifecycle evidence must contain unsigned version",
                 json!({
                     "audit-event-id": "audit-loaded-string-version",
                     "event-type": "table.loaded",
@@ -25661,6 +25677,7 @@ mod tests {
             (
                 "evt-restored-missing-version",
                 "table.restored",
+                "table lifecycle evidence must contain unsigned version",
                 json!({
                     "audit-event-id": "audit-restored-missing-version",
                     "event-type": "table.restored",
@@ -25678,9 +25695,53 @@ mod tests {
                     }
                 }),
             ),
+            (
+                "evt-deleted-missing-soft-delete",
+                "table.deleted",
+                "table lifecycle delete evidence must contain soft-delete",
+                json!({
+                    "audit-event-id": "audit-deleted-missing-soft-delete",
+                    "event-type": "table.deleted",
+                    "table": &table,
+                    "authorization-receipt": {
+                        "principal": &principal,
+                        "action": "table-drop",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+            ),
+            (
+                "evt-deleted-zero-soft-delete-version",
+                "table.deleted",
+                "table lifecycle soft-delete version must be positive",
+                json!({
+                    "audit-event-id": "audit-deleted-zero-soft-delete-version",
+                    "event-type": "table.deleted",
+                    "table": &table,
+                    "soft-delete": {
+                        "table": &table,
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 0,
+                        "principal": &principal,
+                        "authorization-receipt": null,
+                        "deleted-at": chrono::Utc::now(),
+                    },
+                    "authorization-receipt": {
+                        "principal": &principal,
+                        "action": "table-drop",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+            ),
         ];
 
-        for (event_id, event_type, payload) in cases {
+        for (event_id, event_type, expected_message, payload) in cases {
             let store = Arc::new(RecordingOutboxStore {
                 events: Mutex::new(vec![OutboxEvent {
                     event_id: event_id.to_string(),
@@ -25708,7 +25769,7 @@ mod tests {
 
             let message = err.to_string();
             assert!(message.contains(event_type));
-            assert!(message.contains("table lifecycle evidence must contain unsigned version"));
+            assert!(message.contains(expected_message), "{event_id}: {message}");
             assert!(message.contains("event-id-hash=sha256:"));
             assert!(!message.contains(event_id));
             assert!(
