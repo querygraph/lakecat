@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added table lifecycle replay coverage for denied or incomplete
+  authorization receipt decisions. `table.created`, `table.loaded`,
+  `table.deleted`, and `table.restored` now have direct regressions proving a
+  missing or false `allowed` decision fails before acknowledgement, graph
+  projection, OpenLineage projection, QGLake proof, or QueryGraph import can
+  inherit unauthorized table lifecycle evidence.
 - Extended standard catalog replay coverage for denied or incomplete view
   authorization receipt decisions. `view.listed`, `view.upserted`,
   `view.loaded`, and `view.dropped` now have direct coverage in the standard

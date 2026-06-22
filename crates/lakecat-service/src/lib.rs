@@ -34355,6 +34355,133 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_missing_or_denied_table_lifecycle_receipt_allowed_decision() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let receipt = |action: &str| {
+            json!({
+                "principal": &principal,
+                "action": action,
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            })
+        };
+        let missing_allowed = |mut receipt: Value| {
+            receipt.as_object_mut().unwrap().remove("allowed");
+            receipt
+        };
+        let denied = |mut receipt: Value| {
+            receipt["allowed"] = json!(false);
+            receipt
+        };
+        let cases = vec![
+            (
+                "table.created",
+                "evt-table-created-missing-receipt-allowed",
+                missing_allowed(receipt("table-create")),
+                json!({
+                    "version": 1,
+                    "metadata-location": "file:///tmp/events/metadata/00000.json",
+                }),
+                "table lifecycle evidence must contain authorization receipt allowed decision",
+            ),
+            (
+                "table.loaded",
+                "evt-table-loaded-denied-receipt",
+                denied(receipt("table-load")),
+                json!({
+                    "version": 1,
+                    "metadata-location": "file:///tmp/events/metadata/00000.json",
+                }),
+                "table lifecycle authorization receipt must allow replay projection",
+            ),
+            (
+                "table.deleted",
+                "evt-table-deleted-missing-receipt-allowed",
+                missing_allowed(receipt("table-drop")),
+                json!({
+                    "soft-delete": {
+                        "table": &table,
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 1,
+                        "principal": &principal,
+                        "authorization-receipt": null,
+                        "deleted-at": chrono::Utc::now(),
+                    },
+                }),
+                "table lifecycle evidence must contain authorization receipt allowed decision",
+            ),
+            (
+                "table.restored",
+                "evt-table-restored-denied-receipt",
+                denied(receipt("table-restore")),
+                json!({
+                    "version": 2,
+                    "metadata-location": "file:///tmp/events/metadata/00001.json",
+                }),
+                "table lifecycle authorization receipt must allow replay projection",
+            ),
+        ];
+
+        for (event_type, event_id, receipt, mut payload, expected_message) in cases {
+            payload["authorization-receipt"] = receipt;
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": event_type,
+                        "table": &table,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("missing or denied table lifecycle decision should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type), "{message}");
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_mismatched_table_lifecycle_receipt_actions() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),

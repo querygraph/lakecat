@@ -6,6 +6,14 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Cover table lifecycle allowed decisions`.
+  Service replay admission already required `table.created`, `table.loaded`,
+  `table.deleted`, and `table.restored` authorization receipts to carry an
+  affirmative allow decision; the new regression pins those table lifecycle
+  surfaces directly before acknowledgement, graph projection, OpenLineage
+  projection, QGLake proof, or QueryGraph import can inherit unauthorized table
+  lifecycle evidence.
+- Latest implementation/testing slice:
   `Cover view allowed decisions`.
   Service replay admission already required `view.listed`, `view.upserted`,
   `view.loaded`, and `view.dropped` authorization receipts to carry an
