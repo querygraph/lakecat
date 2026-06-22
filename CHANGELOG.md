@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened Turso soft-delete restore so durable `soft_deletes` row scope,
+  metadata location, version, and timestamp columns must match the decoded
+  soft-delete record before a table can be restored. The regression tampers the
+  row namespace while leaving `record_json` valid, proving LakeCat refuses to
+  drop corrupted soft-delete evidence.
 - Hardened Turso idempotency replay so `idempotency_records.table_key` must
   match the requested table before either direct replay probing or the normal
   idempotent commit path can return a stored response. The regression tampers

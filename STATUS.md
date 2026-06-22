@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Reject Turso soft-delete row scope drift`.
+  Turso restore now validates durable `soft_deletes` row scope, metadata
+  location, version, and timestamp columns against the decoded soft-delete
+  record before removing the soft-delete marker. The regression tampers the row
+  namespace while leaving `record_json` valid, proving restore refuses
+  corrupted soft-delete evidence.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_soft_delete_row_scope_drift_on_restore -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Reject Turso idempotency row scope drift`.
   Turso idempotency replay now validates `idempotency_records.table_key`
   against the requested table before direct replay probing or normal

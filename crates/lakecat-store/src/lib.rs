@@ -5563,7 +5563,10 @@ pub mod turso_store {
             let tx = conn.transaction().await.map_err(turso_error)?;
             let mut rows = tx
                 .query(
-                    "select t.record_json, d.record_json from tables t
+                    "select t.record_json, d.warehouse, d.namespace_path,
+                            d.table_name, d.metadata_location, d.version,
+                            d.deleted_at, d.record_json
+                     from tables t
                      join soft_deletes d on d.table_key = t.table_key
                      where t.table_key = ?1",
                     (table_key(ident),),
@@ -5578,8 +5581,9 @@ pub mod turso_store {
             };
             let table: TableRecord = decode_json(row_string(&row, 0)?)?;
             crate::validate_table_record_scope(&table, ident)?;
-            let soft_delete: SoftDeleteRecord = decode_json(row_string(&row, 1)?)?;
+            let soft_delete: SoftDeleteRecord = decode_json(row_string(&row, 7)?)?;
             soft_delete.validate_for_table(ident, &table)?;
+            validate_turso_soft_delete_row(&soft_delete, &row)?;
             let restored_at = Utc::now();
             let changed = tx
                 .execute(
@@ -6825,6 +6829,37 @@ pub mod turso_store {
         {
             return Err(LakeCatError::Internal(
                 "table commit record timestamp does not match pointer log row".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_turso_soft_delete_row(record: &SoftDeleteRecord, row: &Row) -> LakeCatResult<()> {
+        if row_string(row, 1)? != record.table.warehouse.as_str()
+            || row_string(row, 2)? != record.table.namespace.path()
+            || row_string(row, 3)? != record.table.name.as_str()
+        {
+            return Err(LakeCatError::Internal(
+                "soft-delete row scope does not match record identity".to_string(),
+            ));
+        }
+        if record.metadata_location != row_optional_string(row, 4)? {
+            return Err(LakeCatError::Internal(
+                "soft-delete metadata location does not match row".to_string(),
+            ));
+        }
+        let row_version = u64::try_from(row_i64(row, 5)?).map_err(|_| {
+            LakeCatError::Internal("soft-delete row version must be non-negative".to_string())
+        })?;
+        if record.version != row_version {
+            return Err(LakeCatError::Internal(
+                "soft-delete version does not match row".to_string(),
+            ));
+        }
+        if record.deleted_at != parse_turso_datetime(row_string(row, 6)?, "soft-delete deleted_at")?
+        {
+            return Err(LakeCatError::Internal(
+                "soft-delete timestamp does not match row".to_string(),
             ));
         }
         Ok(())
@@ -11042,6 +11077,69 @@ pub mod turso_store {
                 err,
                 LakeCatError::InvalidArgument(message)
                     if message.contains("soft-delete version does not match table record")
+            ));
+            assert_eq!(store.count_rows("soft_deletes").await.unwrap(), 1);
+            assert!(matches!(
+                store.load_table(&ident).await,
+                Err(LakeCatError::NotFound { .. })
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_soft_delete_row_scope_drift_on_restore() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace,
+                TableName::new("events").unwrap(),
+            );
+            let table = TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            );
+            store.create_table(table).await.unwrap();
+            store
+                .soft_delete_table(
+                    &ident,
+                    Principal::anonymous(),
+                    Some(serde_json::json!({
+                        "engine": "typesec",
+                        "allowed": true,
+                        "action": "table-drop"
+                    })),
+                )
+                .await
+                .unwrap();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update soft_deletes set namespace_path = ?2 where table_key = ?1",
+                (table_key(&ident), "other_namespace"),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .restore_table(
+                    &ident,
+                    Principal::anonymous(),
+                    Some(serde_json::json!({
+                        "engine": "typesec",
+                        "allowed": true,
+                        "action": "table-restore"
+                    })),
+                )
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("soft-delete row scope does not match")
             ));
             assert_eq!(store.count_rows("soft_deletes").await.unwrap(), 1);
             assert!(matches!(
