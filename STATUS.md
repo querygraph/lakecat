@@ -6,6 +6,17 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Expand Sail engine-boundary guidance in the book`.
+  The book now includes a responsibility ledger that distinguishes LakeCat
+  catalog authority, TypeSec governance, Sail table semantics, and QueryGraph
+  handoff proof, making the engine-pushdown rule concrete for field-id
+  interpretation, manifest metrics, delete handling, commit validation, v4
+  metadata, and compact replay evidence.
+- Local verification for this book guidance slice is green:
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Pin no-default store test in release gate`.
   The full local release-readiness script now runs
   `cargo test -p lakecat-store --lib --no-default-features`, and the local

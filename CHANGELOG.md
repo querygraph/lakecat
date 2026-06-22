@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expanded the book's Sail engine-boundary argument with a responsibility
+  ledger that separates catalog authority, TypeSec governance, Sail table
+  semantics, and QueryGraph handoff proof. The new text makes the engine
+  pushdown rule concrete for schema/field-id interpretation, manifest metrics,
+  delete handling, commit validation, v4 metadata, and replayable LakeCat proof.
 - Added the `lakecat-store` no-default-feature library test to the full local
   release-readiness gate and dependency contract so warning-free default-store
   hygiene remains part of first-release proof while cloud CI is manual-only.
