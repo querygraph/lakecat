@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require view receipt-chain scope counts`.
+  Service replay admission now rejects `view.version-receipt-chains-listed`
+  evidence whose warehouse, namespace, authorization receipt principal, chain
+  count, receipt count, tombstone count, or nested chain receipt counts are
+  missing or drift from the chain payload before acknowledgement, graph
+  projection, or OpenLineage projection.
+- Local verification for this view receipt-chain scope/count slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib view_receipt_chain -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib view_receipt -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`.
+- Latest completed implementation slice:
   `Require view receipt-list scope evidence`.
   Service replay admission now rejects `view.version-receipts-listed` evidence
   whose warehouse, namespace, view, or authorization receipt principal proof is

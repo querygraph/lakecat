@@ -3642,7 +3642,8 @@ warehouse, namespace, view, and authorization receipt principal are valid, its
 `receipt-count` matches full SHA-256 receipt hashes, and every drop receipt
 hash is included in the listed receipts. A verified
 `view.version-receipt-chains-listed` event is not acknowledged unless its
-verified-chain count matches the chains marked verified, each verified chain and
+warehouse, namespace, authorization receipt principal, chain count, receipt
+count, and tombstone count are valid and count-aligned, each verified chain and
 receipt carries full SHA-256 digest evidence, the first receipt is a version 1
 upsert without previous links, and every later upsert or drop links to the
 previous receipt with the expected view-version transition. That keeps

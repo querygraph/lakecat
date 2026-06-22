@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required `view.version-receipt-chains-listed` replay evidence to carry valid
+  warehouse, namespace, authorization receipt principal, and count-aligned
+  chain/receipt/tombstone totals before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Required `view.version-receipts-listed` replay evidence to carry valid
   warehouse, namespace, view, and authorization receipt principal proof before
   acknowledgement, graph projection, or OpenLineage projection.
