@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added QGLake lineage-drain verifier coverage for malformed governed scan
+  authorization receipt hashes, proving compact scan replay cannot preserve a
+  short receipt digest even when replay/OpenLineage hashes are well-shaped.
 - Extended governed scan replay regressions so `table.scan-planned` and
   `table.scan-tasks-fetched` outbox admission also rejects authorization
   receipts missing action, allowed decision, engine, or `checked_at` evidence

@@ -5,6 +5,20 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest QGLake handoff slice:
+  `Cover scan authorization hash shape`.
+  The QGLake lineage-drain verifier now has focused coverage for malformed
+  governed scan authorization receipt hashes, proving compact scan replay
+  rejects a short receipt digest even when replay/OpenLineage hashes are
+  well-shaped. This keeps the P2 handoff invariant explicit: planned/fetched
+  scan proof must preserve full TypeSec-style authorization receipt hashes from
+  source replay into compact QGLake proof.
+- Local verification for this QGLake handoff slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_short_scan_authorization_hashes -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation slice:
   `Cover missing scan receipt fields`.
   Service outbox-drain coverage now also proves `table.scan-planned` and

@@ -24726,6 +24726,25 @@ mod tests {
     }
 
     #[test]
+    fn qglake_lineage_drain_verifier_rejects_short_scan_authorization_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let scan_plan = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.scan-planned")
+            .expect("scan plan replay fixture");
+        scan_plan.authorization_receipt_hash = Some("sha256:scan-plan-auth".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short scan authorization hashes");
+
+        assert!(err
+            .to_string()
+            .contains("qglake lineage drain scan planning replay is missing compact task, graph, or SHA-256 receipt evidence"));
+    }
+
+    #[test]
     fn qglake_lineage_drain_verifier_rejects_short_scan_policy_hashes() {
         let verification = qglake_handoff_lineage_verification();
         let mut drain = qglake_handoff_lineage_drain();
