@@ -1108,6 +1108,7 @@ pub async fn drain_outbox_once(
         principal_subject: None,
         principal_kind: None,
         authorization_receipt_hash: None,
+        authorization_receipt_action: None,
         request_identity_state: None,
         request_identity_source: None,
         typedid_envelope_hash: None,
@@ -4717,6 +4718,10 @@ fn attach_lineage_drain_authorization(
         .and_then(Value::as_str)
         .map(str::to_string);
     response.authorization_receipt_hash = Some(content_hash_json(&receipt_value)?);
+    response.authorization_receipt_action = receipt_value
+        .get("action")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     response.request_identity_state = receipt
         .context
         .get("request-identity")
@@ -4974,6 +4979,10 @@ fn lineage_drain_event_summary(
         authorization_receipt_hash: payload
             .get("authorization-receipt")
             .and_then(|receipt| content_hash_json(receipt).ok()),
+        authorization_receipt_action: authorization_receipt
+            .and_then(|receipt| receipt.get("action"))
+            .and_then(Value::as_str)
+            .map(str::to_string),
         request_identity_state: request_identity
             .and_then(|identity| identity.get("attestation-state"))
             .and_then(Value::as_str)

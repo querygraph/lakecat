@@ -1642,6 +1642,7 @@ fn verify_qglake_handoff_lineage_drain_artifact_semantics(
         "principalSubject": drain.principal_subject,
         "principalKind": drain.principal_kind,
         "authorizationReceiptHash": drain.authorization_receipt_hash,
+        "authorizationReceiptAction": drain.authorization_receipt_action,
         "requestIdentitySource": drain.request_identity_source,
         "requestIdentityState": drain.request_identity_state,
         "typedidEnvelopeHash": drain.typedid_envelope_hash,
@@ -1807,6 +1808,7 @@ fn verify_lakecat_replay_request_identity_matches_summary(
         "requestIdentitySource",
         "requestIdentityState",
         "authorizationReceiptHash",
+        "authorizationReceiptAction",
     ] {
         require_string_match(
             captured_request_identity,
@@ -1859,6 +1861,7 @@ fn verify_lakecat_replay_querygraph_bootstrap_matches_summary(
         "requestIdentitySource",
         "requestIdentityState",
         "authorizationReceiptHash",
+        "authorizationReceiptAction",
         "agentDelegationHash",
         "agentSummarySignatureHash",
     ] {
@@ -4732,6 +4735,7 @@ fn qglake_request_identity_replay_evidence_json(drain: &LineageDrainResponse) ->
         "principalKind": drain.principal_kind.as_deref()?,
         "requestIdentitySource": drain.request_identity_source.as_deref()?,
         "authorizationReceiptHash": drain.authorization_receipt_hash.as_deref()?,
+        "authorizationReceiptAction": drain.authorization_receipt_action.as_deref()?,
         "requestIdentityState": drain.request_identity_state.as_deref()?,
         "typedidEnvelopeHash": drain.typedid_envelope_hash.as_deref(),
         "typedidProofHash": drain.typedid_proof_hash.as_deref(),
@@ -4754,6 +4758,7 @@ fn qglake_querygraph_bootstrap_replay_evidence_json(drain: &LineageDrainResponse
         "requestIdentitySource": bootstrap.request_identity_source.as_deref(),
         "requestIdentityState": bootstrap.request_identity_state.as_deref(),
         "authorizationReceiptHash": bootstrap.authorization_receipt_hash.as_deref(),
+        "authorizationReceiptAction": bootstrap.authorization_receipt_action.as_deref(),
         "agentDelegationHash": bootstrap.agent_delegation_hash.as_deref(),
         "agentSummarySignatureHash": bootstrap.agent_summary_signature_hash.as_deref(),
         "typedidEnvelopeHash": bootstrap.typedid_envelope_hash.as_deref(),
@@ -7481,6 +7486,12 @@ fn verify_qglake_lineage_drain(
             "qglake lineage drain read is missing SHA-256 authorization receipt hash".to_string(),
         ));
     }
+    if drain.authorization_receipt_action.as_deref() != Some("lineage-read") {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain read authorization receipt action must be lineage-read"
+                .to_string(),
+        ));
+    }
     if drain
         .request_identity_source
         .as_deref()
@@ -7682,9 +7693,72 @@ fn verify_qglake_lineage_drain(
     verify_qglake_table_commit_history_replay(drain, principal)?;
     verify_qglake_scan_replay(drain)?;
     require_qglake_lineage_event_types_cover_summaries(drain)?;
+    require_qglake_lineage_authorization_actions_match_events(drain)?;
     require_qglake_lineage_drain_counts_match_summaries(drain)?;
     require_qglake_lineage_drain_sink_hashes_duplicate_free(drain)?;
     Ok(())
+}
+
+fn require_qglake_lineage_authorization_actions_match_events(
+    drain: &LineageDrainResponse,
+) -> lakecat_core::LakeCatResult<()> {
+    for event in &drain.events {
+        let Some(expected_action) =
+            qglake_expected_authorization_receipt_action(event.event_type.as_str())
+        else {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain replay summary {} has no authorization action contract",
+                event.event_type
+            )));
+        };
+        let Some(action) = event
+            .authorization_receipt_action
+            .as_deref()
+            .filter(|action| !action.trim().is_empty())
+        else {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain replay summary {} is missing authorization receipt action",
+                event.event_type
+            )));
+        };
+        if action != expected_action {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "qglake lineage drain replay summary {} authorization receipt action {action} does not match expected {expected_action}",
+                event.event_type
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn qglake_expected_authorization_receipt_action(event_type: &str) -> Option<&'static str> {
+    match event_type {
+        "catalog.config-read" => Some("catalog-config"),
+        "credentials.vend-attempted" => Some("credentials-vend"),
+        "namespace.created" => Some("namespace-create"),
+        "namespace.dropped" => Some("namespace-drop"),
+        "namespace.listed" => Some("namespace-list"),
+        "namespace.loaded" => Some("namespace-load"),
+        "policy-binding.listed" | "policy-binding.upserted" => Some("policy-manage"),
+        "project.listed" | "project.upserted" => Some("project-manage"),
+        "querygraph.bootstrap" => Some("graph-read"),
+        "server.listed" | "server.upserted" => Some("server-manage"),
+        "storage-profile.listed" | "storage-profile.upserted" => Some("storage-profile-manage"),
+        "table.commit" => Some("table-commit"),
+        "table.commits-listed" | "table.loaded" => Some("table-load"),
+        "table.created" => Some("table-create"),
+        "table.deleted" => Some("table-drop"),
+        "table.restored" => Some("table-restore"),
+        "table.scan-planned" | "table.scan-tasks-fetched" => Some("table-plan-scan"),
+        "view.dropped" => Some("view-drop"),
+        "view.listed"
+        | "view.loaded"
+        | "view.version-receipts-listed"
+        | "view.version-receipt-chains-listed" => Some("view-load"),
+        "view.upserted" => Some("view-manage"),
+        "warehouse.listed" | "warehouse.upserted" => Some("warehouse-manage"),
+        _ => None,
+    }
 }
 
 fn require_qglake_lineage_drain_sink_hashes_duplicate_free(
@@ -10260,6 +10334,7 @@ mod tests {
                     "requestIdentitySource": "x-lakecat-agent-did",
                     "requestIdentityState": "unverified",
                     "authorizationReceiptHash": qglake_fixture_hash("identity"),
+                    "authorizationReceiptAction": "lineage-read",
                     "typedidEnvelopeHash": null,
                     "typedidProofHash": null
                 },
@@ -10285,6 +10360,7 @@ mod tests {
                     "requestIdentitySource": "x-lakecat-agent-did",
                     "requestIdentityState": "unverified",
                     "authorizationReceiptHash": qglake_fixture_hash("identity"),
+                    "authorizationReceiptAction": "graph-read",
                     "agentDelegationHash": qglake_fixture_hash("delegation"),
                     "agentSummarySignatureHash": qglake_fixture_hash("summary"),
                     "typedidEnvelopeHash": null,
@@ -11080,6 +11156,7 @@ mod tests {
                 "principalSubject": summary["lakecatReplayVerification"]["requestIdentityProof"]["principalSubject"].clone(),
                 "principalKind": summary["lakecatReplayVerification"]["requestIdentityProof"]["principalKind"].clone(),
                 "authorizationReceiptHash": summary["lakecatReplayVerification"]["requestIdentityProof"]["authorizationReceiptHash"].clone(),
+                "authorizationReceiptAction": summary["lakecatReplayVerification"]["requestIdentityProof"]["authorizationReceiptAction"].clone(),
                 "requestIdentitySource": summary["lakecatReplayVerification"]["requestIdentityProof"]["requestIdentitySource"].clone(),
                 "requestIdentityState": summary["lakecatReplayVerification"]["requestIdentityProof"]["requestIdentityState"].clone(),
                 "typedidEnvelopeHash": summary["lakecatReplayVerification"]["requestIdentityProof"]["typedidEnvelopeHash"].clone(),
@@ -11273,6 +11350,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:identity".to_string()),
+            authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("unverified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -11309,6 +11387,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -15526,6 +15605,30 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_request_identity_action_drift() {
+        let temp = qglake_temp_dir("handoff-captured-request-identity-action-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["requestIdentity"]["authorizationReceiptAction"] =
+            json!("graph-read");
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay request-identity action drift should be rejected");
+        assert!(
+            err.to_string().contains(
+                "captured LakeCat replay output.replay-evidence.requestIdentity.authorizationReceiptAction mismatch"
+            )
+        );
+    }
+
+    #[test]
     fn qglake_handoff_captured_output_semantics_rejects_querygraph_bootstrap_drift() {
         let temp = qglake_temp_dir("handoff-captured-querygraph-bootstrap-drift");
         let summary_path = temp.join("handoff-summary.json");
@@ -16505,6 +16608,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -16659,6 +16763,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -18220,6 +18325,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -18247,6 +18353,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -18480,6 +18587,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_action: Some("lineage-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -18517,6 +18625,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18553,6 +18662,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18591,6 +18701,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18641,6 +18752,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18685,6 +18797,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18726,6 +18839,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18753,6 +18867,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18781,6 +18896,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18809,6 +18925,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18834,6 +18951,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18878,6 +18996,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: None,
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18904,6 +19023,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: None,
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18930,6 +19050,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18956,6 +19077,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -18966,6 +19088,7 @@ mod tests {
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
@@ -19051,6 +19174,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -19061,6 +19185,7 @@ mod tests {
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
@@ -19148,6 +19273,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -19158,6 +19284,7 @@ mod tests {
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
@@ -19243,6 +19370,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -19253,6 +19381,7 @@ mod tests {
                     principal_subject: Some("did:example:other".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
@@ -19338,6 +19467,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -19348,6 +19478,7 @@ mod tests {
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("human".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
@@ -19433,6 +19564,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -19443,6 +19575,7 @@ mod tests {
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: None,
+                    authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
@@ -19528,6 +19661,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -19538,6 +19672,7 @@ mod tests {
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: None,
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
@@ -19623,6 +19758,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -19633,6 +19769,7 @@ mod tests {
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
@@ -19718,6 +19855,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -19728,6 +19866,7 @@ mod tests {
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
@@ -19813,6 +19952,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -19823,6 +19963,7 @@ mod tests {
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
@@ -19908,6 +20049,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -19918,6 +20060,7 @@ mod tests {
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
@@ -20003,6 +20146,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20013,6 +20157,7 @@ mod tests {
                     principal_subject: Some("did:example:agent".to_string()),
                     principal_kind: Some("agent".to_string()),
                     authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                    authorization_receipt_action: Some("graph-read".to_string()),
                     request_identity_state: Some("verified".to_string()),
                     request_identity_source: Some("x-lakecat-agent-did".to_string()),
                     typedid_envelope_hash: None,
@@ -20101,6 +20246,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20112,6 +20258,7 @@ mod tests {
                         principal_subject: Some("did:example:agent".to_string()),
                         principal_kind: Some("agent".to_string()),
                         authorization_receipt_hash: Some("sha256:authorization".to_string()),
+                        authorization_receipt_action: Some("graph-read".to_string()),
                         request_identity_state: Some("verified".to_string()),
                         request_identity_source: Some("x-lakecat-agent-did".to_string()),
                         typedid_envelope_hash: None,
@@ -20200,6 +20347,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("not-a-sha256-hash".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20226,6 +20374,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20255,6 +20404,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20283,6 +20433,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20506,6 +20657,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20552,6 +20704,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20598,6 +20751,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20634,6 +20788,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20673,6 +20828,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20714,6 +20870,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20756,6 +20913,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20793,6 +20951,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20834,6 +20993,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20879,6 +21039,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20930,6 +21091,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -20981,6 +21143,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21030,6 +21193,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21071,6 +21235,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21109,6 +21274,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21145,6 +21311,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21185,6 +21352,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21230,6 +21398,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21280,6 +21449,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21336,6 +21506,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21383,6 +21554,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21428,6 +21600,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21483,6 +21656,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21525,6 +21699,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21571,6 +21746,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21618,6 +21794,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21668,6 +21845,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21723,6 +21901,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21779,6 +21958,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21836,6 +22016,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21894,6 +22075,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -21951,6 +22133,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22012,6 +22195,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22069,6 +22253,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22127,6 +22312,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22185,6 +22371,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22243,6 +22430,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22301,6 +22489,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22358,6 +22547,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22421,6 +22611,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22482,6 +22673,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22539,6 +22731,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22595,6 +22788,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22664,6 +22858,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22729,6 +22924,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22787,6 +22983,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+            authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22839,6 +23036,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22887,6 +23085,7 @@ mod tests {
                 principal_subject: Some("did:example:agent".to_string()),
                 principal_kind: Some("agent".to_string()),
                 authorization_receipt_hash: Some("sha256:lineage-read".to_string()),
+                authorization_receipt_action: Some("lineage-read".to_string()),
                 request_identity_state: Some("verified".to_string()),
                 request_identity_source: Some("x-lakecat-agent-did".to_string()),
                 typedid_envelope_hash: None,
@@ -22911,6 +23110,46 @@ mod tests {
             1,
         )
         .expect("QGLake lineage drain should accept delivered outbox events");
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_requires_replay_authorization_actions() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let scan_plan = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.scan-planned")
+            .expect("scan plan replay fixture");
+        scan_plan.authorization_receipt_action = None;
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject missing replay action evidence");
+
+        assert!(err.to_string().contains("table.scan-planned"));
+        assert!(
+            err.to_string()
+                .contains("is missing authorization receipt action")
+        );
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_mismatched_replay_authorization_actions() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let commit_history = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.commits-listed")
+            .expect("table commit history replay fixture");
+        commit_history.authorization_receipt_action = Some("table-commit".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject mismatched replay action evidence");
+
+        assert!(err.to_string().contains("table.commits-listed"));
+        assert!(err.to_string().contains("authorization receipt action"));
+        assert!(err.to_string().contains("expected table-load"));
     }
 
     #[test]
@@ -23576,6 +23815,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:authorization".to_string()),
+            authorization_receipt_action: Some("graph-read".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -23672,6 +23912,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:view-authorization".to_string()),
+            authorization_receipt_action: Some("view-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -23744,6 +23985,7 @@ mod tests {
         let mut summary = qglake_view_lineage_summary();
         summary.event_id = "evt-view-drop".to_string();
         summary.event_type = "view.dropped".to_string();
+        summary.authorization_receipt_action = Some("view-drop".to_string());
         summary.expected_view_version = Some(2);
         summary.replay_event_hashes = vec!["sha256:view-drop-replay-event".to_string()];
         summary.replay_open_lineage_hashes =
@@ -23755,6 +23997,7 @@ mod tests {
         let mut summary = qglake_view_lineage_summary();
         summary.event_id = "evt-view-receipts".to_string();
         summary.event_type = "view.version-receipts-listed".to_string();
+        summary.authorization_receipt_action = Some("view-load".to_string());
         summary.graph_events = 0;
         summary.lineage_events = 1;
         summary.expected_view_version = None;
@@ -23769,6 +24012,7 @@ mod tests {
         let mut summary = qglake_view_lineage_summary();
         summary.event_id = "evt-view-receipt-chains".to_string();
         summary.event_type = "view.version-receipt-chains-listed".to_string();
+        summary.authorization_receipt_action = Some("view-load".to_string());
         summary.graph_events = 0;
         summary.lineage_events = 1;
         summary.view_stable_id = None;
@@ -23852,6 +24096,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:table-commits-authorization".to_string()),
+            authorization_receipt_action: Some("table-load".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -23945,6 +24190,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:scan-planned-authorization".to_string()),
+            authorization_receipt_action: Some("table-plan-scan".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -24038,6 +24284,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:scan-fetch-authorization".to_string()),
+            authorization_receipt_action: Some("table-plan-scan".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -24125,6 +24372,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:policy-list-authorization".to_string()),
+            authorization_receipt_action: Some("policy-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -24202,6 +24450,7 @@ mod tests {
             authorization_receipt_hash: Some(
                 "sha256:storage-profile-list-authorization".to_string(),
             ),
+            authorization_receipt_action: Some("storage-profile-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -24279,6 +24528,7 @@ mod tests {
             authorization_receipt_hash: Some(
                 "sha256:storage-profile-upsert-authorization".to_string(),
             ),
+            authorization_receipt_action: Some("storage-profile-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -24359,6 +24609,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:server-list-authorization".to_string()),
+            authorization_receipt_action: Some("server-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -24434,6 +24685,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:project-list-authorization".to_string()),
+            authorization_receipt_action: Some("project-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -24509,6 +24761,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:warehouse-list-authorization".to_string()),
+            authorization_receipt_action: Some("warehouse-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -24584,6 +24837,7 @@ mod tests {
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
             authorization_receipt_hash: Some("sha256:agent-credential-authorization".to_string()),
+            authorization_receipt_action: Some("credentials-vend".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
             typedid_envelope_hash: None,
@@ -24664,6 +24918,7 @@ mod tests {
             principal_subject: Some("human:qglake-operator".to_string()),
             principal_kind: Some("human".to_string()),
             authorization_receipt_hash: Some("sha256:human-credential-authorization".to_string()),
+            authorization_receipt_action: Some("credentials-vend".to_string()),
             request_identity_state: Some("header-principal".to_string()),
             request_identity_source: Some("x-lakecat-principal".to_string()),
             typedid_envelope_hash: None,

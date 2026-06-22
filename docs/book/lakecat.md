@@ -4704,6 +4704,15 @@ receipts identify the local allow-all
 compatibility engine, while real TypeSec-backed receipts identify TypeSec. That
 keeps replay evidence from becoming actorful but action-less, decision-less,
 engine-less, or timeless proof.
+The compact QGLake handoff now preserves the same action proof instead of
+collapsing it into a receipt hash. The lineage-drain response carries
+`authorizationReceiptAction` for the drain read itself and for each replayed
+event summary. The QGLake verifier requires the drain read to prove
+`lineage-read`, requires each replayed event summary to carry a non-empty
+action, and rejects valid-but-wrong action drift, such as `table-commit`
+attached to `table.commits-listed`. Captured replay agreement checks the same
+field in saved handoff artifacts, so an archive cannot keep valid hash-shaped
+proof while silently changing what catalog action was authorized.
 Commit-history replay has the same shape:
 `table.commits-listed` event must carry a `commit-count` that matches both
 full SHA-256 commit hashes and unsigned sequence numbers, plus

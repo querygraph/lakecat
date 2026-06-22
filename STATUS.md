@@ -5,6 +5,26 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Bind QGLake replay summaries to receipt actions`.
+  Lineage-drain responses now carry compact authorization receipt action
+  evidence for the drain read and each replayed event summary. QGLake replay
+  verification rejects archived lineage-drain handoffs when the top-level drain
+  read is not `lineage-read`, when a replay summary omits its action, or when a
+  valid action such as `table-commit` is attached to a different event such as
+  `table.commits-listed`.
+- Local verification for this QGLake action-binding slice is green:
+  `cargo fmt -p lakecat-api -p lakecat-service -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_request_identity_action_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_projects_table_events_to_sinks -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_projects_view_events_to_graph_and_lineage -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed book slice:
   `Expand catalog concepts and Sail engine argument`.
   The LakeCat book now includes a detailed concept classification matrix for

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added compact lineage-drain authorization action evidence to LakeCat replay
+  summaries and QGLake verification, requiring the drain read to prove
+  `lineage-read` and each replayed event summary to carry the receipt action
+  that matches its event type before archived handoff proof is accepted.
 - Expanded the LakeCat book's catalog concepts chapter with a detailed
   standard-Iceberg versus LakeCat/QueryGraph/TypeSec classification matrix,
   concrete PySpark, Rust engine, operator, governed-agent, and QueryGraph
