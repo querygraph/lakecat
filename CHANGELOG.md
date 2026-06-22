@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving `table.commit` rejects blank
+  new metadata pointer evidence before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Added QGLake handoff artifact and import-plan verifier regression coverage
   proving QueryGraph graph-edge counts reject drift the same way graph-node
   counts already do.

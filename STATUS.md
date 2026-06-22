@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover blank table commit new metadata`.
+  Service replay regression coverage now proves `table.commit` rejects blank
+  new metadata pointer evidence before acknowledgement, graph projection, or
+  OpenLineage projection. This closes the blank-value sibling of the existing
+  missing-new and blank-previous metadata pointer replay guards for individual
+  table commits.
+- Local verification for this table commit metadata pointer slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_blank_table_commit_new_metadata_location_before_projection -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib table_commit_new_metadata_location -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover QGLake graph edge count drift`.
   QGLake handoff artifact and import-plan regression coverage now proves
   QueryGraph graph-edge counts reject drift the same way graph-node counts
