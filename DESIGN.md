@@ -658,6 +658,11 @@ stores, ordered by `created_at,event_id`, with batch limits applied after that
 order and with duplicate-safe delivery accounting. Draining should acknowledge
 delivery only after every projection in the batch succeeds, leaving events
 pending for retry when graph or lineage projection fails.
+Store-level commit idempotency evidence must also be shaped before a durable
+mutation starts, not only at the REST header boundary: blank or malformed keys,
+caller-provided request hashes without keys, and non-SHA-256 request hashes
+must fail before pointer movement, pointer-log insertion, audit, outbox
+emission, or idempotency replay.
 Individual `table.commit` replay evidence must carry a positive sequence
 number before acknowledgement or projection, matching the positive,
 strictly-increasing invariant used by commit-history replay.

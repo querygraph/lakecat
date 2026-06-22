@@ -350,6 +350,16 @@ pub struct TableCommit {
 
 impl TableCommit {
     pub fn validate(&self) -> LakeCatResult<()> {
+        if let Some(idempotency_key) = self.idempotency_key.as_deref() {
+            validate_idempotency_key_shape(idempotency_key)?;
+        } else if self.idempotency_request_hash.is_some() {
+            return Err(LakeCatError::InvalidArgument(
+                "table commit idempotency request hash requires an idempotency key".to_string(),
+            ));
+        }
+        if let Some(idempotency_request_hash) = self.idempotency_request_hash.as_deref() {
+            validate_idempotency_request_hash_shape(idempotency_request_hash)?;
+        }
         if self
             .expected_previous_metadata_location
             .as_deref()
@@ -382,6 +392,39 @@ impl TableCommit {
         }
         Ok(())
     }
+}
+
+fn validate_idempotency_key_shape(value: &str) -> LakeCatResult<()> {
+    let bytes = value.as_bytes();
+    if bytes.is_empty() || bytes.len() > 128 || !bytes.iter().all(u8::is_ascii) {
+        return Err(LakeCatError::InvalidArgument(
+            "table commit idempotency key must be 1..=128 ASCII characters".to_string(),
+        ));
+    }
+    if !value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | ':'))
+    {
+        return Err(LakeCatError::InvalidArgument(
+            "table commit idempotency key may only contain A-Z, a-z, 0-9, '-', '_', '.', or ':'"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_idempotency_request_hash_shape(value: &str) -> LakeCatResult<()> {
+    let Some(digest) = value.strip_prefix("sha256:") else {
+        return Err(LakeCatError::InvalidArgument(
+            "table commit idempotency request hash must be full SHA-256 evidence".to_string(),
+        ));
+    };
+    if digest.len() != 64 || !digest.as_bytes().iter().all(u8::is_ascii_hexdigit) {
+        return Err(LakeCatError::InvalidArgument(
+            "table commit idempotency request hash must be full SHA-256 evidence".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1848,6 +1891,8 @@ impl CatalogStore for MemoryCatalogStore {
         idempotency_key: &str,
         idempotency_request_hash: &str,
     ) -> LakeCatResult<Option<TableRecord>> {
+        validate_idempotency_key_shape(idempotency_key)?;
+        validate_idempotency_request_hash_shape(idempotency_request_hash)?;
         let state = self.state.read().await;
         let idem_key = format!("{}:{idempotency_key}", ident.stable_id());
         let Some(replay) = state.idempotency.get(&idem_key) else {
@@ -4481,6 +4526,74 @@ mod memory_tests {
             authorization_receipt: None,
         };
 
+        let mut blank_idempotency_key = base_commit.clone();
+        blank_idempotency_key.idempotency_key = Some("  ".to_string());
+        let err = store
+            .commit_table(&ident, blank_idempotency_key)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("table commit idempotency key may only contain")
+        ));
+
+        let mut request_hash_without_key = base_commit.clone();
+        request_hash_without_key.idempotency_request_hash =
+            Some(content_hash_bytes("commit-request".as_bytes()));
+        let err = store
+            .commit_table(&ident, request_hash_without_key)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains(
+                    "table commit idempotency request hash requires an idempotency key"
+                )
+        ));
+
+        let mut malformed_request_hash = base_commit.clone();
+        malformed_request_hash.idempotency_key = Some("commit-1".to_string());
+        malformed_request_hash.idempotency_request_hash = Some("sha256:short".to_string());
+        let err = store
+            .commit_table(&ident, malformed_request_hash)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains(
+                    "table commit idempotency request hash must be full SHA-256 evidence"
+                )
+        ));
+
+        let err = store
+            .replay_table_commit(
+                &ident,
+                " ",
+                &content_hash_bytes("commit-request".as_bytes()),
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("table commit idempotency key may only contain")
+        ));
+
+        let err = store
+            .replay_table_commit(&ident, "commit-1", "sha256:short")
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains(
+                    "table commit idempotency request hash must be full SHA-256 evidence"
+                )
+        ));
+
         let mut empty_new_location = base_commit.clone();
         empty_new_location.new_metadata_location = Some("  ".to_string());
         let err = store
@@ -5276,6 +5389,8 @@ pub mod turso_store {
             idempotency_key: &str,
             idempotency_request_hash: &str,
         ) -> LakeCatResult<Option<TableRecord>> {
+            crate::validate_idempotency_key_shape(idempotency_key)?;
+            crate::validate_idempotency_request_hash_shape(idempotency_request_hash)?;
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
@@ -8036,6 +8151,74 @@ pub mod turso_store {
                 authorization_receipt: None,
             };
 
+            let mut blank_idempotency_key = base_commit.clone();
+            blank_idempotency_key.idempotency_key = Some("  ".to_string());
+            let err = store
+                .commit_table(&ident, blank_idempotency_key)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("table commit idempotency key may only contain")
+            ));
+
+            let mut request_hash_without_key = base_commit.clone();
+            request_hash_without_key.idempotency_request_hash =
+                Some(content_hash_bytes("commit-request".as_bytes()));
+            let err = store
+                .commit_table(&ident, request_hash_without_key)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains(
+                        "table commit idempotency request hash requires an idempotency key"
+                    )
+            ));
+
+            let mut malformed_request_hash = base_commit.clone();
+            malformed_request_hash.idempotency_key = Some("commit-1".to_string());
+            malformed_request_hash.idempotency_request_hash = Some("sha256:short".to_string());
+            let err = store
+                .commit_table(&ident, malformed_request_hash)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains(
+                        "table commit idempotency request hash must be full SHA-256 evidence"
+                    )
+            ));
+
+            let err = store
+                .replay_table_commit(
+                    &ident,
+                    " ",
+                    &content_hash_bytes("commit-request".as_bytes()),
+                )
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("table commit idempotency key may only contain")
+            ));
+
+            let err = store
+                .replay_table_commit(&ident, "commit-1", "sha256:short")
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains(
+                        "table commit idempotency request hash must be full SHA-256 evidence"
+                    )
+            ));
+
             let mut empty_expected_location = base_commit.clone();
             empty_expected_location.expected_previous_metadata_location = Some("  ".to_string());
             let err = store
@@ -8227,14 +8410,15 @@ pub mod turso_store {
             assert_eq!(commit_records[0].format_version, Some(3));
             assert_eq!(commit_records[0].snapshot_id, Some(0));
             assert_eq!(commit_records[0].policy_hash, None);
+            let different_request_hash = content_hash_bytes("different-request".as_bytes());
             let replay_mismatch = store
-                .replay_table_commit(&ident, "commit-1", "sha256:different-request")
+                .replay_table_commit(&ident, "commit-1", &different_request_hash)
                 .await
                 .unwrap_err();
             let message = replay_mismatch.to_string();
             assert!(message.contains("idempotency key reused with different commit request"));
             assert!(!message.contains("commit-1"));
-            assert!(!message.contains("sha256:different-request"));
+            assert!(!message.contains(different_request_hash.as_str()));
             assert_eq!(
                 commit_records[0].idempotency_key_sha256.as_deref(),
                 Some(content_hash_bytes("commit-1".as_bytes()).as_str())

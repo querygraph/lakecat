@@ -6,6 +6,22 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Harden store commit idempotency evidence`.
+  Memory and Turso stores now reject blank or malformed table-commit
+  idempotency keys, reject caller-supplied idempotency request hashes without a
+  key, require full SHA-256 request-hash evidence, and apply the same shape
+  checks to explicit replay probes before pointer movement, pointer-log
+  insertion, audit, or outbox emission.
+- Local verification for this commit-idempotency store slice is green:
+  `cargo fmt -p lakecat-store -p lakecat-service -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_deserialized_invalid_table_commits -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_deserialized_invalid_table_commits -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service commit_rejects_invalid_rest_idempotency_keys -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`.
+- Latest completed implementation/documentation slice:
   `Expand catalog concepts in the book`.
   The book now more explicitly separates standard Iceberg vocabulary from
   LakeCat implementation choices, LakeCat/QueryGraph/TypeSec extension

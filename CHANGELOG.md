@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened store-level commit idempotency evidence. Memory and Turso stores now
+  reject blank or malformed table-commit idempotency keys, reject caller-supplied
+  idempotency request hashes without a key, require those request hashes to be
+  full SHA-256 evidence, and apply the same shape checks to replay probes before
+  pointer movement, pointer-log insertion, audit, or outbox emission.
 - Expanded the book's catalog-concepts explanation with a clearer distinction
   between standard Iceberg parlance, LakeCat implementation, QueryGraph and
   TypeSec extension surfaces, possible Iceberg-adjacent proposal profiles, and

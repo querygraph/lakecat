@@ -698,6 +698,12 @@ LakeCat terms are idempotency, pointer log, audit, outbox, redaction, and
 replay validation. The future proposal candidate is not "LakeCat commit"; it is
 an optional catalog profile for retry semantics, pointer history, conflict
 proof, and catalog event identity.
+LakeCat also validates retry evidence at the store boundary. A blank or
+malformed idempotency key, a caller-supplied idempotency request hash without a
+key, or a request hash that is not full SHA-256 evidence fails before pointer
+movement, pointer-log insertion, audit, outbox emission, or replay. That keeps
+Turso and embedded memory behavior aligned with the REST contract and prevents
+non-REST callers from smuggling weak retry evidence into durable catalog state.
 
 Governed scan and credential paths carry TypeSec-style receipt evidence. The
 standard Iceberg table already contains the metadata an engine needs for scan
@@ -834,6 +840,10 @@ word is commit. The LakeCat words are idempotency, pointer log, audit, outbox,
 redaction, and replay validation. The future proposal candidates are optional
 behavior profiles for idempotent commit replay, pointer history, redacted
 conflict proof, and catalog event streams.
+The durable store enforces the retry shape as well as the REST edge: malformed
+idempotency keys, orphaned idempotency request hashes, and short request hashes
+are rejected before any commit mutation or replay probe can observe catalog
+state.
 
 Governed scan and credential paths carry substantial TypeSec-style receipt
 evidence. Standard Iceberg gives engines the metadata required to plan reads:
