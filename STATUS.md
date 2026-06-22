@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Bind compact identity/bootstrap actions`.
+  Compact QGLake handoff verification now requires
+  `requestIdentityProof.authorizationReceiptAction` to be `lineage-read` and
+  `queryGraphBootstrapProof.authorizationReceiptAction` to be `graph-read`,
+  so archived summaries cannot preserve valid receipt hashes while drifting
+  the catalog action behind request-identity or QueryGraph-bootstrap proof.
+- Local verification for this compact action slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Expand catalog concept ledger`.
   The book now explains the release claims as a reader-facing catalog concept

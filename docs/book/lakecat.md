@@ -4264,11 +4264,14 @@ verification state as `requestIdentityProof`. The authorization receipt hashes
 are intentionally distinct proof slots: `requestIdentityProof` records the
 lineage-drain read receipt, while `queryGraphBootstrapProof` records the
 original bootstrap event receipt. The verifier requires both hashes to be
-full `sha256:`-prefixed 64-hex digests and bound back to their captured replay
-sections rather than forcing them to be equal. The same full-digest rule applies
-to the required agent delegation and agent summary-signature hashes in the
-bootstrap proof, so a saved handoff cannot replace those proof anchors with
-short readable placeholders.
+full `sha256:`-prefixed 64-hex digests and requires their actions to keep the
+correct meaning: compact `requestIdentityProof` must be `lineage-read`, and
+compact `queryGraphBootstrapProof` must be `graph-read`. Those values are then
+bound back to their captured replay sections rather than forcing the receipt
+hashes to be equal. The same full-digest rule applies to the required agent
+delegation and agent summary-signature hashes in the bootstrap proof, so a
+saved handoff cannot replace those proof anchors with short readable
+placeholders.
 The compact verifier
 also validates the TypeDID hash-slot shape directly: envelope and proof slots
 must be null or full `sha256:`-prefixed 64-hex digests, and a TypeDID proof
@@ -4791,7 +4794,10 @@ event summary. The QGLake verifier requires the drain read to prove
 action, and rejects valid-but-wrong action drift, such as `table-commit`
 attached to `table.commits-listed`. Captured replay agreement checks the same
 field in saved handoff artifacts, so an archive cannot keep valid hash-shaped
-proof while silently changing what catalog action was authorized.
+proof while silently changing what catalog action was authorized. The compact
+handoff summary now makes the same requirement before captured-output
+comparison: request identity proves `lineage-read`, and QueryGraph bootstrap
+proves `graph-read`.
 The saved self-verifier sidecar repeats that binding for
 `lineageDrainArtifactSemantics`: its drain-read `authorizationReceiptAction`
 must still match the compact request-identity proof, so a rehashed

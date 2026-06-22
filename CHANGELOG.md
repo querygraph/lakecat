@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Required compact QGLake `requestIdentityProof` and
+  `queryGraphBootstrapProof` authorization receipt actions to be
+  `lineage-read` and `graph-read` respectively, so archived handoff summaries
+  cannot preserve valid receipt hashes while drifting the catalog action that
+  was authorized.
 - Expanded the LakeCat book's release-claim ledger with workflow-specific
   guidance for PySpark users, operators, governed agents, QueryGraph importers,
   standards readers, and Iceberg v4 compatibility, clarifying that LakeCat's

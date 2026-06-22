@@ -2802,6 +2802,12 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "authorizationReceiptHash",
         "requestIdentityProof",
     )?;
+    require_string_eq(
+        request_identity,
+        "authorizationReceiptAction",
+        "lineage-read",
+        "requestIdentityProof",
+    )?;
     require_typedid_hash_pair(request_identity, "requestIdentityProof")?;
 
     let bootstrap = required_object(
@@ -2880,6 +2886,12 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     require_full_hash_str(
         bootstrap,
         "authorizationReceiptHash",
+        "queryGraphBootstrapProof",
+    )?;
+    require_string_eq(
+        bootstrap,
+        "authorizationReceiptAction",
+        "graph-read",
         "queryGraphBootstrapProof",
     )?;
     require_full_hash_str(bootstrap, "agentDelegationHash", "queryGraphBootstrapProof")?;
@@ -12233,6 +12245,21 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_requires_request_identity_authorization_action() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["requestIdentityProof"]["authorizationReceiptAction"] =
+            json!("graph-read");
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject non-lineage request identity authorization action",
+        );
+
+        assert!(err.to_string().contains("requestIdentityProof"));
+        assert!(err.to_string().contains("authorizationReceiptAction"));
+        assert!(err.to_string().contains("lineage-read"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_bootstrap_typedid_hash_shape() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["typedidEnvelopeHash"] =
@@ -12258,6 +12285,20 @@ mod tests {
         assert!(err.to_string().contains("queryGraphBootstrapProof"));
         assert!(err.to_string().contains("typedidProofHash"));
         assert!(err.to_string().contains("typedidEnvelopeHash"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_bootstrap_authorization_action() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["authorizationReceiptAction"] =
+            json!("lineage-read");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject non-graph bootstrap authorization action");
+
+        assert!(err.to_string().contains("queryGraphBootstrapProof"));
+        assert!(err.to_string().contains("authorizationReceiptAction"));
+        assert!(err.to_string().contains("graph-read"));
     }
 
     #[test]
