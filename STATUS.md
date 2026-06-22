@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Expand catalog concept guide in the book`.
+  The book now adds a front-of-book guide that distinguishes standard Iceberg
+  parlance from LakeCat implementation choices, LakeCat/TypeSec/QueryGraph
+  extensions, and future optional Iceberg-adjacent profile candidates. It
+  covers the Rust service spine, Turso local store, REST namespace/table paths,
+  commit CAS hardening, governed scan and credential receipt evidence,
+  OpenLineage, QueryGraph/QGLake handoff, and the Sail-owned path for typed
+  Iceberg v4 and other engine-shaped work.
+- Local verification for this catalog concept guide slice is green:
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed implementation/documentation slice:
   `Validate store view receipt-chain links`.
   Memory and Turso store view-receipt reads now validate ordered

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a front-of-book catalog concept guide that
+  explicitly classifies the Rust service spine, Turso store, Iceberg REST
+  namespace/table paths, commit CAS hardening, TypeSec-governed scans and
+  credentials, OpenLineage, QueryGraph/QGLake handoff, and Iceberg v4 typed
+  interpretation as standard Iceberg behavior, LakeCat implementation,
+  LakeCat/TypeSec/QueryGraph extensions, or future optional
+  Iceberg-adjacent profile candidates. The new text makes a detailed case for
+  pushing field-id projection, manifest metrics, delete handling,
+  metadata-as-data, scan-task generation, row lineage, and typed v4 work into
+  Sail instead of a LakeCat-local shadow engine.
 - Added memory and Turso store read validation for view receipt chains, so
   forged `previous-receipt-hash` links are rejected before service replay,
   graph/OpenLineage projection, or QueryGraph/QGLake handoff can consume
