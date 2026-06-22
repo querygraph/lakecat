@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added Turso commit-history scope-drift coverage. Corrupted
+  `metadata_pointer_log.record_json` rows that name a different table are now
+  pinned by a direct regression proving `table_commit_records` rejects the
+  decoded record before management reads, graph projection, OpenLineage
+  projection, QGLake proof, or QueryGraph import can inherit cross-table
+  pointer-log evidence.
 - Expanded the LakeCat book's catalog concept guidance with a stricter
   standard/extension/proposal classification and a deeper Sail engine-boundary
   argument. The new material explains why Rust service and Turso store choices

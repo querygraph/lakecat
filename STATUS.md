@@ -5,6 +5,20 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Cover Turso commit-history table scope drift`.
+  Turso commit-history reads now have direct regression coverage proving a
+  corrupted `metadata_pointer_log.record_json` commit record whose embedded
+  table identity names another table is rejected by `table_commit_records`
+  before management reads, graph projection, OpenLineage projection, QGLake
+  proof, or QueryGraph import can inherit cross-table pointer-log evidence.
+- Local verification for this implementation/testing slice is green:
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_commit_history_record_table_scope_drift -- --test-threads=1`
+  passed;
+  `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand catalog concepts and Sail boundary guidance`.
   The book now gives a stricter standard/extension/proposal classification for

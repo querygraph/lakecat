@@ -9097,6 +9097,78 @@ pub mod turso_store {
         }
 
         #[tokio::test]
+        async fn turso_store_rejects_commit_history_record_table_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("events").unwrap(),
+            );
+            store
+                .create_namespace(&warehouse, namespace.clone())
+                .await
+                .unwrap();
+            store
+                .create_table(TableRecord::new(
+                    ident.clone(),
+                    "file:///tmp/events".to_string(),
+                    Some("file:///tmp/events/metadata/00000.json".to_string()),
+                    serde_json::json!({"format-version": 3}),
+                    Principal::anonymous(),
+                ))
+                .await
+                .unwrap();
+            store
+                .commit_table(
+                    &ident,
+                    TableCommit {
+                        requirements: vec![],
+                        updates: vec![serde_json::json!({"action": "noop"})],
+                        expected_previous_metadata_location: Some(
+                            "file:///tmp/events/metadata/00000.json".to_string(),
+                        ),
+                        new_metadata_location: Some(
+                            "file:///tmp/events/metadata/00001.json".to_string(),
+                        ),
+                        new_metadata: Some(serde_json::json!({"format-version": 3})),
+                        idempotency_key: None,
+                        idempotency_request_hash: None,
+                        principal: Principal::anonymous(),
+                        authorization_receipt: None,
+                    },
+                )
+                .await
+                .unwrap();
+            let mut records = store.table_commit_records(&ident, 1, None).await.unwrap();
+            assert_eq!(records.len(), 1);
+            records[0].table = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("other_events").unwrap(),
+            );
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update metadata_pointer_log set record_json = ?2 where table_key = ?1",
+                (table_key(&ident), encode_json(&records[0]).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .table_commit_records(&ident, 0, None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("table commit record table does not match requested table")
+            ));
+        }
+
+        #[tokio::test]
         async fn turso_store_rejects_table_record_json_scope_drift() {
             let store = TursoCatalogStore::in_memory().await.unwrap();
             let warehouse = WarehouseName::new("local").unwrap();
