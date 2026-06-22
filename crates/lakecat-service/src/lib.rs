@@ -27093,6 +27093,104 @@ mod tests {
     }
 
     #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_rejects_blank_environment_secret_config_keys() {
+        use crate::typesec_credential_issuer::{
+            EnvironmentSecretRefCredentialResolver, TypeSecCredentialIssuer,
+        };
+
+        let secret_ref = "typesec://env/LAKECAT_S3_EVENTS_CREDENTIALS";
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:agent".to_string(),
+                resource: secret_ref.to_string(),
+            }),
+            EnvironmentSecretRefCredentialResolver::with_reader(|_| {
+                Ok(serde_json::json!({
+                    " ": "temporary-token"
+                })
+                .to_string())
+            }),
+        );
+
+        let err = issuer
+            .issue(production_secret_credential_request(secret_ref))
+            .await
+            .unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("failed to parse environment credential secret"));
+        assert!(message.contains("secret-ref-hash=sha256:"));
+        assert!(message.contains("error-detail-hash=sha256:"));
+        for forbidden in [
+            secret_ref,
+            "LAKECAT_S3_EVENTS_CREDENTIALS",
+            "temporary-token",
+            "credential config keys",
+        ] {
+            assert!(
+                !message.contains(forbidden),
+                "environment secret parse failures must not expose {forbidden}"
+            );
+        }
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_rejects_blank_vault_secret_config_keys() {
+        use crate::typesec_credential_issuer::{
+            ExternalSecretRefCredentialResolver, TypeSecCredentialIssuer,
+            VaultSecretRefCredentialResolver,
+        };
+
+        let secret_ref = "vault://secret/data/lakecat/s3-events";
+        let vault_client = Arc::new(MockVaultSecretClient::default());
+        *vault_client.response.lock().await = Some(serde_json::json!({
+            "data": {
+                "data": {
+                    " ": "temporary-vault-token"
+                }
+            }
+        }));
+        let vault = VaultSecretRefCredentialResolver::new(
+            "https://vault.example.test/",
+            "vault-token",
+            Some("lakecat/admin".to_string()),
+            vault_client.clone(),
+        )
+        .unwrap();
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:agent".to_string(),
+                resource: secret_ref.to_string(),
+            }),
+            ExternalSecretRefCredentialResolver::with_vault(vault),
+        );
+
+        let err = issuer
+            .issue(production_secret_credential_request(secret_ref))
+            .await
+            .unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("failed to parse Vault credential secret"));
+        assert!(message.contains("secret-ref-hash=sha256:"));
+        assert!(message.contains("error-detail-hash=sha256:"));
+        for forbidden in [
+            secret_ref,
+            "vault-token",
+            "lakecat/admin",
+            "temporary-vault-token",
+            "credential config keys",
+        ] {
+            assert!(
+                !message.contains(forbidden),
+                "Vault secret parse failures must not expose {forbidden}"
+            );
+        }
+        let requests = vault_client.requests.lock().await;
+        assert_eq!(requests.len(), 1);
+    }
+
+    #[cfg(feature = "typesec-local")]
     #[test]
     fn environment_secret_resolver_parses_supported_secret_shapes() {
         use crate::typesec_credential_issuer::{

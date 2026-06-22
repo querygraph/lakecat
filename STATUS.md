@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover malformed secret credential config`.
+  TypeSec-local credential issuer regression coverage now proves environment
+  and Vault secret payloads with blank credential config keys fail after
+  TypeSec authorization and backend fetch, emit only secret-ref/error-detail
+  hash diagnostics, and return no secret-backed credential material.
+- Local verification for this credential config slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features typesec-local --lib typesec_credential_issuer_rejects_blank_environment_secret_config_keys -- --test-threads=1`;
+  `cargo test -p lakecat-service --features typesec-local --lib typesec_credential_issuer_rejects_blank_vault_secret_config_keys -- --test-threads=1`;
+  `cargo test -p lakecat-service --features typesec-local --lib typesec_credential_issuer -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover malformed table commit principals`.
   Service replay regression coverage now proves `table.commit` rejects
   malformed commit-principal and authorization-receipt-principal evidence
