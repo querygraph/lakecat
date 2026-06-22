@@ -532,11 +532,17 @@ fn qglake_handoff_lineage_drain_summary_fields(path: &Path) -> lakecat_core::Lak
             path.display()
         ))
     })?;
+    let catalog_config = qglake_catalog_config_replay_evidence_json(&drain).ok_or_else(|| {
+        lakecat_core::LakeCatError::InvalidArgument(
+            "handoff lineage drain artifact is missing catalog.config-read proof".to_string(),
+        )
+    })?;
     Ok(json!({
         "delivered": drain.delivered,
         "eventTypes": drain.event_types,
         "graphEvents": drain.graph_events,
         "lineageEvents": drain.lineage_events,
+        "catalogConfigProof": catalog_config,
     }))
 }
 
@@ -814,7 +820,13 @@ fn require_qglake_handoff_verify_output_lineage_drain_semantics_match_artifact(
     semantics: &serde_json::Map<String, Value>,
     expected: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
-    for field in ["delivered", "eventTypes", "graphEvents", "lineageEvents"] {
+    for field in [
+        "delivered",
+        "eventTypes",
+        "graphEvents",
+        "lineageEvents",
+        "catalogConfigProof",
+    ] {
         require_value_match(
             semantics,
             field,
@@ -1663,6 +1675,11 @@ fn verify_qglake_handoff_lineage_drain_artifact_semantics(
         "openLineageHash": verification.open_lineage_hash,
         "queryGraphImportHash": verification.querygraph_import_hash,
         "standards": verification.standards,
+        "catalogConfigProof": required_value(
+            required_object(replay, "replay-evidence", "lineage drain replay verification")?,
+            "catalogConfig",
+            "lineage drain replay verification.replay-evidence"
+        )?,
     }))
 }
 
@@ -11962,6 +11979,9 @@ mod tests {
     }
 
     fn qglake_bind_handoff_verify_output_artifact(dir: &Path, summary: &mut Value) -> Value {
+        let lineage_drain_semantics =
+            qglake_handoff_lineage_drain_summary_fields(&dir.join("lineage-drain.json"))
+                .expect("lineage drain summary fields");
         let output = json!({
             "schemaVersion": "lakecat.qglake.handoff-verification.v1",
             "status": "verified",
@@ -12082,6 +12102,7 @@ mod tests {
                 ],
                 "graphEvents": 17,
                 "lineageEvents": 15,
+                "catalogConfigProof": lineage_drain_semantics["catalogConfigProof"].clone(),
                 "principalSubject": summary["lakecatReplayVerification"]["requestIdentityProof"]["principalSubject"].clone(),
                 "principalKind": summary["lakecatReplayVerification"]["requestIdentityProof"]["principalKind"].clone(),
                 "authorizationReceiptHash": summary["lakecatReplayVerification"]["requestIdentityProof"]["authorizationReceiptHash"].clone(),
@@ -15958,6 +15979,33 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_lineage_config_drift() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-lineage-config-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["lineageDrainArtifactSemantics"]["catalogConfigProof"]["authorizationReceiptAction"] =
+            json!("graph-read");
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject handoff verifier config proof drift");
+        let err = err.to_string();
+
+        assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+        assert!(err.contains("lineageDrainArtifactSemantics"), "{err}");
+        assert!(err.contains("catalogConfigProof mismatch"), "{err}");
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_event_type_drift() {
         let temp = qglake_temp_dir("handoff-artifacts-self-verify-event-type-drift");
         let summary_path = temp.join("handoff-summary.json");
@@ -16463,6 +16511,10 @@ mod tests {
         assert_eq!(semantics["requestIdentityState"], json!("unverified"));
         assert_eq!(semantics["typedidEnvelopeHash"], Value::Null);
         assert_eq!(semantics["typedidProofHash"], Value::Null);
+        assert_eq!(
+            semantics["catalogConfigProof"]["authorizationReceiptAction"],
+            json!("catalog-config")
+        );
     }
 
     #[test]

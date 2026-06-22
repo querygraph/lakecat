@@ -659,6 +659,10 @@ overrides, endpoints, `catalog-config` authorization action, graph count,
 replay hashes, and OpenLineage hashes as raw `catalog.config-read` replay, so
 archived QGLake summaries and captured replay sidecars cannot drop the v4 bridge
 posture or integration discovery contract after source replay accepted it.
+Saved `lakecatHandoffVerifyOutput` sidecars must bind their own
+`lineageDrainArtifactSemantics.catalogConfigProof` to the raw lineage-drain
+artifact too, so a self-verification artifact cannot claim verified drain
+semantics while omitting or rewriting the config-read compatibility proof.
 Raw lineage-drain replay summaries and compact handoff summaries must both keep
 replay, OpenLineage, commit-history commit, view receipt, and view
 receipt-chain hash arrays duplicate-free as well as full SHA-256-shaped, so
@@ -924,6 +928,10 @@ Compact QGLake handoff proof must carry that config-read contract forward as
 `catalogConfigProof`, and captured LakeCat replay sidecars must match it
 exactly, so saved handoffs cannot accept weaker v4, endpoint, or
 integration-discovery evidence than the raw lineage drain proved.
+Saved handoff verifier output must also repeat that same proof under
+`lineageDrainArtifactSemantics.catalogConfigProof`, binding the verifier's
+claim about the raw drain artifact to the config-read evidence it actually
+validated.
 The local dependency contract is the guardrail while cloud CI is manual-only:
 it must reject automatic triggers across every GitHub workflow file, not just
 the primary CI workflow, including compact, block-list, inline-map, and quoted

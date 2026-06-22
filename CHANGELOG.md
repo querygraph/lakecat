@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bound raw lineage-drain catalog config proof into saved QGLake
+  self-verification output. `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics`
+  now carries `catalogConfigProof` from the raw drain artifact, and artifact
+  verification rejects saved handoff verifier output whose config proof drifts
+  from the raw lineage drain.
 - Bound catalog config-read proof into compact QGLake handoff verification.
   `lakecatReplayVerification.catalogConfigProof` now carries advertised config
   defaults, overrides, endpoints, principal/action receipt proof, graph counts,

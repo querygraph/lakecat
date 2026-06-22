@@ -6,6 +6,30 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Bind self-verifier lineage config proof`.
+  Saved QGLake handoff verifier output now carries the raw lineage-drain
+  `catalog.config-read` proof under
+  `lineageDrainArtifactSemantics.catalogConfigProof`. Artifact verification
+  compares that proof to the raw `lineage-drain.json` artifact, so a saved
+  `lakecat-handoff-verify.json` file cannot claim verified drain semantics
+  while omitting or rewriting the config defaults, overrides, endpoints,
+  `catalog-config` authorization action, graph count, replay hashes, or
+  OpenLineage hashes that the raw drain actually carried.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_lineage_config_drift -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_accepts_handoff_verify_output_hash -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_lineage_drain_artifact_semantics_accept_matching_drain -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Bind compact QGLake catalog-config proof`.
   Compact QGLake handoff summaries now carry
   `lakecatReplayVerification.catalogConfigProof` beside the raw
