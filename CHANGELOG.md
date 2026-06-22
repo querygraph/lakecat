@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a first-release catalog concept map. The new
+  front-loaded chapter directly classifies the Rust service/catalog spine,
+  Turso local store, Iceberg REST namespace/table paths, commit CAS,
+  idempotency, pointer logs, audit/outbox, replay validation, governed scan and
+  credential receipts, QueryGraph/QGLake/OpenLineage/bootstrap/management/view/
+  commit proof, and typed Iceberg v4 posture as standard Iceberg vocabulary,
+  LakeCat implementation, TypeSec/QueryGraph extension, or future optional
+  profile material. It also strengthens the argument for pushing table-format
+  work into Sail so proof is tied to engine interpretation instead of
+  catalog-local JSON shortcuts.
 - Added table lifecycle replay coverage for denied or incomplete
   authorization receipt decisions. `table.created`, `table.loaded`,
   `table.deleted`, and `table.restored` now have direct regressions proving a
