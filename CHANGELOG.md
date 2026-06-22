@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added QGLake verifier coverage proving policy-binding upsert proof cannot
+  shed principal subject/kind evidence in raw lineage-drain replay or compact
+  handoff summaries.
 - Required `credentials.vend-attempted` replay with governed
   `read-restriction` evidence to carry nonblank purpose and positive
   `max-credential-ttl-seconds` proof before acknowledgement, graph projection,

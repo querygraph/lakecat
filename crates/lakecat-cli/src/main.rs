@@ -12532,6 +12532,24 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_requires_policy_upsert_principal_proof() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["managementProof"]["policyUpsertProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("principalSubject");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing policy upsert principal proof");
+
+        assert!(
+            err.to_string()
+                .contains("managementProof.policyUpsertProof")
+        );
+        assert!(err.to_string().contains("principalSubject"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_management_receipt_hashes() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["managementProof"]["storageProfileReplayEventHashes"] =
@@ -24348,6 +24366,24 @@ mod tests {
 
         assert!(err.to_string().contains("policy binding upsert replay"));
         assert!(err.to_string().contains("authorization receipt hash"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_policy_upsert_missing_principal_proof() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let policy_upsert = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "policy-binding.upserted")
+            .expect("policy upsert replay fixture");
+        policy_upsert.principal_kind = None;
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject actorless policy upsert proof");
+
+        assert!(err.to_string().contains("policy binding upsert replay"));
+        assert!(err.to_string().contains("principal evidence"));
     }
 
     #[test]

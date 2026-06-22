@@ -5,6 +5,22 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest QGLake handoff slice:
+  `Cover policy upsert principal proof`.
+  The QGLake verifier now has focused coverage proving
+  `policy-binding.upserted` replay cannot shed principal subject/kind evidence
+  in either raw lineage-drain replay or compact
+  `managementProof.policyUpsertProof` summaries. This keeps the policy-list
+  plus policy-upsert acceptance proof
+  actor-bound before QueryGraph can import the ODRL content anchor.
+- Local verification for this QGLake handoff slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_requires_policy_upsert_principal_proof -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_policy_upsert_missing_principal_proof -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/book slice:
   `Require credential restriction purpose and TTL`.
   Service replay admission now rejects `credentials.vend-attempted` events
