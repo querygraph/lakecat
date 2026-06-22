@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover absent storage-profile secret ref hash object`.
+  Service replay regression coverage now proves `storage-profile.upserted`
+  rejects object-shaped `secret-ref-hash` evidence when
+  `secret-ref-present` is false before acknowledgement, graph projection, or
+  OpenLineage projection. This pins the hash-field sibling of the absent
+  secret-reference replay rule for storage-profile roots.
+- Local verification for this storage-profile absent secret-ref hash slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_storage_profile_absent_secret_ref_hash_object -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib storage_profile -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Expand catalog concepts in the book`.
   The LakeCat book now includes a release-ledger treatment of the current
   catalog concepts: Rust service spine, Turso-backed store direction, standard
