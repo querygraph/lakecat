@@ -6,6 +6,29 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close service commit history schemas`.
+  Service outbox admission now rejects unexpected top-level payload fields for
+  `table.commits-listed` before acknowledgement, graph projection, OpenLineage
+  projection, or QGLake proof can inherit unverified commit, pointer, lineage,
+  graph, QueryGraph, or application claims beside checked table scope, count,
+  sequence, commit hash, principal, and authorization evidence. The book now
+  gives concrete PySpark, Sail-planned, governed-agent, and QueryGraph/QGLake
+  examples that separate standard Iceberg parlance from LakeCat
+  implementation, TypeSec governance, QueryGraph integration, future optional
+  profile candidates, and the argument for pushing table-format work into Sail.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_table_commit_history_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service commit_history -- --test-threads=1` passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close service scan replay schemas`.
   Service outbox admission now rejects unexpected top-level payload fields for
   `table.scan-planned` and `table.scan-tasks-fetched` before acknowledgement,

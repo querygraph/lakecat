@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed service outbox admission over top-level table commit-history replay
+  payloads. `table.commits-listed` now rejects unexpected top-level payload
+  fields before acknowledgement, graph projection, OpenLineage projection, or
+  QGLake proof can inherit unverified commit, pointer, lineage, graph,
+  QueryGraph, or application claims beside checked table scope, count,
+  sequence, commit hash, principal, and authorization evidence.
 - Closed service outbox admission over top-level governed scan replay payloads.
   `table.scan-planned` and `table.scan-tasks-fetched` now reject unexpected
   top-level payload fields before acknowledgement, graph projection,
@@ -60,7 +66,8 @@
   extension, governance/application integration, or narrow future
   Iceberg-adjacent profile candidates. It also gives a concrete argument for
   pushing table-format, scan-planning, metadata-as-data, commit-validation, and
-  v4 semantics into Sail.
+  v4 semantics into Sail, with concrete PySpark, Sail-planned, governed-agent,
+  and QueryGraph/QGLake handoff examples.
 - Closed service outbox admission over table lifecycle identity and soft-delete
   schemas. Table lifecycle replay now rejects unexpected fields inside full
   table identity objects and soft-delete evidence before acknowledgement, graph

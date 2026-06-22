@@ -1660,6 +1660,18 @@ const VIEW_RECEIPT_CHAIN_LIST_EVIDENCE_FIELDS: &[&str] = &[
     "drop-receipt-hashes",
 ];
 const TABLE_IDENTITY_EVIDENCE_FIELDS: &[&str] = &["warehouse", "namespace", "name"];
+const TABLE_COMMIT_HISTORY_EVIDENCE_FIELDS: &[&str] = &[
+    "event-type",
+    "authorization-receipt",
+    "warehouse",
+    "namespace",
+    "table",
+    "commit-count",
+    "commit-hashes",
+    "sequence-numbers",
+    "principal-subject",
+    "principal-kind",
+];
 const TABLE_COMMIT_EVIDENCE_FIELDS: &[&str] = &[
     "table",
     "previous_metadata_location",
@@ -2352,6 +2364,12 @@ fn validate_table_commit_history_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_object_evidence_schema(
+        event,
+        payload,
+        "table commit-history",
+        TABLE_COMMIT_HISTORY_EVIDENCE_FIELDS,
+    )?;
     let table = validate_required_outbox_table_identity(event, "table commit-history")?;
     validate_table_lifecycle_payload_scope(event, payload, &table, "table commit-history")?;
     validate_required_payload_table_hint(event, payload, &table, "table commit-history")?;
@@ -19896,6 +19914,84 @@ mod tests {
         );
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-duplicate-commit-history-hash"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_table_commit_history_fields() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:writer".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let mut payload = json!({
+            "event-type": "table.commits-listed",
+            "authorization-receipt": {
+                "principal": principal,
+                "action": "table-load",
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            },
+            "warehouse": "local",
+            "namespace": ["default"],
+            "table": "events",
+            "commit-count": 1,
+            "commit-hashes": [
+                content_hash_json(&json!({"commit": 1})).unwrap()
+            ],
+            "sequence-numbers": [1],
+            "principal-subject": "agent:writer",
+            "principal-kind": "agent",
+        });
+        payload["unverified-commit-history-claim"] = json!("shadow");
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-extra-commit-history-field".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commits-listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-extra-commit-history-field",
+                    "event-type": "table.commits-listed",
+                    "table": table,
+                    "payload": payload,
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra commit-history fields should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commits-listed"));
+        assert!(
+            message.contains(
+                "table commit-history contains unexpected field unverified-commit-history-claim"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-extra-commit-history-field"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

@@ -825,6 +825,11 @@ continue to cover missing and drifted commit-history principal subject,
 principal kind, and action proof before compact handoff proof generation, and
 service replay admission must reject a valid mutation action such as
 `table-commit` on a commit-history read before graph or OpenLineage projection.
+Service replay must also close the top-level `table.commits-listed` payload
+schema over the fields current producers emit, so archived commit-history reads
+cannot append unverified commit, pointer, lineage, graph, QueryGraph, or
+application claims beside otherwise valid table scope, count, sequence, commit
+hash, principal, and authorization evidence.
 Pending outbox replay should stay deterministic across embedded and Turso
 stores, ordered by `created_at,event_id`, with batch limits applied after that
 order and with duplicate-safe delivery accounting. Draining should acknowledge
