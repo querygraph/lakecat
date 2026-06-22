@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest QGLake handoff slice:
+  `Reject blank handoff principal anchors`.
+  Compact QGLake handoff verification now requires the top-level accepted
+  `principal` to be non-blank before request identity, QueryGraph bootstrap,
+  governed scan, commit-history, or credential proof can mirror it. The
+  regression rejects whitespace-only principal anchors even when every
+  dependent compact proof field agrees with the same whitespace value.
+- Local verification for this QGLake handoff slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli blank_principal_anchor -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand current catalog concept ledger`.
   The book now includes a detailed matrix that delineates standard Iceberg

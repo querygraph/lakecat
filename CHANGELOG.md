@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Tightened compact QGLake handoff verification so the top-level accepted
+  `principal` must be non-blank before request identity, QueryGraph bootstrap,
+  governed scan, commit-history, or credential proof can mirror it. The
+  regression rejects whitespace-only handoff principal anchors even when every
+  dependent compact proof field agrees with the same whitespace value.
 - Expanded the LakeCat book's current-surface explanation with a detailed
   concept ledger. The new matrix classifies the Rust service spine,
   Turso-backed store, Iceberg REST namespace/table paths, commit CAS,

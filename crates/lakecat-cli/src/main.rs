@@ -1598,7 +1598,7 @@ fn verify_qglake_handoff_lineage_drain_artifact_semantics(
             "handoff summary root must be an object".to_string(),
         )
     })?;
-    let principal = required_str(summary, "principal", "handoff summary")?;
+    let principal = require_non_blank_str(summary, "principal", "handoff summary")?;
     let warehouse = required_str(summary, "warehouse", "handoff summary")?;
     let querygraph = required_object(summary, "querygraphVerification", "handoff summary")?;
     let lakecat = required_object(summary, "lakecatReplayVerification", "handoff summary")?;
@@ -2727,7 +2727,7 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "handoff summary",
     )?;
     require_string_eq(summary, "status", "verified", "handoff summary")?;
-    let principal = required_str(summary, "principal", "handoff summary")?;
+    let principal = require_non_blank_str(summary, "principal", "handoff summary")?;
     let scope = require_handoff_scope(summary)?;
     let querygraph = required_object(summary, "querygraphVerification", "handoff summary")?;
     let import = required_object(summary, "querygraphImportVerification", "handoff summary")?;
@@ -12065,6 +12065,30 @@ mod tests {
             verification["queryGraphBootstrapProof"]["bundleHash"],
             json!(qglake_fixture_hash("bundle"))
         );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_blank_principal_anchor() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["principal"] = json!("   ");
+        summary["lakecatReplayVerification"]["requestIdentityProof"]["principalSubject"] =
+            json!("   ");
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["principalSubject"] =
+            json!("   ");
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedPrincipalSubject"] =
+            json!("   ");
+        summary["lakecatReplayVerification"]["governedScanProof"]["fetchedPrincipalSubject"] =
+            json!("   ");
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["principalSubject"] =
+            json!("   ");
+        summary["lakecatReplayVerification"]["credentialVendingProof"]["restricted"]["principalSubject"] =
+            json!("   ");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject a blank principal anchor");
+
+        assert!(err.to_string().contains("handoff summary.principal"));
+        assert!(err.to_string().contains("blank"));
     }
 
     #[test]
