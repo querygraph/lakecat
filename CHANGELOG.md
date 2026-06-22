@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened generic audit recording so memory and Turso stores reject audit
+  events whose row event type no longer matches the decoded payload before
+  writing audit rows or enqueueing outbox projection work. The regressions
+  mutate a constructor-valid `CatalogAuditEvent` after creation and prove both
+  stores keep audit/outbox state empty on drift.
 - Expanded the LakeCat book with a concrete catalog-concepts-in-practice
   chapter. The new material walks PySpark, standard commit, Turso store,
   governed agent scan, credential, QueryGraph/QGLake handoff, and Sail-planned

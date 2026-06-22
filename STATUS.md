@@ -5,6 +5,20 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation slice:
+  `Reject audit event type drift before outbox`.
+  Memory and Turso generic audit recording now validate a recordable audit
+  event before writing audit rows or enqueueing outbox work. A
+  constructor-valid `CatalogAuditEvent` whose event type is mutated away from
+  the decoded payload is rejected with audit/outbox state still empty.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local audit_event_type_drift_before_outbox -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand catalog concepts in practice`.
   The book now has a concrete catalog-concepts-in-practice chapter that walks

@@ -1588,6 +1588,35 @@ impl CatalogAuditEvent {
             created_at: Utc::now(),
         })
     }
+
+    pub fn validate_recordable(&self) -> LakeCatResult<()> {
+        if self.event_type.trim().is_empty() {
+            return Err(LakeCatError::InvalidArgument(
+                "audit event type must not be empty".to_string(),
+            ));
+        }
+        let payload_event_type = self
+            .payload
+            .get("event-type")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                LakeCatError::InvalidArgument("audit event payload missing event-type".to_string())
+            })?;
+        if payload_event_type != self.event_type {
+            return Err(LakeCatError::InvalidArgument(
+                "audit event type does not match payload".to_string(),
+            ));
+        }
+        if let Some(request_hash) = self.request_hash.as_deref() {
+            let payload_hash = content_hash_json(&self.payload)?;
+            if request_hash != payload_hash {
+                return Err(LakeCatError::InvalidArgument(
+                    "audit event request hash does not match payload".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Default)]
@@ -2384,6 +2413,7 @@ impl CatalogStore for MemoryCatalogStore {
     }
 
     async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {
+        event.validate_recordable()?;
         let event_id = audit_event_id(&event)?;
         let outbox_payload = audit_outbox_payload(&event_id, &event);
         let outbox_event = outbox_event_from_payload(&outbox_payload, event.created_at)?;
@@ -4281,6 +4311,38 @@ mod memory_tests {
             LakeCatError::Internal(message)
                 if message.contains("pending outbox event id does not match payload hash")
         ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_audit_event_type_drift_before_outbox() {
+        let store = MemoryCatalogStore::new();
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let mut event = CatalogAuditEvent::new(
+            "querygraph.bootstrap",
+            Some(ident.clone()),
+            Principal::anonymous(),
+            serde_json::json!({
+                "event-type": "querygraph.bootstrap",
+                "table": ident,
+                "manifest-hash": "lakecat:test"
+            }),
+        )
+        .unwrap();
+        event.event_type = "querygraph.bootstrap.drifted".to_string();
+
+        let err = store.record_audit_event(event).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("audit event type does not match payload")
+        ));
+        let state = store.state.read().await;
+        assert!(state.audit_events.is_empty());
+        assert!(state.outbox_events.is_empty());
     }
 
     #[tokio::test]
@@ -6285,6 +6347,7 @@ pub mod turso_store {
         }
 
         async fn record_audit_event(&self, event: CatalogAuditEvent) -> LakeCatResult<()> {
+            event.validate_recordable()?;
             let conn = self.connect()?;
             let event_id = content_hash_json(&serde_json::json!({
                 "event-type": &event.event_type,
@@ -8977,6 +9040,37 @@ pub mod turso_store {
                     .unwrap(),
                 1
             );
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_audit_event_type_drift_before_outbox() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let mut event = CatalogAuditEvent::new(
+                "querygraph.bootstrap",
+                Some(ident.clone()),
+                Principal::anonymous(),
+                serde_json::json!({
+                    "event-type": "querygraph.bootstrap",
+                    "table": ident,
+                    "manifest-hash": "lakecat:test"
+                }),
+            )
+            .unwrap();
+            event.event_type = "querygraph.bootstrap.drifted".to_string();
+
+            let err = store.record_audit_event(event).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("audit event type does not match payload")
+            ));
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
+            assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);
         }
 
         #[tokio::test]
