@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Recorded the current full local release-readiness proof after refreshing
+  QueryGraph's locked LakeCat handoff dependencies. The broad
+  `scripts/check-release-readiness.sh` gate now passes locally end to end,
+  including the live QGLake handoff, QueryGraph `lakecat-verify` and
+  `lakecat-import` under `--locked`, rebuilt book artifacts, and final
+  whitespace checks.
 - Expanded the LakeCat book's standard-versus-extension guidance with a
   sharper proposal posture and workflow matrix. The book now more explicitly
   distinguishes standard Iceberg compatibility, LakeCat Rust/Turso reliability

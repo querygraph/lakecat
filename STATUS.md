@@ -21,6 +21,26 @@ Updated: 2026-06-22
   passed;
   `scripts/check-release-readiness.sh --quick` passed;
   `git diff --check` passed.
+- Latest release-readiness slice:
+  `Record locked QueryGraph release gate proof`.
+  The broad local `scripts/check-release-readiness.sh` gate is green again
+  after refreshing QueryGraph's locked LakeCat handoff dependency state in
+  `/Users/alexy/src/querygraph/qg-rust` commit
+  `d5c7657 Refresh LakeCat handoff dependency lock`. The first full gate run
+  caught the stale `Cargo.lock` because QueryGraph's `lakecat-verify` command
+  is intentionally invoked with `--locked`; after regenerating and committing
+  the lockfile against the current local Grust crates, the same LakeCat gate
+  passed end to end.
+- Local verification for this release-readiness slice is green:
+  `cargo run --locked --manifest-path /Users/alexy/src/querygraph/qg-rust/Cargo.toml -- lakecat-verify --bundle /Users/alexy/src/lakecat/target/qglake-handoff/lakecat-bootstrap.json`
+  passed;
+  `cargo run --locked --manifest-path /Users/alexy/src/querygraph/qg-rust/Cargo.toml -- lakecat-import --bundle /Users/alexy/src/lakecat/target/qglake-handoff/lakecat-bootstrap.json --output /Users/alexy/src/lakecat/target/qglake-handoff/querygraph-import-plan.json`
+  passed;
+  `cargo test --locked --manifest-path /Users/alexy/src/querygraph/qg-rust/Cargo.toml`
+  passed;
+  `scripts/check-release-readiness.sh` passed, including the live QGLake
+  handoff, QueryGraph verification/import under `--locked`, book build, and
+  final `git diff --check`.
 - Latest implementation/testing slice:
   `Close QGLake lineage catalog-config proof fields`.
   The CLI handoff artifact verifier now has direct regression coverage proving

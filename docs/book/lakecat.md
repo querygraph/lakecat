@@ -11381,6 +11381,15 @@ manual-only until that local proof is boring. A release should be cut from the
 state those commands prove, not from a hope that a remote runner will discover
 the truth later.
 
+The handoff portion must stay locked in QueryGraph as well as in LakeCat. The
+local gate intentionally runs QueryGraph verification and import with Cargo's
+`--locked` mode so a stale QueryGraph dependency graph is a local failure, not
+a cloud surprise. When Grust or TypeSec publish new crates, the right sequence
+is to refresh the QueryGraph lockfile locally, prove `lakecat-verify`,
+`lakecat-import`, and QueryGraph tests under `--locked`, then rerun LakeCat's
+full release gate. That makes the QueryGraph import contract part of the
+release artifact instead of a best-effort downstream hope.
+
 The current gate also proves a subtle QGLake contract that is easy to miss.
 The handoff readiness probe reads `GET /catalog/v1/config`, and that read is a
 catalog event. It must therefore carry the same QGLake agent identity as the
