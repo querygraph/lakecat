@@ -21317,78 +21317,98 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn outbox_drain_rejects_missing_table_commit_history_receipt_allowed_decision() {
-        let table = TableIdent::new(
-            WarehouseName::new("local").unwrap(),
-            "default".parse::<Namespace>().unwrap(),
-            TableName::new("events").unwrap(),
-        );
-        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
-        let store = Arc::new(RecordingOutboxStore {
-            events: Mutex::new(vec![OutboxEvent {
-                event_id: "evt-commit-history-missing-receipt-allowed".to_string(),
-                sink: "lakecat.lineage-and-graph".to_string(),
-                event_type: "table.commits-listed".to_string(),
-                payload: json!({
-                    "audit-event-id": "audit-commit-history-missing-receipt-allowed",
-                    "event-type": "table.commits-listed",
-                    "table": table,
-                    "payload": {
-                        "authorization-receipt": {
-                            "principal": principal,
-                            "action": "table-load",
-                            "engine": "test",
-                            "policy_hash": null,
-                            "checked_at": chrono::Utc::now(),
-                        },
-                        "warehouse": "local",
-                        "namespace": ["default"],
-                        "table": "events",
-                        "commit-count": 1,
-                        "commit-hashes": [
-                            content_hash_json(&json!({"commit": 1})).unwrap()
-                        ],
-                        "sequence-numbers": [1],
-                    },
-                }),
-                created_at: chrono::Utc::now(),
-                delivered_at: None,
-            }]),
-            delivered: Mutex::default(),
-        });
-        let graph = Arc::new(RecordingGraph::default());
-        let lineage = Arc::new(RecordingLineage::default());
-        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
-            .with_integrations(
-                default_sail_engine(),
-                AllowAllGovernanceEngine::new(),
-                graph.clone(),
-                lineage.clone(),
+    async fn outbox_drain_rejects_missing_or_denied_table_commit_history_receipt_allowed_decision()
+    {
+        for (case, allowed, expected) in [
+            (
+                "missing",
+                None,
+                "table commit-history evidence must contain authorization receipt allowed decision",
+            ),
+            (
+                "denied",
+                Some(false),
+                "table commit-history authorization receipt must allow replay projection",
+            ),
+        ] {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
             );
+            let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+            let mut authorization_receipt = json!({
+                "principal": principal,
+                "action": "table-load",
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            });
+            if let Some(allowed) = allowed {
+                authorization_receipt["allowed"] = json!(allowed);
+            }
+            let event_id = format!("evt-commit-history-{case}-receipt-allowed");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.commits-listed".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-commit-history-{case}-receipt-allowed"),
+                        "event-type": "table.commits-listed",
+                        "table": table,
+                        "payload": {
+                            "authorization-receipt": authorization_receipt,
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "table": "events",
+                            "commit-count": 1,
+                            "commit-hashes": [
+                                content_hash_json(&json!({"commit": 1})).unwrap()
+                            ],
+                            "sequence-numbers": [1],
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
 
-        let err = drain_outbox_once(&state, 10).await.expect_err(
-            "missing commit-history receipt allowed decision should fail before delivery",
-        );
+            let err = match drain_outbox_once(&state, 10).await {
+                Ok(_) => panic!(
+                    "{case} commit-history receipt allowed decision should fail before delivery"
+                ),
+                Err(err) => err,
+            };
 
-        let message = err.to_string();
-        assert!(message.contains("table.commits-listed"));
-        assert!(message.contains(
-            "table commit-history evidence must contain authorization receipt allowed decision"
-        ));
-        assert!(message.contains("event-id-hash=sha256:"));
-        assert!(!message.contains("evt-commit-history-missing-receipt-allowed"));
-        assert!(
-            store.delivered.lock().await.is_empty(),
-            "missing commit-history receipt allowed decision must fail before acknowledgement"
-        );
-        assert!(
-            graph.events.lock().await.is_empty(),
-            "missing commit-history receipt allowed decision must fail before graph projection"
-        );
-        assert!(
-            lineage.events.lock().await.is_empty(),
-            "missing commit-history receipt allowed decision must fail before lineage projection"
-        );
+            let message = err.to_string();
+            assert!(message.contains("table.commits-listed"));
+            assert!(message.contains(expected));
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{case} commit-history receipt allowed decision must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{case} commit-history receipt allowed decision must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{case} commit-history receipt allowed decision must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]

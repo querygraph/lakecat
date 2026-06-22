@@ -5,6 +5,20 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Cover commit-history allowed decisions`.
+  Service replay admission already required `table.commits-listed`
+  authorization receipts to carry an affirmative allow decision; the new
+  regression pins that commit-history read surface directly, proving both
+  missing and denied decisions fail before acknowledgement, graph projection,
+  OpenLineage projection, QGLake proof, or QueryGraph import can inherit
+  unauthorized pointer-history evidence.
+- Local verification for this implementation/testing slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_missing_or_denied_table_commit_history_receipt_allowed_decision -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand first-release catalog concept map`.
   The book now has a front-loaded explanation of the current catalog concepts:

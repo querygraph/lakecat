@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added table commit-history replay coverage for denied authorization receipt
+  decisions. `table.commits-listed` now has a direct regression proving both
+  missing and false `allowed` decisions fail before acknowledgement, graph
+  projection, OpenLineage projection, QGLake proof, or QueryGraph import can
+  inherit unauthorized pointer-history evidence.
 - Expanded the LakeCat book with a first-release catalog concept map. The new
   front-loaded chapter directly classifies the Rust service/catalog spine,
   Turso local store, Iceberg REST namespace/table paths, commit CAS,
