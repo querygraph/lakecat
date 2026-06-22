@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Cover missing QGLake handoff lineage config proof`.
+  The CLI handoff artifact verifier now has direct regression coverage proving
+  saved `lakecatHandoffVerifyOutput` artifacts are rejected when
+  `lineageDrainArtifactSemantics.catalogConfigProof` is omitted, so archived
+  verifier output cannot skip the catalog-config proof it claims for the raw
+  lineage-drain artifact.
+- Local verification for this implementation/testing slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_missing_lineage_config -- --test-threads=1`
+  passed;
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Cover file-backed production secret blank-key parsing`.
   AWS/GCP/Azure-style file-backed secret roots now have direct
   `typesec-local` regression coverage proving blank credential config keys fail

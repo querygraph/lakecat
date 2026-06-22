@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened QGLake handoff verifier self-proof coverage. The CLI handoff
+  artifact verifier now has a direct regression proving saved
+  `lakecatHandoffVerifyOutput` artifacts are rejected when
+  `lineageDrainArtifactSemantics.catalogConfigProof` is omitted, so archived
+  verifier output cannot skip the catalog-config proof it claims for the raw
+  lineage-drain artifact.
 - Added file-backed production secret parsing coverage. AWS/GCP/Azure-style
   file-backed secret roots now have direct `typesec-local` regression coverage
   proving blank credential config keys fail closed with hash-only

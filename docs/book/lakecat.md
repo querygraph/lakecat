@@ -11265,6 +11265,9 @@ whose artifact hashes, table/view counts, standards, OpenLineage receipts,
 graph hashes, policy anchors, credential proof, view receipt chains, and commit
 history agree. If that handoff cannot be reproduced locally, LakeCat may still
 serve an Iceberg endpoint, but it has not proven the QueryGraph foundation.
+The saved handoff verifier output must also repeat the lineage-drain
+`catalogConfigProof`; omission is treated as proof failure, not as an
+unspecified optional field.
 Archived handoff file paths are part of that proof. LakeCat resolves artifact
 paths under the handoff summary directory before hashing or parsing them, and
 the verifier rejects relative traversal outside that bundle for both hash
