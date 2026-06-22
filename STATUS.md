@@ -5,6 +5,28 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Add catalog vocabulary guide`.
+  The LakeCat book now opens with a clear vocabulary guide that separates
+  standard Iceberg parlance from LakeCat implementation machinery, TypeSec
+  governance semantics, and QueryGraph integration surfaces. It explicitly
+  classifies Rust service/catalog spine, Turso-backed local storage,
+  REST-compatible table/namespace paths, commit CAS, idempotency, pointer logs,
+  audit/outbox, replay validation, governed scan and credential paths,
+  QueryGraph/QGLake handoff, OpenLineage, and semantic/governance vocabularies
+  as standard behavior, local implementation, additive extension, or possible
+  future Iceberg-adjacent optional profile material. It also makes the
+  engine-push argument visible at the start of the book: Sail should own
+  Iceberg table-format interpretation and typed v4 behavior while LakeCat owns
+  catalog authority and proof envelopes.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover and contents render;
+  the versioned EPUB symlink resolves to `lakecat.epub`;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest docs slice:
   `Align README with full release gate`.
   The README now describes LakeCat as the current implementation instead of a

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added an early book vocabulary guide that cleanly separates standard Iceberg
+  terms from LakeCat implementation machinery, TypeSec governance semantics,
+  and QueryGraph integration surfaces. The guide explicitly answers which
+  ideas are LakeCat extensions, which are future Iceberg-adjacent optional
+  profile candidates, and why Iceberg table-format interpretation should move
+  into Sail while LakeCat preserves the catalog authority boundary.
 - Updated the README release surface to match the current verified state:
   LakeCat is described as the current implementation rather than a scaffold,
   the full local release-readiness gate is called out as green on
