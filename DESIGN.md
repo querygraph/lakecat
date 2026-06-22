@@ -593,7 +593,10 @@ The compact `governedScanProof` object and captured LakeCat replay `scan`
 object must be closed over the fields LakeCat actually compares, so archived
 handoffs cannot append unverified scan-planning, restriction, projection,
 stats-field, replay-hash, or OpenLineage claims beside the Sail-planned read
-proof. Credential replay
+proof. Nested planned/fetched read-restriction objects and their row-predicate
+children must also be closed over their verified fields, so a handoff cannot
+hide unverified purpose, policy, predicate, projection, or credential-scope
+claims inside otherwise matched restriction evidence. Credential replay
 must preserve the policy-derived TTL cap, full authorization receipt hash, the
 `credentials-vend` authorization action, and redacted storage-scope hash in
 raw lineage drains, captured LakeCat replay evidence, and compact handoff

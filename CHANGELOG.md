@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed nested QGLake governed-scan restriction proof objects over their
+  verified schema. Compact and captured planned/fetched read restrictions now
+  reject unexpected fields, and their row-predicate children reject unexpected
+  predicate claims, before handoff verification can accept unverified purpose,
+  policy, predicate, projection, or credential-scope evidence inside a matched
+  Sail-planned read proof.
 - Closed compact and captured QGLake QueryGraph bootstrap proof objects over
   their compared schema. `queryGraphBootstrapProof` and captured LakeCat
   replay `queryGraphBootstrap` evidence now reject unexpected fields before

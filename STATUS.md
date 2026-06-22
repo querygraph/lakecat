@@ -6,6 +6,29 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close governed-scan restriction proof objects`.
+  Compact and captured planned/fetched read-restriction proof now reject
+  unexpected fields, and nested row-predicate proof rejects unexpected
+  predicate claims. This prevents handoff summaries or captured replay
+  artifacts from attaching unverified purpose, policy, predicate, projection,
+  or credential-scope evidence inside otherwise matched Sail-planned read
+  proof. The design and book now state this nested closed-schema invariant for
+  governed restrictions.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_scan_restriction_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_scan_row_predicate_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_extra_planned_restriction_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close QGLake QueryGraph bootstrap proof objects`.
   Compact `queryGraphBootstrapProof` and captured LakeCat replay
   `queryGraphBootstrap` evidence are now closed over their compared schema.

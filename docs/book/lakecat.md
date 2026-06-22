@@ -7085,7 +7085,11 @@ counts, principal and authorization receipt evidence, read restrictions,
 requested and effective projection, stats-field evidence, fetch filters,
 replay hashes, and OpenLineage hashes. A handoff therefore cannot attach an
 extra unverified scan claim beside the checked proof and ask QueryGraph to
-index it as if it were part of the Sail-planned read. Captured
+index it as if it were part of the Sail-planned read. The planned/fetched
+read-restriction objects are closed too, as are their row-predicate children,
+so an archived proof cannot smuggle an unverified purpose, policy, predicate,
+projection, or credential-scope claim inside a restriction object whose core
+fields happen to match. Captured
 scan replay-line recomputation also reuses the governed read-restriction guard,
 so an archived replay artifact cannot make empty planned or fetched
 `allowed-columns` look like a readable operator summary. It also compares the captured

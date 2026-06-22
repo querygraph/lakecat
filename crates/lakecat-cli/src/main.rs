@@ -2171,6 +2171,22 @@ fn verify_lakecat_replay_scan_matches_summary(
         GOVERNED_SCAN_PROOF_FIELDS,
         "captured LakeCat replay output.replay-evidence.scan",
     )?;
+    require_read_restriction_evidence(
+        required_object(
+            captured_scan,
+            "plannedReadRestriction",
+            "captured LakeCat replay output.replay-evidence.scan",
+        )?,
+        "captured LakeCat replay output.replay-evidence.scan.plannedReadRestriction",
+    )?;
+    require_read_restriction_evidence(
+        required_object(
+            captured_scan,
+            "fetchedReadRestriction",
+            "captured LakeCat replay output.replay-evidence.scan",
+        )?,
+        "captured LakeCat replay output.replay-evidence.scan.fetchedReadRestriction",
+    )?;
     let summary_scan = required_object(lakecat, "governedScanProof", "lakecatReplayVerification")?;
 
     for field in GOVERNED_SCAN_PROOF_FIELDS {
@@ -4705,6 +4721,7 @@ fn require_read_restriction_evidence(
     restriction: &serde_json::Map<String, Value>,
     label: &str,
 ) -> lakecat_core::LakeCatResult<()> {
+    require_only_fields(restriction, READ_RESTRICTION_FIELDS, label)?;
     let allowed_columns = required_array(restriction, "allowed-columns", label)?;
     if allowed_columns.is_empty()
         || allowed_columns.iter().any(|column| {
@@ -4739,6 +4756,7 @@ fn require_row_predicate_evidence(
     predicate: &serde_json::Map<String, Value>,
     label: &str,
 ) -> lakecat_core::LakeCatResult<()> {
+    require_only_fields(predicate, ROW_PREDICATE_FIELDS, label)?;
     if predicate.is_empty() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
             "{label} must contain predicate evidence"
@@ -4767,6 +4785,16 @@ fn require_row_predicate_evidence(
     }
     Ok(())
 }
+
+const READ_RESTRICTION_FIELDS: &[&str] = &[
+    "allowed-columns",
+    "row-predicate",
+    "purpose",
+    "policy-hashes",
+    "max-credential-ttl-seconds",
+];
+
+const ROW_PREDICATE_FIELDS: &[&str] = &["type", "term", "value"];
 
 fn require_view_tombstone_expected_versions(
     views: &serde_json::Map<String, Value>,
@@ -14788,6 +14816,26 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_scan_restriction_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedReadRestriction"]["unverifiedRestrictionClaim"] =
+            json!(qglake_fixture_hash("unverified-scan-restriction-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra scan restriction fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("governedScanProof.plannedReadRestriction"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedRestrictionClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_empty_scan_row_predicate() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["governedScanProof"]["plannedReadRestriction"]["row-predicate"] =
@@ -14816,6 +14864,27 @@ mod tests {
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("row-predicate"));
         assert!(err.to_string().contains("type"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_scan_row_predicate_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["plannedReadRestriction"]["row-predicate"]
+            ["unverifiedPredicateClaim"] =
+            json!(qglake_fixture_hash("unverified-scan-predicate-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra scan row-predicate fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("governedScanProof.plannedReadRestriction.row-predicate"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedPredicateClaim"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -18452,7 +18521,7 @@ mod tests {
 
         let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
             .expect_err("captured scan replay should reject empty planned allowed columns");
-        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("captured LakeCat replay output"));
         assert!(err.to_string().contains("plannedReadRestriction"));
         assert!(err.to_string().contains("allowed-columns"));
     }
@@ -18475,9 +18544,40 @@ mod tests {
 
         let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
             .expect_err("captured scan replay should reject empty fetched allowed columns");
-        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("captured LakeCat replay output"));
         assert!(err.to_string().contains("fetchedReadRestriction"));
         assert!(err.to_string().contains("allowed-columns"));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_planned_restriction_fields() {
+        let temp = qglake_temp_dir("handoff-captured-scan-extra-planned-restriction");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["scan"]["plannedReadRestriction"]["unverifiedRestrictionClaim"] =
+            json!(qglake_fixture_hash("unverified-captured-restriction-claim"));
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay scan restriction should reject extra fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains(
+                "captured LakeCat replay output.replay-evidence.scan.plannedReadRestriction"
+            ),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedRestrictionClaim"),
+            "{err}"
+        );
     }
 
     #[test]
