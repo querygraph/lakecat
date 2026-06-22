@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover missing credential issuer config hashes`.
+  Service replay regression coverage now proves returned
+  `credentials.vend-attempted` credential-response evidence rejects entries
+  that omit `issuer-config-hash` before acknowledgement, graph projection, or
+  OpenLineage projection. This pins the missing-field sibling of the existing
+  issuer-config entry-count guard and keeps returned credential evidence tied
+  to redacted issuer configuration proof.
+- Local verification for this credential issuer config hash slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_missing_credential_response_issuer_config_hash -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib issuer_config -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover missing credential prefix hashes`.
   Service replay regression coverage now proves returned
   `credentials.vend-attempted` credential-response evidence rejects entries
