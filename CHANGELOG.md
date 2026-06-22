@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Added a book classification test for new catalog work. The new section asks
+  which layer would be wrong without a feature, then routes standard Iceberg
+  compatibility to the REST/table boundary, durable catalog proof to LakeCat,
+  table-format semantics to Sail, authorization semantics to TypeSec, graph
+  semantics to Grust, and application semantics to QueryGraph. It also narrows
+  future Iceberg-adjacent proposal candidates to portable behavior profiles
+  rather than LakeCat's implementation stack.
+- Promoted the full local release-readiness gate from all-features workspace
+  library tests to the complete `cargo test --workspace --all-features` command
+  and tightened the dependency contract to pin that exact row. This keeps the
+  release proof aligned with the local gate that caught QGLake fixture drift.
 - Fixed QGLake accepted replay fixtures so policy-list evidence is paired with
   `policy-binding.upserted` content proof and the accepted lineage-drain
   manifest derives `delivered`, `eventTypes`, `graphEvents`, and

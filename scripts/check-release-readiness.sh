@@ -91,7 +91,7 @@ if [[ "$mode" == "full" ]]; then
   run cargo test -p lakecat-graph --features grust-local --lib \
     grust_cypher_can_query_lakecat_catalog_projection_boundary -- --test-threads=1
   run cargo test -p lakecat-cli --all-features -- --test-threads=1
-  run cargo test --workspace --all-features --lib -- --test-threads=1
+  run cargo test --workspace --all-features
 
   if [[ "$skip_book" -eq 0 ]]; then
     run docs/book/build.sh

@@ -867,12 +867,13 @@ workflow keys such as job ids that happen to share event names.
 The first-release gate is local too:
 `scripts/check-release-readiness.sh` is the durable release checklist command,
 with full mode running dependency-contract, formatting, Turso, Sail, TypeSec,
-Grust, explicit all-features CLI, all-features workspace library, book, and
+Grust, explicit all-features CLI, complete all-features workspace, book, and
 QGLake handoff checks, and quick mode available for script/contract smoke
 checks during narrow slices. The default workspace run still covers ordinary
 doc-tests; feature-matrix rows target package unit tests so an empty rustdoc
 phase cannot hang after the relevant Turso/Sail/TypeSec/Grust tests have
-already passed.
+already passed. The complete all-features workspace row remains the final broad
+local proof before release or cloud automation is trusted.
 
 ## Review Gate
 

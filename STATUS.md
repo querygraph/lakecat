@@ -5,6 +5,31 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Add catalog-work classification test`.
+  The book now gives readers a direct test for new LakeCat features: route
+  standard Iceberg behavior to the compatibility boundary, durable catalog
+  proof to LakeCat, table-format semantics to Sail, authorization semantics to
+  TypeSec, graph semantics to Grust, and application semantics to QueryGraph.
+  It also narrows future Iceberg-adjacent proposal candidates to portable
+  behavior profiles rather than LakeCat's full implementation stack.
+- Local verification for this book slice is green:
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh`;
+  `git diff --check`.
+- Latest release-gate slice:
+  `Promote full all-features workspace gate`.
+  The full local `scripts/check-release-readiness.sh` gate now runs the
+  complete `cargo test --workspace --all-features` command instead of the
+  narrower all-features workspace library row, and
+  `scripts/check-local-dependency-contract.sh` pins that exact command. This
+  keeps the authoritative local release gate aligned with the broad workspace
+  check that caught the QGLake fixture drift.
+- Local verification for this release-gate slice is green:
+  `scripts/check-local-dependency-contract.sh`;
+  `bash -n scripts/check-release-readiness.sh scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Repair QGLake accepted replay fixtures`.
   The accepted QGLake replay artifacts now include `policy-binding.upserted`
