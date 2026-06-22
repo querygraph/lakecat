@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Validate projection receipt hashes before lineage-drain summaries`.
+  Outbox drains now reject count-drifted, malformed, or duplicate
+  replay/OpenLineage projection receipt hash arrays before returning raw
+  lineage-drain summaries or acknowledging delivery, so QGLake cannot inherit
+  inflated receipt proof from a sink boundary.
+- Local verification for this projection-receipt slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib projection_receipt_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `cargo test --workspace --all-features --no-run`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Clarify standards, extensions, proposals, and Sail ownership in the book`.
   The book now includes a direct decision test for whether catalog concepts are
   standard Iceberg, LakeCat implementation, TypeSec governance extensions,

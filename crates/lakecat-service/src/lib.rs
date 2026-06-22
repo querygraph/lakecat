@@ -1085,6 +1085,7 @@ pub async fn drain_outbox_once(
     for event in events {
         validate_outbox_event_evidence(&event)?;
         let receipt = project_outbox_event(state, &event).await?;
+        validate_projection_receipt_evidence(&event, &receipt)?;
         graph_events += receipt.graph_events;
         lineage_events += receipt.lineage_events;
         summaries.push(lineage_drain_event_summary(&event, &receipt));
@@ -1115,6 +1116,54 @@ pub async fn drain_outbox_once(
         typedid_proof_hash: None,
         events: summaries,
     })
+}
+
+fn validate_projection_receipt_evidence(
+    event: &OutboxEvent,
+    receipt: &OutboxProjectionReceipt,
+) -> Result<(), LakeCatError> {
+    if receipt.lineage_event_hashes.len() != receipt.lineage_events
+        || receipt.open_lineage_hashes.len() != receipt.lineage_events
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "projection receipt hash counts must match lineage event count",
+        ));
+    }
+    validate_projection_receipt_hash_array(
+        event,
+        &receipt.lineage_event_hashes,
+        "replay event hashes",
+    )?;
+    validate_projection_receipt_hash_array(
+        event,
+        &receipt.open_lineage_hashes,
+        "OpenLineage hashes",
+    )?;
+    Ok(())
+}
+
+fn validate_projection_receipt_hash_array(
+    event: &OutboxEvent,
+    hashes: &[String],
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let mut seen = BTreeSet::new();
+    for hash in hashes {
+        if !is_full_sha256_digest_evidence(hash) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("projection receipt {label} must contain full SHA-256 hashes"),
+            ));
+        }
+        if !seen.insert(hash.as_str()) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("projection receipt {label} must be duplicate-free"),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatError> {
@@ -10241,10 +10290,18 @@ mod tests {
     #[async_trait]
     impl LineageSink for RecordingLineage {
         async fn emit(&self, event: LineageEvent) -> lakecat_core::LakeCatResult<LineageReceipt> {
+            let event_hash = content_hash_json(&json!({
+                "sink": "recording",
+                "event": event,
+            }))?;
+            let open_lineage_hash = content_hash_json(&json!({
+                "sink": "recording-openlineage",
+                "event-hash": event_hash,
+            }))?;
             self.events.lock().await.push(event);
             Ok(LineageReceipt {
-                event_hash: "recorded".to_string(),
-                open_lineage_hash: "recorded-openlineage".to_string(),
+                event_hash,
+                open_lineage_hash,
                 sink: "recording".to_string(),
             })
         }
@@ -10275,6 +10332,16 @@ mod tests {
     impl LineageSink for FailingLineageAfter {
         async fn emit(&self, event: LineageEvent) -> lakecat_core::LakeCatResult<LineageReceipt> {
             let mut events = self.events.lock().await;
+            let event_index = events.len() + 1;
+            let event_hash = content_hash_json(&json!({
+                "sink": "recording",
+                "event-index": event_index,
+                "event": event,
+            }))?;
+            let open_lineage_hash = content_hash_json(&json!({
+                "sink": "recording-openlineage",
+                "event-hash": event_hash,
+            }))?;
             events.push(event);
             if events.len() > self.fail_after {
                 return Err(LakeCatError::Internal(
@@ -10282,8 +10349,8 @@ mod tests {
                 ));
             }
             Ok(LineageReceipt {
-                event_hash: format!("recorded-{}", events.len()),
-                open_lineage_hash: format!("recorded-openlineage-{}", events.len()),
+                event_hash,
+                open_lineage_hash,
                 sink: "recording".to_string(),
             })
         }
@@ -12178,13 +12245,17 @@ mod tests {
                 .as_deref(),
             None
         );
-        assert_eq!(
-            credential_summary.replay_event_hashes,
-            vec!["recorded".to_string()]
+        assert!(
+            credential_summary
+                .replay_event_hashes
+                .iter()
+                .all(|hash| is_full_sha256_hash(hash))
         );
-        assert_eq!(
-            credential_summary.replay_open_lineage_hashes,
-            vec!["recorded-openlineage".to_string()]
+        assert!(
+            credential_summary
+                .replay_open_lineage_hashes
+                .iter()
+                .all(|hash| is_full_sha256_hash(hash))
         );
         let graph_events = graph.events.lock().await;
         let credential_profile_event = graph_events
@@ -12302,13 +12373,17 @@ mod tests {
                 .map(|standard| standard.to_string())
                 .collect::<Vec<_>>()
         );
-        assert_eq!(
-            bootstrap_summary.replay_event_hashes,
-            vec!["recorded".to_string()]
+        assert!(
+            bootstrap_summary
+                .replay_event_hashes
+                .iter()
+                .all(|hash| is_full_sha256_hash(hash))
         );
-        assert_eq!(
-            bootstrap_summary.replay_open_lineage_hashes,
-            vec!["recorded-openlineage".to_string()]
+        assert!(
+            bootstrap_summary
+                .replay_open_lineage_hashes
+                .iter()
+                .all(|hash| is_full_sha256_hash(hash))
         );
 
         let graph_events = graph.events.lock().await;
@@ -12483,13 +12558,17 @@ mod tests {
             .expect("policy replay summary should be exposed");
         assert_eq!(policy_summary.graph_events, 2);
         assert_eq!(policy_summary.lineage_events, 1);
-        assert_eq!(
-            policy_summary.replay_event_hashes,
-            vec!["recorded".to_string()]
+        assert!(
+            policy_summary
+                .replay_event_hashes
+                .iter()
+                .all(|hash| is_full_sha256_hash(hash))
         );
-        assert_eq!(
-            policy_summary.replay_open_lineage_hashes,
-            vec!["recorded-openlineage".to_string()]
+        assert!(
+            policy_summary
+                .replay_open_lineage_hashes
+                .iter()
+                .all(|hash| is_full_sha256_hash(hash))
         );
 
         let lineage_events = lineage.events.lock().await;
@@ -31623,13 +31702,19 @@ mod tests {
             payload["events"][0]["standards"],
             serde_json::json!(bootstrap_standards)
         );
-        assert_eq!(
-            payload["events"][0]["replay-event-hashes"],
-            serde_json::json!(["recorded"])
+        assert!(
+            payload["events"][0]["replay-event-hashes"]
+                .as_array()
+                .is_some_and(|hashes| hashes
+                    .iter()
+                    .all(|hash| hash.as_str().is_some_and(is_full_sha256_hash)))
         );
-        assert_eq!(
-            payload["events"][0]["replay-open-lineage-hashes"],
-            serde_json::json!(["recorded-openlineage"])
+        assert!(
+            payload["events"][0]["replay-open-lineage-hashes"]
+                .as_array()
+                .is_some_and(|hashes| hashes
+                    .iter()
+                    .all(|hash| hash.as_str().is_some_and(is_full_sha256_hash)))
         );
         assert_eq!(
             store.delivered.lock().await.as_slice(),
@@ -38306,8 +38391,8 @@ mod tests {
         let receipt = OutboxProjectionReceipt {
             graph_events: 3,
             lineage_events: 1,
-            lineage_event_hashes: vec!["recorded".to_string()],
-            open_lineage_hashes: vec!["recorded-openlineage".to_string()],
+            lineage_event_hashes: vec![content_hash_bytes(b"recorded")],
+            open_lineage_hashes: vec![content_hash_bytes(b"recorded-openlineage")],
         };
 
         let summary = lineage_drain_event_summary(&event, &receipt);
@@ -38330,11 +38415,126 @@ mod tests {
             vec!["event_id".to_string(), "payload".to_string()]
         );
         assert_eq!(summary.effective_stats_fields, vec!["event_id".to_string()]);
-        assert_eq!(summary.replay_event_hashes, vec!["recorded".to_string()]);
-        assert_eq!(
-            summary.replay_open_lineage_hashes,
-            vec!["recorded-openlineage".to_string()]
+        assert!(
+            summary
+                .replay_event_hashes
+                .iter()
+                .all(|hash| is_full_sha256_hash(hash))
         );
+        assert_eq!(
+            summary.replay_open_lineage_hashes.len(),
+            summary.lineage_events
+        );
+        assert!(
+            summary
+                .replay_open_lineage_hashes
+                .iter()
+                .all(|hash| is_full_sha256_hash(hash))
+        );
+    }
+
+    #[test]
+    fn projection_receipt_evidence_rejects_malformed_lineage_hashes() {
+        let event = OutboxEvent {
+            event_id: "evt-malformed-projection-receipt".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-planned".to_string(),
+            payload: json!({
+                "audit-event-id": "audit-malformed-projection-receipt",
+                "event-type": "table.scan-planned",
+                "payload": {}
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let receipt = OutboxProjectionReceipt {
+            graph_events: 1,
+            lineage_events: 1,
+            lineage_event_hashes: vec!["sha256:short".to_string()],
+            open_lineage_hashes: vec![content_hash_bytes(b"openlineage")],
+        };
+
+        let err = validate_projection_receipt_evidence(&event, &receipt)
+            .expect_err("projection receipt hashes must be full SHA-256 evidence");
+
+        let message = err.to_string();
+        assert!(message.contains("table.scan-planned"));
+        assert!(
+            message.contains(
+                "projection receipt replay event hashes must contain full SHA-256 hashes"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-malformed-projection-receipt"));
+    }
+
+    #[test]
+    fn projection_receipt_evidence_rejects_duplicate_openlineage_hashes() {
+        let event = OutboxEvent {
+            event_id: "evt-duplicate-projection-receipt".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-tasks-fetched".to_string(),
+            payload: json!({
+                "audit-event-id": "audit-duplicate-projection-receipt",
+                "event-type": "table.scan-tasks-fetched",
+                "payload": {}
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let duplicate_openlineage_hash = content_hash_bytes(b"duplicate-openlineage");
+        let receipt = OutboxProjectionReceipt {
+            graph_events: 1,
+            lineage_events: 2,
+            lineage_event_hashes: vec![
+                content_hash_bytes(b"lineage-a"),
+                content_hash_bytes(b"lineage-b"),
+            ],
+            open_lineage_hashes: vec![
+                duplicate_openlineage_hash.clone(),
+                duplicate_openlineage_hash,
+            ],
+        };
+
+        let err = validate_projection_receipt_evidence(&event, &receipt)
+            .expect_err("projection receipt hashes must be duplicate-free");
+
+        let message = err.to_string();
+        assert!(message.contains("table.scan-tasks-fetched"));
+        assert!(message.contains("projection receipt OpenLineage hashes must be duplicate-free"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-duplicate-projection-receipt"));
+    }
+
+    #[test]
+    fn projection_receipt_evidence_rejects_hash_count_drift() {
+        let event = OutboxEvent {
+            event_id: "evt-count-drift-projection-receipt".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "policy-binding.upserted".to_string(),
+            payload: json!({
+                "audit-event-id": "audit-count-drift-projection-receipt",
+                "event-type": "policy-binding.upserted",
+                "payload": {}
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let receipt = OutboxProjectionReceipt {
+            graph_events: 1,
+            lineage_events: 2,
+            lineage_event_hashes: vec![content_hash_bytes(b"lineage-a")],
+            open_lineage_hashes: vec![content_hash_bytes(b"openlineage-a")],
+        };
+
+        let err = validate_projection_receipt_evidence(&event, &receipt)
+            .expect_err("projection receipt hash counts must match lineage count");
+
+        let message = err.to_string();
+        assert!(message.contains("policy-binding.upserted"));
+        assert!(message.contains("projection receipt hash counts must match lineage event count"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-count-drift-projection-receipt"));
     }
 
     #[test]

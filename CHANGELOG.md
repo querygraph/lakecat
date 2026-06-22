@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened lineage-drain projection receipt evidence. Outbox drains now reject
+  projection receipts whose replay/OpenLineage hash arrays are count-drifted,
+  malformed, or duplicate before returning raw lineage-drain summaries or
+  acknowledging delivery, keeping QGLake from inheriting inflated receipt proof
+  from a sink boundary.
 - Expanded the book's standards/extension guidance with a direct decision test
   for what is standard Iceberg, LakeCat implementation, governance extension,
   QueryGraph application surface, or future optional Iceberg-adjacent proposal.

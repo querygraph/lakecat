@@ -606,7 +606,10 @@ Raw lineage-drain replay summaries and compact handoff summaries must both keep
 replay, OpenLineage, view receipt, and view receipt-chain hash arrays
 duplicate-free as well as SHA-256-shaped, so source replay and archived proof
 cannot inflate bootstrap, scan, management, commit-history, view,
-storage-profile, or credential evidence by repeating a valid digest.
+storage-profile, or credential evidence by repeating a valid digest. Service
+drain should reject projection receipts whose replay/OpenLineage hash arrays
+are count-drifted, malformed, or duplicate before returning a raw
+lineage-drain summary or acknowledging delivery.
 Compact QGLake storage-profile and credential secret-reference proof must
 mirror service replay admission: present secret refs require nonblank providers
 and full SHA-256 hashes, while absent secret refs may omit provider/hash fields

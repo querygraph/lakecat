@@ -6151,7 +6151,12 @@ A useful drain response includes delivered event types, graph projection counts,
 lineage projection counts, receipt hashes, and the authorization proof for the
 drain request itself. That last part is easy to overlook. Reading the replay
 stream is also privileged, so LakeCat records that the drainer was allowed to
-read lineage evidence. Standard catalog reads replay too:
+read lineage evidence. Before LakeCat returns that raw lineage-drain summary or
+acknowledges delivery, it also checks the projection receipt arrays produced by
+the graph/lineage sink boundary: replay hashes and OpenLineage hashes must be
+count-aligned with lineage events, full SHA-256-shaped, and duplicate-free. That
+keeps a malformed sink receipt from inflating the proof QGLake later archives.
+Standard catalog reads replay too:
 `catalog.config-read` records a warehouse-scoped graph/OpenLineage fact for the
 Iceberg REST configuration entrypoint; `namespace.listed` records the namespace
 listing at the warehouse; and `namespace.loaded` records the specific namespace
@@ -6608,7 +6613,10 @@ receipt-chain hash arrays duplicate-free, not only `sha256:` shaped. That
 covers the bootstrap, governed scan, management, table commit-history, view
 tombstone/receipt-chain, storage-profile upsert, and credential-vending proof
 sections, so a source replay or archived handoff cannot make an evidence set
-look larger by repeating an already accepted digest.
+look larger by repeating an already accepted digest. The service applies the
+first version of that rule before a drain summary is returned at all:
+projection receipt hash arrays must match the lineage-event count and must not
+contain malformed or repeated replay or OpenLineage hashes.
 The verifier
 also compares those QueryGraph import-plan graph node and edge counts with the
 verified bootstrap bundle graph counts, so an import plan cannot keep the
