@@ -2305,46 +2305,7 @@ fn expected_management_storage_profile_upsert_line_from_summary(
 fn lakecat_replay_management_proof_value(
     capture: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<Value> {
-    let management = lakecat_replay_management(capture)?;
-    let mut proof = serde_json::Map::new();
-    for field in [
-        "serverCount",
-        "serverIds",
-        "serverGraphEvents",
-        "projectCount",
-        "projectIds",
-        "projectGraphEvents",
-        "warehouseCount",
-        "warehouseNames",
-        "warehouseGraphEvents",
-        "policyBindingCount",
-        "policyIds",
-        "policyGraphEvents",
-        "storageProfileCount",
-        "storageProfileIds",
-        "storageProfileGraphEvents",
-        "serverReplayEventHashes",
-        "serverOpenLineageHashes",
-        "projectReplayEventHashes",
-        "projectOpenLineageHashes",
-        "warehouseReplayEventHashes",
-        "warehouseOpenLineageHashes",
-        "policyReplayEventHashes",
-        "policyOpenLineageHashes",
-        "storageProfileReplayEventHashes",
-        "storageProfileOpenLineageHashes",
-    ] {
-        proof.insert(
-            field.to_string(),
-            required_value(
-                management,
-                field,
-                "captured LakeCat replay output.replay-evidence.management",
-            )?
-            .clone(),
-        );
-    }
-    Ok(Value::Object(proof))
+    Ok(Value::Object(lakecat_replay_management(capture)?.clone()))
 }
 
 fn lakecat_replay_management(
@@ -11634,13 +11595,14 @@ mod tests {
                 "graphEdges": 7
             },
             "lineageDrainArtifactSemantics": {
-                "delivered": 13,
+                "delivered": 14,
                 "eventTypes": [
                     "querygraph.bootstrap",
                     "credentials.vend-attempted",
                     "credentials.vend-attempted",
                     "view.upserted",
                     "policy-binding.listed",
+                    "policy-binding.upserted",
                     "storage-profile.listed",
                     "storage-profile.upserted",
                     "server.listed",
@@ -11650,8 +11612,8 @@ mod tests {
                     "table.scan-planned",
                     "table.scan-tasks-fetched"
                 ],
-                "graphEvents": 14,
-                "lineageEvents": 13,
+                "graphEvents": 15,
+                "lineageEvents": 14,
                 "principalSubject": summary["lakecatReplayVerification"]["requestIdentityProof"]["principalSubject"].clone(),
                 "principalKind": summary["lakecatReplayVerification"]["requestIdentityProof"]["principalKind"].clone(),
                 "authorizationReceiptHash": summary["lakecatReplayVerification"]["requestIdentityProof"]["authorizationReceiptHash"].clone(),
@@ -15377,7 +15339,7 @@ mod tests {
         let summary_path = temp.join("handoff-summary.json");
         let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
         let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
-        output["lineageDrainArtifactSemantics"]["graphEvents"] = json!(15);
+        output["lineageDrainArtifactSemantics"]["graphEvents"] = json!(16);
         let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
         fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
             .expect("write drifted handoff verify output");
@@ -15783,7 +15745,7 @@ mod tests {
             verify_qglake_handoff_lineage_drain_artifact_semantics(&summary_path, &summary)
                 .expect("lineage drain artifact semantics should verify");
 
-        assert_eq!(semantics["delivered"], json!(13));
+        assert_eq!(semantics["delivered"], json!(14));
         assert_eq!(
             semantics["verifiedViews"],
             json!(["lakecat:view:local:default:active_customers_view"])

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserved full QGLake handoff proof surfaces in the local acceptance loop.
+  The handoff script now requires and carries authorization receipt actions
+  for request identity and QueryGraph bootstrap evidence, passes validated
+  LakeCat replay proof objects through to the handoff summary instead of
+  thinning them, and the CLI verifier now emits full management proof semantics
+  for verifier-output artifact self-checks.
 - Hardened lineage-drain projection receipt evidence. Outbox drains now reject
   projection receipts whose replay/OpenLineage hash arrays are count-drifted,
   malformed, or duplicate before returning raw lineage-drain summaries or

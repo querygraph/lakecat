@@ -386,6 +386,17 @@ OpenLineage, QGLake acceptance, Grust graph import, and TypeSec evidence above
 the portable Iceberg table. Some narrow proof shapes may become optional
 catalog profiles. QueryGraph itself should not become an Iceberg dependency.
 
+The handoff proof rule follows from that boundary. A QGLake handoff summary
+must not shrink LakeCat replay evidence into a convenient local shape after
+LakeCat and QueryGraph have already verified it. Request identity,
+QueryGraph bootstrap, governed scan, management, view, credential, and commit
+proofs are allowed to grow as LakeCat hardens the catalog spine. The local
+acceptance loop should validate those objects and then preserve them, including
+authorization receipt actions, replay hashes, OpenLineage hashes, policy
+upsert proof, storage-profile proof, and optional tenant linkage. Otherwise the
+handoff artifact can prove less than the catalog actually checked, which is
+exactly the kind of drift QueryGraph and TypeSec are meant to eliminate.
+
 This is why LakeCat keeps pushing work into Sail. The catalog has enough to do
 without becoming a second engine. It should not decode every manifest metric,
 implement every partition transform, reason about every delete-file edge case,

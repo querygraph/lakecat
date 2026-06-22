@@ -126,6 +126,10 @@ if (typeof evidence.authorizationReceiptHash !== "string" || evidence.authorizat
   console.error("LakeCat request identity evidence is missing authorizationReceiptHash");
   process.exit(1);
 }
+if (typeof evidence.authorizationReceiptAction !== "string" || evidence.authorizationReceiptAction.length === 0) {
+  console.error("LakeCat request identity evidence is missing authorizationReceiptAction");
+  process.exit(1);
+}
 function requireOptionalHash(value, label) {
   if (value == null) {
     return false;
@@ -142,12 +146,15 @@ if (hasTypedIdProof && !hasTypedIdEnvelope) {
   console.error("LakeCat request identity evidence has typedidProofHash without typedidEnvelopeHash");
   process.exit(1);
 }
+process.stdout.write(JSON.stringify(evidence));
+process.exit(0);
 process.stdout.write(JSON.stringify({
   principalSubject: evidence.principalSubject,
   principalKind: evidence.principalKind,
   requestIdentitySource: evidence.requestIdentitySource,
   requestIdentityState: evidence.requestIdentityState,
   authorizationReceiptHash: evidence.authorizationReceiptHash,
+  authorizationReceiptAction: evidence.authorizationReceiptAction,
   typedidEnvelopeHash: evidence.typedidEnvelopeHash ?? null,
   typedidProofHash: evidence.typedidProofHash ?? null,
 }));
@@ -244,6 +251,10 @@ if (typeof evidence.requestIdentityState !== "string" || evidence.requestIdentit
   process.exit(1);
 }
 requireHash(evidence.authorizationReceiptHash, "authorizationReceiptHash");
+if (typeof evidence.authorizationReceiptAction !== "string" || evidence.authorizationReceiptAction.length === 0) {
+  console.error("LakeCat QueryGraph bootstrap evidence is missing authorizationReceiptAction");
+  process.exit(1);
+}
 requireHash(evidence.agentDelegationHash, "agentDelegationHash");
 requireHash(evidence.agentSummarySignatureHash, "agentSummarySignatureHash");
 const hasTypedIdEnvelope = requireOptionalHash(evidence.typedidEnvelopeHash, "typedidEnvelopeHash");
@@ -260,6 +271,8 @@ if (Number(expectedViewCount) > 0) {
 }
 requireHashArray(evidence.replayEventHashes, "replayEventHashes");
 requireHashArray(evidence.openLineageHashes, "openLineageHashes");
+process.stdout.write(JSON.stringify(evidence));
+process.exit(0);
 process.stdout.write(JSON.stringify({
   bundleHash: evidence.bundleHash,
   graphHash: evidence.graphHash,
@@ -274,6 +287,7 @@ process.stdout.write(JSON.stringify({
   requestIdentitySource: evidence.requestIdentitySource,
   requestIdentityState: evidence.requestIdentityState,
   authorizationReceiptHash: evidence.authorizationReceiptHash,
+  authorizationReceiptAction: evidence.authorizationReceiptAction,
   agentDelegationHash: evidence.agentDelegationHash,
   agentSummarySignatureHash: evidence.agentSummarySignatureHash,
   typedidEnvelopeHash: evidence.typedidEnvelopeHash ?? null,
@@ -340,6 +354,8 @@ if (!Number.isInteger(evidence.graphEvents) || evidence.graphEvents <= 0) {
   console.error("LakeCat storage-profile upsert evidence is missing graphEvents");
   process.exit(1);
 }
+process.stdout.write(JSON.stringify(evidence));
+process.exit(0);
 process.stdout.write(JSON.stringify({
   profileId: evidence.profileId,
   provider: evidence.provider,
@@ -417,6 +433,8 @@ requireStringArrayCount(evidence.projectIds, evidence.projectCount, "projectIds"
 requireStringArrayCount(evidence.warehouseNames, evidence.warehouseCount, "warehouseNames");
 requireStringArrayCount(evidence.policyIds, evidence.policyBindingCount, "policyIds");
 requireStringArrayCount(evidence.storageProfileIds, evidence.storageProfileCount, "storageProfileIds");
+process.stdout.write(JSON.stringify(evidence));
+process.exit(0);
 process.stdout.write(JSON.stringify({
   serverCount: evidence.serverCount,
   serverIds: evidence.serverIds,
@@ -579,6 +597,8 @@ requireHashArray(trustedHuman.replayEventHashes, "trusted-human replayEventHashe
 requireHashArray(trustedHuman.openLineageHashes, "trusted-human openLineageHashes");
 const trustedHumanStorageProfile = requireStorageProfile(trustedHuman.storageProfile, "trusted-human");
 const trustedHumanMaxCredentialTtlSeconds = requireMaxCredentialTtl(trustedHuman, "trusted-human");
+process.stdout.write(JSON.stringify(evidence));
+process.exit(0);
 process.stdout.write(JSON.stringify({
   restricted: {
     principalSubject: restricted.principalSubject,
@@ -750,6 +770,8 @@ for (const field of evidence.plannedEffectiveStatsFields) {
     process.exit(1);
   }
 }
+process.stdout.write(JSON.stringify(evidence));
+process.exit(0);
 process.stdout.write(JSON.stringify({
   planTaskCount: evidence.planTaskCount,
   planGraphEvents: evidence.planGraphEvents,
@@ -822,6 +844,8 @@ requireHashArray(evidence.commitHashes, "commitHashes");
 requirePositiveInteger(evidence.graphEvents, "graphEvents");
 requireHashArray(evidence.replayEventHashes, "replayEventHashes");
 requireHashArray(evidence.openLineageHashes, "openLineageHashes");
+process.stdout.write(JSON.stringify(evidence));
+process.exit(0);
 process.stdout.write(JSON.stringify({
   commitCount: evidence.commitCount,
   sequenceNumbers: evidence.sequenceNumbers,

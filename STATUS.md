@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Preserve QGLake handoff proof surfaces`.
+  The local QGLake handoff script now preserves authorization receipt actions
+  for request identity and QueryGraph bootstrap proof, passes validated LakeCat
+  replay proof objects through to the generated handoff summary instead of
+  compacting away required receipt fields, and the CLI verifier emits full
+  management proof semantics so verifier-output artifact self-checks remain
+  hash-bound to the same proof surface.
+- Local verification for this QGLake handoff proof-surface slice is green:
+  `scripts/qglake-handoff-local.sh`;
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Validate projection receipt hashes before lineage-drain summaries`.
   Outbox drains now reject count-drifted, malformed, or duplicate
   replay/OpenLineage projection receipt hash arrays before returning raw
