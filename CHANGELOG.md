@@ -3,6 +3,10 @@
 ## Unreleased
 
 - Added service replay regression coverage proving governed scan replay rejects
+  non-object `row-predicate` read-restriction evidence for both planned and
+  fetched scan events before acknowledgement, graph projection, or OpenLineage
+  projection.
+- Added service replay regression coverage proving governed scan replay rejects
   `eq` row-predicate read-restriction evidence that omits the required `value`
   for both planned and fetched scan events before acknowledgement, graph
   projection, or OpenLineage projection.
