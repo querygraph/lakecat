@@ -5,6 +5,15 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Expand catalog concept and Sail boundary book text`.
+  The book now more explicitly separates standard Iceberg parlance from
+  LakeCat Rust/Turso implementation choices, optional LakeCat/TypeSec/
+  QueryGraph extensions, and future Iceberg-adjacent behavior-profile
+  candidates. It also strengthens the argument that field-id projection,
+  manifest pruning, delete handling, row lineage, metadata-as-data, and typed
+  v4 interpretation should move into Sail instead of becoming LakeCat-local
+  shadow-engine logic.
 - Latest completed implementation/documentation slice:
   `Cover view lifecycle receipt action drift`.
   Service outbox replay now has regression coverage proving `view.upserted`,

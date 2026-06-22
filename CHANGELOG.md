@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog-concept explanation with a sharper
+  standards boundary: Rust/Turso are implementation choices, REST
+  table/namespace paths and commit CAS are standard Iceberg catalog behavior,
+  LakeCat replay/audit/outbox surfaces are optional catalog hardening,
+  TypeSec receipts are governance extensions, QueryGraph/QGLake handoff is an
+  application extension, and only small behavior profiles such as idempotent
+  replay, pointer history, governed credentials, lineage binding, view proof,
+  and proof-carrying scans should be treated as future Iceberg-adjacent
+  candidates. The Sail argument now explains why field-id projection, manifest
+  pruning, deletes, row lineage, metadata-as-data, and typed v4 interpretation
+  belong in Sail rather than a catalog-side shadow engine.
 - Added service replay regression coverage proving `view.upserted`,
   `view.loaded`, and `view.dropped` reject mismatched authorization receipt
   actions before acknowledgement, graph projection, or OpenLineage projection.
