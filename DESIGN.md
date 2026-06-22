@@ -778,7 +778,9 @@ replay, OpenLineage, commit-history commit, view receipt, and view
 receipt-chain hash arrays duplicate-free as well as full SHA-256-shaped, so
 source replay and archived proof cannot inflate bootstrap, scan, management,
 commit-history, view, storage-profile, or credential evidence by repeating a
-valid digest. Service
+valid digest. Raw QGLake view replay, tombstone receipt, namespace
+receipt-chain, and receipt-chain replay/OpenLineage arrays now reject short
+`sha256:` placeholders in the CLI verifier. Service
 drain should reject projection receipts whose replay/OpenLineage hash arrays
 are count-drifted, malformed, or duplicate before returning a raw
 lineage-drain summary or acknowledging delivery.

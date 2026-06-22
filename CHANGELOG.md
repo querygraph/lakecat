@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Tightened raw QGLake lineage-drain view proof verification. View replay
+  sink receipt hashes, tombstone view-receipt hashes, namespace receipt-chain
+  hashes, and receipt-chain replay/OpenLineage hashes must now be full
+  SHA-256-shaped values before archived handoff proof can use them; short
+  `sha256:` placeholders are rejected.
 - Added QGLake handoff artifact path traversal regression coverage. The CLI
   verifier now has focused tests proving both artifact hash verification and
   captured-output semantic readers reject relative `..` paths that resolve

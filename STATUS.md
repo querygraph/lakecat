@@ -6,6 +6,26 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Require full QGLake view lineage hashes`.
+  Raw QGLake lineage-drain verification now rejects short `sha256:`
+  placeholders for view replay sink receipt hashes, tombstone view-receipt
+  hashes, namespace receipt-chain hashes, and namespace receipt-chain
+  replay/OpenLineage hashes. The QGLake fixtures now use full deterministic
+  SHA-256-shaped values for these view proof arrays.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_short_view_replay_hashes -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_short_view_receipt_hashes -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_duplicate_view_receipt_chain_hashes -- --test-threads=1`
+  passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Cover QGLake artifact path traversal`.
   QGLake handoff verification now has focused regression coverage proving that
   both artifact hash verification and captured-output semantic readers reject

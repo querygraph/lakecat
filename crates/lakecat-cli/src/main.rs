@@ -9492,11 +9492,11 @@ fn verify_qglake_view_replay(
             .map_or(true, str::is_empty)
             || view_replay.view_namespace.is_empty()
             || view_replay.view_name.as_deref().map_or(true, str::is_empty)
-            || !qglake_has_sha256_hashes(&view_replay.replay_event_hashes)
-            || !qglake_has_sha256_hashes(&view_replay.replay_open_lineage_hashes)
+            || !qglake_has_full_sha256_hashes(&view_replay.replay_event_hashes)
+            || !qglake_has_full_sha256_hashes(&view_replay.replay_open_lineage_hashes)
         {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-                "qglake lineage drain view replay for {view_stable_id} is missing compact identity or receipt hashes"
+                "qglake lineage drain view replay for {view_stable_id} is missing compact identity or full SHA-256 receipt hashes"
             )));
         }
         if drain.events.iter().any(|event| {
@@ -9520,10 +9520,10 @@ fn verify_qglake_view_replay(
             let Some(tombstone_receipts) = drain.events.iter().find(|event| {
                 event.event_type == "view.version-receipts-listed"
                     && event.view_stable_id.as_deref() == Some(view_stable_id.as_str())
-                    && qglake_has_sha256_hashes(&event.view_version_receipt_hashes)
+                    && qglake_has_full_sha256_hashes(&event.view_version_receipt_hashes)
             }) else {
                 return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-                    "qglake lineage drain view drop replay for {view_stable_id} is missing SHA-256 tombstone receipt evidence"
+                    "qglake lineage drain view drop replay for {view_stable_id} is missing full SHA-256 tombstone receipt evidence"
                 )));
             };
             if tombstone_receipts.lineage_events == 0 {
@@ -9535,12 +9535,12 @@ fn verify_qglake_view_replay(
                 event.event_type == "view.version-receipt-chains-listed"
                     && event.view_warehouse == view_replay.view_warehouse
                     && event.view_namespace == view_replay.view_namespace
-                    && qglake_has_sha256_hashes(&event.view_version_receipt_chain_hashes)
+                    && qglake_has_full_sha256_hashes(&event.view_version_receipt_chain_hashes)
                     && event.view_version_receipt_chain_verified_count > 0
-                    && qglake_has_sha256_hashes(&event.view_version_receipt_hashes)
+                    && qglake_has_full_sha256_hashes(&event.view_version_receipt_hashes)
             }) else {
                 return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-                    "qglake lineage drain view drop replay for {view_stable_id} is missing SHA-256 namespace receipt-chain evidence for the accepted view namespace"
+                    "qglake lineage drain view drop replay for {view_stable_id} is missing full SHA-256 namespace receipt-chain evidence for the accepted view namespace"
                 )));
             };
             if receipt_chain_read.view_version_receipt_chain_hashes.len()
@@ -9571,11 +9571,11 @@ fn verify_qglake_view_replay(
                 )));
             }
             if receipt_chain_read.lineage_events == 0
-                || !qglake_has_sha256_hashes(&receipt_chain_read.replay_event_hashes)
-                || !qglake_has_sha256_hashes(&receipt_chain_read.replay_open_lineage_hashes)
+                || !qglake_has_full_sha256_hashes(&receipt_chain_read.replay_event_hashes)
+                || !qglake_has_full_sha256_hashes(&receipt_chain_read.replay_open_lineage_hashes)
             {
                 return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-                    "qglake lineage drain namespace receipt-chain replay for {view_stable_id} is missing chain, lineage, or sink receipt hashes"
+                    "qglake lineage drain namespace receipt-chain replay for {view_stable_id} is missing chain, lineage, or full SHA-256 sink receipt hashes"
                 )));
             }
         }
@@ -12922,11 +12922,11 @@ mod tests {
             )]),
             verified_view_receipt_hashes: BTreeMap::from([(
                 "lakecat:view:local:default:active_customers_view".to_string(),
-                "sha256:view-receipt".to_string(),
+                qglake_fixture_hash("view-receipt"),
             )]),
             verified_view_receipt_chain_hashes: BTreeMap::from([(
                 "lakecat:view:local:default:active_customers_view".to_string(),
-                "sha256:view-receipt-chain".to_string(),
+                qglake_fixture_hash("view-receipt-chain"),
             )]),
             bundle_hash: "sha256:bundle".to_string(),
             graph_hash: "sha256:graph".to_string(),
@@ -12943,8 +12943,8 @@ mod tests {
         view.view_stable_id = Some("lakecat:view:local:default:active_customers_view".to_string());
         view.view_version = Some(1);
         view.expected_view_version = None;
-        view.replay_event_hashes = vec!["sha256:view-replay".to_string()];
-        view.replay_open_lineage_hashes = vec!["sha256:view-openlineage".to_string()];
+        view.replay_event_hashes = vec![qglake_fixture_hash("view-replay")];
+        view.replay_open_lineage_hashes = vec![qglake_fixture_hash("view-openlineage")];
 
         LineageDrainResponse {
             delivered: 14,
@@ -27344,8 +27344,8 @@ mod tests {
         chain.view_version_receipt_chain_verified_count = 2;
         chain.view_version_receipt_chain_hashes = vec![duplicate_hash.clone(), duplicate_hash];
         chain.view_version_receipt_hashes = vec![
-            "sha256:view-drop-receipt".to_string(),
-            "sha256:view-receipt-v2".to_string(),
+            qglake_fixture_hash("view-drop-receipt"),
+            qglake_fixture_hash("view-receipt-v2"),
         ];
         let drain = qglake_lineage_drain_from_summaries(vec![
             qglake_bootstrap_lineage_summary_for(&verification, 1),
@@ -27376,6 +27376,70 @@ mod tests {
         );
         assert!(err.to_string().contains("viewVersionReceiptChainHashes"));
         assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_short_view_replay_hashes() {
+        let verification = qglake_view_lineage_verification();
+        let mut view = qglake_view_lineage_summary();
+        view.replay_event_hashes = vec!["sha256:view-replay-event".to_string()];
+        let drain = qglake_lineage_drain_from_summaries(vec![
+            qglake_bootstrap_lineage_summary_for(&verification, 1),
+            qglake_restricted_credential_summary(),
+            qglake_human_credential_summary(),
+            view,
+            qglake_view_drop_lineage_summary(),
+            qglake_view_tombstone_receipt_lineage_summary(),
+            qglake_view_receipt_chain_lineage_summary(),
+            qglake_policy_list_lineage_summary(),
+            qglake_policy_upsert_lineage_summary(),
+            qglake_storage_profile_list_lineage_summary(),
+            qglake_storage_profile_upsert_lineage_summary(),
+            qglake_server_list_lineage_summary(),
+            qglake_project_list_lineage_summary(),
+            qglake_warehouse_list_lineage_summary(),
+            qglake_table_commit_history_lineage_summary(),
+            qglake_scan_planned_lineage_summary(),
+            qglake_scan_tasks_fetched_lineage_summary(),
+        ]);
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short view replay hashes");
+
+        assert!(err.to_string().contains("view replay"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_short_view_receipt_hashes() {
+        let verification = qglake_view_lineage_verification();
+        let mut tombstone = qglake_view_tombstone_receipt_lineage_summary();
+        tombstone.view_version_receipt_hashes = vec!["sha256:view-drop-receipt".to_string()];
+        let drain = qglake_lineage_drain_from_summaries(vec![
+            qglake_bootstrap_lineage_summary_for(&verification, 1),
+            qglake_restricted_credential_summary(),
+            qglake_human_credential_summary(),
+            qglake_view_lineage_summary(),
+            qglake_view_drop_lineage_summary(),
+            tombstone,
+            qglake_view_receipt_chain_lineage_summary(),
+            qglake_policy_list_lineage_summary(),
+            qglake_policy_upsert_lineage_summary(),
+            qglake_storage_profile_list_lineage_summary(),
+            qglake_storage_profile_upsert_lineage_summary(),
+            qglake_server_list_lineage_summary(),
+            qglake_project_list_lineage_summary(),
+            qglake_warehouse_list_lineage_summary(),
+            qglake_table_commit_history_lineage_summary(),
+            qglake_scan_planned_lineage_summary(),
+            qglake_scan_tasks_fetched_lineage_summary(),
+        ]);
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short view receipt hashes");
+
+        assert!(err.to_string().contains("tombstone receipt"));
+        assert!(err.to_string().contains("full SHA-256"));
     }
 
     #[test]
@@ -27791,11 +27855,11 @@ mod tests {
             BTreeMap::from([("lakecat:view:local:default:active_customers".to_string(), 2)]);
         verification.verified_view_receipt_hashes = BTreeMap::from([(
             "lakecat:view:local:default:active_customers".to_string(),
-            "sha256:view-version-receipt".to_string(),
+            qglake_fixture_hash("view-version-receipt"),
         )]);
         verification.verified_view_receipt_chain_hashes = BTreeMap::from([(
             "lakecat:view:local:default:active_customers".to_string(),
-            "sha256:view-receipt-chain".to_string(),
+            qglake_fixture_hash("view-receipt-chain"),
         )]);
         verification
     }
@@ -28043,7 +28107,7 @@ mod tests {
             catalog_config_endpoints: Vec::new(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:view-authorization".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("view-authorization")),
             authorization_receipt_action: Some("view-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -28110,8 +28174,8 @@ mod tests {
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
-            replay_event_hashes: vec!["sha256:view-replay-event".to_string()],
-            replay_open_lineage_hashes: vec!["sha256:view-replay-openlineage".to_string()],
+            replay_event_hashes: vec![qglake_fixture_hash("view-replay-event")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash("view-replay-openlineage")],
         }
     }
 
@@ -28121,9 +28185,9 @@ mod tests {
         summary.event_type = "view.dropped".to_string();
         summary.authorization_receipt_action = Some("view-drop".to_string());
         summary.expected_view_version = Some(2);
-        summary.replay_event_hashes = vec!["sha256:view-drop-replay-event".to_string()];
+        summary.replay_event_hashes = vec![qglake_fixture_hash("view-drop-replay-event")];
         summary.replay_open_lineage_hashes =
-            vec!["sha256:view-drop-replay-openlineage".to_string()];
+            vec![qglake_fixture_hash("view-drop-replay-openlineage")];
         summary
     }
 
@@ -28135,10 +28199,10 @@ mod tests {
         summary.graph_events = 0;
         summary.lineage_events = 1;
         summary.expected_view_version = None;
-        summary.view_version_receipt_hashes = vec!["sha256:view-drop-receipt".to_string()];
-        summary.replay_event_hashes = vec!["sha256:view-receipts-replay-event".to_string()];
+        summary.view_version_receipt_hashes = vec![qglake_fixture_hash("view-drop-receipt")];
+        summary.replay_event_hashes = vec![qglake_fixture_hash("view-receipts-replay-event")];
         summary.replay_open_lineage_hashes =
-            vec!["sha256:view-receipts-replay-openlineage".to_string()];
+            vec![qglake_fixture_hash("view-receipts-replay-openlineage")];
         summary
     }
 
@@ -28155,15 +28219,15 @@ mod tests {
         summary.view_name = None;
         summary.view_version = None;
         summary.expected_view_version = None;
-        summary.view_version_receipt_hashes = vec!["sha256:view-drop-receipt".to_string()];
-        summary.view_version_receipt_chain_hashes = vec!["sha256:view-receipt-chain".to_string()];
+        summary.view_version_receipt_hashes = vec![qglake_fixture_hash("view-drop-receipt")];
+        summary.view_version_receipt_chain_hashes = vec![qglake_fixture_hash("view-receipt-chain")];
         summary.view_version_receipt_chain_verified_count = 1;
         summary.view_version_receipt_chains = vec![ViewVersionReceiptChainResponse {
             stable_id: "lakecat:view:local:default:active_customers".to_string(),
             warehouse: "local".to_string(),
             namespace: vec!["default".to_string()],
             name: "active_customers".to_string(),
-            chain_hash: "sha256:view-receipt-chain".to_string(),
+            chain_hash: qglake_fixture_hash("view-receipt-chain"),
             chain_verified: true,
             latest_view_version: 2,
             latest_operation: "drop".to_string(),
@@ -28179,8 +28243,8 @@ mod tests {
                     previous_view_version: None,
                     previous_receipt_hash: None,
                     operation: "upsert".to_string(),
-                    view_hash: "sha256:view-v1".to_string(),
-                    receipt_hash: "sha256:view-receipt-v1".to_string(),
+                    view_hash: qglake_fixture_hash("view-v1"),
+                    receipt_hash: qglake_fixture_hash("view-receipt-v1"),
                     principal_subject: "did:example:agent".to_string(),
                     principal_kind: "agent".to_string(),
                     recorded_at: "2026-06-20T00:00:00Z".to_string(),
@@ -28192,10 +28256,10 @@ mod tests {
                     name: "active_customers".to_string(),
                     view_version: 2,
                     previous_view_version: Some(1),
-                    previous_receipt_hash: Some("sha256:view-receipt-v1".to_string()),
+                    previous_receipt_hash: Some(qglake_fixture_hash("view-receipt-v1")),
                     operation: "upsert".to_string(),
-                    view_hash: "sha256:view-v2".to_string(),
-                    receipt_hash: "sha256:view-version-receipt".to_string(),
+                    view_hash: qglake_fixture_hash("view-v2"),
+                    receipt_hash: qglake_fixture_hash("view-version-receipt"),
                     principal_subject: "did:example:agent".to_string(),
                     principal_kind: "agent".to_string(),
                     recorded_at: "2026-06-20T00:00:01Z".to_string(),
@@ -28207,19 +28271,20 @@ mod tests {
                     name: "active_customers".to_string(),
                     view_version: 2,
                     previous_view_version: Some(2),
-                    previous_receipt_hash: Some("sha256:view-version-receipt".to_string()),
+                    previous_receipt_hash: Some(qglake_fixture_hash("view-version-receipt")),
                     operation: "drop".to_string(),
-                    view_hash: "sha256:view-drop".to_string(),
-                    receipt_hash: "sha256:view-drop-receipt".to_string(),
+                    view_hash: qglake_fixture_hash("view-drop"),
+                    receipt_hash: qglake_fixture_hash("view-drop-receipt"),
                     principal_subject: "did:example:agent".to_string(),
                     principal_kind: "agent".to_string(),
                     recorded_at: "2026-06-20T00:00:02Z".to_string(),
                 },
             ],
         }];
-        summary.replay_event_hashes = vec!["sha256:view-receipt-chains-replay-event".to_string()];
-        summary.replay_open_lineage_hashes =
-            vec!["sha256:view-receipt-chains-replay-openlineage".to_string()];
+        summary.replay_event_hashes = vec![qglake_fixture_hash("view-receipt-chains-replay-event")];
+        summary.replay_open_lineage_hashes = vec![qglake_fixture_hash(
+            "view-receipt-chains-replay-openlineage",
+        )];
         summary
     }
 

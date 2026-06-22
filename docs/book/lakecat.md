@@ -10289,6 +10289,10 @@ paths under the handoff summary directory before hashing or parsing them, and
 the verifier rejects relative traversal outside that bundle for both hash
 verification and captured-output semantic reads. A matching hash from another
 directory is not accepted as QGLake evidence.
+The same release gate treats raw view-lineage proof hashes as real digests,
+not placeholders: view replay receipts, tombstone view receipts, namespace
+receipt-chain hashes, and receipt-chain replay/OpenLineage hashes must be full
+SHA-256-shaped values before QGLake can archive them as accepted view proof.
 
 The first release should explicitly defer work that belongs elsewhere or is not
 yet ready to claim. Typed Iceberg v4 semantics belong in Sail; LakeCat should
