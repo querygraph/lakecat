@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving governed scan replay rejects
+  empty `row-predicate` read-restriction evidence for both planned and fetched
+  scan events before acknowledgement, graph projection, or OpenLineage
+  projection.
 - Added service replay regression coverage proving governed
   `table.scan-tasks-fetched` events reject missing `row-predicate`
   read-restriction evidence before acknowledgement, graph projection, or
