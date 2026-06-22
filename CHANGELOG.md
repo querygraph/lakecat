@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Required service `table.commit` replay admission to carry positive Iceberg
+  format-version evidence and non-negative snapshot-id evidence before
+  acknowledgement, graph projection, or OpenLineage projection.
 - Required service `table.commit` replay admission to carry full request,
   response, and idempotency-key hash evidence before acknowledgement, graph
   projection, or OpenLineage projection, leaving only `policy_hash` optional

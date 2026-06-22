@@ -4891,9 +4891,10 @@ Individual `table.commit` replay is held to the same commit envelope before
 graph or OpenLineage delivery: it must include a positive sequence number,
 non-empty new metadata pointer evidence, non-blank previous pointer evidence
 when present, matching commit and authorization principals, the `table-commit`
-receipt action, and full SHA-256 request, response, and idempotency-key hashes.
-The policy hash is the only optional hash in that envelope, because some
-standard commits do not pass through a policy binding.
+receipt action, positive Iceberg format-version evidence, non-negative
+snapshot-id evidence, and full SHA-256 request, response, and idempotency-key
+hashes. The policy hash is the only optional hash in that envelope, because
+some standard commits do not pass through a policy binding.
 Credential-vend replay gets the same treatment: `credentials.vend-attempted`
 must carry a
 matching credential count, full duplicate-free credential-response prefix
