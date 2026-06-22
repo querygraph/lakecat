@@ -2671,10 +2671,23 @@ fn validate_audit_payload_authorization_principal(
     payload: &Value,
     principal: &Principal,
 ) -> LakeCatResult<()> {
-    let Some(receipt_principal) = payload
-        .get("authorization-receipt")
-        .and_then(|receipt| receipt.get("principal"))
-    else {
+    let Some(receipt) = payload.get("authorization-receipt") else {
+        return Ok(());
+    };
+    let action = receipt
+        .get("action")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            LakeCatError::InvalidArgument(
+                "audit event authorization receipt action is required".to_string(),
+            )
+        })?;
+    if action.trim().is_empty() {
+        return Err(LakeCatError::InvalidArgument(
+            "audit event authorization receipt action must not be empty".to_string(),
+        ));
+    }
+    let Some(receipt_principal) = receipt.get("principal") else {
         return Ok(());
     };
     let receipt_principal = serde_json::from_value::<Principal>(receipt_principal.clone())
@@ -4635,6 +4648,38 @@ mod memory_tests {
                 if message.contains(
                     "audit event authorization receipt principal does not match event principal"
                 )
+        ));
+        let state = store.state.read().await;
+        assert!(state.audit_events.is_empty());
+        assert!(state.outbox_events.is_empty());
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_audit_authorization_receipts_without_action() {
+        let store = MemoryCatalogStore::new();
+        let principal =
+            Principal::new("did:example:agent", lakecat_core::PrincipalKind::Agent).unwrap();
+        let event = CatalogAuditEvent::new(
+            "querygraph.bootstrap",
+            None,
+            principal.clone(),
+            serde_json::json!({
+                "event-type": "querygraph.bootstrap",
+                "authorization-receipt": {
+                    "engine": "typesec",
+                    "allowed": true,
+                    "principal": principal
+                },
+                "manifest-hash": "lakecat:test"
+            }),
+        )
+        .unwrap();
+
+        let err = store.record_audit_event(event).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("audit event authorization receipt action is required")
         ));
         let state = store.state.read().await;
         assert!(state.audit_events.is_empty());
@@ -9541,6 +9586,37 @@ pub mod turso_store {
                     if message.contains(
                         "audit event authorization receipt principal does not match event principal"
                     )
+            ));
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
+            assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_audit_authorization_receipts_without_action() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let principal =
+                Principal::new("did:example:agent", lakecat_core::PrincipalKind::Agent).unwrap();
+            let event = CatalogAuditEvent::new(
+                "querygraph.bootstrap",
+                None,
+                principal.clone(),
+                serde_json::json!({
+                    "event-type": "querygraph.bootstrap",
+                    "authorization-receipt": {
+                        "engine": "typesec",
+                        "allowed": true,
+                        "principal": principal
+                    },
+                    "manifest-hash": "lakecat:test"
+                }),
+            )
+            .unwrap();
+
+            let err = store.record_audit_event(event).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("audit event authorization receipt action is required")
             ));
             assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
             assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);

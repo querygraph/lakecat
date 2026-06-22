@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Require audit receipt actions`.
+  Generic audit recording now requires every payload `authorization-receipt`
+  to carry a nonblank `action` before memory or Turso stores persist audit rows
+  or enqueue outbox work. The regressions create payload-hash-valid audit
+  events whose receipts omit the action and prove audit/outbox state stays
+  empty.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local audit_authorization_receipts_without_action -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Bind audit receipt principals`.
   Generic audit recording now validates any payload
   `authorization-receipt.principal` against the top-level audit event principal

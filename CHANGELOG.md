@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required generic audit authorization receipts to carry nonblank action
+  evidence before memory or Turso stores persist audit rows or enqueue outbox
+  work. The regressions reject payload-hash-valid audit events whose receipts
+  omit the action.
 - Bound generic audit authorization receipts back to the top-level audit
   principal before memory or Turso stores persist audit rows or enqueue outbox
   work. The regressions create payload-hash-valid audit events whose receipt
