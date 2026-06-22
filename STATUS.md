@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require table commit hash envelope`.
+  Service `table.commit` replay admission now rejects committed pointer
+  transitions unless the replay envelope carries full request, response, and
+  idempotency-key hash evidence before acknowledgement, graph projection, or
+  OpenLineage projection. `policy_hash` remains optional for standard commits
+  that did not involve a policy.
+- Local verification for this table commit envelope slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib table_commit -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind credential receipt proof`.
   Compact QGLake `credentialVendingProof` branches and captured LakeCat replay
   evidence now carry branch-level full authorization receipt hashes and the

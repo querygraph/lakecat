@@ -1429,14 +1429,10 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
             "table commit evidence previous metadata location must be non-empty when present",
         ));
     }
-    for field in [
-        "request_hash",
-        "response_hash",
-        "idempotency_key_sha256",
-        "policy_hash",
-    ] {
-        validate_optional_full_hash_field(event, commit, field)?;
+    for field in ["request_hash", "response_hash", "idempotency_key_sha256"] {
+        validate_required_full_hash_field(event, commit, field)?;
     }
+    validate_optional_full_hash_field(event, commit, "policy_hash")?;
     Ok(())
 }
 
@@ -14498,6 +14494,84 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_missing_table_commit_hash_evidence() {
+        for field in ["request_hash", "response_hash", "idempotency_key_sha256"] {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let principal = Principal {
+                subject: "agent:writer".to_string(),
+                kind: PrincipalKind::Agent,
+            };
+            let mut commit = json!({
+                "table": table,
+                "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+                "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+                "sequence_number": 7,
+                "principal": principal,
+                "format_version": 3,
+                "snapshot_id": 42,
+                "policy_hash": null,
+                "request_hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+                "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+                "idempotency_key_sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+                "committed_at": chrono::Utc::now(),
+            });
+            commit.as_object_mut().unwrap().remove(field);
+            let event_id = format!("evt-missing-commit-{field}");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.commit".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-missing-commit-{field}"),
+                        "event-type": "table.commit",
+                        "table": table,
+                        "commit": commit,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-commit",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("missing table commit hash evidence should fail before delivery");
+
+            let message = err.to_string();
+            assert!(message.contains("table.commit"));
+            assert!(message.contains(field));
+            assert!(message.contains("full SHA-256"));
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(store.delivered.lock().await.is_empty());
+            assert!(graph.events.lock().await.is_empty());
+            assert!(lineage.events.lock().await.is_empty());
+        }
     }
 
     #[tokio::test]

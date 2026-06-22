@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required service `table.commit` replay admission to carry full request,
+  response, and idempotency-key hash evidence before acknowledgement, graph
+  projection, or OpenLineage projection, leaving only `policy_hash` optional
+  for commits that did not involve a policy.
 - Bound compact QGLake credential-vending proof to branch-level authorization
   receipt evidence, requiring restricted-agent and trusted-human credential
   branches plus captured LakeCat replay JSON to carry full authorization
