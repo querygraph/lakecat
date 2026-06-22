@@ -243,7 +243,10 @@ The current working plan is:
    mutations must reject invalid expected-version values before changing active
    view state or appending view-version receipts, and memory/Turso mutation
    paths must validate the existing receipt chain before appending a new view
-   receipt so corrupted durable history cannot be extended.
+   receipt so corrupted durable history cannot be extended. Turso receipt reads
+   and mutation-chain lookups must also verify decoded receipt JSON against the
+   row/query warehouse, namespace, and view scope before returning or extending
+   durable view-history evidence.
 6. Keep reproducibility ahead of integration claims. Run local gates before
    commit, keep cloud CI manual/disabled until it is known green, use published
    Grust/TypeSec crates when available, and keep any Sail path/patch bridge

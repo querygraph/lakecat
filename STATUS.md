@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Validate Turso view receipt row scope`.
+  Turso view-version receipt reads, namespace receipt-chain reads, and
+  latest-receipt mutation lookups now require decoded `receipt_json` identity
+  to match the row/query warehouse, namespace, and view scope. Corrupt durable
+  rows whose indexed columns select one view while JSON claims another view now
+  fail before QGLake reads the chain or LakeCat appends later view history.
+- Local verification for this Turso view receipt row-scope slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_view_receipt_json_scope_drift -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Validate view receipt chains before mutation`.
   Memory and Turso view upsert/drop paths now validate the existing durable
   view-version receipt chain before computing the latest receipt hash and

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened Turso view-version receipt reads and mutation history extension so
+  decoded `receipt_json` must match the row/query warehouse, namespace, and
+  view identity before LakeCat returns receipts, validates namespace receipt
+  chains, or appends another view receipt. This rejects row/content scope drift
+  before QGLake or later mutations can consume spliced view-history evidence.
 - Hardened memory and Turso view mutations so they validate the existing
   durable view-version receipt chain before appending a new upsert or drop
   receipt. A forged `previous-receipt-hash` in existing durable receipt history

@@ -4750,6 +4750,10 @@ unguarded view upsert/drop first validates the existing durable receipt chain,
 then computes the latest receipt hash, and only then appends the next receipt.
 If a stored receipt has a forged `previous-receipt-hash`, LakeCat rejects the
 new mutation before changing the active view record or writing another receipt.
+For the Turso-backed store, LakeCat also compares the decoded receipt JSON to
+the row/query scope. A receipt row selected for one warehouse, namespace, and
+view cannot carry JSON that claims another view and still be returned, grouped
+into a namespace chain, or used as the latest receipt for the next mutation.
 
 The verifier is fail-closed on version progression too. The first receipt must
 be a version-1 upsert with no previous version or receipt hash; zero-version
