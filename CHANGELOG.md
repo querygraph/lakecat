@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's first-release catalog concept explanation with a
+  standards-reader guide. The book now more explicitly separates ordinary
+  Iceberg client vocabulary from LakeCat operator proof, TypeSec/Sail governed
+  service evidence, QueryGraph/QGLake integration, and future optional
+  Iceberg-adjacent profile candidates, while strengthening the argument that
+  Sail should own reusable Iceberg table interpretation for PySpark, governed
+  service, and agentic QueryGraph workflows.
 - Added credential-vend replay coverage for denied or incomplete authorization
   receipt decisions. `credentials.vend-attempted` now has a direct regression
   proving missing or false `allowed` decisions fail before acknowledgement,

@@ -5,6 +5,25 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Expand catalog standards and engine guidance`.
+  The book now more thoroughly explains the first-release catalog concepts
+  through a standards-reader lens: standard Iceberg clients stop at ordinary
+  REST namespace/table and commit vocabulary; LakeCat operators read durable
+  Rust/Turso/idempotency/pointer-log/audit/outbox/replay proof; governed
+  services read TypeSec receipt evidence bound to Sail-planned table facts; and
+  QueryGraph/QGLake reads additive semantic proof surfaces. The added text also
+  sharpens the proposal posture by separating local implementation choices
+  from optional Iceberg-adjacent reliability, replay, governed-scan, and
+  credential-posture profile candidates, and it makes the case that Sail should
+  own reusable Iceberg table interpretation for PySpark, governed service, and
+  agentic QueryGraph workflows.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/testing slice:
   `Cover credential-vend allowed decisions`.
   Service replay admission already required `credentials.vend-attempted`
