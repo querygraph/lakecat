@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog-concepts chapter with a dedicated
+  extension/proposal boundary, classifying Rust/Turso as implementation
+  choices, REST table/namespace paths and CAS as standard Iceberg behavior,
+  LakeCat replay/audit/outbox and TypeSec receipt evidence as additive
+  catalog/governance extensions, QueryGraph/QGLake as application handoff, and
+  only the narrow portable proof shapes as future Iceberg-adjacent proposal
+  candidates. The Sail section now more directly argues that engine-shaped work
+  such as manifest metrics, delete planning, metadata-as-data, commit
+  validation, and typed v4 interpretation should move into Sail.
 - Required service `table.commit` replay admission to carry positive Iceberg
   format-version evidence and non-negative snapshot-id evidence before
   acknowledgement, graph projection, or OpenLineage projection.

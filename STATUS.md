@@ -20,6 +20,20 @@ Updated: 2026-06-22
   `docs/book/build.sh`;
   `scripts/check-release-readiness.sh --quick`;
   `git diff --check`.
+- Latest completed documentation slice:
+  `Clarify catalog extension boundaries`.
+  The book now gives a dedicated explanation of what is standard Iceberg
+  parlance, what is a LakeCat implementation or optional control-plane
+  extension, what belongs to TypeSec governance, what belongs to
+  QueryGraph/QGLake handoff, and which narrow proof shapes could become future
+  Iceberg-adjacent proposals. The Sail section now more directly argues for
+  pushing engine-shaped Iceberg work into Sail, including manifest metrics,
+  delete planning, metadata-as-data, commit validation, and typed v4
+  interpretation.
+- Local verification for this book slice is green:
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Require table commit hash envelope`.
   Service `table.commit` replay admission now rejects committed pointer
