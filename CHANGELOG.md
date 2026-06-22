@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required `table.created`, `table.loaded`, and `table.restored` replay
+  evidence to carry an unsigned table `version` before acknowledgement, graph
+  projection, or OpenLineage projection, with malformed-version coverage for
+  create, load, and restore lifecycle events.
 - Required table lifecycle replay evidence to carry a valid authorization
   receipt principal before acknowledgement, graph projection, or OpenLineage
   projection, with missing and malformed principal coverage across

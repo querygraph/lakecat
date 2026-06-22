@@ -1558,6 +1558,16 @@ fn validate_table_lifecycle_event_evidence(
     let table = decode_table_lifecycle_identity(event, table_value, "table lifecycle")?;
     validate_authorization_receipt_principal(event, payload, "table lifecycle")?;
     validate_table_lifecycle_payload_scope(event, payload, &table, "table lifecycle")?;
+    if matches!(
+        event.event_type.as_str(),
+        "table.created" | "table.loaded" | "table.restored"
+    ) && payload.get("version").and_then(Value::as_u64).is_none()
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "table lifecycle evidence must contain unsigned version",
+        ));
+    }
 
     if let Some(payload_table) = payload.get("table") {
         validate_table_lifecycle_table_hint(
@@ -11142,6 +11152,7 @@ mod tests {
                                 "checked_at": chrono::Utc::now(),
                             },
                             "metadata-location": "file:///tmp/events/metadata/00000.json",
+                            "version": 0,
                             "metadata-graph": {
                                 "current-schema-id": 1,
                                 "fields": [
@@ -11898,6 +11909,7 @@ mod tests {
                             "checked_at": chrono::Utc::now(),
                         },
                         "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 0,
                     }
                 }),
                 created_at: chrono::Utc::now(),
@@ -11963,6 +11975,7 @@ mod tests {
                                 "checked_at": first_created_at,
                             },
                             "metadata-location": "file:///tmp/events/metadata/00000.json",
+                            "version": 0,
                         }
                     }),
                     created_at: first_created_at,
@@ -11986,6 +11999,7 @@ mod tests {
                                 "checked_at": second_created_at,
                             },
                             "metadata-location": "file:///tmp/events/metadata/00001.json",
+                            "version": 0,
                         }
                     }),
                     created_at: second_created_at,
@@ -12054,6 +12068,7 @@ mod tests {
                             "checked_at": chrono::Utc::now(),
                         },
                         "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 0,
                     }
                 }),
                 created_at: chrono::Utc::now(),
@@ -12116,6 +12131,7 @@ mod tests {
                             "checked_at": chrono::Utc::now(),
                         },
                         "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 0,
                     }
                 }),
                 created_at: chrono::Utc::now(),
@@ -18045,6 +18061,7 @@ mod tests {
                     "checked_at": chrono::Utc::now(),
                 },
                 "metadata-location": "file:///tmp/events/metadata/00000.json",
+                "version": 0,
             }
         });
         let store = Arc::new(RecordingOutboxStore {
@@ -22781,6 +22798,7 @@ mod tests {
                             "checked_at": checked_at,
                         },
                         "metadata-location": " ",
+                        "version": 0,
                     }
                 }),
             ),
@@ -22802,6 +22820,7 @@ mod tests {
                             "checked_at": checked_at,
                         },
                         "location": "\t",
+                        "version": 0,
                     }
                 }),
             ),
@@ -22877,6 +22896,124 @@ mod tests {
             assert!(
                 lineage.events.lock().await.is_empty(),
                 "blank table lifecycle location evidence must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_table_lifecycle_version_evidence() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            (
+                "evt-created-missing-version",
+                "table.created",
+                json!({
+                    "audit-event-id": "audit-created-missing-version",
+                    "event-type": "table.created",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": &principal,
+                            "action": "table-create",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                    }
+                }),
+            ),
+            (
+                "evt-loaded-string-version",
+                "table.loaded",
+                json!({
+                    "audit-event-id": "audit-loaded-string-version",
+                    "event-type": "table.loaded",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": &principal,
+                            "action": "table-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": "0",
+                    }
+                }),
+            ),
+            (
+                "evt-restored-missing-version",
+                "table.restored",
+                json!({
+                    "audit-event-id": "audit-restored-missing-version",
+                    "event-type": "table.restored",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": &principal,
+                            "action": "table-restore",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                    }
+                }),
+            ),
+        ];
+
+        for (event_id, event_type, payload) in cases {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed table lifecycle version evidence should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(message.contains("table lifecycle evidence must contain unsigned version"));
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
             );
         }
     }
@@ -23430,6 +23567,7 @@ mod tests {
                         "namespace": ["default"],
                         "table": "events",
                         "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 0,
                     }
                 }),
                 created_at: chrono::Utc::now(),

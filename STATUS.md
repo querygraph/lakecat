@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require table lifecycle version evidence`.
+  Service replay admission now rejects `table.created`, `table.loaded`, and
+  `table.restored` evidence whose table `version` is missing or not an unsigned
+  integer before acknowledgement, graph projection, or OpenLineage projection.
+  `table.deleted` continues to prove version through its required
+  `soft-delete.version` evidence.
+- Local verification for this table lifecycle version slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib table_lifecycle_version -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib table_lifecycle -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain_projects_table_events_to_sinks -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`.
+- Latest completed implementation slice:
   `Require table lifecycle receipt principals`.
   Service replay admission now rejects `table.created`, `table.loaded`,
   `table.deleted`, and `table.restored` evidence whose authorization receipt

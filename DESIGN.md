@@ -652,6 +652,9 @@ Table lifecycle replay for create, load, delete, and restore events must carry
 the same valid authorization receipt principal before projection, so table
 lifecycle graph/OpenLineage facts cannot be actorless even when the standard
 Iceberg REST response shape remains unchanged.
+Create, load, and restore replay must also carry the unsigned table version
+that current producers emit; delete replay carries the same pointer-generation
+evidence through required `soft-delete.version`.
 
 View mutation guards must remain positive, store-assigned version checks so
 QueryGraph receipt chains cannot be extended by invalid guarded requests.
