@@ -17768,6 +17768,125 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_malformed_management_list_receipt_principal() {
+        let cases = vec![
+            (
+                "policy-binding.listed",
+                "policy-binding",
+                json!({
+                    "warehouse": "local",
+                    "policy-count": 1,
+                    "policy-ids": ["restricted-events"],
+                }),
+            ),
+            (
+                "project.listed",
+                "project",
+                json!({
+                    "project-count": 1,
+                    "project-ids": ["analytics"],
+                }),
+            ),
+            (
+                "server.listed",
+                "server",
+                json!({
+                    "server-count": 1,
+                    "server-ids": ["prod-us"],
+                }),
+            ),
+            (
+                "storage-profile.listed",
+                "storage-profile",
+                json!({
+                    "warehouse": "local",
+                    "storage-profile-count": 1,
+                    "storage-profile-ids": ["s3-events"],
+                }),
+            ),
+            (
+                "warehouse.listed",
+                "warehouse",
+                json!({
+                    "project-id": "analytics",
+                    "warehouse-count": 1,
+                    "warehouse-names": ["local"],
+                }),
+            ),
+        ];
+
+        for (event_type, label, mut payload) in cases {
+            payload["authorization-receipt"] = json!({
+                "principal": {
+                    "subject": "agent:operator",
+                    "kind": "unknown",
+                },
+                "action": "management-list",
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            });
+            let event_id = format!("evt-malformed-{label}-list-principal");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-malformed-{label}-list-principal"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed management-list receipt principal should fail");
+
+            let message = err.to_string();
+            assert!(
+                message.contains(&format!(
+                    "outbox event {event_type} (lakecat.lineage-and-graph) has invalid"
+                )),
+                "{event_type} should be identified in the validation error"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(
+                message.contains("management-list authorization receipt principal"),
+                "{event_type} should identify malformed authorization receipt principal evidence"
+            );
+            assert!(message.contains("must be a valid principal"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "malformed management-list principal must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "malformed management-list principal must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "malformed management-list principal must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_management_list_id_evidence() {
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {

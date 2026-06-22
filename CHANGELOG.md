@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving management list events
+  reject malformed authorization receipt principals before acknowledgement,
+  graph projection, or OpenLineage projection.
 - Expanded the LakeCat book with a front-loaded catalog concept field guide
   explaining which concepts are standard Iceberg parlance, LakeCat
   implementation, optional LakeCat/QueryGraph extensions, TypeSec governance

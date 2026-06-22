@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Cover malformed management list principals`.
+  Service replay regression coverage now proves policy-binding, project,
+  server, storage-profile, and warehouse list events reject malformed
+  authorization receipt principals before acknowledgement, graph projection, or
+  OpenLineage projection. This closes the malformed-principal sibling of the
+  management-list actor attribution rule.
+- Local verification for this malformed management list principal slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_management_list_receipt_principal -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib management_list_receipt_principal -- --test-threads=1`;
+  `git diff --check`.
 - Latest completed book/documentation slice:
   `Expand catalog concept field guide`.
   The LakeCat book now front-loads a detailed concept map for the Rust service
