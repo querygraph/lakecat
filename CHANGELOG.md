@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added management-upsert replay coverage for denied or incomplete
+  authorization receipt decisions. `policy-binding.upserted`,
+  `project.upserted`, `server.upserted`, `storage-profile.upserted`, and
+  `warehouse.upserted` now have direct regressions proving missing or false
+  `allowed` decisions fail before acknowledgement, graph projection,
+  OpenLineage projection, QGLake proof, or QueryGraph import can inherit
+  unauthorized management evidence.
 - Added table commit-history replay coverage for denied authorization receipt
   decisions. `table.commits-listed` now has a direct regression proving both
   missing and false `allowed` decisions fail before acknowledgement, graph

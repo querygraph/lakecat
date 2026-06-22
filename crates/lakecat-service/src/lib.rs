@@ -18430,6 +18430,188 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_missing_or_denied_management_upsert_receipt_allowed_decision() {
+        let principal = Principal {
+            subject: "agent:operator".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let storage_profile_location_hash = content_hash_json(&json!({
+            "location-prefix": "file:///tmp/lakecat/events"
+        }))
+        .unwrap();
+        let storage_root_hash = content_hash_json(&json!({
+            "storage-root": "file:///tmp/lakecat"
+        }))
+        .unwrap();
+        let endpoint_url_hash = content_hash_json(&json!({
+            "endpoint-url": "https://lakecat.example"
+        }))
+        .unwrap();
+        let odrl = json!({
+            "uid": "policy:agent-read",
+            "lakecat:read-restriction": {
+                "allowed-columns": ["event_id"]
+            }
+        });
+        let odrl_hash = content_hash_json(&odrl).unwrap();
+
+        for (event_type, label, action) in [
+            (
+                "policy-binding.upserted",
+                "policy-binding upsert",
+                "policy-manage",
+            ),
+            ("project.upserted", "project upsert", "project-manage"),
+            ("server.upserted", "server upsert", "server-manage"),
+            (
+                "storage-profile.upserted",
+                "storage-profile upsert",
+                "storage-profile-manage",
+            ),
+            ("warehouse.upserted", "warehouse upsert", "warehouse-manage"),
+        ] {
+            for (case, allowed, expected_message) in [
+                (
+                    "missing",
+                    None,
+                    format!("{label} evidence must contain authorization receipt allowed decision"),
+                ),
+                (
+                    "denied",
+                    Some(false),
+                    format!("{label} authorization receipt must allow replay projection"),
+                ),
+            ] {
+                let mut authorization_receipt = json!({
+                    "principal": principal.clone(),
+                    "action": action,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "checked_at": chrono::Utc::now(),
+                });
+                if let Some(allowed) = allowed {
+                    authorization_receipt["allowed"] = json!(allowed);
+                }
+                let payload = match event_type {
+                    "policy-binding.upserted" => json!({
+                        "authorization-receipt": authorization_receipt,
+                        "warehouse": "local",
+                        "policy": {
+                            "policy-id": "agent-read",
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "table": "events",
+                            "enforced": true,
+                            "odrl-hash": odrl_hash.clone(),
+                            "odrl": odrl.clone(),
+                        }
+                    }),
+                    "project.upserted" => json!({
+                        "authorization-receipt": authorization_receipt,
+                        "project-id": "default",
+                        "project-record": {
+                            "project-id": "default",
+                            "display-name": "Default Project",
+                            "properties": {"owner": "querygraph"}
+                        }
+                    }),
+                    "server.upserted" => json!({
+                        "authorization-receipt": authorization_receipt,
+                        "server-id": "prod",
+                        "server-record": {
+                            "server-id": "prod",
+                            "display-name": "Production",
+                            "endpoint-url": "https://lakecat.example",
+                            "endpoint-url-hash": endpoint_url_hash.clone(),
+                            "properties": {"region": "global"}
+                        }
+                    }),
+                    "storage-profile.upserted" => json!({
+                        "authorization-receipt": authorization_receipt,
+                        "warehouse": "local",
+                        "storage-profile": {
+                            "profile-id": "file-events",
+                            "warehouse": "local",
+                            "location-prefix-hash": storage_profile_location_hash.clone(),
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                        }
+                    }),
+                    "warehouse.upserted" => json!({
+                        "authorization-receipt": authorization_receipt,
+                        "warehouse": "local",
+                        "warehouse-record": {
+                            "warehouse": "local",
+                            "project-id": "default",
+                            "storage-root": "file:///tmp/lakecat",
+                            "storage-root-hash": storage_root_hash.clone(),
+                            "properties": {"region": "local"}
+                        }
+                    }),
+                    _ => unreachable!("covered by management upsert cases"),
+                };
+                let event_id = format!(
+                    "evt-{case}-{}-receipt-allowed",
+                    event_type.replace('.', "-")
+                );
+                let store = Arc::new(RecordingOutboxStore {
+                    events: Mutex::new(vec![OutboxEvent {
+                        event_id: event_id.clone(),
+                        sink: "lakecat.lineage-and-graph".to_string(),
+                        event_type: event_type.to_string(),
+                        payload: json!({
+                            "audit-event-id": format!("audit-{event_id}"),
+                            "event-type": event_type,
+                            "payload": payload,
+                        }),
+                        created_at: chrono::Utc::now(),
+                        delivered_at: None,
+                    }]),
+                    delivered: Mutex::default(),
+                });
+                let graph = Arc::new(RecordingGraph::default());
+                let lineage = Arc::new(RecordingLineage::default());
+                let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                    .with_integrations(
+                        default_sail_engine(),
+                        AllowAllGovernanceEngine::new(),
+                        graph.clone(),
+                        lineage.clone(),
+                    );
+
+                let err = drain_outbox_once(&state, 10)
+                    .await
+                    .expect_err("missing or denied management-upsert receipt decision should fail");
+
+                let message = err.to_string();
+                assert!(
+                    message.contains(event_type),
+                    "{event_type} error should include event type: {message}"
+                );
+                assert!(
+                    message.contains(&expected_message),
+                    "{event_type} should reject {case} allowed decision: {message}"
+                );
+                assert!(message.contains("event-id-hash=sha256:"));
+                assert!(!message.contains(&event_id));
+                assert!(
+                    store.delivered.lock().await.is_empty(),
+                    "{event_type} {case} allowed decision must fail before acknowledgement"
+                );
+                assert!(
+                    graph.events.lock().await.is_empty(),
+                    "{event_type} {case} allowed decision must fail before graph projection"
+                );
+                assert!(
+                    lineage.events.lock().await.is_empty(),
+                    "{event_type} {case} allowed decision must fail before lineage projection"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_short_table_commit_hash_evidence() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),
