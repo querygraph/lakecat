@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Require audit table scope anchors`.
+  String-form table scopes in generic audit payloads must now carry warehouse
+  and namespace anchors before memory or Turso stores persist audit rows or
+  enqueue outbox work. The regressions reject table-scoped audit payloads that
+  only say `"table": "events"`.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local bare_table_name_audit_payload_scope -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Bind audit payload table scope`.
   Memory and Turso generic audit recording now validate payload table scope
   against the top-level audit event table before persisting audit rows or

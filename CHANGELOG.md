@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required string-form table scopes in generic audit payloads to carry
+  warehouse and namespace anchors before memory or Turso stores persist audit
+  rows or enqueue outbox work. The regressions reject table-scoped audit
+  payloads that say only `"table": "events"`.
 - Bound generic audit payload table scope to the top-level audit event table
   before memory or Turso stores persist audit rows or enqueue outbox work. The
   regressions create payload-hash-valid audit events whose payload table points
