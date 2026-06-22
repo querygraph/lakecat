@@ -6,6 +6,23 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind receipt actions to outbox events`.
+  Service outbox replay admission now rejects authorization receipt `action`
+  values that are known LakeCat `CatalogAction` variants but do not match the
+  outbox event type. This prevents durable replay from using a valid
+  `table-load` receipt for `table.commit` projection, or a management/view
+  receipt from the wrong producer path, before acknowledgement, graph
+  projection, or OpenLineage projection.
+- Local verification for this receipt-action binding slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib receipt_action -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib receipt -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require known authorization receipt actions`.
   Service outbox replay admission now rejects authorization receipt `action`
   values that do not deserialize as LakeCat's canonical `CatalogAction` enum

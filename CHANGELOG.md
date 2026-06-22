@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required outbox replay admission to reject valid authorization receipt
+  `action` values when they do not match the outbox event type, so replay
+  cannot use a `table-load` receipt to project `table.commit` or similar
+  action drift.
 - Required outbox replay admission to reject unknown authorization receipt
   `action` values that do not deserialize as LakeCat's canonical
   `CatalogAction` enum before acknowledgement, graph projection, or

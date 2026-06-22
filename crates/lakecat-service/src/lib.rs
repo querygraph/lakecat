@@ -1496,13 +1496,60 @@ fn validate_authorization_receipt_action(
             &format!("{label} authorization receipt action must be non-empty"),
         ));
     }
-    serde_json::from_value::<CatalogAction>(Value::String(action.to_string())).map_err(|err| {
-        outbox_evidence_error(
+    let action = serde_json::from_value::<CatalogAction>(Value::String(action.to_string()))
+        .map_err(|err| {
+            outbox_evidence_error(
+                event,
+                &format!(
+                    "{label} authorization receipt action must be a known catalog action: {err}"
+                ),
+            )
+        })?;
+    if !authorization_receipt_action_matches_event(event.event_type.as_str(), &action) {
+        return Err(outbox_evidence_error(
             event,
-            &format!("{label} authorization receipt action must be a known catalog action: {err}"),
-        )
-    })?;
+            &format!("{label} authorization receipt action does not match outbox event type"),
+        ));
+    }
     Ok(())
+}
+
+fn authorization_receipt_action_matches_event(event_type: &str, action: &CatalogAction) -> bool {
+    match event_type {
+        "catalog.config-read" => matches!(action, CatalogAction::CatalogConfig),
+        "credentials.vend-attempted" => matches!(action, CatalogAction::CredentialsVend),
+        "namespace.created" => matches!(action, CatalogAction::NamespaceCreate),
+        "namespace.dropped" => matches!(action, CatalogAction::NamespaceDrop),
+        "namespace.listed" => matches!(action, CatalogAction::NamespaceList),
+        "namespace.loaded" => matches!(action, CatalogAction::NamespaceLoad),
+        "policy-binding.listed" | "policy-binding.upserted" => {
+            matches!(action, CatalogAction::PolicyManage)
+        }
+        "project.listed" | "project.upserted" => matches!(action, CatalogAction::ProjectManage),
+        "querygraph.bootstrap" => matches!(action, CatalogAction::GraphRead),
+        "server.listed" | "server.upserted" => matches!(action, CatalogAction::ServerManage),
+        "storage-profile.listed" | "storage-profile.upserted" => {
+            matches!(action, CatalogAction::StorageProfileManage)
+        }
+        "table.commit" => matches!(action, CatalogAction::TableCommit),
+        "table.commits-listed" | "table.loaded" => matches!(action, CatalogAction::TableLoad),
+        "table.created" => matches!(action, CatalogAction::TableCreate),
+        "table.deleted" => matches!(action, CatalogAction::TableDrop),
+        "table.restored" => matches!(action, CatalogAction::TableRestore),
+        "table.scan-planned" | "table.scan-tasks-fetched" => {
+            matches!(action, CatalogAction::TablePlanScan)
+        }
+        "view.dropped" => matches!(action, CatalogAction::ViewDrop),
+        "view.listed" => matches!(action, CatalogAction::ViewLoad | CatalogAction::ViewManage),
+        "view.loaded" | "view.version-receipts-listed" | "view.version-receipt-chains-listed" => {
+            matches!(action, CatalogAction::ViewLoad)
+        }
+        "view.upserted" => matches!(action, CatalogAction::ViewManage),
+        "warehouse.listed" | "warehouse.upserted" => {
+            matches!(action, CatalogAction::WarehouseManage)
+        }
+        _ => false,
+    }
 }
 
 fn validate_authorization_receipt_allowed(
@@ -15471,6 +15518,89 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_mismatched_table_commit_receipt_action() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-mismatched-commit-receipt-action".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commit".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-mismatched-commit-receipt-action",
+                    "event-type": "table.commit",
+                    "table": table,
+                    "commit": {
+                        "table": table,
+                        "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+                        "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+                        "sequence_number": 7,
+                        "principal": principal,
+                        "format_version": 3,
+                        "snapshot_id": 42,
+                        "policy_hash": null,
+                        "request_hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+                        "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+                        "idempotency_key_sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+                        "committed_at": chrono::Utc::now(),
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("mismatched table commit receipt action should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commit"));
+        assert!(
+            message.contains(
+                "table commit authorization receipt action does not match outbox event type"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-mismatched-commit-receipt-action"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "mismatched commit receipt action must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "mismatched commit receipt action must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "mismatched commit receipt action must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_missing_table_commit_receipt_engine() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),
@@ -21462,7 +21592,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn outbox_drain_rejects_missing_blank_or_unknown_standard_catalog_receipt_action() {
+    async fn outbox_drain_rejects_invalid_standard_catalog_receipt_actions() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let base_receipt = json!({
             "principal": principal,
@@ -21481,6 +21611,14 @@ mod tests {
         blank_action_receipt["action"] = json!(" ");
         let mut unknown_action_receipt = base_receipt;
         unknown_action_receipt["action"] = json!("catalog-administer-everything");
+        let mismatched_action_receipt = json!({
+            "principal": principal,
+            "action": "namespace-list",
+            "allowed": true,
+            "engine": "test",
+            "policy_hash": null,
+            "checked_at": chrono::Utc::now(),
+        });
 
         for (event_id, receipt, expected_message) in [
             (
@@ -21497,6 +21635,11 @@ mod tests {
                 "evt-config-unknown-receipt-action",
                 unknown_action_receipt,
                 "catalog config-read authorization receipt action must be a known catalog action",
+            ),
+            (
+                "evt-config-mismatched-receipt-action",
+                mismatched_action_receipt,
+                "catalog config-read authorization receipt action does not match outbox event type",
             ),
         ] {
             let store = Arc::new(RecordingOutboxStore {
@@ -25532,14 +25675,16 @@ mod tests {
     #[tokio::test]
     async fn outbox_drain_projects_management_list_reads_to_lineage() {
         let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
-        let authorization_receipt = json!({
-            "principal": principal,
-            "action": "server-manage",
-            "allowed": true,
-            "engine": "test",
-            "policy_hash": null,
-            "checked_at": chrono::Utc::now(),
-        });
+        let authorization_receipt = |action: &str| {
+            json!({
+                "principal": principal,
+                "action": action,
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            })
+        };
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![
                 OutboxEvent {
@@ -25550,7 +25695,7 @@ mod tests {
                         "audit-event-id": "audit-policy-list",
                         "event-type": "policy-binding.listed",
                         "payload": {
-                            "authorization-receipt": authorization_receipt,
+                            "authorization-receipt": authorization_receipt("policy-manage"),
                             "warehouse": "local",
                             "policy-count": 2,
                             "policy-ids": ["agent-read", "human.raw"],
@@ -25567,7 +25712,7 @@ mod tests {
                         "audit-event-id": "audit-project-list",
                         "event-type": "project.listed",
                         "payload": {
-                            "authorization-receipt": authorization_receipt,
+                            "authorization-receipt": authorization_receipt("project-manage"),
                             "project-count": 1,
                             "project-ids": ["analytics"],
                         }
@@ -25583,7 +25728,7 @@ mod tests {
                         "audit-event-id": "audit-server-list",
                         "event-type": "server.listed",
                         "payload": {
-                            "authorization-receipt": authorization_receipt,
+                            "authorization-receipt": authorization_receipt("server-manage"),
                             "server-count": 1,
                             "server-ids": ["prod-us"],
                         }
@@ -25599,7 +25744,7 @@ mod tests {
                         "audit-event-id": "audit-storage-profile-list",
                         "event-type": "storage-profile.listed",
                         "payload": {
-                            "authorization-receipt": authorization_receipt,
+                            "authorization-receipt": authorization_receipt("storage-profile-manage"),
                             "warehouse": "local",
                             "storage-profile-count": 2,
                             "storage-profile-ids": ["events-local", "audit-local"],
@@ -25616,7 +25761,7 @@ mod tests {
                         "audit-event-id": "audit-warehouse-list",
                         "event-type": "warehouse.listed",
                         "payload": {
-                            "authorization-receipt": authorization_receipt,
+                            "authorization-receipt": authorization_receipt("warehouse-manage"),
                             "project-id": "analytics",
                             "warehouse-count": 3,
                             "warehouse-names": ["local", "sandbox", "prod"],
@@ -27028,6 +27173,10 @@ mod tests {
         });
         let mut guarded_view_payload = view_payload.clone();
         guarded_view_payload["expected-view-version"] = json!(1);
+        let mut view_load_payload = view_payload.clone();
+        view_load_payload["authorization-receipt"]["action"] = json!("view-load");
+        let mut view_drop_payload = guarded_view_payload.clone();
+        view_drop_payload["authorization-receipt"]["action"] = json!("view-drop");
         let view_upsert_hash = content_hash_json(&json!({
             "view": "events_view",
             "version": 1,
@@ -27113,7 +27262,7 @@ mod tests {
                     payload: json!({
                         "audit-event-id": "audit-view-load",
                         "event-type": "view.loaded",
-                        "payload": view_payload,
+                        "payload": view_load_payload,
                     }),
                     created_at: chrono::Utc::now(),
                     delivered_at: None,
@@ -27125,7 +27274,7 @@ mod tests {
                     payload: json!({
                         "audit-event-id": "audit-view-drop",
                         "event-type": "view.dropped",
-                        "payload": guarded_view_payload.clone(),
+                        "payload": view_drop_payload,
                     }),
                     created_at: chrono::Utc::now(),
                     delivered_at: None,
