@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a release-ledger treatment of catalog
+  concepts, explicitly separating standard Iceberg parlance from LakeCat
+  implementation details, LakeCat/QueryGraph optional extensions, TypeSec
+  governance proof, and possible future Iceberg-adjacent profiles; also
+  sharpened the argument that reusable Iceberg planning, pruning, metadata, and
+  validation work belongs in Sail.
 - Added service replay regression coverage proving `storage-profile.upserted`
   rejects object-shaped secret-ref provider evidence when `secret-ref-present`
   is false before acknowledgement, graph projection, or OpenLineage projection.

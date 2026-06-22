@@ -1,10 +1,25 @@
 # LakeCat Status
 
-Updated: 2026-06-21
+Updated: 2026-06-22
 
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Expand catalog concepts in the book`.
+  The LakeCat book now includes a release-ledger treatment of the current
+  catalog concepts: Rust service spine, Turso-backed store direction, standard
+  Iceberg REST namespace/table paths, commit CAS, idempotency, pointer logs,
+  audit/outbox, replay validation, governed scan and credential proof,
+  QueryGraph/QGLake handoff, OpenLineage, and the boundary between standard
+  Iceberg parlance, LakeCat implementation, optional LakeCat/QueryGraph
+  extensions, TypeSec governance proof, and possible future Iceberg-adjacent
+  profiles. The Sail argument now more directly explains why reusable Iceberg
+  planning, pruning, metadata interpretation, delete handling, and commit
+  validation should live in Sail rather than in LakeCat.
+- Local verification for this book concepts slice is green:
+  `docs/book/build.sh`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Cover absent storage-profile secret ref object`.
   Service replay regression coverage now proves `storage-profile.upserted`
