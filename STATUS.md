@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover planned termless row predicates`.
+  Service replay regression coverage now proves governed `table.scan-planned`
+  events reject term-based `row-predicate` read-restriction evidence that omits
+  the narrowed `term` before acknowledgement, graph projection, or OpenLineage
+  projection. This closes the planned-scan sibling of the existing fetched
+  termless row-predicate replay guard.
+- Local verification for this planned termless row-predicate slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_planned_termless_row_predicate -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib row_predicate -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require scan policy hash replay proof`.
   Service replay admission now requires governed `table.scan-planned` and
   `table.scan-tasks-fetched` read-restriction evidence to carry

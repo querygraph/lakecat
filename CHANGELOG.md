@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving governed `table.scan-planned`
+  replay rejects term-based `row-predicate` read-restriction evidence that
+  omits the narrowed `term` before acknowledgement, graph projection, or
+  OpenLineage projection.
 - Required governed scan read-restriction replay evidence to carry
   `policy-hashes` at service admission, with planned and fetched scan
   regression coverage proving missing policy digest proof fails before
