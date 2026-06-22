@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened catalog-config override replay: `catalog.config-read` evidence now
+  validates optional `overrides` as structured string key/value entries and
+  rejects any `lakecat.format.v4*` override claims before acknowledgement,
+  graph projection, OpenLineage projection, or QGLake handoff. The config-read
+  audit payload now records the response's override array, and the book expands
+  the workflow explanation from PySpark through Sail, agents, and QueryGraph.
 - Hardened catalog-config v4 bridge replay: `catalog.config-read` evidence now
   rejects unsupported extra `lakecat.format.v4*` default keys, even when the
   required `extension-ready`, `json-passthrough`, and `typed-sail=unavailable`

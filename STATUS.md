@@ -6,6 +6,22 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Reject catalog-config v4 override claims`.
+  Catalog config replay now validates optional `overrides` as structured
+  string key/value entries and rejects any `lakecat.format.v4*` override
+  before acknowledgement, graph projection, OpenLineage projection, or QGLake
+  handoff. Config-read audit evidence now records the response override array,
+  and the book adds a workflow bridge explaining how the same catalog concepts
+  serve PySpark, Sail, governed agents, and QueryGraph without making
+  QueryGraph/TypeSec/Grust concepts part of standard Iceberg table access.
+- Local verification for this catalog-config override slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib catalog_config -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Reject unsupported catalog-config v4 claims`.
   Catalog config replay now treats the `lakecat.format.v4*` defaults namespace
   as a pinned compatibility claim set until typed Sail v4 support exists.

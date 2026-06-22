@@ -815,7 +815,9 @@ contradictory v4 bridge claims fail before graph or OpenLineage projection.
 Until typed Sail v4 support is available, `lakecat.format.v4*` defaults are a
 pinned claim namespace: replay must reject unsupported extra v4 bridge keys
 rather than letting future-looking typed-Sail claims coexist with
-`typed-sail=unavailable`.
+`typed-sail=unavailable`. Config overrides cannot carry v4 bridge keys either;
+until Sail exposes stable typed v4 support, an override is not allowed to
+rewrite the catalog's advertised v4 posture.
 The local dependency contract is the guardrail while cloud CI is manual-only:
 it must reject automatic triggers across every GitHub workflow file, not just
 the primary CI workflow, including compact, block-list, inline-map, and quoted

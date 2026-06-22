@@ -2927,8 +2927,48 @@ fn validate_catalog_config_read_event_evidence(
 ) -> Result<(), LakeCatError> {
     validate_required_warehouse_field(event, payload, "catalog config-read")?;
     validate_catalog_config_defaults(event, payload)?;
+    validate_catalog_config_overrides(event, payload)?;
     validate_authorization_receipt_principal(event, payload, "catalog config-read")?;
     Ok(())
+}
+
+fn validate_catalog_config_entries(
+    event: &OutboxEvent,
+    entries: &Value,
+    label: &str,
+) -> Result<BTreeSet<String>, LakeCatError> {
+    let Some(entries) = entries.as_array() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} must be an array"),
+        ));
+    };
+    let mut keys = BTreeSet::new();
+    for entry in entries {
+        let Some(key) = entry
+            .get("key")
+            .and_then(Value::as_str)
+            .filter(|key| !key.is_empty())
+        else {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} must contain non-empty string keys"),
+            ));
+        };
+        if entry.get("value").and_then(Value::as_str).is_none() {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} must contain string values"),
+            ));
+        }
+        if !keys.insert(key.to_string()) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} must not contain duplicate keys"),
+            ));
+        }
+    }
+    Ok(keys)
 }
 
 fn validate_catalog_config_defaults(
@@ -2941,37 +2981,11 @@ fn validate_catalog_config_defaults(
             "catalog config-read evidence must contain defaults",
         ));
     };
-    let Some(defaults) = defaults.as_array() else {
-        return Err(outbox_evidence_error(
-            event,
-            "catalog config-read defaults must be an array",
-        ));
-    };
-    let mut default_keys = BTreeSet::new();
-    for entry in defaults {
-        let Some(key) = entry
-            .get("key")
-            .and_then(Value::as_str)
-            .filter(|key| !key.is_empty())
-        else {
-            return Err(outbox_evidence_error(
-                event,
-                "catalog config-read defaults must contain non-empty string keys",
-            ));
-        };
-        if entry.get("value").and_then(Value::as_str).is_none() {
-            return Err(outbox_evidence_error(
-                event,
-                "catalog config-read defaults must contain string values",
-            ));
-        }
-        if !default_keys.insert(key) {
-            return Err(outbox_evidence_error(
-                event,
-                "catalog config-read defaults must not contain duplicate keys",
-            ));
-        }
-    }
+    let default_keys =
+        validate_catalog_config_entries(event, defaults, "catalog config-read defaults")?;
+    let default_entries = defaults
+        .as_array()
+        .expect("validated config defaults array");
     let required = [
         (LAKECAT_COMPATIBILITY_KEY, LAKECAT_COMPATIBILITY_VALUE),
         (LAKECAT_FORMAT_BASELINE_KEY, LAKECAT_FORMAT_BASELINE_VALUE),
@@ -2986,8 +3000,9 @@ fn validate_catalog_config_defaults(
         .iter()
         .map(|(key, _)| *key)
         .filter(|key| key.starts_with("lakecat.format.v4"))
+        .map(str::to_string)
         .collect::<BTreeSet<_>>();
-    for key in default_keys {
+    for key in &default_keys {
         if key.starts_with("lakecat.format.v4") && !allowed_v4_keys.contains(key) {
             return Err(outbox_evidence_error(
                 event,
@@ -2996,7 +3011,7 @@ fn validate_catalog_config_defaults(
         }
     }
     for (required_key, required_value) in required {
-        let found = defaults.iter().any(|entry| {
+        let found = default_entries.iter().any(|entry| {
             entry.get("key").and_then(Value::as_str) == Some(required_key)
                 && entry.get("value").and_then(Value::as_str) == Some(required_value)
         });
@@ -3006,6 +3021,29 @@ fn validate_catalog_config_defaults(
                 &format!(
                     "catalog config-read defaults must include {required_key}={required_value}"
                 ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_catalog_config_overrides(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(overrides) = payload.get("overrides") else {
+        return Ok(());
+    };
+    if overrides.is_null() {
+        return Ok(());
+    }
+    let override_keys =
+        validate_catalog_config_entries(event, overrides, "catalog config-read overrides")?;
+    for key in override_keys {
+        if key.starts_with("lakecat.format.v4") {
+            return Err(outbox_evidence_error(
+                event,
+                "catalog config-read overrides must not contain v4 bridge keys",
             ));
         }
     }
@@ -5443,6 +5481,7 @@ async fn get_config_in_warehouse(
                 "authorization-receipt": capability.receipt(),
                 "warehouse": warehouse.as_str(),
                 "defaults": &config.defaults,
+                "overrides": &config.overrides,
             }),
         )?)
         .await?;
@@ -21124,6 +21163,65 @@ mod tests {
         );
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-config-unsupported-v4-default"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_unsupported_catalog_config_v4_overrides() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-config-unsupported-v4-override".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-config-unsupported-v4-override",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": catalog_config_defaults_json(),
+                        "overrides": [
+                            {"key": "lakecat.format.v4.typed-sail", "value": "available"}
+                        ]
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("catalog config replay must reject v4 bridge overrides");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(
+            message.contains("catalog config-read overrides must not contain v4 bridge keys"),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-config-unsupported-v4-override"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
