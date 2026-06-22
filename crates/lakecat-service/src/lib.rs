@@ -1530,6 +1530,7 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
         ));
     };
     let root_table = decode_table_lifecycle_identity(event, root_table, "table commit")?;
+    validate_table_lifecycle_payload_scope(event, payload, &root_table, "table commit")?;
     if let Some(commit_table) = commit.get("table") {
         validate_table_lifecycle_table_hint(
             event,
@@ -16823,6 +16824,124 @@ mod tests {
             lineage.events.lock().await.is_empty(),
             "mismatched commit identity must fail before lineage projection"
         );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_mismatched_table_commit_payload_scope() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let commit = json!({
+            "table": table,
+            "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+            "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+            "sequence_number": 7,
+            "principal": principal,
+            "format_version": 3,
+            "snapshot_id": 42,
+            "policy_hash": null,
+            "request_hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+            "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+            "idempotency_key_sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+            "committed_at": chrono::Utc::now(),
+        });
+        let receipt = json!({
+            "principal": principal,
+            "action": "table-commit",
+            "allowed": true,
+            "engine": "test",
+            "policy_hash": null,
+            "checked_at": chrono::Utc::now(),
+        });
+        let cases = vec![
+            (
+                "warehouse",
+                json!({
+                    "audit-event-id": "audit-mismatched-commit-warehouse",
+                    "event-type": "table.commit",
+                    "table": table,
+                    "warehouse": "other",
+                    "commit": commit,
+                    "authorization-receipt": receipt,
+                }),
+                "table commit warehouse does not match table identity",
+            ),
+            (
+                "namespace",
+                json!({
+                    "audit-event-id": "audit-mismatched-commit-namespace",
+                    "event-type": "table.commit",
+                    "table": table,
+                    "namespace": ["other"],
+                    "commit": commit,
+                    "authorization-receipt": receipt,
+                }),
+                "table commit namespace does not match table identity",
+            ),
+            (
+                "table-name",
+                json!({
+                    "audit-event-id": "audit-mismatched-commit-table-name",
+                    "event-type": "table.commit",
+                    "table": table,
+                    "payload": {
+                        "table": "shadow_events",
+                        "commit": commit,
+                        "authorization-receipt": receipt,
+                    },
+                }),
+                "table commit table name does not match table identity",
+            ),
+        ];
+
+        for (case, payload, expected) in cases {
+            let event_id = format!("evt-mismatched-commit-payload-scope-{case}");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.commit".to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("mismatched table commit payload scope should fail before delivery");
+
+            let message = err.to_string();
+            assert!(message.contains("table.commit"), "{message}");
+            assert!(message.contains(expected), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"), "{message}");
+            assert!(!message.contains(&event_id), "{message}");
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "mismatched commit payload scope must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "mismatched commit payload scope must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "mismatched commit payload scope must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]

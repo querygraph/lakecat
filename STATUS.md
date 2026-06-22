@@ -5,6 +5,28 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Bind table commit replay scope`.
+  `table.commit` replay admission now rejects optional payload-level
+  warehouse, namespace, or table-name hints that conflict with the durable
+  outbox table identity before acknowledgement, Grust-facing graph projection,
+  or OpenLineage projection. The book now expands the catalog-concepts
+  discussion into a detailed standards guide: Rust service spine and Turso are
+  LakeCat implementation choices, REST namespace/table paths and commit CAS
+  are standard Iceberg compatibility, idempotency/pointer-log/audit/outbox and
+  replay validation are LakeCat proof, TypeSec receipts and governed
+  credentials are governance extensions, QueryGraph/QGLake/OpenLineage
+  handoff is an application integration surface, and only narrow portable
+  proof behaviors should become future Iceberg-adjacent proposal candidates.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_mismatched_table_commit_payload_scope -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --lib table_commit -- --test-threads=1`
+  passed;
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest handoff-hardening slice:
   `Require full handoff replay hash arrays`.
   The live `scripts/qglake-handoff-local.sh` harness now rejects replay and

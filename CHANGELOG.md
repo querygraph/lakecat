@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Hardened `table.commit` replay admission so optional payload-level
+  warehouse, namespace, and table-name scope hints must match the durable
+  outbox table identity before graph/OpenLineage projection. The book now
+  explains the catalog concepts in that same standards vocabulary: Rust/Turso
+  are implementation choices, REST namespace/table paths and CAS are Iceberg
+  compatibility, replay/audit/outbox proof is LakeCat catalog evidence,
+  TypeSec receipts are governance extensions, QueryGraph/QGLake is an
+  application handoff, and narrow proof behaviors are the future
+  Iceberg-adjacent proposal candidates. It also adds a detailed Sail-first
+  argument for keeping table-format semantics in the engine.
 - Hardened the live QGLake handoff harness so compact proof extraction now
   requires replay/OpenLineage hash arrays for QueryGraph bootstrap, management,
   credentials, governed scans, table commit history, and view receipts to carry
