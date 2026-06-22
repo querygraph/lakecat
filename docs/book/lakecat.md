@@ -7138,7 +7138,14 @@ before their `expectedViewVersion` guard evidence is accepted, so deletion proof
 cannot drift from the stable view identity either. The verifier also checks that
 each namespace receipt-chain summary's `verifiedChainCount` equals the number
 of structural `chains[]` entries and that every chain entry is covered by
-`chainHashes`. The compact proof carries `chains[]` entries inside each
+`chainHashes`. The compact proof and captured LakeCat replay sidecar are also
+closed over their verified view schema: top-level `viewReceiptChainProof`, each
+accepted-view entry, each tombstone entry, each receipt-chain group, each
+structural chain, and each receipt may carry only the fields LakeCat compares or
+uses in the structural digests. A saved handoff therefore cannot append
+unverified view lifecycle, tombstone, receipt-chain, principal, replay, or
+OpenLineage claims beside the checked view proof. The compact proof carries
+`chains[]` entries inside each
 namespace receipt-chain summary.
 Each chain entry keeps only catalog-facing evidence: stable view identity, the
 chain hash, the verified flag, latest view version, latest operation, tombstone

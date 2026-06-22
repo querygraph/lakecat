@@ -2331,6 +2331,10 @@ fn verify_lakecat_replay_views_match_summary(
     lakecat: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
     let captured_views = lakecat_replay_views(capture)?;
+    require_view_receipt_chain_schema(
+        captured_views,
+        "captured LakeCat replay output.replay-evidence.views",
+    )?;
     let summary_views = required_object(
         lakecat,
         "viewReceiptChainProof",
@@ -4139,6 +4143,77 @@ const MANAGEMENT_POLICY_UPSERT_PROOF_FIELDS: &[&str] = &[
     "openLineageHashes",
 ];
 
+const VIEW_RECEIPT_CHAIN_PROOF_FIELDS: &[&str] =
+    &["viewCount", "views", "tombstoneReceipts", "receiptChains"];
+
+const VIEW_RECEIPT_CHAIN_VIEW_FIELDS: &[&str] = &[
+    "stableId",
+    "warehouse",
+    "namespace",
+    "name",
+    "viewVersion",
+    "acceptedViewVersion",
+    "acceptedReceiptHash",
+    "acceptedReceiptChainHash",
+    "eventType",
+    "expectedViewVersion",
+    "graphEvents",
+    "replayEventHashes",
+    "openLineageHashes",
+];
+
+const VIEW_RECEIPT_CHAIN_TOMBSTONE_FIELDS: &[&str] = &[
+    "stableId",
+    "warehouse",
+    "namespace",
+    "name",
+    "expectedViewVersion",
+    "receiptHashes",
+    "replayEventHashes",
+    "openLineageHashes",
+];
+
+const VIEW_RECEIPT_CHAIN_GROUP_FIELDS: &[&str] = &[
+    "warehouse",
+    "namespace",
+    "verifiedChainCount",
+    "receiptHashes",
+    "chainHashes",
+    "chains",
+    "replayEventHashes",
+    "openLineageHashes",
+];
+
+const VIEW_RECEIPT_CHAIN_CHAIN_FIELDS: &[&str] = &[
+    "stableId",
+    "warehouse",
+    "namespace",
+    "name",
+    "chainHash",
+    "chainVerified",
+    "latestViewVersion",
+    "latestOperation",
+    "tombstoned",
+    "receiptCount",
+    "receipts",
+];
+
+const VIEW_RECEIPT_CHAIN_RECEIPT_FIELDS: &[&str] = &[
+    "stableId",
+    "warehouse",
+    "namespace",
+    "name",
+    "viewVersion",
+    "previousViewVersion",
+    "previousReceiptHash",
+    "operation",
+    "viewHash",
+    "receiptHash",
+    "principalSubject",
+    "principalKind",
+    "recordedAt",
+];
+
 fn require_catalog_config_evidence(
     config: &serde_json::Map<String, Value>,
     principal: &str,
@@ -4794,6 +4869,7 @@ fn require_bootstrap_view_receipt_hashes_match_views(
 fn require_view_receipt_chain_evidence(
     views: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
+    require_view_receipt_chain_schema(views, "viewReceiptChainProof")?;
     let view_count = required_u64(views, "viewCount", "viewReceiptChainProof")?;
     if view_count == 0 {
         return Ok(());
@@ -5005,6 +5081,75 @@ fn require_view_receipt_chain_evidence(
         }
     }
 
+    Ok(())
+}
+
+fn require_view_receipt_chain_schema(
+    views: &serde_json::Map<String, Value>,
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    require_only_fields(views, VIEW_RECEIPT_CHAIN_PROOF_FIELDS, label)?;
+    for (index, view) in required_array(views, "views", label)?.iter().enumerate() {
+        let view = view.as_object().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label}.views[{index}] must be an object"
+            ))
+        })?;
+        let view_label = format!("{label}.views[]");
+        require_only_fields(view, VIEW_RECEIPT_CHAIN_VIEW_FIELDS, &view_label)?;
+    }
+    for (index, receipt) in required_array(views, "tombstoneReceipts", label)?
+        .iter()
+        .enumerate()
+    {
+        let receipt = receipt.as_object().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label}.tombstoneReceipts[{index}] must be an object"
+            ))
+        })?;
+        let receipt_label = format!("{label}.tombstoneReceipts[]");
+        require_only_fields(receipt, VIEW_RECEIPT_CHAIN_TOMBSTONE_FIELDS, &receipt_label)?;
+    }
+    for (group_index, chain_group) in required_array(views, "receiptChains", label)?
+        .iter()
+        .enumerate()
+    {
+        let chain_group = chain_group.as_object().ok_or_else(|| {
+            lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label}.receiptChains[{group_index}] must be an object"
+            ))
+        })?;
+        let chain_group_label = format!("{label}.receiptChains[]");
+        require_only_fields(
+            chain_group,
+            VIEW_RECEIPT_CHAIN_GROUP_FIELDS,
+            &chain_group_label,
+        )?;
+        for (chain_index, chain) in required_array(chain_group, "chains", &chain_group_label)?
+            .iter()
+            .enumerate()
+        {
+            let chain = chain.as_object().ok_or_else(|| {
+                lakecat_core::LakeCatError::InvalidArgument(format!(
+                    "{label}.receiptChains[{group_index}].chains[{chain_index}] must be an object"
+                ))
+            })?;
+            let chain_label = format!("{label}.receiptChains[].chains[]");
+            require_only_fields(chain, VIEW_RECEIPT_CHAIN_CHAIN_FIELDS, &chain_label)?;
+            for (receipt_index, receipt) in required_array(chain, "receipts", &chain_label)?
+                .iter()
+                .enumerate()
+            {
+                let receipt = receipt.as_object().ok_or_else(|| {
+                    lakecat_core::LakeCatError::InvalidArgument(format!(
+                        "{label}.receiptChains[{group_index}].chains[{chain_index}].receipts[{receipt_index}] must be an object"
+                    ))
+                })?;
+                let receipt_label = format!("{label}.receiptChains[].chains[].receipts[]");
+                require_only_fields(receipt, VIEW_RECEIPT_CHAIN_RECEIPT_FIELDS, &receipt_label)?;
+            }
+        }
+    }
     Ok(())
 }
 
@@ -16210,6 +16355,121 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_view_receipt_chain_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["unverifiedViewClaim"] =
+            json!(qglake_fixture_hash("unverified-view-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra view receipt-chain fields");
+        let err = err.to_string();
+
+        assert!(err.contains("viewReceiptChainProof"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedViewClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_accepted_view_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["views"][0]["unverifiedAcceptedViewClaim"] =
+            json!(qglake_fixture_hash("unverified-accepted-view-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra accepted view fields");
+        let err = err.to_string();
+
+        assert!(err.contains("viewReceiptChainProof.views[]"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedAcceptedViewClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_tombstone_receipt_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["tombstoneReceipts"][0]["unverifiedTombstoneClaim"] =
+            json!(qglake_fixture_hash("unverified-tombstone-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra tombstone receipt fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("viewReceiptChainProof.tombstoneReceipts[]"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedTombstoneClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_receipt_chain_group_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["unverifiedChainGroupClaim"] =
+            json!(qglake_fixture_hash("unverified-chain-group-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra receipt-chain group fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("viewReceiptChainProof.receiptChains[]"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedChainGroupClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_receipt_chain_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chains"]
+            [0]["unverifiedChainClaim"] = json!(qglake_fixture_hash("unverified-chain-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra receipt-chain fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("viewReceiptChainProof.receiptChains[].chains[]"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedChainClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_view_receipt_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["viewReceiptChainProof"]["receiptChains"][0]["chains"]
+            [0]["receipts"][0]["unverifiedReceiptClaim"] =
+            json!(qglake_fixture_hash("unverified-receipt-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra view receipt fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("viewReceiptChainProof.receiptChains[].chains[].receipts[]"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedReceiptClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_accepts_matching_files() {
         let temp = qglake_temp_dir("handoff-artifacts-ok");
         let summary_path = temp.join("handoff-summary.json");
@@ -18438,6 +18698,66 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("captured LakeCat replay output.replay-evidence.views.views mismatch")
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_view_receipt_chain_fields() {
+        let temp = qglake_temp_dir("handoff-captured-view-extra-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["views"]["unverifiedViewClaim"] =
+            json!(qglake_fixture_hash("unverified-view-claim"));
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay view proof should reject extra fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains("captured LakeCat replay output.replay-evidence.views"),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedViewClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_view_receipt_fields() {
+        let temp = qglake_temp_dir("handoff-captured-view-receipt-extra-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["views"]["receiptChains"][0]["chains"][0]["receipts"][0]["unverifiedReceiptClaim"] =
+            json!(qglake_fixture_hash("unverified-receipt-claim"));
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay view receipt should reject extra fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains(
+                "captured LakeCat replay output.replay-evidence.views.receiptChains[].chains[].receipts[]"
+            ),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedReceiptClaim"),
+            "{err}"
         );
     }
 

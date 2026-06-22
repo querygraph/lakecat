@@ -636,6 +636,12 @@ authorization receipt principal, the read-side `view-load` action, and
 count-aligned chain, receipt, and tombstone totals before projection, so
 namespace-level view-history evidence cannot inflate chains, shed chains, or
 reuse a mutation receipt by drifting the summary counts or action.
+Compact `viewReceiptChainProof`, captured replay `views`, and every nested
+accepted-view, tombstone, receipt-chain group, structural chain, and receipt
+object must be closed over the fields LakeCat verifies. A handoff or captured
+replay sidecar cannot attach unverified view lifecycle, tombstone,
+receipt-chain, principal, replay, or OpenLineage claims beside checked
+structural view proof.
 Lineage-drain replay summaries must also stay bound to the drain-level event
 type manifest: a compact QGLake handoff cannot include a replay summary for an
 event type that the drain did not declare as delivered, and repeated event

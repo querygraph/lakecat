@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Closed compact and captured QGLake view receipt-chain proof objects over
+  their verified schema. `viewReceiptChainProof`, captured LakeCat replay
+  `views`, and nested accepted-view, tombstone, receipt-chain group,
+  structural chain, and receipt objects now reject unexpected fields before
+  summary or sidecar verification can accept unverified view lifecycle,
+  tombstone, receipt-chain, principal, replay, or OpenLineage claims beside
+  checked structural view proof.
 - Closed compact and captured QGLake management proof objects over their
   compared schema. `managementProof`, captured LakeCat replay `management`,
   and nested `policyUpsertProof` evidence now reject unexpected fields before
