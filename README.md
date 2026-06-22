@@ -43,9 +43,13 @@ history, audit/outbox rows, and idempotent commit replay; without it the binary
 keeps the in-memory store.
 
 The Grust and TypeSec feature gates build against published crates
-(`grust-graph` 0.9.1 and `typesec` 0.8.0). Sail integration still uses local
-Sail paths plus the checked-in helper patch bridge until the required Sail APIs
-are published.
+(`grust-graph` 0.9.1 and `typesec` 0.8.0). LakeCat intentionally keeps the
+Grust contract at 0.9.1 until the companion crates used by `grust-local`
+publish as a consistent newer set; `grust-graph` 0.9.2 is visible, but the
+current LakeCat feature set still relies on published `grust-cypher`,
+`grust-core`, `grust-memory`, and `grust-sail` 0.9.1 crates. Sail integration
+still uses local Sail paths plus the checked-in helper patch bridge until the
+required Sail APIs are published.
 
 Useful local checks:
 

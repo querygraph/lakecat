@@ -5,6 +5,16 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-contract slice:
+  `Reconcile release dependency boundary`.
+  The release ledger now treats the full local release gate as recorded and
+  keeps the remaining first-release work focused on final release engineering,
+  the explicit Sail helper bridge, and final clean-commit verification. The
+  dependency posture is also explicit: LakeCat remains on the published Grust
+  0.9.1 contract because `grust-graph` 0.9.2 is visible but the companion
+  crates needed by the current `grust-local` feature surface, including
+  `grust-cypher`, `grust-core`, `grust-memory`, and `grust-sail`, still resolve
+  through the published 0.9.1 set.
 - Latest book slice:
   `Add front-loaded catalog concept contract`.
   The book now opens with a practitioner-facing concept chapter that separates
@@ -20,9 +30,10 @@ Updated: 2026-06-22
   `Record first-release remaining-work estimate`.
   The canonical design, status, changelog, and book now answer the approximate
   first-release completion question directly. The current release-scope
-  estimate is about 80-85 percent complete for the locally verifiable LakeCat
-  catalog substrate, with the remaining 15-20 percent concentrated in a fresh
-  full release-gate proof, the temporary Sail helper bridge, final
+  estimate is now about 85-90 percent complete for the locally verifiable
+  LakeCat catalog substrate, with the remaining 10-15 percent concentrated in
+  keeping the full local release gate green from the final dependency state,
+  maintaining the release-explicit Sail helper bridge, final
   docs/version/release-note cleanup, and release tagging. Typed Iceberg v4,
   cloud SDK secret resolvers, richer Grust graph behavior, and full QueryGraph
   product semantics remain explicitly deferred from this first release.
@@ -84,7 +95,7 @@ Updated: 2026-06-22
   The broad local `scripts/check-release-readiness.sh` gate is green again
   after refreshing QueryGraph's locked LakeCat handoff dependency state in
   `/Users/alexy/src/querygraph/qg-rust` commit
-  `d5c7657 Refresh LakeCat handoff dependency lock`. The first full gate run
+  `18523dc Refresh LakeCat handoff Grust lock`. The first full gate run
   caught the stale `Cargo.lock` because QueryGraph's `lakecat-verify` command
   is intentionally invoked with `--locked`; after regenerating and committing
   the lockfile against the current local Grust crates, the same LakeCat gate

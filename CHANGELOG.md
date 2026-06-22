@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Reconciled the first-release dependency boundary. The design, status, README,
+  and book now record that the broad local release gate has already been
+  captured for the current handoff path, the remaining first-release work is
+  final release engineering plus the explicit Sail helper bridge, and LakeCat
+  should stay on the published Grust 0.9.1 contract until the companion crates
+  needed by `grust-local` publish consistently for a newer Grust release.
 - Added a front-loaded catalog concepts chapter to the LakeCat book. The new
   chapter gives readers a concise owner map for standard Iceberg vocabulary,
   LakeCat's Rust/Turso catalog-control spine, TypeSec-governed scan and

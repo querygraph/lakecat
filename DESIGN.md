@@ -327,7 +327,7 @@ Authoritative first-release evidence:
 - `scripts/check-local-dependency-contract.sh` proves the Grust/TypeSec/Sail,
   QueryGraph, and CI-trigger assumptions still match the current repo.
 
-Approximate completion for this first-release scope is about 80-85 percent as
+Approximate completion for this first-release scope is about 85-90 percent as
 of June 22, 2026. The percentage is intentionally about the locally verifiable
 LakeCat catalog substrate, not the whole long-term QueryGraph architecture.
 Most catalog and proof surfaces are implemented and heavily regression-tested:
@@ -336,15 +336,22 @@ Turso-backed store, memory-store parity, commit CAS, idempotency, pointer
 logs, audit/outbox, replay admission, governed scan/fetch, credential receipt
 proof, management surfaces, view receipt chains, QueryGraph bootstrap,
 OpenLineage replay, and QGLake handoff/import proof.
+The broad local release gate has been recorded from the current handoff path,
+including QueryGraph `lakecat-verify` and `lakecat-import` under `--locked`.
 
-The remaining 15-20 percent should be treated as release engineering and
+The remaining 10-15 percent should be treated as release engineering and
 boundary cleanup rather than new architecture:
 
-- Run and record one fresh full `scripts/check-release-readiness.sh` after the
-  final dependency state is selected.
-- Replace or explicitly document the remaining temporary Sail helper bridge.
-  If the reusable helper behavior is not yet upstream, keep the bridge
-  release-explicit rather than pretending the dependency is settled.
+- Keep the fresh full `scripts/check-release-readiness.sh` proof green after
+  every dependency-boundary change and rerun it from the final release commit.
+- Keep the temporary Sail helper bridge release-explicit until the required
+  helper behavior is published upstream. The local dependency contract already
+  proves the expected Sail path dependencies and patch files.
+- Keep LakeCat on the published Grust 0.9.1 contract until the companion
+  crates needed by `grust-local` are published consistently for a newer Grust
+  release. As of this ledger update, `grust-graph` 0.9.2 is visible, but the
+  LakeCat feature set still resolves through published `grust-cypher`,
+  `grust-core`, `grust-memory`, and `grust-sail` 0.9.1 crates.
 - Refresh README, book artifacts, `STATUS.md`, and version/release notes from
   the same commit that passes the full gate.
 - Cut a release tag only after the broad local gate, QGLake handoff,
