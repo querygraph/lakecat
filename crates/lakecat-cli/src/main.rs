@@ -9357,11 +9357,30 @@ fn verify_qglake_management_list_receipts(
             "qglake lineage drain {label} replay is missing compact management scope"
         )));
     }
-    if !qglake_has_sha256_hashes(&event.replay_event_hashes)
-        || !qglake_has_sha256_hashes(&event.replay_open_lineage_hashes)
+    if event
+        .principal_subject
+        .as_deref()
+        .map_or(true, str::is_empty)
+        || event.principal_kind.as_deref().map_or(true, str::is_empty)
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
-            "qglake lineage drain {label} replay is missing SHA-256 receipt hashes"
+            "qglake lineage drain {label} replay is missing principal evidence"
+        )));
+    }
+    if event
+        .authorization_receipt_hash
+        .as_deref()
+        .map_or(true, |hash| !is_full_sha256_hash(hash))
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} replay is missing full SHA-256 authorization receipt hash evidence"
+        )));
+    }
+    if !qglake_has_full_sha256_hashes(&event.replay_event_hashes)
+        || !qglake_has_full_sha256_hashes(&event.replay_open_lineage_hashes)
+    {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "qglake lineage drain {label} replay is missing full SHA-256 receipt hashes"
         )));
     }
     Ok(())
@@ -24189,6 +24208,43 @@ mod tests {
     }
 
     #[test]
+    fn qglake_lineage_drain_verifier_requires_management_authorization_hash_shape() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let server_list = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "server.listed")
+            .expect("server list replay fixture");
+        server_list.authorization_receipt_hash = Some("sha256:server-list-auth".to_string());
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject short management authorization hashes");
+
+        assert!(err.to_string().contains("server list replay"));
+        assert!(err.to_string().contains("authorization receipt hash"));
+        assert!(err.to_string().contains("full SHA-256"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_requires_management_principal_evidence() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let warehouse_list = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "warehouse.listed")
+            .expect("warehouse list replay fixture");
+        warehouse_list.principal_subject = None;
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err("QGLake lineage drain should reject actorless management replay");
+
+        assert!(err.to_string().contains("warehouse list replay"));
+        assert!(err.to_string().contains("principal evidence"));
+    }
+
+    #[test]
     fn qglake_lineage_drain_verifier_rejects_missing_policy_upsert() {
         let verification = qglake_handoff_lineage_verification();
         let mut drain = qglake_handoff_lineage_drain();
@@ -24380,10 +24436,8 @@ mod tests {
             .iter_mut()
             .find(|event| event.event_type == "server.listed")
             .expect("server list replay fixture");
-        server_list.replay_event_hashes = vec![
-            "sha256:server-list-replay-event".to_string(),
-            "sha256:server-list-replay-event".to_string(),
-        ];
+        let duplicate_hash = qglake_fixture_hash("duplicate-server-list-replay-event");
+        server_list.replay_event_hashes = vec![duplicate_hash.clone(), duplicate_hash];
 
         let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
             .expect_err("QGLake lineage drain should reject duplicate management receipt hashes");
@@ -25488,7 +25542,7 @@ mod tests {
             event_type: "policy-binding.listed".to_string(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:policy-list-authorization".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("policy-list-authorization")),
             authorization_receipt_action: Some("policy-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25555,8 +25609,8 @@ mod tests {
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
-            replay_event_hashes: vec!["sha256:policy-list-replay-event".to_string()],
-            replay_open_lineage_hashes: vec!["sha256:policy-list-openlineage".to_string()],
+            replay_event_hashes: vec![qglake_fixture_hash("policy-list-replay-event")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash("policy-list-openlineage")],
         }
     }
 
@@ -25644,9 +25698,9 @@ mod tests {
             event_type: "storage-profile.listed".to_string(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some(
-                "sha256:storage-profile-list-authorization".to_string(),
-            ),
+            authorization_receipt_hash: Some(qglake_fixture_hash(
+                "storage-profile-list-authorization",
+            )),
             authorization_receipt_action: Some("storage-profile-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25713,8 +25767,10 @@ mod tests {
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
-            replay_event_hashes: vec!["sha256:storage-profile-list-replay-event".to_string()],
-            replay_open_lineage_hashes: vec!["sha256:storage-profile-list-openlineage".to_string()],
+            replay_event_hashes: vec![qglake_fixture_hash("storage-profile-list-replay-event")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash(
+                "storage-profile-list-openlineage",
+            )],
         }
     }
 
@@ -25796,10 +25852,10 @@ mod tests {
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
-            replay_event_hashes: vec!["sha256:storage-profile-upsert-replay-event".to_string()],
-            replay_open_lineage_hashes: vec![
-                "sha256:storage-profile-upsert-openlineage".to_string(),
-            ],
+            replay_event_hashes: vec![qglake_fixture_hash("storage-profile-upsert-replay-event")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash(
+                "storage-profile-upsert-openlineage",
+            )],
         }
     }
 
@@ -25809,7 +25865,7 @@ mod tests {
             event_type: "server.listed".to_string(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:server-list-authorization".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("server-list-authorization")),
             authorization_receipt_action: Some("server-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25876,8 +25932,8 @@ mod tests {
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
-            replay_event_hashes: vec!["sha256:server-list-replay-event".to_string()],
-            replay_open_lineage_hashes: vec!["sha256:server-list-openlineage".to_string()],
+            replay_event_hashes: vec![qglake_fixture_hash("server-list-replay-event")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash("server-list-openlineage")],
         }
     }
 
@@ -25887,7 +25943,7 @@ mod tests {
             event_type: "project.listed".to_string(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:project-list-authorization".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("project-list-authorization")),
             authorization_receipt_action: Some("project-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -25954,8 +26010,8 @@ mod tests {
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
-            replay_event_hashes: vec!["sha256:project-list-replay-event".to_string()],
-            replay_open_lineage_hashes: vec!["sha256:project-list-openlineage".to_string()],
+            replay_event_hashes: vec![qglake_fixture_hash("project-list-replay-event")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash("project-list-openlineage")],
         }
     }
 
@@ -25965,7 +26021,7 @@ mod tests {
             event_type: "warehouse.listed".to_string(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:warehouse-list-authorization".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("warehouse-list-authorization")),
             authorization_receipt_action: Some("warehouse-manage".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -26032,8 +26088,8 @@ mod tests {
             credential_block_reason: None,
             raw_credential_exception_allowed: None,
             raw_credential_exception_reason: None,
-            replay_event_hashes: vec!["sha256:warehouse-list-replay-event".to_string()],
-            replay_open_lineage_hashes: vec!["sha256:warehouse-list-openlineage".to_string()],
+            replay_event_hashes: vec![qglake_fixture_hash("warehouse-list-replay-event")],
+            replay_open_lineage_hashes: vec![qglake_fixture_hash("warehouse-list-openlineage")],
         }
     }
 

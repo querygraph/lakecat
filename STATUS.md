@@ -6,6 +6,25 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Harden QGLake management-list receipt proof`.
+  Raw QGLake lineage-drain verification now requires server, project,
+  warehouse, policy-binding, and storage-profile list replay to carry nonblank
+  principal subject/kind evidence, a full authorization receipt hash, and full
+  replay/OpenLineage SHA-256 receipt hashes before compact `managementProof`
+  construction. The design and book now describe this as
+  LakeCat/QGLake/TypeSec control-plane proof around standard Iceberg catalog
+  behavior, not as custom Iceberg metadata.
+- Local verification for this QGLake management-list receipt proof slice is
+  green:
+  `cargo fmt -p lakecat-cli -p lakecat-api -p lakecat-service -- --check`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Bind QGLake storage-profile upsert authorization proof`.
   Compact QGLake `storageProfileUpsertProof` now preserves the
   storage-profile-management principal subject/kind, full authorization receipt

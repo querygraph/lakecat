@@ -528,6 +528,12 @@ be inflated with repeated redacted credential entries. Captured LakeCat replay
 JSON must then match the compact credential proof for those prefix hashes, so
 an archived handoff cannot pair a valid summary with drifted credential replay
 output.
+Management-list replay for servers, projects, warehouses, policy bindings, and
+storage profiles must also preserve nonblank principal subject/kind evidence,
+full authorization receipt hashes, and full replay/OpenLineage SHA-256 hash
+arrays before compact QGLake proof is built. These are LakeCat/QGLake/TypeSec
+control-plane proof requirements around standard Iceberg catalog state, not
+custom Iceberg table metadata.
 
 View receipt-chain proof must remain a structural proof, not just a bag of
 hashes: the first receipt must be a version-1 upsert without previous-link

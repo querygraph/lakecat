@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Hardened raw QGLake management-list replay for server, project, warehouse,
+  policy-binding, and storage-profile inventory: lineage drains now require
+  principal subject/kind evidence, full authorization receipt hashes, and full
+  replay/OpenLineage SHA-256 hashes before compact management proof can be
+  built. The book and design now classify this as LakeCat/QGLake/TypeSec
+  control-plane proof around standard Iceberg catalog behavior, not an Iceberg
+  metadata extension.
 - Bound compact QGLake `storageProfileUpsertProof` to storage-profile
   management authorization evidence, requiring principal subject/kind, full
   authorization receipt hash, and the `storage-profile-manage` action across

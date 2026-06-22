@@ -5071,8 +5071,14 @@ management records existed while losing the identities or receipt evidence for
 the reads. The lineage-drain verifier rejects those source replay events when
 the ID arrays
 are missing, empty, duplicate-inflated, count-drifted, or when the receipt
-arrays are empty or not SHA-256-shaped, so the compact `managementProof` starts
-from verified replay evidence rather than untrusted text. The compact handoff
+arrays are empty or not full SHA-256-shaped, or when the event no longer
+preserves nonblank principal subject/kind evidence and a full authorization
+receipt hash, so the compact `managementProof` starts from verified replay
+evidence rather than untrusted text. This is deliberately LakeCat/QGLake/TypeSec
+control-plane proof: the underlying namespace, table, warehouse, policy, and
+storage-profile inventory remains standard catalog state, while the actor,
+authorization, replay, and OpenLineage receipts prove how that state was read
+and projected for QueryGraph. The compact handoff
 verifier repeats that check with the stricter full `sha256:`-prefixed 64-hex
 digest shape for every management replay and OpenLineage array, and it verifies
 that `serverIds`, `projectIds`, `warehouseNames`, `policyIds`, and
