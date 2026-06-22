@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with concrete PySpark, governed scan, credential,
+  and QueryGraph bootstrap walkthroughs that show exactly where standard
+  Iceberg behavior ends, where LakeCat's Rust/Turso/CAS/audit/outbox spine
+  begins, how TypeSec receipts and credential posture remain governance
+  extensions, and why Sail should carry field-id, manifest, delete, pruning,
+  and v4 table-format work.
 - Required `table.deleted` replay admission to carry a soft-delete object with
   positive version evidence before acknowledgement, graph projection, or
   OpenLineage projection, so delete replay cannot drop the catalog

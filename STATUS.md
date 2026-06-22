@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Expand catalog workflow concept guide`.
+  The book now walks PySpark commit, governed scan, credential-vending, and
+  QueryGraph/QGLake bootstrap requests through the catalog boundary, separating
+  standard Iceberg behavior from LakeCat implementation, TypeSec governance
+  proof, QueryGraph integration, and future Iceberg-adjacent proposal
+  candidates. The added material reinforces that reusable table-format work
+  belongs in Sail while LakeCat persists catalog authority and replayable
+  evidence.
+- Local verification for this book slice is green:
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Require table delete soft-delete version evidence`.
   Service `table.deleted` replay admission now rejects delete replay unless a
