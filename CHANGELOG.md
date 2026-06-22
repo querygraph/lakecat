@@ -4,6 +4,11 @@
 
 - Added service replay regression coverage proving returned
   `credentials.vend-attempted` credential-response evidence rejects entries
+  that omit catalog-derived `storage-profile-id`, `catalog-profile-id`,
+  `storage-provider`, or `credential-mode` proof before acknowledgement, graph
+  projection, or OpenLineage projection.
+- Added service replay regression coverage proving returned
+  `credentials.vend-attempted` credential-response evidence rejects entries
   that omit `authorization-principal` or `receipt-principal` before
   acknowledgement, graph projection, or OpenLineage projection.
 - Added service replay regression coverage proving returned

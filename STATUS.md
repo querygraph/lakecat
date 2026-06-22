@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover missing credential storage-profile proof`.
+  Service replay regression coverage now proves returned
+  `credentials.vend-attempted` credential-response evidence rejects entries
+  that omit catalog-derived `storage-profile-id`, `catalog-profile-id`,
+  `storage-provider`, or `credential-mode` proof before acknowledgement, graph
+  projection, or OpenLineage projection. This pins the missing-field sibling of
+  the credential response storage-profile binding proof.
+- Local verification for this credential storage-profile proof slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain_rejects_missing_credential_response_storage_profile_proof -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib credential_response -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover missing credential principal proof`.
   Service replay regression coverage now proves returned
   `credentials.vend-attempted` credential-response evidence rejects entries
