@@ -11500,6 +11500,35 @@ composition, and agent-facing reasoning belong in QueryGraph. Cloud SDK secret
 managers beyond the current Vault and file-backed provider roots are future
 credential backends, not blockers for the catalog substrate.
 
+As a working estimate, the first-release LakeCat catalog substrate is roughly
+80-85 percent complete. That number is not a promise about the whole future
+QueryGraph architecture. It means the release-blocking LakeCat pieces are
+mostly present and locally proven: standard Iceberg REST namespace and table
+paths, the Rust service spine, the Turso-backed local store direction,
+metadata-pointer CAS, idempotency, pointer logs, audit and outbox rows, replay
+admission, governed scan and fetch proof, credential-vending receipt proof,
+management proof, view receipt chains, QueryGraph bootstrap, OpenLineage
+replay, and QGLake handoff/import evidence.
+
+The remaining 15-20 percent is concentrated in release engineering and
+dependency-boundary cleanup rather than a new conceptual layer. LakeCat still
+needs one fresh full local release-gate run from the final dependency state;
+the temporary Sail helper bridge must either be replaced by upstream Sail
+support or documented as a release-explicit bridge; README, status, changelog,
+book artifacts, and version notes must be refreshed from the same clean commit;
+and the release should be tagged only after the broad local gate, QGLake
+handoff, QueryGraph locked verify/import, dependency-contract check, and book
+build all pass together.
+
+That leaves important work after the first release, but it should stay out of
+the first-release blocker list unless the scope changes. Typed Iceberg v4
+semantics belong in Sail. Cloud SDK-backed secret resolvers belong behind the
+existing TypeSec-gated provider seam. Reusable graph taxonomy, traversal,
+stores, and Cypher behavior belong in Grust. Full Croissant, CDIF, OSI, ODRL
+application composition and agentic workflow semantics belong in QueryGraph
+and TypeSec above LakeCat. The first release should prove the catalog
+foundation, not absorb every future system.
+
 The release evidence is concrete:
 
 ```sh

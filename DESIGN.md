@@ -327,6 +327,37 @@ Authoritative first-release evidence:
 - `scripts/check-local-dependency-contract.sh` proves the Grust/TypeSec/Sail,
   QueryGraph, and CI-trigger assumptions still match the current repo.
 
+Approximate completion for this first-release scope is about 80-85 percent as
+of June 22, 2026. The percentage is intentionally about the locally verifiable
+LakeCat catalog substrate, not the whole long-term QueryGraph architecture.
+Most catalog and proof surfaces are implemented and heavily regression-tested:
+standard Iceberg REST namespace/table behavior, the Rust service spine,
+Turso-backed store, memory-store parity, commit CAS, idempotency, pointer
+logs, audit/outbox, replay admission, governed scan/fetch, credential receipt
+proof, management surfaces, view receipt chains, QueryGraph bootstrap,
+OpenLineage replay, and QGLake handoff/import proof.
+
+The remaining 15-20 percent should be treated as release engineering and
+boundary cleanup rather than new architecture:
+
+- Run and record one fresh full `scripts/check-release-readiness.sh` after the
+  final dependency state is selected.
+- Replace or explicitly document the remaining temporary Sail helper bridge.
+  If the reusable helper behavior is not yet upstream, keep the bridge
+  release-explicit rather than pretending the dependency is settled.
+- Refresh README, book artifacts, `STATUS.md`, and version/release notes from
+  the same commit that passes the full gate.
+- Cut a release tag only after the broad local gate, QGLake handoff,
+  QueryGraph locked verify/import, dependency-contract check, and book build
+  pass from a clean tree.
+
+The deferred long-term work should not block this first release unless the
+user chooses to expand scope: typed Iceberg v4 support belongs in Sail; cloud
+SDK-backed secret managers belong behind the existing TypeSec-gated provider
+seam; reusable graph taxonomy, traversal, stores, and Cypher behavior belong in
+Grust; and full Croissant/CDIF/OSI/ODRL application composition and agentic
+workflow semantics belong in QueryGraph and TypeSec above LakeCat.
+
 ## Thesis
 
 Iceberg constrains one layer: how table state is stored and how standard

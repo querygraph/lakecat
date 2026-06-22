@@ -5,6 +5,20 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-planning slice:
+  `Record first-release remaining-work estimate`.
+  The canonical design, status, changelog, and book now answer the approximate
+  first-release completion question directly. The current release-scope
+  estimate is about 80-85 percent complete for the locally verifiable LakeCat
+  catalog substrate, with the remaining 15-20 percent concentrated in a fresh
+  full release-gate proof, the temporary Sail helper bridge, final
+  docs/version/release-note cleanup, and release tagging. Typed Iceberg v4,
+  cloud SDK secret resolvers, richer Grust graph behavior, and full QueryGraph
+  product semantics remain explicitly deferred from this first release.
+- Local verification for this release-planning slice is green:
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/testing slice:
   `Cover Turso commit-history table scope drift`.
   Turso commit-history reads now have direct regression coverage proving a

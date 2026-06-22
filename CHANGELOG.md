@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added a first-release remaining-work estimate to the canonical design,
+  status, and book. The release ledger now records that the LakeCat catalog
+  substrate is roughly four-fifths complete for a first release, with the
+  remaining work concentrated in one full local release-gate rerun, the
+  temporary Sail helper bridge, final docs/version cleanup, and a release tag,
+  while typed Iceberg v4, cloud SDK secret resolvers, richer graph behavior,
+  and full QueryGraph product semantics stay explicitly deferred.
 - Added Turso commit-history scope-drift coverage. Corrupted
   `metadata_pointer_log.record_json` rows that name a different table are now
   pinned by a direct regression proving `table_commit_records` rejects the
