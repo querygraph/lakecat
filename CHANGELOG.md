@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving `table.commit` rejects
+  malformed commit and authorization-receipt principals before acknowledgement,
+  graph projection, or OpenLineage projection.
 - Added service replay regression coverage proving `table.scan-planned` and
   `table.scan-tasks-fetched` reject duplicate governed read-restriction
   `allowed-columns` evidence before acknowledgement, graph projection, or

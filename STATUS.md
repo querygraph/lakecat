@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover malformed table commit principals`.
+  Service replay regression coverage now proves `table.commit` rejects
+  malformed commit-principal and authorization-receipt-principal evidence
+  before delivery acknowledgement, graph projection, or OpenLineage projection.
+  This pins the P3 actor-attribution invariant next to the existing missing
+  and mismatched principal guards for individual table commit replay.
+- Local verification for this table commit principal slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_table_commit_principal_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_table_commit_receipt_principal_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib table_commit -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover duplicate scan allowed-column replay`.
   Service replay regression coverage now proves `table.scan-planned` and
   `table.scan-tasks-fetched` reject duplicate governed read-restriction
