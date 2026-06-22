@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound generic audit payload table scope to the top-level audit event table
+  before memory or Turso stores persist audit rows or enqueue outbox work. The
+  regressions create payload-hash-valid audit events whose payload table points
+  at a different table and prove both stores keep audit/outbox state empty.
 - Hardened outbox delivery acknowledgement so memory and Turso stores reject
   malformed delivery event IDs before marking rows delivered. The regressions
   attempt to acknowledge `sha256:short` after creating a real pending outbox

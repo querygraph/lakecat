@@ -1630,6 +1630,9 @@ impl CatalogAuditEvent {
                 "audit event request hash does not match payload".to_string(),
             ));
         }
+        if let Some(table) = &self.table {
+            validate_audit_payload_table_scope(&self.payload, table)?;
+        }
         Ok(())
     }
 }
@@ -2661,6 +2664,68 @@ fn audit_outbox_payload(event_id: &str, event: &CatalogAuditEvent) -> Value {
         "table": &event.table,
         "payload": &event.payload,
     })
+}
+
+fn validate_audit_payload_table_scope(payload: &Value, table: &TableIdent) -> LakeCatResult<()> {
+    let Some(payload_table) = payload.get("table") else {
+        return Err(LakeCatError::InvalidArgument(
+            "audit event payload missing table scope".to_string(),
+        ));
+    };
+    if payload_table.is_object() {
+        let payload_table =
+            serde_json::from_value::<TableIdent>(payload_table.clone()).map_err(|_| {
+                LakeCatError::InvalidArgument(
+                    "audit event payload table scope is malformed".to_string(),
+                )
+            })?;
+        if &payload_table != table {
+            return Err(LakeCatError::InvalidArgument(
+                "audit event payload table scope does not match event table".to_string(),
+            ));
+        }
+        return Ok(());
+    }
+    let Some(payload_table_name) = payload_table.as_str() else {
+        return Err(LakeCatError::InvalidArgument(
+            "audit event payload table scope is malformed".to_string(),
+        ));
+    };
+    if payload_table_name != table.name.as_str() {
+        return Err(LakeCatError::InvalidArgument(
+            "audit event payload table scope does not match event table".to_string(),
+        ));
+    }
+    if let Some(payload_warehouse) = payload.get("warehouse").and_then(Value::as_str) {
+        if payload_warehouse != table.warehouse.as_str() {
+            return Err(LakeCatError::InvalidArgument(
+                "audit event payload warehouse scope does not match event table".to_string(),
+            ));
+        }
+    }
+    if let Some(payload_namespace) = payload.get("namespace") {
+        if !audit_payload_namespace_matches(payload_namespace, &table.namespace) {
+            return Err(LakeCatError::InvalidArgument(
+                "audit event payload namespace scope does not match event table".to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn audit_payload_namespace_matches(payload_namespace: &Value, namespace: &Namespace) -> bool {
+    if let Some(namespace_path) = payload_namespace.as_str() {
+        return namespace_path == namespace.path();
+    }
+    let Some(parts) = payload_namespace.as_array() else {
+        return false;
+    };
+    let payload_parts = parts.iter().filter_map(Value::as_str).collect::<Vec<_>>();
+    payload_parts.len() == parts.len()
+        && payload_parts
+            .iter()
+            .copied()
+            .eq(namespace.parts().iter().map(String::as_str))
 }
 
 fn outbox_event_from_payload(
@@ -4431,6 +4496,42 @@ mod memory_tests {
             err,
             LakeCatError::InvalidArgument(message)
                 if message.contains("audit event request hash is required")
+        ));
+        let state = store.state.read().await;
+        assert!(state.audit_events.is_empty());
+        assert!(state.outbox_events.is_empty());
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_audit_payload_table_scope_drift() {
+        let store = MemoryCatalogStore::new();
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let other_ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("other_events").unwrap(),
+        );
+        let event = CatalogAuditEvent::new(
+            "querygraph.bootstrap",
+            Some(ident),
+            Principal::anonymous(),
+            serde_json::json!({
+                "event-type": "querygraph.bootstrap",
+                "table": other_ident,
+                "manifest-hash": "lakecat:test"
+            }),
+        )
+        .unwrap();
+
+        let err = store.record_audit_event(event).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("audit event payload table scope does not match")
         ));
         let state = store.state.read().await;
         assert!(state.audit_events.is_empty());
@@ -9236,6 +9337,41 @@ pub mod turso_store {
                 err,
                 LakeCatError::InvalidArgument(message)
                     if message.contains("audit event request hash is required")
+            ));
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
+            assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_audit_payload_table_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let other_ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("other_events").unwrap(),
+            );
+            let event = CatalogAuditEvent::new(
+                "querygraph.bootstrap",
+                Some(ident),
+                Principal::anonymous(),
+                serde_json::json!({
+                    "event-type": "querygraph.bootstrap",
+                    "table": other_ident,
+                    "manifest-hash": "lakecat:test"
+                }),
+            )
+            .unwrap();
+
+            let err = store.record_audit_event(event).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("audit event payload table scope does not match")
             ));
             assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
             assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);

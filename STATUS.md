@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Bind audit payload table scope`.
+  Memory and Turso generic audit recording now validate payload table scope
+  against the top-level audit event table before persisting audit rows or
+  enqueueing outbox work. The regressions create payload-hash-valid audit
+  events whose payload table points at a different table and prove audit/outbox
+  state remains empty.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local audit_payload_table_scope_drift -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Reject malformed outbox delivery IDs`.
   Memory and Turso outbox delivery acknowledgement now rejects malformed event
   IDs before marking rows delivered. The regressions try to acknowledge
