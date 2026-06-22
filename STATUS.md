@@ -6,6 +6,26 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Accept empty QGLake commit-history proof`.
+  The QGLake compact handoff verifier and raw lineage-drain verifier now match
+  the service's empty commit-history contract: explicit `commitCount: 0` proof
+  with empty sequence/hash arrays is accepted, while non-empty histories still
+  require count-aligned positive sequences, SHA-shaped commit hashes, and
+  duplicate-free evidence. The design and book now call out the compact
+  zero-count rule.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_accepts_empty_table_commit_history -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_accepts_empty_table_commit_history -- --test-threads=1`
+  passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover and contents render;
+  the versioned EPUB symlink resolves to `lakecat.epub`;
+  `scripts/check-release-readiness.sh --quick` passed.
+- Latest implementation/book slice:
   `Cover empty commit-history proof`.
   `table.commits-listed` now has focused service coverage for the standard
   management case where a table exists but has no commit records yet. The

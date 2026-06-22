@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Aligned QGLake compact and raw lineage-drain verification with the service's
+  empty commit-history proof. `tableCommitHistoryProof` and
+  `table.commits-listed` replay now accept explicit zero-count histories with
+  empty sequence/hash arrays while retaining strict hash/sequence checks for
+  present commits.
 - Added service coverage for the empty table commit-history path. A
   `table.commits-listed` read over a table with no commit records now has a
   regression proving it drains as explicit zero-count proof, emits lineage

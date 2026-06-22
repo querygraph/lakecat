@@ -649,10 +649,11 @@ actions directly: `requestIdentityProof` is a `lineage-read` proof for the
 drain read, while `queryGraphBootstrapProof` is a `graph-read` proof for the
 bootstrap event. Saved `lakecatHandoffVerifyOutput` sidecars must reject
 top-level copies of those compact proofs when either authorization action
-drifts. Compact table commit-history proof must preserve the same
-duplicate-free commit-hash invariant as service replay, so archived QueryGraph
-handoff summaries cannot inflate pointer-log evidence by repeating a valid
-commit hash.
+drifts. Compact table commit-history proof must preserve the same explicit
+zero-count and duplicate-free commit-hash invariants as service replay, so
+archived QueryGraph handoff summaries can represent an empty history without
+fabricating commits and cannot inflate pointer-log evidence by repeating a
+valid commit hash.
 Raw lineage-drain replay summaries and compact handoff summaries must both keep
 replay, OpenLineage, view receipt, and view receipt-chain hash arrays
 duplicate-free as well as SHA-256-shaped, so source replay and archived proof

@@ -3593,8 +3593,7 @@ fn require_table_commit_history_evidence(
         "table-load",
         "tableCommitHistoryProof",
     )?;
-    let commit_count =
-        require_positive_u64(commit_history, "commitCount", "tableCommitHistoryProof")?;
+    let commit_count = required_u64(commit_history, "commitCount", "tableCommitHistoryProof")?;
     let sequence_numbers =
         required_array(commit_history, "sequenceNumbers", "tableCommitHistoryProof")?;
     if sequence_numbers.len() as u64 != commit_count {
@@ -3630,7 +3629,9 @@ fn require_table_commit_history_evidence(
             commit_hashes.len()
         )));
     }
-    require_full_hash_array(commit_history, "commitHashes", "tableCommitHistoryProof")?;
+    if commit_count > 0 {
+        require_full_hash_array(commit_history, "commitHashes", "tableCommitHistoryProof")?;
+    }
     let mut unique_commit_hashes = BTreeSet::new();
     for commit_hash in commit_hashes.iter().filter_map(Value::as_str) {
         if !unique_commit_hashes.insert(commit_hash) {
@@ -9162,10 +9163,15 @@ fn verify_qglake_table_commit_history_replay(
                 .to_string(),
         ));
     }
-    let commit_count = commit_history.table_commit_count.unwrap_or_default();
-    if commit_count == 0
-        || commit_history.table_commit_sequence_numbers.is_empty()
-        || !qglake_has_sha256_hashes(&commit_history.table_commit_hashes)
+    let Some(commit_count) = commit_history.table_commit_count else {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "qglake lineage drain table commit history replay is missing compact commit summary or SHA-256 commit hash evidence"
+                .to_string(),
+        ));
+    };
+    if commit_count > 0
+        && (commit_history.table_commit_sequence_numbers.is_empty()
+            || !qglake_has_sha256_hashes(&commit_history.table_commit_hashes))
     {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "qglake lineage drain table commit history replay is missing compact commit summary or SHA-256 commit hash evidence"
@@ -13660,6 +13666,18 @@ mod tests {
         assert!(err.to_string().contains("tableCommitHistoryProof"));
         assert!(err.to_string().contains("sequenceNumbers"));
         assert!(err.to_string().contains("length mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_accepts_empty_table_commit_history() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["commitCount"] = json!(0);
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["sequenceNumbers"] =
+            json!([]);
+        summary["lakecatReplayVerification"]["tableCommitHistoryProof"]["commitHashes"] = json!([]);
+
+        verify_qglake_handoff_summary_value(&summary)
+            .expect("handoff summary should accept explicit zero-count commit-history proof");
     }
 
     #[test]
@@ -24197,6 +24215,23 @@ mod tests {
             1,
         )
         .expect("QGLake lineage drain should accept delivered outbox events");
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_accepts_empty_table_commit_history() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let commit_history = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "table.commits-listed")
+            .expect("commit history replay fixture");
+        commit_history.table_commit_count = Some(0);
+        commit_history.table_commit_sequence_numbers.clear();
+        commit_history.table_commit_hashes.clear();
+
+        verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect("QGLake lineage drain should accept explicit zero-count commit-history proof");
     }
 
     #[test]
