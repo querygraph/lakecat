@@ -1436,6 +1436,12 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
             "table commit evidence snapshot id must be non-negative",
         ));
     }
+    validate_required_rfc3339_string(
+        event,
+        commit,
+        &["committed_at", "committed-at"],
+        "table commit evidence committed_at timestamp",
+    )?;
     if !commit
         .get("new_metadata_location")
         .or_else(|| commit.get("new-metadata-location"))
@@ -1656,6 +1662,33 @@ fn validate_authorization_receipt_checked_at(
             &format!("{label} authorization receipt checked_at timestamp must be RFC3339: {err}"),
         )
     })?;
+    Ok(())
+}
+
+fn validate_required_rfc3339_string(
+    event: &OutboxEvent,
+    value: &Value,
+    field_names: &[&str],
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(timestamp) = field_names
+        .iter()
+        .find_map(|field_name| value.get(*field_name))
+        .and_then(Value::as_str)
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} must be present"),
+        ));
+    };
+    if timestamp.trim().is_empty() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} must be non-empty"),
+        ));
+    }
+    chrono::DateTime::parse_from_rfc3339(timestamp)
+        .map_err(|err| outbox_evidence_error(event, &format!("{label} must be RFC3339: {err}")))?;
     Ok(())
 }
 
@@ -14845,6 +14878,106 @@ mod tests {
             let err = drain_outbox_once(&state, 10)
                 .await
                 .expect_err("malformed table commit format/snapshot evidence should fail");
+            let message = err.to_string();
+            assert!(message.contains("table.commit"));
+            assert!(message.contains(expected), "{case}: {message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(store.delivered.lock().await.is_empty());
+            assert!(graph.events.lock().await.is_empty());
+            assert!(lineage.events.lock().await.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_table_commit_committed_at_evidence() {
+        for (case, mutate, expected) in [
+            (
+                "missing-committed-at",
+                "remove-committed-at",
+                "table commit evidence committed_at timestamp must be present",
+            ),
+            (
+                "blank-committed-at",
+                "blank-committed-at",
+                "table commit evidence committed_at timestamp must be non-empty",
+            ),
+            (
+                "malformed-committed-at",
+                "malformed-committed-at",
+                "table commit evidence committed_at timestamp must be RFC3339",
+            ),
+        ] {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+            let mut commit = json!({
+                "table": table,
+                "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+                "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+                "sequence_number": 7,
+                "principal": principal,
+                "format_version": 3,
+                "snapshot_id": 42,
+                "policy_hash": null,
+                "request_hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+                "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+                "idempotency_key_sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+                "committed_at": chrono::Utc::now(),
+            });
+            match mutate {
+                "remove-committed-at" => {
+                    commit.as_object_mut().unwrap().remove("committed_at");
+                }
+                "blank-committed-at" => {
+                    commit["committed_at"] = json!(" ");
+                }
+                "malformed-committed-at" => {
+                    commit["committed_at"] = json!("not-a-timestamp");
+                }
+                _ => unreachable!("unknown table commit committed_at mutation"),
+            }
+            let event_id = format!("evt-table-commit-{case}");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.commit".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-table-commit-{case}"),
+                        "event-type": "table.commit",
+                        "table": table,
+                        "commit": commit,
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-commit",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed table commit committed_at evidence should fail");
             let message = err.to_string();
             assert!(message.contains("table.commit"));
             assert!(message.contains(expected), "{case}: {message}");

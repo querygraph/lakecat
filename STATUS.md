@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require table commit timestamp evidence`.
+  Service `table.commit` replay admission now rejects committed pointer
+  transitions unless the replay envelope carries an RFC3339 `committed_at`
+  timestamp before acknowledgement, graph projection, or OpenLineage
+  projection. This preserves when the catalog accepted the individual pointer
+  transition, distinct from the authorization receipt's `checked_at` timestamp.
+- Local verification for this table commit timestamp slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib table_commit -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require table commit format summary`.
   Service `table.commit` replay admission now rejects committed pointer
   transitions unless the replay envelope carries positive Iceberg

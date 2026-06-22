@@ -626,7 +626,10 @@ response hash, and idempotency-key hash evidence before projection; only the
 policy hash remains optional when no policy participated. It must also carry
 positive Iceberg format-version evidence and non-negative snapshot-id evidence,
 so graph and OpenLineage projections cannot lose the table-format summary that
-the pointer-log path exposes later.
+the pointer-log path exposes later. The individual commit envelope must also
+carry an RFC3339 committed-at timestamp before acknowledgement or projection,
+so replay cannot preserve pointer movement while dropping the time at which the
+catalog accepted it.
 
 ### P4 Semantic Catalog Graph
 

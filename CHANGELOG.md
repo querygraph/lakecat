@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required service `table.commit` replay admission to carry an RFC3339
+  `committed_at` timestamp before acknowledgement, graph projection, or
+  OpenLineage projection, so individual pointer-transition replay cannot drop
+  when the catalog accepted the commit.
 - Expanded the LakeCat book's catalog-concepts chapter with a dedicated
   extension/proposal boundary, classifying Rust/Turso as implementation
   choices, REST table/namespace paths and CAS as standard Iceberg behavior,

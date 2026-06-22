@@ -4938,12 +4938,14 @@ table identity, matching nested commit-table identity, a valid commit principal
 and a valid authorization receipt principal with matching values, an
 authorization receipt whose action is a known LakeCat catalog action matching
 the `table.commit` event, whose `allowed` decision is true, whose engine is
-non-empty, whose `checked_at` timestamp is RFC3339, and whose commit hash
-evidence is full SHA-256 before graph or OpenLineage projection can start.
+non-empty, whose `checked_at` timestamp is RFC3339, an RFC3339 commit
+`committed_at` timestamp, and commit hash evidence that is full SHA-256 before
+graph or OpenLineage projection can start.
 The action, decision, engine, and timestamp fields are deliberately small but
 important: replay evidence must prove which catalog action was authorized,
 prove the catalog acted under an affirmative authorization decision, say which
-engine made that decision, and preserve when the check happened. Local/default
+engine made that decision, preserve when the authorization check happened, and
+preserve when the catalog accepted the pointer transition. Local/default
 receipts identify the local allow-all
 compatibility engine, while real TypeSec-backed receipts identify TypeSec. That
 keeps replay evidence from becoming actorful but action-less, decision-less,
