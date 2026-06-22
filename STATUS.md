@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation slice:
+  `Reject duplicate config endpoints`.
+  Service outbox-drain coverage now proves `catalog.config-read` replay
+  rejects duplicate advertised endpoint entries before acknowledgement, graph
+  projection, or OpenLineage projection. This keeps the P6 compatibility and
+  integration discovery proof from inflating standard Iceberg, governed access,
+  or QueryGraph/OpenLineage surfaces by repeating an already valid route.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_duplicate_catalog_config_endpoints -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Expand catalog concept standards guidance`.
   The book now more thoroughly explains the Rust service/catalog spine,

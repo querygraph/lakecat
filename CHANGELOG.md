@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added catalog config replay coverage for duplicate advertised endpoint
+  entries, proving malformed config-read evidence fails before acknowledgement,
+  graph projection, or OpenLineage projection.
 - Expanded the LakeCat book's catalog-concepts chapter with a reader-facing
   naming discipline and proposal filter that separates standard Iceberg
   behavior from LakeCat control-plane proof, QueryGraph/TypeSec integration,
