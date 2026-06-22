@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened catalog-config endpoint replay: `catalog.config-read` audit payloads
+  now record the advertised endpoint list, service replay validates endpoint
+  arrays as non-empty duplicate-free strings, and replay rejects config evidence
+  that omits the standard config, namespace, table-load, or table-commit REST
+  endpoints for default and warehouse-prefixed routes before graph/OpenLineage
+  projection or QGLake handoff.
 - Hardened catalog-config override replay: `catalog.config-read` evidence now
   validates optional `overrides` as structured string key/value entries and
   rejects any `lakecat.format.v4*` override claims before acknowledgement,

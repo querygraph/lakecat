@@ -2929,6 +2929,7 @@ fn validate_catalog_config_read_event_evidence(
     validate_catalog_config_defaults(event, payload)?;
     validate_catalog_config_overrides(event, payload)?;
     validate_authorization_receipt_principal(event, payload, "catalog config-read")?;
+    validate_catalog_config_endpoints(event, payload)?;
     Ok(())
 }
 
@@ -3044,6 +3045,63 @@ fn validate_catalog_config_overrides(
             return Err(outbox_evidence_error(
                 event,
                 "catalog config-read overrides must not contain v4 bridge keys",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_catalog_config_endpoints(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    let Some(endpoints) = payload.get("endpoints") else {
+        return Err(outbox_evidence_error(
+            event,
+            "catalog config-read evidence must contain endpoints",
+        ));
+    };
+    let Some(endpoints) = endpoints.as_array() else {
+        return Err(outbox_evidence_error(
+            event,
+            "catalog config-read endpoints must be an array",
+        ));
+    };
+    let mut endpoint_set = BTreeSet::new();
+    for endpoint in endpoints {
+        let Some(endpoint) = endpoint
+            .as_str()
+            .filter(|endpoint| !endpoint.trim().is_empty())
+        else {
+            return Err(outbox_evidence_error(
+                event,
+                "catalog config-read endpoints must contain non-empty strings",
+            ));
+        };
+        if !endpoint_set.insert(endpoint.to_string()) {
+            return Err(outbox_evidence_error(
+                event,
+                "catalog config-read endpoints must not contain duplicate entries",
+            ));
+        }
+    }
+    let required = [
+        "GET /catalog/v1/config",
+        "GET /catalog/v1/namespaces",
+        "POST /catalog/v1/namespaces",
+        "GET /catalog/v1/namespaces/{namespace}/tables/{table}",
+        "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit",
+        "GET /catalog/v1/{warehouse}/config",
+        "GET /catalog/v1/{warehouse}/namespaces",
+        "POST /catalog/v1/{warehouse}/namespaces",
+        "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}",
+        "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit",
+    ];
+    for required_endpoint in required {
+        if !endpoint_set.contains(required_endpoint) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("catalog config-read endpoints must include {required_endpoint}"),
             ));
         }
     }
@@ -5482,6 +5540,7 @@ async fn get_config_in_warehouse(
                 "warehouse": warehouse.as_str(),
                 "defaults": &config.defaults,
                 "overrides": &config.overrides,
+                "endpoints": &config.endpoints,
             }),
         )?)
         .await?;
@@ -11326,6 +11385,14 @@ mod tests {
             &payload["defaults"],
             "lakecat.format.v4.typed-sail",
             "unavailable",
+        );
+        assert_config_endpoints_include(
+            &payload["endpoints"],
+            "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit",
+        );
+        assert_config_endpoints_include(
+            &payload["endpoints"],
+            "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/commit",
         );
     }
 
@@ -21190,6 +21257,7 @@ mod tests {
                         },
                         "warehouse": "local",
                         "defaults": catalog_config_defaults_json(),
+                        "endpoints": catalog_config_endpoints_json(),
                         "overrides": [
                             {"key": "lakecat.format.v4.typed-sail", "value": "available"}
                         ]
@@ -21222,6 +21290,72 @@ mod tests {
         );
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-config-unsupported-v4-override"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_catalog_config_missing_standard_endpoints() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let endpoints = CatalogConfigResponse::default()
+            .endpoints
+            .into_iter()
+            .filter(|endpoint| {
+                endpoint != "POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit"
+            })
+            .collect::<Vec<_>>();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-config-missing-standard-endpoint".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-config-missing-standard-endpoint",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": catalog_config_defaults_json(),
+                        "endpoints": endpoints
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("catalog config replay must preserve standard endpoints");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(
+            message.contains(
+                "catalog config-read endpoints must include POST /catalog/v1/namespaces/{namespace}/tables/{table}/commit"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-config-missing-standard-endpoint"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
@@ -27714,6 +27848,7 @@ mod tests {
                     },
                     "warehouse": warehouse,
                     "defaults": catalog_config_defaults_json(),
+                    "endpoints": catalog_config_endpoints_json(),
                 }
             }),
             created_at: created_at.parse().unwrap(),
@@ -27794,6 +27929,7 @@ mod tests {
                         },
                         "warehouse": "local",
                         "defaults": catalog_config_defaults_json(),
+                        "endpoints": catalog_config_endpoints_json(),
                         "warehouse-record": {
                             "warehouse": "local",
                             "project-id": "default",
@@ -38925,6 +39061,10 @@ mod tests {
         serde_json::to_value(CatalogConfigResponse::default().defaults).unwrap()
     }
 
+    fn catalog_config_endpoints_json() -> serde_json::Value {
+        serde_json::to_value(CatalogConfigResponse::default().endpoints).unwrap()
+    }
+
     fn valid_querygraph_bootstrap_payload(principal: Principal) -> serde_json::Value {
         let bundle_hash = content_hash_json(&json!({"querygraph-bootstrap": "bundle"})).unwrap();
         let graph_hash = content_hash_json(&json!({"querygraph-bootstrap": "graph"})).unwrap();
@@ -39002,6 +39142,18 @@ mod tests {
                     && entry.get("value").and_then(serde_json::Value::as_str) == Some(value)
             }),
             "config defaults should include {key}={value}: {defaults:?}"
+        );
+    }
+
+    fn assert_config_endpoints_include(endpoints: &serde_json::Value, expected: &str) {
+        let endpoints = endpoints
+            .as_array()
+            .expect("config endpoints should be an array");
+        assert!(
+            endpoints
+                .iter()
+                .any(|endpoint| endpoint.as_str() == Some(expected)),
+            "config endpoints should include {expected}: {endpoints:?}"
         );
     }
 

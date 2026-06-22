@@ -818,6 +818,11 @@ rather than letting future-looking typed-Sail claims coexist with
 `typed-sail=unavailable`. Config overrides cannot carry v4 bridge keys either;
 until Sail exposes stable typed v4 support, an override is not allowed to
 rewrite the catalog's advertised v4 posture.
+Catalog config-read replay must also bind the advertised endpoint list to the
+standard Iceberg REST surface: config, namespace list/create, table load, and
+table commit endpoints must be present for both default and warehouse-prefixed
+routes before graph or OpenLineage projection can treat the config read as
+compatibility evidence.
 The local dependency contract is the guardrail while cloud CI is manual-only:
 it must reject automatic triggers across every GitHub workflow file, not just
 the primary CI workflow, including compact, block-list, inline-map, and quoted

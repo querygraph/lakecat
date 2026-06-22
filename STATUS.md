@@ -6,6 +6,23 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Bind config-read endpoint evidence`.
+  Catalog config-read audit payloads now carry the advertised endpoint list,
+  and service replay validates that endpoints are duplicate-free non-empty
+  strings including the standard Iceberg REST config, namespace list/create,
+  table-load, and table-commit paths for both default and warehouse-prefixed
+  routes. Config-read replay now fails before acknowledgement, graph
+  projection, OpenLineage projection, or QGLake handoff if standard endpoint
+  evidence is missing, while the book explains this as compatibility proof
+  rather than a new client obligation.
+- Local verification for this config endpoint-evidence slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib catalog_config -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Reject catalog-config v4 override claims`.
   Catalog config replay now validates optional `overrides` as structured
   string key/value entries and rejects any `lakecat.format.v4*` override
