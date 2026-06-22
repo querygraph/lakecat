@@ -6,6 +6,30 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close service credential-vend schemas`.
+  Service outbox admission now rejects unexpected top-level payload fields for
+  `credentials.vend-attempted` before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake proof can inherit unverified credential,
+  storage-scope, authorization, issuer, graph, OpenLineage, QueryGraph, or
+  application claims beside checked table, read-restriction, raw-credential
+  exception, storage profile, response evidence, mode, block reason, and
+  authorization proof. The design and book now describe top-level
+  credential-vend payload closure alongside nested read-restriction,
+  raw-credential exception, storage-profile, and credential-response closure.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_top_level_credential_vend_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service credential_vend -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close service table lifecycle schemas`.
   Service outbox admission now rejects unexpected top-level payload fields for
   `table.created`, `table.loaded`, `table.deleted`, and `table.restored` before

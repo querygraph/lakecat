@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Closed service outbox admission over top-level credential-vend replay
+  payloads. `credentials.vend-attempted` now rejects unexpected top-level
+  payload fields before acknowledgement, graph projection, OpenLineage
+  projection, or QGLake proof can inherit unverified credential, storage-scope,
+  authorization, issuer, graph, OpenLineage, QueryGraph, or application claims
+  beside checked table, read-restriction, raw-credential exception,
+  storage-profile, response evidence, and authorization proof.
 - Closed service outbox admission over top-level table lifecycle replay
   payloads. `table.created`, `table.loaded`, `table.deleted`, and
   `table.restored` now reject unexpected top-level payload fields before

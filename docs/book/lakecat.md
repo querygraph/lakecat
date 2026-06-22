@@ -7978,6 +7978,12 @@ secret-reference presence evidence that agrees with nested storage-profile
 evidence, and
 credential-response metadata that agrees with the selected storage profile and
 authorization receipt before delivery.
+The top-level `credentials.vend-attempted` payload is also closed over the
+fields LakeCat actually emits and verifies. A replay record cannot append
+unverified credential, storage-scope, issuer, graph, OpenLineage, QueryGraph,
+or application claims beside otherwise valid read-restriction,
+raw-credential-exception, storage-profile, response-evidence, and authorization
+proof.
 Storage-profile upsert replay must likewise reject raw secret references and contradictory
 secret-reference-state evidence before delivery. Policy-binding upsert replay
 must carry valid catalog scope evidence before delivery, including policy id,

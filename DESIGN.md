@@ -924,6 +924,12 @@ top level, branch level, and nested redacted storage-profile level. Archived
 handoffs must reject unverified raw credential, storage-scope, authorization,
 replay, or OpenLineage claims before QueryGraph indexes them as accepted
 TypeSec-style credential decisions.
+Service outbox admission must also close the top-level
+`credentials.vend-attempted` payload over the fields current producers emit, so
+raw lineage drains cannot append unverified credential, storage-scope,
+authorization, issuer, graph, OpenLineage, QueryGraph, or application claims
+beside checked table, read-restriction, raw-credential exception, storage
+profile, response evidence, and authorization proof.
 Storage-profile upsert replay must be hash-only for storage roots: generated
 audit/outbox evidence records `location-prefix-hash`, and raw
 `location-prefix` values must fail before acknowledgement or projection.

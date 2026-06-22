@@ -1541,6 +1541,22 @@ const CREDENTIAL_RESPONSE_EVIDENCE_FIELDS: &[&str] = &[
     "catalog-profile-id",
     "receipt-principal",
 ];
+const CREDENTIAL_VEND_EVIDENCE_FIELDS: &[&str] = &[
+    "audit-event-id",
+    "event-type",
+    "table",
+    "authorization-receipt",
+    "storage-location",
+    "storage-profile-id",
+    "storage-profile",
+    "secret-ref-present",
+    "credential-count",
+    "credential-response-evidence",
+    "mode",
+    "read-restriction",
+    "lakecat:raw-credential-exception",
+    "lakecat:credential-block-reason",
+];
 const RAW_CREDENTIAL_EXCEPTION_EVIDENCE_FIELDS: &[&str] = &["requested", "allowed", "reason"];
 const STORAGE_PROFILE_EVIDENCE_FIELDS: &[&str] = &[
     "profile-id",
@@ -4517,6 +4533,12 @@ fn validate_credential_vend_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_object_evidence_schema(
+        event,
+        payload,
+        "credential-vend",
+        CREDENTIAL_VEND_EVIDENCE_FIELDS,
+    )?;
     validate_read_restriction_evidence_schema(
         event,
         payload.get("read-restriction"),
@@ -21014,6 +21036,108 @@ mod tests {
         assert!(message.contains("location-prefix-hash"));
         assert!(message.contains("full SHA-256"));
         assert!(message.contains("event-id-hash=sha256:"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_top_level_credential_vend_fields() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let raw_exception = json!({
+            "requested": true,
+            "allowed": false,
+            "reason": "fine-grained read restriction requires Sail-planned reads",
+        });
+        let read_restriction = json!({
+            "allowed-columns": ["event_id"],
+            "row-predicate": {
+                "type": "eq",
+                "term": "tenant_id",
+                "value": "tenant-a",
+            },
+            "purpose": "fraud-review",
+            "policy-hashes": [content_hash_bytes(b"credential-vend-policy")],
+            "max-credential-ttl-seconds": 300,
+        });
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-vend-extra-top-level-field".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-vend-extra-top-level-field",
+                    "event-type": "credentials.vend-attempted",
+                    "table": &table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                            "context": {
+                                "read-restriction": read_restriction,
+                                "lakecat:raw-credential-exception": raw_exception,
+                            },
+                        },
+                        "read-restriction": read_restriction,
+                        "lakecat:raw-credential-exception": raw_exception,
+                        "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
+                        "storage-location": "file:///tmp/lakecat/events",
+                        "storage-profile-id": "events-local",
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": content_hash_json(&json!({
+                                "location-prefix": "file:///tmp/lakecat/events"
+                            })).unwrap(),
+                        },
+                        "secret-ref-present": false,
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "mode": "local-file-no-secret",
+                        "unverified-credential-vend-claim": "shadow",
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("extra top-level credential-vend fields should fail");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains(
+            "credential-vend contains unexpected field unverified-credential-vend-claim"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-credential-vend-extra-top-level-field"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
