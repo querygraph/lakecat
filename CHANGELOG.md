@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Rebuilt and verified the LakeCat book artifacts after the catalog-concepts
+  expansion. The current book already covers the Rust service spine, Turso
+  store direction, Iceberg REST paths, commit CAS, idempotency, pointer logs,
+  audit/outbox, replay validation, TypeSec-style governed scan and credential
+  receipts, QueryGraph/QGLake/OpenLineage proof surfaces, the
+  standard-versus-extension-versus-future-profile distinction, and the argument
+  for pushing table-format work into Sail.
 - Closed service outbox admission over top-level credential-vend replay
   payloads. `credentials.vend-attempted` now rejects unexpected top-level
   payload fields before acknowledgement, graph projection, OpenLineage

@@ -5,6 +5,21 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book artifact slice:
+  `Refresh catalog concept book artifacts`.
+  The current book already contains the requested detailed explanation of the
+  Rust service spine, Turso-backed local store direction, Iceberg REST-compatible
+  namespace/table routes, commit CAS, idempotency, pointer logs, audit/outbox,
+  replay validation, TypeSec-style governed scan and credential receipts,
+  QueryGraph/QGLake/OpenLineage/bootstrap/management/view/credential/commit
+  proof surfaces, and the boundary between standard Iceberg parlance, LakeCat
+  implementation, TypeSec governance, QueryGraph integration, and future
+  optional profile candidates. The artifacts were rebuilt and verified after
+  that review.
+- Local verification for this book artifact slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed.
 - Latest implementation/book slice:
   `Close service credential-vend schemas`.
   Service outbox admission now rejects unexpected top-level payload fields for
