@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required QGLake handoff artifact paths to resolve inside the handoff summary
+  directory before hashing or semantic verification. The CLI verifier now
+  rejects absolute or relative artifact-path splices that point outside the
+  archived bundle even when the referenced file bytes match the declared hash.
 - Required saved QGLake self-verification artifact hashes to be full SHA-256
   digests. `lakecatHandoffVerifyOutput.artifactFiles` now rejects short nested
   bundle, lineage-drain, QueryGraph import-plan, captured LakeCat/QueryGraph

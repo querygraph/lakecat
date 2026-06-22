@@ -672,6 +672,9 @@ LakeCat/QueryGraph output, and service-log hashes before those values are
 compared with the compact handoff summary. Equality to the summary is not
 enough if the saved self-verifier artifact can carry placeholder or prefix-only
 hashes.
+Handoff artifact paths must resolve under the handoff summary directory before
+LakeCat hashes or parses them. A saved summary must not be able to splice in an
+absolute path or `..` traversal to matching bytes outside the archived bundle.
 Raw lineage-drain replay summaries and compact handoff summaries must both keep
 replay, OpenLineage, commit-history commit, view receipt, and view
 receipt-chain hash arrays duplicate-free as well as full SHA-256-shaped, so

@@ -7811,13 +7811,16 @@ stable ids, standards, request-identity proof, and QueryGraph bootstrap proof
 still match the compact handoff summary. It also checks the saved
 self-verifier output's bundle, lineage-drain, QueryGraph import-plan,
 captured-output, and service-log hashes against the summary's artifact
-manifest. It also checks the saved self-verifier output's own semantic
-sections: captured replay semantics must match the compact LakeCat and
-QueryGraph proof, bundle artifact semantics must match QueryGraph
-verification, import-plan semantics must match QueryGraph import verification,
-lineage-drain semantics must match the accepted replay proof, and saved
-import-plan graph counts must still match the saved bundle graph counts. Then
-it parses the archived lineage-drain artifact and requires the saved
+manifest. Artifact paths are checked before hashing as well: every path must
+resolve under the handoff summary directory, so an archived summary cannot
+splice in an absolute path or `..` traversal to matching bytes outside the
+bundle. It also checks the saved self-verifier output's own semantic sections:
+captured replay semantics must match the compact LakeCat and QueryGraph proof,
+bundle artifact semantics must match QueryGraph verification, import-plan
+semantics must match QueryGraph import verification, lineage-drain semantics
+must match the accepted replay proof, and saved import-plan graph counts must
+still match the saved bundle graph counts. Then it parses the archived
+lineage-drain artifact and requires the saved
 lineage-drain semantics' delivered count, event type list, graph event count,
 lineage event count, and drain authorization action to match before accepting
 the verifier-output hash.

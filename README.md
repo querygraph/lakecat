@@ -90,7 +90,9 @@ QueryGraph table/view counts, semantic hashes, and standards after LakeCat
 replay, `lakecat-verify`, and `lakecat-import` agree, structured
 scan/management/credential/commit replay evidence, artifact paths, raw file
 hashes, captured LakeCat replay output, QueryGraph verify output, QueryGraph
-import output, and service log path for automation.
+import output, and service log path for automation. Handoff verification keeps
+those artifacts bundle-local: paths must resolve under the handoff summary
+directory before LakeCat hashes or parses them.
 
 For first-release readiness, run the local release gate instead of relying on
 cloud CI:

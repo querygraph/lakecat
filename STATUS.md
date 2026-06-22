@@ -6,6 +6,26 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Keep QGLake handoff artifacts bundle-local`.
+  QGLake handoff artifact verification now canonicalizes each declared artifact
+  path and rejects absolute or relative path splices that resolve outside the
+  handoff summary directory before hashing or semantic verification. This keeps
+  a saved handoff from accepting matching bytes outside the archived bundle.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_artifact_path_outside_summary_dir -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_accepts_matching_files -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_drifted_path_alias -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Require full QGLake sidecar artifact hashes`.
   QGLake handoff artifact verification now requires the saved
   `lakecatHandoffVerifyOutput.artifactFiles` object to use full SHA-256

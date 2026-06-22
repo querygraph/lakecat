@@ -1030,11 +1030,31 @@ fn required_resolved_artifact_path(
         )));
     }
     let path = PathBuf::from(path);
-    Ok(if path.is_absolute() {
+    let resolved = if path.is_absolute() {
         path
     } else {
         base_dir.join(path)
-    })
+    };
+    let canonical_base = fs::canonicalize(base_dir).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff summary artifact base directory {} is not readable: {err}",
+            base_dir.display()
+        ))
+    })?;
+    let canonical_path = fs::canonicalize(&resolved).map_err(|err| {
+        lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff artifact path {field} at {} is not readable: {err}",
+            resolved.display()
+        ))
+    })?;
+    if !canonical_path.starts_with(&canonical_base) {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+            "handoff artifact path {field} must stay under handoff summary directory {}: {}",
+            canonical_base.display(),
+            canonical_path.display()
+        )));
+    }
+    Ok(canonical_path)
 }
 
 fn verify_qglake_handoff_artifact_file(
@@ -15612,12 +15632,40 @@ mod tests {
         );
         assert_eq!(
             verification["pathAliases"]["querygraphVerifyOutput"],
-            summary["artifacts"]["querygraphVerifyOutput"]
+            json!(
+                fs::canonicalize(
+                    summary["artifacts"]["querygraphVerifyOutput"]
+                        .as_str()
+                        .unwrap()
+                )
+                .expect("canonical QueryGraph verify output")
+            )
         );
         assert_eq!(
             verification["pathAliases"]["serviceLog"],
-            summary["artifacts"]["serviceLog"]
+            json!(
+                fs::canonicalize(summary["artifacts"]["serviceLog"].as_str().unwrap())
+                    .expect("canonical service log")
+            )
         );
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_artifact_path_outside_summary_dir() {
+        let temp = qglake_temp_dir("handoff-artifacts-path-outside");
+        let outside = qglake_temp_dir("handoff-artifacts-path-outside-splice");
+        let outside_bundle = outside.join("bundle");
+        fs::write(&outside_bundle, b"bundle").expect("write outside bundle");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        summary["artifacts"]["bundle"]["path"] = json!(outside_bundle);
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("handoff verifier should reject artifacts outside summary directory");
+        let err = err.to_string();
+
+        assert!(err.contains("bundle"), "{err}");
+        assert!(err.contains("summary directory"), "{err}");
     }
 
     #[test]
@@ -16270,6 +16318,8 @@ mod tests {
         let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
         summary["artifacts"]["querygraphVerifyOutput"] =
             json!(temp.join("other-querygraph-verify.json"));
+        fs::write(temp.join("other-querygraph-verify.json"), b"{}")
+            .expect("write drifted QueryGraph verify alias target");
         fs::write(
             &summary_path,
             serde_json::to_vec_pretty(&summary).expect("summary JSON"),
