@@ -32849,6 +32849,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_missing_or_denied_querygraph_bootstrap_allowed_decision() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let mut missing_allowed_payload = valid_querygraph_bootstrap_payload(principal.clone());
+        missing_allowed_payload["payload"]["authorization-receipt"]
+            .as_object_mut()
+            .expect("authorization receipt should be an object")
+            .remove("allowed");
+        let mut denied_payload = valid_querygraph_bootstrap_payload(principal);
+        denied_payload["payload"]["authorization-receipt"]["allowed"] = json!(false);
+
+        for (event_id, payload, expected_message) in [
+            (
+                "evt-bootstrap-missing-receipt-allowed",
+                missing_allowed_payload,
+                "querygraph bootstrap evidence must contain authorization receipt allowed decision",
+            ),
+            (
+                "evt-bootstrap-denied-receipt",
+                denied_payload,
+                "querygraph bootstrap authorization receipt must allow replay projection",
+            ),
+        ] {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("missing or denied QueryGraph bootstrap decision should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("querygraph.bootstrap"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "QueryGraph bootstrap decision failures must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "QueryGraph bootstrap decision failures must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "QueryGraph bootstrap decision failures must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_extra_querygraph_bootstrap_request_identity_fields() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let mut payload = valid_querygraph_bootstrap_payload(principal.clone());

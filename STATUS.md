@@ -6,6 +6,14 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Cover QueryGraph bootstrap allowed decisions`.
+  Service replay admission already required `querygraph.bootstrap`
+  authorization receipts to carry an affirmative allow decision; the new
+  regression pins that contract directly on the QueryGraph bootstrap handoff
+  surface, proving a missing or denied decision fails before acknowledgement,
+  graph projection, OpenLineage projection, QGLake proof, or QueryGraph import
+  can inherit unauthorized bootstrap evidence.
+- Latest implementation/testing slice:
   `Cover view receipt-chain allowed decisions`.
   Service replay admission already required
   `view.version-receipt-chains-listed` authorization receipts to carry an

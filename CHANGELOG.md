@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added QueryGraph bootstrap replay coverage for denied or incomplete
+  authorization receipt decisions. `querygraph.bootstrap` outbox admission now
+  has a direct regression proving a missing or false `allowed` decision fails
+  before acknowledgement, graph projection, OpenLineage projection, QGLake
+  proof, or QueryGraph import can inherit unauthorized bootstrap evidence.
 - Added view receipt-chain replay coverage for denied or incomplete
   authorization receipt decisions. `view.version-receipt-chains-listed`
   outbox admission now has a direct regression proving a missing or false
