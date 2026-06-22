@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added management-list replay coverage for denied or incomplete authorization
+  receipt decisions. `server.listed` outbox admission now has a direct
+  regression proving a missing or false `allowed` decision fails before
+  acknowledgement, graph projection, OpenLineage projection, QGLake proof, or
+  QueryGraph import can inherit unauthorized inventory evidence.
 - Bound fetched scan replay `stats-fields` to effective stats evidence. When
   `table.scan-tasks-fetched` replay carries `stats-fields`, service outbox
   admission now rejects empty, duplicate, or drifted arrays before graph,

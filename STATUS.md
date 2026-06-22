@@ -5,6 +5,14 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Cover management-list allowed receipt decisions`.
+  Service replay admission already required management-list authorization
+  receipts to carry an affirmative allow decision; the new regression pins that
+  contract directly on `server.listed`, proving a missing or denied decision
+  fails before acknowledgement, graph projection, OpenLineage projection,
+  QGLake proof, or QueryGraph import can inherit unauthorized inventory
+  evidence.
 - Latest implementation/book slice:
   `Bind scan-fetch stats-field replay evidence`.
   Service replay admission now validates present `table.scan-tasks-fetched`
