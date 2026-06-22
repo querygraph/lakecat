@@ -6,6 +6,26 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close QGLake artifact hash leaf objects`.
+  Saved `lakecatHandoffVerifyOutput.artifactFiles` hash leaf objects are now
+  closed over `sha256` only. Nested bundle, lineage-drain, QueryGraph
+  import-plan, and captured LakeCat/QueryGraph output hash objects reject
+  unexpected fields before comparison with the compact handoff summary, so a
+  sidecar cannot attach alternate unverified hash claims to accepted artifact
+  evidence.
+- Local verification for this implementation/book slice is green so far:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_artifact_hash_field -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_capture_hash_field -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close QGLake self-verifier semantic sections`.
   Saved QGLake self-verifier semantic sections are now closed over the fields
   LakeCat actually compares. LakeCat replay semantics, QueryGraph

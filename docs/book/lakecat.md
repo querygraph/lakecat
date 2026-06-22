@@ -7948,12 +7948,14 @@ log must carry full SHA-256 digests before they are compared with the compact
 summary. The saved sidecar also has to stay closed over that known manifest:
 extra top-level artifact claims and extra nested captured-output claims are
 rejected instead of being carried as unverified evidence beside the accepted
-hashes. The sidecar root and `capturedOutputSemantics` object are closed over
-their known schema keys for the same reason: a saved verifier output should not
-append proof sections that no verifier compares. The individual LakeCat,
-QueryGraph, bundle, import-plan, and lineage-drain semantic sections are
-closed the same way. It is small, but it is not decorative. It is the
-acceptance story for a catalog that participates in the user workflow from
+hashes. Each nested artifact and captured-output hash object is also closed
+over `sha256` only, so an otherwise accepted hash cannot carry an alternate
+unverified hash claim beside it. The sidecar root and `capturedOutputSemantics`
+object are closed over their known schema keys for the same reason: a saved
+verifier output should not append proof sections that no verifier compares. The
+individual LakeCat, QueryGraph, bundle, import-plan, and lineage-drain semantic
+sections are closed the same way. It is small, but it is not decorative. It is
+the acceptance story for a catalog that participates in the user workflow from
 notebook to agent. The summary file gives automation a single stable place to
 find the accepted table/view counts, semantic hashes, bundle, lineage drain,
 import plan, captured verifier outputs, and raw artifact hashes without

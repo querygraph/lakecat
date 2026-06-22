@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed saved QGLake self-verifier artifact hash leaf objects over `sha256`
+  only. Nested bundle, lineage-drain, QueryGraph import-plan, and captured
+  LakeCat/QueryGraph output hash objects now reject unexpected fields before
+  comparing with the compact handoff summary, preventing sidecars from attaching
+  alternate unverified hash claims to accepted artifact evidence.
 - Closed saved QGLake self-verifier semantic sections over their compared
   fields. LakeCat replay semantics, QueryGraph verify/import semantics, bundle
   artifact semantics, import-plan semantics, and lineage-drain semantics now

@@ -674,13 +674,16 @@ enough if the saved self-verifier artifact can carry placeholder or prefix-only
 hashes. The same object must be closed over the known artifact manifest: extra
 top-level artifact keys or extra nested captured-output keys are rejected so a
 saved sidecar cannot smuggle unverified artifact claims alongside the checked
-bundle. The saved self-verifier root and `capturedOutputSemantics` object must
-also be closed over their known schema keys, so a sidecar cannot append
-unverified proof sections or captured-output semantics that no verifier compares
-to the compact summary. Individual saved semantic proof sections must be closed
-as well: LakeCat replay semantics, QueryGraph verify/import semantics, bundle
-artifact semantics, import-plan semantics, and lineage-drain semantics may carry
-only the fields the verifier compares.
+bundle. Each nested artifact and captured-output hash object must also be
+closed over `sha256` only, so a sidecar cannot attach alternate hash claims to
+an otherwise accepted artifact hash. The saved self-verifier root and
+`capturedOutputSemantics` object must also be closed over their known schema
+keys, so a sidecar cannot append unverified proof sections or captured-output
+semantics that no verifier compares to the compact summary. Individual saved
+semantic proof sections must be closed as well: LakeCat replay semantics,
+QueryGraph verify/import semantics, bundle artifact semantics, import-plan
+semantics, and lineage-drain semantics may carry only the fields the verifier
+compares.
 Handoff artifact paths must resolve under the handoff summary directory before
 LakeCat hashes or parses them. A saved summary must not be able to splice in an
 absolute path or `..` traversal to matching bytes outside the archived bundle.
