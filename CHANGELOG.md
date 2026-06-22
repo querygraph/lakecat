@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's concept guidance with audience-specific language
+  for Iceberg users, operators, governed-agent designers, QueryGraph readers,
+  and standards readers, including a direct "what to say / what not to say"
+  ledger for Rust, Turso, REST paths, commit hardening, governed scans,
+  credential proof, and QGLake handoff.
 - Added compact QGLake table commit-history authorization receipt proof,
   requiring `tableCommitHistoryProof` and captured LakeCat replay evidence to
   carry a full authorization receipt hash and the `table-load` action before

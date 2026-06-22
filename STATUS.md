@@ -5,6 +5,18 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Expand audience catalog concept guidance`.
+  The book now adds audience-specific guidance for standard Iceberg readers,
+  operators, governed-agent designers, QueryGraph readers, and standards
+  readers, plus a direct "what to say / what not to say" ledger separating
+  LakeCat implementation choices, standard Iceberg REST behavior, TypeSec
+  governance proof, QGLake handoff surfaces, and possible future optional
+  Iceberg-adjacent profiles.
+- Local verification for this book slice is green:
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Bind commit-history receipt proof`.
   Compact QGLake `tableCommitHistoryProof` and captured LakeCat replay evidence
