@@ -6,6 +6,28 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require management root hash evidence`.
+  Service replay admission now rejects `server.upserted` and
+  `warehouse.upserted` evidence that carries raw endpoint URLs or storage roots
+  without full SHA-256 hash proof before acknowledgement, graph projection, or
+  OpenLineage projection. Live server and warehouse upsert producers now persist
+  redacted hash evidence in audit/outbox payloads, so QueryGraph and lineage
+  consumers receive management-root proof without raw roots.
+- Latest documentation/book slice:
+  `Clarify Iceberg standard versus LakeCat extension concepts`.
+  The book now front-loads a detailed standard Iceberg, LakeCat implementation,
+  optional LakeCat/QueryGraph extension, TypeSec governance extension,
+  QueryGraph application extension, and future Iceberg-adjacent profile guide,
+  with an expanded argument for pushing Iceberg table-format work into Sail.
+- Local verification for this management-root/book slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib management_upsert -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain_projects_server_upserts_to_lineage -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain_projects_warehouse_upserts_to_graph -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain_rejects_unhashed_server_and_warehouse_roots -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`.
+- Latest completed implementation slice:
   `Require QueryGraph bootstrap receipt principals`.
   Service replay admission now rejects `querygraph.bootstrap` evidence whose
   authorization receipt principal is missing or malformed before

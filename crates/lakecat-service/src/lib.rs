@@ -2540,7 +2540,11 @@ fn validate_server_upsert_event_evidence(
     }
     let endpoint_url =
         optional_string_field(event, server_record, "endpoint-url", "server upsert")?;
-    validate_optional_full_hash_field(event, server_record, "endpoint-url-hash")?;
+    if endpoint_url.is_some() {
+        validate_required_full_hash_field(event, server_record, "endpoint-url-hash")?;
+    } else {
+        validate_optional_full_hash_field(event, server_record, "endpoint-url-hash")?;
+    }
     let display_name =
         optional_string_field(event, server_record, "display-name", "server upsert")?;
     let properties =
@@ -2606,7 +2610,11 @@ fn validate_warehouse_upsert_event_evidence(
     };
     let storage_root =
         optional_string_field(event, warehouse_record, "storage-root", "warehouse upsert")?;
-    validate_optional_full_hash_field(event, warehouse_record, "storage-root-hash")?;
+    if storage_root.is_some() {
+        validate_required_full_hash_field(event, warehouse_record, "storage-root-hash")?;
+    } else {
+        validate_optional_full_hash_field(event, warehouse_record, "storage-root-hash")?;
+    }
     let properties =
         optional_string_map_field(event, warehouse_record, "properties", "warehouse upsert")?;
     WarehouseRecord::new(
@@ -5983,18 +5991,19 @@ async fn upsert_server(
         capability.receipt().principal.clone(),
     )?;
     let record = state.store.upsert_server(record).await?;
+    let event_payload = redact_server_event_payload(json!({
+        "event-type": "server.upserted",
+        "server-id": record.server_id.as_str(),
+        "server-record": server_response(&record),
+        "authorization-receipt": capability.receipt(),
+    }));
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
             "server.upserted",
             None,
             capability.receipt().principal.clone(),
-            json!({
-                "event-type": "server.upserted",
-                "server-id": record.server_id.as_str(),
-                "server-record": server_response(&record),
-                "authorization-receipt": capability.receipt(),
-            }),
+            event_payload,
         )?)
         .await?;
     Ok(Json(server_response(&record)))
@@ -6048,18 +6057,19 @@ async fn upsert_warehouse(
         capability.receipt().principal.clone(),
     )?;
     let record = state.store.upsert_warehouse(record).await?;
+    let event_payload = redact_warehouse_event_payload(json!({
+        "event-type": "warehouse.upserted",
+        "warehouse": warehouse.as_str(),
+        "warehouse-record": warehouse_response(&record),
+        "authorization-receipt": capability.receipt(),
+    }));
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
             "warehouse.upserted",
             None,
             capability.receipt().principal.clone(),
-            json!({
-                "event-type": "warehouse.upserted",
-                "warehouse": warehouse.as_str(),
-                "warehouse-record": warehouse_response(&record),
-                "authorization-receipt": capability.receipt(),
-            }),
+            event_payload,
         )?)
         .await?;
     Ok(Json(warehouse_response(&record)))
@@ -6089,19 +6099,20 @@ async fn upsert_project_warehouse(
         capability.receipt().principal.clone(),
     )?;
     let record = state.store.upsert_warehouse(record).await?;
+    let event_payload = redact_warehouse_event_payload(json!({
+        "event-type": "warehouse.upserted",
+        "project-id": record.project_id.as_str(),
+        "warehouse": warehouse.as_str(),
+        "warehouse-record": warehouse_response(&record),
+        "authorization-receipt": capability.receipt(),
+    }));
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
             "warehouse.upserted",
             None,
             capability.receipt().principal.clone(),
-            json!({
-                "event-type": "warehouse.upserted",
-                "project-id": record.project_id.as_str(),
-                "warehouse": warehouse.as_str(),
-                "warehouse-record": warehouse_response(&record),
-                "authorization-receipt": capability.receipt(),
-            }),
+            event_payload,
         )?)
         .await?;
     Ok(Json(warehouse_response(&record)))
@@ -13752,6 +13763,9 @@ mod tests {
                             "server-id": "prod",
                             "display-name": "Production",
                             "endpoint-url": "https://lakecat.example?token=raw-secret",
+                            "endpoint-url-hash": content_hash_json(&json!({
+                                "endpoint-url": "https://lakecat.example?token=raw-secret"
+                            })).unwrap(),
                             "properties": {"region": "global"}
                         }
                     }
@@ -13809,6 +13823,9 @@ mod tests {
                             "warehouse": "local",
                             "project-id": "default",
                             "storage-root": "file:///tmp/lakecat?token=raw-secret",
+                            "storage-root-hash": content_hash_json(&json!({
+                                "storage-root": "file:///tmp/lakecat?token=raw-secret"
+                            })).unwrap(),
                             "properties": {"region": "local"}
                         }
                     }
@@ -13910,6 +13927,9 @@ mod tests {
                         "server-id": "prod",
                         "display-name": "Production",
                         "endpoint-url": "https://lakecat.example",
+                        "endpoint-url-hash": content_hash_json(&json!({
+                            "endpoint-url": "https://lakecat.example"
+                        })).unwrap(),
                         "properties": {"region": "global"}
                     }
                 }),
@@ -13952,6 +13972,9 @@ mod tests {
                         "warehouse": "local",
                         "project-id": "default",
                         "storage-root": "file:///tmp/lakecat",
+                        "storage-root-hash": content_hash_json(&json!({
+                            "storage-root": "file:///tmp/lakecat"
+                        })).unwrap(),
                         "properties": {"region": "local"}
                     }
                 }),
@@ -14093,6 +14116,9 @@ mod tests {
                         "server-id": "prod",
                         "display-name": "Production",
                         "endpoint-url": "https://lakecat.example",
+                        "endpoint-url-hash": content_hash_json(&json!({
+                            "endpoint-url": "https://lakecat.example"
+                        })).unwrap(),
                         "properties": {"region": "global"}
                     }
                 }),
@@ -14137,6 +14163,9 @@ mod tests {
                         "warehouse": "local",
                         "project-id": "default",
                         "storage-root": "file:///tmp/lakecat",
+                        "storage-root-hash": content_hash_json(&json!({
+                            "storage-root": "file:///tmp/lakecat"
+                        })).unwrap(),
                         "properties": {"region": "local"}
                     }
                 }),
@@ -20394,6 +20423,106 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_unhashed_server_and_warehouse_roots() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            (
+                "server.upserted",
+                "evt-server-unhashed-endpoint",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "server-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "server-id": "prod",
+                    "server-record": {
+                        "server-id": "prod",
+                        "display-name": "Production",
+                        "endpoint-url": "https://lakecat.example",
+                        "properties": {"region": "global"}
+                    }
+                }),
+                "endpoint-url-hash must contain full SHA-256 digest evidence",
+            ),
+            (
+                "warehouse.upserted",
+                "evt-warehouse-unhashed-root",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "warehouse-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "warehouse-record": {
+                        "warehouse": "local",
+                        "project-id": "default",
+                        "storage-root": "file:///tmp/lakecat",
+                        "properties": {"region": "local"}
+                    }
+                }),
+                "storage-root-hash must contain full SHA-256 digest evidence",
+            ),
+        ];
+
+        for (event_type, event_id, payload, expected_message) in cases {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("raw management endpoint/root evidence should require hash proof");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_scan_planned_evidence() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let ident = table_ident("local", "default", "events").unwrap();
@@ -24580,6 +24709,9 @@ mod tests {
                             "server-id": "prod",
                             "display-name": "Production",
                             "endpoint-url": "https://lakecat.example",
+                            "endpoint-url-hash": content_hash_json(&json!({
+                                "endpoint-url": "https://lakecat.example"
+                            })).unwrap(),
                             "properties": {"region": "global"}
                         }
                     }
@@ -26711,6 +26843,9 @@ mod tests {
                             "warehouse": "local",
                             "project-id": "default",
                             "storage-root": "file:///tmp/lakecat",
+                            "storage-root-hash": content_hash_json(&json!({
+                                "storage-root": "file:///tmp/lakecat"
+                            })).unwrap(),
                             "properties": {"region": "local"}
                         }
                     }

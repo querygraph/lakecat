@@ -1,6 +1,6 @@
 # LakeCat Design
 
-Updated: 2026-06-21
+Updated: 2026-06-22
 
 Status: living design. This document supersedes the OPUS review/design notes
 that are now archived under `docs/completed/`.
@@ -637,6 +637,12 @@ Management-upsert replay for policy bindings, projects, servers, storage
 profiles, and warehouses must also carry a valid authorization receipt
 principal before projection, so tenant-root and policy mutations cannot become
 actorless catalog graph or OpenLineage facts.
+Server and warehouse upsert replay must also treat endpoint URLs and storage
+roots as sensitive management roots. Generated audit/outbox evidence should
+persist `endpoint-url-hash` and `storage-root-hash` instead of raw roots, and
+legacy durable events that still carry raw `endpoint-url` or `storage-root`
+values must include the matching full SHA-256 hash evidence before any graph or
+OpenLineage projection.
 Provider and issuance-mode compatibility must be replay-checked too:
 `local-file-no-secret` requires the file provider, while
 `short-lived-secret-ref` requires a cloud object provider.

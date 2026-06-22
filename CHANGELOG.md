@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Required `server.upserted` and `warehouse.upserted` replay evidence to carry
+  full hash proof whenever endpoint URLs or storage roots are present, and
+  changed live management upsert producers to persist redacted hash evidence
+  before graph or OpenLineage projection.
+- Expanded the LakeCat book's front matter with an explicit standard Iceberg
+  versus LakeCat implementation versus LakeCat/QueryGraph/TypeSec extension
+  guide, including which pieces are future Iceberg-adjacent profile candidates
+  and why Iceberg table-format work should be pushed into Sail.
 - Required `querygraph.bootstrap` replay evidence to carry a valid
   authorization receipt principal before acknowledgement, graph projection, or
   OpenLineage projection, with missing/malformed-principal coverage proving
