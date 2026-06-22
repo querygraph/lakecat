@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened Turso table record reads and idempotency replay so decoded
+  `record_json` / `response_json` must match the row/query table identity
+  before LakeCat returns table records, replays idempotent commit responses,
+  commits over an existing row, or soft-deletes the table. This keeps standard
+  Iceberg REST table access from trusting spliced durable table JSON.
 - Hardened Turso view-version receipt reads and mutation history extension so
   decoded `receipt_json` must match the row/query warehouse, namespace, and
   view identity before LakeCat returns receipts, validates namespace receipt

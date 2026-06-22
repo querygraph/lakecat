@@ -6,6 +6,22 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Validate Turso table record row scope`.
+  Turso standard table reads, list reads, commit-row loads, soft-delete loads,
+  restore loads, and idempotency replay now require decoded table JSON to
+  match the selected table identity before returning or mutating table state.
+  Spliced durable `record_json` or idempotency `response_json` now fails before
+  LakeCat serves a standard Iceberg table response or advances metadata
+  pointer state.
+- Local verification for this Turso table record row-scope slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_table_record_json_scope_drift -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_table_idempotency_response_scope_drift -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Validate Turso view receipt row scope`.
   Turso view-version receipt reads, namespace receipt-chain reads, and
   latest-receipt mutation lookups now require decoded `receipt_json` identity

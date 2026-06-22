@@ -222,6 +222,9 @@ The current working plan is:
 3. Keep commit hardening focused on REST-visible correctness: idempotency
    replay, metadata object create-only writes, CAS conflict evidence, orphan
    cleanup, object-store portability, and redacted operator-facing errors.
+   Turso table rows and idempotency responses must bind decoded JSON back to
+   the row/query table identity before returning standard table records or
+   committing over the row.
    Backend object-store error details should be represented by hash evidence,
    not raw paths, bucket/object names, or configuration text. Metadata object
    writes must target child objects under the selected storage profile root, not

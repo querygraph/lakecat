@@ -3417,6 +3417,14 @@ Sail owns reusable Iceberg validation and metadata preparation.
    up the uncommitted metadata object when it can do so safely.
 15. Outbox draining projects the committed event to graph and lineage sinks.
 
+The Turso-backed store binds decoded table JSON back to the selected table
+identity on this path. A row selected for `local.default.events` cannot return
+or replay `record_json` or idempotency `response_json` that claims another
+table. LakeCat rejects that drift before loading a table, listing standard
+catalog tables, replaying an idempotent commit response, committing over the
+row, soft-deleting it, or restoring it. That is not an Iceberg extension; it is
+durable-store hygiene around standard Iceberg table access.
+
 The cleanup path is deliberately secondary to the commit result. If metadata
 cleanup fails after the store rejects a commit, LakeCat preserves the original
 store or compare-and-swap error class and appends cleanup context. A stale

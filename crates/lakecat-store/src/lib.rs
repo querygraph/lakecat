@@ -2351,6 +2351,16 @@ fn optional_location_hash(location: Option<&str>) -> String {
         .unwrap_or_else(|| "null".to_string())
 }
 
+fn validate_table_record_scope(record: &TableRecord, ident: &TableIdent) -> LakeCatResult<()> {
+    record.validate()?;
+    if record.ident != *ident {
+        return Err(LakeCatError::Internal(
+            "table record row scope does not match requested table".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn view_key(view: &ViewRecord) -> String {
     view_key_parts(&view.warehouse, &view.namespace, &view.name)
 }
@@ -4687,7 +4697,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select record_json from tables t
+                    "select record_json, namespace_path, table_name from tables t
                      where warehouse = ?1
                        and not exists (
                          select 1 from soft_deletes d where d.table_key = t.table_key
@@ -4699,7 +4709,14 @@ pub mod turso_store {
                 .map_err(turso_error)?;
             let mut tables = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
-                tables.push(decode_json(row_string(&row, 0)?)?);
+                let table: TableRecord = decode_json(row_string(&row, 0)?)?;
+                let ident = TableIdent::new(
+                    warehouse.clone(),
+                    row_string(&row, 1)?.parse()?,
+                    TableName::new(row_string(&row, 2)?)?,
+                );
+                crate::validate_table_record_scope(&table, &ident)?;
+                tables.push(table);
             }
             Ok(tables)
         }
@@ -4769,7 +4786,11 @@ pub mod turso_store {
             rows.next()
                 .await
                 .map_err(turso_error)?
-                .map(|row| decode_json(row_string(&row, 0)?))
+                .map(|row| {
+                    let table: TableRecord = decode_json(row_string(&row, 0)?)?;
+                    crate::validate_table_record_scope(&table, ident)?;
+                    Ok(table)
+                })
                 .transpose()?
                 .ok_or_else(|| LakeCatError::NotFound {
                     object: "table",
@@ -4814,6 +4835,7 @@ pub mod turso_store {
                         )));
                     }
                     let table = decode_json(row_string(&row, 1)?)?;
+                    crate::validate_table_record_scope(&table, ident)?;
                     tx.commit().await.map_err(turso_error)?;
                     return Ok(table);
                 }
@@ -4837,6 +4859,7 @@ pub mod turso_store {
                 });
             };
             let mut table: TableRecord = decode_json(row_string(&row, 0)?)?;
+            crate::validate_table_record_scope(&table, ident)?;
             let previous_metadata_location = table.metadata_location.clone();
             let idempotency_key_sha256 = commit
                 .idempotency_key
@@ -5020,7 +5043,9 @@ pub mod turso_store {
                     ident.stable_id()
                 )));
             }
-            Ok(Some(decode_json(row_string(&row, 1)?)?))
+            let table = decode_json(row_string(&row, 1)?)?;
+            crate::validate_table_record_scope(&table, ident)?;
+            Ok(Some(table))
         }
 
         async fn soft_delete_table(
@@ -5049,7 +5074,7 @@ pub mod turso_store {
                 });
             };
             let table: TableRecord = decode_json(row_string(&row, 0)?)?;
-            table.validate()?;
+            crate::validate_table_record_scope(&table, ident)?;
             let deleted_at = Utc::now();
             let record = SoftDeleteRecord {
                 table: ident.clone(),
@@ -5162,6 +5187,7 @@ pub mod turso_store {
                 });
             };
             let table: TableRecord = decode_json(row_string(&row, 0)?)?;
+            crate::validate_table_record_scope(&table, ident)?;
             let soft_delete: SoftDeleteRecord = decode_json(row_string(&row, 1)?)?;
             soft_delete.validate_for_table(ident, &table)?;
             let restored_at = Utc::now();
@@ -7823,6 +7849,174 @@ pub mod turso_store {
                     if message.contains(
                         "table commit record sequence number does not match pointer log row"
                     )
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_table_record_json_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("events").unwrap(),
+            );
+            store
+                .create_namespace(&warehouse, namespace.clone())
+                .await
+                .unwrap();
+            store
+                .create_table(TableRecord::new(
+                    ident.clone(),
+                    "file:///tmp/events".to_string(),
+                    Some("file:///tmp/events/metadata/00000.json".to_string()),
+                    serde_json::json!({"format-version": 3}),
+                    Principal::anonymous(),
+                ))
+                .await
+                .unwrap();
+            let mut table = store.load_table(&ident).await.unwrap();
+            table.ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("other_events").unwrap(),
+            );
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update tables set record_json = ?2 where table_key = ?1",
+                (table_key(&ident), encode_json(&table).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store.load_table(&ident).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("table record row scope does not match")
+            ));
+            let err = store.list_tables(&warehouse).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("table record row scope does not match")
+            ));
+            let err = store
+                .commit_table(
+                    &ident,
+                    TableCommit {
+                        requirements: vec![],
+                        updates: vec![serde_json::json!({"action": "noop"})],
+                        expected_previous_metadata_location: Some(
+                            "file:///tmp/events/metadata/00000.json".to_string(),
+                        ),
+                        new_metadata_location: Some(
+                            "file:///tmp/events/metadata/00001.json".to_string(),
+                        ),
+                        new_metadata: Some(serde_json::json!({"format-version": 3})),
+                        idempotency_key: None,
+                        idempotency_request_hash: None,
+                        principal: Principal::anonymous(),
+                        authorization_receipt: None,
+                    },
+                )
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("table record row scope does not match")
+            ));
+            let err = store
+                .soft_delete_table(&ident, Principal::anonymous(), None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("table record row scope does not match")
+            ));
+            assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 0);
+            assert_eq!(store.count_rows("soft_deletes").await.unwrap(), 0);
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_table_idempotency_response_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("events").unwrap(),
+            );
+            store
+                .create_namespace(&warehouse, namespace.clone())
+                .await
+                .unwrap();
+            store
+                .create_table(TableRecord::new(
+                    ident.clone(),
+                    "file:///tmp/events".to_string(),
+                    Some("file:///tmp/events/metadata/00000.json".to_string()),
+                    serde_json::json!({"format-version": 3}),
+                    Principal::anonymous(),
+                ))
+                .await
+                .unwrap();
+            store
+                .commit_table(
+                    &ident,
+                    TableCommit {
+                        requirements: vec![],
+                        updates: vec![serde_json::json!({"action": "noop"})],
+                        expected_previous_metadata_location: Some(
+                            "file:///tmp/events/metadata/00000.json".to_string(),
+                        ),
+                        new_metadata_location: Some(
+                            "file:///tmp/events/metadata/00001.json".to_string(),
+                        ),
+                        new_metadata: Some(serde_json::json!({"format-version": 3})),
+                        idempotency_key: Some("commit-1".to_string()),
+                        idempotency_request_hash: None,
+                        principal: Principal::anonymous(),
+                        authorization_receipt: None,
+                    },
+                )
+                .await
+                .unwrap();
+            let record = store
+                .table_commit_records(&ident, 1, Some(1))
+                .await
+                .unwrap()
+                .pop()
+                .unwrap();
+            let mut response = store.load_table(&ident).await.unwrap();
+            response.ident = TableIdent::new(
+                warehouse.clone(),
+                namespace.clone(),
+                TableName::new("other_events").unwrap(),
+            );
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update idempotency_records set response_json = ?2 where idem_key = ?1",
+                (
+                    idempotency_record_key(&ident, "commit-1"),
+                    encode_json(&response).unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .replay_table_commit(&ident, "commit-1", &record.request_hash)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("table record row scope does not match")
             ));
         }
 
