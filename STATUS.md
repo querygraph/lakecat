@@ -6,6 +6,28 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Replay-check storage-profile public config`.
+  `storage-profile.upserted` and `credentials.vend-attempted` replay now
+  re-check nested storage-profile `public-config` objects before
+  acknowledgement, graph projection, OpenLineage projection, or QGLake
+  credential-root proof can inherit reserved LakeCat credential-evidence keys
+  or secret-like public hints. Diagnostics remain hash-only via
+  `public-config-key-hash=sha256:...`.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service public_config -- --test-threads=1` passed;
+  `cargo test -p lakecat-service storage_profile -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service credential_storage_profile -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close service table commit schemas`.
   Individual `table.commit` replay now rejects unexpected fields inside the
   nested `commit` object before acknowledgement, graph projection,

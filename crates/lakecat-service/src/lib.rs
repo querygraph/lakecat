@@ -1516,6 +1516,17 @@ const STORAGE_PROFILE_EVIDENCE_FIELDS: &[&str] = &[
     "secret-ref-provider",
     "secret-ref-hash",
 ];
+const RESERVED_STORAGE_PROFILE_PUBLIC_CONFIG_KEYS: &[&str] = &[
+    "lakecat.storage-profile-id",
+    "lakecat.storage-provider",
+    "lakecat.credential-mode",
+    "lakecat.governed-read-required",
+    "lakecat.authorization-principal",
+    "lakecat.max-credential-ttl-seconds",
+    "lakecat.credential-kind",
+    "lakecat.secret-ref-provider",
+    "lakecat.secret-ref-hash",
+];
 const POLICY_BINDING_EVIDENCE_FIELDS: &[&str] = &[
     "policy-id",
     "warehouse",
@@ -1697,6 +1708,88 @@ fn validate_storage_profile_evidence_schema(
         }
     }
     Ok(())
+}
+
+fn validate_storage_profile_public_config_evidence(
+    event: &OutboxEvent,
+    storage_profile: &Value,
+    evidence_label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(public_config) = storage_profile.get("public-config") else {
+        return Ok(());
+    };
+    let Some(public_config) = public_config.as_object() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{evidence_label} public-config must be an object"),
+        ));
+    };
+    for (key, value) in public_config {
+        let key_hash = content_hash_bytes(key.as_bytes());
+        if key.trim().is_empty() {
+            return Err(outbox_evidence_error(
+                event,
+                &format!(
+                    "{evidence_label} public-config key must be non-empty; public-config-key-hash={key_hash}"
+                ),
+            ));
+        }
+        let normalized = key.to_ascii_lowercase();
+        if normalized.contains("secret")
+            || normalized.contains("token")
+            || normalized.contains("password")
+            || normalized.contains("credential")
+        {
+            return Err(outbox_evidence_error(
+                event,
+                &format!(
+                    "{evidence_label} public-config key may expose secret material; public-config-key-hash={key_hash}"
+                ),
+            ));
+        }
+        if RESERVED_STORAGE_PROFILE_PUBLIC_CONFIG_KEYS.contains(&normalized.as_str()) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!(
+                    "{evidence_label} public-config key is reserved for LakeCat credential evidence; public-config-key-hash={key_hash}"
+                ),
+            ));
+        }
+        let Some(value) = value.as_str() else {
+            return Err(outbox_evidence_error(
+                event,
+                &format!(
+                    "{evidence_label} public-config value must be a string; public-config-key-hash={key_hash}"
+                ),
+            ));
+        };
+        if embeds_raw_secret_material(value) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!(
+                    "{evidence_label} public-config value may expose secret material; public-config-key-hash={key_hash}"
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn embeds_raw_secret_material(value: &str) -> bool {
+    let normalized = value.to_ascii_lowercase();
+    [
+        "password=",
+        "secret=",
+        "token=",
+        "credential=",
+        "api_key=",
+        "apikey=",
+        "access_key=",
+        "private_key=",
+        "pass=",
+    ]
+    .iter()
+    .any(|pattern| normalized.contains(pattern))
 }
 
 fn validate_policy_binding_evidence_schema(
@@ -3099,6 +3192,11 @@ fn validate_storage_profile_upsert_event_evidence(
         storage_profile,
         "storage-profile upsert storage-profile",
     )?;
+    validate_storage_profile_public_config_evidence(
+        event,
+        storage_profile,
+        "storage-profile upsert storage-profile",
+    )?;
     validate_required_full_hash_field(event, storage_profile, "location-prefix-hash")?;
     validate_secret_ref_evidence(event, storage_profile, "storage-profile upsert")?;
     validate_authorization_receipt_principal(event, payload, "storage-profile upsert")?;
@@ -4192,6 +4290,11 @@ fn validate_credential_vend_event_evidence(
         ));
     };
     validate_storage_profile_evidence_schema(
+        event,
+        storage_profile,
+        "credential-vend storage-profile",
+    )?;
+    validate_storage_profile_public_config_evidence(
         event,
         storage_profile,
         "credential-vend storage-profile",
@@ -21861,6 +21964,86 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_reserved_credential_storage_profile_public_config() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "agent:reader".to_string(),
+            kind: PrincipalKind::Agent,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-storage-profile-reserved-public-config".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-storage-profile-reserved-public-config",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "credential-count": 0,
+                        "credential-response-evidence": [],
+                        "storage-profile-id": "events-local",
+                        "secret-ref-present": false,
+                        "storage-profile": {
+                            "profile-id": "events-local",
+                            "warehouse": "local",
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                            "public-config": {
+                                "lakecat.storage-profile-id": "shadow-profile"
+                            }
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("reserved credential public-config evidence should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains(
+            "credential-vend storage-profile public-config key is reserved for LakeCat credential evidence"
+        ));
+        assert!(message.contains("public-config-key-hash=sha256:"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("lakecat.storage-profile-id"));
+        assert!(!message.contains("shadow-profile"));
+        assert!(!message.contains("evt-credential-storage-profile-reserved-public-config"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_credential_storage_profile_warehouse_drift() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),
@@ -32924,6 +33107,74 @@ mod tests {
         ));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-storage-profile-extra-field"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_storage_profile_upsert_reserved_public_config() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-storage-profile-reserved-public-config".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-storage-profile-reserved-public-config",
+                    "event-type": "storage-profile.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "storage-profile-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "storage-profile": {
+                            "profile-id": "file-events",
+                            "warehouse": "local",
+                            "location-prefix-hash": content_hash_json(&json!({
+                                "location-prefix": "file:///tmp/lakecat/events"
+                            })).unwrap(),
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "public-config": {
+                                "lakecat.governed-read-required": "false"
+                            }
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("reserved storage-profile public-config evidence should fail");
+        let message = err.to_string();
+        assert!(message.contains("storage-profile.upserted"));
+        assert!(message.contains(
+            "storage-profile upsert storage-profile public-config key is reserved for LakeCat credential evidence"
+        ));
+        assert!(message.contains("public-config-key-hash=sha256:"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("lakecat.governed-read-required"));
+        assert!(!message.contains("evt-storage-profile-reserved-public-config"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());

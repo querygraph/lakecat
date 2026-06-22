@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Replayed storage-profile public config now fails closed on reserved or
+  secret-like keys and values. `storage-profile.upserted` and
+  `credentials.vend-attempted` outbox admission reject public config that would
+  shadow LakeCat credential evidence before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake credential-root proof.
 - Closed service outbox admission over individual table commit evidence.
   `table.commit` replay now rejects unexpected fields inside the nested
   `commit` object before acknowledgement, graph projection, OpenLineage

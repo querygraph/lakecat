@@ -892,6 +892,12 @@ than storage-profile management would accept. The replay payload must also
 carry top-level `secret-ref-present` evidence that matches the nested storage
 profile, so compact credential proof cannot omit or contradict whether the
 selected credential root depends on an external secret reference.
+Replay admission for both `storage-profile.upserted` and
+`credentials.vend-attempted` must also re-check nested storage-profile
+`public-config` objects: values must stay string-shaped, secret-like keys or
+values must fail with hash-only public-config-key evidence, and LakeCat-reserved
+credential evidence keys must be rejected before graph, OpenLineage, or QGLake
+proof can treat those public hints as accepted credential-root facts.
 The compact `credentialVendingProof` object and captured LakeCat replay
 `credentials` object must stay closed over their compared field set at the
 top level, branch level, and nested redacted storage-profile level. Archived

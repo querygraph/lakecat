@@ -6188,7 +6188,11 @@ identifier. LakeCat also reserves credential-evidence keys such as
 `lakecat.storage-profile-id`, `lakecat.storage-provider`,
 `lakecat.credential-mode`, and `lakecat.max-credential-ttl-seconds`; operators
 may still publish non-secret hints such as `lakecat.endpoint`, but they cannot
-shadow catalog-owned proof in the eventual credential response. The
+shadow catalog-owned proof in the eventual credential response. Replay
+admission re-checks the same public-config shape for `storage-profile.upserted`
+and `credentials.vend-attempted`, so archived storage-profile or credential
+sidecars cannot smuggle reserved LakeCat proof keys or secret-like public hints
+after the management/store guards have already run. The
 `secret-ref` field itself must remain a clean external
 secret-store locator: LakeCat rejects query strings, URI fragments, and
 userinfo before persisting a storage profile, so token-like material cannot hide
