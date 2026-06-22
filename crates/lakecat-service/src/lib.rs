@@ -12897,6 +12897,147 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_scan_restriction_malformed_ttl_before_projection() {
+        let cases = [
+            (
+                "table.scan-planned",
+                "scan-planned",
+                "evt-scan-plan-malformed-ttl",
+                "audit-scan-plan-malformed-ttl",
+            ),
+            (
+                "table.scan-tasks-fetched",
+                "scan-tasks-fetched",
+                "evt-scan-fetch-malformed-ttl",
+                "audit-scan-fetch-malformed-ttl",
+            ),
+        ];
+
+        for (event_type, label, event_id, audit_event_id) in cases {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+            let policy_hash =
+                content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
+                    .unwrap();
+            let read_restriction = json!({
+                "allowed-columns": ["event_id"],
+                "row-predicate": {
+                    "type": "not-eq",
+                    "term": "severity",
+                    "value": "debug"
+                },
+                "purpose": "qglake-agent-demo",
+                "max-credential-ttl-seconds": "300",
+                "policy-hashes": [policy_hash]
+            });
+            let payload = if event_type == "table.scan-planned" {
+                json!({
+                    "table": table,
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                        "context": {
+                            "read-restriction": read_restriction
+                        }
+                    },
+                    "read-restriction": read_restriction,
+                    "requested-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "requested-stats-fields": ["event_id"],
+                    "effective-stats-fields": ["event_id"],
+                    "scan-task-count": 1,
+                })
+            } else {
+                json!({
+                    "table": table,
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-plan-scan",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                        "context": {
+                            "read-restriction": read_restriction
+                        }
+                    },
+                    "read-restriction": read_restriction,
+                    "required-projection": ["event_id"],
+                    "effective-projection": ["event_id"],
+                    "required-filters": [{
+                        "type": "not-eq",
+                        "term": "severity",
+                        "value": "debug"
+                    }],
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0,
+                })
+            };
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": audit_event_id,
+                        "event-type": event_type,
+                        "table": table,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("scan restriction TTL evidence should be an integer");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(
+                message.contains(&format!(
+                    "{label} read-restriction max-credential-ttl-seconds must be a positive integer"
+                )),
+                "{message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "malformed TTL scan replay must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "malformed TTL scan replay must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "malformed TTL scan replay must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_policy_binding_upsert_evidence() {
         let principal = Principal {
             subject: "agent:writer".to_string(),

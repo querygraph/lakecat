@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving governed scan read
+  restrictions reject malformed non-integer `max-credential-ttl-seconds`
+  evidence before acknowledgement, graph projection, or OpenLineage projection.
 - Expanded service replay regression coverage proving malformed standard
   catalog authorization receipt principals are rejected for catalog config
   reads before acknowledgement, graph projection, or OpenLineage projection.

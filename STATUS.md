@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover malformed scan restriction TTL`.
+  Service replay regression coverage now proves governed `table.scan-planned`
+  and `table.scan-tasks-fetched` events reject non-integer
+  `max-credential-ttl-seconds` read-restriction evidence before
+  acknowledgement, graph projection, or OpenLineage projection. This closes the
+  malformed-TTL sibling of the governed scan purpose/TTL replay rule.
+- Local verification for this malformed scan restriction TTL slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_restriction_malformed_ttl_before_projection -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib scan_restriction -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover malformed catalog config principals`.
   Service replay regression coverage now includes `catalog.config-read` in the
   malformed standard-catalog authorization receipt principal matrix, proving
