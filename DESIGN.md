@@ -934,7 +934,11 @@ use file-backed provider roots for local and single-node deployments. These
 roots are configured with provider-specific environment variables, use the
 SHA-256 digest of the secret reference as the JSON filename, and still dispatch
 only after TypeSec authorizes the exact secret-ref resource. They are a
-redacted built-in backend, not a claim of cloud SDK integration.
+redacted built-in backend, not a claim of cloud SDK integration. Their secret
+payload parsing follows the same fail-closed rule as environment and Vault
+resolution: blank credential config keys or malformed credential shapes must
+surface only `secret-ref-hash` and `error-detail-hash` diagnostics, never raw
+secret references, file roots, config keys, or credential values.
 Credential responses should carry catalog-derived secret-ref provider and
 secret-ref hash evidence when a storage profile uses an external secret
 reference, and backend-supplied provider/hash evidence must be replaced rather

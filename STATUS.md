@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Cover file-backed production secret blank-key parsing`.
+  AWS/GCP/Azure-style file-backed secret roots now have direct
+  `typesec-local` regression coverage proving blank credential config keys fail
+  closed before any credential response is issued, and the failure stays
+  hash-only with `secret-ref-hash` and `error-detail-hash` diagnostics instead
+  of exposing raw secret refs, file roots, credential keys, or credential
+  values.
+- Local verification for this implementation/testing slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --features typesec-local typesec_credential_issuer_rejects_blank_file_backed_secret_config_keys -- --test-threads=1`
+  passed;
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Add pending outbox hash diagnostics`.
   Memory and Turso `pending_outbox_events` validation now reports hash-only
   `event-id-hash`, `payload-hash`, and event-type hash evidence for corrupt

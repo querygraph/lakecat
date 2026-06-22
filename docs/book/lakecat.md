@@ -10959,6 +10959,11 @@ an audited exception. It records the storage-profile root, provider label,
 issuance mode, public config, secret-reference presence, TTL cap, authorization
 receipt, and replay verdict in a redacted form. It should not leak a raw secret
 or turn a credential event into a carrier for unverified storage claims.
+Even the local file-backed AWS/GCP/Azure-style secret roots follow that rule:
+the filename is derived from the secret-reference hash, dispatch happens only
+after the TypeSec-style decision, and malformed secret payloads such as blank
+credential config keys produce hash-only diagnostics rather than echoing the
+secret reference, file root, config key, or credential value.
 
 These receipts are LakeCat/TypeSec/Sail extensions today. A future optional
 profile should be policy-engine-neutral. It might say that a catalog and

@@ -45628,6 +45628,66 @@ mod tests {
     }
 
     #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_rejects_blank_file_backed_secret_config_keys() {
+        use crate::typesec_credential_issuer::{
+            ExternalSecretRefCredentialResolver, SecretRefProvider, TypeSecCredentialIssuer,
+            secret_ref_hash_file_name,
+        };
+
+        let secret_ref = "aws-sm://lakecat/s3-events";
+        let root = std::env::temp_dir().join(format!(
+            "lakecat-file-secret-blank-key-{}",
+            chrono::Utc::now()
+                .timestamp_nanos_opt()
+                .expect("timestamp should fit")
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join(secret_ref_hash_file_name(secret_ref)),
+            serde_json::json!({
+                " ": "temporary-file-token",
+                "aws.session-token": "also-secret"
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:agent".to_string(),
+                resource: secret_ref.to_string(),
+            }),
+            ExternalSecretRefCredentialResolver::with_file_provider_roots(BTreeMap::from([(
+                SecretRefProvider::AwsSecretsManager,
+                root.clone(),
+            )])),
+        );
+
+        let err = issuer
+            .issue(production_secret_credential_request(secret_ref))
+            .await
+            .unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("failed to resolve aws-secrets-manager credential secret"));
+        assert!(message.contains("secret-ref-hash=sha256:"));
+        assert!(message.contains("error-detail-hash=sha256:"));
+        for forbidden in [
+            secret_ref,
+            "temporary-file-token",
+            "also-secret",
+            "credential config keys",
+            root.to_string_lossy().as_ref(),
+        ] {
+            assert!(
+                !message.contains(forbidden),
+                "file-backed secret parse failures must not expose {forbidden}"
+            );
+        }
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[cfg(feature = "typesec-local")]
     #[test]
     fn environment_secret_resolver_parses_supported_secret_shapes() {
         use crate::typesec_credential_issuer::{

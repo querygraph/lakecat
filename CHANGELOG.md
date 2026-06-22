@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added file-backed production secret parsing coverage. AWS/GCP/Azure-style
+  file-backed secret roots now have direct `typesec-local` regression coverage
+  proving blank credential config keys fail closed with hash-only
+  `secret-ref-hash` and `error-detail-hash` diagnostics, without exposing raw
+  secret refs, file roots, credential keys, or credential values.
 - Added hash-only pending outbox validation diagnostics. Memory and Turso
   `pending_outbox_events` reads now report `event-id-hash`, `payload-hash`,
   and event-type hash evidence for corrupt pending rows without echoing raw
