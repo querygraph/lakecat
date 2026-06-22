@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Required service `table.commits-listed` replay evidence to carry
+  `principal-subject` and `principal-kind` fields that match the authorization
+  receipt principal before acknowledgement, graph projection, or OpenLineage
+  projection, and added missing/drifted principal-summary coverage for
+  pointer-log reads.
 - Expanded the LakeCat book's catalog concept explanation with a release-facing
   status matrix covering the Rust service spine, Turso store, Iceberg REST
   paths, commit CAS/idempotency/pointer logs/audit/outbox/replay validation,

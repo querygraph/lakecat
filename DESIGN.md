@@ -570,17 +570,18 @@ profile root, without echoing the storage-profile id. Metadata object-store
 setup failures should likewise expose only metadata-location and backend-error
 hashes, not raw URI parse text, schemes, or backend diagnostics. Catalog state
 changes should not lose outbox side effects. Table commit-history replay must
-carry the accepted replay principal subject/agent kind, positive, strictly
-increasing sequence numbers, and duplicate-free commit hashes at the raw
-lineage-drain boundary and in compact handoff proof, so pointer-log evidence
-cannot drop or rewrite actor attribution, duplicate commits, or reorder between
-the catalog and QGLake proof. Raw lineage-drain regressions cover both missing
-and drifted commit-history principal subject and principal kind before compact
-handoff proof generation. Service replay admission must first require a valid
-authorization receipt principal for every `table.commits-listed` source event,
-and must bind warehouse/namespace/table evidence to the durable outbox table
-identity, so graph and OpenLineage projection never observe actorless or
-cross-table pointer-log reads.
+carry the accepted replay principal subject/kind, positive, strictly
+increasing sequence numbers, and duplicate-free commit hashes at the service
+outbox boundary, raw lineage-drain boundary, and compact handoff proof, so
+pointer-log evidence cannot drop or rewrite actor attribution, duplicate
+commits, or reorder between the catalog and QGLake proof. Service replay
+admission must require a valid authorization receipt principal for every
+`table.commits-listed` source event, bind `principal-subject` and
+`principal-kind` to that receipt, and bind warehouse/namespace/table evidence
+to the durable outbox table identity, so graph and OpenLineage projection
+never observe actorless or cross-table pointer-log reads. Raw lineage-drain
+regressions continue to cover missing and drifted commit-history principal
+subject and principal kind before compact handoff proof generation.
 Pending outbox replay should stay deterministic across embedded and Turso stores, ordered by
 `created_at,event_id`, with batch limits applied after that order and with
 duplicate-safe delivery accounting. Draining should acknowledge delivery only

@@ -5,6 +5,18 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Bind commit-history principal summary`.
+  Service `table.commits-listed` audit/outbox payloads now carry
+  `principal-subject` and `principal-kind`, and replay admission rejects
+  missing or drifted principal-summary fields before acknowledgement, graph
+  projection, or OpenLineage projection. This binds pointer-log reads to the
+  same actor proof that QGLake compact commit-history summaries already verify.
+- Local verification for this commit-history principal summary slice is green:
+  `cargo fmt -p lakecat-service -- --check` and
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib commit_history -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`.
 - Latest documentation/book slice:
   `Expand catalog concept status matrix`.
   The book now gives a release-facing explanation of the Rust service/catalog

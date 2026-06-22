@@ -1483,7 +1483,7 @@ fn validate_table_commit_history_event_evidence(
             "table commit-history evidence must contain authorization receipt principal",
         ));
     };
-    decode_outbox_principal_value(
+    let receipt_principal = decode_outbox_principal_value(
         event,
         receipt_principal,
         "table commit-history authorization receipt principal",
@@ -1542,6 +1542,20 @@ fn validate_table_commit_history_event_evidence(
             "table commit-history commit-count does not match sequence-numbers",
         ));
     }
+    validate_string_field_equals(
+        event,
+        payload,
+        "principal-subject",
+        &receipt_principal.subject,
+        "table commit-history",
+    )?;
+    validate_string_field_equals(
+        event,
+        payload,
+        "principal-kind",
+        principal_kind_name(&receipt_principal.kind),
+        "table commit-history",
+    )?;
     Ok(())
 }
 
@@ -5444,6 +5458,8 @@ async fn list_table_commits(
                     .iter()
                     .map(|commit| commit.sequence_number)
                     .collect::<Vec<_>>(),
+                "principal-subject": capability.receipt().principal.subject,
+                "principal-kind": principal_kind_name(&capability.receipt().principal.kind),
                 "authorization-receipt": capability.receipt(),
             }),
         )?)
@@ -15617,6 +15633,114 @@ mod tests {
             lineage.events.lock().await.is_empty(),
             "malformed commit-history receipt principal must fail before lineage projection"
         );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_table_commit_history_principal_summary() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let base_payload = json!({
+            "audit-event-id": "audit-commit-history-principal-summary",
+            "event-type": "table.commits-listed",
+            "table": table,
+            "payload": {
+                "authorization-receipt": {
+                    "principal": principal,
+                    "action": "table-load",
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "checked_at": chrono::Utc::now(),
+                },
+                "warehouse": "local",
+                "namespace": ["default"],
+                "table": "events",
+                "commit-count": 1,
+                "commit-hashes": [
+                    content_hash_json(&json!({"commit": 1})).unwrap()
+                ],
+                "sequence-numbers": [1],
+                "principal-subject": "agent:writer",
+                "principal-kind": "agent",
+            },
+        });
+        let mut missing_subject = base_payload.clone();
+        missing_subject["payload"]
+            .as_object_mut()
+            .unwrap()
+            .remove("principal-subject");
+        let mut drifted_subject = base_payload.clone();
+        drifted_subject["payload"]["principal-subject"] = json!("agent:forged");
+        let mut drifted_kind = base_payload.clone();
+        drifted_kind["payload"]["principal-kind"] = json!("human");
+
+        for (event_id, payload, expected_message) in [
+            (
+                "evt-commit-history-missing-principal-subject",
+                missing_subject,
+                "table commit-history principal-subject must be a non-empty string",
+            ),
+            (
+                "evt-commit-history-drifted-principal-subject",
+                drifted_subject,
+                "table commit-history principal-subject must match catalog evidence",
+            ),
+            (
+                "evt-commit-history-drifted-principal-kind",
+                drifted_kind,
+                "table commit-history principal-kind must match catalog evidence",
+            ),
+        ] {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "table.commits-listed".to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed commit-history principal summary should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("table.commits-listed"));
+            assert!(
+                message.contains(expected_message),
+                "{event_id} should reject malformed principal summary proof: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_id} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_id} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_id} must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]
@@ -27409,6 +27533,14 @@ mod tests {
         assert_eq!(
             commit_read_payload["sequence-numbers"],
             serde_json::json!([1])
+        );
+        assert_eq!(
+            commit_read_payload["principal-subject"],
+            serde_json::json!("operator@example.com")
+        );
+        assert_eq!(
+            commit_read_payload["principal-kind"],
+            serde_json::json!("human")
         );
 
         let drain = Request::builder()

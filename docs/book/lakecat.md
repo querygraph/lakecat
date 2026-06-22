@@ -1788,7 +1788,10 @@ The read itself enters the durable outbox as `table.commits-listed` and drains
 as lineage evidence plus catalog-facing `Commit` graph anchors keyed by table
 and sequence number. That gives audit tools and QueryGraph a Grust-visible
 pointer-log inspection trail without requiring direct access to the Turso
-catalog database or making LakeCat a graph query engine. QGLake acceptance now
+catalog database or making LakeCat a graph query engine. The outbox payload
+also carries `principal-subject` and `principal-kind`, and service replay
+admission requires those fields to match the authorization receipt principal
+before graph or OpenLineage projection. QGLake acceptance now
 exercises this path directly: the fixture issues an idempotent no-op commit
 probe, reads the compact commit-history endpoint, verifies that the record
 preserves the table's Iceberg format-version and current snapshot summary,
@@ -3326,12 +3329,13 @@ raw lineage-drain regressions cover both missing and drifted commit-history
 principal subject and principal kind, so actor attribution must survive before
 the compact handoff proof exists. The service admission layer now rejects
 `table.commits-listed` source replay whose authorization receipt principal is
-missing or malformed before acknowledgement, catalog graph projection, or
-OpenLineage projection, so the raw lineage-drain summary is never built from an
-actorless pointer-log read. It also binds the replayed warehouse, namespace,
-and table evidence to the durable outbox table identity before projection, so a
-source replay cannot project one table's pointer log as another table's
-history. Captured
+missing or malformed, whose top-level `principal-subject` or `principal-kind`
+is missing, or whose top-level actor summary drifts from the receipt before
+acknowledgement, catalog graph projection, or OpenLineage projection, so the
+raw lineage-drain summary is never built from an actorless pointer-log read.
+It also binds the replayed warehouse, namespace, and table evidence to the
+durable outbox table identity before projection, so a source replay cannot
+project one table's pointer log as another table's history. Captured
 LakeCat replay-line recomputation enforces the same sequence invariant even
 when the captured replay JSON and compact summary agree on malformed sequence
 evidence, so operator-readable `table-commit-history-replay` text cannot
@@ -3749,11 +3753,13 @@ and a valid authorization receipt principal with matching values, and full
 SHA-256 commit hash evidence before graph or OpenLineage projection can start.
 Commit-history replay has the same shape:
 `table.commits-listed` event must carry a `commit-count` that matches both
-full SHA-256 commit hashes and unsigned sequence numbers; compact QGLake proof
-also binds that pointer-log replay to the accepted principal subject/kind. The
-raw QGLake lineage-drain verifier checks the same accepted-principal and agent
-kind before compact handoff proof is generated, so malformed or actor-drifted
-pointer-log summaries cannot become delivered replay evidence. Credential-vend
+full SHA-256 commit hashes and unsigned sequence numbers, plus
+`principal-subject` and `principal-kind` fields that match the authorization
+receipt principal; compact QGLake proof also binds that pointer-log replay to
+the accepted principal subject/kind. The raw QGLake lineage-drain verifier
+checks the same accepted-principal and agent kind before compact handoff proof
+is generated, so malformed or actor-drifted pointer-log summaries cannot
+become delivered replay evidence. Credential-vend
 replay gets the same treatment: `credentials.vend-attempted` must carry a
 matching credential count, full duplicate-free credential-response prefix
 hashes, a full redacted storage-profile location hash, internally consistent secret-reference
