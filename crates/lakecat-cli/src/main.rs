@@ -16650,6 +16650,28 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_artifact_verifier_rejects_relative_artifact_path_traversal() {
+        let temp = qglake_temp_dir("handoff-artifacts-relative-path-traversal");
+        let outside = qglake_temp_dir("handoff-artifacts-relative-path-splice");
+        let outside_bundle = outside.join("bundle");
+        fs::write(&outside_bundle, b"bundle").expect("write outside bundle");
+        let outside_name = outside
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("outside temp dir name");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        summary["artifacts"]["bundle"]["path"] = json!(format!("../{outside_name}/bundle"));
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("handoff verifier should reject relative artifact path traversal");
+        let err = err.to_string();
+
+        assert!(err.contains("bundle"), "{err}");
+        assert!(err.contains("summary directory"), "{err}");
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_rejects_short_artifact_hashes() {
         let temp = qglake_temp_dir("handoff-artifacts-short-hash");
         let summary_path = temp.join("handoff-summary.json");
@@ -17722,6 +17744,31 @@ mod tests {
 
         assert!(err.to_string().contains("catalogConfig"));
         assert!(err.to_string().contains("authorizationReceiptAction"));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_relative_path_traversal() {
+        let temp = qglake_temp_dir("handoff-captured-relative-path-traversal");
+        let outside = qglake_temp_dir("handoff-captured-relative-path-splice");
+        let outside_replay = outside.join("lakecat-replay.txt");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        fs::copy(temp.join("lakecat-replay.txt"), &outside_replay)
+            .expect("copy replay outside summary dir");
+        let outside_name = outside
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("outside temp dir name");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["path"] =
+            json!(format!("../{outside_name}/lakecat-replay.txt"));
+        summary["artifacts"]["lakecatReplayOutput"] =
+            json!(format!("../{outside_name}/lakecat-replay.txt"));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured output reader should reject relative path traversal");
+        let err = err.to_string();
+
+        assert!(err.contains("summary directory"), "{err}");
     }
 
     #[test]

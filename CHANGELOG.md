@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added QGLake handoff artifact path traversal regression coverage. The CLI
+  verifier now has focused tests proving both artifact hash verification and
+  captured-output semantic readers reject relative `..` paths that resolve
+  outside the handoff summary directory, keeping archived handoff artifacts
+  bundle-local before hashing or parsing.
 - Expanded the book's first-release catalog concept explanation with an
   owner-first decision rule: Iceberg terms stay standard, LakeCat owns the
   catalog-control envelope, TypeSec owns governance evidence, Grust owns graph

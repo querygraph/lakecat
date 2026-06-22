@@ -10284,6 +10284,11 @@ whose artifact hashes, table/view counts, standards, OpenLineage receipts,
 graph hashes, policy anchors, credential proof, view receipt chains, and commit
 history agree. If that handoff cannot be reproduced locally, LakeCat may still
 serve an Iceberg endpoint, but it has not proven the QueryGraph foundation.
+Archived handoff file paths are part of that proof. LakeCat resolves artifact
+paths under the handoff summary directory before hashing or parsing them, and
+the verifier rejects relative traversal outside that bundle for both hash
+verification and captured-output semantic reads. A matching hash from another
+directory is not accepted as QGLake evidence.
 
 The first release should explicitly defer work that belongs elsewhere or is not
 yet ready to claim. Typed Iceberg v4 semantics belong in Sail; LakeCat should

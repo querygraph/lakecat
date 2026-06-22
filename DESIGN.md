@@ -769,7 +769,10 @@ LakeCat hashes or parses them. A saved summary must not be able to splice in an
 absolute path or `..` traversal to matching bytes outside the archived bundle.
 The same bundle-local resolver must be used by semantic artifact readers as
 well as hash verification, so captured output, bundle, import-plan, and
-lineage-drain parsers cannot drift from the public handoff verifier.
+lineage-drain parsers cannot drift from the public handoff verifier. Focused
+CLI regressions now cover both artifact hash verification and captured-output
+semantic reads rejecting relative traversal outside the handoff summary
+directory.
 Raw lineage-drain replay summaries and compact handoff summaries must both keep
 replay, OpenLineage, commit-history commit, view receipt, and view
 receipt-chain hash arrays duplicate-free as well as full SHA-256-shaped, so

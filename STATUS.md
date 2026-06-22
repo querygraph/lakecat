@@ -5,6 +5,25 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Cover QGLake artifact path traversal`.
+  QGLake handoff verification now has focused regression coverage proving that
+  both artifact hash verification and captured-output semantic readers reject
+  relative `..` paths that resolve outside the handoff summary directory before
+  hashing or parsing archived handoff files. This protects the bundle-local
+  resolver invariant for saved QGLake summaries, captured LakeCat replay,
+  QueryGraph output, bundle, import-plan, and lineage-drain artifacts.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_relative_artifact_path_traversal -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_relative_path_traversal -- --test-threads=1`
+  passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Clarify catalog concept ownership and proposal posture`.
   The book now gives an owner-first decision rule for the first-release
