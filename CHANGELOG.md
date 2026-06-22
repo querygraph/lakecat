@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a concrete governed-agent workflow that maps
+  Iceberg, TypeSec, Sail, LakeCat, and QueryGraph responsibilities across one
+  request, reinforcing why table-format interpretation belongs in Sail while
+  LakeCat persists catalog authority and proof.
 - Added QGLake verifier coverage proving policy-binding upsert proof cannot
   shed principal subject/kind evidence in raw lineage-drain replay or compact
   handoff summaries.

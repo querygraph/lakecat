@@ -5,6 +5,26 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Explain governed catalog concept layers`.
+  The LakeCat book now includes a concrete governed-agent request that
+  delineates standard Iceberg table state, TypeSec authorization receipts,
+  Sail engine interpretation, LakeCat catalog proof, and QueryGraph/QGLake
+  import evidence in one workflow. The new section makes the standards
+  boundary explicit: Rust and Turso are implementation choices; REST paths and
+  commit CAS are Iceberg compatibility; receipt, outbox, replay, credential,
+  and handoff proof are additive LakeCat/TypeSec/QueryGraph surfaces; the
+  portable future proposal candidates are narrow proof profiles, not a
+  requirement to adopt LakeCat's whole stack.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover and contents render;
+  the versioned EPUB symlink resolves to `lakecat.epub` and byte-compares with
+  the canonical EPUB;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest QGLake handoff slice:
   `Cover policy upsert principal proof`.
   The QGLake verifier now has focused coverage proving

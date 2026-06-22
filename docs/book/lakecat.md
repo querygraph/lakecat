@@ -802,6 +802,72 @@ graph-native projection and traversal. QueryGraph gets a foundation that can
 import catalog truth without forcing ordinary Iceberg clients into the
 QueryGraph application model.
 
+### One Request, Five Layers
+
+A concrete governed workflow shows why the catalog should stay thin and why
+the engine should do as much table-shaped work as possible. Imagine a revenue
+operations agent asking QueryGraph to analyze recent customer events. The agent
+does not need raw object-store credentials. It needs a bounded answer and proof
+that the answer came from the allowed table slice.
+
+The user-facing request is simple:
+
+```text
+Analyze June retention events for Acme customers.
+```
+
+QueryGraph turns that request into catalog intent:
+
+```json
+{
+  "principal": "did:example:agent:revops",
+  "purpose": "customer-retention-analysis",
+  "warehouse": "local",
+  "namespace": ["demo"],
+  "table": "events",
+  "requestedColumns": ["event_id", "event_ts", "customer_id", "amount"],
+  "requestedPredicate": "event_ts >= timestamp '2026-06-01 00:00:00'"
+}
+```
+
+Each layer owns a different part of the answer:
+
+| Layer | Question it answers | Artifact it should produce |
+| --- | --- | --- |
+| Iceberg | What table state is current, and what metadata describes it? | Current metadata location, snapshot, schema, manifests, data files, delete files. |
+| TypeSec | Is this principal allowed to perform this action for this purpose? | Capability decision, ODRL-derived restriction, TypeDID context, receipt hash, TTL cap. |
+| Sail | What does the allowed request mean against the actual table? | Field-id-safe projection, residual predicate, manifest pruning, delete posture, scan tasks, plan hash. |
+| LakeCat | Under what catalog authority was the action accepted and persisted? | CAS context, idempotency row, audit row, pointer or plan proof, outbox event, replay-valid envelope. |
+| QueryGraph | How does this proof become application knowledge? | QGLake handoff, OpenLineage correlation, Grust graph import, Croissant/CDIF/OSI/ODRL workflow state. |
+
+That table is the whole architecture in miniature. The Iceberg row is standard
+parlance. The TypeSec and QueryGraph rows are governance and application
+extensions. The LakeCat row is catalog control-plane proof. The Sail row is
+engine interpretation.
+
+If LakeCat tries to answer Sail's row by itself, the proof becomes weaker even
+when the code appears simpler. A catalog-local shortcut can match column names
+but miss field ids after schema evolution. It can read a partition value but
+miss a partition-spec change. It can ignore equality deletes, position deletes,
+or residual predicates. It can pass through an Iceberg v4 JSON field without
+knowing whether that field changes planning. The resulting proof may be
+well-hashed and still wrong.
+
+If LakeCat asks Sail, the receipt becomes stronger. TypeSec says the agent may
+read `event_id`, `event_ts`, and `amount` for a purpose-bound predicate. Sail
+maps those names to stable Iceberg field ids, plans against the current
+snapshot, uses manifest metrics, preserves residual filters, accounts for
+delete files, and returns bounded tasks or a plan hash. LakeCat persists that
+Sail-shaped proof with the authorization receipt, audit row, outbox event, and
+replay validator. QueryGraph imports the proof knowing that governance was
+attached to engine interpretation rather than to a catalog approximation.
+
+The same pattern applies to commits. Iceberg defines optimistic pointer
+movement. Sail should validate table-format and commit-requirement semantics.
+LakeCat should make the accepted transition durable, idempotent, audited, and
+replayable. QueryGraph should consume the committed proof. No one layer has to
+pretend to be all the others.
+
 ### A Detailed Catalog Concept Map
 
 This release is easiest to understand if each catalog concept is placed in one
