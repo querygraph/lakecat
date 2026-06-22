@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over catalog config key/value entries.
+  `catalog.config-read` replay now rejects unexpected fields inside `defaults`
+  and `overrides` entries before acknowledgement, graph projection,
+  OpenLineage projection, or QGLake config proof can inherit unverified
+  compatibility, v4 bridge, or integration-discovery claims.
 - Closed service outbox admission over nested view lifecycle evidence.
   `view.upserted`, `view.loaded`, and `view.dropped` replay now reject
   unexpected fields inside their nested `view` object before acknowledgement,

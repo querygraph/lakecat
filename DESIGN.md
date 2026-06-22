@@ -1008,6 +1008,10 @@ tuples as unsupported.
 Replay evidence for those defaults must stay unambiguous: defaults are
 structured string key/value entries, duplicate keys are rejected, and stale or
 contradictory v4 bridge claims fail before graph or OpenLineage projection.
+Default and override entries are closed over `key` and `value` before
+acknowledgement, graph projection, OpenLineage projection, or QGLake config
+proof, so unverified compatibility, v4, or integration-discovery claims cannot
+ride beside the checked catalog config contract.
 Until typed Sail v4 support is available, `lakecat.format.v4*` defaults are a
 pinned claim namespace: replay must reject unsupported extra v4 bridge keys
 rather than letting future-looking typed-Sail claims coexist with

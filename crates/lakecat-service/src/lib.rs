@@ -1551,6 +1551,7 @@ const VIEW_RECORD_EVIDENCE_FIELDS: &[&str] = &[
     "columns",
     "properties",
 ];
+const CATALOG_CONFIG_ENTRY_EVIDENCE_FIELDS: &[&str] = &["key", "value"];
 
 fn validate_read_restriction_evidence_schema(
     event: &OutboxEvent,
@@ -3405,6 +3406,7 @@ fn validate_catalog_config_entries(
     };
     let mut keys = BTreeSet::new();
     for entry in entries {
+        validate_object_evidence_schema(event, entry, label, CATALOG_CONFIG_ENTRY_EVIDENCE_FIELDS)?;
         let Some(key) = entry
             .get("key")
             .and_then(Value::as_str)
@@ -23377,6 +23379,75 @@ mod tests {
         assert!(message.contains("catalog config-read defaults must contain string values"));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-config-malformed-default-entry"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_catalog_config_entry_fields() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-config-extra-default-entry".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-config-extra-default-entry",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": [
+                            {"key": "lakecat.compatibility", "value": "iceberg-rest"},
+                            {"key": "lakecat.format.baseline", "value": "iceberg-v1-v3"},
+                            {"key": "lakecat.format.v4", "value": "extension-ready"},
+                            {"key": "lakecat.format.v4.bridge", "value": "json-passthrough"},
+                            {
+                                "key": "lakecat.format.v4.typed-sail",
+                                "value": "unavailable",
+                                "unverified-config-claim": true
+                            }
+                        ],
+                        "endpoints": catalog_config_endpoints_json()
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("catalog config replay must reject extra key/value entry fields");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(
+            message.contains(
+                "catalog config-read defaults contains unexpected field unverified-config-claim"
+            ),
+            "extra catalog config entry field should be rejected: {message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-config-extra-default-entry"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
