@@ -867,6 +867,11 @@ that principal to a full authorization receipt hash and the
 location-prefix hash, optional secret-reference hash, graph event count, replay
 hashes, and OpenLineage hashes. This keeps credential-root management proof from
 being replayed as a weaker table or lineage action.
+The compact `storageProfileUpsertProof` object and captured LakeCat replay
+`management.storageProfileUpsert` object must be closed over those compared
+fields, so archived handoffs cannot append unverified credential-root,
+provider, secret-reference, authorization, graph, replay, or OpenLineage
+claims beside checked storage-profile management proof.
 Policy-binding upsert replay must also bind captured ODRL material to a full
 `odrl-hash` before graph or OpenLineage projection. LakeCat validates the
 catalog scope and content anchor, while TypeSec and QueryGraph remain the

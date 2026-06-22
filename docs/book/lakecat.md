@@ -7114,7 +7114,17 @@ both credential branches agree on the redacted provider and full
 `secret_ref_hash=sha256:...` rather than a raw secret URI. Those
 operator-facing management and credential replay lines also fail closed when
 secret-backed evidence has only a prefix-shaped or placeholder hash, so the
-human-readable proof cannot be weaker than the structured verifier. It also compares
+human-readable proof cannot be weaker than the structured verifier. The
+storage-profile proof objects themselves are closed over the compared schema:
+`storageProfileUpsertProof` and captured
+`replay-evidence.management.storageProfileUpsert` may carry only the profile
+identity, provider, issuance mode, redacted location and secret-reference
+posture, principal and authorization receipt evidence, graph count, replay
+hashes, and OpenLineage hashes that LakeCat verifies. QueryGraph should treat
+any extra credential-root claim as untrusted until it is promoted into that
+closed proof contract and backed by replay evidence. This is a LakeCat/TypeSec
+governance extension around Iceberg access, not an Iceberg table-metadata
+extension. It also compares
 the captured `replay-evidence.credentials` restricted-agent and trusted-human
 branches with the compact `credentialVendingProof`, so a saved handoff cannot
 claim that agents were blocked onto Sail-planned reads or that humans used an

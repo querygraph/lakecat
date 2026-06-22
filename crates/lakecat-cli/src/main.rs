@@ -2364,6 +2364,11 @@ fn verify_lakecat_replay_storage_profile_matches_summary(
     lakecat: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
     let captured_storage_profile = lakecat_replay_storage_profile_upsert(capture)?;
+    require_only_fields(
+        captured_storage_profile,
+        STORAGE_PROFILE_UPSERT_PROOF_FIELDS,
+        "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert",
+    )?;
     let summary_storage_profile = required_object(
         lakecat,
         "storageProfileUpsertProof",
@@ -3584,6 +3589,11 @@ fn require_handoff_catalog_url<'a>(
 fn require_storage_profile_upsert_evidence(
     storage_profile: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
+    require_only_fields(
+        storage_profile,
+        STORAGE_PROFILE_UPSERT_PROOF_FIELDS,
+        "storageProfileUpsertProof",
+    )?;
     require_non_empty_str(storage_profile, "profileId", "storageProfileUpsertProof")?;
     let provider = require_non_empty_str(storage_profile, "provider", "storageProfileUpsertProof")?;
     let issuance_mode =
@@ -3964,6 +3974,23 @@ const GOVERNED_SCAN_PROOF_FIELDS: &[&str] = &[
     "fetchedReplayEventHashes",
     "plannedOpenLineageHashes",
     "fetchedOpenLineageHashes",
+];
+
+const STORAGE_PROFILE_UPSERT_PROOF_FIELDS: &[&str] = &[
+    "profileId",
+    "provider",
+    "issuanceMode",
+    "locationPrefixHash",
+    "secretRefPresent",
+    "secretRefProvider",
+    "secretRefHash",
+    "principalSubject",
+    "principalKind",
+    "authorizationReceiptHash",
+    "authorizationReceiptAction",
+    "graphEvents",
+    "replayEventHashes",
+    "openLineageHashes",
 ];
 
 fn require_catalog_config_evidence(
@@ -13757,6 +13784,23 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_extra_storage_profile_fields() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["unverifiedStorageClaim"] =
+            json!(qglake_fixture_hash("unverified-storage-claim"));
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject extra storage-profile proof fields");
+        let err = err.to_string();
+
+        assert!(err.contains("storageProfileUpsertProof"), "{err}");
+        assert!(
+            err.contains("unexpected field unverifiedStorageClaim"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_rejects_storage_profile_provider_issuance_mismatch() {
         let mut summary = qglake_handoff_summary_json();
         summary["lakecatReplayVerification"]["storageProfileUpsertProof"]["provider"] = json!("s3");
@@ -17563,6 +17607,37 @@ mod tests {
             err.to_string().contains(
                 "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert.locationPrefixHash mismatch"
             )
+        );
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_extra_storage_profile_fields() {
+        let temp = qglake_temp_dir("handoff-captured-storage-profile-extra-field");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["management"]["storageProfileUpsert"]["unverifiedStorageClaim"] =
+            json!(qglake_fixture_hash("unverified-storage-claim"));
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay storage-profile proof should reject extra fields");
+        let err = err.to_string();
+
+        assert!(
+            err.contains(
+                "captured LakeCat replay output.replay-evidence.management.storageProfileUpsert"
+            ),
+            "{err}"
+        );
+        assert!(
+            err.contains("unexpected field unverifiedStorageClaim"),
+            "{err}"
         );
     }
 

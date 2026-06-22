@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed compact and captured QGLake storage-profile upsert proof objects over
+  their compared schema. `storageProfileUpsertProof` and captured LakeCat
+  replay `management.storageProfileUpsert` evidence now reject unexpected
+  fields before summary or sidecar verification can accept unverified
+  credential-root, provider, secret-reference, authorization, graph, replay, or
+  OpenLineage claims beside checked storage-profile management proof.
 - Closed compact and captured QGLake governed-scan proof objects over their
   compared schema. `governedScanProof` and captured LakeCat replay `scan`
   evidence now reject unexpected fields before summary or sidecar verification

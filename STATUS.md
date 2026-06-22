@@ -6,6 +6,26 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close QGLake storage-profile proof objects`.
+  Compact `storageProfileUpsertProof` and captured LakeCat replay
+  `management.storageProfileUpsert` evidence are now closed over their
+  compared schema. Unexpected fields are rejected before a handoff summary,
+  captured replay output, or saved verifier sidecar can attach unverified
+  credential-root, provider, secret-reference, authorization, graph, replay, or
+  OpenLineage claims beside checked storage-profile management proof.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_extra_storage_profile_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics_rejects_extra_storage_profile_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close QGLake governed scan proof objects`.
   Compact `governedScanProof` and captured LakeCat replay `scan` evidence are
   now closed over their compared schema. Unexpected fields are rejected before
