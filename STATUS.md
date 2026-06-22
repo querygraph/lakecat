@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require scan policy hash replay proof`.
+  Service replay admission now requires governed `table.scan-planned` and
+  `table.scan-tasks-fetched` read-restriction evidence to carry
+  `policy-hashes`; missing policy digest proof fails before acknowledgement,
+  graph projection, or OpenLineage projection. Existing full-SHA and
+  duplicate-free policy hash guards remain green under the stricter scan gate.
+- Local verification for this scan policy hash proof slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_scan_missing_read_restriction_policy_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib policy_hashes -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover malformed scan row predicates`.
   Service replay regression coverage now proves governed `table.scan-planned`
   and `table.scan-tasks-fetched` events reject non-object `row-predicate`

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required governed scan read-restriction replay evidence to carry
+  `policy-hashes` at service admission, with planned and fetched scan
+  regression coverage proving missing policy digest proof fails before
+  acknowledgement, graph projection, or OpenLineage projection.
 - Added service replay regression coverage proving governed scan replay rejects
   non-object `row-predicate` read-restriction evidence for both planned and
   fetched scan events before acknowledgement, graph projection, or OpenLineage
