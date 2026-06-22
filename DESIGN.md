@@ -703,11 +703,12 @@ evidence should stay hash-only and must not emit credential replay records.
 Secret-manager payload parsing must also fail closed on malformed credential
 config shapes, including blank config keys, before any secret-backed
 credential response is issued.
-Credential responses should carry catalog-derived secret-ref provider evidence
-when a storage profile uses an external secret reference, and backend-supplied
-provider evidence must be replaced rather than trusted. Credential-vend replay
-must also reject response evidence whose secret-ref provider drifts from the
-selected storage profile before any graph or OpenLineage sink observes it.
+Credential responses should carry catalog-derived secret-ref provider and
+secret-ref hash evidence when a storage profile uses an external secret
+reference, and backend-supplied provider/hash evidence must be replaced rather
+than trusted. Credential-vend replay must also reject response evidence whose
+secret-ref provider or hash drifts from the selected storage profile before any
+graph or OpenLineage sink observes it.
 It must bind the replay payload table hint to the durable outbox table identity
 before projection, so a credential-vend event cannot project one table's
 credential-root decision as another table's graph or lineage evidence.

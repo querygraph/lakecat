@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bound credential response secret-reference hash proof. Secret-ref-backed
+  credential responses now carry catalog-derived `secret-ref-hash` evidence
+  beside `secret-ref-provider`, backend-supplied shadow values are replaced,
+  and replay rejects missing or drifted response-level secret-ref hashes before
+  acknowledgement, graph projection, or OpenLineage projection.
 - Hardened store-level commit idempotency evidence. Memory and Turso stores now
   reject blank or malformed table-commit idempotency keys, reject caller-supplied
   idempotency request hashes without a key, require those request hashes to be

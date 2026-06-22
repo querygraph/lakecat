@@ -6,6 +6,23 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Bind credential response secret-ref hashes`.
+  Secret-ref-backed credential responses now carry catalog-derived
+  `secret-ref-hash` evidence beside `secret-ref-provider`, canonicalization
+  replaces backend-supplied shadow values, and replay rejects missing or drifted
+  response-level secret-ref hashes before acknowledgement, graph projection, or
+  OpenLineage projection.
+- Local verification for this credential response secret-ref hash slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib credential_response_secret_ref -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib credentials_vend_audit_payload_records_secret_ref_provider_response_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib credential_response -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Harden store commit idempotency evidence`.
   Memory and Turso stores now reject blank or malformed table-commit
   idempotency keys, reject caller-supplied idempotency request hashes without a

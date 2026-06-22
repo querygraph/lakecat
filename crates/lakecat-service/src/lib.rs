@@ -3865,6 +3865,12 @@ fn validate_credential_response_entry_evidence(
             "secret-ref-provider",
             "credential-vend storage-profile",
         )?;
+        let secret_ref_hash = required_string_field(
+            event,
+            storage_profile,
+            "secret-ref-hash",
+            "credential-vend storage-profile",
+        )?;
         validate_string_field_equals(
             event,
             entry,
@@ -3872,11 +3878,24 @@ fn validate_credential_response_entry_evidence(
             secret_ref_provider,
             "credential-vend credential-response",
         )?;
+        validate_string_field_equals(
+            event,
+            entry,
+            "secret-ref-hash",
+            secret_ref_hash,
+            "credential-vend credential-response",
+        )?;
     } else {
         validate_null_or_absent_field(
             event,
             entry,
             "secret-ref-provider",
+            "credential-vend credential-response",
+        )?;
+        validate_null_or_absent_field(
+            event,
+            entry,
+            "secret-ref-hash",
             "credential-vend credential-response",
         )?;
     }
@@ -6199,6 +6218,10 @@ fn credential_response_evidence(
                     "secret-ref-provider": single_config_value(
                         &credential.config,
                         "lakecat.secret-ref-provider"
+                    ),
+                    "secret-ref-hash": single_config_value(
+                        &credential.config,
+                        "lakecat.secret-ref-hash"
                     ),
                     "issuer-config-entry-count": non_lakecat_config
                         .as_array()
@@ -9110,23 +9133,28 @@ fn apply_secret_ref_provider_evidence(
     mut credentials: Vec<StorageCredential>,
     profile: &StorageProfile,
 ) -> Vec<StorageCredential> {
-    let Some(secret_ref_provider) = profile
-        .secret_ref
-        .as_deref()
-        .and_then(secret_ref_provider_label)
-        .map(str::to_string)
+    let Some(secret_ref) = profile.secret_ref.as_deref() else {
+        return credentials;
+    };
+    let Some(secret_ref_provider) = secret_ref_provider_label(secret_ref).map(str::to_string)
     else {
         return credentials;
     };
+    let secret_ref_hash = content_hash_bytes(secret_ref.as_bytes());
     for credential in &mut credentials {
         credential.config.retain(|entry| {
-            !entry
-                .key
-                .eq_ignore_ascii_case("lakecat.secret-ref-provider")
+            !matches!(
+                entry.key.to_ascii_lowercase().as_str(),
+                "lakecat.secret-ref-provider" | "lakecat.secret-ref-hash"
+            )
         });
         credential.config.push(ConfigEntry::new(
             "lakecat.secret-ref-provider",
             secret_ref_provider.clone(),
+        ));
+        credential.config.push(ConfigEntry::new(
+            "lakecat.secret-ref-hash",
+            secret_ref_hash.clone(),
         ));
     }
     credentials
@@ -9182,6 +9210,7 @@ const LAKECAT_CREDENTIAL_RESPONSE_EVIDENCE_KEYS: &[&str] = &[
     "lakecat.authorization-principal",
     "lakecat.governed-read-required",
     "lakecat.secret-ref-provider",
+    "lakecat.secret-ref-hash",
 ];
 
 fn issued_credentials_for_profile(
@@ -18671,6 +18700,7 @@ mod tests {
                             "governed-read-required": "false",
                             "max-credential-ttl-seconds": null,
                             "secret-ref-provider": "vault",
+                            "secret-ref-hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
                             "issuer-config-entry-count": 0,
                             "receipt-principal": "human:operator"
                         }],
@@ -18713,6 +18743,95 @@ mod tests {
         ));
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-credential-response-secret-provider-drift"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_credential_response_secret_ref_hash_drift() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal {
+            subject: "human:operator".to_string(),
+            kind: PrincipalKind::Human,
+        };
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-credential-response-secret-hash-drift".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "credentials.vend-attempted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-credential-response-secret-hash-drift",
+                    "event-type": "credentials.vend-attempted",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "credentials-vend",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "credential-count": 1,
+                        "credential-response-evidence": [{
+                            "prefix-hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                            "issuer-config-hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                            "storage-profile-id": "events-prod",
+                            "catalog-profile-id": "events-prod",
+                            "storage-provider": "s3",
+                            "credential-mode": "short-lived-secret-ref",
+                            "authorization-principal": "human:operator",
+                            "governed-read-required": "false",
+                            "max-credential-ttl-seconds": null,
+                            "secret-ref-provider": "typesec",
+                            "secret-ref-hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                            "issuer-config-entry-count": 0,
+                            "receipt-principal": "human:operator"
+                        }],
+                        "storage-profile-id": "events-prod",
+                        "storage-profile": {
+                            "profile-id": "events-prod",
+                            "warehouse": "local",
+                            "provider": "s3",
+                            "issuance-mode": "short-lived-secret-ref",
+                            "secret-ref-present": true,
+                            "secret-ref-provider": "typesec",
+                            "secret-ref-hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                            "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                        },
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("credential response secret-ref hash must match selected storage profile");
+
+        let message = err.to_string();
+        assert!(message.contains("credentials.vend-attempted"));
+        assert!(message.contains(
+            "credential-vend credential-response secret-ref-hash must match catalog evidence"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-credential-response-secret-hash-drift"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
@@ -37956,6 +38075,7 @@ mod tests {
                 prefix: "s3://lakecat-demo/events".to_string(),
                 config: vec![
                     ConfigEntry::new("lakecat.secret-ref-provider", "backend-shadow"),
+                    ConfigEntry::new("lakecat.secret-ref-hash", "sha256:shadow"),
                     ConfigEntry::new("aws.session-token", "temporary-test-token"),
                 ],
             }],
@@ -37977,11 +38097,24 @@ mod tests {
             serde_json::json!("typesec")
         );
         assert_eq!(
+            response_evidence[0]["secret-ref-hash"],
+            serde_json::json!(content_hash_bytes(
+                "typesec://lakecat/local/events-prod".as_bytes()
+            ))
+        );
+        assert_eq!(
             payload["storage-profile"]["secret-ref-provider"],
             serde_json::json!("typesec")
         );
+        assert_eq!(
+            payload["storage-profile"]["secret-ref-hash"],
+            serde_json::json!(content_hash_bytes(
+                "typesec://lakecat/local/events-prod".as_bytes()
+            ))
+        );
         let evidence_text = serde_json::to_string(&response_evidence).unwrap();
         assert!(!evidence_text.contains("backend-shadow"));
+        assert!(!evidence_text.contains("sha256:shadow"));
         assert!(!evidence_text.contains("temporary-test-token"));
         assert!(!evidence_text.contains("typesec://lakecat/local/events-prod"));
     }

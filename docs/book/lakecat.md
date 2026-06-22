@@ -4934,10 +4934,11 @@ entries into one effective value before returning credentials, preserving a
 stricter issuer TTL when it is valid and otherwise falling back to the policy
 cap. It also rewrites LakeCat-owned profile, provider, mode, principal, and
 governed-read-required evidence after issuance. For secret-ref-backed profiles
-it also derives `lakecat.secret-ref-provider` from the selected storage profile,
-so a cloud secret backend cannot make the response look like a different
-catalog decision or secret-provider path. Replay admission treats that evidence
-as structural too: secret-ref providers must be nonblank when
+it also derives `lakecat.secret-ref-provider` and `lakecat.secret-ref-hash`
+from the selected storage profile, so a cloud secret backend cannot make the
+response look like a different catalog decision, secret-provider path, or
+secret-reference anchor. Replay admission treats that evidence as structural
+too: secret-ref providers and hashes must be nonblank when
 `secret-ref-present` is true, and provider/hash fields must be absent when
 `secret-ref-present` is false, no matter how a corrupted pending event encodes
 them. The service tests for the REST
@@ -4954,14 +4955,15 @@ proof fields are kept as canonical values, and issuer-owned config is hashed
 rather than copied. That keeps OpenLineage and QueryGraph replay useful without
 turning lineage into a credential leak. For secret-ref-backed profiles the
 redacted response evidence includes the catalog-derived
-`lakecat.secret-ref-provider`, while the storage-profile replay evidence
-includes `secret-ref-provider` and a full `secret-ref-hash`; outbox admission
-rejects any credential response whose provider proof drifts from the selected
-profile before graph or OpenLineage projection. The nested storage-profile
-proof is still checked even when no credentials are returned: provider and
-issuance mode must be compatible, and secret-reference presence must match the
-mode. That keeps blocked credential attempts from projecting a weaker
-credential-root proof than storage-profile management would accept.
+`lakecat.secret-ref-provider` and `lakecat.secret-ref-hash`, while the
+storage-profile replay evidence includes `secret-ref-provider` and a full
+`secret-ref-hash`; outbox admission rejects any credential response whose
+provider or hash proof drifts from the selected profile before graph or
+OpenLineage projection. The nested storage-profile proof is still checked even
+when no credentials are returned: provider and issuance mode must be
+compatible, and secret-reference presence must match the mode. That keeps
+blocked credential attempts from projecting a weaker credential-root proof than
+storage-profile management would accept.
 The storage-profile and
 credential-vend service tests pin that producer-side `location-prefix-hash`
 evidence is already a full SHA-256 digest before QGLake receives the compact
