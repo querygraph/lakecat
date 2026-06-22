@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Required `credentials.vend-attempted` replay admission to carry top-level
+  boolean `secret-ref-present` evidence matching the nested storage-profile
+  proof before acknowledgement, graph projection, or OpenLineage projection,
+  so credential proof cannot omit whether the selected credential root depends
+  on an external secret reference.
 - Required service `table.commit` replay admission to carry an RFC3339
   `committed_at` timestamp before acknowledgement, graph projection, or
   OpenLineage projection, so individual pointer-transition replay cannot drop

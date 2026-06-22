@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require credential secret-ref presence evidence`.
+  Service `credentials.vend-attempted` replay admission now rejects credential
+  replay unless the top-level boolean `secret-ref-present` field is present
+  and matches nested `storage-profile.secret-ref-present` evidence before
+  acknowledgement, graph projection, or OpenLineage projection. This keeps
+  compact credential proof from omitting whether the selected credential root
+  depends on an external secret reference.
+- Local verification for this credential secret-ref presence slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib credential -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require table commit timestamp evidence`.
   Service `table.commit` replay admission now rejects committed pointer
   transitions unless the replay envelope carries an RFC3339 `committed_at`

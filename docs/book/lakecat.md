@@ -4675,9 +4675,11 @@ match the event table warehouse. The replay payload's `table` hint must also
 match the durable outbox table identity before acknowledgement, graph
 projection, or OpenLineage projection, so a credential decision for one table
 cannot be replayed as another table's credential-root evidence. If the
-top-level `secret-ref-present` field is
-present, it must match `storage-profile.secret-ref-present`; older replay
-fixtures may omit the duplicate field, but contradictory evidence is rejected.
+top-level `secret-ref-present` field is missing, non-boolean, or different
+from `storage-profile.secret-ref-present`, the replay event is rejected before
+delivery. That duplicate field is small, but it keeps compact credential proof
+from omitting whether the selected credential root depends on an external
+secret reference.
 Each returned credential entry must also agree with the catalog-derived
 storage-profile id, catalog profile id, storage provider, credential mode,
 authorization principal, receipt principal, governed-read marker, and any
@@ -4998,10 +5000,10 @@ receipt principal, a full authorization receipt hash, the `credentials-vend`
 authorization action, internally consistent secret-reference
 presence/provider/hash fields, a top-level storage-profile id that agrees with
 nested storage-profile evidence, a nested storage-profile warehouse that agrees
-with the event table warehouse, any top-level secret-reference presence value
-that agrees with nested storage-profile evidence, and credential-response
-metadata that agrees with the selected storage profile and authorization receipt
-before delivery.
+with the event table warehouse, required top-level secret-reference presence
+evidence that agrees with nested storage-profile evidence, and
+credential-response metadata that agrees with the selected storage profile and
+authorization receipt before delivery.
 Storage-profile upsert replay must likewise reject raw secret references and contradictory
 secret-reference-state evidence before delivery. Policy-binding upsert replay
 must carry valid catalog scope evidence before delivery, including policy id,

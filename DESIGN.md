@@ -659,7 +659,10 @@ credential-root decision as another table's graph or lineage evidence.
 Credential-vend replay must validate the nested storage-profile
 provider/issuance-mode and secret-ref/mode proof even when no credentials were
 returned, so blocked attempts cannot project a weaker credential-root claim
-than storage-profile management would accept.
+than storage-profile management would accept. The replay payload must also
+carry top-level `secret-ref-present` evidence that matches the nested storage
+profile, so compact credential proof cannot omit or contradict whether the
+selected credential root depends on an external secret reference.
 Storage-profile upsert replay must be hash-only for storage roots: generated
 audit/outbox evidence records `location-prefix-hash`, and raw
 `location-prefix` values must fail before acknowledgement or projection.
