@@ -16095,6 +16095,120 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_missing_credential_response_principal_proof() {
+        let cases = [
+            (
+                "authorization-principal",
+                "evt-credential-response-missing-authorization-principal",
+                "audit-credential-response-missing-authorization-principal",
+            ),
+            (
+                "receipt-principal",
+                "evt-credential-response-missing-receipt-principal",
+                "audit-credential-response-missing-receipt-principal",
+            ),
+        ];
+
+        for (missing_field, event_id, audit_event_id) in cases {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let principal = Principal {
+                subject: "human:operator".to_string(),
+                kind: PrincipalKind::Human,
+            };
+            let mut response_entry = json!({
+                "prefix-hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "issuer-config-hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "storage-profile-id": "events-local",
+                "catalog-profile-id": "events-local",
+                "storage-provider": "file",
+                "credential-mode": "local-file-no-secret",
+                "authorization-principal": "human:operator",
+                "governed-read-required": "false",
+                "max-credential-ttl-seconds": null,
+                "issuer-config-entry-count": 0,
+                "receipt-principal": "human:operator"
+            });
+            response_entry
+                .as_object_mut()
+                .unwrap()
+                .remove(missing_field);
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "credentials.vend-attempted".to_string(),
+                    payload: json!({
+                        "audit-event-id": audit_event_id,
+                        "event-type": "credentials.vend-attempted",
+                        "table": table,
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": "credentials-vend",
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            },
+                            "credential-count": 1,
+                            "credential-response-evidence": [response_entry],
+                            "storage-profile-id": "events-local",
+                            "storage-profile": {
+                                "profile-id": "events-local",
+                                "warehouse": "local",
+                                "provider": "file",
+                                "issuance-mode": "local-file-no-secret",
+                                "secret-ref-present": false,
+                                "location-prefix-hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                            },
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("credential response principal proof should be required");
+
+            let message = err.to_string();
+            assert!(message.contains("credentials.vend-attempted"));
+            assert!(message.contains(&format!(
+                "credential-vend credential-response {missing_field} must be a non-empty string"
+            )));
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "missing credential principal proof must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "missing credential principal proof must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "missing credential principal proof must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_credential_response_issuer_config_count() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),

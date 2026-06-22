@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover missing credential principal proof`.
+  Service replay regression coverage now proves returned
+  `credentials.vend-attempted` credential-response evidence rejects entries
+  that omit `authorization-principal` or `receipt-principal` before
+  acknowledgement, graph projection, or OpenLineage projection. This pins the
+  missing-field sibling of the credential response actor-binding proof.
+- Local verification for this credential principal proof slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_missing_credential_response_principal_proof -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib credential_response_principal -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover missing credential issuer config hashes`.
   Service replay regression coverage now proves returned
   `credentials.vend-attempted` credential-response evidence rejects entries
