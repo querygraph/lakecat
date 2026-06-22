@@ -6053,7 +6053,11 @@ server scope, and string-map public properties; server evidence must carry a
 valid server id, optional valid endpoint URL or full `endpoint-url-hash`, and
 string-map properties; warehouse evidence must carry a valid warehouse, project
 id, optional valid storage root or full `storage-root-hash`, and string-map
-properties. Policy-binding upsert replay is checked before projection too: the
+properties. Service admission also closes those nested project, server, and
+warehouse record objects over their route-produced fields, so unexpected
+tenant-root, endpoint, or storage-root claims fail before acknowledgement,
+graph projection, OpenLineage projection, or QGLake proof can inherit them.
+Policy-binding upsert replay is checked before projection too: the
 evidence must carry a valid policy id, warehouse, optional namespace/table
 scope, an enforcement flag, the captured ODRL material, and an `odrl-hash`
 that matches that material. LakeCat does not reason over that ODRL during

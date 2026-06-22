@@ -896,6 +896,10 @@ principal plus an event-matching catalog action, affirmative allowed decision,
 non-empty engine, and RFC3339 `checked_at` timestamp before projection, so
 tenant-root and policy mutations cannot become actorless or action-drifted
 catalog graph or OpenLineage facts.
+Service outbox admission must close nested project, server, and warehouse
+record objects over their route-produced fields, so replay rejects unexpected
+tenant-root, endpoint, or storage-root claims before acknowledgement, graph
+projection, OpenLineage projection, or QGLake proof.
 Server and warehouse upsert replay must also bind redaction hashes back to the
 source value when that value is present: `endpoint-url-hash` must recompute
 from `endpoint-url`, and `storage-root-hash` must recompute from

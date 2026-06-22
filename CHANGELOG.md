@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over nested management record evidence.
+  `project.upserted`, `server.upserted`, and `warehouse.upserted` replay now
+  reject unexpected fields inside their nested record objects before
+  acknowledgement, graph projection, OpenLineage projection, or QGLake proof
+  can inherit unverified tenant-root, endpoint, or storage-root claims.
 - Closed service outbox admission over nested policy-binding upsert evidence.
   `policy-binding.upserted` replay now rejects unexpected fields inside the
   nested `policy` object before acknowledgement, graph projection,

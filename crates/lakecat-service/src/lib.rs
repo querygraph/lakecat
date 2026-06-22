@@ -1524,6 +1524,22 @@ const POLICY_BINDING_EVIDENCE_FIELDS: &[&str] = &[
     "odrl",
     "odrl-hash",
 ];
+const PROJECT_RECORD_EVIDENCE_FIELDS: &[&str] =
+    &["project-id", "server-id", "display-name", "properties"];
+const SERVER_RECORD_EVIDENCE_FIELDS: &[&str] = &[
+    "server-id",
+    "display-name",
+    "endpoint-url",
+    "endpoint-url-hash",
+    "properties",
+];
+const WAREHOUSE_RECORD_EVIDENCE_FIELDS: &[&str] = &[
+    "warehouse",
+    "project-id",
+    "storage-root",
+    "storage-root-hash",
+    "properties",
+];
 
 fn validate_read_restriction_evidence_schema(
     event: &OutboxEvent,
@@ -1616,6 +1632,29 @@ fn validate_policy_binding_evidence_schema(
             return Err(outbox_evidence_error(
                 event,
                 &format!("policy-binding upsert policy contains unexpected field {field}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_object_evidence_schema(
+    event: &OutboxEvent,
+    object: &Value,
+    label: &str,
+    allowed_fields: &[&str],
+) -> Result<(), LakeCatError> {
+    let Some(object) = object.as_object() else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} must be an object"),
+        ));
+    };
+    for field in object.keys() {
+        if !allowed_fields.contains(&field.as_str()) {
+            return Err(outbox_evidence_error(
+                event,
+                &format!("{label} contains unexpected field {field}"),
             ));
         }
     }
@@ -3118,6 +3157,12 @@ fn validate_project_upsert_event_evidence(
             "project upsert evidence must contain project-record",
         ));
     };
+    validate_object_evidence_schema(
+        event,
+        project_record,
+        "project upsert project-record",
+        PROJECT_RECORD_EVIDENCE_FIELDS,
+    )?;
     let Some(project_id) = project_record
         .get("project-id")
         .and_then(Value::as_str)
@@ -3168,6 +3213,12 @@ fn validate_server_upsert_event_evidence(
             "server upsert evidence must contain server-record",
         ));
     };
+    validate_object_evidence_schema(
+        event,
+        server_record,
+        "server upsert server-record",
+        SERVER_RECORD_EVIDENCE_FIELDS,
+    )?;
     let Some(server_id) = server_record
         .get("server-id")
         .and_then(Value::as_str)
@@ -3231,6 +3282,12 @@ fn validate_warehouse_upsert_event_evidence(
             "warehouse upsert evidence must contain warehouse-record",
         ));
     };
+    validate_object_evidence_schema(
+        event,
+        warehouse_record,
+        "warehouse upsert warehouse-record",
+        WAREHOUSE_RECORD_EVIDENCE_FIELDS,
+    )?;
     let Some(warehouse_name) = warehouse_record
         .get("warehouse")
         .or_else(|| payload.get("warehouse"))
@@ -15948,6 +16005,124 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_management_record_fields() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let cases = [
+            (
+                "project.upserted",
+                "project-manage",
+                "evt-project-extra-record-field",
+                json!({
+                    "project-id": "default",
+                    "project-record": {
+                        "project-id": "default",
+                        "display-name": "Default Project",
+                        "properties": {"owner": "querygraph"},
+                        "unverified-tenant-claim": true,
+                    }
+                }),
+                "project upsert project-record contains unexpected field unverified-tenant-claim",
+            ),
+            (
+                "server.upserted",
+                "server-manage",
+                "evt-server-extra-record-field",
+                json!({
+                    "server-id": "prod",
+                    "server-record": {
+                        "server-id": "prod",
+                        "display-name": "Production",
+                        "endpoint-url-hash": content_hash_json(&json!({
+                            "endpoint-url": "https://lakecat.example"
+                        })).unwrap(),
+                        "properties": {"region": "global"},
+                        "unverified-endpoint-claim": true,
+                    }
+                }),
+                "server upsert server-record contains unexpected field unverified-endpoint-claim",
+            ),
+            (
+                "warehouse.upserted",
+                "warehouse-manage",
+                "evt-warehouse-extra-record-field",
+                json!({
+                    "warehouse": "local",
+                    "warehouse-record": {
+                        "warehouse": "local",
+                        "project-id": "default",
+                        "storage-root-hash": content_hash_json(&json!({
+                            "storage-root": "file:///tmp/lakecat"
+                        })).unwrap(),
+                        "properties": {"environment": "demo"},
+                        "unverified-storage-claim": true,
+                    }
+                }),
+                "warehouse upsert warehouse-record contains unexpected field unverified-storage-claim",
+            ),
+        ];
+
+        for (event_type, action, event_id, mut payload, expected_message) in cases {
+            let payload = payload.as_object_mut().expect("payload should be object");
+            payload.insert(
+                "authorization-receipt".to_string(),
+                json!({
+                    "principal": principal,
+                    "action": action,
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "checked_at": chrono::Utc::now(),
+                }),
+            );
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("extra management record fields should fail before delivery");
+            let message = err.to_string();
+            assert!(message.contains(event_type), "{message}");
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"), "{message}");
+            assert!(!message.contains(event_id), "{message}");
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} extra record fields must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} extra record fields must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} extra record fields must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]
