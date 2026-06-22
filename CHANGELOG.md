@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed saved QGLake self-verifier artifact manifests over their known key
+  set. `lakecatHandoffVerifyOutput.artifactFiles` now rejects unexpected
+  top-level artifact keys and unexpected nested captured-output keys before
+  comparing hashes with the compact handoff summary, preventing a saved sidecar
+  from carrying unverified artifact claims beside accepted evidence.
 - Expanded the book's catalog-concept chapter with a stricter standards
   vocabulary for the current implementation claims. The chapter now separates
   standard Iceberg compatibility, LakeCat control-plane extensions, TypeSec

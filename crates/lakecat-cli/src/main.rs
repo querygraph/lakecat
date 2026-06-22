@@ -900,6 +900,17 @@ fn require_qglake_handoff_verify_output_artifact_hashes_match_summary(
     summary: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
     let output_artifacts = required_object(output, "artifactFiles", "lakecatHandoffVerifyOutput")?;
+    require_only_fields(
+        output_artifacts,
+        &[
+            "bundle",
+            "lineageDrain",
+            "querygraphImportPlan",
+            "capturedOutputs",
+            "serviceLogHash",
+        ],
+        "lakecatHandoffVerifyOutput.artifactFiles",
+    )?;
     let summary_artifacts = required_object(summary, "artifacts", "handoff summary")?;
     for field in ["bundle", "lineageDrain", "querygraphImportPlan"] {
         let output_artifact = required_object(
@@ -925,6 +936,11 @@ fn require_qglake_handoff_verify_output_artifact_hashes_match_summary(
         output_artifacts,
         "capturedOutputs",
         "lakecatHandoffVerifyOutput.artifactFiles",
+    )?;
+    require_only_fields(
+        output_captures,
+        &["lakecatReplay", "querygraphVerify", "querygraphImport"],
+        "lakecatHandoffVerifyOutput.artifactFiles.capturedOutputs",
     )?;
     let summary_captures = required_object(
         summary_artifacts,
@@ -10765,6 +10781,21 @@ fn required_object<'a>(
         })
 }
 
+fn require_only_fields(
+    value: &serde_json::Map<String, Value>,
+    allowed_fields: &[&str],
+    label: &str,
+) -> lakecat_core::LakeCatResult<()> {
+    for field in value.keys() {
+        if !allowed_fields.iter().any(|allowed| allowed == field) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "{label} contains unexpected field {field}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn required_array<'a>(
     value: &'a serde_json::Map<String, Value>,
     field: &str,
@@ -15938,6 +15969,33 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_artifact_hash() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-extra-artifact-hash");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["artifactFiles"]["unverifiedSidecar"] =
+            json!({ "sha256": qglake_fixture_hash("unverified-sidecar") });
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject extra sidecar artifact hash claims");
+        let err = err.to_string();
+
+        assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+        assert!(err.contains("artifactFiles"), "{err}");
+        assert!(err.contains("unexpected field unverifiedSidecar"), "{err}");
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_short_artifact_hash() {
         let temp = qglake_temp_dir("handoff-artifacts-self-verify-short-artifact-hash");
         let summary_path = temp.join("handoff-summary.json");
@@ -15987,6 +16045,33 @@ mod tests {
         assert!(err.to_string().contains("lakecatHandoffVerifyOutput"));
         assert!(err.to_string().contains("capturedOutputs"));
         assert!(err.to_string().contains("sha256 mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_capture_hash() {
+        let temp = qglake_temp_dir("handoff-artifacts-self-verify-extra-capture-hash");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+        output["artifactFiles"]["capturedOutputs"]["unverifiedCapture"] =
+            json!({ "sha256": qglake_fixture_hash("unverified-capture") });
+        let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+        fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+            .expect("write drifted handoff verify output");
+        summary["artifacts"]["lakecatHandoffVerifyOutputHash"] = json!(content_hash_bytes(&bytes));
+        fs::write(
+            &summary_path,
+            serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+        )
+        .expect("write summary");
+
+        let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+            .expect_err("artifact verifier should reject extra sidecar capture hash claims");
+        let err = err.to_string();
+
+        assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+        assert!(err.contains("capturedOutputs"), "{err}");
+        assert!(err.contains("unexpected field unverifiedCapture"), "{err}");
     }
 
     #[test]

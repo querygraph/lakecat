@@ -5,6 +5,26 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Close QGLake self-verifier artifact manifests`.
+  Saved `lakecatHandoffVerifyOutput.artifactFiles` sidecars now reject
+  unexpected top-level artifact keys and unexpected nested captured-output keys
+  before comparing full SHA-256 hashes with the compact handoff summary. This
+  keeps a saved self-verifier artifact from smuggling unverified artifact
+  claims beside the accepted bootstrap bundle, lineage drain, QueryGraph
+  import-plan, captured-output, and service-log evidence.
+- Local verification for this implementation/book slice is green so far:
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_artifact_hash -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier_rejects_handoff_verify_output_extra_capture_hash -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-cli` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Clarify LakeCat catalog concepts in the book`.
   The LakeCat book now gives the current catalog claims a sharper vocabulary:

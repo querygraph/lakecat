@@ -7945,7 +7945,10 @@ unchecked convenience file. The saved self-verifier output is checked too: its
 internal `artifactFiles` entries for the bootstrap bundle, lineage drain,
 QueryGraph import plan, captured LakeCat and QueryGraph outputs, and service
 log must carry full SHA-256 digests before they are compared with the compact
-summary. It is small, but it is not decorative. It is the acceptance story for a
+summary. The saved sidecar also has to stay closed over that known manifest:
+extra top-level artifact claims and extra nested captured-output claims are
+rejected instead of being carried as unverified evidence beside the accepted
+hashes. It is small, but it is not decorative. It is the acceptance story for a
 catalog that participates in the user workflow from notebook to agent. The
 summary file gives automation a single stable place to find the accepted
 table/view counts, semantic hashes, bundle, lineage drain, import plan,

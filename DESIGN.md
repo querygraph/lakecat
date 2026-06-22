@@ -671,7 +671,10 @@ digests for its nested bundle, lineage-drain, QueryGraph import-plan, captured
 LakeCat/QueryGraph output, and service-log hashes before those values are
 compared with the compact handoff summary. Equality to the summary is not
 enough if the saved self-verifier artifact can carry placeholder or prefix-only
-hashes.
+hashes. The same object must be closed over the known artifact manifest: extra
+top-level artifact keys or extra nested captured-output keys are rejected so a
+saved sidecar cannot smuggle unverified artifact claims alongside the checked
+bundle.
 Handoff artifact paths must resolve under the handoff summary directory before
 LakeCat hashes or parses them. A saved summary must not be able to splice in an
 absolute path or `..` traversal to matching bytes outside the archived bundle.
