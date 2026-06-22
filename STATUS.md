@@ -5,6 +5,18 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation slice:
+  `Cover duplicate projection replay hashes`.
+  Service replay-admission coverage now proves an outbox projection receipt
+  cannot repeat replay event hashes before graph or OpenLineage projection.
+  This makes the P2/P3 duplicate-free replay-array invariant explicit for the
+  replay hash side, matching the existing duplicate OpenLineage hash coverage.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service projection_receipt_evidence_rejects_duplicate_replay_event_hashes -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest book slice:
   `Explain governed catalog concept layers`.
   The LakeCat book now includes a concrete governed-agent request that

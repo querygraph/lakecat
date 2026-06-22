@@ -40042,6 +40042,41 @@ mod tests {
     }
 
     #[test]
+    fn projection_receipt_evidence_rejects_duplicate_replay_event_hashes() {
+        let event = OutboxEvent {
+            event_id: "evt-duplicate-replay-projection-receipt".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.commits-listed".to_string(),
+            payload: json!({
+                "audit-event-id": "audit-duplicate-replay-projection-receipt",
+                "event-type": "table.commits-listed",
+                "payload": {}
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let duplicate_replay_hash = content_hash_bytes(b"duplicate-replay-event");
+        let receipt = OutboxProjectionReceipt {
+            graph_events: 1,
+            lineage_events: 2,
+            lineage_event_hashes: vec![duplicate_replay_hash.clone(), duplicate_replay_hash],
+            open_lineage_hashes: vec![
+                content_hash_bytes(b"openlineage-a"),
+                content_hash_bytes(b"openlineage-b"),
+            ],
+        };
+
+        let err = validate_projection_receipt_evidence(&event, &receipt)
+            .expect_err("projection replay event hashes must be duplicate-free");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commits-listed"));
+        assert!(message.contains("projection receipt replay event hashes must be duplicate-free"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-duplicate-replay-projection-receipt"));
+    }
+
+    #[test]
     fn projection_receipt_evidence_rejects_hash_count_drift() {
         let event = OutboxEvent {
             event_id: "evt-count-drift-projection-receipt".to_string(),

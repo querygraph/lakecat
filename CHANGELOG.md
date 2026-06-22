@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added service replay-admission coverage proving projection receipts cannot
+  repeat replay event hashes before graph or OpenLineage projection, matching
+  the existing duplicate-free OpenLineage hash guard.
 - Expanded the LakeCat book with a concrete governed-agent workflow that maps
   Iceberg, TypeSec, Sail, LakeCat, and QueryGraph responsibilities across one
   request, reinforcing why table-format interpretation belongs in Sail while
