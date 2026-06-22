@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed service outbox admission over top-level table commit replay payloads.
+  `table.commit` now rejects unexpected sibling fields beside the checked table
+  identity, optional scope hints, authorization receipt, and nested commit
+  evidence before acknowledgement, graph projection, OpenLineage projection, or
+  QGLake proof can inherit unverified commit, policy, storage, graph, lineage,
+  QueryGraph, or application claims.
 - Closed service outbox admission over top-level catalog config and QueryGraph
   bootstrap replay payloads. `catalog.config-read` and `querygraph.bootstrap`
   now reject unexpected top-level payload fields before acknowledgement, graph

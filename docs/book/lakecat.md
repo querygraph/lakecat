@@ -10259,6 +10259,10 @@ best-effort projection filter. `catalog.config-read` replay is closed over the
 checked warehouse, defaults, overrides, advertised endpoints, and authorization
 receipt, with defaults and overrides closed again as `key`/`value` entries and
 tenant-root records closed over their known record fields.
+`table.commit` replay is closed over the checked table identity or scope hints,
+authorization receipt, and nested commit evidence, and the nested commit object
+is closed over the pointer transition, principal, hashes, format, snapshot, and
+timestamp fields LakeCat verifies.
 `querygraph.bootstrap` replay is closed over the checked warehouse, counts,
 verified table/view manifests, artifact hashes, view-version receipts,
 standards, bundle hash, graph hash, OpenLineage hash, QueryGraph import hash,

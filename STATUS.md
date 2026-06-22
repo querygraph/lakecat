@@ -6,6 +6,22 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close service table commit schemas`.
+  Service outbox admission now rejects unexpected top-level payload fields for
+  `table.commit` before acknowledgement, graph projection, OpenLineage
+  projection, or QGLake proof can inherit unverified commit, policy, storage,
+  graph, lineage, QueryGraph, or application claims beside checked table scope,
+  authorization receipt, and nested commit evidence.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_top_level_table_commit_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service table_commit -- --test-threads=1` passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed.
+- Latest implementation/book slice:
   `Close service config/bootstrap schemas`.
   Service outbox admission now rejects unexpected top-level payload fields for
   `catalog.config-read` and `querygraph.bootstrap` before acknowledgement,

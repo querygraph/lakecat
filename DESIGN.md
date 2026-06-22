@@ -863,10 +863,12 @@ no policy participated. It must also carry
 positive Iceberg format-version evidence and non-negative snapshot-id evidence,
 so graph and OpenLineage projections cannot lose the table-format summary that
 the pointer-log path exposes later. Service replay admission must also close
-the nested `commit` object over the pointer-transition, identity, authorization,
-hash, format, snapshot, and timestamp fields LakeCat actually verifies, so a
-durable `table.commit` event cannot append unverified commit, policy, storage,
-or graph claims beside an otherwise valid pointer transition. The store
+the top-level `table.commit` payload over checked table scope, authorization
+receipt, and nested commit evidence, and close the nested `commit` object over
+the pointer-transition, identity, authorization, hash, format, snapshot, and
+timestamp fields LakeCat actually verifies. A durable `table.commit` event
+cannot append unverified commit, policy, storage, graph, lineage, QueryGraph,
+or application claims beside an otherwise valid pointer transition. The store
 producer now rejects table and
 commit metadata that lacks positive `format-version` evidence before producing
 durable commit records, and it emits explicit `snapshot_id: 0` evidence for
