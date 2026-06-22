@@ -5,6 +5,26 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Expand catalog concept boundaries`.
+  The book now gives a stricter and more detailed explanation of standard
+  Iceberg parlance versus LakeCat implementation choices, TypeSec governance
+  evidence, QueryGraph/QGLake proof surfaces, and future Iceberg-adjacent
+  profile candidates. It explicitly frames Rust and Turso as LakeCat
+  implementation choices, commit CAS and REST namespace/table paths as standard
+  compatibility surfaces, idempotency/pointer-log/audit/outbox/replay proof as
+  LakeCat reliability extensions with portable-profile potential, governed
+  scan/credential proof as LakeCat/TypeSec/Sail extension territory, and
+  QueryGraph/OpenLineage/bootstrap/management/view/credential/commit proof
+  surfaces as additive QueryGraph integration. It also strengthens the argument
+  for pushing table-format, scan-planning, metadata-as-data, commit-validation,
+  governed-read, and typed v4 semantics into Sail so LakeCat does not become a
+  shadow engine.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `git diff --check` passed.
 - Latest implementation/book slice:
   `Close service policy-binding upsert schemas`.
   Service outbox admission now rejects unexpected top-level payload fields for

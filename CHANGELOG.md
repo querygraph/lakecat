@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expanded the book's catalog-concepts explanation with a stricter
+  standard-versus-extension-versus-future-profile decision rule. The book now
+  more thoroughly separates standard Iceberg catalog/table vocabulary from
+  LakeCat implementation choices, TypeSec governance evidence, QueryGraph/QGLake
+  proof surfaces, and reusable profile candidates, and it sharpens the argument
+  for pushing table-format, governed-scan, metadata-as-data, and v4 semantics
+  into Sail instead of building a shadow engine inside LakeCat.
 - Closed service outbox admission over top-level view lifecycle replay
   payloads. `view.upserted`, `view.loaded`, and `view.dropped` now reject
   unexpected top-level payload fields before acknowledgement, graph projection,
