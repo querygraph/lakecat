@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving `querygraph.bootstrap`
+  rejects a mismatched authorization receipt action before acknowledgement,
+  graph projection, or OpenLineage projection. The design and book now state
+  that QueryGraph bootstrap replay must prove the `graph-read` action, not a
+  lineage-read or other proof.
 - Added service replay regression coverage proving `table.commits-listed`
   rejects a mismatched authorization receipt action before acknowledgement,
   graph projection, or OpenLineage projection. The design and book now state

@@ -6,6 +6,22 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Cover QueryGraph bootstrap receipt action drift`.
+  Service outbox replay now has regression coverage proving
+  `querygraph.bootstrap` rejects a mismatched authorization receipt action
+  before acknowledgement, graph projection, or OpenLineage projection. The
+  design and book now describe QueryGraph bootstrap replay as a `graph-read`
+  proof, not a lineage-read or other proof.
+- Local verification for this QueryGraph bootstrap receipt action slice is
+  green:
+  `cargo fmt -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_mismatched_querygraph_bootstrap_receipt_action -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib querygraph_bootstrap -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Cover commit-history receipt action drift`.
   Service outbox replay now has regression coverage proving
   `table.commits-listed` rejects a mismatched authorization receipt action

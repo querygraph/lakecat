@@ -26001,6 +26001,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_mismatched_querygraph_bootstrap_receipt_action() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let mut payload = valid_querygraph_bootstrap_payload(principal);
+        payload["payload"]["authorization-receipt"]["action"] = json!("lineage-read");
+        let event_id = "evt-bootstrap-mismatched-receipt-action";
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                payload,
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("mismatched QueryGraph bootstrap receipt action should fail");
+
+        let message = err.to_string();
+        assert!(message.contains("querygraph.bootstrap"));
+        assert!(message.contains(
+            "querygraph bootstrap authorization receipt action does not match outbox event type"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(event_id));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "mismatched QueryGraph bootstrap action must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "mismatched QueryGraph bootstrap action must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "mismatched QueryGraph bootstrap action must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_querygraph_bootstrap_table_artifact_manifest_drift() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let mut payload = valid_querygraph_bootstrap_payload(principal);

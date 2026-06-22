@@ -500,12 +500,13 @@ continue importing LakeCat evidence without losing view receipt-chain hashes,
 accepted view versions, graph proof, import proof, or OpenLineage replay
 anchors. QueryGraph bootstrap replay must bind table artifacts to
 `verified-tables`, and view artifacts plus view-version receipts to
-`verified-views`, plus a valid authorization receipt principal, so saved
-bootstrap evidence cannot become actorless or splice semantic artifacts and
-receipt chains across manifests. Those verified table/view manifests must
-also be duplicate-free at outbox admission and compact handoff verification, so
-QueryGraph bootstrap replay and archived handoffs cannot inflate counts by
-repeating accepted stable IDs. Scan replay must preserve the
+`verified-views`, plus a valid authorization receipt principal and the
+`graph-read` action, so saved bootstrap evidence cannot become actorless,
+action-drifted, or splice semantic artifacts and receipt chains across
+manifests. Those verified table/view manifests must also be duplicate-free at
+outbox admission and compact handoff verification, so QueryGraph bootstrap
+replay and archived handoffs cannot inflate counts by repeating accepted
+stable IDs. Scan replay must preserve the
 server-derived purpose and
 policy-derived TTL cap in both captured LakeCat replay text and compact handoff
 proof. Compact governed scan proof must also preserve the planned and fetched

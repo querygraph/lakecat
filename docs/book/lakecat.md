@@ -4621,11 +4621,12 @@ lost the accepted catalog receipt or detached the ordered receipt chain before
 the richer graph import begins.
 
 LakeCat also enforces the same binding when a `querygraph.bootstrap` outbox
-event is replayed. The authorization receipt must carry a valid principal,
-table artifact stable IDs must match the `verified-tables` manifest exactly,
-view artifact stable IDs must match `verified-views`, and view-version receipt
-stable IDs must match `verified-views`. A saved replay event that keeps
-valid-looking hashes while dropping actor proof, swapping in another table
+event is replayed. The authorization receipt must carry a valid principal and
+the `graph-read` action, table artifact stable IDs must match the
+`verified-tables` manifest exactly, view artifact stable IDs must match
+`verified-views`, and view-version receipt stable IDs must match
+`verified-views`. A saved replay event that keeps valid-looking hashes while
+dropping actor proof, drifting to a lineage-read action, swapping in another table
 artifact, or borrowing another view's receipt evidence fails before graph or
 OpenLineage projection.
 
