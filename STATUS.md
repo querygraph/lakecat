@@ -5,6 +5,26 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Expand catalog concept ledger`.
+  The book's catalog-boundary chapter now gives a detailed concept ledger for
+  the Rust service spine, Turso-backed local store, Iceberg REST-compatible
+  namespace/table paths, commit CAS, idempotency, pointer logs, audit/outbox,
+  replay validation, governed scan and credential paths, and the broad
+  QueryGraph/QGLake, OpenLineage, bootstrap, management, view, credential, and
+  commit proof surfaces. It explicitly distinguishes standard Iceberg parlance
+  from LakeCat implementation, LakeCat/TypeSec/QueryGraph extensions, and
+  narrow future Iceberg-adjacent optional profile candidates. It also explains
+  what pushing work into Sail means for generated REST models, manifest metric
+  decoding, pruning, delete handling, metadata-as-data, commit validation,
+  governed planning, and typed v4 behavior.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `cargo fmt -p lakecat-cli -- --check` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/book slice:
   `Close credential-response evidence schemas`.
   Service outbox admission now rejects unexpected fields inside each

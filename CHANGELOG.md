@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Expanded the book's catalog-boundary chapter with a detailed concept ledger
+  that classifies the Rust service spine, Turso local store, Iceberg REST
+  routes, commit CAS, idempotency, pointer logs, audit/outbox, replay
+  validation, governed scan and credential paths, QueryGraph/QGLake handoff,
+  OpenLineage, bootstrap, management, view, credential, and commit proof
+  surfaces as standard Iceberg parlance, LakeCat implementation, additive
+  TypeSec/QueryGraph governance and integration, or narrow future
+  Iceberg-adjacent profile candidates. The chapter now also spells out what
+  "push work into Sail" means operationally for REST models, manifests,
+  pruning, deletes, metadata-as-data, commit validation, governed planning,
+  and typed v4 support.
 - Closed service outbox admission over credential-response evidence entries.
   Governed credential-vending replay now rejects unexpected fields inside each
   `credential-response-evidence` entry before acknowledgement, graph
