@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a detailed catalog-concept chapter that
+  separates standard Iceberg parlance from LakeCat implementation,
+  LakeCat/QueryGraph optional surfaces, TypeSec governance receipts, and
+  future Iceberg-adjacent profile candidates, with PySpark, agentic, and
+  QueryGraph bootstrap workflows explaining why reusable table-format work
+  belongs in Sail.
 - Required `credentials.vend-attempted` replay evidence to carry a valid
   authorization receipt principal before acknowledgement, graph projection, or
   OpenLineage projection, with zero-credential missing/malformed-principal

@@ -5,6 +5,14 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/book slice:
+  `Clarify catalog concepts and Sail engine boundary`.
+  The book now adds a dedicated release-facing chapter that delineates standard
+  Iceberg parlance, LakeCat implementation, optional LakeCat/QueryGraph
+  surfaces, TypeSec governance extensions, and future Iceberg-adjacent profile
+  candidates. It also explains why scan planning, manifest/deletes/v4 metadata,
+  metadata-as-data, and other reusable table-format work should live in Sail,
+  with PySpark, agentic, and QueryGraph bootstrap workflow examples.
 - Latest completed implementation slice:
   `Require credential-vend receipt principals`.
   Service `credentials.vend-attempted` replay admission now rejects missing or
