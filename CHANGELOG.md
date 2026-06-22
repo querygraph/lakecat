@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog concept explanation with a release-facing
+  status matrix covering the Rust service spine, Turso store, Iceberg REST
+  paths, commit CAS/idempotency/pointer logs/audit/outbox/replay validation,
+  governed scan and credential receipts, QueryGraph/QGLake handoff surfaces,
+  and which pieces are standard Iceberg, LakeCat implementation,
+  TypeSec/QueryGraph extensions, or future Iceberg-adjacent candidates.
 - Required `view.version-receipt-chains-listed` replay evidence to carry valid
   warehouse, namespace, authorization receipt principal, and count-aligned
   chain/receipt/tombstone totals before acknowledgement, graph projection, or

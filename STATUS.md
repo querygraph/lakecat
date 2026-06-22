@@ -5,6 +5,15 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/book slice:
+  `Expand catalog concept status matrix`.
+  The book now gives a release-facing explanation of the Rust service/catalog
+  spine, Turso-backed store, Iceberg REST-compatible namespace/table paths,
+  commit CAS, idempotency, pointer logs, audit/outbox, replay validation,
+  governed scan and credential receipt evidence, and QueryGraph/QGLake handoff
+  surfaces, explicitly separating standard Iceberg parlance from LakeCat
+  implementation, TypeSec/QueryGraph extensions, and future Iceberg-adjacent
+  proposal candidates.
 - Latest completed implementation slice:
   `Require view receipt-chain scope counts`.
   Service replay admission now rejects `view.version-receipt-chains-listed`
