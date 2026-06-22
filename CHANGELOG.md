@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refreshed the checked-in LakeCat book artifacts after the final local book
+  build so the committed EPUB, MOBI, and PDF match the current generated
+  output for the expanded catalog-surface chapter.
 - Expanded the LakeCat book's current catalog surface explanation with a
   dedicated standard-vs-extension classification for the Rust service spine,
   Turso store, REST namespace/table paths, commit CAS, idempotency, pointer
