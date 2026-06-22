@@ -5,6 +5,39 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Expand catalog standards-boundary guide in the book`.
+  The book now includes a standards-document reading guide for the release
+  ledger, separating standard Iceberg namespace/table/CAS behavior from
+  LakeCat Rust/Turso implementation choices, TypeSec-governed scan and
+  credential extensions, QueryGraph/QGLake application surfaces, and narrow
+  future Iceberg-adjacent profile candidates. The new text also makes the
+  Sail-first engine boundary explicit for field ids, schema and partition
+  evolution, manifests, deletes, row lineage, metadata tables, scan tasks,
+  commit requirements, and v4 interpretation.
+- Local verification for this book standards-boundary slice is green:
+  `docs/book/build.sh`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features typesec-local --lib typesec_credential_issuer -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
+  `Add file-backed production secret-ref provider roots`.
+  The TypeSec-backed credential issuer can now resolve AWS/GCP/Azure-style
+  `aws-sm://`, `gcp-sm://`, and `azure-kv://` secret refs from configured
+  file-backed provider roots after TypeSec authorizes the exact secret-ref
+  resource. Credential files are named by the SHA-256 digest of the secret ref,
+  denied decisions do not read files, returned evidence is canonicalized, and
+  read/parse failures remain hash-only. Cloud SDK-backed resolvers beyond Vault
+  and file-backed roots remain future work.
+- Local verification for this production secret-ref provider slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --features typesec-local --lib typesec_credential_issuer -- --test-threads=1`;
+  `cargo test -p lakecat-service --all-features`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed implementation/documentation slice:
   `Expand Sail engine-boundary guidance in the book`.
   The book now includes a responsibility ledger that distinguishes LakeCat

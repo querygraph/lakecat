@@ -1153,6 +1153,102 @@ The current implementation should be described this way.
 | Grust-backed graph import | No | Emits graph-facing events | QueryGraph/Grust extension | No |
 | Typed v4 interpretation | Emerging Iceberg work | Not claimed complete | Should be Sail-owned | Yes, through Iceberg itself |
 
+### Reading The Ledger Like A Standards Document
+
+The release ledger should be read as a compatibility contract, not as a feature
+checklist. A feature can be essential to LakeCat and still not be an Iceberg
+feature. A feature can be useful to QueryGraph and still not belong in Iceberg
+metadata. A feature can be promising for standards work and still need to stay
+optional until multiple catalogs and engines need the same interoperable shape.
+
+The Rust service spine is the clearest example. It exists, and it matters. It
+lets LakeCat keep routing, identity, tenancy, commit requirements,
+idempotency, Sail calls, TypeSec receipts, audit, outbox, and replay admission
+inside one typed service path. But a Rust spine is not an Iceberg extension.
+Iceberg should not care whether a compatible catalog is written in Rust, Java,
+Go, or provided as a managed service. The standardizable part is behavioral:
+can a catalog prove which action it accepted, rejected, replayed, vended, or
+emitted?
+
+The Turso-backed local store follows the same rule. It is the right LakeCat
+implementation direction because it keeps the local durable catalog spine
+Rust-native and exercises real transactions, row/content validation, CAS,
+idempotency, pointer logs, audit, outbox, and replay checks. But Turso is not
+a table-format concept. The portable behavior is not "use this database." The
+portable behavior is "make pointer movement atomic, make retries exact, keep
+pointer history inspectable, redact conflicts, and emit side effects from
+durable committed state."
+
+The namespace and table REST paths are different. Those are standard Iceberg
+surface area. LakeCat's job is to keep them ordinary. `/catalog/v1` should let
+standard clients resolve namespaces, load tables, create tables, and commit
+metadata without a QueryGraph route, TypeSec envelope, Grust graph import,
+OpenLineage drain, Croissant vocabulary, CDIF document, OSI model, or ODRL
+policy becoming a hidden prerequisite. LakeCat can record proof behind the
+route, but that proof is not part of what a standard client must understand to
+perform a normal Iceberg operation.
+
+Commit CAS is the mixed case. The optimistic current-metadata-pointer update
+is standard Iceberg. LakeCat's idempotency records, pointer logs, audit rows,
+transactional outbox rows, conflict redaction, and replay validation are
+catalog hardening around the standard commit. This is exactly the kind of
+place where future Iceberg-adjacent work may be useful. The proposal should
+not be "adopt LakeCat's schema." It should be a narrow optional catalog
+profile for exact retry, conflict proof, pointer history, and event identity.
+
+Governed scans and credentials are intentionally outside ordinary Iceberg
+table semantics. The standard table already exposes the metadata engines need
+to plan reads. LakeCat adds authority: who is asking, why, under which policy,
+with which restriction, and with what credential posture. TypeSec decides the
+governance meaning. Sail turns the effective restriction into table-real work.
+LakeCat records the receipt. That design can inspire optional profiles such as
+proof-carrying scan planning or governed credential vending, but those
+profiles should stay table-format neutral and should not require TypeSec as
+the only policy system.
+
+QueryGraph, QGLake, OpenLineage, Croissant, CDIF, OSI, ODRL, TypeDID, and
+Grust-backed graph import are broader application and integration surfaces.
+They are the reason LakeCat needs rich proof, but they are not the normal path
+for an Iceberg client to load a table. LakeCat should export stable catalog
+anchors and receipt hashes. QueryGraph should compose semantic meaning above
+those anchors. Grust should own graph mechanics. TypeSec should own policy and
+capability semantics. Iceberg should remain the portable table contract below
+them.
+
+This gives LakeCat a disciplined proposal rubric:
+
+1. If the feature is needed to understand Iceberg metadata correctly, move the
+   reusable implementation into Sail or the Iceberg ecosystem.
+2. If the feature is needed to authorize an action, keep the semantics in
+   TypeSec and persist only catalog-bound receipts in LakeCat.
+3. If the feature is graph traversal, taxonomy, projection, or Cypher behavior,
+   push it into Grust and keep LakeCat at the graph-event boundary.
+4. If the feature is QueryGraph semantic composition, keep it above LakeCat and
+   import LakeCat proof rather than making standard Iceberg clients depend on
+   QueryGraph.
+5. If the feature helps many catalogs interoperate, propose a small optional
+   profile: retry proof, pointer history, conflict redaction, event identity,
+   lineage binding, governed credential proof, or proof-carrying scan planning.
+
+Sail is central to that rubric. It is not merely a dependency that LakeCat can
+call when convenient. It is the place where Iceberg table meaning should
+converge for Rust. Field ids, schema evolution, partition transforms, manifest
+metrics, delete files, row lineage, metadata tables, scan tasks, commit
+requirements, and v4 metadata interpretation need one reusable implementation.
+If LakeCat owns a second implementation, the catalog can drift from execution.
+If Sail owns it, LakeCat proof becomes smaller and stronger: it can store the
+pointer, request identity, TypeSec receipt hash, effective restriction hash,
+Sail plan hash, snapshot id, format version, task count, and delete posture
+without pretending to be the engine.
+
+That is the core LakeCat argument. The catalog should be thin in table-format
+semantics and thick in authority, durability, and replay evidence. Sail should
+be thick in Iceberg semantics. QueryGraph should be thick in semantic
+composition. TypeSec should be thick in security semantics. Grust should be
+thick in graph semantics. Keeping those centers of gravity separate is what
+lets LakeCat remain compatible with ordinary Iceberg while still becoming the
+foundation for governed, agentic QueryGraph workflows.
+
 ### Standard Terms, LakeCat Terms, And Proposal Terms
 
 The safest way to explain LakeCat is to keep three questions separate.
@@ -5212,9 +5308,18 @@ than hard-coding credentials into catalog state. `vault://` can resolve through
 the built-in Vault HTTP backend when Vault environment configuration is present.
 `aws-sm://`, `gcp-sm://`, and `azure-kv://` can dispatch to explicitly
 configured provider backends after TypeSec authorizes the exact secret-ref
-resource. If no backend is configured, those providers fail closed with an
-operator-readable not-configured error, and denied TypeSec decisions do not call
-the backend at all. Configured provider backends receive the same
+resource. They can also use LakeCat's built-in file-backed provider roots for
+local or single-node deployments:
+`LAKECAT_AWS_SECRETS_MANAGER_FILE_DIR`,
+`LAKECAT_GCP_SECRET_MANAGER_FILE_DIR`, and
+`LAKECAT_AZURE_KEY_VAULT_FILE_DIR`. Each directory contains JSON credential
+config files named as the full SHA-256 digest of the exact secret reference,
+without the `sha256:` prefix, plus `.json`. For example,
+`gcp-sm://lakecat/events` is authorized as that exact TypeSec resource and then
+resolved from a hash-named JSON file under the configured GCP root. If no
+backend is configured, those providers fail closed with an operator-readable
+not-configured error, and denied TypeSec decisions do not call the backend or
+read the file at all. Configured provider backends receive the same
 policy-derived `max-credential-ttl-seconds` cap that LakeCat records in the
 read restriction, and returned credentials must preserve that cap in
 `lakecat.max-credential-ttl-seconds`. LakeCat rewrites duplicate TTL config
@@ -5278,7 +5383,11 @@ error-detail hash instead of the environment variable name, Vault path, token,
 namespace, backend exception text, cloud secret-manager ARN or account path, or
 malformed secret fields. That rule applies both to the built-in Vault and
 environment resolvers and to explicitly configured AWS Secrets Manager, GCP
-Secret Manager, and Azure Key Vault style backend seams.
+Secret Manager, and Azure Key Vault style backend seams, including the
+file-backed provider roots. The file-backed roots are not a claim that LakeCat
+has cloud SDK support for those providers; they are a redacted built-in backend
+that lets the same production-shaped secret-ref dispatch run locally while SDK
+resolvers are added later.
 Secret payload parsing also rejects malformed credential configuration before
 issuance, including blank config keys in either object-shaped secrets,
 ConfigEntry-array secrets, or Vault's nested data object. That keeps

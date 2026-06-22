@@ -161,6 +161,7 @@ impl CredentialIssuer for ConservativeCredentialIssuer {
 #[cfg(feature = "typesec-local")]
 pub mod typesec_credential_issuer {
     use std::collections::BTreeMap;
+    use std::path::PathBuf;
     use std::sync::Arc;
 
     use async_trait::async_trait;
@@ -180,6 +181,8 @@ pub mod typesec_credential_issuer {
             request: &CredentialIssuanceRequest,
         ) -> LakeCatResult<Vec<StorageCredential>>;
     }
+
+    type SecretRefResolverMap = BTreeMap<SecretRefProvider, Arc<dyn SecretRefCredentialResolver>>;
 
     pub struct TypeSecCredentialIssuer {
         engine: Arc<dyn PolicyEngine>,
@@ -311,7 +314,7 @@ pub mod typesec_credential_issuer {
     pub struct ExternalSecretRefCredentialResolver {
         env: Arc<EnvironmentSecretRefCredentialResolver>,
         vault: Option<Arc<VaultSecretRefCredentialResolver>>,
-        provider_backends: BTreeMap<SecretRefProvider, Arc<dyn SecretRefCredentialResolver>>,
+        provider_backends: SecretRefResolverMap,
     }
 
     impl ExternalSecretRefCredentialResolver {
@@ -319,7 +322,7 @@ pub mod typesec_credential_issuer {
             Arc::new(Self {
                 env: EnvironmentSecretRefCredentialResolver::new(),
                 vault: VaultSecretRefCredentialResolver::from_env(),
-                provider_backends: BTreeMap::new(),
+                provider_backends: file_provider_backends_from_env(),
             })
         }
 
@@ -350,6 +353,15 @@ pub mod typesec_credential_issuer {
                 env: EnvironmentSecretRefCredentialResolver::new(),
                 vault: Some(vault),
                 provider_backends: BTreeMap::new(),
+            })
+        }
+
+        #[cfg(test)]
+        pub fn with_file_provider_roots(roots: BTreeMap<SecretRefProvider, PathBuf>) -> Arc<Self> {
+            Arc::new(Self {
+                env: EnvironmentSecretRefCredentialResolver::new(),
+                vault: None,
+                provider_backends: file_provider_backends(roots),
             })
         }
     }
@@ -580,6 +592,101 @@ pub mod typesec_credential_issuer {
         }
     }
 
+    pub struct FileSecretRefCredentialResolver {
+        provider: SecretRefProvider,
+        root: PathBuf,
+    }
+
+    impl FileSecretRefCredentialResolver {
+        fn new(provider: SecretRefProvider, root: impl Into<PathBuf>) -> Arc<Self> {
+            Arc::new(Self {
+                provider,
+                root: root.into(),
+            })
+        }
+
+        fn secret_path(&self, secret_ref: &str) -> LakeCatResult<PathBuf> {
+            let provider = secret_ref_provider(secret_ref)?;
+            if provider != self.provider {
+                return Err(LakeCatError::InvalidArgument(format!(
+                    "file-backed {} resolver received mismatched secret provider; {}",
+                    self.provider.as_str(),
+                    secret_ref_hash_context(secret_ref),
+                )));
+            }
+            Ok(self
+                .root
+                .join(format!("{}.json", secret_ref_hash_hex(secret_ref))))
+        }
+    }
+
+    #[async_trait]
+    impl SecretRefCredentialResolver for FileSecretRefCredentialResolver {
+        async fn resolve(
+            &self,
+            request: &CredentialIssuanceRequest,
+        ) -> LakeCatResult<Vec<StorageCredential>> {
+            let Some(secret_ref) = request.profile.secret_ref.as_deref() else {
+                return Ok(Vec::new());
+            };
+            let path = self.secret_path(secret_ref)?;
+            let raw = std::fs::read_to_string(&path).map_err(|err| {
+                LakeCatError::InvalidArgument(format!(
+                    "failed to read file-backed {} credential secret; {}; {}",
+                    self.provider.as_str(),
+                    secret_ref_hash_context(secret_ref),
+                    error_detail_hash_context(err),
+                ))
+            })?;
+            Ok(vec![StorageCredential {
+                prefix: request.profile.location_prefix.clone(),
+                config: config_entries_from_secret_json(&raw).map_err(|err| {
+                    LakeCatError::InvalidArgument(format!(
+                        "failed to parse file-backed {} credential secret; {}; {}",
+                        self.provider.as_str(),
+                        secret_ref_hash_context(secret_ref),
+                        error_detail_hash_context(err),
+                    ))
+                })?,
+            }])
+        }
+    }
+
+    fn file_provider_backends_from_env() -> SecretRefResolverMap {
+        let roots = [
+            (
+                SecretRefProvider::AwsSecretsManager,
+                "LAKECAT_AWS_SECRETS_MANAGER_FILE_DIR",
+            ),
+            (
+                SecretRefProvider::GcpSecretManager,
+                "LAKECAT_GCP_SECRET_MANAGER_FILE_DIR",
+            ),
+            (
+                SecretRefProvider::AzureKeyVault,
+                "LAKECAT_AZURE_KEY_VAULT_FILE_DIR",
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(provider, var)| std::env::var_os(var).map(|root| (provider, root.into())))
+        .collect::<BTreeMap<_, _>>();
+        file_provider_backends(roots)
+    }
+
+    fn file_provider_backends(roots: BTreeMap<SecretRefProvider, PathBuf>) -> SecretRefResolverMap {
+        roots
+            .into_iter()
+            .filter(|(provider, _)| provider.supports_file_backend())
+            .map(|(provider, root)| {
+                (
+                    provider,
+                    FileSecretRefCredentialResolver::new(provider, root)
+                        as Arc<dyn SecretRefCredentialResolver>,
+                )
+            })
+            .collect()
+    }
+
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     pub enum SecretRefProvider {
         TypeSecEnv,
@@ -600,6 +707,13 @@ pub mod typesec_credential_issuer {
                 Self::GcpSecretManager => "gcp-secret-manager",
                 Self::AzureKeyVault => "azure-key-vault",
             }
+        }
+
+        fn supports_file_backend(self) -> bool {
+            matches!(
+                self,
+                Self::AwsSecretsManager | Self::GcpSecretManager | Self::AzureKeyVault
+            )
         }
     }
 
@@ -741,6 +855,18 @@ pub mod typesec_credential_issuer {
             "secret-ref-hash={}",
             content_hash_bytes(secret_ref.as_bytes())
         )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn secret_ref_hash_file_name(secret_ref: &str) -> String {
+        format!("{}.json", secret_ref_hash_hex(secret_ref))
+    }
+
+    fn secret_ref_hash_hex(secret_ref: &str) -> String {
+        content_hash_bytes(secret_ref.as_bytes())
+            .strip_prefix("sha256:")
+            .expect("content_hash_bytes returns sha256-prefixed digests")
+            .to_string()
     }
 
     pub(crate) fn config_entries_from_secret_json(raw: &str) -> LakeCatResult<Vec<ConfigEntry>> {
@@ -36586,6 +36712,164 @@ mod tests {
                 entry.key == "aws.session-token" && entry.value == "temporary-token"
             })
         );
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_resolves_file_backed_secret_refs_after_authorization() {
+        use crate::typesec_credential_issuer::{
+            ExternalSecretRefCredentialResolver, SecretRefProvider, TypeSecCredentialIssuer,
+            secret_ref_hash_file_name,
+        };
+
+        let secret_ref = "gcp-sm://lakecat/events";
+        let root = std::env::temp_dir().join(format!(
+            "lakecat-file-secret-{}",
+            chrono::Utc::now()
+                .timestamp_nanos_opt()
+                .expect("timestamp should fit")
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join(secret_ref_hash_file_name(secret_ref)),
+            serde_json::json!({
+                "lakecat.credential-kind": "gcp-file-backed",
+                "gcp.access-token": "temporary-gcp-token"
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:agent".to_string(),
+                resource: secret_ref.to_string(),
+            }),
+            ExternalSecretRefCredentialResolver::with_file_provider_roots(BTreeMap::from([(
+                SecretRefProvider::GcpSecretManager,
+                root.clone(),
+            )])),
+        );
+
+        let credentials = issuer
+            .issue(production_secret_credential_request(secret_ref))
+            .await
+            .unwrap();
+
+        assert_eq!(credentials.len(), 1);
+        assert_eq!(credentials[0].prefix, "s3://lakecat-demo/events");
+        assert_single_config_value(
+            &credentials[0].config,
+            "lakecat.secret-ref-provider",
+            "gcp-sm",
+        );
+        assert_single_config_value(
+            &credentials[0].config,
+            "lakecat.secret-ref-hash",
+            &lakecat_core::content_hash_bytes(secret_ref.as_bytes()),
+        );
+        assert!(credentials[0].config.iter().any(|entry| {
+            entry.key == "gcp.access-token" && entry.value == "temporary-gcp-token"
+        }));
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_does_not_read_file_backed_secret_refs_when_denied() {
+        use crate::typesec_credential_issuer::{
+            ExternalSecretRefCredentialResolver, SecretRefProvider, TypeSecCredentialIssuer,
+        };
+
+        let secret_ref = "azure-kv://lakecat/events";
+        let root = std::env::temp_dir().join(format!(
+            "lakecat-file-secret-denied-{}",
+            chrono::Utc::now()
+                .timestamp_nanos_opt()
+                .expect("timestamp should fit")
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:other".to_string(),
+                resource: secret_ref.to_string(),
+            }),
+            ExternalSecretRefCredentialResolver::with_file_provider_roots(BTreeMap::from([(
+                SecretRefProvider::AzureKeyVault,
+                root.clone(),
+            )])),
+        );
+
+        let err = issuer
+            .issue(production_secret_credential_request(secret_ref))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, LakeCatError::Conflict(_)));
+        assert!(
+            err.to_string()
+                .contains("TypeSec denied credential issuance")
+        );
+        assert!(!err.to_string().contains("failed to read file-backed"));
+        assert!(!err.to_string().contains(secret_ref));
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[cfg(feature = "typesec-local")]
+    #[tokio::test]
+    async fn typesec_credential_issuer_redacts_file_backed_secret_parse_failures() {
+        use crate::typesec_credential_issuer::{
+            ExternalSecretRefCredentialResolver, SecretRefProvider, TypeSecCredentialIssuer,
+            secret_ref_hash_file_name,
+        };
+
+        let secret_ref = "aws-sm://lakecat/s3-events";
+        let root = std::env::temp_dir().join(format!(
+            "lakecat-file-secret-invalid-{}",
+            chrono::Utc::now()
+                .timestamp_nanos_opt()
+                .expect("timestamp should fit")
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join(secret_ref_hash_file_name(secret_ref)),
+            r#"{"aws.session-token": 123, "raw-token": "temporary-secret"}"#,
+        )
+        .unwrap();
+        let issuer = TypeSecCredentialIssuer::new(
+            Arc::new(AllowCredentialIssuePolicy {
+                subject: "did:example:agent".to_string(),
+                resource: secret_ref.to_string(),
+            }),
+            ExternalSecretRefCredentialResolver::with_file_provider_roots(BTreeMap::from([(
+                SecretRefProvider::AwsSecretsManager,
+                root.clone(),
+            )])),
+        );
+
+        let err = issuer
+            .issue(production_secret_credential_request(secret_ref))
+            .await
+            .unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("failed to resolve aws-secrets-manager credential secret"));
+        assert!(message.contains("secret-ref-hash=sha256:"));
+        assert!(message.contains("error-detail-hash=sha256:"));
+        for forbidden in [
+            secret_ref,
+            "temporary-secret",
+            "raw-token",
+            "aws.session-token",
+            root.to_string_lossy().as_ref(),
+        ] {
+            assert!(
+                !message.contains(forbidden),
+                "file-backed resolver failures must not expose {forbidden}"
+            );
+        }
+
+        std::fs::remove_dir_all(root).ok();
     }
 
     #[cfg(feature = "typesec-local")]

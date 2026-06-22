@@ -390,13 +390,18 @@ Vault HTTP backend when `LAKECAT_VAULT_ADDR` / `LAKECAT_VAULT_TOKEN` (or the
 standard `VAULT_ADDR` / `VAULT_TOKEN`) are configured. `aws-sm://`,
 `gcp-sm://`, and `azure-kv://` refs can dispatch to explicitly configured
 provider backends after the same TypeSec authorization check; when no backend
-is configured, they fail closed with explicit not-configured errors. Tests now
-cover every accepted production secret-ref scheme through the TypeSec
-authorization gate and prove that configured production backends are not called
-on denied decisions. Governed management endpoints can now upsert and list
-warehouse storage profiles, and Turso persists those profiles for
-longest-prefix credential selection. Built-in production external secret-store
-SDK resolver coverage beyond Vault remains pending. Governed management
+is configured, they fail closed with explicit not-configured errors. LakeCat
+also has a built-in file-backed resolver for those AWS/GCP/Azure-style schemes:
+`LAKECAT_AWS_SECRETS_MANAGER_FILE_DIR`,
+`LAKECAT_GCP_SECRET_MANAGER_FILE_DIR`, and `LAKECAT_AZURE_KEY_VAULT_FILE_DIR`
+point at directories containing JSON credential config files named by the
+SHA-256 digest of the exact secret reference. Tests now cover every accepted
+production secret-ref scheme through the TypeSec authorization gate and prove
+that configured production backends are not called on denied decisions.
+Governed management endpoints can now upsert and list warehouse storage
+profiles, and Turso persists those profiles for longest-prefix credential
+selection. Built-in production external secret-store SDK resolver coverage
+beyond Vault and file-backed provider roots remains pending. Governed management
 endpoints can
 also upsert and list durable semantic view records in memory and Turso, giving
 QueryGraph a stable catalog-owned view entity. Warehouse-prefixed catalog REST

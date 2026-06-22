@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Expanded the book's release-ledger explanation with a standards-document
+  reading guide. The new section separates Iceberg-standard namespace/table
+  and CAS behavior from LakeCat Rust/Turso implementation choices,
+  TypeSec-governed scan and credential extensions, QueryGraph/QGLake
+  application surfaces, and narrow future Iceberg-adjacent profile candidates,
+  while making the Sail-first table-semantics boundary explicit.
+- Added a TypeSec-gated file-backed production secret-ref resolver for
+  AWS/GCP/Azure-style `aws-sm://`, `gcp-sm://`, and `azure-kv://` providers.
+  Provider roots are configured by environment variable, credential JSON files
+  are addressed by the SHA-256 digest of the exact secret ref, denied TypeSec
+  decisions do not read files, and parse failures remain hash-only.
 - Expanded the book's Sail engine-boundary argument with a responsibility
   ledger that separates catalog authority, TypeSec governance, Sail table
   semantics, and QueryGraph handoff proof. The new text makes the engine

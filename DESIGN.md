@@ -417,7 +417,7 @@ visible, data columns are narrowed to none, and the receipt proves the decision.
 | F5 scans bypass in-process provider | Started | Plan/fetch paths are guarded; reusable Sail planner integration remains the target. |
 | F6 graph projection still shallow | Started | Catalog graph events are bounded and expanding; reusable taxonomy/query behavior belongs in Grust. |
 | F7 tenancy hierarchy not fully routed | Started | Server/project/warehouse/namespace anchors are projected and used in bootstrap. |
-| F8 production secret refs | Started | Explicit provider dispatch seams fail closed and receive policy TTL caps; QGLake credential replay now proves the same TTL cap; SDK-backed resolvers beyond configured backends remain pending. |
+| F8 production secret refs | Started | Explicit provider dispatch seams fail closed and receive policy TTL caps; QGLake credential replay now proves the same TTL cap; built-in Vault and file-backed AWS/GCP/Azure-style providers exist, while cloud SDK-backed resolvers remain pending. |
 | F9 v4 JSON passthrough | Open by design | Keep compatibility bridge until typed Sail v4 support is available. |
 | F10 sibling dependency drift | Open but guarded | Local dependency-contract audits check Grust/TypeSec, Sail, QueryGraph, and manual CI state. |
 
@@ -448,7 +448,7 @@ whether an old OPUS item still needs work.
 | OPUS2 F5 scans bypass in-process provider | P1, P6 | Started; REST `sail-local` plan/fetch routes use provider seams, but Sail should own more planner execution. |
 | OPUS2 F6 catalog graph is breadcrumbs | P4 Semantic Catalog Graph | Started; keep file-granularity out of graph and use Sail metadata-as-data for file enumeration. |
 | OPUS2 F7 tenancy hierarchy durable but not fully routed | P5 Tenancy And Credentials | Started; server/project/warehouse/view anchors and routing are active. Full Iceberg view semantics remain pending. |
-| OPUS2 F8 production secret stores unexercised | P5 Tenancy And Credentials | Started; configured production providers dispatch only after TypeSec authorization and preserve TTL caps. SDK-backed resolvers remain pending. |
+| OPUS2 F8 production secret stores unexercised | P5 Tenancy And Credentials | Started; configured production providers dispatch only after TypeSec authorization and preserve TTL caps. Vault and file-backed provider roots are built in; cloud SDK-backed resolvers remain pending. |
 | OPUS2 F9 v4 JSON passthrough | P6 Reproducibility And V4 | Open by design. |
 | OPUS2 F10 sibling dependency drift / manual CI | P6 Reproducibility And V4 | Open but guarded; keep local verification and dependency-contract checks ahead of any cloud CI. |
 
@@ -709,6 +709,12 @@ credential response is issued. Configured cloud-style provider backend
 failures must also stay hash-only: provider label, `secret-ref-hash`, and
 `error-detail-hash` are admissible diagnostics; raw secret refs, account paths,
 tokens, ARNs, backend exception text, or secret names are not.
+AWS/GCP/Azure-style `aws-sm://`, `gcp-sm://`, and `azure-kv://` references may
+use file-backed provider roots for local and single-node deployments. These
+roots are configured with provider-specific environment variables, use the
+SHA-256 digest of the secret reference as the JSON filename, and still dispatch
+only after TypeSec authorizes the exact secret-ref resource. They are a
+redacted built-in backend, not a claim of cloud SDK integration.
 Credential responses should carry catalog-derived secret-ref provider and
 secret-ref hash evidence when a storage profile uses an external secret
 reference, and backend-supplied provider/hash evidence must be replaced rather
