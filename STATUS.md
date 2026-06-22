@@ -5,6 +5,12 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Harden REST commit idempotency-header side effects`.
+  The REST commit regression for invalid or duplicate
+  `x-lakecat-idempotency-key` headers now proves those requests fail before
+  authorization, Sail commit preparation, and durable outbox side effects, so
+  malformed retry evidence cannot enqueue commit projection work.
 - Latest release-contract slice:
   `Reconcile release dependency boundary`.
   The release ledger now treats the full local release gate as recorded and

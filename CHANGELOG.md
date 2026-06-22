@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Strengthened REST commit idempotency-header coverage. Invalid or duplicate
+  `x-lakecat-idempotency-key` headers are now pinned as failing before
+  authorization, Sail commit preparation, and durable outbox side effects.
 - Reconciled the first-release dependency boundary. The design, status, README,
   and book now record that the broad local release gate has already been
   captured for the current handoff path, the remaining first-release work is

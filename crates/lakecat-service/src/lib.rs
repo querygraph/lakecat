@@ -40625,16 +40625,16 @@ mod tests {
     async fn commit_rejects_invalid_rest_idempotency_keys() {
         let sail = Arc::new(RecordingSailEngine::default());
         let governance = Arc::new(RecordingGovernance::default());
-        let app = app(LakeCatState::new(
-            WarehouseName::new("local").unwrap(),
-            MemoryCatalogStore::new(),
-        )
-        .with_integrations(
-            sail.clone(),
-            governance.clone(),
-            NoopCatalogGraphSink::new(),
-            Arc::new(RecordingLineage::default()),
-        ));
+        let store = MemoryCatalogStore::new();
+        let app = app(
+            LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    sail.clone(),
+                    governance.clone(),
+                    NoopCatalogGraphSink::new(),
+                    Arc::new(RecordingLineage::default()),
+                ),
+        );
         let cases = vec![
             (
                 HeaderValue::from_static("commit events 0001"),
@@ -40696,6 +40696,14 @@ mod tests {
         assert!(
             governance.principals.lock().await.is_empty(),
             "invalid idempotency keys must fail before authorization"
+        );
+        let pending = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        assert!(
+            pending.is_empty(),
+            "invalid idempotency keys must fail before durable outbox side effects"
         );
     }
 
