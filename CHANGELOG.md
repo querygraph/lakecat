@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Updated LakeCat's published Grust dependency contract to the current
+  `grust-graph`/`grust-cypher` 0.9.1 crates. The local dependency-contract
+  guard, lockfile, README, and book now agree that `grust-local` resolves
+  through published Grust 0.9.1 while Sail remains on the explicit local helper
+  bridge.
 - Recorded the current full local release-readiness proof after refreshing
   QueryGraph's locked LakeCat handoff dependencies. The broad
   `scripts/check-release-readiness.sh` gate now passes locally end to end,

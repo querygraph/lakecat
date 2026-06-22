@@ -6557,7 +6557,7 @@ TypeSec.
 
 The dependency contract is executable because LakeCat still has one active
 sibling bridge. Grust and TypeSec now resolve from the published
-`grust-graph` 0.9.0, `grust-cypher` 0.9.0, and `typesec` 0.8.0 crates, so the
+`grust-graph` 0.9.1, `grust-cypher` 0.9.1, and `typesec` 0.8.0 crates, so the
 `grust-local` and `typesec-local` features no longer require sibling checkouts
 merely to compile. That makes the graph and governance boundaries reproducible
 outside this machine while still keeping their reusable behavior in Grust and

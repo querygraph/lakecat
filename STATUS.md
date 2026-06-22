@@ -41,6 +41,24 @@ Updated: 2026-06-22
   `scripts/check-release-readiness.sh` passed, including the live QGLake
   handoff, QueryGraph verification/import under `--locked`, book build, and
   final `git diff --check`.
+- Latest dependency-contract slice:
+  `Update published Grust dependency contract`.
+  LakeCat now depends on the published `grust-graph` 0.9.1 crate, with
+  `grust-cypher`, `grust-core`, and `grust-memory` locked at 0.9.1. The local
+  dependency-contract script now proves the 0.9.1 registry resolution in both
+  direct metadata and all-features metadata, matching the current QueryGraph
+  handoff lockfile state.
+- Local verification for this dependency-contract slice is green:
+  `cargo tree -p lakecat-graph --features grust-local -i grust-graph` resolved
+  `grust-graph v0.9.1`;
+  `cargo tree -p lakecat-graph --features grust-local -i grust-cypher`
+  resolved `grust-cypher v0.9.1`;
+  `cargo test -p lakecat-graph --features grust-local --lib -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --features grust-local --lib outbox_drain_projects_table_events_to_sinks -- --test-threads=1`
+  passed;
+  `scripts/check-local-dependency-contract.sh` passed;
+  `cargo test --workspace --all-features` passed.
 - Latest implementation/testing slice:
   `Close QGLake lineage catalog-config proof fields`.
   The CLI handoff artifact verifier now has direct regression coverage proving
