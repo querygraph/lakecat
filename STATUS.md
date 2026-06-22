@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover handoff self-verifier action copies`.
+  QGLake handoff artifact verification now has direct regression coverage for
+  saved `lakecat-handoff-verify.json` top-level `requestIdentityProof` and
+  `queryGraphBootstrapProof` copies, proving their authorization receipt
+  actions cannot drift away from the compact summary after the sidecar is
+  rehashed.
+- Local verification for this self-verifier action-copy slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_artifact_verifier -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Bind compact identity/bootstrap actions`.
   Compact QGLake handoff verification now requires
   `requestIdentityProof.authorizationReceiptAction` to be `lineage-read` and

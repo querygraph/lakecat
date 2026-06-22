@@ -4797,7 +4797,9 @@ field in saved handoff artifacts, so an archive cannot keep valid hash-shaped
 proof while silently changing what catalog action was authorized. The compact
 handoff summary now makes the same requirement before captured-output
 comparison: request identity proves `lineage-read`, and QueryGraph bootstrap
-proves `graph-read`.
+proves `graph-read`. The saved self-verifier sidecar carries top-level copies
+of both compact proof objects, and artifact verification rejects those copies
+if either authorization action drifts from the summary.
 The saved self-verifier sidecar repeats that binding for
 `lineageDrainArtifactSemantics`: its drain-read `authorizationReceiptAction`
 must still match the compact request-identity proof, so a rehashed

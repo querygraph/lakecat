@@ -558,7 +558,9 @@ from the compact request-identity proof. Compact request-identity and
 QueryGraph-bootstrap proofs must also preserve their expected authorization
 actions directly: `requestIdentityProof` is a `lineage-read` proof for the
 drain read, while `queryGraphBootstrapProof` is a `graph-read` proof for the
-bootstrap event. Compact table commit-history proof must preserve the same
+bootstrap event. Saved `lakecatHandoffVerifyOutput` sidecars must reject
+top-level copies of those compact proofs when either authorization action
+drifts. Compact table commit-history proof must preserve the same
 duplicate-free commit-hash invariant as service replay, so archived QueryGraph
 handoff summaries cannot inflate pointer-log evidence by repeating a valid
 commit hash.

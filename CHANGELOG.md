@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added QGLake handoff self-verifier regression coverage proving saved
+  `lakecat-handoff-verify.json` top-level `requestIdentityProof` and
+  `queryGraphBootstrapProof` copies cannot drift their authorization receipt
+  actions away from the compact summary.
 - Required compact QGLake `requestIdentityProof` and
   `queryGraphBootstrapProof` authorization receipt actions to be
   `lineage-read` and `graph-read` respectively, so archived handoff summaries
