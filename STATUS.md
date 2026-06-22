@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Cover view lifecycle receipt action drift`.
+  Service outbox replay now has regression coverage proving `view.upserted`,
+  `view.loaded`, and `view.dropped` reject mismatched authorization receipt
+  actions before acknowledgement, graph projection, or OpenLineage projection.
+  The design and book now describe the view lifecycle action contract:
+  `view-manage` for upsert, `view-load` for load, and `view-drop` for drop.
+- Local verification for this view lifecycle receipt action slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_mismatched_view_lifecycle_receipt_actions -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib view_lifecycle -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Cover table lifecycle receipt action drift`.
   Service outbox replay now has regression coverage proving `table.created`,
   `table.loaded`, `table.deleted`, and `table.restored` reject mismatched

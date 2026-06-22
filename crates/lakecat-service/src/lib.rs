@@ -21870,6 +21870,86 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_mismatched_view_lifecycle_receipt_actions() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            ("view.upserted", "view-load"),
+            ("view.loaded", "view-manage"),
+            ("view.dropped", "view-manage"),
+        ];
+
+        for (event_type, wrong_action) in cases {
+            let event_id = format!("evt-mismatched-{event_type}-action-token");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-mismatched-{event_type}-action"),
+                        "event-type": event_type,
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": principal,
+                                "action": wrong_action,
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            },
+                            "view": {
+                                "warehouse": "local",
+                                "namespace": ["default"],
+                                "name": "active_customers",
+                                "view-version": 1,
+                            }
+                        }
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("view lifecycle replay should require matching receipt action");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(
+                message.contains(
+                    "view lifecycle authorization receipt action does not match outbox event type"
+                ),
+                "{event_type} should reject mismatched receipt action: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_view_lifecycle_evidence() {
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {

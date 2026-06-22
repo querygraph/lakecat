@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving `view.upserted`,
+  `view.loaded`, and `view.dropped` reject mismatched authorization receipt
+  actions before acknowledgement, graph projection, or OpenLineage projection.
+  The design and book now state the view lifecycle action contract:
+  `view-manage`, `view-load`, and `view-drop`.
 - Added service replay regression coverage proving `table.created`,
   `table.loaded`, `table.deleted`, and `table.restored` reject mismatched
   authorization receipt actions before acknowledgement, graph projection, or

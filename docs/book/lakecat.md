@@ -3808,7 +3808,10 @@ authorization receipt principal before delivery, preserving actor evidence for
 QueryGraph view proofs. A view list is read-side catalog evidence, so the
 service requires its authorization receipt action to be `view-load`; a
 `view-manage` receipt is valid for mutations but not for replaying
-`view.listed`. Table lifecycle replay now follows the same rule:
+`view.listed`. View lifecycle replay is action-bound too: `view.upserted`
+requires `view-manage`, `view.loaded` requires `view-load`, and `view.dropped`
+requires `view-drop` before LakeCat emits graph or OpenLineage evidence. Table
+lifecycle replay now follows the same rule:
 create, load, delete, and restore events must carry a valid root table identity,
 and any payload warehouse, namespace, table-name, or soft-delete table evidence
 must agree with that identity before the event can be acknowledged. Their
@@ -4242,7 +4245,10 @@ can distinguish "the replacement happened at version 2" from "the replacement
 was guarded by version 1 and then produced version 2." Replay admission rejects
 view lifecycle evidence that omits the positive store-assigned `view-version`
 or carries a non-positive guarded `expected-view-version`, so graph and
-OpenLineage sinks never observe a versionless view lifecycle fact.
+OpenLineage sinks never observe a versionless view lifecycle fact. Replay
+admission also checks the authorization receipt action: upsert uses
+`view-manage`, load uses `view-load`, and drop uses `view-drop`, so a valid
+view artifact cannot be replayed under a weaker or unrelated catalog action.
 
 LakeCat also writes a compact view-version receipt in the durable store. The
 receipt records the stable view id, assigned version, previous version,
@@ -5304,7 +5310,10 @@ view/table name and the array must be duplicate-free, so an archived
 `view.listed` event cannot inflate view discovery by repeating or forging view
 identities. The receipt action must be `view-load`, matching the compact
 QGLake action contract; `view-manage` remains mutation proof for
-`view.upserted`.
+`view.upserted`, while `view.loaded` uses `view-load` and `view.dropped` uses
+`view-drop`. View lifecycle replay with a drifted action is rejected before
+graph or OpenLineage projection, so QueryGraph cannot accept a view mutation or
+read under the wrong catalog permission.
 Table lifecycle replay applies the same identity discipline before delivery:
 `table.created`, `table.loaded`, `table.deleted`, and `table.restored` must
 carry a decodable table identity, optional payload scope hints must match it,
