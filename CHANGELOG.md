@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's current-surface explanation with a detailed
+  concept ledger. The new matrix classifies the Rust service spine,
+  Turso-backed store, Iceberg REST namespace/table paths, commit CAS,
+  idempotency, pointer logs, audit/outbox, replay validation, governed scans,
+  credential decisions, QueryGraph/QGLake handoff, OpenLineage, and
+  Croissant/CDIF/OSI/ODRL surfaces as standard Iceberg parlance, LakeCat
+  implementation, LakeCat/QueryGraph/TypeSec extensions, or narrow future
+  Iceberg-adjacent profile candidates. It also states why table-format and
+  planning work should move into Sail instead of becoming LakeCat-local
+  engine logic.
 - Tightened compact QGLake request-identity proof so `requestIdentitySource`
   and `requestIdentityState` must be non-blank, not merely non-empty. The
   regression rejects whitespace-only provenance before QueryGraph bootstrap

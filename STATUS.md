@@ -5,6 +5,12 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Expand current catalog concept ledger`.
+  The book now includes a detailed matrix that delineates standard Iceberg
+  parlance from LakeCat implementation, LakeCat/QueryGraph/TypeSec extension
+  surfaces, future Iceberg-adjacent profile candidates, and Sail-owned
+  table-format/planning responsibilities.
 - Latest QGLake handoff slice:
   `Reject blank request identity provenance`.
   Compact QGLake handoff verification now requires `requestIdentitySource` and
