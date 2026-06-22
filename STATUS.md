@@ -5,6 +5,14 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest docs slice:
+  `Align README with full release gate`.
+  The README now describes LakeCat as the current implementation instead of a
+  scaffold, records that the full local release-readiness gate was green on
+  2026-06-22, documents the QGLake handoff harness protections for stale Turso
+  WAL/SHM files, generated fixture storage, occupied bind ports, and spawned
+  service cleanup, and expands the full gate summary to match the current
+  `scripts/check-release-readiness.sh` matrix.
 - Latest implementation/handoff slice:
   `Stabilize QGLake handoff release gate`.
   The broad `scripts/check-release-readiness.sh` gate exposed two local

@@ -6,10 +6,12 @@ The implementation keeps Iceberg compatibility at the service boundary while
 pushing engine-heavy metadata planning, pruning, and commit validation toward
 Sail. See [ARCHITECTURE.md](ARCHITECTURE.md) for the system design.
 
-The current scaffold exposes an Iceberg REST-compatible catalog surface under
-`/catalog/v1` and a QueryGraph bootstrap bundle at `/querygraph/v1/bootstrap`.
-The bootstrap bundle projects live catalog tables into Croissant, CDIF, OSI,
-ODRL, OpenLineage, and a Grust-ready graph envelope.
+The current implementation exposes an Iceberg REST-compatible catalog surface
+under `/catalog/v1` and a QueryGraph bootstrap bundle at
+`/querygraph/v1/bootstrap`. The bootstrap bundle projects live catalog tables
+into Croissant, CDIF, OSI, ODRL, OpenLineage, and a Grust-ready graph envelope.
+The full local release-readiness gate is green as of June 22, 2026; keep that
+local proof green before making release or cloud-automation claims.
 
 Scan planning already routes through the Sail-facing engine. Point-in-time scans
 produce opaque Iceberg REST plan-task tokens from stable Sail metadata, and
@@ -77,8 +79,11 @@ cargo run -p lakecat-cli -- bootstrap-export --output lakecat-bootstrap.json
 it starts LakeCat on `127.0.0.1:18181`, generates paired QGLake bootstrap and
 lineage-drain artifacts, verifies saved replay with LakeCat, then runs
 QueryGraph's `lakecat-verify` and `lakecat-import` over the same bundle while
-writing all generated artifacts under `target/qglake-handoff/`. It also writes
-`target/qglake-handoff/handoff-summary.json`, a
+writing all generated artifacts under `target/qglake-handoff/`. The script
+owns that default target directory for each run: it clears stale Turso
+WAL/SHM files and generated fixture table storage, fails fast if the handoff
+bind address is already occupied, and stops the spawned LakeCat service tree on
+exit. It also writes `target/qglake-handoff/handoff-summary.json`, a
 `lakecat.qglake.handoff-summary.v1` contract which records the verified
 LakeCat replay status from `lakecat.qglake.replay-verification.v1`,
 QueryGraph table/view counts, semantic hashes, and standards after LakeCat
@@ -94,10 +99,11 @@ cloud CI:
 scripts/check-release-readiness.sh
 ```
 
-The full gate runs the dependency contract, formatting, default workspace
-tests, integration feature tests, the service-level Grust outbox projection
-row, explicit all-features CLI tests, all-features workspace library tests,
-book rebuild, and QGLake handoff proof.
+The full gate runs shell syntax checks, the local dependency contract, workflow
+trigger checks, formatting, default workspace tests, integration feature tests,
+the Turso store row, service feature rows, Grust/TypeSec/Sail feature rows,
+explicit all-features CLI tests, all-features workspace tests, book rebuild,
+QGLake handoff proof, and `git diff --check`.
 Use `--quick` for a faster script/contract smoke check while developing a
 narrow slice.
 

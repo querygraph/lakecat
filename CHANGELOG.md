@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Updated the README release surface to match the current verified state:
+  LakeCat is described as the current implementation rather than a scaffold,
+  the full local release-readiness gate is called out as green on
+  2026-06-22, and the QGLake handoff harness now documents its stale-state and
+  occupied-port protections.
 - Preserved governed stats-field proof for `table.scan-tasks-fetched` events
   by carrying the restricted fetch projection as requested, effective, and
   compact stats-field evidence. The route and outbox tests now assert that
