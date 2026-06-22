@@ -1060,6 +1060,12 @@ acknowledgement or projection. Context-level extras are rejected at the LakeCat
 boundary, so a receipt cannot carry unverified tenant, policy, restriction,
 raw-credential, request-identity, delegation, or application claims beside the
 nested proof objects that LakeCat actually compares.
+The receipt-context `policy-bindings` array must also be closed entry by entry
+over the policy response fields LakeCat emits: `policy-id`, `warehouse`,
+`namespace`, `table`, `enforced`, and `odrl`. Policy-binding context entries
+are proof anchors for TypeSec and QueryGraph, not an open ODRL extension bag;
+unexpected ODRL, scope, enforcement, delegation, or application fields must
+fail before acknowledgement or projection.
 Namespace lifecycle replay must also close the top-level payload schema over
 `event-type`, `authorization-receipt`, `warehouse`, and `namespace`, so
 create/load/drop replay cannot append unverified namespace, scope, graph,

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed authorization receipt context policy-binding entries over the
+  service-produced policy response fields. Standard catalog replay now rejects
+  unexpected policy-binding context claims before acknowledgement, graph
+  projection, OpenLineage projection, QGLake proof, or QueryGraph import proof
+  can inherit unverified ODRL, scope, enforcement, delegation, or application
+  evidence beside checked policy context.
 - Closed shared authorization receipt context replay schemas over the context
   keys LakeCat compares. Standard catalog replay now rejects unexpected
   context-level claims before acknowledgement, graph projection, OpenLineage

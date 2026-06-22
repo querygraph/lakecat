@@ -6,6 +6,28 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close authorization policy-binding context schemas`.
+  Service outbox admission now rejects unexpected fields inside
+  authorization receipt context `policy-bindings` entries before
+  acknowledgement, graph projection, OpenLineage projection, QGLake proof, or
+  QueryGraph import proof can inherit unverified ODRL, scope, enforcement,
+  delegation, policy, or application claims beside checked policy context.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_authorization_receipt_context_policy_binding_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service policy_bindings_are_governed_and_attached_to_table_authorization_context -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service outbox_drain_projects_table_events_to_sinks -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close authorization receipt context schemas`.
   Service outbox admission now rejects unexpected fields inside shared
   authorization receipt `context` objects before acknowledgement, graph
