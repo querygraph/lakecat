@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover absent credential secret ref provider object`.
+  Service replay regression coverage now proves `credentials.vend-attempted`
+  rejects object-shaped nested storage-profile `secret-ref-provider` evidence
+  when `secret-ref-present` is false before acknowledgement, graph projection,
+  or OpenLineage projection. This pins the provider-field sibling of the
+  absent secret-reference replay rule for blocked credential-root evidence.
+- Local verification for this credential absent secret-ref provider slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_credential_unexpected_secret_ref_provider_object -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib unexpected_secret_ref -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib credential_storage_profile -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover absent storage-profile secret ref hash object`.
   Service replay regression coverage now proves `storage-profile.upserted`
   rejects object-shaped `secret-ref-hash` evidence when

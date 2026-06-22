@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving `credentials.vend-attempted`
+  rejects object-shaped nested storage-profile secret-ref provider evidence
+  when `secret-ref-present` is false before acknowledgement, graph projection,
+  or OpenLineage projection.
 - Added service replay regression coverage proving `storage-profile.upserted`
   rejects object-shaped secret-ref hash evidence when `secret-ref-present` is
   false before acknowledgement, graph projection, or OpenLineage projection.
