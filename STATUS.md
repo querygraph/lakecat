@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Gate Turso-only store validators`.
+  Turso row-scope validation helpers are now compiled only with
+  `turso-local`, removing default/no-default-feature dead-code warnings while
+  keeping the Turso row/content validation path intact.
+- Local verification for this store build-hygiene slice is green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --lib --no-default-features`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `cargo test -p lakecat-service --features typesec-local --lib typesec_credential_issuer_redacts_configured_provider_backend_failures -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Redact configured production secret-ref backend failures`.
   TypeSec-gated external secret resolvers now wrap configured cloud-style
   provider backend failures with provider label, `secret-ref-hash`, and

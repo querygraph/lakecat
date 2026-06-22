@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Feature-gated Turso-only store row-scope validators so default and
+  no-default-feature `lakecat-store` builds no longer emit dead-code warnings
+  while Turso-backed row/content validation remains compiled and tested under
+  `turso-local`.
 - Redacted configured production secret-ref backend failures. TypeSec-gated
   external secret resolvers now wrap configured AWS/GCP/Azure-style backend
   errors with only the provider label, `secret-ref-hash`, and

@@ -1108,6 +1108,7 @@ fn validate_view_receipt_chains(receipts: &[ViewVersionReceipt]) -> LakeCatResul
     Ok(())
 }
 
+#[cfg(feature = "turso-local")]
 fn validate_view_receipt_scope(
     receipt: &ViewVersionReceipt,
     warehouse: &WarehouseName,
@@ -2473,6 +2474,7 @@ fn optional_location_hash(location: Option<&str>) -> String {
         .unwrap_or_else(|| "null".to_string())
 }
 
+#[cfg(feature = "turso-local")]
 fn validate_table_record_scope(record: &TableRecord, ident: &TableIdent) -> LakeCatResult<()> {
     record.validate()?;
     if record.ident != *ident {
@@ -2483,6 +2485,7 @@ fn validate_table_record_scope(record: &TableRecord, ident: &TableIdent) -> Lake
     Ok(())
 }
 
+#[cfg(feature = "turso-local")]
 fn validate_namespace_scope(
     namespace: &Namespace,
     expected_warehouse: &WarehouseName,
@@ -2497,6 +2500,7 @@ fn validate_namespace_scope(
     Ok(())
 }
 
+#[cfg(feature = "turso-local")]
 fn validate_policy_binding_scope(
     binding: &PolicyBinding,
     warehouse: &WarehouseName,
@@ -2511,6 +2515,7 @@ fn validate_policy_binding_scope(
     Ok(())
 }
 
+#[cfg(feature = "turso-local")]
 fn validate_storage_profile_scope(
     profile: &StorageProfile,
     warehouse: &WarehouseName,
@@ -2525,6 +2530,7 @@ fn validate_storage_profile_scope(
     Ok(())
 }
 
+#[cfg(feature = "turso-local")]
 fn validate_server_record_scope(server: &ServerRecord, server_id: &str) -> LakeCatResult<()> {
     server.validate()?;
     if server.server_id != server_id {
@@ -2535,6 +2541,7 @@ fn validate_server_record_scope(server: &ServerRecord, server_id: &str) -> LakeC
     Ok(())
 }
 
+#[cfg(feature = "turso-local")]
 fn validate_project_record_scope(project: &ProjectRecord, project_id: &str) -> LakeCatResult<()> {
     project.validate()?;
     if project.project_id != project_id {
@@ -2545,6 +2552,7 @@ fn validate_project_record_scope(project: &ProjectRecord, project_id: &str) -> L
     Ok(())
 }
 
+#[cfg(feature = "turso-local")]
 fn validate_warehouse_record_scope(
     record: &WarehouseRecord,
     warehouse: &WarehouseName,
