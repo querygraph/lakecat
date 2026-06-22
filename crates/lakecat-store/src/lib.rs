@@ -1607,13 +1607,14 @@ impl CatalogAuditEvent {
                 "audit event type does not match payload".to_string(),
             ));
         }
-        if let Some(request_hash) = self.request_hash.as_deref() {
-            let payload_hash = content_hash_json(&self.payload)?;
-            if request_hash != payload_hash {
-                return Err(LakeCatError::InvalidArgument(
-                    "audit event request hash does not match payload".to_string(),
-                ));
-            }
+        let request_hash = self.request_hash.as_deref().ok_or_else(|| {
+            LakeCatError::InvalidArgument("audit event request hash is required".to_string())
+        })?;
+        let payload_hash = content_hash_json(&self.payload)?;
+        if request_hash != payload_hash {
+            return Err(LakeCatError::InvalidArgument(
+                "audit event request hash does not match payload".to_string(),
+            ));
         }
         Ok(())
     }
@@ -4339,6 +4340,38 @@ mod memory_tests {
             err,
             LakeCatError::InvalidArgument(message)
                 if message.contains("audit event type does not match payload")
+        ));
+        let state = store.state.read().await;
+        assert!(state.audit_events.is_empty());
+        assert!(state.outbox_events.is_empty());
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_audit_events_without_request_hash() {
+        let store = MemoryCatalogStore::new();
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let mut event = CatalogAuditEvent::new(
+            "querygraph.bootstrap",
+            Some(ident.clone()),
+            Principal::anonymous(),
+            serde_json::json!({
+                "event-type": "querygraph.bootstrap",
+                "table": ident,
+                "manifest-hash": "lakecat:test"
+            }),
+        )
+        .unwrap();
+        event.request_hash = None;
+
+        let err = store.record_audit_event(event).await.unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::InvalidArgument(message)
+                if message.contains("audit event request hash is required")
         ));
         let state = store.state.read().await;
         assert!(state.audit_events.is_empty());
@@ -9068,6 +9101,37 @@ pub mod turso_store {
                 err,
                 LakeCatError::InvalidArgument(message)
                     if message.contains("audit event type does not match payload")
+            ));
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
+            assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_audit_events_without_request_hash() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let mut event = CatalogAuditEvent::new(
+                "querygraph.bootstrap",
+                Some(ident.clone()),
+                Principal::anonymous(),
+                serde_json::json!({
+                    "event-type": "querygraph.bootstrap",
+                    "table": ident,
+                    "manifest-hash": "lakecat:test"
+                }),
+            )
+            .unwrap();
+            event.request_hash = None;
+
+            let err = store.record_audit_event(event).await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::InvalidArgument(message)
+                    if message.contains("audit event request hash is required")
             ));
             assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
             assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);

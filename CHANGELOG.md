@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required generic audit events to carry request-hash evidence before memory
+  or Turso stores can persist audit rows or enqueue outbox work. The new
+  regressions mutate constructor-valid audit events to remove `request_hash`
+  and prove both stores leave audit/outbox state untouched.
 - Hardened generic audit recording so memory and Turso stores reject audit
   events whose row event type no longer matches the decoded payload before
   writing audit rows or enqueueing outbox projection work. The regressions

@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Require audit event request hashes`.
+  Memory and Turso generic audit recording now require request-hash evidence
+  before persisting audit rows or enqueueing outbox work. The regressions
+  remove `request_hash` from constructor-valid audit events and prove
+  audit/outbox state remains empty.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local audit_events_without_request_hash -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Reject audit event type drift before outbox`.
   Memory and Turso generic audit recording now validate a recordable audit
   event before writing audit rows or enqueueing outbox work. A
