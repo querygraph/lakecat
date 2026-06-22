@@ -3365,7 +3365,7 @@ and authorization proofs.
 Every externally meaningful action should pass through TypeSec:
 
 - catalog configuration reads;
-- namespace creation and listing;
+- namespace creation, listing, loading, and dropping;
 - table creation, load, scan planning, commit, drop, and restore;
 - credential vending;
 - policy management;
@@ -3393,6 +3393,13 @@ and prefixed JSON-LD operand keys such as `odrl:leftOperand` and
 `@value` and `@list` right operands for bounded allowed-column, purpose, and
 credential-TTL values. Malformed JSON-LD lists still fail closed, and the parser
 does not turn LakeCat into a full ODRL reasoner.
+
+Namespace events follow the same receipt discipline as table, view, and
+management events. A namespace list proves `namespace-list`; creation proves
+`namespace-create`; loading proves `namespace-load`; dropping proves
+`namespace-drop`. Replay admission rejects action drift before graph or
+OpenLineage projection, so standard Iceberg namespace behavior cannot become
+QueryGraph evidence under the wrong TypeSec-style authority.
 Recognized constraint operands must also include a right operand; otherwise
 LakeCat rejects the policy material instead of silently dropping an
 allowed-column, row-predicate, purpose, or credential-TTL restriction. The

@@ -731,12 +731,15 @@ cannot become malformed QueryGraph or OpenLineage proof.
 Standard catalog replay for catalog config reads, namespace list/lifecycle
 events, and view list/lifecycle events must carry valid authorization receipt
 principals before projection too, so Iceberg-compatible control-plane evidence
-cannot become actorless graph or OpenLineage facts. View-list replay must use
-the read-side `view-load` action; `view-manage` is reserved for view mutations,
-so service replay and QGLake handoff action contracts stay aligned. View
-lifecycle replay must also preserve event-matching actions: `view.upserted`
-uses `view-manage`, `view.loaded` uses `view-load`, and `view.dropped` uses
-`view-drop` before graph or OpenLineage projection.
+cannot become actorless graph or OpenLineage facts. Namespace replay must also
+preserve event-matching actions: `namespace.listed` uses `namespace-list`,
+`namespace.created` uses `namespace-create`, `namespace.loaded` uses
+`namespace-load`, and `namespace.dropped` uses `namespace-drop`. View-list
+replay must use the read-side `view-load` action; `view-manage` is reserved for
+view mutations, so service replay and QGLake handoff action contracts stay
+aligned. View lifecycle replay must also preserve event-matching actions:
+`view.upserted` uses `view-manage`, `view.loaded` uses `view-load`, and
+`view.dropped` uses `view-drop` before graph or OpenLineage projection.
 Table lifecycle replay for create, load, delete, and restore events must carry
 the same valid authorization receipt principal plus an event-matching catalog
 action, affirmative allowed decision, non-empty engine, and RFC3339 `checked_at`

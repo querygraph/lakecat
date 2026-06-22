@@ -22880,6 +22880,116 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_mismatched_namespace_receipt_actions() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            (
+                "namespace.listed",
+                "namespace list",
+                "namespace-create",
+                json!({
+                    "warehouse": "local",
+                    "namespace-count": 1,
+                    "namespace-paths": ["default"],
+                }),
+            ),
+            (
+                "namespace.created",
+                "namespace lifecycle",
+                "namespace-list",
+                json!({
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                }),
+            ),
+            (
+                "namespace.loaded",
+                "namespace lifecycle",
+                "namespace-drop",
+                json!({
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                }),
+            ),
+            (
+                "namespace.dropped",
+                "namespace lifecycle",
+                "namespace-load",
+                json!({
+                    "warehouse": "local",
+                    "namespace": ["archived"],
+                }),
+            ),
+        ];
+
+        for (event_type, label, mismatched_action, mut payload) in cases {
+            payload["authorization-receipt"] = json!({
+                "principal": principal,
+                "action": mismatched_action,
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            });
+            let event_id = format!("evt-{}-mismatched-receipt-action", event_type);
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_type}-mismatched-action"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("mismatched namespace receipt action should fail before delivery");
+
+            let message = err.to_string();
+            assert!(
+                message.contains(event_type),
+                "{event_type} error should include event type: {message}"
+            );
+            assert!(
+                message.contains(&format!(
+                    "{label} authorization receipt action does not match outbox event type"
+                )),
+                "{event_type} error should describe receipt action drift: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_missing_standard_catalog_receipt_checked_at() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let mut receipt = json!({

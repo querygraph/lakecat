@@ -5,6 +5,22 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation/documentation slice:
+  `Cover namespace receipt action drift`.
+  Service outbox replay now has regression coverage proving
+  `namespace.listed`, `namespace.created`, `namespace.loaded`, and
+  `namespace.dropped` reject mismatched authorization receipt actions before
+  acknowledgement, graph projection, or OpenLineage projection. The design and
+  book now describe the namespace action contract: `namespace-list`,
+  `namespace-create`, `namespace-load`, and `namespace-drop`.
+- Local verification for this namespace receipt action slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-api -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_mismatched_namespace_receipt_actions -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib namespace -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Expand catalog concept and Sail boundary book text`.
   The book now more explicitly separates standard Iceberg parlance from

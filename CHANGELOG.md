@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving `namespace.listed`,
+  `namespace.created`, `namespace.loaded`, and `namespace.dropped` reject
+  mismatched authorization receipt actions before acknowledgement, graph
+  projection, or OpenLineage projection. The design and book now state the
+  namespace action contract: `namespace-list`, `namespace-create`,
+  `namespace-load`, and `namespace-drop`.
 - Expanded the LakeCat book's catalog-concept explanation with a sharper
   standards boundary: Rust/Turso are implementation choices, REST
   table/namespace paths and commit CAS are standard Iceberg catalog behavior,
