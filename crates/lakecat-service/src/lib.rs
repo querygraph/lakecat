@@ -21180,6 +21180,75 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_storage_profile_absent_secret_ref_provider_object() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-storage-profile-absent-secret-provider-object".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "storage-profile.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-storage-profile-absent-secret-provider-object",
+                    "event-type": "storage-profile.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "storage-profile-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "storage-profile": {
+                            "profile-id": "file-events",
+                            "warehouse": "local",
+                            "location-prefix-hash": content_hash_json(&json!({
+                                "location-prefix": "file:///tmp/lakecat/events"
+                            })).unwrap(),
+                            "provider": "file",
+                            "issuance-mode": "local-file-no-secret",
+                            "secret-ref-present": false,
+                            "secret-ref-provider": {
+                                "unexpected": "typesec"
+                            },
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10).await.expect_err(
+            "storage-profile absent secret-ref provider object should fail before delivery",
+        );
+        let message = err.to_string();
+        assert!(message.contains("storage-profile.upserted"));
+        assert!(
+            message.contains(
+                "storage-profile upsert cannot carry secret-ref evidence when secret-ref-present is false"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-storage-profile-absent-secret-provider-object"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_storage_profile_local_no_secret_remote_provider() {
         let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
         let store = Arc::new(RecordingOutboxStore {

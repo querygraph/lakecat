@@ -6,6 +6,18 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover absent storage-profile secret ref object`.
+  Service replay regression coverage now proves `storage-profile.upserted`
+  rejects object-shaped `secret-ref-provider` evidence when
+  `secret-ref-present` is false before acknowledgement, graph projection, or
+  OpenLineage projection. This pins the JSON-type sibling of the absent
+  secret-reference replay rule for storage-profile roots.
+- Local verification for this storage-profile absent secret-ref slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_storage_profile_absent_secret_ref_provider_object -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib storage_profile -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover stale catalog typed Sail default`.
   Service replay regression coverage now proves `catalog.config-read` rejects
   stale structured `lakecat.format.v4.typed-sail=available` evidence before
