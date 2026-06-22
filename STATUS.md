@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Document standards boundary and Sail engine boundary`.
+  The book now has a front-of-book section that explicitly separates standard
+  Iceberg parlance from LakeCat implementation details, LakeCat/TypeSec/
+  QueryGraph extension surfaces, and possible future Iceberg-adjacent profile
+  candidates. It also makes the case for pushing field-id projection, manifest
+  metrics, delete handling, metadata-as-data, scan-task generation, row
+  lineage, and typed v4 interpretation into Sail rather than a LakeCat-local
+  shadow engine.
+- Local verification for this documentation slice is green:
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed implementation/documentation slice:
   `Validate Turso namespace row scope`.
   Turso namespace reads now require decoded `namespace_json` to match the

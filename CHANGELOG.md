@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added a dedicated book section, `The Standards Boundary For The Current
+  Release`, that classifies the Rust service spine, Turso store, Iceberg REST
+  paths, commit CAS hardening, governed scan/credential receipts,
+  OpenLineage/outbox replay, QueryGraph/QGLake handoff, standards vocabularies,
+  and typed v4 work as standard Iceberg behavior, LakeCat implementation,
+  LakeCat/TypeSec/QueryGraph extensions, or future optional
+  Iceberg-adjacent profile candidates. The paired Sail section makes the
+  engine-first argument explicit for PySpark, Rust engine, agentic, QueryGraph,
+  and v4 workflows.
 - Hardened Turso namespace reads so decoded `namespace_json` must match the
   selected warehouse row and namespace path before LakeCat lists, loads, or
   drops a namespace. This keeps standard Iceberg namespace routes and QGLake
