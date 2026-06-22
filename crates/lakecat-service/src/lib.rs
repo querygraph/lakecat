@@ -1379,6 +1379,7 @@ fn validate_table_commit_hash_evidence(event: &OutboxEvent) -> Result<(), LakeCa
     )?;
     validate_authorization_receipt_allowed(event, payload, "table commit")?;
     validate_authorization_receipt_engine(event, payload, "table commit")?;
+    validate_authorization_receipt_checked_at(event, payload, "table commit")?;
     if commit_principal != receipt_principal {
         return Err(outbox_evidence_error(
             event,
@@ -1468,6 +1469,7 @@ fn validate_authorization_receipt_principal(
     )?;
     validate_authorization_receipt_allowed(event, payload, label)?;
     validate_authorization_receipt_engine(event, payload, label)?;
+    validate_authorization_receipt_checked_at(event, payload, label)?;
     Ok(())
 }
 
@@ -1519,6 +1521,36 @@ fn validate_authorization_receipt_engine(
     Ok(())
 }
 
+fn validate_authorization_receipt_checked_at(
+    event: &OutboxEvent,
+    payload: &Value,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(checked_at) = payload
+        .get("authorization-receipt")
+        .and_then(|receipt| receipt.get("checked_at"))
+        .and_then(Value::as_str)
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} evidence must contain authorization receipt checked_at timestamp"),
+        ));
+    };
+    if checked_at.trim().is_empty() {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} authorization receipt checked_at timestamp must be non-empty"),
+        ));
+    }
+    chrono::DateTime::parse_from_rfc3339(checked_at).map_err(|err| {
+        outbox_evidence_error(
+            event,
+            &format!("{label} authorization receipt checked_at timestamp must be RFC3339: {err}"),
+        )
+    })?;
+    Ok(())
+}
+
 fn validate_table_commit_history_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
@@ -1542,6 +1574,7 @@ fn validate_table_commit_history_event_evidence(
     )?;
     validate_authorization_receipt_allowed(event, payload, "table commit-history")?;
     validate_authorization_receipt_engine(event, payload, "table commit-history")?;
+    validate_authorization_receipt_checked_at(event, payload, "table commit-history")?;
     let commit_hashes = validate_required_full_hash_array_field(event, payload, "commit-hashes")?;
     validate_unique_hash_array(event, &commit_hashes, "table commit-history commit-hashes")?;
     let sequence_numbers = payload
@@ -15403,6 +15436,88 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_blank_table_commit_receipt_checked_at() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-blank-commit-receipt-checked-at".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commit".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-blank-commit-receipt-checked-at",
+                    "event-type": "table.commit",
+                    "table": table,
+                    "commit": {
+                        "table": table,
+                        "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+                        "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+                        "sequence_number": 7,
+                        "principal": principal,
+                        "format_version": 3,
+                        "snapshot_id": 42,
+                        "policy_hash": null,
+                        "request_hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+                        "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+                        "idempotency_key_sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+                        "committed_at": chrono::Utc::now(),
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "table-commit",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": " ",
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("blank table commit receipt checked_at should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commit"));
+        assert!(
+            message.contains(
+                "table commit authorization receipt checked_at timestamp must be non-empty"
+            )
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-blank-commit-receipt-checked-at"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "blank commit receipt timestamp must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "blank commit receipt timestamp must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "blank commit receipt timestamp must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_table_commit_history_evidence() {
         let table = TableIdent::new(
             WarehouseName::new("local").unwrap(),
@@ -16067,6 +16182,82 @@ mod tests {
         assert!(
             lineage.events.lock().await.is_empty(),
             "missing commit-history receipt allowed decision must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_table_commit_history_receipt_checked_at() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-commit-history-malformed-receipt-checked-at".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commits-listed".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-commit-history-malformed-receipt-checked-at",
+                    "event-type": "table.commits-listed",
+                    "table": table,
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": "not-a-timestamp",
+                        },
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "table": "events",
+                        "commit-count": 1,
+                        "commit-hashes": [
+                            content_hash_json(&json!({"commit": 1})).unwrap()
+                        ],
+                        "sequence-numbers": [1],
+                    },
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("malformed commit-history receipt checked_at should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("table.commits-listed"));
+        assert!(message.contains(
+            "table commit-history authorization receipt checked_at timestamp must be RFC3339"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-commit-history-malformed-receipt-checked-at"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "malformed commit-history receipt timestamp must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "malformed commit-history receipt timestamp must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "malformed commit-history receipt timestamp must fail before lineage projection"
         );
     }
 
@@ -20997,6 +21188,73 @@ mod tests {
                 "receipt decision failures must fail before lineage projection"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_missing_standard_catalog_receipt_checked_at() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let mut receipt = json!({
+            "principal": principal,
+            "action": "catalog-config",
+            "allowed": true,
+            "engine": "test",
+            "policy_hash": null,
+            "checked_at": chrono::Utc::now(),
+        });
+        receipt.as_object_mut().unwrap().remove("checked_at");
+        let event_id = "evt-config-missing-receipt-checked-at";
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": format!("audit-{event_id}"),
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": receipt,
+                        "warehouse": "local",
+                        "defaults": catalog_config_defaults_json(),
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("missing receipt checked_at should fail before delivery");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(message.contains(
+            "catalog config-read evidence must contain authorization receipt checked_at timestamp"
+        ));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains(event_id));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "missing receipt timestamp must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "missing receipt timestamp must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "missing receipt timestamp must fail before lineage projection"
+        );
     }
 
     #[tokio::test]

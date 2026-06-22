@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require authorization receipt timestamp replay evidence`.
+  Service outbox replay admission now rejects missing, blank, or malformed
+  authorization receipt `checked_at` timestamps before acknowledgement, graph
+  projection, or OpenLineage projection. The rule covers shared catalog receipt
+  validation and specialized `table.commit` / `table.commits-listed` replay
+  paths, ensuring durable replay evidence proves when the authorization
+  decision was made before it becomes QueryGraph or OpenLineage material.
+- Local verification for this receipt-timestamp replay slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib receipt -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`.
+- Latest completed implementation slice:
   `Require allowed authorization receipt replay evidence`.
   Service outbox replay admission now rejects missing or denied authorization
   receipt `allowed` decisions before acknowledgement, graph projection, or
