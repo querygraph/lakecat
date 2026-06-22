@@ -10254,6 +10254,19 @@ manual-only until that local proof is boring. A release should be cut from the
 state those commands prove, not from a hope that a remote runner will discover
 the truth later.
 
+For this release, replay admission is part of that local proof rather than a
+best-effort projection filter. `catalog.config-read` replay is closed over the
+checked warehouse, defaults, overrides, advertised endpoints, and authorization
+receipt, with defaults and overrides closed again as `key`/`value` entries and
+tenant-root records closed over their known record fields.
+`querygraph.bootstrap` replay is closed over the checked warehouse, counts,
+verified table/view manifests, artifact hashes, view-version receipts,
+standards, bundle hash, graph hash, OpenLineage hash, QueryGraph import hash,
+and authorization receipt. That means an old or corrupted outbox row cannot add
+an unverified compatibility claim, endpoint claim, graph claim, standards claim,
+OpenLineage claim, QueryGraph claim, or application claim and have it flow into
+Grust, OpenLineage, QGLake, or QueryGraph import proof.
+
 ## What Comes Next
 
 LakeCat is a direction more than a single release. The next slices should keep

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Closed service outbox admission over top-level catalog config and QueryGraph
+  bootstrap replay payloads. `catalog.config-read` and `querygraph.bootstrap`
+  now reject unexpected top-level payload fields before acknowledgement, graph
+  projection, OpenLineage projection, or QGLake proof can inherit unverified
+  compatibility, endpoint, authorization, artifact, standards, graph,
+  OpenLineage, QueryGraph, or application claims beside checked config,
+  tenant-root, bootstrap, and receipt evidence.
 - Rebuilt and verified the LakeCat book artifacts after the catalog-concepts
   expansion. The current book already covers the Rust service spine, Turso
   store direction, Iceberg REST paths, commit CAS, idempotency, pointer logs,

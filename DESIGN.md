@@ -731,6 +731,12 @@ objects must also stay closed over those compared fields, so a summary,
 captured replay output, or saved self-verifier sidecar cannot attach unverified
 v4 bridge, endpoint, authorization, graph, replay, or OpenLineage compatibility
 claims beside checked config-read proof.
+Raw `catalog.config-read` and `querygraph.bootstrap` replay payloads must also
+stay closed over their checked service schemas before graph, OpenLineage,
+QGLake, or QueryGraph import proof can inherit them. A durable outbox row cannot
+attach unverified compatibility, endpoint, authorization, artifact, standards,
+graph, OpenLineage, QueryGraph, or application claims beside validated config
+evidence, tenant-root records, or bootstrap evidence.
 Saved `lakecatHandoffVerifyOutput` sidecars must bind their own
 `lineageDrainArtifactSemantics.catalogConfigProof` to the raw lineage-drain
 artifact too, so a self-verification artifact cannot claim verified drain

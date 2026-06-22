@@ -5,6 +5,27 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/book slice:
+  `Close service config/bootstrap schemas`.
+  Service outbox admission now rejects unexpected top-level payload fields for
+  `catalog.config-read` and `querygraph.bootstrap` before acknowledgement,
+  graph projection, OpenLineage projection, or QGLake proof can inherit
+  unverified compatibility, endpoint, authorization, artifact, standards,
+  graph, OpenLineage, QueryGraph, or application claims beside checked config,
+  tenant-root, bootstrap, and receipt evidence.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_top_level_catalog_config_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_top_level_querygraph_bootstrap_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service catalog_config -- --test-threads=1` passed;
+  `cargo test -p lakecat-service querygraph_bootstrap -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed.
 - Latest book artifact slice:
   `Refresh catalog concept book artifacts`.
   The current book already contains the requested detailed explanation of the

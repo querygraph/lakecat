@@ -1652,7 +1652,39 @@ const VIEW_LIFECYCLE_EVIDENCE_FIELDS: &[&str] = &[
     "view",
     "expected-view-version",
 ];
+const CATALOG_CONFIG_READ_EVIDENCE_FIELDS: &[&str] = &[
+    "audit-event-id",
+    "event-type",
+    "authorization-receipt",
+    "warehouse",
+    "defaults",
+    "overrides",
+    "endpoints",
+    "warehouse-record",
+    "project-record",
+    "server-record",
+];
 const CATALOG_CONFIG_ENTRY_EVIDENCE_FIELDS: &[&str] = &["key", "value"];
+const QUERYGRAPH_BOOTSTRAP_EVIDENCE_FIELDS: &[&str] = &[
+    "audit-event-id",
+    "event-type",
+    "authorization-receipt",
+    "warehouse",
+    "table-count",
+    "view-count",
+    "policy-binding-count",
+    "verified-tables",
+    "verified-views",
+    "verified-view-versions",
+    "view-version-receipts",
+    "bundle-hash",
+    "graph-hash",
+    "open-lineage-hash",
+    "querygraph-import-hash",
+    "table-artifacts",
+    "view-artifacts",
+    "standards",
+];
 const QUERYGRAPH_VIEW_RECEIPT_EVIDENCE_FIELDS: &[&str] = &[
     "stable-id",
     "view-version",
@@ -3831,11 +3863,49 @@ fn validate_catalog_config_read_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_object_evidence_schema(
+        event,
+        payload,
+        "catalog config-read",
+        CATALOG_CONFIG_READ_EVIDENCE_FIELDS,
+    )?;
     validate_required_warehouse_field(event, payload, "catalog config-read")?;
     validate_catalog_config_defaults(event, payload)?;
     validate_catalog_config_overrides(event, payload)?;
     validate_authorization_receipt_principal(event, payload, "catalog config-read")?;
     validate_catalog_config_endpoints(event, payload)?;
+    validate_catalog_config_tenant_records(event, payload)?;
+    Ok(())
+}
+
+fn validate_catalog_config_tenant_records(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    if let Some(warehouse_record) = payload.get("warehouse-record") {
+        validate_object_evidence_schema(
+            event,
+            warehouse_record,
+            "catalog config-read warehouse-record",
+            WAREHOUSE_RECORD_EVIDENCE_FIELDS,
+        )?;
+    }
+    if let Some(project_record) = payload.get("project-record") {
+        validate_object_evidence_schema(
+            event,
+            project_record,
+            "catalog config-read project-record",
+            PROJECT_RECORD_EVIDENCE_FIELDS,
+        )?;
+    }
+    if let Some(server_record) = payload.get("server-record") {
+        validate_object_evidence_schema(
+            event,
+            server_record,
+            "catalog config-read server-record",
+            SERVER_RECORD_EVIDENCE_FIELDS,
+        )?;
+    }
     Ok(())
 }
 
@@ -5339,6 +5409,12 @@ fn validate_querygraph_bootstrap_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    validate_object_evidence_schema(
+        event,
+        payload,
+        "querygraph bootstrap",
+        QUERYGRAPH_BOOTSTRAP_EVIDENCE_FIELDS,
+    )?;
     validate_required_warehouse_field(event, payload, "querygraph bootstrap")?;
     validate_authorization_receipt_principal(event, payload, "querygraph bootstrap")?;
     for field in [
@@ -24849,6 +24925,131 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_extra_top_level_catalog_config_fields() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-config-extra-top-level".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-config-extra-top-level",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": catalog_config_defaults_json(),
+                        "endpoints": catalog_config_endpoints_json(),
+                        "unverified-config-claim": true
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("catalog config replay must reject extra top-level fields");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(
+            message
+                .contains("catalog config-read contains unexpected field unverified-config-claim"),
+            "extra catalog config top-level field should be rejected: {message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-config-extra-top-level"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_catalog_config_tenant_record_fields() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-config-extra-tenant-record".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-config-extra-tenant-record",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": catalog_config_defaults_json(),
+                        "endpoints": catalog_config_endpoints_json(),
+                        "warehouse-record": {
+                            "warehouse": "local",
+                            "project-id": "default",
+                            "storage-root": "file:///tmp/lakecat/config",
+                            "properties": {"purpose": "config-read"},
+                            "unverified-tenant-claim": true
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("catalog config replay must reject extra tenant record fields");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(
+            message.contains(
+                "catalog config-read warehouse-record contains unexpected field unverified-tenant-claim"
+            ),
+            "extra catalog config tenant record field should be rejected: {message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-config-extra-tenant-record"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_stale_catalog_config_typed_sail_default() {
         let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
         let store = Arc::new(RecordingOutboxStore {
@@ -31804,6 +32005,55 @@ mod tests {
                 "{event_id} must fail before lineage projection"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_top_level_querygraph_bootstrap_fields() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let mut payload = valid_querygraph_bootstrap_payload(principal);
+        payload
+            .pointer_mut("/payload")
+            .and_then(Value::as_object_mut)
+            .expect("valid bootstrap payload should contain payload object")
+            .insert("unverified-bootstrap-claim".to_string(), json!(true));
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-bootstrap-extra-top-level".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "querygraph.bootstrap".to_string(),
+                payload,
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("QueryGraph bootstrap replay must reject extra top-level fields");
+
+        let message = err.to_string();
+        assert!(message.contains("querygraph.bootstrap"));
+        assert!(
+            message.contains(
+                "querygraph bootstrap contains unexpected field unverified-bootstrap-claim"
+            ),
+            "extra QueryGraph bootstrap top-level field should be rejected: {message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-bootstrap-extra-top-level"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
     }
 
     #[tokio::test]
