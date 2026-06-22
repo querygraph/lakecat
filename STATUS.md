@@ -5,6 +5,23 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Require authorization receipt action replay evidence`.
+  Service outbox replay admission now rejects missing or blank authorization
+  receipt `action` evidence before acknowledgement, graph projection, or
+  OpenLineage projection. The rule covers shared catalog receipt validation and
+  specialized `table.commit` / `table.commits-listed` replay paths, ensuring
+  durable replay evidence proves which catalog action was authorized before it
+  becomes QueryGraph or OpenLineage material.
+- Local verification for this receipt-action replay slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib receipt_action -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib receipt -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest documentation/book slice:
   `Expand catalog concepts contract`.
   The book now front-loads a detailed contract for reading LakeCat concepts:

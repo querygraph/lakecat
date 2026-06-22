@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required outbox replay admission to reject missing or blank authorization
+  receipt `action` evidence before acknowledgement, graph projection, or
+  OpenLineage projection, covering shared catalog receipt validation plus
+  specialized table commit and commit-history replay paths.
 - Expanded the LakeCat book with a front-loaded catalog-concepts contract
   explaining why the Rust service spine and Turso store are implementation
   choices, Iceberg REST namespace/table paths and commit CAS are standard
