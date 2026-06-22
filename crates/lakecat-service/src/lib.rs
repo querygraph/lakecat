@@ -1556,6 +1556,7 @@ fn validate_table_lifecycle_event_evidence(
         ));
     };
     let table = decode_table_lifecycle_identity(event, table_value, "table lifecycle")?;
+    validate_authorization_receipt_principal(event, payload, "table lifecycle")?;
     validate_table_lifecycle_payload_scope(event, payload, &table, "table lifecycle")?;
 
     if let Some(payload_table) = payload.get("table") {
@@ -22876,6 +22877,164 @@ mod tests {
             assert!(
                 lineage.events.lock().await.is_empty(),
                 "blank table lifecycle location evidence must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_missing_table_lifecycle_receipt_principal() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let cases = vec![
+            ("table.created", "table-create"),
+            ("table.loaded", "table-load"),
+            ("table.deleted", "table-drop"),
+            ("table.restored", "table-restore"),
+        ];
+
+        for (event_type, action) in cases {
+            let event_id = format!("evt-missing-{event_type}-principal");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-missing-{event_type}-principal"),
+                        "event-type": event_type,
+                        "table": &table,
+                        "payload": {
+                            "authorization-receipt": {
+                                "action": action,
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            },
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("missing table lifecycle receipt principal should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(
+                message.contains(
+                    "table lifecycle evidence must contain authorization receipt principal"
+                )
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_table_lifecycle_receipt_principal() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let malformed_principal = json!({
+            "subject": "agent:writer",
+            "kind": "unknown"
+        });
+        let cases = vec![
+            ("table.created", "table-create"),
+            ("table.loaded", "table-load"),
+            ("table.deleted", "table-drop"),
+            ("table.restored", "table-restore"),
+        ];
+
+        for (event_type, action) in cases {
+            let event_id = format!("evt-malformed-{event_type}-principal");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-malformed-{event_type}-principal"),
+                        "event-type": event_type,
+                        "table": &table,
+                        "payload": {
+                            "authorization-receipt": {
+                                "principal": malformed_principal.clone(),
+                                "action": action,
+                                "allowed": true,
+                                "engine": "test",
+                                "policy_hash": null,
+                                "checked_at": chrono::Utc::now(),
+                            },
+                        },
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("malformed table lifecycle receipt principal should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type));
+            assert!(message.contains("table lifecycle authorization receipt principal"));
+            assert!(message.contains("must be a valid principal"));
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(&event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
             );
         }
     }

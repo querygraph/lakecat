@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required table lifecycle replay evidence to carry a valid authorization
+  receipt principal before acknowledgement, graph projection, or OpenLineage
+  projection, with missing and malformed principal coverage across
+  `table.created`, `table.loaded`, `table.deleted`, and `table.restored`.
 - Required table lifecycle replay location evidence to be non-empty when
   present, with service admission coverage proving blank table and soft-delete
   locations fail before acknowledgement, graph projection, or OpenLineage

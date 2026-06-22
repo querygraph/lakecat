@@ -3696,7 +3696,8 @@ identities.
 Table lifecycle replay applies the same identity discipline before delivery:
 `table.created`, `table.loaded`, `table.deleted`, and `table.restored` must
 carry a decodable table identity, optional payload scope hints must match it,
-and soft-delete evidence must point at the same table with an unsigned version.
+soft-delete evidence must point at the same table with an unsigned version, and
+the authorization receipt must carry a valid principal.
 When those lifecycle events carry table `metadata-location`, table `location`,
 or soft-delete `metadata-location` evidence, the values must be non-empty before
 the event is acknowledged or projected. The Iceberg table operation remains the

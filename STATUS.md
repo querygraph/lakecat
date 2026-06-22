@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require table lifecycle receipt principals`.
+  Service replay admission now rejects `table.created`, `table.loaded`,
+  `table.deleted`, and `table.restored` evidence whose authorization receipt
+  principal is missing or malformed before acknowledgement, graph projection,
+  or OpenLineage projection. This closes the actorless table lifecycle sibling
+  of the existing standard-catalog, management, table-commit, and
+  commit-history receipt-principal gates.
+- Local verification for this table lifecycle receipt-principal slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib table_lifecycle_receipt_principal -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib table_lifecycle -- --test-threads=1`;
+  `CARGO_INCREMENTAL=0 cargo test -p lakecat-service --lib outbox_drain_projects_table_events_to_sinks -- --test-threads=1`;
+  `docs/book/build.sh`.
+- Latest completed implementation slice:
   `Reject blank table lifecycle locations`.
   Service replay admission now rejects blank table lifecycle `metadata-location`
   and `location` evidence, plus blank `soft-delete.metadata-location` evidence,

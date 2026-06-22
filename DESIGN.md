@@ -648,6 +648,10 @@ Standard catalog replay for catalog config reads, namespace list/lifecycle
 events, and view list/lifecycle events must carry valid authorization receipt
 principals before projection too, so Iceberg-compatible control-plane evidence
 cannot become actorless graph or OpenLineage facts.
+Table lifecycle replay for create, load, delete, and restore events must carry
+the same valid authorization receipt principal before projection, so table
+lifecycle graph/OpenLineage facts cannot be actorless even when the standard
+Iceberg REST response shape remains unchanged.
 
 View mutation guards must remain positive, store-assigned version checks so
 QueryGraph receipt chains cannot be extended by invalid guarded requests.
