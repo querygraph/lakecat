@@ -6,6 +6,17 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Pin no-default store test in release gate`.
+  The full local release-readiness script now runs
+  `cargo test -p lakecat-store --lib --no-default-features`, and the local
+  dependency contract asserts that row remains present so no-default store
+  hygiene stays part of first-release proof while cloud CI is manual-only.
+- Local verification for this release-gate slice is green:
+  `bash -n scripts/check-local-dependency-contract.sh scripts/check-release-readiness.sh`;
+  `cargo test -p lakecat-store --lib --no-default-features -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Gate Turso-only store validators`.
   Turso row-scope validation helpers are now compiled only with
   `turso-local`, removing default/no-default-feature dead-code warnings while

@@ -79,6 +79,7 @@ if [[ "$mode" == "full" ]]; then
   run cargo test -p lakecat-sail --features sail-local --lib \
     encodes_null_and_nested_partition_literals_for_iceberg_rest -- --test-threads=1
   run cargo test -p lakecat-cli --features qglake-fixture qglake_fixture -- --test-threads=1
+  run cargo test -p lakecat-store --lib --no-default-features -- --test-threads=1
   run cargo test -p lakecat-store --features turso-local --lib -- --test-threads=1
   run cargo test -p lakecat-service --features turso-local --lib -- --test-threads=1
   run cargo test -p lakecat-service --features sail-local --lib -- --test-threads=1

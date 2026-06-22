@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added the `lakecat-store` no-default-feature library test to the full local
+  release-readiness gate and dependency contract so warning-free default-store
+  hygiene remains part of first-release proof while cloud CI is manual-only.
 - Feature-gated Turso-only store row-scope validators so default and
   no-default-feature `lakecat-store` builds no longer emit dead-code warnings
   while Turso-backed row/content validation remains compiled and tested under

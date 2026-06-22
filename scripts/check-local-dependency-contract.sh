@@ -110,6 +110,8 @@ require_pattern 'cargo test --workspace --all-features' scripts/check-release-re
   "release-readiness gate must run the all-features workspace test"
 require_pattern 'cargo test -p lakecat-api --lib' scripts/check-release-readiness.sh \
   "release-readiness gate must run explicit lakecat-api unit tests"
+require_pattern 'cargo test -p lakecat-store --lib --no-default-features' scripts/check-release-readiness.sh \
+  "release-readiness gate must prove lakecat-store no-default-feature builds"
 require_pattern 'encodes_null_and_nested_partition_literals_for_iceberg_rest' scripts/check-release-readiness.sh \
   "release-readiness gate must prove v4 bridge partition literal encoding"
 require_pattern 'cargo test -p lakecat-service --features grust-local --lib' scripts/check-release-readiness.sh \
