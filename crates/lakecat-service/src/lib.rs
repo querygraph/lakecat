@@ -9807,14 +9807,19 @@ struct RequestIdentity {
 
 fn request_identity(headers: &HeaderMap) -> Result<RequestIdentity, LakeCatHttpError> {
     let header = |name: &str| -> Result<Option<&str>, LakeCatError> {
-        headers
-            .get(name)
-            .map(|value| {
-                value.to_str().map_err(|_| {
-                    LakeCatError::InvalidArgument(format!("invalid UTF-8 in {name} header"))
-                })
-            })
-            .transpose()
+        let mut values = headers.get_all(name).iter();
+        let Some(value) = values.next() else {
+            return Ok(None);
+        };
+        if values.next().is_some() {
+            return Err(LakeCatError::InvalidArgument(format!(
+                "{name} header must appear at most once"
+            )));
+        }
+        value
+            .to_str()
+            .map(Some)
+            .map_err(|_| LakeCatError::InvalidArgument(format!("invalid UTF-8 in {name} header")))
     };
 
     let explicit_principal = header("x-lakecat-principal")?;
@@ -11289,6 +11294,60 @@ mod tests {
         assert!(!envelope.contains("protected"));
         assert!(!envelope.contains("delegation-token"));
         assert!(!envelope.contains("summary-secret"));
+    }
+
+    #[test]
+    fn request_identity_rejects_duplicate_identity_headers() {
+        let mut headers = HeaderMap::new();
+        headers.append("x-lakecat-principal", "alice@example.com".parse().unwrap());
+        headers.append("x-lakecat-principal", "bob@example.com".parse().unwrap());
+
+        let err = request_identity(&headers).expect_err("duplicate principal should fail closed");
+        let LakeCatHttpError(inner) = err;
+        let message = inner.to_string();
+
+        assert!(message.contains("x-lakecat-principal header must appear at most once"));
+        assert!(!message.contains("alice@example.com"));
+        assert!(!message.contains("bob@example.com"));
+    }
+
+    #[tokio::test]
+    async fn config_endpoint_rejects_duplicate_identity_headers_before_governance() {
+        let governance = Arc::new(RecordingGovernance::default());
+        let app = app(LakeCatState::new(
+            WarehouseName::new("local").unwrap(),
+            MemoryCatalogStore::new(),
+        )
+        .with_integrations(
+            default_sail_engine(),
+            governance.clone(),
+            NoopCatalogGraphSink::new(),
+            HashOnlyLineageSink::new(),
+        ));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/catalog/v1/config")
+                    .header("x-lakecat-agent-did", "did:example:agent-a")
+                    .header("x-lakecat-agent-did", "did:example:agent-b")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let message = String::from_utf8(body.to_vec()).unwrap();
+        assert!(message.contains("x-lakecat-agent-did header must appear at most once"));
+        assert!(!message.contains("did:example:agent-a"));
+        assert!(!message.contains("did:example:agent-b"));
+        assert!(governance.principals.lock().await.is_empty());
+        assert!(governance.contexts.lock().await.is_empty());
     }
 
     #[test]

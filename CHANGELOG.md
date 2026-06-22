@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened request identity admission so duplicate identity-bearing headers
+  such as `x-lakecat-principal`, `x-lakecat-agent-did`, TypeDID headers, agent
+  proof headers, or `Authorization` are rejected before governance, TypeSec
+  verification, Sail calls, audit, or outbox evidence. Diagnostics identify the
+  duplicated header without echoing conflicting principal, DID, token, or proof
+  values.
 - Hardened REST commit idempotency key admission so duplicate
   `x-lakecat-idempotency-key` headers are rejected before identity,
   authorization, Sail commit preparation, pointer movement, audit, or outbox

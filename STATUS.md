@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Reject duplicate request identity headers`.
+  Request identity parsing now rejects duplicate identity-bearing headers such
+  as `x-lakecat-principal`, `x-lakecat-agent-did`, TypeDID headers, agent proof
+  headers, or `Authorization` before governance, TypeSec verification, Sail
+  calls, audit, or outbox evidence. The regression keeps diagnostics generic so
+  conflicting principal/DID/proof material is not echoed.
+- Local verification for this implementation slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service --lib duplicate_identity_headers -- --test-threads=1`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed.
+- Latest implementation slice:
   `Reject duplicate REST idempotency keys`.
   Commit requests now reject duplicate `x-lakecat-idempotency-key` headers at
   the REST edge before identity, authorization, Sail commit preparation,
