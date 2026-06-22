@@ -5,6 +5,22 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Expand catalog concept ledger`.
+  The book now gives a claim-by-claim classification for the Rust service
+  spine, Turso-backed store, Iceberg REST namespace/table paths, commit CAS plus
+  idempotency/pointer-log/audit/outbox/replay hardening, TypeSec-style governed
+  scan and credential receipts, and QueryGraph/QGLake/OpenLineage bootstrap,
+  management, view, credential, and commit proof surfaces. The section
+  distinguishes standard Iceberg parlance from LakeCat implementation,
+  TypeSec/QueryGraph governance and application extensions, and narrow future
+  Iceberg-adjacent optional profile candidates. It also states why Sail should
+  own engine-shaped interpretation for field ids, projections, predicates,
+  manifests, deletes, and scan tasks before LakeCat persists proof.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation slice:
   `Reject duplicate request identity headers`.
   Request identity parsing now rejects duplicate identity-bearing headers such

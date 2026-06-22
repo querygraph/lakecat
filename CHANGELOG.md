@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a claim-by-claim catalog concept ledger. The
+  new section classifies the Rust service spine, Turso store, Iceberg REST
+  namespace/table paths, commit CAS plus idempotency/pointer-log/audit/outbox
+  hardening, TypeSec-style governed scan and credential receipts, and
+  QueryGraph/QGLake/OpenLineage proof surfaces as standard Iceberg behavior,
+  LakeCat implementation, governance/application extensions, or narrow future
+  Iceberg-adjacent profile candidates. It also makes the Sail argument
+  explicit: proof-carrying scans are credible only when field ids, projections,
+  predicates, manifests, deletes, and scan tasks are interpreted by the engine
+  path rather than by catalog-local JSON shortcuts.
 - Hardened request identity admission so duplicate identity-bearing headers
   such as `x-lakecat-principal`, `x-lakecat-agent-did`, TypeDID headers, agent
   proof headers, or `Authorization` are rejected before governance, TypeSec
