@@ -29623,6 +29623,137 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn outbox_drain_rejects_mismatched_view_receipt_read_actions() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let receipt_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "view-version": 1,
+            "operation": "upsert"
+        }))
+        .unwrap();
+        let chain_hash = content_hash_json(&json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "receipt-hashes": [&receipt_hash]
+        }))
+        .unwrap();
+        let valid_chain = json!({
+            "stable-id": "lakecat:view:local:default:events_view",
+            "warehouse": "local",
+            "namespace": ["default"],
+            "name": "events_view",
+            "chain-hash": &chain_hash,
+            "chain-verified": true,
+            "latest-view-version": 1,
+            "latest-operation": "upsert",
+            "tombstoned": false,
+            "receipt-count": 1,
+            "receipts": [{
+                "stable-id": "lakecat:view:local:default:events_view",
+                "warehouse": "local",
+                "namespace": ["default"],
+                "name": "events_view",
+                "view-version": 1,
+                "previous-view-version": null,
+                "previous-receipt-hash": null,
+                "operation": "upsert",
+                "view-hash": content_hash_json(&json!({"view": "events_view", "version": 1})).unwrap(),
+                "receipt-hash": &receipt_hash,
+                "principal-subject": "agent:operator",
+                "principal-kind": "agent",
+                "recorded-at": "2026-06-20T00:00:00Z"
+            }]
+        });
+        let cases = vec![
+            (
+                "view.version-receipts-listed",
+                "view receipt-list",
+                "evt-view-receipts-mismatched-action",
+                json!({
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": "events_view",
+                    "receipt-count": 1,
+                    "receipt-hashes": [&receipt_hash],
+                    "drop-receipt-hashes": [],
+                }),
+            ),
+            (
+                "view.version-receipt-chains-listed",
+                "view receipt-chain",
+                "evt-view-chains-mismatched-action",
+                json!({
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "chain-count": 1,
+                    "receipt-count": 1,
+                    "tombstone-count": 0,
+                    "chain-verified-count": 1,
+                    "view-version-receipt-chains": [valid_chain],
+                    "chain-hashes": [&chain_hash],
+                    "receipt-hashes": [&receipt_hash],
+                    "drop-receipt-hashes": [],
+                }),
+            ),
+        ];
+
+        for (event_type, label, event_id, mut payload) in cases {
+            payload["authorization-receipt"] = json!({
+                "principal": principal,
+                "action": "view-manage",
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            });
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": event_type,
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("mismatched view receipt read action should fail before delivery");
+
+            let message = err.to_string();
+            assert!(
+                message.contains(event_type),
+                "{event_type} error should include event type: {message}"
+            );
+            assert!(
+                message.contains(&format!(
+                    "{label} authorization receipt action does not match outbox event type"
+                )),
+                "{event_type} error should describe receipt action drift: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(store.delivered.lock().await.is_empty());
+            assert!(graph.events.lock().await.is_empty());
+            assert!(lineage.events.lock().await.is_empty());
+        }
+    }
+
+    #[tokio::test]
     async fn outbox_drain_rejects_malformed_view_receipt_list_evidence() {
         let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
         let receipt_hash = content_hash_json(&json!({

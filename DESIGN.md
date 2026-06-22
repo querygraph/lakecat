@@ -543,12 +543,14 @@ replay must reject duplicate receipt, drop-receipt, and chain hash arrays
 before projection so later compact QGLake proof cannot inherit inflated
 view-history evidence.
 View receipt-list replay must also carry valid warehouse, namespace, view, and
-authorization receipt principal evidence before projection, so receipt hashes
-cannot become actorless or scope-free view-history facts.
+authorization receipt principal evidence plus the read-side `view-load` action
+before projection, so receipt hashes cannot become actorless, scope-free, or
+mutation-authorized view-history facts.
 View receipt-chain replay must likewise carry valid warehouse, namespace,
-authorization receipt principal, and count-aligned chain, receipt, and
-tombstone totals before projection, so namespace-level view-history evidence
-cannot inflate or shed chains by drifting the summary counts.
+authorization receipt principal, the read-side `view-load` action, and
+count-aligned chain, receipt, and tombstone totals before projection, so
+namespace-level view-history evidence cannot inflate chains, shed chains, or
+reuse a mutation receipt by drifting the summary counts or action.
 Lineage-drain replay summaries must also stay bound to the drain-level event
 type manifest: a compact QGLake handoff cannot include a replay summary for an
 event type that the drain did not declare as delivered, and repeated event

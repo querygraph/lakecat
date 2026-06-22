@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added service replay regression coverage proving
+  `view.version-receipts-listed` and
+  `view.version-receipt-chains-listed` reject mismatched authorization receipt
+  actions before acknowledgement, graph projection, or OpenLineage projection.
+  The design and book now state that governed view receipt read surfaces must
+  prove the read-side `view-load` action.
 - Added service replay regression coverage proving `namespace.listed`,
   `namespace.created`, `namespace.loaded`, and `namespace.dropped` reject
   mismatched authorization receipt actions before acknowledgement, graph

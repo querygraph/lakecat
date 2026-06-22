@@ -5299,16 +5299,18 @@ proof hashes when those slots are present. View receipt replay follows the
 same fail-closed rule at the drain boundary. A
 `view.version-receipts-listed` event is not acknowledged unless its
 warehouse, namespace, view, and authorization receipt principal are valid, its
-`receipt-count` matches full SHA-256 receipt hashes, and every drop receipt
-hash is included in the listed receipts. A verified
+authorization receipt action is `view-load`, its `receipt-count` matches full
+SHA-256 receipt hashes, and every drop receipt hash is included in the listed
+receipts. A verified
 `view.version-receipt-chains-listed` event is not acknowledged unless its
-warehouse, namespace, authorization receipt principal, chain count, receipt
-count, and tombstone count are valid and count-aligned, each verified chain and
-receipt carries full SHA-256 digest evidence, the first receipt is a version 1
-upsert without previous links, and every later upsert or drop links to the
-previous receipt with the expected view-version transition. That keeps
-malformed view-history evidence out of both graph projection and OpenLineage
-replay before QueryGraph ever sees a compact handoff. The verifier also requires
+warehouse, namespace, authorization receipt principal, read-side `view-load`
+authorization action, chain count, receipt count, and tombstone count are valid
+and count-aligned, each verified chain and receipt carries full SHA-256 digest
+evidence, the first receipt is a version 1 upsert without previous links, and
+every later upsert or drop links to the previous receipt with the expected
+view-version transition. That keeps malformed view-history evidence out of both
+graph projection and OpenLineage replay before QueryGraph ever sees a compact
+handoff. The verifier also requires
 table-commit replay to be internally consistent before delivery:
 `table.commit` must carry a commit object, unsigned sequence number, stable
 table identity, matching nested commit-table identity, a valid commit principal
