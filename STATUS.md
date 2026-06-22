@@ -6,6 +6,22 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Bind QGLake scan receipt proof`.
+  QGLake governed scan proof now preserves planned and fetched scan receipt
+  identity evidence: principal subject/kind, full authorization receipt hashes,
+  and `table-plan-scan` actions. Handoff summary verification and captured
+  LakeCat replay agreement now reject archived proof that drops or drifts those
+  scan receipt fields.
+- Local verification for this QGLake scan receipt proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_captured_output_semantics -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Require scan receipt identity evidence`.
   Service outbox replay admission now rejects `table.scan-planned` and
   `table.scan-tasks-fetched` evidence unless the authorization receipt carries

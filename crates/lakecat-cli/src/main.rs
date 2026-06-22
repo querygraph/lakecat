@@ -1919,6 +1919,14 @@ fn verify_lakecat_replay_scan_matches_summary(
         "deleteFileCount",
         "childPlanTaskCount",
         "planGraphEvents",
+        "plannedPrincipalSubject",
+        "plannedPrincipalKind",
+        "plannedAuthorizationReceiptHash",
+        "plannedAuthorizationReceiptAction",
+        "fetchedPrincipalSubject",
+        "fetchedPrincipalKind",
+        "fetchedAuthorizationReceiptHash",
+        "fetchedAuthorizationReceiptAction",
         "plannedReadRestriction",
         "fetchedReadRestriction",
         "plannedRequestedProjection",
@@ -2903,6 +2911,52 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
     require_positive_u64(governed_scan, "fileTaskCount", "governedScanProof")?;
     require_positive_u64(governed_scan, "deleteFileCount", "governedScanProof")?;
     require_positive_u64(governed_scan, "childPlanTaskCount", "governedScanProof")?;
+    require_string_match(
+        governed_scan,
+        "plannedPrincipalSubject",
+        principal,
+        "governedScanProof",
+    )?;
+    require_string_match(
+        governed_scan,
+        "fetchedPrincipalSubject",
+        principal,
+        "governedScanProof",
+    )?;
+    require_string_eq(
+        governed_scan,
+        "plannedPrincipalKind",
+        "agent",
+        "governedScanProof",
+    )?;
+    require_string_eq(
+        governed_scan,
+        "fetchedPrincipalKind",
+        "agent",
+        "governedScanProof",
+    )?;
+    require_full_hash_str(
+        governed_scan,
+        "plannedAuthorizationReceiptHash",
+        "governedScanProof",
+    )?;
+    require_full_hash_str(
+        governed_scan,
+        "fetchedAuthorizationReceiptHash",
+        "governedScanProof",
+    )?;
+    require_string_eq(
+        governed_scan,
+        "plannedAuthorizationReceiptAction",
+        "table-plan-scan",
+        "governedScanProof",
+    )?;
+    require_string_eq(
+        governed_scan,
+        "fetchedAuthorizationReceiptAction",
+        "table-plan-scan",
+        "governedScanProof",
+    )?;
     let planned_restriction =
         required_object(governed_scan, "plannedReadRestriction", "governedScanProof")?;
     let fetched_restriction =
@@ -4779,6 +4833,14 @@ fn qglake_scan_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Valu
         "fileTaskCount": fetched.file_scan_task_count.unwrap_or_default(),
         "deleteFileCount": fetched.delete_file_count.unwrap_or_default(),
         "childPlanTaskCount": fetched.child_plan_task_count.unwrap_or_default(),
+        "plannedPrincipalSubject": planned.principal_subject.as_deref(),
+        "plannedPrincipalKind": planned.principal_kind.as_deref(),
+        "plannedAuthorizationReceiptHash": planned.authorization_receipt_hash.as_deref(),
+        "plannedAuthorizationReceiptAction": planned.authorization_receipt_action.as_deref(),
+        "fetchedPrincipalSubject": fetched.principal_subject.as_deref(),
+        "fetchedPrincipalKind": fetched.principal_kind.as_deref(),
+        "fetchedAuthorizationReceiptHash": fetched.authorization_receipt_hash.as_deref(),
+        "fetchedAuthorizationReceiptAction": fetched.authorization_receipt_action.as_deref(),
         "plannedReadRestriction": planned.read_restriction.as_ref(),
         "fetchedReadRestriction": fetched.read_restriction.as_ref(),
         "plannedRequestedProjection": &planned.requested_projection,
@@ -7908,7 +7970,7 @@ fn verify_qglake_scan_replay(drain: &LineageDrainResponse) -> lakecat_core::Lake
         || planned
             .authorization_receipt_hash
             .as_deref()
-            .map_or(true, str::is_empty)
+            .map_or(true, |hash| !is_full_sha256_hash(hash))
         || planned
             .request_identity_state
             .as_deref()
@@ -7932,7 +7994,7 @@ fn verify_qglake_scan_replay(drain: &LineageDrainResponse) -> lakecat_core::Lake
         || fetched
             .authorization_receipt_hash
             .as_deref()
-            .map_or(true, str::is_empty)
+            .map_or(true, |hash| !is_full_sha256_hash(hash))
         || fetched
             .request_identity_state
             .as_deref()
@@ -10550,6 +10612,9 @@ mod tests {
         qglake_add_management_receipt_hashes(
             &mut summary["lakecatReplayVerification"]["managementProof"],
         );
+        qglake_add_governed_scan_identity_evidence(
+            &mut summary["lakecatReplayVerification"]["governedScanProof"],
+        );
         qglake_add_view_receipt_chain_structures(
             &mut summary["lakecatReplayVerification"]["viewReceiptChainProof"],
         );
@@ -10558,6 +10623,19 @@ mod tests {
             ["viewReceiptChainProof"]["views"][0]["acceptedReceiptHash"]
             .clone()]);
         summary
+    }
+
+    fn qglake_add_governed_scan_identity_evidence(governed_scan: &mut Value) {
+        governed_scan["plannedPrincipalSubject"] = json!("did:example:agent");
+        governed_scan["plannedPrincipalKind"] = json!("agent");
+        governed_scan["plannedAuthorizationReceiptHash"] =
+            json!(qglake_fixture_hash("scan-planned-authorization"));
+        governed_scan["plannedAuthorizationReceiptAction"] = json!("table-plan-scan");
+        governed_scan["fetchedPrincipalSubject"] = json!("did:example:agent");
+        governed_scan["fetchedPrincipalKind"] = json!("agent");
+        governed_scan["fetchedAuthorizationReceiptHash"] =
+            json!(qglake_fixture_hash("scan-fetch-authorization"));
+        governed_scan["fetchedAuthorizationReceiptAction"] = json!("table-plan-scan");
     }
 
     fn qglake_add_view_receipt_chain_structures(view_receipts: &mut Value) {
@@ -10943,6 +11021,13 @@ mod tests {
                 }
             }
         });
+        lakecat_replay_json["replay-evidence"]["requestIdentity"]["authorizationReceiptAction"] =
+            json!("lineage-read");
+        lakecat_replay_json["replay-evidence"]["queryGraphBootstrap"]["authorizationReceiptAction"] =
+            json!("graph-read");
+        qglake_add_governed_scan_identity_evidence(
+            &mut lakecat_replay_json["replay-evidence"]["scan"],
+        );
         lakecat_replay_json["management-replay"] = json!(
             "management replay servers=1 projects=1 warehouses=1 policies=1 storage_profiles=1 storage_profile_upserts=1 credential_root=events-local:file:local-file-no-secret:location_prefix_hash=sha256:2222222222222222222222222222222222222222222222222222222222222222:secret_ref=none"
         );
@@ -12526,6 +12611,59 @@ mod tests {
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("planGraphEvents"));
         assert!(err.to_string().contains("positive"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_scan_receipt_identity() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("plannedPrincipalSubject");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing scan principal proof");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("plannedPrincipalSubject"));
+
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["fetchedPrincipalSubject"] =
+            json!("did:example:other-agent");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject drifted fetched scan principal proof");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("fetchedPrincipalSubject mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_scan_receipt_action_and_hash() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("plannedAuthorizationReceiptHash");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing scan receipt hash proof");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("plannedAuthorizationReceiptHash"));
+
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["fetchedAuthorizationReceiptAction"] =
+            json!("table-load");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject drifted fetched scan action proof");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(
+            err.to_string()
+                .contains("fetchedAuthorizationReceiptAction mismatch")
+        );
     }
 
     #[test]
@@ -24239,7 +24377,7 @@ mod tests {
             event_type: "table.scan-planned".to_string(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:scan-planned-authorization".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("scan-planned-authorization")),
             authorization_receipt_action: Some("table-plan-scan".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),
@@ -24333,7 +24471,7 @@ mod tests {
             event_type: "table.scan-tasks-fetched".to_string(),
             principal_subject: Some("did:example:agent".to_string()),
             principal_kind: Some("agent".to_string()),
-            authorization_receipt_hash: Some("sha256:scan-fetch-authorization".to_string()),
+            authorization_receipt_hash: Some(qglake_fixture_hash("scan-fetch-authorization")),
             authorization_receipt_action: Some("table-plan-scan".to_string()),
             request_identity_state: Some("verified".to_string()),
             request_identity_source: Some("x-lakecat-agent-did".to_string()),

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bound QGLake governed scan proof to compact planned/fetched scan receipt
+  identity evidence, requiring principal subject/kind, full authorization
+  receipt hashes, and `table-plan-scan` actions to survive source replay,
+  captured replay, and archived handoff summary verification.
 - Required `table.scan-planned` and `table.scan-tasks-fetched` outbox replay
   admission to carry valid authorization receipt principal, action, allowed,
   engine, and checked-at evidence before acknowledgement, graph projection, or

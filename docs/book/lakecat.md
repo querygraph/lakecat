@@ -4664,7 +4664,13 @@ catalog action, an affirmative allowed decision, a non-empty receipt engine, and
 an RFC3339 `checked_at` timestamp. This is LakeCat replay admission, not Sail
 planning logic; Sail remains responsible for producing reusable table-format and
 scan-planning behavior, while LakeCat refuses to turn actorless or actionless
-scan evidence into graph or lineage proof. Scan replay now gets the same
+scan evidence into graph or lineage proof. QGLake preserves the same actor and
+action evidence in compact handoff proof: planned and fetched scan proof carry
+principal subject/kind, full authorization receipt hashes, and
+`table-plan-scan` actions, and captured LakeCat replay must match those fields.
+That keeps archived handoffs from retaining only the restriction and task counts
+while dropping who was authorized to perform the governed scan. Scan replay now
+gets the same
 drain-side admission check before Grust or OpenLineage projection:
 planned-scan events must carry
 matching table identity, unsigned task counts,

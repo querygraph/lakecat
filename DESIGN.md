@@ -508,7 +508,11 @@ QueryGraph bootstrap replay and archived handoffs cannot inflate counts by
 repeating accepted stable IDs. Scan replay must preserve the
 server-derived purpose and
 policy-derived TTL cap in both captured LakeCat replay text and compact handoff
-proof. Credential replay must preserve the policy-derived TTL cap and redacted
+proof. Compact governed scan proof must also preserve the planned and fetched
+scan receipt identities: principal subject/kind, full authorization receipt
+hashes, and the `table-plan-scan` action from source replay through captured
+LakeCat replay and archived handoff summary verification. Credential replay
+must preserve the policy-derived TTL cap and redacted
 storage-scope hash in both the captured LakeCat replay evidence and compact
 handoff summary. Credential-vend replay should fail when top-level
 read-restriction evidence or `lakecat:raw-credential-exception` evidence drifts
