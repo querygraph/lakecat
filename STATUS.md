@@ -5,6 +5,21 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Explain release catalog concepts in detail`.
+  The book now has a dedicated release concept deep dive that maps the Rust
+  service spine, Turso local store, Iceberg REST table/namespace paths, commit
+  CAS, idempotency, pointer logs, audit/outbox, replay validation, governed
+  scan/credential receipts, and QueryGraph/QGLake proof surfaces to standard
+  Iceberg parlance, LakeCat/TypeSec/QueryGraph extensions, and narrow future
+  Iceberg-adjacent profile candidates. It also expands the argument for moving
+  table-format interpretation and governed scan proof into Sail.
+- Local verification for this book slice is green:
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/book slice:
   `Close QGLake artifact hash leaf objects`.
   Saved `lakecatHandoffVerifyOutput.artifactFiles` hash leaf objects are now

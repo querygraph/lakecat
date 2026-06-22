@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added a detailed release concept deep dive to the book. The new chapter
+  directly delineates Rust service spine, Turso local store, Iceberg REST
+  paths, commit CAS, idempotency, pointer logs, audit/outbox, replay
+  validation, governed scan/credential receipts, and QueryGraph/QGLake proof
+  surfaces as standard Iceberg behavior, LakeCat/TypeSec/QueryGraph extensions,
+  or narrow future Iceberg-adjacent profile candidates, and strengthens the
+  argument for pushing table-format work into Sail.
 - Closed saved QGLake self-verifier artifact hash leaf objects over `sha256`
   only. Nested bundle, lineage-drain, QueryGraph import-plan, and captured
   LakeCat/QueryGraph output hash objects now reject unexpected fields before
