@@ -826,6 +826,12 @@ config read as compatibility evidence. The same replay evidence must preserve
 LakeCat's governed access surfaces for both route forms: plan, fetch-scan-tasks,
 and credential endpoints are additive proof-carrying catalog APIs over standard
 tables, not required custom Iceberg metadata or QueryGraph-only routes.
+Config replay must also preserve LakeCat's integration discovery surfaces:
+`POST /management/v1/lineage/drain` and `GET /querygraph/v1/bootstrap`. These
+are not standard Iceberg REST table-access requirements; they are additive
+LakeCat/QueryGraph/OpenLineage control-plane surfaces that let QGLake imports
+and lineage drains prove which integration contract was advertised when the
+config read entered graph or lineage projection.
 The local dependency contract is the guardrail while cloud CI is manual-only:
 it must reject automatic triggers across every GitHub workflow file, not just
 the primary CI workflow, including compact, block-list, inline-map, and quoted

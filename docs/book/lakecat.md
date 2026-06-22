@@ -4589,6 +4589,14 @@ not a QueryGraph dependency for ordinary reads. They are additive catalog APIs
 that let governed clients ask LakeCat, TypeSec, and Sail for proof-carrying
 plans, task fetches, or audited credential decisions over the same standard
 Iceberg tables.
+Replay validation also preserves the additive integration surfaces that make
+LakeCat useful as the QueryGraph foundation: `/querygraph/v1/bootstrap` and
+`/management/v1/lineage/drain`. These are not standard Iceberg REST table
+operations and they are not required for PySpark or another ordinary Iceberg
+client to load a table. They are LakeCat/QueryGraph/OpenLineage control-plane
+endpoints. Their presence in config evidence proves that a QGLake import,
+OpenLineage replay, or agentic management workflow saw the same integration
+contract that LakeCat later projects into graph and lineage systems.
 
 The bridge is intentionally conservative, but it should not reject Iceberg
 metadata that Sail has already decoded. Manifest expansion now emits null

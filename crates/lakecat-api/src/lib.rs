@@ -98,6 +98,8 @@ impl Default for CatalogConfigResponse {
                     .to_string(),
                 "GET /management/v1/warehouses/{warehouse}/policies".to_string(),
                 "PUT /management/v1/warehouses/{warehouse}/policies/{policy}".to_string(),
+                "POST /management/v1/lineage/drain".to_string(),
+                "GET /querygraph/v1/bootstrap".to_string(),
             ],
         }
     }
@@ -169,6 +171,17 @@ mod tests {
 
         assert!(endpoints.contains("POST /catalog/v1/namespaces/{namespace}/tables"));
         assert!(endpoints.contains("POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables"));
+    }
+
+    #[test]
+    fn catalog_config_endpoints_advertise_querygraph_integration_routes() {
+        let endpoints = CatalogConfigResponse::default()
+            .endpoints
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>();
+
+        assert!(endpoints.contains("POST /management/v1/lineage/drain"));
+        assert!(endpoints.contains("GET /querygraph/v1/bootstrap"));
     }
 }
 

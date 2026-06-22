@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Advertised QueryGraph/OpenLineage integration endpoints in catalog config
+  discovery and replay evidence. `CatalogConfigResponse` now includes
+  `/querygraph/v1/bootstrap` and `/management/v1/lineage/drain`, and
+  config-read replay requires those additive integration surfaces before graph,
+  OpenLineage, or QGLake projection can accept the config event.
 - Hardened config-read governed-access endpoint replay. Service replay now
   requires advertised plan, fetch-scan-tasks, and credential endpoints for both
   default and warehouse-prefixed catalog routes before config-read evidence can

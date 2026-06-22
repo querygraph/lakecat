@@ -3104,6 +3104,8 @@ fn validate_catalog_config_endpoints(
         "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/plan",
         "POST /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/fetch-scan-tasks",
         "GET /catalog/v1/{warehouse}/namespaces/{namespace}/tables/{table}/credentials",
+        "POST /management/v1/lineage/drain",
+        "GET /querygraph/v1/bootstrap",
     ];
     for required_endpoint in required {
         if !endpoint_set.contains(required_endpoint) {
@@ -11422,6 +11424,8 @@ mod tests {
             &payload["endpoints"],
             "GET /catalog/v1/namespaces/{namespace}/tables/{table}/credentials",
         );
+        assert_config_endpoints_include(&payload["endpoints"], "POST /management/v1/lineage/drain");
+        assert_config_endpoints_include(&payload["endpoints"], "GET /querygraph/v1/bootstrap");
     }
 
     #[tokio::test]
@@ -21448,6 +21452,70 @@ mod tests {
         );
         assert!(message.contains("event-id-hash=sha256:"));
         assert!(!message.contains("evt-config-missing-governed-endpoint"));
+        assert!(store.delivered.lock().await.is_empty());
+        assert!(graph.events.lock().await.is_empty());
+        assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_catalog_config_missing_querygraph_integration_endpoints() {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let endpoints = CatalogConfigResponse::default()
+            .endpoints
+            .into_iter()
+            .filter(|endpoint| endpoint != "GET /querygraph/v1/bootstrap")
+            .collect::<Vec<_>>();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-config-missing-querygraph-endpoint".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "catalog.config-read".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-config-missing-querygraph-endpoint",
+                    "event-type": "catalog.config-read",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "catalog-config",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "defaults": catalog_config_defaults_json(),
+                        "endpoints": endpoints
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("catalog config replay must preserve QueryGraph integration endpoints");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog.config-read"));
+        assert!(
+            message.contains(
+                "catalog config-read endpoints must include GET /querygraph/v1/bootstrap"
+            ),
+            "{message}"
+        );
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-config-missing-querygraph-endpoint"));
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
