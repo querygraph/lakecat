@@ -673,6 +673,10 @@ Management-upsert replay for policy bindings, projects, servers, storage
 profiles, and warehouses must also carry a valid authorization receipt
 principal before projection, so tenant-root and policy mutations cannot become
 actorless catalog graph or OpenLineage facts.
+Policy-binding upsert replay must also bind captured ODRL material to a full
+`odrl-hash` before graph or OpenLineage projection. LakeCat validates the
+catalog scope and content anchor, while TypeSec and QueryGraph remain the
+places for policy interpretation and semantic composition.
 Server and warehouse upsert replay must also treat endpoint URLs and storage
 roots as sensitive management roots. Generated audit/outbox evidence should
 persist `endpoint-url-hash` and `storage-root-hash` instead of raw roots, and

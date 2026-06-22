@@ -2687,6 +2687,24 @@ fn validate_policy_binding_upsert_event_evidence(
             "policy-binding upsert evidence must contain odrl",
         ));
     };
+    let odrl_hash = content_hash_json(odrl)
+        .map_err(|_| outbox_evidence_error(event, "policy-binding upsert odrl must be hashable"))?;
+    let Some(recorded_odrl_hash) = policy
+        .get("odrl-hash")
+        .and_then(Value::as_str)
+        .filter(|hash| !hash.is_empty())
+    else {
+        return Err(outbox_evidence_error(
+            event,
+            "policy-binding upsert evidence must contain odrl-hash",
+        ));
+    };
+    if recorded_odrl_hash != odrl_hash {
+        return Err(outbox_evidence_error(
+            event,
+            "policy-binding upsert odrl-hash must match odrl",
+        ));
+    }
     PolicyBinding::new(
         policy_id,
         warehouse,
@@ -6863,6 +6881,21 @@ async fn upsert_policy_binding(
         request.odrl,
     )?;
     let binding = state.store.upsert_policy_binding(binding).await?;
+    let policy_payload = json!({
+        "policy-id": binding.policy_id.as_str(),
+        "warehouse": binding.warehouse.as_str(),
+        "namespace": binding
+            .namespace
+            .as_ref()
+            .map(|namespace| namespace.parts().to_vec()),
+        "table": binding
+            .table
+            .as_ref()
+            .map(|table| table.as_str().to_string()),
+        "enforced": binding.enforced,
+        "odrl": binding.odrl.clone(),
+        "odrl-hash": content_hash_json(&binding.odrl)?,
+    });
     state
         .store
         .record_audit_event(CatalogAuditEvent::new(
@@ -6872,7 +6905,7 @@ async fn upsert_policy_binding(
             json!({
                 "event-type": "policy-binding.upserted",
                 "warehouse": warehouse.as_str(),
-                "policy": policy_binding_response(&binding),
+                "policy": policy_payload,
                 "authorization-receipt": capability.receipt(),
             }),
         )?)
@@ -11532,6 +11565,12 @@ mod tests {
                                 "namespace": ["default"],
                                 "table": "events",
                                 "enforced": true,
+                                "odrl-hash": content_hash_json(&json!({
+                                    "uid": "policy:agent-read",
+                                    "lakecat:read-restriction": {
+                                        "allowed-columns": ["event_id"]
+                                    }
+                                })).unwrap(),
                                 "odrl": {
                                     "uid": "policy:agent-read",
                                     "lakecat:read-restriction": {
@@ -13921,6 +13960,12 @@ mod tests {
                             "warehouse": "local",
                             "table": "events",
                             "enforced": true,
+                            "odrl-hash": content_hash_json(&json!({
+                                "uid": "policy:agent-read",
+                                "lakecat:read-restriction": {
+                                    "allowed-columns": ["event_id"]
+                                }
+                            })).unwrap(),
                             "odrl": {
                                 "uid": "policy:agent-read",
                                 "lakecat:read-restriction": {
@@ -13955,6 +14000,154 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_policy_binding_upsert_missing_odrl_hash() {
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-policy-missing-odrl-hash".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "policy-binding.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-policy-missing-odrl-hash",
+                    "event-type": "policy-binding.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "policy-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "policy": {
+                            "policy-id": "agent-read",
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "table": "events",
+                            "enforced": true,
+                            "odrl": {
+                                "uid": "policy:agent-read",
+                                "lakecat:read-restriction": {
+                                    "allowed-columns": ["event_id"]
+                                }
+                            }
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("missing policy-binding odrl-hash should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("policy-binding.upserted"));
+        assert!(message.contains("policy-binding upsert evidence must contain odrl-hash"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-policy-missing-odrl-hash"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "missing ODRL hash must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "missing ODRL hash must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "missing ODRL hash must fail before lineage projection"
+        );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_policy_binding_upsert_mismatched_odrl_hash() {
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let wrong_odrl_hash = content_hash_json(&json!({"uid": "policy:other"})).unwrap();
+        let store = Arc::new(RecordingOutboxStore {
+            events: Mutex::new(vec![OutboxEvent {
+                event_id: "evt-policy-mismatched-odrl-hash".to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "policy-binding.upserted".to_string(),
+                payload: json!({
+                    "audit-event-id": "audit-policy-mismatched-odrl-hash",
+                    "event-type": "policy-binding.upserted",
+                    "payload": {
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "policy-manage",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "policy": {
+                            "policy-id": "agent-read",
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "table": "events",
+                            "enforced": true,
+                            "odrl-hash": wrong_odrl_hash,
+                            "odrl": {
+                                "uid": "policy:agent-read",
+                                "lakecat:read-restriction": {
+                                    "allowed-columns": ["event_id"]
+                                }
+                            }
+                        }
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            }]),
+            delivered: Mutex::default(),
+        });
+        let graph = Arc::new(RecordingGraph::default());
+        let lineage = Arc::new(RecordingLineage::default());
+        let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+            .with_integrations(
+                default_sail_engine(),
+                AllowAllGovernanceEngine::new(),
+                graph.clone(),
+                lineage.clone(),
+            );
+
+        let err = drain_outbox_once(&state, 10)
+            .await
+            .expect_err("mismatched policy-binding odrl-hash should fail before delivery");
+        let message = err.to_string();
+        assert!(message.contains("policy-binding.upserted"));
+        assert!(message.contains("policy-binding upsert odrl-hash must match odrl"));
+        assert!(message.contains("event-id-hash=sha256:"));
+        assert!(!message.contains("evt-policy-mismatched-odrl-hash"));
+        assert!(
+            store.delivered.lock().await.is_empty(),
+            "mismatched ODRL hash must fail before acknowledgement"
+        );
+        assert!(
+            graph.events.lock().await.is_empty(),
+            "mismatched ODRL hash must fail before graph projection"
+        );
+        assert!(
+            lineage.events.lock().await.is_empty(),
+            "mismatched ODRL hash must fail before lineage projection"
+        );
     }
 
     #[tokio::test]
@@ -14157,6 +14350,12 @@ mod tests {
                         "namespace": ["default"],
                         "table": "events",
                         "enforced": true,
+                        "odrl-hash": content_hash_json(&json!({
+                            "uid": "policy:agent-read",
+                            "lakecat:read-restriction": {
+                                "allowed-columns": ["event_id"]
+                            }
+                        })).unwrap(),
                         "odrl": {
                             "uid": "policy:agent-read",
                             "lakecat:read-restriction": {
@@ -14344,6 +14543,12 @@ mod tests {
                         "namespace": ["default"],
                         "table": "events",
                         "enforced": true,
+                        "odrl-hash": content_hash_json(&json!({
+                            "uid": "policy:agent-read",
+                            "lakecat:read-restriction": {
+                                "allowed-columns": ["event_id"]
+                            }
+                        })).unwrap(),
                         "odrl": {
                             "uid": "policy:agent-read",
                             "lakecat:read-restriction": {
@@ -34695,16 +34900,16 @@ mod tests {
     #[tokio::test]
     async fn policy_bindings_are_governed_and_attached_to_table_authorization_context() {
         let governance = Arc::new(RecordingGovernance::default());
-        let app = app(LakeCatState::new(
-            WarehouseName::new("local").unwrap(),
-            MemoryCatalogStore::new(),
-        )
-        .with_integrations(
-            default_sail_engine(),
-            governance.clone(),
-            NoopCatalogGraphSink::new(),
-            HashOnlyLineageSink::new(),
-        ));
+        let store = MemoryCatalogStore::new();
+        let app = app(
+            LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    governance.clone(),
+                    NoopCatalogGraphSink::new(),
+                    HashOnlyLineageSink::new(),
+                ),
+        );
 
         let upsert = Request::builder()
             .method(Method::PUT)
@@ -34733,6 +34938,18 @@ mod tests {
             .unwrap();
         let response = app.clone().oneshot(upsert).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        let policy_outbox = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|event| event.event_type == "policy-binding.upserted")
+            .expect("policy upsert should record outbox evidence");
+        let policy_payload = &policy_outbox.payload["payload"]["policy"];
+        assert_eq!(
+            policy_payload["odrl-hash"],
+            serde_json::json!(content_hash_json(&policy_payload["odrl"]).unwrap())
+        );
 
         let list = Request::builder()
             .method(Method::GET)

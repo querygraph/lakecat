@@ -5,6 +5,22 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed implementation slice:
+  `Require policy ODRL hash proof`.
+  `policy-binding.upserted` producers now persist `odrl-hash` evidence beside
+  the captured ODRL material, and service replay admission rejects missing or
+  mismatched ODRL hashes before acknowledgement, graph projection, or
+  OpenLineage projection. This gives QueryGraph and lineage consumers a stable
+  policy-content anchor while leaving ODRL interpretation in TypeSec and
+  QueryGraph.
+- Local verification for this policy ODRL hash slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib policy_binding -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib management_upsert -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed documentation slice:
   `Expand catalog workflow concept guide`.
   The book now walks PySpark commit, governed scan, credential-vending, and

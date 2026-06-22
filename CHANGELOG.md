@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required `policy-binding.upserted` producers and replay admission to carry an
+  `odrl-hash` matching the captured ODRL policy material before
+  acknowledgement, graph projection, or OpenLineage projection, so QueryGraph
+  policy anchors cannot drift from the policy document LakeCat recorded.
 - Expanded the LakeCat book with concrete PySpark, governed scan, credential,
   and QueryGraph bootstrap walkthroughs that show exactly where standard
   Iceberg behavior ends, where LakeCat's Rust/Turso/CAS/audit/outbox spine

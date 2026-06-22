@@ -3637,8 +3637,9 @@ string-map properties; warehouse evidence must carry a valid warehouse, project
 id, optional valid storage root or full `storage-root-hash`, and string-map
 properties. Policy-binding upsert replay is checked before projection too: the
 evidence must carry a valid policy id, warehouse, optional namespace/table
-scope, an enforcement flag, and the captured ODRL material. LakeCat does not
-reason over that ODRL during replay, but malformed binding shape fails closed
+scope, an enforcement flag, the captured ODRL material, and an `odrl-hash`
+that matches that material. LakeCat does not reason over that ODRL during
+replay, but malformed binding shape or drifted ODRL content proof fails closed
 before the policy anchor can be delivered to graph or lineage sinks. Those
 management upserts must also carry a valid authorization receipt principal, so
 the catalog graph and OpenLineage stream never accept actorless tenant-root,
@@ -5101,9 +5102,10 @@ authorization receipt before delivery.
 Storage-profile upsert replay must likewise reject raw secret references and contradictory
 secret-reference-state evidence before delivery. Policy-binding upsert replay
 must carry valid catalog scope evidence before delivery, including policy id,
-warehouse, optional namespace/table scope, enforcement state, and captured ODRL
-material. Namespace lifecycle replay must carry a valid warehouse and namespace
-path or component array before create/load/drop events can be delivered.
+warehouse, optional namespace/table scope, enforcement state, captured ODRL
+material, and a matching `odrl-hash`. Namespace lifecycle replay must carry a
+valid warehouse and namespace path or component array before create/load/drop
+events can be delivered.
 Catalog config and namespace-list read replay must likewise carry a valid
 warehouse, and namespace listing must preserve both an unsigned namespace count
 and count-aligned `namespace-paths` evidence. Those paths are parsed as
