@@ -3784,6 +3784,7 @@ fn validate_querygraph_bootstrap_event_evidence(
     payload: &Value,
 ) -> Result<(), LakeCatError> {
     validate_required_warehouse_field(event, payload, "querygraph bootstrap")?;
+    validate_authorization_receipt_principal(event, payload, "querygraph bootstrap")?;
     for field in [
         "bundle-hash",
         "graph-hash",
@@ -22939,6 +22940,85 @@ mod tests {
             lineage.events.lock().await.is_empty(),
             "malformed QueryGraph bootstrap evidence must fail before lineage projection"
         );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_malformed_querygraph_bootstrap_receipt_principal() {
+        let cases = vec![
+            (
+                "evt-bootstrap-missing-principal",
+                serde_json::Value::Null,
+                "querygraph bootstrap evidence must contain authorization receipt principal",
+            ),
+            (
+                "evt-bootstrap-malformed-principal",
+                json!({
+                    "subject": "agent:reader",
+                    "kind": "unknown"
+                }),
+                "querygraph bootstrap authorization receipt principal must be a valid principal",
+            ),
+        ];
+
+        for (event_id, principal, expected_message) in cases {
+            let mut payload = valid_querygraph_bootstrap_payload(
+                Principal::new("agent:reader", PrincipalKind::Agent).unwrap(),
+            );
+            if principal.is_null() {
+                payload["payload"]["authorization-receipt"]
+                    .as_object_mut()
+                    .expect("authorization receipt should be an object")
+                    .remove("principal");
+            } else {
+                payload["payload"]["authorization-receipt"]["principal"] = principal;
+            }
+
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "querygraph.bootstrap".to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("actorless QueryGraph bootstrap replay should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("querygraph.bootstrap"));
+            assert!(
+                message.contains(expected_message),
+                "QueryGraph bootstrap error should describe principal proof: {message}"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "actorless QueryGraph bootstrap replay must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "actorless QueryGraph bootstrap replay must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "actorless QueryGraph bootstrap replay must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]

@@ -6,6 +6,13 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Require QueryGraph bootstrap receipt principals`.
+  Service replay admission now rejects `querygraph.bootstrap` evidence whose
+  authorization receipt principal is missing or malformed before
+  acknowledgement, graph projection, or OpenLineage projection. This binds the
+  bootstrap handoff to the same actor-proof invariant as standard catalog,
+  management, table, view, scan, and credential replay surfaces.
+- Latest completed implementation slice:
   `Require view lifecycle version evidence`.
   Service replay admission now rejects `view.upserted`, `view.loaded`, and
   `view.dropped` evidence whose view name is invalid, whose `view-version` is

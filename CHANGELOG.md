@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required `querygraph.bootstrap` replay evidence to carry a valid
+  authorization receipt principal before acknowledgement, graph projection, or
+  OpenLineage projection, with missing/malformed-principal coverage proving
+  QueryGraph bootstrap handoff cannot become actorless catalog graph material.
 - Required `view.upserted`, `view.loaded`, and `view.dropped` replay evidence
   to carry a valid view name and positive `view-version`, and required guarded
   lifecycle replay to reject non-positive `expected-view-version` values before
