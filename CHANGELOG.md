@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added compact QGLake handoff-summary and raw lineage-drain verifier
+  regression coverage proving duplicate bootstrap OpenLineage receipt hashes
+  are rejected before archived QueryGraph proof can inflate bootstrap evidence.
 - Added QGLake handoff artifact verifier regression coverage proving saved
   `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics` rejects drifted
   delivered and graph-event counts even when the verifier-output artifact hash

@@ -11748,6 +11748,21 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_summary_verifier_rejects_duplicate_bootstrap_openlineage_hashes() {
+        let mut summary = qglake_handoff_summary_json();
+        let duplicate_hash = qglake_fixture_hash("duplicate-bootstrap-openlineage");
+        summary["lakecatReplayVerification"]["queryGraphBootstrapProof"]["openLineageHashes"] =
+            json!([duplicate_hash, duplicate_hash]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject duplicate bootstrap OpenLineage hashes");
+
+        assert!(err.to_string().contains("queryGraphBootstrapProof"));
+        assert!(err.to_string().contains("openLineageHashes"));
+        assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
     fn qglake_handoff_summary_verifier_requires_required_standards() {
         let mut summary = qglake_handoff_summary_json();
         let incomplete = json!([
@@ -22795,6 +22810,28 @@ mod tests {
 
         assert!(err.to_string().contains("querygraph.bootstrap"));
         assert!(err.to_string().contains("replayEventHashes"));
+        assert!(err.to_string().contains("duplicate-free"));
+    }
+
+    #[test]
+    fn qglake_lineage_drain_verifier_rejects_duplicate_bootstrap_openlineage_hashes() {
+        let verification = qglake_handoff_lineage_verification();
+        let mut drain = qglake_handoff_lineage_drain();
+        let bootstrap = drain
+            .events
+            .iter_mut()
+            .find(|event| event.event_type == "querygraph.bootstrap")
+            .expect("bootstrap replay fixture");
+        let duplicate_hash = qglake_fixture_hash("duplicate-bootstrap-openlineage");
+        bootstrap.replay_open_lineage_hashes = vec![duplicate_hash.clone(), duplicate_hash];
+
+        let err = verify_qglake_lineage_drain(&drain, &verification, Some("did:example:agent"), 1)
+            .expect_err(
+                "QGLake lineage drain should reject duplicate bootstrap OpenLineage hashes",
+            );
+
+        assert!(err.to_string().contains("querygraph.bootstrap"));
+        assert!(err.to_string().contains("openLineageHashes"));
         assert!(err.to_string().contains("duplicate-free"));
     }
 

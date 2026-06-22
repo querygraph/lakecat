@@ -6,6 +6,19 @@ Updated: 2026-06-21
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover duplicate bootstrap OpenLineage proof`.
+  Compact QGLake handoff-summary and raw lineage-drain regression coverage now
+  proves duplicate bootstrap OpenLineage receipt hashes are rejected before
+  archived QueryGraph proof can inflate bootstrap evidence. This pins the
+  OpenLineage sibling of the existing bootstrap replay-hash duplicate guard.
+- Local verification for this bootstrap OpenLineage proof slice is green:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier_rejects_duplicate_bootstrap_openlineage_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier_rejects_duplicate_bootstrap_openlineage_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_handoff_summary_verifier -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain_verifier -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Pin QGLake verifier drain count drift`.
   QGLake handoff artifact regression coverage now proves saved
   `lakecatHandoffVerifyOutput.lineageDrainArtifactSemantics` rejects drifted
