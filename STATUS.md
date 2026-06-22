@@ -5,6 +5,25 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed documentation slice:
+  `Expand release vocabulary and Sail boundary book chapter`.
+  The book now front-loads a detailed release vocabulary for the catalog
+  concepts the current implementation exposes: the Rust service spine and
+  Turso store are LakeCat implementation choices, REST namespace/table paths
+  and commit CAS are standard Iceberg catalog behavior, idempotency,
+  pointer-log, audit/outbox, and replay validation are LakeCat hardening,
+  TypeSec receipts are governance extensions, QueryGraph/QGLake/OpenLineage
+  handoff surfaces are optional integration extensions, and only narrow
+  proof shapes such as idempotent replay, pointer history, governed
+  credentials, proof-carrying scans, lineage binding, and view proof should be
+  treated as future Iceberg-adjacent profile candidates. The added Sail
+  chapter explains why field-id projection, manifest pruning, delete handling,
+  metadata-as-data, row lineage, and typed v4 semantics belong in Sail rather
+  than a LakeCat-local shadow engine.
+- Local verification for this release-vocabulary book slice is green:
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest completed implementation/documentation slice:
   `Cover QueryGraph bootstrap receipt action drift`.
   Service outbox replay now has regression coverage proving

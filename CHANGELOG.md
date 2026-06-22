@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book with a front-loaded release vocabulary chapter
+  that thoroughly classifies the Rust service spine, Turso store, Iceberg REST
+  paths, commit CAS/idempotency/pointer-log/audit/outbox/replay hardening,
+  TypeSec-governed scan and credential proof, OpenLineage projection, and
+  QueryGraph/QGLake handoff as standard Iceberg behavior, LakeCat
+  implementation, optional LakeCat/QueryGraph/TypeSec extensions, or future
+  Iceberg-adjacent profile candidates. The new Sail section makes the engine
+  boundary explicit for PySpark, agentic, QueryGraph, and v4 workflows.
 - Added service replay regression coverage proving `querygraph.bootstrap`
   rejects a mismatched authorization receipt action before acknowledgement,
   graph projection, or OpenLineage projection. The design and book now state
