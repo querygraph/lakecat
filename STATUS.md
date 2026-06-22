@@ -5,6 +5,17 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book slice:
+  `Expand catalog concepts with workflow translation`.
+  The book now walks the same catalog state through a PySpark Iceberg client,
+  a platform operator, a governed TypeSec/Sail agent path, and QueryGraph/QGLake
+  semantic import. It sharpens which concepts are standard Iceberg parlance,
+  which are LakeCat reliability and replay extensions, which are TypeSec or
+  QueryGraph surfaces, and which narrow behaviors could become future optional
+  engine-neutral profiles. It also strengthens the Sail argument: reusable
+  table-format interpretation, scan planning, metadata-as-data, commit
+  validation, and typed v4 behavior should move into Sail so LakeCat proof
+  binds engine facts instead of catalog-local approximations.
 - Latest implementation/book slice:
   `Restore full local release gate`.
   The full local release-readiness gate is green again after repairing QGLake

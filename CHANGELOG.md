@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog-concepts chapter with workflow-focused
+  explanations for PySpark clients, platform operators, governed agents, and
+  QueryGraph/QGLake import. The new text more explicitly separates standard
+  Iceberg compatibility from LakeCat reliability extensions, TypeSec governance
+  evidence, QueryGraph semantic handoff surfaces, and future optional
+  engine-neutral profile candidates, and it strengthens the argument that Sail
+  should own reusable table interpretation so LakeCat proofs are tied to engine
+  facts rather than catalog-local approximations.
 - Restored the full local release-readiness gate. QGLake CLI fixture tests now
   use full deterministic view receipt hashes instead of stale short
   `sha256:` placeholders, and the handoff script now binds readiness
