@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog concepts chapter with a detailed
+  standard-Iceberg versus LakeCat/QueryGraph/TypeSec classification matrix,
+  concrete PySpark, Rust engine, operator, governed-agent, and QueryGraph
+  workflows, and a stronger argument for pushing Iceberg-heavy validation,
+  pruning, delete handling, metadata-as-data, and v4 work into Sail.
 - Required outbox replay admission to reject valid authorization receipt
   `action` values when they do not match the outbox event type, so replay
   cannot use a `table-load` receipt to project `table.commit` or similar

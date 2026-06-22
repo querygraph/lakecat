@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest completed book slice:
+  `Expand catalog concepts and Sail engine argument`.
+  The LakeCat book now includes a detailed concept classification matrix for
+  standard Iceberg parlance, LakeCat implementation, TypeSec/QueryGraph
+  extension surfaces, and future Iceberg-adjacent candidates. It also walks
+  through PySpark, Rust engine, operator, governed-agent, and QueryGraph
+  workflows, and explains why Iceberg-heavy validation, pruning, delete
+  handling, metadata-as-data, and v4 work should move into Sail rather than
+  LakeCat.
+- Local verification for this book slice is green:
+  `docs/book/build.sh`;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`;
+  `git diff --check`.
 - Latest completed implementation slice:
   `Bind receipt actions to outbox events`.
   Service outbox replay admission now rejects authorization receipt `action`
