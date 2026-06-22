@@ -3,6 +3,10 @@
 ## Unreleased
 
 - Added service replay regression coverage proving `credentials.vend-attempted`
+  rejects credential response `max-credential-ttl-seconds` drift from the
+  read-restriction receipt before acknowledgement, graph projection, or
+  OpenLineage projection.
+- Added service replay regression coverage proving `credentials.vend-attempted`
   rejects credential response `governed-read-required` drift from the
   read-restriction receipt before acknowledgement, graph projection, or
   OpenLineage projection.

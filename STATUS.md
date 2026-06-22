@@ -6,6 +6,18 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover credential response TTL drift`.
+  Service replay regression coverage now proves `credentials.vend-attempted`
+  rejects credential response `max-credential-ttl-seconds` drift from the
+  read-restriction receipt before acknowledgement, graph projection, or
+  OpenLineage projection. This pins the credential TTL cap evidence that
+  follows governed Sail-planned reads.
+- Local verification for this credential response TTL slice is green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_credential_response_ttl_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib credential_response -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover credential governed-read response drift`.
   Service replay regression coverage now proves `credentials.vend-attempted`
   rejects credential response `governed-read-required` drift from the
