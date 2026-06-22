@@ -1586,6 +1586,17 @@ const VIEW_RECEIPT_CHAIN_RECEIPT_EVIDENCE_FIELDS: &[&str] = &[
     "principal-kind",
     "recorded-at",
 ];
+const TABLE_IDENTITY_EVIDENCE_FIELDS: &[&str] = &["warehouse", "namespace", "name"];
+const TABLE_LIFECYCLE_SOFT_DELETE_EVIDENCE_FIELDS: &[&str] = &[
+    "table",
+    "metadata-location",
+    "version",
+    "format-version",
+    "format_version",
+    "principal",
+    "authorization-receipt",
+    "deleted-at",
+];
 
 fn validate_read_restriction_evidence_schema(
     event: &OutboxEvent,
@@ -2242,6 +2253,12 @@ fn validate_table_lifecycle_event_evidence(
         ));
     }
     if let Some(soft_delete) = soft_delete {
+        validate_object_evidence_schema(
+            event,
+            soft_delete,
+            "table lifecycle soft-delete",
+            TABLE_LIFECYCLE_SOFT_DELETE_EVIDENCE_FIELDS,
+        )?;
         let Some(soft_delete) = soft_delete.as_object() else {
             return Err(outbox_evidence_error(
                 event,
@@ -2298,6 +2315,14 @@ fn decode_table_lifecycle_identity(
     table: &Value,
     label: &str,
 ) -> Result<TableIdent, LakeCatError> {
+    if table.is_object() {
+        validate_object_evidence_schema(
+            event,
+            table,
+            &format!("{label} table identity"),
+            TABLE_IDENTITY_EVIDENCE_FIELDS,
+        )?;
+    }
     serde_json::from_value(table.clone()).map_err(|_| {
         outbox_evidence_error(
             event,
@@ -30697,6 +30722,114 @@ mod tests {
             assert!(message.contains(expected_message), "{event_id}: {message}");
             assert!(message.contains("event-id-hash=sha256:"));
             assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_table_lifecycle_identity_fields() {
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let checked_at = chrono::Utc::now();
+        let receipt = |action: &str| {
+            json!({
+                "principal": &principal,
+                "action": action,
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": checked_at,
+            })
+        };
+        let mut table_with_extra = serde_json::to_value(&table).unwrap();
+        table_with_extra["unverified-table-claim"] = json!(true);
+        let mut soft_delete_with_extra = json!({
+            "table": &table,
+            "metadata-location": "file:///tmp/events/metadata/00000.json",
+            "version": 1,
+            "format-version": 3,
+            "principal": &principal,
+            "authorization-receipt": null,
+            "deleted-at": checked_at,
+        });
+        soft_delete_with_extra["unverified-soft-delete-claim"] = json!(true);
+        let cases = vec![
+            (
+                "evt-created-extra-table-identity",
+                "table.created",
+                "table lifecycle table identity contains unexpected field unverified-table-claim",
+                json!({
+                    "audit-event-id": "audit-created-extra-table-identity",
+                    "event-type": "table.created",
+                    "table": table_with_extra,
+                    "payload": {
+                        "authorization-receipt": receipt("table-create"),
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "format-version": 3,
+                        "version": 1,
+                    }
+                }),
+            ),
+            (
+                "evt-deleted-extra-soft-delete",
+                "table.deleted",
+                "table lifecycle soft-delete contains unexpected field unverified-soft-delete-claim",
+                json!({
+                    "audit-event-id": "audit-deleted-extra-soft-delete",
+                    "event-type": "table.deleted",
+                    "table": &table,
+                    "soft-delete": soft_delete_with_extra,
+                    "authorization-receipt": receipt("table-drop"),
+                }),
+            ),
+        ];
+
+        for (event_id, event_type, expected_message, payload) in cases {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("extra table lifecycle fields should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type), "{message}");
+            assert!(message.contains(expected_message), "{event_id}: {message}");
+            assert!(message.contains("event-id-hash=sha256:"), "{message}");
+            assert!(!message.contains(event_id), "{message}");
             assert!(
                 store.delivered.lock().await.is_empty(),
                 "{event_type} must fail before acknowledgement"

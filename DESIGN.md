@@ -990,7 +990,10 @@ evidence through required `soft-delete.version` and `soft-delete.format_version`
 or `soft-delete.format-version`, and `table.deleted` replay must reject missing
 soft-delete objects, non-positive soft-delete versions, or missing/non-positive
 soft-delete format versions before acknowledgement, graph projection, or
-OpenLineage projection.
+OpenLineage projection. Full table identity objects and soft-delete objects are
+also closed over the fields LakeCat verifies before projection, so unverified
+table-scope, delete-state, principal, storage, or application claims cannot ride
+beside the checked lifecycle identity and soft-delete proof.
 
 View lifecycle replay must carry valid view names and positive store-assigned
 `view-version` values before projection, and guarded view lifecycle replay must

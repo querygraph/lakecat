@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over table lifecycle identity and soft-delete
+  schemas. Table lifecycle replay now rejects unexpected fields inside full
+  table identity objects and soft-delete evidence before acknowledgement, graph
+  projection, OpenLineage projection, or QGLake proof can inherit unverified
+  table-scope or delete-state claims.
 - Closed service outbox admission over view receipt-chain entry schemas.
   `view.version-receipt-chains-listed` replay now rejects unexpected fields
   inside nested receipt-chain and receipt objects before acknowledgement, graph

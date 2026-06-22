@@ -7800,7 +7800,11 @@ emitted by the catalog producer plus positive Iceberg `format-version`
 evidence. Delete replay carries the same generation and table-format evidence
 inside the required positive soft-delete record, accepting the durable Rust
 record spelling `format_version` and the Iceberg-style proof spelling
-`format-version`.
+`format-version`. Full table identity objects are closed over warehouse,
+namespace, and name, and soft-delete evidence is closed over the durable
+delete-proof fields LakeCat verifies. A replay sidecar cannot attach extra
+table-scope, delete-state, principal, storage, or application claims beside the
+checked lifecycle identity or soft-delete record.
 When those lifecycle events carry table `metadata-location`, table `location`,
 or soft-delete `metadata-location` evidence, the values must be non-empty before
 the event is acknowledged or projected. The Iceberg table operation remains the

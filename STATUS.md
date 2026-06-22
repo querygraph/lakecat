@@ -6,6 +6,28 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/book slice:
+  `Close service table lifecycle schemas`.
+  Service outbox admission now rejects unexpected fields inside full table
+  identity objects and soft-delete evidence for table lifecycle replay before
+  acknowledgement, graph projection, OpenLineage projection, or QGLake proof can
+  inherit unverified table-scope or delete-state claims. The design and book now
+  state this service-side closed-schema guard beside the existing table identity,
+  scope, version, format-version, metadata-location, action, and authorization
+  receipt replay checks.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -p lakecat-cli -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_extra_table_lifecycle_identity_fields -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service table_lifecycle -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service --features turso-local` passed;
+  `cargo test -p lakecat-service --all-features` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/book slice:
   `Close service view receipt-chain schemas`.
   Service outbox admission now rejects unexpected fields inside nested
   receipt-chain and receipt evidence for
