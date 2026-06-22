@@ -544,7 +544,10 @@ fields, and each later link must point at the previous receipt hash, use a
 supported operation, and preserve the expected version transition. Service
 replay must reject duplicate receipt, drop-receipt, and chain hash arrays
 before projection so later compact QGLake proof cannot inherit inflated
-view-history evidence.
+view-history evidence. Memory and Turso store reads must also reject corrupt
+durable view receipt chains whose previous links no longer match the prior
+receipt, so service replay and QueryGraph handoff never start from forged
+store-level view-history evidence.
 View receipt-list replay must also carry valid warehouse, namespace, view, and
 authorization receipt principal evidence plus the read-side `view-load` action
 before projection, so receipt hashes cannot become actorless, scope-free, or

@@ -6,6 +6,21 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation/documentation slice:
+  `Validate store view receipt-chain links`.
+  Memory and Turso store view-receipt reads now validate ordered
+  `previous-receipt-hash` links before returning receipt history, so forged
+  durable view-history evidence fails before service replay,
+  graph/OpenLineage projection, or QueryGraph/QGLake handoff can consume it.
+- Local verification for this store view receipt-chain validation slice is
+  green:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_corrupt_view_receipt_chain_links_on_read -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_corrupt_view_receipt_chain_links_on_read -- --test-threads=1 --nocapture`;
+  `cargo test -p lakecat-store --features turso-local`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
+- Latest completed implementation/documentation slice:
   `Cover governed scan receipt action drift`.
   Service outbox replay now has table-driven regression coverage proving
   `table.scan-planned` and `table.scan-tasks-fetched` reject mismatched

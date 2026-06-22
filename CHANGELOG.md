@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added memory and Turso store read validation for view receipt chains, so
+  forged `previous-receipt-hash` links are rejected before service replay,
+  graph/OpenLineage projection, or QueryGraph/QGLake handoff can consume
+  durable view-history evidence.
 - Added service replay regression coverage proving `table.scan-planned` and
   `table.scan-tasks-fetched` reject mismatched authorization receipt actions
   before acknowledgement, graph projection, or OpenLineage projection. The

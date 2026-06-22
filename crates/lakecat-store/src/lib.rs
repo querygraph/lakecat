@@ -949,6 +949,71 @@ fn latest_view_receipt_hash<'a>(
     latest_view_receipt_evidence(receipts).map(|evidence| evidence.map(|(_, hash)| hash))
 }
 
+fn validate_view_receipt_chains(receipts: &[ViewVersionReceipt]) -> LakeCatResult<()> {
+    let mut grouped = BTreeMap::<&str, Vec<&ViewVersionReceipt>>::new();
+    for receipt in receipts {
+        grouped
+            .entry(receipt.stable_id.as_str())
+            .or_default()
+            .push(receipt);
+    }
+
+    for mut chain in grouped.into_values() {
+        chain.sort_by(|left, right| {
+            left.view_version
+                .cmp(&right.view_version)
+                .then_with(|| left.recorded_at.cmp(&right.recorded_at))
+                .then_with(|| {
+                    view_version_operation_order(&left.operation)
+                        .cmp(&view_version_operation_order(&right.operation))
+                })
+        });
+        for (index, receipt) in chain.iter().enumerate() {
+            receipt.validate()?;
+            let Some(previous) = index.checked_sub(1).and_then(|index| chain.get(index)) else {
+                if receipt.operation != ViewVersionOperation::Upsert
+                    || receipt.view_version != 1
+                    || receipt.previous_view_version.is_some()
+                    || receipt.previous_receipt_hash.is_some()
+                {
+                    return Err(LakeCatError::Internal(
+                        "view receipt chain must begin with version 1 upsert without previous links"
+                            .to_string(),
+                    ));
+                }
+                continue;
+            };
+            let previous_hash = view_receipt_hash(previous)?;
+            if receipt.previous_receipt_hash.as_deref() != Some(previous_hash.as_str()) {
+                return Err(LakeCatError::Internal(
+                    "view receipt chain previous links must match the prior receipt".to_string(),
+                ));
+            }
+            match receipt.operation {
+                ViewVersionOperation::Upsert => {
+                    if receipt.previous_view_version != Some(previous.view_version)
+                        || receipt.view_version != previous.view_version.saturating_add(1)
+                    {
+                        return Err(LakeCatError::Internal(
+                            "view receipt chain upsert transition is invalid".to_string(),
+                        ));
+                    }
+                }
+                ViewVersionOperation::Drop => {
+                    if receipt.previous_view_version != Some(previous.view_version)
+                        || receipt.view_version != previous.view_version
+                    {
+                        return Err(LakeCatError::Internal(
+                            "view receipt chain drop transition is invalid".to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn view_version_operation_order(operation: &ViewVersionOperation) -> u8 {
     match operation {
         ViewVersionOperation::Upsert => 0,
@@ -2005,9 +2070,7 @@ impl CatalogStore for MemoryCatalogStore {
             })
             .cloned()
             .collect::<Vec<_>>();
-        for receipt in &receipts {
-            receipt.validate()?;
-        }
+        validate_view_receipt_chains(&receipts)?;
         Ok(receipts)
     }
 
@@ -2023,9 +2086,7 @@ impl CatalogStore for MemoryCatalogStore {
             .filter(|receipt| receipt.warehouse == *warehouse && receipt.namespace == *namespace)
             .cloned()
             .collect::<Vec<_>>();
-        for receipt in &receipts {
-            receipt.validate()?;
-        }
+        validate_view_receipt_chains(&receipts)?;
         Ok(receipts)
     }
 
@@ -3657,6 +3718,71 @@ mod memory_tests {
     }
 
     #[tokio::test]
+    async fn memory_store_rejects_corrupt_view_receipt_chain_links_on_read() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let view_name = TableName::new("active_customers").unwrap();
+        let view = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            view_name.clone(),
+            "select * from customers where active",
+            "sql",
+            Some(1),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store.upsert_view(view).await.unwrap();
+        let updated = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            view_name.clone(),
+            "select id from customers where active",
+            "sql",
+            Some(2),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        store
+            .upsert_view_if_version(updated, Some(1))
+            .await
+            .unwrap();
+
+        let forged_hash = content_hash_json(&serde_json::json!({"forged": "previous"})).unwrap();
+        store
+            .state
+            .write()
+            .await
+            .view_version_receipts
+            .get_mut(1)
+            .unwrap()
+            .previous_receipt_hash = Some(forged_hash);
+
+        let err = store
+            .list_view_version_receipts(&warehouse, &namespace, &view_name)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("view receipt chain previous links must match")
+        ));
+
+        let err = store
+            .list_namespace_view_version_receipts(&warehouse, &namespace)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("view receipt chain previous links must match")
+        ));
+    }
+
+    #[tokio::test]
     async fn memory_store_rejects_corrupt_soft_delete_records_on_restore() {
         let store = MemoryCatalogStore::new();
         let warehouse = WarehouseName::new("local").unwrap();
@@ -4290,8 +4416,8 @@ pub mod turso_store {
         ViewVersionReceipt, WarehouseRecord, metadata_pointer_conflict, namespace_not_empty,
         namespace_not_found, policy_binding_key, policy_bindings_for_table,
         require_expected_view_version, storage_profile_key, storage_profile_match, table_key,
-        validate_expected_view_version, validate_project_id, view_key, view_key_parts,
-        view_receipt_hash,
+        validate_expected_view_version, validate_project_id, validate_view_receipt_chains,
+        view_key, view_key_parts, view_receipt_hash,
     };
 
     #[derive(Debug, Clone)]
@@ -5403,9 +5529,9 @@ pub mod turso_store {
             let mut receipts = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
                 let receipt: ViewVersionReceipt = decode_json(row_string(&row, 0)?)?;
-                receipt.validate()?;
                 receipts.push(receipt);
             }
+            validate_view_receipt_chains(&receipts)?;
             Ok(receipts)
         }
 
@@ -5427,9 +5553,9 @@ pub mod turso_store {
             let mut receipts = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
                 let receipt: ViewVersionReceipt = decode_json(row_string(&row, 0)?)?;
-                receipt.validate()?;
                 receipts.push(receipt);
             }
+            validate_view_receipt_chains(&receipts)?;
             Ok(receipts)
         }
 
@@ -6805,6 +6931,76 @@ pub mod turso_store {
                 err,
                 LakeCatError::Internal(message)
                     if message.contains("view receipt hash must be a SHA-256 digest")
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_corrupt_view_receipt_chain_links_on_read() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let view_name = TableName::new("active_customers").unwrap();
+            let view = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select * from customers where active",
+                "sql",
+                Some(1),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_view(view).await.unwrap();
+            let updated = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select id from customers where active",
+                "sql",
+                Some(2),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store
+                .upsert_view_if_version(updated, Some(1))
+                .await
+                .unwrap();
+
+            let mut receipts = store
+                .list_view_version_receipts(&warehouse, &namespace, &view_name)
+                .await
+                .unwrap();
+            let receipt_id = view_receipt_hash(&receipts[1]).unwrap();
+            receipts[1].previous_receipt_hash =
+                Some(content_hash_json(&serde_json::json!({"forged": "previous"})).unwrap());
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update view_version_receipts set receipt_json = ?2 where receipt_id = ?1",
+                (receipt_id, encode_json(&receipts[1]).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .list_view_version_receipts(&warehouse, &namespace, &view_name)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("view receipt chain previous links must match")
+            ));
+
+            let err = store
+                .list_namespace_view_version_receipts(&warehouse, &namespace)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("view receipt chain previous links must match")
             ));
         }
 

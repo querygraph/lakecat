@@ -4602,6 +4602,10 @@ consumes them.
 LakeCat also validates the ordered `previous-receipt-hash` links before marking
 a namespace chain as `chain-verified`, so QueryGraph can reject a replay that
 contains hashes but not a coherent chain.
+The lower store layer now applies the same structural guard when view receipts
+are read: both memory and Turso-backed receipt reads reject forged
+`previous-receipt-hash` links before service replay, OpenLineage projection, or
+QGLake handoff can consume the chain.
 
 The verifier is fail-closed on version progression too. The first receipt must
 be a version-1 upsert with no previous version or receipt hash; zero-version
