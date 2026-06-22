@@ -6,6 +6,26 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation slice:
+  `Bind view receipt-chain hash arrays`.
+  Service replay admission now requires
+  `view.version-receipt-chains-listed` top-level `chain-hashes`,
+  `receipt-hashes`, and `drop-receipt-hashes` to exactly match the nested
+  verified receipt-chain structure. Corrupted namespace receipt-chain replay
+  can no longer swap, invent, or omit those hash arrays while keeping plausible
+  chain bodies.
+- Local verification for this implementation/book slice is green:
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_view_receipt_chain_scope_and_counts -- --test-threads=1`
+  passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "$expected_title"`
+  passed;
+  PDF page 1/page 2 text extraction confirmed the cover and contents render;
+  the versioned EPUB symlink resolves to `lakecat.epub` and byte-compares with
+  the canonical EPUB;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation slice:
   `Bind view receipt-chain heads`.
   Service replay admission now rejects
   `view.version-receipt-chains-listed` evidence whose verified chain declares a

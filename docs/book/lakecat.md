@@ -6360,6 +6360,11 @@ verified chain cannot claim a larger `receipt-count`, a different
 does not agree with the last receipt. That prevents namespace-level
 receipt-chain evidence from shedding receipts or presenting a forged head while
 keeping individually plausible receipt links.
+The top-level hash arrays are bound to the same structure: `chain-hashes`,
+`receipt-hashes`, and `drop-receipt-hashes` must exactly cover the nested
+verified chains, receipt bodies, and tombstone receipts. A replay event cannot
+declare a convenient hash set that is merely SHA-256-shaped while the embedded
+chain tells a different story.
 
 QueryGraph and operators can also read the compact receipt chain directly from
 the governed management surface:

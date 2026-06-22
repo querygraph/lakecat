@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound `view.version-receipt-chains-listed` replay hash arrays to structural
+  receipt-chain evidence, so declared chain, receipt, and drop-receipt hashes
+  must exactly cover the nested verified chains before projection.
 - Hardened `view.version-receipt-chains-listed` replay admission so verified
   view receipt chains must bind declared `receipt-count`, latest view version,
   latest operation, and tombstone state back to the actual receipt array before

@@ -4377,6 +4377,9 @@ fn validate_view_receipt_chain_event_evidence(
     let mut verified_count = 0u64;
     let mut receipt_count = 0u64;
     let mut tombstone_count = 0u64;
+    let mut structural_chain_hashes = BTreeSet::new();
+    let mut structural_receipt_hashes = BTreeSet::new();
+    let mut structural_drop_receipt_hashes = BTreeSet::new();
     for chain in chains {
         let Some(chain_receipt_count) = chain.get("receipt-count").and_then(Value::as_u64) else {
             return Err(outbox_evidence_error(
@@ -4402,6 +4405,23 @@ fn validate_view_receipt_chain_event_evidence(
         verified_count = verified_count.saturating_add(1);
         validate_view_receipt_chain_hash_evidence(event, chain)?;
         validate_view_receipt_chain_structure_evidence(event, chain)?;
+        if let Some(chain_hash) = chain.get("chain-hash").and_then(Value::as_str) {
+            structural_chain_hashes.insert(chain_hash.to_string());
+        }
+        if let Some(receipts) = chain.get("receipts").and_then(Value::as_array) {
+            for receipt in receipts {
+                if let Some(receipt_hash) = receipt.get("receipt-hash").and_then(Value::as_str) {
+                    structural_receipt_hashes.insert(receipt_hash.to_string());
+                    if receipt
+                        .get("operation")
+                        .and_then(Value::as_str)
+                        .is_some_and(|operation| operation == "drop")
+                    {
+                        structural_drop_receipt_hashes.insert(receipt_hash.to_string());
+                    }
+                }
+            }
+        }
     }
 
     if verified_count != expected_verified_count {
@@ -4434,6 +4454,43 @@ fn validate_view_receipt_chain_event_evidence(
         &drop_receipt_hashes,
         "view receipt-chain drop-receipt-hashes",
     )?;
+    validate_hash_array_covers_structure(
+        event,
+        "view receipt-chain chain-hashes",
+        &chain_hashes,
+        &structural_chain_hashes,
+    )?;
+    validate_hash_array_covers_structure(
+        event,
+        "view receipt-chain receipt-hashes",
+        &receipt_hashes,
+        &structural_receipt_hashes,
+    )?;
+    validate_hash_array_covers_structure(
+        event,
+        "view receipt-chain drop-receipt-hashes",
+        &drop_receipt_hashes,
+        &structural_drop_receipt_hashes,
+    )?;
+    Ok(())
+}
+
+fn validate_hash_array_covers_structure(
+    event: &OutboxEvent,
+    label: &str,
+    declared: &[&str],
+    structural: &BTreeSet<String>,
+) -> Result<(), LakeCatError> {
+    let declared = declared
+        .iter()
+        .map(|value| (*value).to_string())
+        .collect::<BTreeSet<_>>();
+    if &declared != structural {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} must match structural receipt-chain evidence"),
+        ));
+    }
     Ok(())
 }
 
@@ -32213,6 +32270,33 @@ mod tests {
             "evt-view-chain-tombstoned-drift",
             "verified view receipt-chain tombstoned flag must match the last receipt operation",
             chain_tombstoned_drift,
+        ));
+
+        let mut chain_hash_coverage_drift = base_payload.clone();
+        chain_hash_coverage_drift["chain-hashes"] =
+            json!([content_hash_bytes(b"forged-view-receipt-chain")]);
+        cases.push((
+            "evt-view-chain-chain-hash-coverage-drift",
+            "view receipt-chain chain-hashes must match structural receipt-chain evidence",
+            chain_hash_coverage_drift,
+        ));
+
+        let mut receipt_hash_coverage_drift = base_payload.clone();
+        receipt_hash_coverage_drift["receipt-hashes"] =
+            json!([content_hash_bytes(b"forged-view-receipt")]);
+        cases.push((
+            "evt-view-chain-receipt-hash-coverage-drift",
+            "view receipt-chain receipt-hashes must match structural receipt-chain evidence",
+            receipt_hash_coverage_drift,
+        ));
+
+        let mut drop_receipt_hash_coverage_drift = base_payload.clone();
+        drop_receipt_hash_coverage_drift["drop-receipt-hashes"] =
+            json!([content_hash_bytes(b"forged-view-drop-receipt")]);
+        cases.push((
+            "evt-view-chain-drop-receipt-hash-coverage-drift",
+            "view receipt-chain drop-receipt-hashes must match structural receipt-chain evidence",
+            drop_receipt_hash_coverage_drift,
         ));
 
         for (event_id, expected_message, payload) in cases {
