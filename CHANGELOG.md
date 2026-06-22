@@ -3,6 +3,10 @@
 ## Unreleased
 
 - Added service replay regression coverage proving `credentials.vend-attempted`
+  rejects blocked raw-credential exception evidence whose allowed=false proof
+  omits a non-empty reason before acknowledgement, graph projection, or
+  OpenLineage projection.
+- Added service replay regression coverage proving `credentials.vend-attempted`
   rejects malformed non-boolean raw-credential exception `allowed` evidence
   before acknowledgement, graph projection, or OpenLineage projection.
 - Added service replay regression coverage proving `credentials.vend-attempted`

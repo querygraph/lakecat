@@ -6,6 +6,19 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest completed implementation slice:
+  `Cover blocked raw credential exception reason`.
+  Service replay regression coverage now proves `credentials.vend-attempted`
+  rejects blocked raw-credential exception evidence whose `allowed=false` proof
+  omits a non-empty reason before acknowledgement, graph projection, or
+  OpenLineage projection. This pins the receipt-side reason proof before
+  LakeCat compares it to the top-level credential block reason.
+- Local verification for this blocked raw-credential exception reason slice is
+  green:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_blocked_raw_credential_exception_missing_reason -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib raw_credential_exception -- --test-threads=1`;
+  `git diff --check`.
+- Latest completed implementation slice:
   `Cover malformed raw credential exception allowed`.
   Service replay regression coverage now proves `credentials.vend-attempted`
   rejects malformed non-boolean `lakecat:raw-credential-exception.allowed`
