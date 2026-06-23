@@ -9756,7 +9756,11 @@ missing prefix hashes, malformed prefix hashes, duplicate prefix hashes,
 malformed issuer-config hashes, unsigned issuer-config entry counts, or a zero
 issuer-config entry count paired with a non-canonical empty issuer hash reject
 the raw lineage-drain summary instead of silently omitting redacted
-credential proof.
+credential proof. It also reuses the service credential-response binding, so a
+raw summary cannot drift the returned credential away from the catalog
+storage-profile id, storage provider, issuance mode, receipt principal,
+governed-read posture, secret-ref posture, or authorized TTL while preserving a
+valid-looking redacted prefix hash.
 Credential replay also rejects a governed `read-restriction` that is missing
 from, or different from, the authorization receipt context, so credential TTL
 and blocked-agent evidence cannot drift away from the receipt that authorized

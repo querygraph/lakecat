@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bound lineage-drain credential response summaries to catalog evidence. Raw
+  credential summaries now reuse the service credential-response validator, so
+  returned credential proof must still match the storage profile, receipt
+  principal, governed-read posture, secret-ref posture, and TTL evidence before
+  compact QGLake proof is built.
 - Bound raw credential exception summaries to authorization receipt context.
   Raw lineage-drain credential summaries now reject top-level-only,
   receipt-context-only, or drifted `lakecat:raw-credential-exception` evidence

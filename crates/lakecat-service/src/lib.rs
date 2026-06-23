@@ -8070,37 +8070,20 @@ fn lineage_summary_credential_prefix_hashes(
 ) -> Result<Vec<String>, LakeCatError> {
     let entries = optional_array_field(event, payload, "credential-response-evidence")?
         .expect("field presence was checked by caller");
+    let storage_profile = payload.get("storage-profile").ok_or_else(|| {
+        outbox_evidence_error(
+            event,
+            "lineage drain credential-response evidence must contain storage-profile",
+        )
+    })?;
     let mut hashes = Vec::with_capacity(entries.len());
     for entry in entries {
-        validate_credential_response_entry_schema(event, entry)?;
-        validate_required_full_hash_field(event, entry, "prefix-hash")?;
-        validate_required_full_hash_field(event, entry, "issuer-config-hash")?;
-        let Some(issuer_config_entry_count) = entry
-            .get("issuer-config-entry-count")
-            .and_then(Value::as_u64)
-        else {
-            return Err(outbox_evidence_error(
-                event,
-                "lineage drain credential-response issuer-config-entry-count must be unsigned",
-            ));
-        };
-        if issuer_config_entry_count == 0 {
-            let expected_empty_hash = content_hash_json(&json!([]))?;
-            validate_string_field_equals(
-                event,
-                entry,
-                "issuer-config-hash",
-                &expected_empty_hash,
-                "lineage drain credential-response",
-            )?;
-        }
-        hashes.push(
-            entry
-                .get("prefix-hash")
-                .and_then(Value::as_str)
-                .expect("prefix hash field was validated")
-                .to_string(),
-        );
+        hashes.push(validate_credential_response_entry_evidence(
+            event,
+            payload,
+            storage_profile,
+            entry,
+        )?);
     }
     let hash_refs = hashes.iter().map(String::as_str).collect::<Vec<_>>();
     validate_unique_hash_array(
@@ -53355,10 +53338,48 @@ mod tests {
             .to_string();
         assert!(
             err.contains(
-                "lineage drain credential-response issuer-config-hash must match catalog evidence"
+                "credential-vend credential-response issuer-config-hash must match catalog evidence"
             ),
             "{err}"
         );
+
+        let drift_cases = [
+            (
+                "evt-summary-credential-response-profile-drift",
+                "storage-profile-id",
+                json!("forged-profile"),
+                "credential-vend credential-response storage-profile-id must match catalog evidence",
+            ),
+            (
+                "evt-summary-credential-response-principal-drift",
+                "authorization-principal",
+                json!("agent:forged"),
+                "credential-vend credential-response authorization-principal must match catalog evidence",
+            ),
+            (
+                "evt-summary-credential-response-governed-drift",
+                "governed-read-required",
+                json!("true"),
+                "credential-vend credential-response governed-read-required must match catalog evidence",
+            ),
+            (
+                "evt-summary-credential-response-ttl-drift",
+                "max-credential-ttl-seconds",
+                json!("300"),
+                "credential-vend credential-response max-credential-ttl-seconds must be absent when not authorized by receipt evidence",
+            ),
+        ];
+        for (event_id, field, value, expected_message) in drift_cases {
+            let mut event = valid_lineage_summary_credential_event(event_id);
+            event.event_type = "credentials.summary-only".to_string();
+            event.payload["event-type"] = json!("credentials.summary-only");
+            event.payload["payload"]["event-type"] = json!("credentials.summary-only");
+            event.payload["payload"]["credential-response-evidence"][0][field] = value;
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{err}");
+        }
 
         let duplicate_prefix_hash = content_hash_bytes(b"duplicate-credential-prefix");
         let mut duplicate_prefix_hashes =

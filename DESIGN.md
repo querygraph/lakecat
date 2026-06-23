@@ -762,8 +762,12 @@ unverified credential-scope, issuer, storage, authorization, or secret-ref
 claims beside an otherwise valid redacted prefix proof. When a returned
 credential entry reports zero issuer config entries, its `issuer-config-hash`
 must also match LakeCat's canonical empty issuer-config hash; non-zero issuer
-config remains redacted as count plus full digest evidence. Service outbox admission
-must also close the top-level and authorization-receipt-context
+config remains redacted as count plus full digest evidence. Raw lineage-drain
+summaries must reuse that same credential-response binding before compact
+QGLake proof is built, so summary-only replay cannot become a weaker path for
+storage-profile, principal, governed-read, secret-ref, TTL, or issuer evidence
+drift. Service outbox admission must also close the top-level and
+authorization-receipt-context
 `lakecat:raw-credential-exception` objects over the raw exception fields
 LakeCat actually compares, so replay cannot attach unverified raw-credential
 posture claims beside an otherwise matching blocked-agent or trusted-human

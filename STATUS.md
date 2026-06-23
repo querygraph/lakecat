@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest lineage-drain credential response binding hardening:
+  raw credential summaries now reuse the service credential-response validator
+  for returned credential evidence, so compact QGLake proof cannot inherit
+  storage-profile, authorization-principal, governed-read, secret-ref, or TTL
+  drift beside otherwise valid redacted prefix hashes.
+- Local verification for this credential response summary-binding slice passed:
+  `cargo fmt -p lakecat-service -- --check`; and
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_credential_prefix_hashes -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest raw credential exception receipt-binding summary hardening:
   raw lineage-drain credential summaries now reject top-level-only,
   authorization-receipt-context-only, or drifted
