@@ -108,6 +108,11 @@ The proof contract requires a clean working tree by default. While editing the
 contract or release docs, use `LAKECAT_RELEASE_PROOF_ALLOW_DIRTY=1` only as a
 local self-test; that mode still checks unstaged, staged, and untracked paths
 against the post-proof allowlist.
+The full release-candidate gate runs the same contract with
+`LAKECAT_RELEASE_PROOF_CANDIDATE=1`. Candidate mode still requires a clean tree
+and coherent active proof references, but it allows the current clean `HEAD` to
+become the next proof commit so the proof-refresh documentation commit does not
+create an infinite hash-update loop.
 
 Use the quick gate only while preparing a narrow slice:
 

@@ -364,6 +364,11 @@ Authoritative first-release evidence:
   the same allowlist to unstaged, staged, and untracked paths. If executable
   behavior changes after the cited proof commit, the broad release-candidate
   gate must be rerun from the new clean candidate.
+- `scripts/check-release-readiness.sh --release-candidate` runs the
+  release-proof contract with `LAKECAT_RELEASE_PROOF_CANDIDATE=1`. Candidate
+  mode is the non-circular proof path: it still requires a clean tree and
+  coherent active proof references, while allowing the current clean `HEAD` to
+  be the next proof commit that the follow-up docs/book refresh records.
 
 Approximate completion for this first-release scope is about 90 percent as
 of June 23, 2026. The percentage is intentionally about the locally verifiable

@@ -13669,6 +13669,17 @@ That is only a local self-test mode. It still checks unstaged, staged, and
 untracked paths against the same post-proof allowlist, so a dirty Rust source
 file or manifest does not masquerade as documentation-only release evidence.
 
+The full release-candidate gate runs the same contract in candidate mode:
+
+```sh
+LAKECAT_RELEASE_PROOF_CANDIDATE=1 scripts/check-release-proof-contract.sh
+```
+
+That mode is intentionally narrow. It still requires a clean tree and coherent
+active proof references, but it allows the current clean `HEAD` to become the
+next proof commit. After the heavy gate passes, the follow-up documentation and
+book artifact refresh records that new proof commit.
+
 The already-published `v0.1.0` tag is a baseline, not something to move. While
 the workspace version remains `0.1.0` and `HEAD` is past `v0.1.0`, post-tag
 hardening stays under `Unreleased`. The release version contract checks that

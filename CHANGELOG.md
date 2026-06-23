@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Wired the release-proof freshness contract into the clean release-candidate
+  gate. `scripts/check-release-readiness.sh --release-candidate` now runs
+  `scripts/check-release-proof-contract.sh` in candidate mode, so the heavy
+  gate can prove the current clean `HEAD` as the next candidate without
+  creating a self-referential proof-hash loop.
 - Hardened the release-proof freshness contract against dirty working trees.
   `scripts/check-release-proof-contract.sh` now requires a clean tree by
   default, and its explicit dirty-test mode includes unstaged, staged, and

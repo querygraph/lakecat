@@ -49,6 +49,12 @@ Updated: 2026-06-23
   self-tests, applies the same allowlist to unstaged, staged, and untracked
   paths. Any executable change after the cited proof requires a new full
   `scripts/check-release-readiness.sh --release-candidate` run.
+- Latest release-gate proof-contract wiring:
+  `scripts/check-release-readiness.sh --release-candidate` now runs the
+  release-proof contract in clean candidate mode. That mode keeps active proof
+  references coherent while allowing the current clean `HEAD` to become the
+  next full-gate proof commit before the follow-up documentation/book artifact
+  refresh records it.
 - First-release proximity:
   the locally verifiable LakeCat catalog substrate is now about 90 percent
   complete for a first release. Remaining work is release engineering and

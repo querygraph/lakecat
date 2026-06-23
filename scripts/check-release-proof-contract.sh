@@ -18,8 +18,15 @@ for file in README.md DESIGN.md STATUS.md CHANGELOG.md RELEASE.md docs/book/lake
 done
 
 allow_dirty="${LAKECAT_RELEASE_PROOF_ALLOW_DIRTY:-0}"
+candidate_mode="${LAKECAT_RELEASE_PROOF_CANDIDATE:-0}"
 if [[ "$allow_dirty" != "0" && "$allow_dirty" != "1" ]]; then
   fail "LAKECAT_RELEASE_PROOF_ALLOW_DIRTY must be 0 or 1"
+fi
+if [[ "$candidate_mode" != "0" && "$candidate_mode" != "1" ]]; then
+  fail "LAKECAT_RELEASE_PROOF_CANDIDATE must be 0 or 1"
+fi
+if [[ "$allow_dirty" == "1" && "$candidate_mode" == "1" ]]; then
+  fail "LAKECAT_RELEASE_PROOF_ALLOW_DIRTY and LAKECAT_RELEASE_PROOF_CANDIDATE cannot both be 1"
 fi
 if [[ "$allow_dirty" == "0" && -n "$(git status --short)" ]]; then
   echo "release proof contract requires a clean tree" >&2
@@ -51,7 +58,7 @@ git rev-parse -q --verify "$proof_ref^{commit}" >/dev/null || \
 git merge-base --is-ancestor "$proof_ref" HEAD || \
   fail "release-candidate proof ref $proof_ref must be an ancestor of HEAD"
 
-if [[ "$(git rev-parse "$proof_ref")" != "$(git rev-parse HEAD)" ]]; then
+if [[ "$(git rev-parse "$proof_ref")" != "$(git rev-parse HEAD)" && "$candidate_mode" == "0" ]]; then
   {
     git diff --name-only "$proof_ref"..HEAD
     if [[ "$allow_dirty" == "1" ]]; then
@@ -78,4 +85,8 @@ if ! rg -q 'documentation/book artifact refresh is allowed' RELEASE.md; then
   fail "RELEASE.md must document the post-proof documentation/book artifact refresh rule"
 fi
 
-echo "LakeCat release proof contract is intact: $proof_ref"
+if [[ "$candidate_mode" == "1" ]]; then
+  echo "LakeCat release proof candidate contract is intact: $proof_ref -> $(git rev-parse --short HEAD)"
+else
+  echo "LakeCat release proof contract is intact: $proof_ref"
+fi

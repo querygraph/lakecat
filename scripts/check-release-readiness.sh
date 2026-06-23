@@ -35,7 +35,8 @@ Options:
                   release evidence by itself.
   --release-candidate
                   Require a clean tree before and after the complete full gate.
-                  This rejects skipped book or handoff proof.
+                  This rejects skipped book or handoff proof and runs the
+                  release-proof contract in clean candidate mode.
   --skip-handoff Skip scripts/qglake-handoff-local.sh in full mode and report
                   partial evidence instead of release-candidate success.
   --skip-book    Skip docs/book/build.sh in full mode and report partial
@@ -98,10 +99,14 @@ run bash -n scripts/check-workflow-trigger-contract.sh
 run bash -n scripts/qglake-handoff-local.sh
 run bash -n scripts/check-book-artifact-contract.sh
 run bash -n scripts/check-release-version-contract.sh
+run bash -n scripts/check-release-proof-contract.sh
 run bash -n scripts/check-release-readiness.sh
 run scripts/check-local-dependency-contract.sh
 run scripts/check-workflow-trigger-contract.sh
 run scripts/check-release-version-contract.sh
+if [[ "$require_clean" -ne 0 ]]; then
+  run env LAKECAT_RELEASE_PROOF_CANDIDATE=1 scripts/check-release-proof-contract.sh
+fi
 run scripts/check-book-artifact-contract.sh docs/book/dist
 
 run cargo fmt \

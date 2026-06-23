@@ -137,6 +137,7 @@ require_file Cargo.toml
 require_file .github/workflows/ci.yml
 require_file scripts/check-release-readiness.sh
 require_file scripts/check-release-version-contract.sh
+require_file scripts/check-release-proof-contract.sh
 require_file DESIGN.md
 require_file README.md
 require_file RELEASE.md
@@ -154,6 +155,12 @@ require_pattern 'scripts/check-workflow-trigger-contract.sh' scripts/check-relea
   "release-readiness gate must run the workflow trigger self-test"
 require_pattern 'scripts/check-release-version-contract.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must run the release version contract"
+require_pattern 'scripts/check-release-proof-contract.sh' scripts/check-release-readiness.sh \
+  "release-candidate gate must run the release proof contract"
+require_pattern 'LAKECAT_RELEASE_PROOF_CANDIDATE=1' scripts/check-release-readiness.sh \
+  "release-candidate gate must run the release proof contract in candidate mode"
+require_pattern 'LAKECAT_RELEASE_PROOF_CANDIDATE' scripts/check-release-proof-contract.sh \
+  "release proof contract must support clean candidate mode"
 require_pattern 'scripts/check-book-artifact-contract.sh docs/book/dist' scripts/check-release-readiness.sh \
   "release-readiness gate must run the tracked book artifact contract"
 require_pattern 'require_file CHANGELOG\.md' scripts/check-release-version-contract.sh \
