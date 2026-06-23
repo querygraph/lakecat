@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tightened the local QGLake handoff management verifier. Compact management
+  proof now rejects duplicate server/project/warehouse/policy/storage-profile
+  identity arrays and requires present `warehouseProjectId` scope evidence to
+  match a listed project.
 - Bound raw lineage-drain table commit-history counts to sequence/hash arrays.
   Archived QGLake summaries now reject drifted `commit-count`,
   `sequence-numbers`, and `commit-hashes` evidence before compact

@@ -9490,9 +9490,11 @@ and projected for QueryGraph. The compact handoff
 verifier repeats that check with the stricter full `sha256:`-prefixed 64-hex
 digest shape for every management replay and OpenLineage array, and it verifies
 that `serverIds`, `projectIds`, `warehouseNames`, `policyIds`, and
-`storageProfileIds` match their recorded counts and are duplicate-free. Saved
-summaries therefore cannot preserve only prefix-shaped placeholders for
-control-plane read receipts, inflate a count with repeated valid identities, or
+`storageProfileIds` match their recorded counts and are duplicate-free. When
+`warehouseProjectId` is present, it must be a non-empty listed project id.
+Saved summaries therefore cannot preserve only prefix-shaped placeholders for
+control-plane read receipts, inflate a count with repeated valid identities,
+detach a project-filtered warehouse inventory from the project list, or
 normalize malformed management identities later. Captured replay agreement
 checks the same ID arrays against the saved compact `managementProof`, so a
 handoff cannot keep valid artifact hashes while swapping the server, project,

@@ -937,7 +937,10 @@ inflate server, project, warehouse, policy, or storage-profile reads by
 repeating valid control-plane identities. It must also preserve warehouse-list
 project scope as compact `warehouseProjectId` evidence and reject malformed or
 unlisted scopes, so archived QGLake management proof cannot detach a
-project-filtered warehouse inventory from the project list it claims.
+project-filtered warehouse inventory from the project list it claims. The
+local QGLake handoff script now enforces both the duplicate-free management ID
+arrays and the listed-project `warehouseProjectId` rule before accepting
+compact management proof.
 Raw lineage-drain management ID summary arrays must match that posture:
 `project-ids`, `server-ids`, `warehouse-names`, `policy-ids`, and
 `storage-profile-ids` are malformed when they are not string arrays, carry blank

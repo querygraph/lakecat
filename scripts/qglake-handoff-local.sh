@@ -552,6 +552,28 @@ function requireStringArrayCount(value, expected, label) {
     console.error(`LakeCat management replay evidence ${label} must have ${expected} non-empty string value(s)`);
     process.exit(1);
   }
+  const seen = new Set();
+  for (const item of value) {
+    if (seen.has(item)) {
+      console.error(`LakeCat management replay evidence ${label} must be duplicate-free`);
+      process.exit(1);
+    }
+    seen.add(item);
+  }
+}
+function optionalListedProjectId(value, projectIds, label) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== "string" || value.length === 0) {
+    console.error(`LakeCat management replay evidence ${label} must be a non-empty string when present`);
+    process.exit(1);
+  }
+  if (!projectIds.includes(value)) {
+    console.error(`LakeCat management replay evidence ${label} must match projectIds`);
+    process.exit(1);
+  }
+  return value;
 }
 for (const field of [
   "serverCount",
@@ -586,6 +608,7 @@ requireStringArrayCount(evidence.projectIds, evidence.projectCount, "projectIds"
 requireStringArrayCount(evidence.warehouseNames, evidence.warehouseCount, "warehouseNames");
 requireStringArrayCount(evidence.policyIds, evidence.policyBindingCount, "policyIds");
 requireStringArrayCount(evidence.storageProfileIds, evidence.storageProfileCount, "storageProfileIds");
+const warehouseProjectId = optionalListedProjectId(evidence.warehouseProjectId, evidence.projectIds, "warehouseProjectId");
 process.stdout.write(JSON.stringify({
   serverCount: evidence.serverCount,
   serverIds: evidence.serverIds,
@@ -595,7 +618,7 @@ process.stdout.write(JSON.stringify({
   projectGraphEvents: evidence.projectGraphEvents,
   warehouseCount: evidence.warehouseCount,
   warehouseNames: evidence.warehouseNames,
-  warehouseProjectId: evidence.warehouseProjectId ?? null,
+  warehouseProjectId,
   warehouseGraphEvents: evidence.warehouseGraphEvents,
   policyBindingCount: evidence.policyBindingCount,
   policyIds: evidence.policyIds,

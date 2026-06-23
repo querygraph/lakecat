@@ -5,6 +5,12 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest handoff-script hardening slice:
+  `Tighten compact management identity proof`.
+  `scripts/qglake-handoff-local.sh` now rejects duplicate compact management
+  identity arrays and requires present `warehouseProjectId` scope evidence to
+  be a non-empty listed project id before saved QGLake management proof can be
+  accepted.
 - Latest implementation/testing slice:
   `Bind commit-history summary counts`.
   Raw lineage-drain summary construction now requires `commit-count`,
