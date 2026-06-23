@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added explicit Turso namespace row-column drift regression coverage. Namespace
+  list, load, and drop paths now have focused test coverage proving corrupted
+  durable `namespaces` row columns cannot remap namespace state away from the
+  decoded namespace identity.
 - Added explicit Turso active-view row-column drift regression coverage. The
   durable view load, list, guarded mutation, and drop paths now have focused
   test coverage proving corrupted `views` row columns cannot remap an active

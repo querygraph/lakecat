@@ -6,6 +6,20 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Add Turso namespace row-column drift regression`.
+  Turso namespace list, load, and drop paths now have explicit regression
+  coverage proving corrupted durable `namespaces` row columns cannot remap a
+  decoded namespace into another warehouse/path scope.
+- Local verification for this Turso namespace row-column scope slice is
+  green:
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_namespace_row_column_scope_drift -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed; `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Add Turso active-view row-column drift regression`.
   Turso active-view load, list, guarded mutation, and drop paths now have
   explicit regression coverage proving corrupted durable `views` row columns

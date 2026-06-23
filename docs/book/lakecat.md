@@ -6740,6 +6740,12 @@ Warehouse reads bind decoded records to the Turso row's warehouse, project id,
 and storage-root columns before returning tenant-root inventory. That keeps
 management and QueryGraph bootstrap proof from inheriting a row index that
 points a valid JSON warehouse at a different project or storage root.
+Namespace reads use the same decoded-row binding. A namespace list, load, or
+drop operation must reconcile the decoded namespace with the selected warehouse
+and durable `namespaces.namespace_path` row column before standard namespace
+state can be returned or removed. That prevents a corrupted local catalog row
+from moving a standard Iceberg namespace into another path before management,
+outbox replay, or QueryGraph bootstrap consumes it.
 For governed policy evidence, Turso policy-binding reads bind the decoded JSON
 back to the row's warehouse, policy id, namespace path, table name, and enforced
 flag before a binding can be returned or matched to a table. That keeps a

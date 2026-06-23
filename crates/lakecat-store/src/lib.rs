@@ -8677,6 +8677,50 @@ pub mod turso_store {
         }
 
         #[tokio::test]
+        async fn turso_store_rejects_namespace_row_column_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let shadow_namespace = "tenant_shadow".parse::<Namespace>().unwrap();
+            store
+                .create_namespace(&warehouse, namespace.clone())
+                .await
+                .unwrap();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update namespaces
+                 set namespace_path = ?3
+                 where warehouse = ?1 and namespace_path = ?2",
+                (
+                    warehouse.as_str(),
+                    namespace.path().as_str(),
+                    shadow_namespace.path().as_str(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            for err in [
+                store.list_namespaces(&warehouse).await.unwrap_err(),
+                store
+                    .load_namespace(&warehouse, &shadow_namespace)
+                    .await
+                    .unwrap_err(),
+                store
+                    .drop_namespace(&warehouse, &shadow_namespace)
+                    .await
+                    .unwrap_err(),
+            ] {
+                assert!(matches!(
+                    err,
+                    LakeCatError::Internal(message)
+                        if message.contains("namespace row scope does not match")
+                ));
+            }
+        }
+
+        #[tokio::test]
         async fn turso_store_rejects_deserialized_empty_table_locations() {
             let store = TursoCatalogStore::in_memory().await.unwrap();
             let warehouse = WarehouseName::new("local").unwrap();
