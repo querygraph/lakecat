@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expanded raw table-commit summary schema coverage. Raw lineage-drain
+  `table.commit` summaries now explicitly prove duplicate alias fields and
+  unverified nested, top-level, or wrapper claims are rejected with hash-only
+  event identity before compact QGLake commit proof can inherit them.
 - Added pending outbox missing payload event-type coverage. Embedded and Turso
   pending-row validation now explicitly prove a corrupt row whose payload drops
   `event-type` fails with hash-only event-id, event-type, and payload evidence

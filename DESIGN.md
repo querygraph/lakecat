@@ -1161,7 +1161,10 @@ cannot append unverified commit, policy, storage, graph, lineage, QueryGraph,
 or application claims beside an otherwise valid pointer transition. Service
 replay now also closes the wrapped `table.commit` envelope over the producer
 wrapper fields, so those claims cannot ride beside an otherwise valid checked
-inner commit payload. The store
+inner commit payload. Raw lineage-drain summary construction now pins the same
+table-commit alias-conflict and closed-schema rejection path, so compact QGLake
+commit proof cannot inherit duplicate pointer aliases or unverified nested,
+top-level, or wrapper commit claims. The store
 producer now rejects table and
 commit metadata that lacks positive `format-version` evidence before producing
 durable commit records, and it emits explicit `snapshot_id: 0` evidence for

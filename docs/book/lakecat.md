@@ -10130,6 +10130,13 @@ the `table.commit` event, whose `allowed` decision is true, whose engine is
 non-empty, whose `checked_at` timestamp is RFC3339, an RFC3339 commit
 `committed_at` timestamp, and commit hash evidence that is full SHA-256 before
 graph or OpenLineage projection can start.
+Raw lineage-drain summary construction uses the same table-commit admission
+shape: duplicate snake-case/kebab-case aliases for the same pointer or proof
+field fail closed, and nested `commit`, top-level payload, and wrapper objects
+are closed over the fields LakeCat actually verifies. A compact QGLake commit
+summary therefore cannot smuggle an extra graph, lineage, storage, policy, or
+application claim beside otherwise valid request/response hashes and pointer
+evidence.
 The action, decision, engine, and timestamp fields are deliberately small but
 important: replay evidence must prove which catalog action was authorized,
 prove the catalog acted under an affirmative authorization decision, say which

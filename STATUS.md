@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw table-commit summary schema coverage:
+  raw lineage-drain `table.commit` summaries now explicitly prove duplicate
+  alias fields and unverified nested, top-level, or wrapper claims are rejected
+  with hash-only event identity before compact QGLake commit proof can inherit
+  them.
+- Local verification for this raw table-commit summary schema slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_table_commit_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_extra_table_commit_payload_fields -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest pending outbox missing payload event-type coverage:
   embedded and Turso pending-row validation now explicitly prove a corrupt
   durable pending row whose payload drops `event-type` fails with hash-only

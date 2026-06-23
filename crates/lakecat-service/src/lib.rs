@@ -52346,6 +52346,16 @@ mod tests {
                 "blank-previous-metadata",
                 "table commit evidence previous metadata location must be non-empty when present",
             ),
+            (
+                "duplicate-new-metadata-alias",
+                "duplicate-new-metadata-alias",
+                "table commit must not carry both new_metadata_location and new-metadata-location",
+            ),
+            (
+                "extra-commit-claim",
+                "extra-commit-claim",
+                "table commit contains unexpected field unverified-commit-claim",
+            ),
         ] {
             let mut commit = base_commit.clone();
             match mutate {
@@ -52385,6 +52395,13 @@ mod tests {
                 "blank-previous-metadata" => {
                     commit["previous_metadata_location"] = json!(" ");
                 }
+                "duplicate-new-metadata-alias" => {
+                    commit["new-metadata-location"] =
+                        json!("file:///tmp/events/metadata/00002.json");
+                }
+                "extra-commit-claim" => {
+                    commit["unverified-commit-claim"] = json!("already-authorized");
+                }
                 _ => unreachable!("unknown table commit summary mutation"),
             }
             let event = OutboxEvent {
@@ -52405,6 +52422,84 @@ mod tests {
                         "checked_at": chrono::Utc::now(),
                     },
                 }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            };
+
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{case}: {err}");
+            assert!(err.contains("event-id-hash=sha256:"), "{case}: {err}");
+            assert!(!err.contains(event.event_id.as_str()), "{case}: {err}");
+        }
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_extra_table_commit_payload_fields() {
+        let receipt = OutboxProjectionReceipt::default();
+        let table = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        let principal = Principal::new("agent:writer", PrincipalKind::Agent).unwrap();
+        let commit = json!({
+            "table": table,
+            "previous_metadata_location": "file:///tmp/events/metadata/00000.json",
+            "new_metadata_location": "file:///tmp/events/metadata/00001.json",
+            "sequence_number": 7,
+            "principal": principal,
+            "format_version": 3,
+            "snapshot_id": 42,
+            "policy_hash": null,
+            "request_hash": content_hash_json(&json!({"request": "commit"})).unwrap(),
+            "response_hash": content_hash_json(&json!({"response": "commit"})).unwrap(),
+            "idempotency_key_sha256": content_hash_bytes("commit:events:0001".as_bytes()),
+            "committed_at": chrono::Utc::now(),
+        });
+        let inner_payload = json!({
+            "audit-event-id": "audit-summary-extra-commit-payload",
+            "event-type": "table.commit",
+            "table": table,
+            "commit": commit,
+            "authorization-receipt": {
+                "principal": principal,
+                "action": "table-commit",
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            },
+        });
+
+        for (case, payload, expected_message) in [
+            (
+                "extra-top-level",
+                {
+                    let mut payload = inner_payload.clone();
+                    payload["unverified-commit-claim"] = json!("already-authorized");
+                    payload
+                },
+                "table commit payload contains unexpected field unverified-commit-claim",
+            ),
+            (
+                "extra-wrapper",
+                json!({
+                    "audit-event-id": "audit-summary-extra-commit-wrapper",
+                    "event-type": "table.commit",
+                    "table": table,
+                    "payload": inner_payload,
+                    "unverified-commit-wrapper-claim": "already-authorized",
+                }),
+                "table commit outbox payload contains unexpected field unverified-commit-wrapper-claim",
+            ),
+        ] {
+            let event = OutboxEvent {
+                event_id: format!("evt-summary-table-commit-{case}"),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commit".to_string(),
+                payload,
                 created_at: chrono::Utc::now(),
                 delivered_at: None,
             };
