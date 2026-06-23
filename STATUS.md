@@ -5,6 +5,24 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest fetched-scan raw summary required-filter coverage:
+  raw lineage-drain summary tests now explicitly prove governed
+  `table.scan-tasks-fetched` replay cannot omit `required-filters` when a
+  read-restriction row predicate is present, matching the service admission and
+  planned-scan summary invariant.
+- Local verification for this fetched-scan raw summary coverage passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_scan_required_filters -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib -- --test-threads=1`;
+  `cargo test -p lakecat-service --features turso-local --lib -- --test-threads=1`;
+  `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store -- --test-threads=1`;
+  `cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service configured_grust_turso_graph_sink_projects_catalog_events_to_turso_store -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`; and
+  `scripts/check-release-readiness.sh --quick`.
+- Grust Turso routing check: LakeCat graph persistence, traversal, Cypher
+  mutation, and matched-node patch tests all run through
+  `grust_turso::TursoGraphStore`; raw `turso` use remains confined to the
+  catalog store rather than graph operations.
 - Latest planned-scan required-filter replay hardening:
   governed `table.scan-planned` replay must now carry `required-filters` when
   read-restriction evidence is present. Service outbox admission and raw

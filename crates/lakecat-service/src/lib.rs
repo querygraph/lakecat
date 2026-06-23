@@ -52124,6 +52124,35 @@ mod tests {
             .to_string();
         assert!(err.contains("lineage drain table.scan-planned required-filters must be an array"));
 
+        let missing_fetched_required_filters = OutboxEvent {
+            event_id: "evt-missing-summary-fetched-required-filters".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-tasks-fetched".to_string(),
+            payload: json!({
+                "payload": {
+                    "read-restriction": {
+                        "allowed-columns": ["event_id"],
+                        "row-predicate": {
+                            "type": "eq",
+                            "term": "event_id",
+                            "value": "evt-1"
+                        },
+                        "policy-hashes": [content_hash_bytes(b"policy")]
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&missing_fetched_required_filters, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain table.scan-tasks-fetched required-filters must be an array"
+            )
+        );
+
         let row_predicate = json!({
             "type": "eq",
             "term": "event_id",

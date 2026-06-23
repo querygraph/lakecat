@@ -10446,7 +10446,9 @@ projection or stats evidence. Planned and fetched scan summary construction
 applies the same second-line check to `required-filters`: when row-predicate
 evidence is present, the field must remain array-shaped and exactly preserve
 that server-derived predicate rather than widening or omitting the mandatory
-filter inside raw QGLake proof.
+filter inside raw QGLake proof. The raw summary regression suite covers both
+planned and fetched scan replay, so either half of the governed scan can fail
+closed before compact proof is returned.
 The verifier
 also compares those QueryGraph import-plan graph node and edge counts with the
 verified bootstrap bundle graph counts, so an import plan cannot keep the

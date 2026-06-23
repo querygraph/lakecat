@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added fetched-scan raw summary coverage for missing required filters. The
+  lineage-drain summary regression suite now proves governed
+  `table.scan-tasks-fetched` replay cannot omit `required-filters` when a
+  read-restriction row predicate is present.
 - Required governed planned-scan replay to preserve required-filter evidence.
   Service outbox admission and lineage-drain summaries now reject governed
   `table.scan-planned` replay that omits `required-filters`, matching the
