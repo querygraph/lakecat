@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw storage-profile summary coverage slice:
+  `Cover public-config redaction in summaries`.
+  Lineage-drain summary regressions now prove nested storage-profile
+  `public-config` evidence rejects LakeCat-reserved credential keys and
+  secret-like values with hash-only diagnostics before compact QGLake
+  storage-profile or credential proof can inherit those public hints.
+- Local verification for this storage-profile summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_storage_profile_secret_ref_evidence -- --test-threads=1`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest raw lineage summary hardening slice:
   `Validate planned required filters in summaries`.
   Raw lineage-drain summary construction now validates present

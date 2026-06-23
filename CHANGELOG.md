@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added raw storage-profile public-config summary coverage. Lineage-drain
+  summary regressions now prove reserved LakeCat credential evidence keys and
+  secret-like public-config values are rejected with hash-only diagnostics
+  before compact QGLake storage-profile or credential proof can inherit them.
 - Hardened planned-scan required-filter summary extraction. Raw lineage-drain
   summary construction now validates `table.scan-planned` `required-filters`
   against the governed read-restriction row predicate, matching service replay
