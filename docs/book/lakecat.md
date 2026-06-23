@@ -9770,7 +9770,10 @@ view, expected-version, and authorization evidence. Top-level warehouse and
 namespace evidence must also match the nested view object. QueryGraph cannot
 accept a view mutation or read under the wrong catalog permission or scope, nor
 can a replay sidecar append unverified view lifecycle, lineage, graph, or
-application claims beside otherwise valid view evidence.
+application claims beside otherwise valid view evidence. LakeCat also closes
+the wrapped outbox envelope for `view.upserted`, `view.loaded`, and
+`view.dropped`, so those claims cannot be placed beside an otherwise valid
+checked inner view lifecycle payload.
 Table lifecycle replay applies the same identity discipline before delivery:
 `table.created`, `table.loaded`, `table.deleted`, and `table.restored` must
 carry a decodable table identity, optional payload scope hints must match it,

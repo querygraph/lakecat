@@ -1771,6 +1771,7 @@ const VIEW_LIFECYCLE_EVIDENCE_FIELDS: &[&str] = &[
     "view",
     "expected-view-version",
 ];
+const VIEW_LIFECYCLE_OUTBOX_PAYLOAD_FIELDS: &[&str] = &["audit-event-id", "event-type", "payload"];
 const CATALOG_CONFIG_READ_EVIDENCE_FIELDS: &[&str] = &[
     "audit-event-id",
     "event-type",
@@ -4835,6 +4836,14 @@ fn validate_view_lifecycle_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "view lifecycle outbox payload",
+            VIEW_LIFECYCLE_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     validate_object_evidence_schema(
         event,
         payload,
@@ -31153,6 +31162,93 @@ mod tests {
             lineage.events.lock().await.is_empty(),
             "extra top-level view lifecycle evidence must fail before lineage projection"
         );
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_view_lifecycle_wrapper_fields() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            ("view.upserted", "view-manage", "upserted"),
+            ("view.loaded", "view-load", "loaded"),
+            ("view.dropped", "view-drop", "dropped"),
+        ];
+
+        for (event_type, action, label) in cases {
+            let event_id = format!("evt-view-{label}-extra-wrapper-field");
+            let mut payload = json!({
+                "warehouse": "local",
+                "namespace": ["default"],
+                "view": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "name": "events_view",
+                    "view-version": 1,
+                },
+                "authorization-receipt": {
+                    "principal": principal,
+                    "action": action,
+                    "allowed": true,
+                    "engine": "test",
+                    "policy_hash": null,
+                    "checked_at": chrono::Utc::now(),
+                },
+            });
+            if event_type == "view.dropped" {
+                payload["expected-view-version"] = json!(1);
+            }
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-view-{label}-extra-wrapper-field"),
+                        "event-type": event_type,
+                        "payload": payload,
+                        "unverified-view-lifecycle-wrapper-claim": "shadow",
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("extra view lifecycle wrapper fields should fail");
+
+            let message = err.to_string();
+            assert!(message.contains(event_type), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"), "{message}");
+            assert!(
+                message.contains(
+                    "view lifecycle outbox payload contains unexpected field unverified-view-lifecycle-wrapper-claim"
+                ),
+                "{message}"
+            );
+            assert!(!message.contains(&event_id), "{message}");
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} extra wrapper fields must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} extra wrapper fields must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} extra wrapper fields must fail before lineage projection"
+            );
+        }
     }
 
     #[tokio::test]

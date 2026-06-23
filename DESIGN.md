@@ -1319,7 +1319,10 @@ before acknowledgement, graph projection, OpenLineage projection, or QGLake
 proof, so unverified or drifted view lifecycle, lineage, graph, QueryGraph, or
 application claims cannot ride beside the checked view scope, version,
 expected-version, interface, authorization evidence, SQL dialect/schema,
-columns, properties, and store-assigned version.
+columns, properties, and store-assigned version. Service replay now also
+closes the wrapped view lifecycle envelopes over the producer wrapper fields,
+so those claims cannot ride beside an otherwise valid checked view lifecycle
+payload.
 
 ### P6 Reproducibility And V4
 

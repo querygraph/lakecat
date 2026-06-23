@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Closed service outbox admission over wrapped view lifecycle replay payloads.
+  `view.upserted`, `view.loaded`, and `view.dropped` wrappers now reject extra
+  unverified view lifecycle, lineage, graph, QGLake, QueryGraph, or
+  application claims before acknowledgement, graph projection, or OpenLineage
+  projection.
 - Closed service outbox admission over wrapped table lifecycle replay
   payloads. `table.created`, `table.loaded`, `table.deleted`, and
   `table.restored` wrappers now reject extra unverified table lifecycle,
