@@ -9162,7 +9162,11 @@ pointer-history discipline before compact proof generation: the table commit
 count must match the sequence-number and commit-hash arrays, commit sequences
 must be positive and strictly increasing, and commit hashes must be
 full SHA-256-shaped before pointer-history evidence can enter the compact handoff
-proof. A table with no recorded commit entries is still valid pointer-history
+proof. The graph projection helper applies the same fail-closed posture to the
+commit-history summary it consumes: missing, count-drifted, or non-string
+`commit-hashes` fail before commit graph nodes are emitted, so graph evidence
+cannot silently carry a null commit hash if a future internal path bypasses the
+replay validator. A table with no recorded commit entries is still valid pointer-history
 evidence: it drains as an explicit zero-count read, emits lineage proof, and
 does not fabricate loaded commit graph nodes. The compact QGLake verifier
 accepts that zero-count proof only when the sequence-number and commit-hash

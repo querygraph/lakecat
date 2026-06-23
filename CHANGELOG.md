@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened table commit-history graph projection. Internal commit-history
+  graph projection now rejects missing, count-drifted, or non-string
+  `commit-hashes` before emitting commit graph nodes, so projection cannot
+  produce a null commit hash even if a future path bypasses replay admission.
 - Hardened service view receipt-chain replay hash admission. Verified
   `view.version-receipt-chains-listed` replay now recomputes each structural
   `chain-hash` from the chain identity, latest state, tombstone posture, and

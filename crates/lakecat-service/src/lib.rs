@@ -10863,9 +10863,7 @@ fn outbox_commit_sequence_number(event: &OutboxEvent) -> Result<u64, LakeCatErro
         })
 }
 
-fn outbox_commit_history_entries(
-    event: &OutboxEvent,
-) -> Result<Vec<(u64, Option<String>)>, LakeCatError> {
+fn outbox_commit_history_entries(event: &OutboxEvent) -> Result<Vec<(u64, String)>, LakeCatError> {
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
     let sequence_numbers = payload
         .get("sequence-numbers")
@@ -10879,8 +10877,18 @@ fn outbox_commit_history_entries(
     let commit_hashes = payload
         .get("commit-hashes")
         .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+        .ok_or_else(|| {
+            LakeCatError::Internal(format!(
+                "outbox event hash {} commit history payload is missing commit hashes",
+                outbox_event_hash(event)
+            ))
+        })?;
+    if commit_hashes.len() != sequence_numbers.len() {
+        return Err(LakeCatError::Internal(format!(
+            "outbox event hash {} commit history payload commit hash count does not match sequence numbers",
+            outbox_event_hash(event)
+        )));
+    }
     sequence_numbers
         .iter()
         .enumerate()
@@ -10894,7 +10902,13 @@ fn outbox_commit_history_entries(
             let commit_hash = commit_hashes
                 .get(index)
                 .and_then(Value::as_str)
-                .map(ToString::to_string);
+                .ok_or_else(|| {
+                    LakeCatError::Internal(format!(
+                        "outbox event hash {} commit history payload has a non-string commit hash",
+                        outbox_event_hash(event)
+                    ))
+                })?
+                .to_string();
             Ok((sequence_number, commit_hash))
         })
         .collect()
@@ -21846,6 +21860,60 @@ mod tests {
         assert!(store.delivered.lock().await.is_empty());
         assert!(graph.events.lock().await.is_empty());
         assert!(lineage.events.lock().await.is_empty());
+    }
+
+    #[test]
+    fn commit_history_graph_entries_require_commit_hashes() {
+        let base_event = OutboxEvent {
+            event_id: "evt-commit-history-helper".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.commits-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "sequence-numbers": [1],
+                    "commit-hashes": [content_hash_json(&json!({"commit": 1})).unwrap()],
+                },
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let entries = outbox_commit_history_entries(&base_event).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0, 1);
+        assert!(is_full_sha256_hash(&entries[0].1));
+
+        let mut missing_hashes = base_event.clone();
+        missing_hashes
+            .payload
+            .pointer_mut("/payload")
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .remove("commit-hashes");
+        let err = outbox_commit_history_entries(&missing_hashes).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("commit history payload is missing commit hashes"),
+            "{err}"
+        );
+
+        let mut count_drift = base_event.clone();
+        count_drift.payload["payload"]["commit-hashes"] = json!([]);
+        let err = outbox_commit_history_entries(&count_drift).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("commit hash count does not match sequence numbers"),
+            "{err}"
+        );
+
+        let mut non_string_hash = base_event;
+        non_string_hash.payload["payload"]["commit-hashes"] = json!([42]);
+        let err = outbox_commit_history_entries(&non_string_hash).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("commit history payload has a non-string commit hash"),
+            "{err}"
+        );
     }
 
     #[tokio::test]

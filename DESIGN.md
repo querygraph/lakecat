@@ -896,7 +896,11 @@ commit graph nodes; present commit entries must carry positive, strictly
 increasing sequence numbers and duplicate-free commit hashes at the service
 outbox boundary, raw lineage-drain boundary, and compact handoff proof, so
 pointer-log evidence cannot drop or rewrite actor attribution, duplicate
-commits, or reorder between the catalog and QGLake proof. Service replay
+commits, or reorder between the catalog and QGLake proof. Graph projection must
+also fail closed if a commit-history payload is missing commit hashes, carries
+a different number of commit hashes than sequence numbers, or contains
+non-string commit-hash values, so catalog graph events cannot represent
+pointer-log entries with null commit evidence. Service replay
 admission must require a valid authorization receipt principal for every
 `table.commits-listed` source event, bind `principal-subject` and
 `principal-kind` to that receipt, and bind warehouse/namespace/table evidence

@@ -6,6 +6,24 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden table commit-history graph hashes`.
+  Internal table commit-history graph projection now rejects missing,
+  count-drifted, or non-string `commit-hashes` before emitting commit graph
+  nodes, so graph projection cannot produce a null commit hash even if a
+  future path bypasses replay admission.
+- Local verification for this table commit-history graph-hash slice is
+  green:
+  `cargo test -p lakecat-service commit_history_graph_entries_require_commit_hashes -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-service table_commit_history -- --test-threads=1`
+  passed;
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Harden view receipt-chain replay hashes`.
   Verified `view.version-receipt-chains-listed` replay now recomputes each
   structural `chain-hash` from the chain identity, latest state, tombstone
