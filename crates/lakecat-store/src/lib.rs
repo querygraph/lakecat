@@ -7510,6 +7510,35 @@ pub mod turso_store {
         }
 
         #[tokio::test]
+        async fn turso_store_rejects_server_row_column_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let record = ServerRecord::new(
+                "lakecat-local",
+                Some("Local LakeCat".to_string()),
+                Some("http://127.0.0.1:8181".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_server(record).await.unwrap();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update servers set server_id = ?2 where server_id = ?1",
+                ("lakecat-local", "lakecat-other"),
+            )
+            .await
+            .unwrap();
+
+            let err = store.list_servers().await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("server row scope does not match")
+            ));
+        }
+
+        #[tokio::test]
         async fn turso_store_persists_warehouse_records() {
             let store = TursoCatalogStore::in_memory().await.unwrap();
             assert_eq!(store.list_warehouses().await.unwrap(), vec![]);
@@ -7859,6 +7888,35 @@ pub mod turso_store {
             conn.execute(
                 "update projects set record_json = ?2 where project_id = ?1",
                 ("default", encode_json(&project).unwrap()),
+            )
+            .await
+            .unwrap();
+
+            let err = store.list_projects().await.unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("project row scope does not match")
+            ));
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_project_row_column_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let project = ProjectRecord::new(
+                "default",
+                None,
+                Some("QueryGraph Project".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_project(project).await.unwrap();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update projects set project_id = ?2 where project_id = ?1",
+                ("default", "other-project"),
             )
             .await
             .unwrap();

@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Add Turso server/project row-column drift regressions`.
+  Turso server and project list paths now have explicit regression coverage
+  proving corrupted durable `servers.server_id` and `projects.project_id` row
+  columns cannot remap decoded tenant-root inventory away from its stored JSON
+  identity.
+- Local verification for this Turso server/project row-column scope slice is
+  green:
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_server_row_column_scope_drift -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_project_row_column_scope_drift -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest documentation/book slice:
   `Expand worked catalog examples`.
   The book now shows the same accepted LakeCat catalog state through standard

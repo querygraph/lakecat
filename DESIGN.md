@@ -246,7 +246,10 @@ The current working plan is:
    server/project/warehouse reads must bind decoded JSON back to the selecting
    row identity, including warehouse project and storage-root row columns,
    before returning tenant-root inventory for QueryGraph
-   bootstrap or management proof. Turso namespace reads must bind decoded JSON
+   bootstrap or management proof; the Turso server/project regression suite now
+   covers both decoded JSON identity drift and durable `servers.server_id` /
+   `projects.project_id` row-column drift for tenant-root list paths. Turso
+   namespace reads must bind decoded JSON
    back to the selected warehouse row and namespace path before returning or
    dropping standard namespace state; the Turso namespace regression suite now
    covers both decoded JSON drift and durable `namespaces` row-column drift for

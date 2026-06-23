@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added explicit Turso server/project row-column drift regression coverage.
+  Server and project list paths now have focused tests proving corrupted
+  durable `servers.server_id` and `projects.project_id` row columns cannot
+  remap decoded tenant-root inventory away from its stored JSON identity.
 - Expanded the LakeCat book with worked catalog examples that show the same
   accepted state through standard PySpark Iceberg access, optimistic commit
   CAS, operator audit/replay inspection, TypeSec-governed agent scans,
