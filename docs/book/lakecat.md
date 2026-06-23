@@ -8153,6 +8153,20 @@ array.
 That makes the config proof replayable outside the service process. QueryGraph
 can trust that the compatibility and integration contract it imports is the
 same contract LakeCat admitted before graph and OpenLineage projection.
+The same rule now applies to raw `querygraph.bootstrap` summaries. Bootstrap
+itself is not standard Iceberg parlance: it is LakeCat/QueryGraph handoff
+evidence built beside the Iceberg REST path. Its source facts still describe
+standard catalog state such as warehouse identity, table count, view count, and
+accepted table/view stable ids, but its bundle hash, Grust graph hash,
+OpenLineage hash, Croissant/CDIF/OSI/ODRL artifact hashes, standards list,
+authorization receipt, and TypeSec-style request-identity hashes are additive
+LakeCat/QueryGraph/TypeSec proof. Raw summary construction now runs the same
+service replay validator over that bootstrap envelope before compact QGLake
+proof can inherit any of it. A saved drain cannot keep a `querygraph.bootstrap`
+event while shrinking the standards list, replacing artifact arrays with
+objects, drifting table/view counts away from verified manifests, inventing a
+malformed principal, or attaching short TypeDID/agent hashes to an otherwise
+valid-looking bootstrap proof.
 When config evidence carries optional tenant-root records, the same admission
 rule applies to sensitive roots: a raw `server-record.endpoint-url` must carry
 the matching full `endpoint-url-hash`, and a raw

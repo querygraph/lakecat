@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened raw QueryGraph bootstrap summary extraction. Raw lineage-drain
+  summary construction now reuses the service replay validator for
+  `querygraph.bootstrap` evidence, so malformed bootstrap warehouses, counts,
+  standards, artifact manifests, authorization receipts, and TypeSec-style
+  request-identity hashes cannot bypass replay admission before compact QGLake
+  or QueryGraph handoff proof inherits them.
 - Hardened raw catalog-config summary extraction. Raw lineage-drain summary
   construction now reuses the service replay validator for `catalog.config-read`
   evidence, so malformed advertised defaults, overrides, endpoints, tenant

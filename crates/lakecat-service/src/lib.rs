@@ -7275,6 +7275,10 @@ fn lineage_drain_event_summary(
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_catalog_config_read_event_evidence(event, payload)?;
     }
+    if event.event_type == "querygraph.bootstrap" {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_querygraph_bootstrap_event_evidence(event, payload)?;
+    }
     let payload = event.payload.get("payload").unwrap_or(&event.payload);
     let view = payload.get("view");
     let view_warehouse = lineage_summary_optional_nonblank_string_value(
@@ -52663,56 +52667,39 @@ mod tests {
     #[test]
     fn lineage_drain_summary_rejects_malformed_querygraph_standards() {
         let receipt = OutboxProjectionReceipt::default();
-        let malformed_standards = OutboxEvent {
-            event_id: "evt-bad-summary-standards".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "querygraph.bootstrap".to_string(),
-            payload: json!({
-                "payload": {
-                    "standards": ["Iceberg REST", 42]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut malformed_standards =
+            valid_lineage_summary_querygraph_bootstrap_event("evt-bad-summary-standards");
+        malformed_standards.payload["payload"]["standards"] = json!(["Iceberg REST", 42]);
         let err = lineage_drain_event_summary(&malformed_standards, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("standards must contain strings"));
+        assert!(
+            err.contains("querygraph bootstrap standards must contain non-empty strings"),
+            "{err}"
+        );
 
-        let blank_standard = OutboxEvent {
-            event_id: "evt-blank-summary-standard".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "querygraph.bootstrap".to_string(),
-            payload: json!({
-                "payload": {
-                    "standards": ["Iceberg REST", " "]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut blank_standard =
+            valid_lineage_summary_querygraph_bootstrap_event("evt-blank-summary-standard");
+        blank_standard.payload["payload"]["standards"] = json!(["Iceberg REST", " "]);
         let err = lineage_drain_event_summary(&blank_standard, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("standards must not contain blank strings"));
+        assert!(
+            err.contains("querygraph bootstrap standards must contain non-empty strings"),
+            "{err}"
+        );
 
-        let duplicate_standard = OutboxEvent {
-            event_id: "evt-duplicate-summary-standard".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "querygraph.bootstrap".to_string(),
-            payload: json!({
-                "payload": {
-                    "standards": ["Iceberg REST", "Iceberg REST"]
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut duplicate_standard =
+            valid_lineage_summary_querygraph_bootstrap_event("evt-duplicate-summary-standard");
+        duplicate_standard.payload["payload"]["standards"] =
+            json!(["Iceberg REST", "Iceberg REST"]);
         let err = lineage_drain_event_summary(&duplicate_standard, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("standards must not contain duplicate values"));
+        assert!(
+            err.contains("querygraph bootstrap standards must be duplicate-free"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -52742,14 +52729,12 @@ mod tests {
         ];
 
         for (event_id, payload, expected_message) in cases {
-            let event = OutboxEvent {
-                event_id: event_id.to_string(),
-                sink: "lakecat.lineage-and-graph".to_string(),
-                event_type: "querygraph.bootstrap".to_string(),
-                payload: json!({ "payload": payload }),
-                created_at: chrono::Utc::now(),
-                delivered_at: None,
-            };
+            let mut event = valid_lineage_summary_querygraph_bootstrap_event(event_id);
+            let field = payload
+                .as_object()
+                .and_then(|fields| fields.iter().next())
+                .expect("single malformed hash field");
+            event.payload["payload"][field.0] = field.1.clone();
             let err = lineage_drain_event_summary(&event, &receipt)
                 .unwrap_err()
                 .to_string();
@@ -52784,24 +52769,14 @@ mod tests {
         ];
 
         for (field, value, expected_message) in cases {
-            let mut request_identity = serde_json::Map::new();
-            request_identity.insert(field.to_string(), value);
-            let event = OutboxEvent {
-                event_id: format!("evt-bad-summary-{field}"),
-                sink: "lakecat.lineage-and-graph".to_string(),
-                event_type: "querygraph.bootstrap".to_string(),
-                payload: json!({
-                    "payload": {
-                        "authorization-receipt": {
-                            "context": {
-                                "request-identity": Value::Object(request_identity)
-                            }
-                        }
-                    }
-                }),
-                created_at: chrono::Utc::now(),
-                delivered_at: None,
-            };
+            let mut event = valid_lineage_summary_querygraph_bootstrap_event(&format!(
+                "evt-bad-summary-{field}"
+            ));
+            event.payload["payload"]["authorization-receipt"]["context"] = json!({
+                "request-identity": {
+                    field: value
+                }
+            });
             let err = lineage_drain_event_summary(&event, &receipt)
                 .unwrap_err()
                 .to_string();
@@ -52823,7 +52798,7 @@ mod tests {
                         }
                     }
                 }),
-                "subject must be a string when present",
+                "querygraph bootstrap authorization receipt principal must be a valid principal",
             ),
             (
                 "evt-blank-summary-principal-kind",
@@ -52835,7 +52810,7 @@ mod tests {
                         }
                     }
                 }),
-                "kind must not be blank",
+                "querygraph bootstrap authorization receipt principal must be a valid principal",
             ),
             (
                 "evt-bad-summary-receipt-action",
@@ -52844,7 +52819,7 @@ mod tests {
                         "action": 42
                     }
                 }),
-                "action must be a string when present",
+                "querygraph bootstrap evidence must contain authorization receipt action",
             ),
             (
                 "evt-blank-summary-request-identity-state",
@@ -52875,16 +52850,8 @@ mod tests {
         ];
 
         for (event_id, payload, expected_message) in cases {
-            let event = OutboxEvent {
-                event_id: event_id.to_string(),
-                sink: "lakecat.lineage-and-graph".to_string(),
-                event_type: "querygraph.bootstrap".to_string(),
-                payload: json!({
-                    "payload": payload
-                }),
-                created_at: chrono::Utc::now(),
-                delivered_at: None,
-            };
+            let mut event = valid_lineage_summary_querygraph_bootstrap_event(event_id);
+            merge_json_object(&mut event.payload["payload"], payload);
             let err = lineage_drain_event_summary(&event, &receipt)
                 .unwrap_err()
                 .to_string();
@@ -52895,45 +52862,31 @@ mod tests {
     #[test]
     fn lineage_drain_summary_rejects_malformed_querygraph_artifact_arrays() {
         let receipt = OutboxProjectionReceipt::default();
-        let malformed_table_artifacts = OutboxEvent {
-            event_id: "evt-bad-summary-table-artifacts".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "querygraph.bootstrap".to_string(),
-            payload: json!({
-                "payload": {
-                    "table-artifacts": {
-                        "stable-id": "lakecat:table:local:default.events"
-                    },
-                    "view-artifacts": []
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut malformed_table_artifacts =
+            valid_lineage_summary_querygraph_bootstrap_event("evt-bad-summary-table-artifacts");
+        malformed_table_artifacts.payload["payload"]["table-artifacts"] = json!({
+            "stable-id": "lakecat:table:local:default.events"
+        });
         let err = lineage_drain_event_summary(&malformed_table_artifacts, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("table-artifacts must be an array when present"));
+        assert!(
+            err.contains("querygraph bootstrap evidence must contain table-artifacts"),
+            "{err}"
+        );
 
-        let malformed_view_artifacts = OutboxEvent {
-            event_id: "evt-bad-summary-view-artifacts".to_string(),
-            sink: "lakecat.lineage-and-graph".to_string(),
-            event_type: "querygraph.bootstrap".to_string(),
-            payload: json!({
-                "payload": {
-                    "table-artifacts": [],
-                    "view-artifacts": {
-                        "stable-id": "lakecat:view:local:default.events_view"
-                    }
-                }
-            }),
-            created_at: chrono::Utc::now(),
-            delivered_at: None,
-        };
+        let mut malformed_view_artifacts =
+            valid_lineage_summary_querygraph_bootstrap_event("evt-bad-summary-view-artifacts");
+        malformed_view_artifacts.payload["payload"]["view-artifacts"] = json!({
+            "stable-id": "lakecat:view:local:default.events_view"
+        });
         let err = lineage_drain_event_summary(&malformed_view_artifacts, &receipt)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("view-artifacts must be an array when present"));
+        assert!(
+            err.contains("querygraph bootstrap evidence must contain view-artifacts"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -54838,6 +54791,37 @@ mod tests {
                 ]
             }
         })
+    }
+
+    fn valid_lineage_summary_querygraph_bootstrap_event(event_id: &str) -> OutboxEvent {
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let mut payload = valid_querygraph_bootstrap_payload(principal);
+        payload["audit-event-id"] = json!(format!("audit-{event_id}"));
+        OutboxEvent {
+            event_id: event_id.to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "querygraph.bootstrap".to_string(),
+            payload,
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        }
+    }
+
+    fn merge_json_object(target: &mut serde_json::Value, patch: serde_json::Value) {
+        let (Some(target), Some(patch)) = (target.as_object_mut(), patch.as_object()) else {
+            *target = patch;
+            return;
+        };
+        for (key, value) in patch {
+            if value.is_object() {
+                merge_json_object(
+                    target.entry(key).or_insert_with(|| json!({})),
+                    value.clone(),
+                );
+            } else {
+                target.insert(key.clone(), value.clone());
+            }
+        }
     }
 
     fn assert_config_defaults_include(defaults: &serde_json::Value, key: &str, value: &str) {

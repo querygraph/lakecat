@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw QueryGraph bootstrap summary hardening slice:
+  `Validate raw querygraph bootstrap summaries`.
+  Raw lineage-drain summary construction now reuses the service replay
+  validator for `querygraph.bootstrap` evidence, rejecting malformed bootstrap
+  warehouses, counts, standards, artifact manifests, authorization receipts,
+  and TypeSec-style request-identity hashes before compact QGLake or
+  QueryGraph handoff proof can inherit them.
+- Local verification for this raw QueryGraph bootstrap summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_querygraph -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_request_identity_hashes -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary -- --test-threads=1`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest raw catalog-config summary hardening slice:
   `Validate raw catalog config summaries`.
   Raw lineage-drain summary construction now reuses the service replay
