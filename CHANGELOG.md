@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's standards ledger for catalog concepts. The book
+  now explicitly separates LakeCat/QueryGraph/TypeSec/Turso/Grust/Sail product
+  architecture from possible optional Iceberg-adjacent profiles, and makes the
+  case that only database-neutral, policy-neutral, engine-neutral proof ideas
+  should be proposed beyond LakeCat.
 - Closed service outbox admission over wrapped inventory-list replay payloads.
   `namespace.listed`, `view.listed`, and management list wrappers now reject
   extra unverified inventory, replay, lineage, graph, QueryGraph, or

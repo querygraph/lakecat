@@ -79,6 +79,26 @@ idempotency drift," "record redacted pointer history," "emit transactional
 catalog event identity," "admit only scoped replay evidence," and "prove a
 governed scan was narrowed by an engine" are the portable ideas.
 
+The practical standards ledger is therefore intentionally conservative:
+
+| Keep as LakeCat/QueryGraph/TypeSec architecture | Consider as optional Iceberg-adjacent profile | Reason |
+| --- | --- | --- |
+| Rust service implementation and the exact crate layout | Deterministic catalog transition evidence | Iceberg should not require Rust, but every catalog benefits from reproducible, redacted state transitions. |
+| Turso local store and LakeCat row schema | Atomic pointer CAS, exact retry, row/content binding, and pointer-history proof | The database is implementation. The durable invariants are portable. |
+| TypeSec receipt JSON and TypeDID envelope shape | Policy-engine-neutral governed scan proof | The security stack is product architecture. The idea that a scan can prove its effective restriction is broadly useful. |
+| QGLake artifact layout and QueryGraph import schema | Replay-admissible lineage, view, credential, and commit evidence | QueryGraph is the product. Redacted, scoped replay contracts could help other catalog integrations. |
+| Grust taxonomy, Cypher stores, and semantic graph import | Stable catalog-event identity for graph projection | Graph implementation belongs outside Iceberg. Event identity and replay admission can be neutral. |
+| Sail-specific helper names and patch bridges | Engine-owned typed v4 interpretation, metadata-as-data, scan planning, and commit validation | Sail is LakeCat's engine choice. The broader principle is that engines, not catalogs, should own table-format meaning. |
+
+That distinction matters when deciding what to standardize. A proposal that
+forces every Iceberg catalog to understand QueryGraph, TypeSec, Grust, QGLake,
+or Turso would narrow the ecosystem. A proposal that says "a catalog may
+publish redacted, replayable commit evidence" or "a governed scan proof should
+bind the effective projection and predicate to an engine plan" leaves room for
+many implementations. LakeCat should be opinionated in code and modest in
+standardization: prove the stronger shape locally, then extract only the
+database-neutral, policy-neutral, engine-neutral part.
+
 ## Why The Engine Boundary Matters
 
 The reason LakeCat pushes work into Sail is not just cleanliness. It is the

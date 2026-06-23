@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/book slice:
+  `Clarify standards ledger for catalog concepts`.
+  The book now directly answers whether current LakeCat concepts are standard
+  Iceberg parlance, LakeCat/QueryGraph/TypeSec product extensions, or future
+  optional Iceberg-adjacent proposal candidates. It keeps Rust/Turso/TypeSec/
+  Grust/QGLake/Sail-specific choices as product architecture while naming
+  portable candidates such as deterministic transition evidence, exact retry,
+  pointer-history proof, replay-admissible lineage events, policy-neutral
+  governed scan proof, and engine-owned typed v4 interpretation.
 - Latest implementation/testing slice:
   `Close wrapped inventory replay payloads`.
   Service outbox admission now closes wrapped `namespace.listed`,
