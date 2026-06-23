@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Extended idempotency request-hash row validation to the memory store. Default
+  and Turso-backed stores now both reject corrupted stored idempotency
+  `request_hash` evidence before direct replay or idempotent commit retry can
+  return a stored response.
 - Hardened Turso idempotency request-hash row validation. Durable
   `idempotency_records.request_hash` values are now checked for full SHA-256
   evidence before replay comparison, so corrupted idempotency rows fail closed

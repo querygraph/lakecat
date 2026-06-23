@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest memory/Turso idempotency row-hash parity:
+  the default memory store now shares the same stored idempotency request-hash
+  validation as the Turso store. Corrupted replay state fails closed before
+  direct idempotency replay or an idempotent commit retry can return a stored
+  response.
+- Local verification for this memory/Turso idempotency parity slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --lib memory_store_rejects_table_idempotency_request_hash_row_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local --lib turso_store_rejects_table_idempotency_request_hash_row_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --lib -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local --lib -- --test-threads=1`;
+  `docs/book/build.sh`; `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest Turso idempotency row-hash hardening:
   durable `idempotency_records.request_hash` values are now validated as full
   SHA-256 evidence before replay comparison. Corrupted row hashes fail closed
