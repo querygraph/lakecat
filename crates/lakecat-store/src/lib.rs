@@ -5362,6 +5362,31 @@ mod memory_tests {
                     "table commit idempotency request hash must be full SHA-256 evidence"
                 )
         ));
+        {
+            let table = store.load_table(&ident).await.unwrap();
+            assert_eq!(table.version, 0);
+            assert_eq!(
+                table.metadata_location.as_deref(),
+                Some("file:///tmp/events/metadata/00000.json")
+            );
+            let state = store.state.read().await;
+            assert!(
+                state.commits.is_empty(),
+                "invalid idempotency evidence must fail before pointer-log insertion"
+            );
+            assert!(
+                state.audit_events.is_empty(),
+                "invalid idempotency evidence must fail before audit insertion"
+            );
+            assert!(
+                state.outbox_events.is_empty(),
+                "invalid idempotency evidence must fail before outbox insertion"
+            );
+            assert!(
+                state.idempotency.is_empty(),
+                "invalid idempotency evidence must fail before idempotency replay state"
+            );
+        }
 
         let mut empty_new_location = base_commit.clone();
         empty_new_location.new_metadata_location = Some("  ".to_string());
@@ -9477,6 +9502,16 @@ pub mod turso_store {
                         "table commit idempotency request hash must be full SHA-256 evidence"
                     )
             ));
+            let table = store.load_table(&ident).await.unwrap();
+            assert_eq!(table.version, 0);
+            assert_eq!(
+                table.metadata_location.as_deref(),
+                Some("file:///tmp/events/metadata/00000.json")
+            );
+            assert_eq!(store.count_rows("metadata_pointer_log").await.unwrap(), 0);
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 0);
+            assert_eq!(store.count_rows("outbox_events").await.unwrap(), 0);
+            assert_eq!(store.count_rows("idempotency_records").await.unwrap(), 0);
 
             let mut empty_expected_location = base_commit.clone();
             empty_expected_location.expected_previous_metadata_location = Some("  ".to_string());

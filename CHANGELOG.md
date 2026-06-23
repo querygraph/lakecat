@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened store-level idempotency validation evidence. Invalid table commit
+  idempotency keys and request hashes now have memory and Turso assertions
+  proving they fail before pointer movement, pointer-log insertion, audit,
+  outbox, or idempotency replay state.
 - Added pending outbox sink corruption coverage for memory and Turso stores.
   Persisted rows with blank sink values now have focused regressions proving
   they fail before projection with hash-only event and payload diagnostics.

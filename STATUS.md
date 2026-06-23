@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest commit/idempotency hardening slice:
+  `Prove invalid idempotency has no store side effects`.
+  Memory and Turso invalid table-commit tests now assert that malformed
+  idempotency keys, missing idempotency keys for caller-supplied request hashes,
+  malformed request hashes, and malformed replay lookups fail before metadata
+  pointer movement, pointer-log insertion, audit rows, outbox rows, or
+  idempotency replay records.
+- Local verification for this commit/idempotency slice is green:
+  `cargo test -p lakecat-store --lib memory_store_rejects_deserialized_invalid_table_commits -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local --lib turso_store_rejects_deserialized_invalid_table_commits -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest store/outbox coverage slice:
   `Cover blank pending outbox sinks`.
   Memory and Turso pending outbox tests now cover persisted rows whose sink is
