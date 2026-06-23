@@ -6,6 +6,21 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden Turso table row-column validation`.
+  Turso table list, load, commit, soft-delete, and restore paths now bind
+  decoded table JSON to durable `tables` row key, warehouse, namespace, and
+  table-name columns before returning or mutating REST-visible table state.
+- Local verification for this Turso table row-column scope slice is green:
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_table_row_column_scope_drift -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_table_record_json_scope_drift -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed; `git diff --check` passed.
+- Latest implementation/testing slice:
   `Add Turso server/project row-column drift regressions`.
   Turso server and project list paths now have explicit regression coverage
   proving corrupted durable `servers.server_id` and `projects.project_id` row

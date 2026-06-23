@@ -230,7 +230,10 @@ The current working plan is:
    writes must target child objects under the selected storage profile root, not
    the root itself. Store setup failures, including invalid metadata URI parsing
    and unsupported backend configuration, must follow the same hash-only error
-   evidence rule.
+   evidence rule. Turso table list, load, commit, soft-delete, and restore
+   paths must bind decoded table JSON back to the durable row key, warehouse,
+   namespace, and table-name columns before returning or mutating REST-visible
+   table state.
 4. Keep the graph bounded. LakeCat should emit stable catalog-domain facts for
    Server, Project, Warehouse, Namespace, Table, View, Column, Snapshot, Policy,
    StorageProfile, Principal, ScanPlan, Commit, and lineage runs. Traversal,

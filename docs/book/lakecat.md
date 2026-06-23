@@ -82,6 +82,13 @@ Iceberg proposal. Atomic pointer CAS, exact retry, pointer-history proof,
 transactional event identity, row/content drift rejection, and replay
 admission are the reusable ideas.
 
+For table rows, row/content validation means more than decoding valid JSON.
+LakeCat also binds decoded table identity back to the durable row key,
+warehouse, namespace, and table-name columns before table list, load, commit,
+soft-delete, or restore paths can return or mutate REST-visible table state.
+That prevents a damaged local store row from quietly remapping a standard
+Iceberg table operation while leaving the JSON payload looking plausible.
+
 Commit CAS is the bridge between standard Iceberg and LakeCat hardening. In
 Iceberg parlance, optimistic commit means the writer proposes a new metadata
 location and requirements, and the catalog advances the current pointer only

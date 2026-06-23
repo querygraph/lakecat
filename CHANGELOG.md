@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened Turso table row-column validation. Table list, load, commit,
+  soft-delete, and restore paths now bind decoded table JSON to durable
+  `tables` row key, warehouse, namespace, and table-name columns before
+  returning or mutating REST-visible table state.
 - Added explicit Turso server/project row-column drift regression coverage.
   Server and project list paths now have focused tests proving corrupted
   durable `servers.server_id` and `projects.project_id` row columns cannot
