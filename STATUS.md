@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-engineering slice:
+  `Add first-release checklist`.
+  `RELEASE.md` now turns the first-release ledger into an executable local-first
+  checklist: scope, preflight dependency contract, required full
+  `scripts/check-release-readiness.sh` gate, book artifact checks, release-note
+  chores, manual-cloud-CI policy, tagging commands, and deferred work ledger.
+  `README.md` now points release readers to the checklist and carries the
+  June 23, 2026 full-gate evidence date; `DESIGN.md` lists `RELEASE.md` as the
+  canonical home for first-release checklist and tagging steps.
 - Latest documentation/release-evidence slice:
   `Expand catalog concepts and refresh full release gate`.
   The book now more explicitly separates what a standard Iceberg REST client

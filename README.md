@@ -11,8 +11,9 @@ The current implementation exposes an Iceberg REST-compatible catalog surface
 under `/catalog/v1` and a QueryGraph bootstrap bundle at
 `/querygraph/v1/bootstrap`. The bootstrap bundle projects live catalog tables
 into Croissant, CDIF, OSI, ODRL, OpenLineage, and a Grust-ready graph envelope.
-The full local release-readiness gate is green as of June 22, 2026; keep that
-local proof green before making release or cloud-automation claims.
+The full local release-readiness gate is green as of June 23, 2026; keep that
+local proof green before making release or cloud-automation claims. Use
+[RELEASE.md](RELEASE.md) for the first-release checklist.
 
 Scan planning already routes through the Sail-facing engine. Point-in-time scans
 produce opaque Iceberg REST plan-task tokens from stable Sail metadata, and
@@ -112,7 +113,7 @@ attach alternate hashes, mirror artifacts, or unverified captured-output claims
 beside otherwise valid files.
 
 For first-release readiness, run the local release gate instead of relying on
-cloud CI:
+cloud CI. The full release checklist lives in [RELEASE.md](RELEASE.md):
 
 ```bash
 scripts/check-release-readiness.sh

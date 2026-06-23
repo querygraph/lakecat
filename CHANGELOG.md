@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added `RELEASE.md` as the first-release checklist and reconciled the README
+  and design release ledger with the June 23, 2026 full local release gate. The
+  checklist keeps release evidence local-first, documents the required full
+  `scripts/check-release-readiness.sh` gate, preserves the manual-cloud-CI
+  policy, names the book artifact checks, and records the deferred work ledger
+  before tagging.
 - Expanded the LakeCat book's catalog-concepts explanation and refreshed full
   local release-readiness evidence. The book now separates what standard
   Iceberg clients see, what governed TypeSec/LakeCat/Sail callers see, what

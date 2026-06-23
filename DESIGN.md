@@ -54,6 +54,7 @@ Use this map instead of reopening OPUS files for routine work:
 | Agent/commit/verification discipline | `AGENTS.md` |
 | Latest completed slices, local verification, blockers, and next work | `STATUS.md` |
 | User-facing change record before each commit | `CHANGELOG.md` |
+| First-release checklist, gate commands, release notes, and tagging steps | `RELEASE.md` |
 | Book-quality operator narrative and examples | `docs/book/lakecat.md` |
 | Historical review provenance only | `docs/completed/OPUS*.md` |
 
@@ -97,6 +98,7 @@ the canonical merge record for those pieces.
 | Agent commit discipline, feature-gate expectations, graph/Sail/TypeSec placement rules, and Turso preference | `AGENTS.md` | It is executable guidance for future agents working in this repo. |
 | Latest completed slices, verification evidence, blockers, and next recommended work | `STATUS.md` | It changes after each logical unit and should not be buried in design prose. |
 | Public/operator explanation, examples, and QGLake workflow narrative | `docs/book/lakecat.md` | It is the reader-facing book and must evolve with user workflows. |
+| First-release checklist, local gate evidence, release-note chores, and tagging steps | `RELEASE.md` | It turns the release ledger into an executable checklist. |
 | Historical verification tables, original line references, and review provenance | `docs/completed/OPUS*.md` | It is audit history; it is not the active backlog. |
 
 When old OPUS wording is useful again, merge the durable rule into the active
@@ -300,7 +302,8 @@ record the local/published dependency state explicitly.
 
 The first release should be cut around behavior that is already locally
 verifiable, not around every long-term architecture ambition. Treat this ledger
-as the release-scope map until it is replaced by an explicit release checklist.
+as the release-scope map and use `RELEASE.md` as the executable release
+checklist.
 
 Release-blocking scope:
 
