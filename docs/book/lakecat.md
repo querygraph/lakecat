@@ -13636,7 +13636,7 @@ scripts/check-local-dependency-contract.sh
 ```
 
 The current full local release-candidate proof was refreshed on June 23, 2026
-from clean head `016e2865`. It passed with tracked book artifact validation,
+from clean head `e3a28d30`. It passed with tracked book artifact validation,
 the temporary book build, executable book artifact contract, QueryGraph locked
 verify/import, Grust Turso graph projection proof, and the final clean-tree
 check.

@@ -368,7 +368,7 @@ logs, audit/outbox, replay admission, governed scan/fetch, credential receipt
 proof, management surfaces, view receipt chains, QueryGraph bootstrap,
 OpenLineage replay, and QGLake handoff/import proof.
 The broad local release gate was refreshed on June 23, 2026 from clean head
-`016e2865`. `scripts/check-release-readiness.sh --release-candidate` passed
+`e3a28d30`. `scripts/check-release-readiness.sh --release-candidate` passed
 locally, including shell-contract checks, dependency-contract checks, manual CI
 trigger contract checks, tracked book artifact validation, formatter checks,
 default and all-features workspace tests, explicit Turso/Sail/TypeSec/Grust

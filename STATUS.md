@@ -19,7 +19,7 @@ Updated: 2026-06-23
   now executable local evidence.
 - Latest release-candidate proof:
   `scripts/check-release-readiness.sh --release-candidate` passed locally on
-  June 23, 2026 from clean head `016e2865`. The gate covered shell syntax
+  June 23, 2026 from clean head `e3a28d30`. The gate covered shell syntax
   checks, dependency and workflow trigger contracts, release-version checks,
   tracked book artifact validation, formatting, default and all-features
   workspace tests, Turso/Sail/TypeSec/Grust and Grust Turso feature rows,
