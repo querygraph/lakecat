@@ -8113,6 +8113,11 @@ For the Turso-backed store, LakeCat also compares the decoded receipt JSON to
 the row/query scope. A receipt row selected for one warehouse, namespace, and
 view cannot carry JSON that claims another view and still be returned, grouped
 into a namespace chain, or used as the latest receipt for the next mutation.
+That comparison now includes the durable receipt row columns themselves:
+`view_version_receipts.warehouse`, `namespace_path`, and `view_name` must agree
+with the decoded receipt before LakeCat returns receipt history or appends the
+next receipt. A valid-looking receipt body cannot ride a corrupted row index
+into another namespace or view.
 
 The verifier is fail-closed on version progression too. The first receipt must
 be a version-1 upsert with no previous version or receipt hash; zero-version

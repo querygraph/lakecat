@@ -6531,7 +6531,7 @@ pub mod turso_store {
             let view_key = view_key_parts(warehouse, namespace, view);
             let mut rows = conn
                 .query(
-                    "select receipt_json from view_version_receipts
+                    "select receipt_json, warehouse, namespace_path, view_name from view_version_receipts
                      where view_key = ?1
                      order by view_version, recorded_at, receipt_id",
                     (view_key.as_str(),),
@@ -6541,6 +6541,15 @@ pub mod turso_store {
             let mut receipts = Vec::new();
             while let Some(row) = rows.next().await.map_err(turso_error)? {
                 let receipt: ViewVersionReceipt = decode_json(row_string(&row, 0)?)?;
+                let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+                let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
+                let row_view = TableName::new(row_string(&row, 3)?)?;
+                crate::validate_view_receipt_scope(
+                    &receipt,
+                    &row_warehouse,
+                    &row_namespace,
+                    Some(&row_view),
+                )?;
                 crate::validate_view_receipt_scope(&receipt, warehouse, namespace, Some(view))?;
                 receipts.push(receipt);
             }
@@ -7208,7 +7217,7 @@ pub mod turso_store {
     ) -> LakeCatResult<Option<(u64, String)>> {
         let mut rows = tx
             .query(
-                "select receipt_json from view_version_receipts
+                "select receipt_json, warehouse, namespace_path, view_name from view_version_receipts
              where view_key = ?1
              order by view_version, recorded_at, receipt_id",
                 (view_key,),
@@ -7218,6 +7227,15 @@ pub mod turso_store {
         let mut receipts = Vec::new();
         while let Some(row) = rows.next().await.map_err(turso_error)? {
             let receipt = decode_json::<ViewVersionReceipt>(row_string(&row, 0)?)?;
+            let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
+            let row_namespace = row_string(&row, 2)?.parse::<Namespace>()?;
+            let row_view = TableName::new(row_string(&row, 3)?)?;
+            crate::validate_view_receipt_scope(
+                &receipt,
+                &row_warehouse,
+                &row_namespace,
+                Some(&row_view),
+            )?;
             crate::validate_view_receipt_scope(&receipt, warehouse, namespace, Some(view))?;
             receipts.push(receipt);
         }
@@ -8550,6 +8568,111 @@ pub mod turso_store {
             ));
             let err = store
                 .list_namespace_view_version_receipts(&warehouse, &namespace)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("view receipt row scope does not match")
+            ));
+
+            let attempted = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select id, email from customers where active",
+                "sql",
+                Some(3),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            let err = store
+                .upsert_view_if_version(attempted, Some(2))
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("view receipt row scope does not match")
+            ));
+            assert_eq!(
+                store
+                    .load_view(&warehouse, &namespace, &view_name)
+                    .await
+                    .unwrap()
+                    .view_version,
+                2
+            );
+            assert_eq!(store.count_rows("view_version_receipts").await.unwrap(), 2);
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_view_receipt_row_column_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let namespace = "default".parse::<Namespace>().unwrap();
+            let shadow_namespace = "tenant_shadow".parse::<Namespace>().unwrap();
+            let view_name = TableName::new("active_customers").unwrap();
+            let shadow_view_name = TableName::new("shadow_active_customers").unwrap();
+            let view = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select * from customers where active",
+                "sql",
+                Some(1),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_view(view).await.unwrap();
+            let updated = ViewRecord::new(
+                warehouse.clone(),
+                namespace.clone(),
+                view_name.clone(),
+                "select id from customers where active",
+                "sql",
+                Some(2),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store
+                .upsert_view_if_version(updated, Some(1))
+                .await
+                .unwrap();
+
+            let receipts = store
+                .list_view_version_receipts(&warehouse, &namespace, &view_name)
+                .await
+                .unwrap();
+            let receipt_id = view_receipt_hash(&receipts[1]).unwrap();
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update view_version_receipts
+                 set namespace_path = ?2, view_name = ?3
+                 where receipt_id = ?1",
+                (
+                    receipt_id.as_str(),
+                    shadow_namespace.path().as_str(),
+                    shadow_view_name.as_str(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .list_view_version_receipts(&warehouse, &namespace, &view_name)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("view receipt row scope does not match")
+            ));
+            let err = store
+                .list_namespace_view_version_receipts(&warehouse, &shadow_namespace)
                 .await
                 .unwrap_err();
             assert!(matches!(

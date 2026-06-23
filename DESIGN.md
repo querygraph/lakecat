@@ -266,9 +266,9 @@ The current working plan is:
    covers both decoded JSON drift and durable `views` row-column drift for
    load, list, guarded mutation, and drop paths. Turso receipt reads and
    mutation-chain lookups
-   must also verify decoded receipt JSON against the row/query warehouse,
-   namespace, and view scope before returning or extending durable view-history
-   evidence.
+   must also verify decoded receipt JSON against the durable receipt row and
+   row/query warehouse, namespace, and view scope before returning or extending
+   durable view-history evidence.
 6. Keep reproducibility ahead of integration claims. Run local gates before
    commit, keep cloud CI manual/disabled until it is known green, use published
    Grust/TypeSec crates when available, and keep any Sail path/patch bridge

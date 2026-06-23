@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened Turso view-version receipt row-column validation. Receipt reads and
+  mutation-chain lookups now bind decoded receipt JSON to durable receipt row
+  warehouse, namespace, and view columns before returning receipt chains or
+  extending view history.
 - Added explicit Turso namespace row-column drift regression coverage. Namespace
   list, load, and drop paths now have focused test coverage proving corrupted
   durable `namespaces` row columns cannot remap namespace state away from the

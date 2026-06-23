@@ -6,6 +6,20 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden Turso view receipt row-column scope`.
+  Turso view-version receipt reads and mutation-chain lookups now bind decoded
+  receipt JSON to durable receipt row warehouse, namespace, and view columns
+  before returning receipt chains or extending view history.
+- Local verification for this Turso view receipt row-column scope slice is
+  green:
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_view_receipt_row_column_scope_drift -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed; `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Add Turso namespace row-column drift regression`.
   Turso namespace list, load, and drop paths now have explicit regression
   coverage proving corrupted durable `namespaces` row columns cannot remap a
