@@ -6390,6 +6390,11 @@ Object storage remains the source of Iceberg metadata files. Turso stores the
 atomic pointer, management state, idempotency evidence, and event record. This
 mirrors the Iceberg catalog contract: metadata files describe the table;
 catalog state decides which metadata file is current.
+For governed policy evidence, Turso policy-binding reads bind the decoded JSON
+back to the row's warehouse, policy id, namespace path, table name, and enforced
+flag before a binding can be returned or matched to a table. That keeps a
+corrupted row index from silently changing which TypeSec-style policy anchors
+apply to a governed read.
 
 Outbox draining is intentionally strict. LakeCat projects a batch to graph and
 lineage sinks first, then acknowledges the whole projected batch in the store.

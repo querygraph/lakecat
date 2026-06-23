@@ -6,6 +6,20 @@ Updated: 2026-06-22
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden Turso policy-binding row scope`.
+  Turso policy-binding reads now bind decoded JSON back to the selecting row's
+  namespace path, table name, and enforced columns as well as warehouse and
+  policy id, so corrupted row indexes cannot silently change which policies
+  match a table.
+- Local verification for this Turso policy-binding scope slice is green:
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_policy_binding_row_column_scope_drift -- --test-threads=1` passed;
+  `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Redact TypeSec RBAC policy path failures`.
   The `typesec-local` service binary now reports hash-only
   `policy-path-hash=sha256:...` evidence when `LAKECAT_TYPESEC_RBAC_POLICY`

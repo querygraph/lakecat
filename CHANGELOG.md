@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened Turso policy-binding row scope validation. Policy-binding reads now
+  bind decoded JSON back to the row's namespace, table, and enforced columns,
+  so corrupted row indexes cannot silently change which policies match a table.
 - Redacted service-level TypeSec RBAC policy path read failures. The
   `typesec-local` service binary now reports only `policy-path-hash=sha256:...`
   evidence when `LAKECAT_TYPESEC_RBAC_POLICY` cannot be read, and the regression
