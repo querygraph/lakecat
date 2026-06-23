@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened memory namespace-drop dependency scope binding. Memory namespace
+  deletion now validates dependent table, view, and policy-binding records
+  against their map keys before deciding a namespace is empty.
 - Hardened memory soft-delete tombstone scope binding. Memory restore now
   validates soft-delete tombstones against their map keys before removing a
   marker, matching Turso's soft-delete row-scope drift rejection.

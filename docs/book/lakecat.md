@@ -3123,11 +3123,12 @@ standard." The important behavior is that durable rows are scoped and checked:
 server, project, and warehouse tenant-root records must match their selected
 rows or memory keys, namespace, table, and active-view records must match their
 selected rows or memory keys before ordinary reads or mutations use them,
-soft-delete tombstones must match their durable row or memory marker keys,
-policy bindings and storage-profile records must match their durable keys and
-row anchors, idempotency responses must match the route and table they replay,
-and outbox records must be fit for graph and lineage projection. Those are
-LakeCat reliability properties. The
+namespace drops must validate dependent table, view, and policy-binding records
+before removing namespace state, soft-delete tombstones must match their durable
+row or memory marker keys, policy bindings and storage-profile records must
+match their durable keys and row anchors, idempotency responses must match the
+route and table they replay, and outbox records must be fit for graph and
+lineage projection. Those are LakeCat reliability properties. The
 Iceberg-adjacent candidates are much smaller: atomic pointer CAS, exact retry
 semantics, pointer-history inspection, redacted conflict proof, and durable
 catalog event identity.

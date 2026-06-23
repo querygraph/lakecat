@@ -1790,21 +1790,43 @@ impl CatalogStore for MemoryCatalogStore {
         }
         if state
             .tables
-            .values()
+            .iter()
+            .map(|(table_key, table)| {
+                validate_table_record_map_scope(table, table_key)?;
+                Ok(table)
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?
+            .into_iter()
             .any(|table| table.ident.warehouse == *warehouse && table.ident.namespace == *namespace)
         {
             return Err(namespace_not_empty(namespace, "tables"));
         }
         if state
             .views
-            .values()
+            .iter()
+            .map(|(view_key, view)| {
+                validate_view_record_map_scope(view, view_key)?;
+                Ok(view)
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?
+            .into_iter()
             .any(|view| view.warehouse == *warehouse && view.namespace == *namespace)
         {
             return Err(namespace_not_empty(namespace, "views"));
         }
-        if state.policy_bindings.values().any(|binding| {
-            binding.warehouse == *warehouse && binding.namespace.as_ref() == Some(namespace)
-        }) {
+        if state
+            .policy_bindings
+            .iter()
+            .map(|(binding_key, binding)| {
+                validate_policy_binding_map_scope(binding, binding_key)?;
+                Ok(binding)
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?
+            .into_iter()
+            .any(|binding| {
+                binding.warehouse == *warehouse && binding.namespace.as_ref() == Some(namespace)
+            })
+        {
             return Err(namespace_not_empty(namespace, "policy bindings"));
         }
         let namespaces = state
@@ -4188,6 +4210,145 @@ mod memory_tests {
             store.drop_namespace(&warehouse, &policy_namespace).await,
             Err(LakeCatError::Conflict(message)) if message.contains("policy bindings")
         ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_corrupt_namespace_drop_dependencies() {
+        let warehouse = WarehouseName::new("local").unwrap();
+
+        let store = MemoryCatalogStore::new();
+        let table_namespace = "table_scope".parse::<Namespace>().unwrap();
+        let table_ident = TableIdent::new(
+            warehouse.clone(),
+            table_namespace.clone(),
+            TableName::new("events").unwrap(),
+        );
+        store
+            .create_table(TableRecord::new(
+                table_ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            ))
+            .await
+            .unwrap();
+        let drifted_table_ident = TableIdent::new(
+            warehouse.clone(),
+            table_namespace.clone(),
+            TableName::new("other_events").unwrap(),
+        );
+        store
+            .state
+            .write()
+            .await
+            .tables
+            .get_mut(&table_key(&table_ident))
+            .unwrap()
+            .ident = drifted_table_ident;
+
+        let err = store
+            .drop_namespace(&warehouse, &table_namespace)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("table record row scope does not match")
+        ));
+        assert_eq!(
+            store
+                .load_namespace(&warehouse, &table_namespace)
+                .await
+                .unwrap(),
+            table_namespace
+        );
+
+        let store = MemoryCatalogStore::new();
+        let view_namespace = "view_scope".parse::<Namespace>().unwrap();
+        store
+            .create_namespace(&warehouse, view_namespace.clone())
+            .await
+            .unwrap();
+        let view = ViewRecord::new(
+            warehouse.clone(),
+            view_namespace.clone(),
+            TableName::new("active_customers").unwrap(),
+            "select * from customers",
+            "duckdb",
+            None,
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        let view = store.upsert_view(view).await.unwrap();
+        store
+            .state
+            .write()
+            .await
+            .views
+            .get_mut(&view_key(&view))
+            .unwrap()
+            .name = TableName::new("other_view").unwrap();
+
+        let err = store
+            .drop_namespace(&warehouse, &view_namespace)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("view record row scope does not match")
+        ));
+        assert_eq!(
+            store
+                .load_namespace(&warehouse, &view_namespace)
+                .await
+                .unwrap(),
+            view_namespace
+        );
+
+        let store = MemoryCatalogStore::new();
+        let policy_namespace = "policy_scope".parse::<Namespace>().unwrap();
+        store
+            .create_namespace(&warehouse, policy_namespace.clone())
+            .await
+            .unwrap();
+        let binding = PolicyBinding::new(
+            "namespace-policy",
+            warehouse.clone(),
+            Some(policy_namespace.clone()),
+            None,
+            true,
+            serde_json::json!({"permission": []}),
+        )
+        .unwrap();
+        store.upsert_policy_binding(binding).await.unwrap();
+        store
+            .state
+            .write()
+            .await
+            .policy_bindings
+            .get_mut(&policy_binding_key(&warehouse, "namespace-policy"))
+            .unwrap()
+            .policy_id = "other-policy".to_string();
+
+        let err = store
+            .drop_namespace(&warehouse, &policy_namespace)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("policy binding row scope does not match")
+        ));
+        assert_eq!(
+            store
+                .load_namespace(&warehouse, &policy_namespace)
+                .await
+                .unwrap(),
+            policy_namespace
+        );
     }
 
     #[tokio::test]

@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest memory namespace-drop dependency scope binding:
+  memory namespace deletion now validates dependent table, view, and
+  policy-binding records against their map keys before deciding a namespace is
+  empty, so corrupted dependent state cannot be bypassed by a namespace drop.
+- Local verification for this memory namespace-drop dependency scope slice
+  passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_corrupt_namespace_drop_dependencies -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_namespace_json_scope_drift -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest memory soft-delete tombstone scope binding:
   memory restore now validates soft-delete tombstones against their map keys
   before removing a marker, matching Turso's soft-delete row-scope drift

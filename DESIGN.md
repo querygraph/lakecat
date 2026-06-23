@@ -275,7 +275,9 @@ The current working plan is:
    tenant-root list paths. Turso
    namespace reads must bind decoded JSON
    back to the selected warehouse row and namespace path before returning or
-   dropping standard namespace state; the Turso namespace regression suite now
+   dropping standard namespace state; memory namespace drops must also validate
+   dependent table, view, and policy-binding records against their map keys
+   before removing namespace state. The Turso namespace regression suite now
    covers both decoded JSON drift and durable `namespaces` row-column drift for
    list, load, and drop paths. Policy-binding reads must bind decoded JSON
    back to the memory map key or Turso row/query warehouse and policy id,
