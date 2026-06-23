@@ -150,7 +150,9 @@ of truth yet.
 
 For the already-published `v0.1.0` baseline, do not run another tag command.
 Post-`v0.1.0` hardening should keep changes under `Unreleased` until the
-workspace version moves forward.
+workspace version moves forward. The release version contract enforces that
+post-tag state: if `v$workspace_version` already exists and `HEAD` is past that
+tag, `CHANGELOG.md` must still contain an `Unreleased` section.
 
 For a future release where `Cargo.toml` has moved to a version without an
 existing local tag, tag only after the full gate passes from the final clean

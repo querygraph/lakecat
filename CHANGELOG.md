@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened the post-tag release-version contract. When the workspace version's
+  tag already exists and `HEAD` is past that tag, the local release gate now
+  requires `CHANGELOG.md` to keep an `Unreleased` section until the workspace
+  version moves forward, preventing post-`v0.1.0` hardening from looking like a
+  second same-version release.
 - Added tracked book artifact validation to the quick release gate.
   `scripts/check-release-readiness.sh --quick` now runs
   `scripts/check-book-artifact-contract.sh docs/book/dist`, so narrow-slice

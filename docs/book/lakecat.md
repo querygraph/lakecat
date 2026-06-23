@@ -13641,6 +13641,12 @@ the temporary book build, executable book artifact contract, QueryGraph locked
 verify/import, Grust Turso graph projection proof, and the final clean-tree
 check.
 
+The already-published `v0.1.0` tag is a baseline, not something to move. While
+the workspace version remains `0.1.0` and `HEAD` is past `v0.1.0`, post-tag
+hardening stays under `Unreleased`. The release version contract checks that
+shape directly so a follow-up proof commit cannot accidentally look like a
+second same-version release.
+
 The quick check is acceptable while landing a narrow slice:
 
 ```sh

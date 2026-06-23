@@ -62,6 +62,12 @@ if git rev-parse -q --verify "refs/tags/$local_tag" >/dev/null; then
   if rg -q "git tag -a $local_tag\\b" RELEASE.md; then
     fail "RELEASE.md must not instruct retagging already-published $local_tag"
   fi
+  tag_commit="$(git rev-parse "$local_tag^{}")"
+  head_commit="$(git rev-parse HEAD)"
+  if [[ "$tag_commit" != "$head_commit" ]]; then
+    rg -q '^## Unreleased$' CHANGELOG.md || \
+      fail "post-$local_tag hardening must remain under CHANGELOG.md Unreleased until the workspace version moves forward"
+  fi
 else
   rg -q 'git tag -a "v\$version"' RELEASE.md || \
     fail "RELEASE.md must derive future unpublished tags from the workspace version"

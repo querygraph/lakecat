@@ -5,6 +5,12 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-version hardening:
+  `scripts/check-release-version-contract.sh` now detects post-tag hardening
+  when the workspace-version tag already exists and `HEAD` is past that tag.
+  In that state, it requires `CHANGELOG.md` to retain an `Unreleased` section
+  until the workspace version moves forward, so post-`v0.1.0` hardening cannot
+  be mistaken for a second same-version release.
 - Latest quick-gate hardening:
   `scripts/check-release-readiness.sh --quick` now runs the tracked
   `docs/book/dist` artifact contract, so narrow release-slice checks verify the
