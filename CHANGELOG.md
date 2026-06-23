@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened service view receipt-chain replay hash admission. Verified
+  `view.version-receipt-chains-listed` replay now recomputes each structural
+  `chain-hash` from the chain identity, latest state, tombstone posture, and
+  ordered receipt hashes, so forged chain digests cannot pass by also appearing
+  in the top-level `chain-hashes` array.
 - Hardened service view receipt-chain replay identity admission. Raw
   `view.version-receipt-chains-listed` replay now rejects nested chain or
   receipt `stable-id`/view-name evidence that does not match the

@@ -8478,7 +8478,11 @@ receipt-chain hash with a different ordered receipt body.
 LakeCat enforces the duplicate-free part before compact proof generation as
 well: outbox replay rejects duplicate `receipt-hashes`,
 `drop-receipt-hashes`, or `chain-hashes` in view receipt-list and receipt-chain
-events before graph or OpenLineage projection.
+events before graph or OpenLineage projection. For verified receipt chains, raw
+service replay also recomputes each structural `chain-hash` from the chain
+identity, latest state, tombstone posture, and ordered receipt hashes before
+projection, so an archived outbox event cannot simply invent a full SHA and
+repeat it in `chain-hashes`.
 Each structural `receiptHash` is recomputed too, using the same
 content-derived view-version receipt digest LakeCat service emits over stable
 view identity, version, previous-link fields, operation, view hash, principal,

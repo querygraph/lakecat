@@ -6,6 +6,21 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden view receipt-chain replay hashes`.
+  Verified `view.version-receipt-chains-listed` replay now recomputes each
+  structural `chain-hash` from the chain identity, latest state, tombstone
+  posture, and ordered receipt hashes, so forged chain digests cannot pass
+  replay admission by also appearing in the top-level `chain-hashes` array.
+- Local verification for this view receipt-chain replay-hash slice is green:
+  `cargo test -p lakecat-service view_receipt_chain -- --test-threads=1`
+  passed;
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Harden view receipt-chain replay identity`.
   Raw `view.version-receipt-chains-listed` replay now rejects nested chain or
   receipt `stable-id`/view-name evidence that does not match the

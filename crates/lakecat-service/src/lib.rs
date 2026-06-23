@@ -6464,6 +6464,49 @@ fn validate_view_receipt_chain_structure_evidence(
             "verified view receipt-chain tombstoned flag must match the last receipt operation",
         ));
     }
+    let receipt_hashes = receipts
+        .iter()
+        .map(|receipt| {
+            receipt
+                .get("receipt-hash")
+                .and_then(Value::as_str)
+                .expect("receipt-hash was validated")
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+    let expected_chain_hash = content_hash_json(&json!({
+        "stable-id": latest_receipt
+            .get("stable-id")
+            .and_then(Value::as_str)
+            .expect("stable-id was validated"),
+        "warehouse": latest_receipt
+            .get("warehouse")
+            .and_then(Value::as_str)
+            .expect("warehouse was validated"),
+        "namespace": latest_receipt
+            .get("namespace")
+            .expect("namespace was validated"),
+        "name": latest_receipt
+            .get("name")
+            .and_then(Value::as_str)
+            .expect("name was validated"),
+        "latest-view-version": latest_view_version,
+        "latest-operation": latest_operation,
+        "tombstoned": chain_tombstoned,
+        "receipt-hashes": receipt_hashes,
+    }))
+    .map_err(|err| {
+        outbox_evidence_error(
+            event,
+            &format!("verified view receipt-chain hash could not be computed: {err}"),
+        )
+    })?;
+    if chain.get("chain-hash").and_then(Value::as_str) != Some(expected_chain_hash.as_str()) {
+        return Err(outbox_evidence_error(
+            event,
+            "verified view receipt-chain chain-hash must match structural receipt-chain evidence",
+        ));
+    }
 
     Ok(())
 }
@@ -38878,10 +38921,10 @@ mod tests {
             "operation": "upsert"
         }))
         .unwrap();
-        let chain_hash = content_hash_json(&json!({
-            "stable-id": "lakecat:view:local:default:events_view",
-            "receipt-hashes": [&receipt_hash_1, &receipt_hash_2]
-        }))
+        let chain_hash = view_version_receipt_chain_hash(&[
+            test_view_receipt(1, None, None, "upsert", &receipt_hash_1),
+            test_view_receipt(2, Some(1), Some(&receipt_hash_1), "upsert", &receipt_hash_2),
+        ])
         .unwrap();
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {
@@ -38990,10 +39033,13 @@ mod tests {
             "operation": "upsert"
         }))
         .unwrap();
-        let chain_hash = content_hash_json(&json!({
-            "stable-id": "lakecat:view:local:default:events_view",
-            "receipt-hashes": [&receipt_hash]
-        }))
+        let chain_hash = view_version_receipt_chain_hash(&[test_view_receipt(
+            1,
+            None,
+            None,
+            "upsert",
+            &receipt_hash,
+        )])
         .unwrap();
         let store = Arc::new(RecordingOutboxStore {
             events: Mutex::new(vec![OutboxEvent {
@@ -39090,10 +39136,13 @@ mod tests {
             "operation": "upsert"
         }))
         .unwrap();
-        let chain_hash = content_hash_json(&json!({
-            "stable-id": "lakecat:view:local:default:events_view",
-            "receipt-hashes": [&receipt_hash]
-        }))
+        let chain_hash = view_version_receipt_chain_hash(&[test_view_receipt(
+            1,
+            None,
+            None,
+            "upsert",
+            &receipt_hash,
+        )])
         .unwrap();
         let valid_chain = json!({
             "stable-id": "lakecat:view:local:default:events_view",
@@ -39304,6 +39353,17 @@ mod tests {
             "evt-view-chain-tombstoned-drift",
             "verified view receipt-chain tombstoned flag must match the last receipt operation",
             chain_tombstoned_drift,
+        ));
+
+        let mut chain_hash_content_drift = base_payload.clone();
+        let forged_chain_hash = content_hash_bytes(b"forged-view-receipt-chain");
+        chain_hash_content_drift["view-version-receipt-chains"][0]["chain-hash"] =
+            json!(&forged_chain_hash);
+        chain_hash_content_drift["chain-hashes"] = json!([forged_chain_hash]);
+        cases.push((
+            "evt-view-chain-hash-content-drift",
+            "verified view receipt-chain chain-hash must match structural receipt-chain evidence",
+            chain_hash_content_drift,
         ));
 
         let mut chain_hash_coverage_drift = base_payload.clone();
