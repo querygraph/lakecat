@@ -248,12 +248,20 @@ require_pattern 'docs/book/check_pdf_layout\.sh' RELEASE.md \
   "RELEASE.md must include the PDF layout artifact check"
 require_pattern 'For the already-published `v0\.1\.0` baseline, do not run another tag command' RELEASE.md \
   "RELEASE.md must preserve the post-v0.1.0 no-retag rule"
+require_pattern 'For the already-published `v0\.1\.0` baseline, do not move current post-tag' RELEASE.md \
+  "RELEASE.md must keep post-v0.1.0 hardening under Unreleased"
+require_pattern 'For a future version-bump release, before tagging:' RELEASE.md \
+  "RELEASE.md must scope tagging chores to future version-bump releases"
+forbid_pattern '^Before tagging:$' RELEASE.md \
+  "RELEASE.md must not present a standalone pre-tagging section for the already-published baseline"
 require_pattern 'git tag -a "v\$version"' RELEASE.md \
   "RELEASE.md must derive future unpublished release tags from the workspace version"
 forbid_pattern 'git tag -a v0\.1\.0' RELEASE.md \
   "RELEASE.md must not instruct retagging the already-published v0.1.0 baseline"
 require_pattern 'must not instruct retagging already-published \$local_tag' scripts/check-release-version-contract.sh \
   "release version contract must reject retag instructions for already-published workspace tags"
+require_pattern 'must scope tagging chores to future version-bump releases' scripts/check-release-version-contract.sh \
+  "release version contract must enforce future-version release-note scope"
 require_pattern 'Typed Iceberg v4 support belongs in Sail' RELEASE.md \
   "RELEASE.md must keep typed Iceberg v4 in the deferred Sail-owned ledger"
 
@@ -269,6 +277,8 @@ require_pattern 'typed-sail=unavailable' DESIGN.md \
   "DESIGN.md must preserve the honest typed Sail v4 posture"
 require_pattern 'scripts/check-release-readiness.sh' DESIGN.md \
   "DESIGN.md must name the local release-readiness proof"
+require_pattern 'For the already-published `v0\.1\.0`, do not retag' DESIGN.md \
+  "DESIGN.md must preserve the post-v0.1.0 no-retag rule"
 require_pattern 'scripts/qglake-handoff-local.sh' DESIGN.md \
   "DESIGN.md must name the QGLake handoff proof"
 require_pattern 'First-release scope is intentionally narrower' README.md \
@@ -283,6 +293,8 @@ require_pattern '### Standard, Extension, Or Proposal\?' docs/book/lakecat.md \
   "LakeCat book must keep the standard/extension/proposal taxonomy"
 require_pattern 'The handoff between LakeCat and Sail should therefore be compact and typed' docs/book/lakecat.md \
   "LakeCat book must keep the LakeCat/Sail responsibility ledger"
+require_pattern 'The already-published `v0\.1\.0` tag is a baseline, not something to move' docs/book/lakecat.md \
+  "LakeCat book must preserve the post-v0.1.0 no-retag explanation"
 require_pattern '## First Release Readiness' docs/book/lakecat.md \
   "LakeCat book must keep the first-release readiness section"
 require_pattern 'typed-sail=unavailable' docs/book/lakecat.md \

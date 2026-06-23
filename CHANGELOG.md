@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened release-posture contracts for the published `v0.1.0` baseline.
+  `scripts/check-release-version-contract.sh` and the local dependency
+  contract now require release docs to distinguish current post-tag hardening
+  from future version-bump tagging chores.
 - Clarified the post-tag release posture. `RELEASE.md`, `DESIGN.md`, and the
   book now distinguish the already-published `v0.1.0` baseline from future
   version-bump releases, so post-tag hardening stays under `Unreleased` while

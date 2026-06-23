@@ -13686,10 +13686,12 @@ The already-published `v0.1.0` tag is a baseline, not something to move. While
 the workspace version remains `0.1.0` and `HEAD` is past `v0.1.0`, post-tag
 hardening stays under `Unreleased`. The release version contract checks that
 shape directly so a follow-up proof commit cannot accidentally look like a
-second same-version release. It also derives the expected versioned changelog
-heading date from the existing tag, not the current day, so the published
-`0.1.0 - 2026-06-23` release heading remains stable while hardening continues
-under `Unreleased`.
+second same-version release. It also requires the release checklist to scope
+tagging chores to a future version-bump release, not the already-published
+baseline. Finally, it derives the expected versioned changelog heading date
+from the existing tag, not the current day, so the published `0.1.0 -
+2026-06-23` release heading remains stable while hardening continues under
+`Unreleased`.
 
 The quick check is acceptable while landing a narrow slice:
 

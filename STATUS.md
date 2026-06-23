@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-posture contract hardening:
+  `scripts/check-release-version-contract.sh` and
+  `scripts/check-local-dependency-contract.sh` now require the release docs to
+  distinguish the already-published `v0.1.0` baseline from future version-bump
+  tagging chores. The contracts reject a standalone pre-tagging checklist for
+  the current baseline, require the post-`v0.1.0` hardening posture to stay
+  under `Unreleased`, and keep the no-retag guidance aligned across
+  `RELEASE.md`, `DESIGN.md`, and the book.
+- Local verification for this release-posture contract hardening slice passed:
+  `docs/book/build.sh`; `bash -n scripts/check-release-version-contract.sh`;
+  `bash -n scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-version-contract.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest release-version hardening:
   `scripts/check-release-version-contract.sh` now detects post-tag hardening
   when the workspace-version tag already exists and `HEAD` is past that tag.

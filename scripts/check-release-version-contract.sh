@@ -63,6 +63,17 @@ if git rev-parse -q --verify "refs/tags/$local_tag" >/dev/null; then
   if rg -q "git tag -a $local_tag\\b" RELEASE.md; then
     fail "RELEASE.md must not instruct retagging already-published $local_tag"
   fi
+  rg -q "For the already-published \`$local_tag\` baseline" RELEASE.md || \
+    fail "RELEASE.md must identify already-published $local_tag as the fixed baseline"
+  rg -q 'For a future version-bump release, before tagging:' RELEASE.md || \
+    fail "RELEASE.md must scope tagging chores to future version-bump releases"
+  if rg -q '^Before tagging:$' RELEASE.md; then
+    fail "RELEASE.md must not present a standalone pre-tagging section for already-published $local_tag"
+  fi
+  rg -q "For the already-published \`$local_tag\`, do not retag" DESIGN.md || \
+    fail "DESIGN.md must say not to retag already-published $local_tag"
+  rg -q "The already-published \`$local_tag\` tag is a baseline, not something to move" docs/book/lakecat.md || \
+    fail "LakeCat book must say already-published $local_tag is a fixed baseline"
   expected_release_date="$(
     git for-each-ref "refs/tags/$local_tag" --format='%(creatordate:short)'
   )"
