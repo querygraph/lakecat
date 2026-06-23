@@ -369,9 +369,10 @@ contract checks, formatter checks, default and all-features workspace tests,
 explicit Turso/Sail/TypeSec/Grust feature gates, Grust Turso graph projection
 tests, explicit Rust `lakecat-cli qglake_handoff` verifier tests, book artifact
 validation, local QGLake handoff replay verification with
-`graphProjectionProof.backend = grust-turso`, and `git diff --check`. This
-remains local release evidence; automatic cloud CI stays manual/disabled until
-local gates are consistently boring from the final release commit.
+`graphProjectionProof.backend = grust-turso` and
+`graphProjectionProof.tablePrefix = lakecat_graph`, and `git diff --check`.
+This remains local release evidence; automatic cloud CI stays manual/disabled
+until local gates are consistently boring from the final release commit.
 
 The remaining 10-15 percent should be treated as release engineering and
 boundary cleanup rather than new architecture:

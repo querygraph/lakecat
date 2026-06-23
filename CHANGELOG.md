@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof from clean head `0167d442`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally,
+  covering dependency and workflow contracts, release-version checks,
+  formatting, default and all-features workspace tests, Turso/Sail/TypeSec/Grust
+  feature rows, out-of-tree book artifact validation, QGLake handoff replay
+  with `graphProjectionProof.tablePrefix = lakecat_graph`, and `git diff
+  --check`.
 - Added saved handoff verifier artifact coverage for Grust Turso table-prefix
   drift. The QGLake artifact verifier now has explicit regression coverage for
   `lakecat-handoff-verify.json` changing `graphProjectionProof.tablePrefix`,

@@ -141,6 +141,9 @@ explicit Rust `lakecat-cli qglake_handoff` verifier row, explicit all-features
 CLI tests, all-features workspace tests, book rebuild with
 EPUB metadata and PDF layout validation, QGLake handoff proof, and
 `git diff --check`.
+The current full proof also verifies the Grust Turso graph projection evidence,
+including `graphProjectionProof.backend = grust-turso` and
+`graphProjectionProof.tablePrefix = lakecat_graph`.
 In `--release-candidate` mode, book artifacts are built into a temporary dist
 directory through `LAKECAT_BOOK_DIST_DIR`; run `docs/book/build.sh` directly
 when intentionally refreshing tracked `docs/book/dist` artifacts.
