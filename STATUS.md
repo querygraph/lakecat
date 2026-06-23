@@ -44,7 +44,10 @@ Updated: 2026-06-23
   shape for first-release documentation. Active docs must agree on the full
   release-candidate proof commit, that commit must be an ancestor of `HEAD`,
   and commits after it must be limited to documentation and checked-in book
-  artifacts. Any executable change after the cited proof requires a new full
+  artifacts. The contract now requires a clean tree by default and, when
+  explicitly run with `LAKECAT_RELEASE_PROOF_ALLOW_DIRTY=1` for local
+  self-tests, applies the same allowlist to unstaged, staged, and untracked
+  paths. Any executable change after the cited proof requires a new full
   `scripts/check-release-readiness.sh --release-candidate` run.
 - First-release proximity:
   the locally verifiable LakeCat catalog substrate is now about 90 percent

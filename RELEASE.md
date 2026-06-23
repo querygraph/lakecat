@@ -104,6 +104,10 @@ If any Rust source, manifest, release script, workflow, dependency bridge, or
 other executable behavior changes after the cited proof commit, rerun
 `scripts/check-release-readiness.sh --release-candidate` from the new clean
 candidate and refresh the proof references again.
+The proof contract requires a clean working tree by default. While editing the
+contract or release docs, use `LAKECAT_RELEASE_PROOF_ALLOW_DIRTY=1` only as a
+local self-test; that mode still checks unstaged, staged, and untracked paths
+against the post-proof allowlist.
 
 Use the quick gate only while preparing a narrow slice:
 

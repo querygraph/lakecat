@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened the release-proof freshness contract against dirty working trees.
+  `scripts/check-release-proof-contract.sh` now requires a clean tree by
+  default, and its explicit dirty-test mode includes unstaged, staged, and
+  untracked paths in the same post-proof allowlist.
 - Added a standalone release-proof freshness contract. The new
   `scripts/check-release-proof-contract.sh` verifies that active docs agree on
   the latest full release-candidate proof commit, that the proof commit is an

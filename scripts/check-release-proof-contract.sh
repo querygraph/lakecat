@@ -17,6 +17,16 @@ for file in README.md DESIGN.md STATUS.md CHANGELOG.md RELEASE.md docs/book/lake
   require_file "$file"
 done
 
+allow_dirty="${LAKECAT_RELEASE_PROOF_ALLOW_DIRTY:-0}"
+if [[ "$allow_dirty" != "0" && "$allow_dirty" != "1" ]]; then
+  fail "LAKECAT_RELEASE_PROOF_ALLOW_DIRTY must be 0 or 1"
+fi
+if [[ "$allow_dirty" == "0" && -n "$(git status --short)" ]]; then
+  echo "release proof contract requires a clean tree" >&2
+  git status --short >&2
+  exit 1
+fi
+
 proof_refs="$(
   {
     rg --no-filename -o 'release-candidate proof (?:was )?refreshed from (?:clean )?head `([0-9a-f]{8,40})`' \
@@ -42,7 +52,14 @@ git merge-base --is-ancestor "$proof_ref" HEAD || \
   fail "release-candidate proof ref $proof_ref must be an ancestor of HEAD"
 
 if [[ "$(git rev-parse "$proof_ref")" != "$(git rev-parse HEAD)" ]]; then
-  while IFS= read -r changed_file; do
+  {
+    git diff --name-only "$proof_ref"..HEAD
+    if [[ "$allow_dirty" == "1" ]]; then
+      git diff --name-only
+      git diff --name-only --cached
+      git ls-files --others --exclude-standard
+    fi
+  } | sort -u | while IFS= read -r changed_file; do
     [[ -n "$changed_file" ]] || continue
     case "$changed_file" in
       CHANGELOG.md|DESIGN.md|README.md|RELEASE.md|STATUS.md|docs/book/lakecat.md|docs/book/dist/*|scripts/check-release-proof-contract.sh)
@@ -51,7 +68,7 @@ if [[ "$(git rev-parse "$proof_ref")" != "$(git rev-parse HEAD)" ]]; then
         fail "non-documentation file changed after release-candidate proof $proof_ref: $changed_file"
         ;;
     esac
-  done < <(git diff --name-only "$proof_ref"..HEAD)
+  done
 fi
 
 if ! rg -q 'scripts/check-release-readiness\.sh --release-candidate' RELEASE.md; then

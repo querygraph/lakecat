@@ -360,8 +360,10 @@ Authoritative first-release evidence:
 - `scripts/check-release-proof-contract.sh` proves that the active docs agree
   on the latest full release-candidate proof commit and that any commits after
   that proof are limited to documentation and checked-in book artifact refresh.
-  If executable behavior changes after the cited proof commit, the broad
-  release-candidate gate must be rerun from the new clean candidate.
+  It requires a clean tree by default; its explicit dirty self-test mode applies
+  the same allowlist to unstaged, staged, and untracked paths. If executable
+  behavior changes after the cited proof commit, the broad release-candidate
+  gate must be rerun from the new clean candidate.
 
 Approximate completion for this first-release scope is about 90 percent as
 of June 23, 2026. The percentage is intentionally about the locally verifiable

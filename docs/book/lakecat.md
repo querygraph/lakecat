@@ -13658,6 +13658,17 @@ scripts, or other executable behavior changes after the cited proof commit,
 the old proof is no longer enough and the full release-candidate gate must run
 again.
 
+The contract requires a clean tree by default. While editing the proof contract
+or release docs, maintainers can run:
+
+```sh
+LAKECAT_RELEASE_PROOF_ALLOW_DIRTY=1 scripts/check-release-proof-contract.sh
+```
+
+That is only a local self-test mode. It still checks unstaged, staged, and
+untracked paths against the same post-proof allowlist, so a dirty Rust source
+file or manifest does not masquerade as documentation-only release evidence.
+
 The already-published `v0.1.0` tag is a baseline, not something to move. While
 the workspace version remains `0.1.0` and `HEAD` is past `v0.1.0`, post-tag
 hardening stays under `Unreleased`. The release version contract checks that
