@@ -1719,7 +1719,7 @@ struct MemoryState {
     warehouses: BTreeMap<String, WarehouseRecord>,
     namespaces: BTreeMap<String, BTreeSet<Namespace>>,
     tables: BTreeMap<String, TableRecord>,
-    commits: Vec<TableCommitRecord>,
+    commits: Vec<MemoryCommitRecord>,
     audit_events: Vec<CatalogAuditEvent>,
     outbox_events: Vec<OutboxEvent>,
     idempotency: BTreeMap<String, IdempotencyReplay>,
@@ -1735,6 +1735,12 @@ struct IdempotencyReplay {
     table_key: String,
     request_hash: String,
     response: TableRecord,
+}
+
+#[derive(Debug, Clone)]
+struct MemoryCommitRecord {
+    table_key: String,
+    record: TableCommitRecord,
 }
 
 #[async_trait]
@@ -2020,7 +2026,10 @@ impl CatalogStore for MemoryCatalogStore {
             created_at: committed_at,
         });
         state.outbox_events.push(outbox_event);
-        state.commits.push(record);
+        state.commits.push(MemoryCommitRecord {
+            table_key: table_key(ident),
+            record,
+        });
 
         if let Some(idempotency_key) = commit.idempotency_key {
             state.idempotency.insert(
@@ -2069,15 +2078,16 @@ impl CatalogStore for MemoryCatalogStore {
         end_version: Option<u64>,
     ) -> LakeCatResult<Vec<TableCommitRecord>> {
         let state = self.state.read().await;
+        let key = table_key(ident);
         state
             .commits
             .iter()
-            .filter(|commit| &commit.table == ident)
-            .filter(|commit| commit.sequence_number >= start_version)
-            .filter(|commit| end_version.is_none_or(|end| commit.sequence_number <= end))
+            .filter(|commit| commit.table_key == key)
+            .filter(|commit| commit.record.sequence_number >= start_version)
+            .filter(|commit| end_version.is_none_or(|end| commit.record.sequence_number <= end))
             .map(|commit| {
-                commit.validate_for_table(ident)?;
-                Ok(commit.clone())
+                validate_table_commit_record_memory_scope(commit, ident)?;
+                Ok(commit.record.clone())
             })
             .collect()
     }
@@ -2764,6 +2774,18 @@ fn validate_idempotency_record_request_hash(row_request_hash: &str) -> LakeCatRe
             "idempotency record request hash must be full SHA-256 evidence".to_string(),
         )
     })
+}
+
+fn validate_table_commit_record_memory_scope(
+    commit: &MemoryCommitRecord,
+    ident: &TableIdent,
+) -> LakeCatResult<()> {
+    if commit.table_key != table_key(ident) {
+        return Err(LakeCatError::Internal(
+            "table commit record row scope does not match requested table".to_string(),
+        ));
+    }
+    commit.record.validate_for_table(ident)
 }
 
 #[cfg(feature = "turso-local")]
@@ -6814,11 +6836,11 @@ mod memory_tests {
             .await
             .unwrap();
 
-        let base_record = store.state.read().await.commits[0].clone();
+        let base_record = store.state.read().await.commits[0].record.clone();
 
         let mut missing_format_record = base_record.clone();
         missing_format_record.format_version = None;
-        store.state.write().await.commits[0] = missing_format_record;
+        store.state.write().await.commits[0].record = missing_format_record;
 
         let err = store
             .table_commit_records(&ident, 0, None)
@@ -6832,7 +6854,7 @@ mod memory_tests {
 
         let mut negative_snapshot_record = base_record.clone();
         negative_snapshot_record.snapshot_id = Some(-1);
-        store.state.write().await.commits[0] = negative_snapshot_record;
+        store.state.write().await.commits[0].record = negative_snapshot_record;
 
         let err = store
             .table_commit_records(&ident, 0, None)
@@ -6846,7 +6868,7 @@ mod memory_tests {
 
         let mut missing_snapshot_record = base_record.clone();
         missing_snapshot_record.snapshot_id = None;
-        store.state.write().await.commits[0] = missing_snapshot_record;
+        store.state.write().await.commits[0].record = missing_snapshot_record;
 
         let err = store
             .table_commit_records(&ident, 0, None)
@@ -6861,7 +6883,7 @@ mod memory_tests {
         let mut decorated_new_metadata_record = base_record.clone();
         decorated_new_metadata_record.new_metadata_location =
             Some("s3://lakecat-demo/events/metadata/00001.json?token=secret".to_string());
-        store.state.write().await.commits[0] = decorated_new_metadata_record;
+        store.state.write().await.commits[0].record = decorated_new_metadata_record;
 
         let err = store
             .table_commit_records(&ident, 0, None)
@@ -6879,7 +6901,7 @@ mod memory_tests {
         let mut credential_previous_metadata_record = base_record.clone();
         credential_previous_metadata_record.previous_metadata_location =
             Some("s3://lakecat-demo/events/metadata/access_key=secret.json".to_string());
-        store.state.write().await.commits[0] = credential_previous_metadata_record;
+        store.state.write().await.commits[0].record = credential_previous_metadata_record;
 
         let err = store
             .table_commit_records(&ident, 0, None)
@@ -6896,7 +6918,7 @@ mod memory_tests {
 
         let mut malformed_response_record = base_record.clone();
         malformed_response_record.response_hash = "sha256:short".to_string();
-        store.state.write().await.commits[0] = malformed_response_record;
+        store.state.write().await.commits[0].record = malformed_response_record;
 
         let err = store
             .table_commit_records(&ident, 0, None)
@@ -6912,7 +6934,7 @@ mod memory_tests {
 
         let mut malformed_policy_record = base_record;
         malformed_policy_record.policy_hash = Some("sha256:short".to_string());
-        store.state.write().await.commits[0] = malformed_policy_record;
+        store.state.write().await.commits[0].record = malformed_policy_record;
 
         let err = store
             .table_commit_records(&ident, 0, None)
@@ -6924,6 +6946,96 @@ mod memory_tests {
                 if message.contains(
                     "table commit record policy hash must be full SHA-256 evidence"
                 )
+        ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_commit_history_scope_drift() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let ident = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("events").unwrap(),
+        );
+        let other_ident = TableIdent::new(
+            warehouse.clone(),
+            namespace.clone(),
+            TableName::new("other_events").unwrap(),
+        );
+        store
+            .create_namespace(&warehouse, namespace.clone())
+            .await
+            .unwrap();
+        store
+            .create_table(TableRecord::new(
+                ident.clone(),
+                "file:///tmp/events".to_string(),
+                Some("file:///tmp/events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            ))
+            .await
+            .unwrap();
+        store
+            .create_table(TableRecord::new(
+                other_ident.clone(),
+                "file:///tmp/other_events".to_string(),
+                Some("file:///tmp/other_events/metadata/00000.json".to_string()),
+                serde_json::json!({"format-version": 3}),
+                Principal::anonymous(),
+            ))
+            .await
+            .unwrap();
+        store
+            .commit_table(
+                &ident,
+                TableCommit {
+                    requirements: vec![],
+                    updates: vec![serde_json::json!({"action": "noop"})],
+                    expected_previous_metadata_location: Some(
+                        "file:///tmp/events/metadata/00000.json".to_string(),
+                    ),
+                    new_metadata_location: Some(
+                        "file:///tmp/events/metadata/00001.json".to_string(),
+                    ),
+                    new_metadata: Some(serde_json::json!({"format-version": 3})),
+                    idempotency_key: None,
+                    idempotency_request_hash: None,
+                    principal: Principal::anonymous(),
+                    authorization_receipt: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let base_commit = store.state.read().await.commits[0].clone();
+        store.state.write().await.commits[0].record.table = other_ident.clone();
+        let err = store
+            .table_commit_records(&ident, 0, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("table commit record table does not match requested table")
+        ));
+
+        store.state.write().await.commits[0] = base_commit;
+        store.state.write().await.commits[0].table_key = table_key(&other_ident);
+        assert_eq!(
+            store.table_commit_records(&ident, 0, None).await.unwrap(),
+            vec![]
+        );
+        let err = store
+            .table_commit_records(&other_ident, 0, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains("table commit record table does not match requested table")
         ));
     }
 }

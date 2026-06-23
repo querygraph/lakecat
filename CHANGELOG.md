@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened memory commit-history pointer-log scope binding. Memory pointer-log
+  records now carry a private table-key anchor and validate it before returning
+  commit-history records, matching Turso's durable pointer-log row binding.
 - Hardened memory idempotency replay scope binding. Memory idempotent commit
   replay records now carry and validate the table-key anchor before explicit
   replay or commit-path retry returns a stored response.

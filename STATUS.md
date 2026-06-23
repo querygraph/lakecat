@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest memory commit-history pointer-log scope binding:
+  memory pointer-log records now carry a private table-key anchor and validate
+  it before returning commit-history records, matching Turso's durable
+  pointer-log row binding.
+- Local verification for this memory commit-history pointer-log scope slice
+  passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_commit_history_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store memory_store_rejects_malformed_commit_history_records -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_commit_history_row_column_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_commit_history_record_table_scope_drift -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest memory idempotency replay scope binding:
   memory idempotent commit replay records now carry and validate the table-key
   anchor before explicit replay or commit-path retry returns a stored response,

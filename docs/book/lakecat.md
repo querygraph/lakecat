@@ -3128,9 +3128,10 @@ before removing namespace state, soft-delete tombstones must match their durable
 row or memory marker keys, policy bindings and storage-profile records must
 match their durable keys and row anchors, idempotency responses must match the
 route and table they replay, memory idempotent replay records must carry the
-same table-key anchor that Turso persists in durable idempotency rows, and
-outbox records must be fit for graph and lineage projection. Those are LakeCat
-reliability properties. The
+same table-key anchor that Turso persists in durable idempotency rows, memory
+pointer-log records must carry the same private table-key anchor before
+commit-history reads return them, and outbox records must be fit for graph and
+lineage projection. Those are LakeCat reliability properties. The
 Iceberg-adjacent candidates are much smaller: atomic pointer CAS, exact retry
 semantics, pointer-history inspection, redacted conflict proof, and durable
 catalog event identity.
