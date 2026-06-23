@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Current release-candidate gate issue:
+  `scripts/check-release-readiness.sh --release-candidate` correctly exposes
+  tracked book artifact drift. A clean-tree run rewrites
+  `docs/book/dist/lakecat.epub`, `docs/book/dist/lakecat.mobi`, and
+  `docs/book/dist/lakecat.pdf`; an immediate second `docs/book/build.sh`
+  rewrote all three hashes again without source changes. The next release
+  engineering slice should make book generation deterministic or move the
+  release-gate build into an out-of-tree artifact directory before relying on
+  the clean-after rule.
 - Latest graph-integration slice:
   `Prove Grust Turso traversal projection`.
   LakeCat's `grust-turso-local` graph tests now prove catalog events can be

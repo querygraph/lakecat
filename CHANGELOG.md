@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Recorded the release-candidate book artifact drift surfaced by the strict
+  clean-tree gate. The tracked EPUB/MOBI/PDF artifacts were refreshed by the
+  local book build, and `STATUS.md` now calls out that deterministic or
+  out-of-tree book generation is needed before the clean-after release-candidate
+  gate can pass.
 - Added a focused Grust Turso traversal regression for LakeCat catalog graph
   projection. The `grust-turso-local` graph tests now prove catalog events can
   be written to Grust's Turso backend and traversed through Grust graph-store
