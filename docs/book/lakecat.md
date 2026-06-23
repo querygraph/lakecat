@@ -7302,8 +7302,10 @@ requires `view-manage`, `view.loaded` requires `view-load`, and `view.dropped`
 requires `view-drop` before LakeCat emits graph or OpenLineage evidence. The
 nested `view` evidence is closed over the catalog route's view shape too:
 warehouse, namespace, name, store-assigned `view-version`, SQL, dialect, schema
-version, columns, and properties. A replay sidecar cannot add an extra
-QueryGraph, lineage, governance, or application claim inside that view object
+version, columns, and properties. If a sidecar also carries top-level
+warehouse or namespace evidence, it must match the nested view object before
+delivery. A replay sidecar cannot drift the view scope, add an extra
+QueryGraph, lineage, governance, or application claim inside that view object,
 and have it acknowledged as catalog evidence. Table lifecycle replay now
 follows the same rule:
 
@@ -7738,8 +7740,11 @@ acknowledged from replay, LakeCat closes the top-level lifecycle payload over
 the fields current producers emit and checks that the nested `view` object
 contains only the catalog's view fields: warehouse, namespace, name,
 `view-version`, SQL, dialect, schema version, columns, and properties. That
-keeps a replay bundle from smuggling unverified graph, lineage, policy,
-QueryGraph, or application facts beside or inside view lifecycle evidence. The
+same replay gate rejects top-level warehouse or namespace evidence that drifts
+from the nested view object. That keeps a replay bundle from smuggling
+unverified graph, lineage, policy, QueryGraph, or application facts beside or
+inside view lifecycle evidence, and it prevents a view event from being
+projected under a different catalog scope than the view record itself. The
 lineage-drain summary also carries compact view replay identity:
 
 ```json
@@ -9030,10 +9035,11 @@ QGLake action contract; `view-manage` remains mutation proof for
 `view-drop`. View lifecycle replay with a drifted action is rejected before
 graph or OpenLineage projection, and top-level view lifecycle payloads are
 closed over the checked event type, optional interface, warehouse, namespace,
-view, expected-version, and authorization evidence. QueryGraph cannot accept a
-view mutation or read under the wrong catalog permission, nor can a replay
-sidecar append unverified view lifecycle, lineage, graph, or application claims
-beside otherwise valid view evidence.
+view, expected-version, and authorization evidence. Top-level warehouse and
+namespace evidence must also match the nested view object. QueryGraph cannot
+accept a view mutation or read under the wrong catalog permission or scope, nor
+can a replay sidecar append unverified view lifecycle, lineage, graph, or
+application claims beside otherwise valid view evidence.
 Table lifecycle replay applies the same identity discipline before delivery:
 `table.created`, `table.loaded`, `table.deleted`, and `table.restored` must
 carry a decodable table identity, optional payload scope hints must match it,

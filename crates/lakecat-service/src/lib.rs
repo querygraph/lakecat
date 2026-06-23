@@ -4637,10 +4637,10 @@ fn validate_view_lifecycle_event_evidence(
         "view lifecycle view",
         VIEW_RECORD_EVIDENCE_FIELDS,
     )?;
-    let Some(warehouse_name) = view
-        .get("warehouse")
-        .or_else(|| payload.get("warehouse"))
-        .and_then(Value::as_str)
+    let view_warehouse = view.get("warehouse").and_then(Value::as_str);
+    let payload_warehouse = payload.get("warehouse").and_then(Value::as_str);
+    let Some(warehouse_name) = view_warehouse
+        .or(payload_warehouse)
         .filter(|warehouse| !warehouse.is_empty())
     else {
         return Err(outbox_evidence_error(
@@ -4651,13 +4651,34 @@ fn validate_view_lifecycle_event_evidence(
     WarehouseName::new(warehouse_name).map_err(|_| {
         outbox_evidence_error(event, "view lifecycle evidence has invalid warehouse")
     })?;
-    let Some(namespace) = view.get("namespace").or_else(|| payload.get("namespace")) else {
+    if let Some(payload_warehouse) = payload_warehouse
+        && view_warehouse.is_some()
+        && view_warehouse != Some(payload_warehouse)
+    {
+        return Err(outbox_evidence_error(
+            event,
+            "view lifecycle view warehouse must match payload warehouse",
+        ));
+    }
+    let view_namespace = view.get("namespace");
+    let payload_namespace = payload.get("namespace");
+    let Some(namespace) = view_namespace.or(payload_namespace) else {
         return Err(outbox_evidence_error(
             event,
             "view lifecycle evidence must contain namespace",
         ));
     };
-    validate_namespace_value(event, namespace, "view lifecycle")?;
+    let namespace = decode_namespace_value(event, namespace, "view lifecycle")?;
+    if let (Some(_), Some(payload_namespace)) = (view_namespace, payload_namespace) {
+        let payload_namespace =
+            decode_namespace_value(event, payload_namespace, "view lifecycle payload")?;
+        if namespace != payload_namespace {
+            return Err(outbox_evidence_error(
+                event,
+                "view lifecycle view namespace must match payload namespace",
+            ));
+        }
+    }
     let Some(view_name) = view
         .get("name")
         .and_then(Value::as_str)
@@ -4952,6 +4973,15 @@ fn validate_namespace_value(
     namespace: &Value,
     label: &str,
 ) -> Result<(), LakeCatError> {
+    decode_namespace_value(event, namespace, label)?;
+    Ok(())
+}
+
+fn decode_namespace_value(
+    event: &OutboxEvent,
+    namespace: &Value,
+    label: &str,
+) -> Result<Namespace, LakeCatError> {
     match namespace {
         Value::Array(parts) => {
             let parts = parts
@@ -4970,21 +5000,16 @@ fn validate_namespace_value(
                 .collect::<Result<Vec<_>, _>>()?;
             Namespace::new(parts).map_err(|_| {
                 outbox_evidence_error(event, &format!("{label} evidence has invalid namespace"))
-            })?;
+            })
         }
-        Value::String(path) if !path.is_empty() => {
-            path.parse::<Namespace>().map_err(|_| {
-                outbox_evidence_error(event, &format!("{label} evidence has invalid namespace"))
-            })?;
-        }
-        _ => {
-            return Err(outbox_evidence_error(
-                event,
-                &format!("{label} namespace must be a non-empty string or array"),
-            ));
-        }
+        Value::String(path) if !path.is_empty() => path.parse::<Namespace>().map_err(|_| {
+            outbox_evidence_error(event, &format!("{label} evidence has invalid namespace"))
+        }),
+        _ => Err(outbox_evidence_error(
+            event,
+            &format!("{label} namespace must be a non-empty string or array"),
+        )),
     }
-    Ok(())
 }
 
 fn validate_credential_vend_event_evidence(
@@ -29039,6 +29064,107 @@ mod tests {
             assert!(
                 lineage.events.lock().await.is_empty(),
                 "{event_type} must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_mismatched_view_lifecycle_scope_evidence() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let cases = vec![
+            (
+                "warehouse",
+                json!({
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": {
+                        "warehouse": "shadow",
+                        "namespace": ["default"],
+                        "name": "active_customers",
+                        "view-version": 1,
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "view-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    }
+                }),
+                "view lifecycle view warehouse must match payload warehouse",
+            ),
+            (
+                "namespace",
+                json!({
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": {
+                        "warehouse": "local",
+                        "namespace": ["shadow"],
+                        "name": "active_customers",
+                        "view-version": 1,
+                    },
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "view-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    }
+                }),
+                "view lifecycle view namespace must match payload namespace",
+            ),
+        ];
+
+        for (label, payload, expected_message) in cases {
+            let event_id = format!("evt-view-lifecycle-mismatched-{label}");
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.clone(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "view.upserted".to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-view-lifecycle-mismatched-{label}"),
+                        "event-type": "view.upserted",
+                        "payload": payload,
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("mismatched view lifecycle scope evidence should fail");
+
+            let message = err.to_string();
+            assert!(message.contains("view.upserted"), "{message}");
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"), "{message}");
+            assert!(!message.contains(&event_id), "{message}");
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "mismatched view lifecycle scope must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "mismatched view lifecycle scope must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "mismatched view lifecycle scope must fail before lineage projection"
             );
         }
     }

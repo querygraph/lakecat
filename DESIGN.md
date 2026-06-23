@@ -1192,13 +1192,16 @@ cannot ride beside the checked lifecycle identity and soft-delete proof.
 View lifecycle replay must carry valid view names and positive store-assigned
 `view-version` values before projection, and guarded view lifecycle replay must
 reject non-positive `expected-view-version` values, so QueryGraph receipt chains
-cannot be extended by invalid or versionless guarded requests. Service replay
-also closes the top-level view lifecycle payload plus the nested `view` object
-over the fields current producers emit before acknowledgement, graph projection,
-OpenLineage projection, or QGLake proof, so unverified view lifecycle, lineage,
-graph, QueryGraph, or application claims cannot ride beside the checked view
-scope, version, expected-version, interface, authorization evidence, SQL
-dialect/schema, columns, properties, and store-assigned version.
+cannot be extended by invalid or versionless guarded requests. If top-level
+warehouse or namespace scope is present beside the nested `view` object, it
+must match the nested view scope before acknowledgement, graph projection, or
+OpenLineage projection. Service replay also closes the top-level view lifecycle
+payload plus the nested `view` object over the fields current producers emit
+before acknowledgement, graph projection, OpenLineage projection, or QGLake
+proof, so unverified or drifted view lifecycle, lineage, graph, QueryGraph, or
+application claims cannot ride beside the checked view scope, version,
+expected-version, interface, authorization evidence, SQL dialect/schema,
+columns, properties, and store-assigned version.
 
 ### P6 Reproducibility And V4
 

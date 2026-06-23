@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened service view-lifecycle replay scope admission. `view.upserted`,
+  `view.loaded`, and `view.dropped` replay now reject payloads whose top-level
+  warehouse or namespace evidence drifts from the nested view object before
+  acknowledgement, graph projection, or OpenLineage projection.
 - Hardened service table-lifecycle soft-delete replay alias admission.
   `table.deleted` replay now accepts either `format-version` or
   `format_version` in the nested soft-delete evidence while rejecting duplicate
