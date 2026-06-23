@@ -859,6 +859,11 @@ Lineage-drain summary construction should also fail closed over top-level and
 nested view receipt / receipt-chain hash evidence, so malformed receipt or
 chain hashes cannot be silently omitted from raw QGLake replay summaries if a
 future internal path bypasses replay admission.
+Raw view receipt-chain summary construction must also decode every
+`view-version-receipt-chains` entry into the expected
+`ViewVersionReceiptChainResponse` shape and reject malformed
+`chain-verified-count` evidence rather than recomputing around corrupted
+structural chain objects.
 The same fail-closed summary rule applies to table commit-history
 `sequence-numbers` and `commit-hashes`, so malformed sequence or commit hash
 evidence cannot disappear from raw commit-history proof.

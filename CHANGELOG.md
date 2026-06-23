@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened service lineage-drain view receipt-chain object summaries. Raw
+  lineage-drain summary construction now rejects malformed
+  `view-version-receipt-chains` entries and malformed `chain-verified-count`
+  evidence instead of silently dropping invalid structural view-history proof.
 - Hardened service lineage-drain storage-profile secret-reference summaries.
   Raw lineage-drain summary construction now rejects malformed nested
   storage-profile evidence, raw secret references, short location/secret hashes,

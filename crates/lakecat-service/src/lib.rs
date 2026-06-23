@@ -6956,39 +6956,13 @@ fn lineage_drain_event_summary(
     let view_version_receipt_hashes = lineage_summary_view_receipt_hashes(event, payload)?;
     let view_version_receipt_chain_hashes =
         lineage_summary_view_receipt_chain_hashes(event, payload)?;
-    let view_version_receipt_chain_verified_count = payload
-        .get("chain-verified-count")
-        .and_then(Value::as_u64)
-        .and_then(|count| usize::try_from(count).ok())
-        .or_else(|| {
-            payload
-                .get("view-version-receipt-chains")
-                .and_then(Value::as_array)
-                .map(|chains| {
-                    chains
-                        .iter()
-                        .filter(|chain| {
-                            chain
-                                .get("chain-verified")
-                                .and_then(Value::as_bool)
-                                .unwrap_or(false)
-                        })
-                        .count()
-                })
-        })
-        .unwrap_or_default();
-    let view_version_receipt_chains = payload
-        .get("view-version-receipt-chains")
-        .and_then(Value::as_array)
-        .map(|chains| {
-            chains
-                .iter()
-                .filter_map(|chain| {
-                    serde_json::from_value::<ViewVersionReceiptChainResponse>(chain.clone()).ok()
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let view_version_receipt_chains = lineage_summary_view_receipt_chains(event, payload)?;
+    let view_version_receipt_chain_verified_count =
+        lineage_summary_view_receipt_chain_verified_count(
+            event,
+            payload,
+            &view_version_receipt_chains,
+        )?;
     let storage_profile = lineage_summary_storage_profile(event, payload.get("storage-profile"))?;
     let authorization_receipt = payload
         .get("authorization-receipt")
@@ -7341,6 +7315,53 @@ fn lineage_summary_view_receipt_chain_hashes(
         );
     }
     Ok(Vec::new())
+}
+
+fn lineage_summary_view_receipt_chains(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<Vec<ViewVersionReceiptChainResponse>, LakeCatError> {
+    let Some(chains) = optional_array_field(event, payload, "view-version-receipt-chains")? else {
+        return Ok(Vec::new());
+    };
+    let mut decoded = Vec::with_capacity(chains.len());
+    for (index, chain) in chains.iter().enumerate() {
+        decoded.push(
+            serde_json::from_value::<ViewVersionReceiptChainResponse>(chain.clone()).map_err(
+                |err| {
+                    outbox_evidence_error(
+                        event,
+                        &format!(
+                            "lineage drain view-version-receipt-chains entry {index} must match ViewVersionReceiptChainResponse JSON shape: {err}"
+                        ),
+                    )
+                },
+            )?,
+        );
+    }
+    Ok(decoded)
+}
+
+fn lineage_summary_view_receipt_chain_verified_count(
+    event: &OutboxEvent,
+    payload: &Value,
+    chains: &[ViewVersionReceiptChainResponse],
+) -> Result<usize, LakeCatError> {
+    if let Some(count) = payload.get("chain-verified-count") {
+        let Some(count) = count.as_u64() else {
+            return Err(outbox_evidence_error(
+                event,
+                "chain-verified-count must be an unsigned integer when present",
+            ));
+        };
+        return usize::try_from(count).map_err(|_| {
+            outbox_evidence_error(
+                event,
+                "chain-verified-count is too large to summarize on this platform",
+            )
+        });
+    }
+    Ok(chains.iter().filter(|chain| chain.chain_verified).count())
 }
 
 fn optional_array_field<'a>(
@@ -48451,6 +48472,66 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("chain-hashes must contain full SHA-256 digest evidence"));
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_view_receipt_chain_objects() {
+        let receipt = OutboxProjectionReceipt::default();
+        let chain_hash = content_hash_bytes(b"chain");
+        let missing_stable_id = OutboxEvent {
+            event_id: "evt-bad-summary-view-chain-shape".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "view.version-receipt-chains-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view-version-receipt-chains": [{
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "events_view",
+                        "chain-hash": chain_hash,
+                        "chain-verified": true,
+                        "latest-view-version": 1,
+                        "latest-operation": "upsert",
+                        "tombstoned": false,
+                        "receipt-count": 0,
+                        "receipts": []
+                    }]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&missing_stable_id, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "lineage drain view-version-receipt-chains entry 0 must match ViewVersionReceiptChainResponse JSON shape"
+            ),
+            "{err}"
+        );
+
+        let malformed_verified_count = OutboxEvent {
+            event_id: "evt-bad-summary-chain-verified-count".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "view.version-receipt-chains-listed".to_string(),
+            payload: json!({
+                "payload": {
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "chain-verified-count": "1",
+                    "view-version-receipt-chains": []
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_verified_count, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("chain-verified-count must be an unsigned integer when present"));
     }
 
     #[test]

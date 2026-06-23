@@ -9370,6 +9370,11 @@ check applies to accepted-view receipt evidence: bootstrap view-version receipt
 hashes, tombstone receipt hashes, and namespace receipt-chain hashes must be
 full SHA-256 digest evidence before accepted-view proof feeds the compact
 handoff summary.
+Raw lineage-drain summary construction now applies the structural shape rule
+too: every `view-version-receipt-chains` entry must decode as a
+`ViewVersionReceiptChainResponse`, and a present `chain-verified-count` must be
+an unsigned count. A malformed chain object can no longer disappear from the raw
+summary just because its `chain-hash` looked valid.
 Dropped and active accepted-view source replay also compares the bootstrap
 view-version receipt hashes with the accepted QueryGraph verification set, so a
 valid-looking receipt array cannot be spliced from another bootstrap proof.
@@ -9384,6 +9389,7 @@ or receipt-hash coverage drift before compact handoff proof is generated. The
 lineage-drain summary now carries the nested chain receipts as full receipt
 hash coverage before that check runs. Summary construction also fails closed
 when top-level or nested view receipt and receipt-chain hashes are malformed,
+or when a nested receipt-chain object or verified-count field is malformed,
 instead of omitting bad values from the raw replay summary. Generated replay
 evidence also preserves each accepted view's `acceptedReceiptChainHash` inside
 the namespace
