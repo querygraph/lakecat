@@ -6826,14 +6826,7 @@ pub mod turso_store {
             event.validate_recordable()?;
             let mut conn = self.connect()?;
             let tx = conn.transaction().await.map_err(turso_error)?;
-            let event_id = content_hash_json(&serde_json::json!({
-                "event-type": &event.event_type,
-                "table": &event.table,
-                "principal": &event.principal,
-                "request-hash": &event.request_hash,
-                "payload": &event.payload,
-                "created-at": event.created_at.to_rfc3339(),
-            }))?;
+            let event_id = crate::audit_event_id(&event)?;
             tx.execute(
                 "insert into audit_events (
                     event_id, event_type, table_key, principal_json,
@@ -10367,6 +10360,43 @@ pub mod turso_store {
                 "audit insert must roll back when transactional outbox insert fails"
             );
             assert_eq!(store.count_rows("outbox_events").await.unwrap(), 1);
+        }
+
+        #[tokio::test]
+        async fn turso_store_duplicate_audit_write_does_not_duplicate_outbox() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let mut event = CatalogAuditEvent::new(
+                "querygraph.bootstrap",
+                Some(ident.clone()),
+                Principal::anonymous(),
+                serde_json::json!({
+                    "event-type": "querygraph.bootstrap",
+                    "table": ident,
+                    "manifest-hash": "lakecat:test"
+                }),
+            )
+            .unwrap();
+            event.created_at = "2026-01-01T00:00:00Z".parse().unwrap();
+
+            store.record_audit_event(event.clone()).await.unwrap();
+            let err = store.record_audit_event(event).await.unwrap_err();
+            assert!(
+                matches!(&err, LakeCatError::Internal(message) if message.contains("UNIQUE") || message.contains("PRIMARY KEY")),
+                "unexpected error: {err:?}"
+            );
+            assert_eq!(store.count_rows("audit_events").await.unwrap(), 1);
+            assert_eq!(store.count_rows("outbox_events").await.unwrap(), 1);
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            assert_eq!(pending.len(), 1);
+            assert_eq!(pending[0].event_type, "querygraph.bootstrap");
         }
 
         #[tokio::test]

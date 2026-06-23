@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened Turso audit event identity reuse. Standalone Turso audit recording
+  now uses the shared audit event-id helper, and duplicate audit writes are
+  covered so they cannot create duplicate lineage/graph outbox replay evidence.
 - Hardened Turso audit/outbox atomicity. Standalone audit recording now writes
   the audit row and lineage/graph outbox row in one Turso transaction, with
   regression coverage proving an outbox insert failure rolls back the audit
