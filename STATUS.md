@@ -5,6 +5,25 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-candidate proof:
+  `scripts/check-release-readiness.sh --release-candidate` passed locally on
+  June 23, 2026 from clean head `0fd1482e`. The gate covered shell syntax
+  checks, dependency and workflow trigger contracts, release-version checks,
+  formatting, default and all-features workspace tests, Turso/Sail/TypeSec/Grust
+  and Grust Turso feature rows, explicit Rust handoff verifier tests,
+  out-of-tree book artifact validation, live QGLake handoff replay through
+  QueryGraph locked verify/import with `graphProjectionProof.backend =
+  grust-turso` and `graphProjectionProof.tablePrefix = lakecat_graph`, and
+  `git diff --check`. This is the current first-release evidence; cloud CI
+  remains manual/disabled until local gates are boring from the final release
+  commit.
+- First-release proximity:
+  the locally verifiable LakeCat catalog substrate is now about 90 percent
+  complete for a first release. Remaining work is release engineering and
+  boundary cleanup: rerun the full gate from the final release commit, keep
+  Sail/Grust/TypeSec/QueryGraph dependency contracts current, decide the tag
+  and release notes, and refresh tracked book artifacts deliberately when their
+  source changes.
 - Latest compact handoff summary non-bundle artifact hash-shape coverage:
   the CLI artifact verifier now explicitly proves `handoff-summary.json`
   cannot use short placeholder hashes or unverified extra hash fields under

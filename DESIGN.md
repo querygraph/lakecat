@@ -353,7 +353,7 @@ Authoritative first-release evidence:
 - `scripts/check-local-dependency-contract.sh` proves the Grust/TypeSec/Sail,
   QueryGraph, and CI-trigger assumptions still match the current repo.
 
-Approximate completion for this first-release scope is about 85-90 percent as
+Approximate completion for this first-release scope is about 90 percent as
 of June 23, 2026. The percentage is intentionally about the locally verifiable
 LakeCat catalog substrate, not the whole long-term QueryGraph architecture.
 Most catalog and proof surfaces are implemented and heavily regression-tested:
@@ -363,7 +363,7 @@ logs, audit/outbox, replay admission, governed scan/fetch, credential receipt
 proof, management surfaces, view receipt chains, QueryGraph bootstrap,
 OpenLineage replay, and QGLake handoff/import proof.
 The broad local release gate was refreshed on June 23, 2026 from clean head
-`c72f8dfd`. `scripts/check-release-readiness.sh --release-candidate` passed
+`0fd1482e`. `scripts/check-release-readiness.sh --release-candidate` passed
 locally, including shell-contract checks, dependency-contract checks, manual CI
 trigger contract checks, formatter checks, default and all-features workspace
 tests, explicit Turso/Sail/TypeSec/Grust feature gates, Grust Turso graph
@@ -375,7 +375,7 @@ with QueryGraph locked verify/import,
 This remains local release evidence; automatic cloud CI stays manual/disabled
 until local gates are consistently boring from the final release commit.
 
-The remaining 10-15 percent should be treated as release engineering and
+The remaining 5-10 percent should be treated as release engineering and
 boundary cleanup rather than new architecture:
 
 - Keep the fresh full `scripts/check-release-readiness.sh` proof green after

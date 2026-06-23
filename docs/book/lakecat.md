@@ -13579,7 +13579,7 @@ managers beyond the current Vault and file-backed provider roots are future
 credential backends, not blockers for the catalog substrate.
 
 As a working estimate, the first-release LakeCat catalog substrate is roughly
-85-90 percent complete. That number is not a promise about the whole future
+90 percent complete. That number is not a promise about the whole future
 QueryGraph architecture. It means the release-blocking LakeCat pieces are
 mostly present and locally proven: standard Iceberg REST namespace and table
 paths, the Rust service spine, the Turso-backed local store direction,
@@ -13588,7 +13588,7 @@ admission, governed scan and fetch proof, credential-vending receipt proof,
 management proof, view receipt chains, QueryGraph bootstrap, OpenLineage
 replay, and QGLake handoff/import evidence.
 
-The remaining 10-15 percent is concentrated in release engineering and
+The remaining 5-10 percent is concentrated in release engineering and
 dependency-boundary cleanup rather than a new conceptual layer. The broad local
 gate has already been recorded from the current handoff path, including
 QueryGraph verification and import under `--locked`; the release task is to
@@ -13635,7 +13635,7 @@ scripts/check-local-dependency-contract.sh
 ```
 
 The current full local release-candidate proof was refreshed on June 23, 2026
-from clean head `c72f8dfd`. It passed with the temporary book build,
+from clean head `0fd1482e`. It passed with the temporary book build,
 QueryGraph locked verify/import, Grust Turso graph projection proof, and the
 final clean-tree check.
 
