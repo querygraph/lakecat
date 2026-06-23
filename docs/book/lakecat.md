@@ -8258,21 +8258,27 @@ schema LakeCat actually verifies.
 Policy-binding upsert replay is checked before projection too: the
 evidence must carry a valid policy id, warehouse, optional namespace/table
 scope, an enforcement flag, the captured ODRL material, and an `odrl-hash`
-that matches that material. LakeCat does not reason over that ODRL during
-replay, but malformed binding shape or drifted ODRL content proof fails closed
-before the policy anchor can be delivered to graph or lineage sinks. Service
-admission also closes the nested `policy` object over the route-produced
-fields, so unexpected ODRL, governance, scope, or enforcement claims fail
-before acknowledgement, graph projection, OpenLineage projection, or QGLake
-proof can inherit them. It also closes the top-level
-`policy-binding.upserted` payload, so a replay sidecar cannot append
-unverified ODRL, governance, scope, lineage, graph, QueryGraph, or application
-claims beside checked warehouse, policy object, ODRL content hash, enforcement
-state, and authorization evidence. The wrapped `policy-binding.upserted`
-envelope is closed too, so ODRL or governance claims cannot be smuggled beside
-an otherwise valid inner policy-binding replay payload. Those management
-upserts must also carry a valid authorization receipt principal, so the catalog
-graph and OpenLineage stream never accept actorless tenant-root,
+that matches that material. The hash must be a full SHA-256-shaped digest
+before LakeCat compares it to the ODRL body. LakeCat does not reason over that
+ODRL during replay, but malformed binding shape or drifted ODRL content proof
+fails closed before the policy anchor can be delivered to graph or lineage
+sinks. Service admission also closes the nested `policy` object over the
+route-produced fields, so unexpected ODRL, governance, scope, or enforcement
+claims fail before acknowledgement, graph projection, OpenLineage projection,
+or QGLake proof can inherit them. It also closes the top-level
+`policy-binding.upserted` payload, so a replay sidecar cannot append unverified
+ODRL, governance, scope, lineage, graph, QueryGraph, or application claims
+beside checked warehouse, policy object, ODRL content hash, enforcement state,
+and authorization evidence. The wrapped `policy-binding.upserted` envelope is
+closed too, so ODRL or governance claims cannot be smuggled beside an otherwise
+valid inner policy-binding replay payload. Raw lineage-drain summaries now use
+the same service replay validators for `policy-binding.upserted`,
+`project.upserted`, `server.upserted`, and `warehouse.upserted` before compact
+QGLake management proof inherits them. That keeps compact replay proof from
+becoming a looser path for malformed management ids, endpoint or storage-root
+hashes, ODRL hashes, wrapper fields, or authorization receipts. Those
+management upserts must also carry a valid authorization receipt principal, so
+the catalog graph and OpenLineage stream never accept actorless tenant-root,
 storage-profile, or policy mutations.
 Namespace lifecycle replay is checked before projection as well: create, load,
 and drop events must carry a valid warehouse and either a valid namespace path

@@ -5,6 +5,24 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw management-upsert summary hardening slice:
+  `Validate raw management-upsert summaries`.
+  Raw lineage-drain summary construction now reuses the service replay
+  validators for `policy-binding.upserted`, `project.upserted`,
+  `server.upserted`, and `warehouse.upserted` evidence, rejecting malformed
+  wrappers, management identifiers, redacted endpoint/storage-root hashes, ODRL
+  content hashes, and authorization receipts before compact QGLake management
+  proof can inherit them.
+- Local verification for this raw management-upsert summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_management_upserts -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_scope_scalars -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_management_upsert_receipt_principal -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_mismatched_management_upsert_receipt_actions -- --test-threads=1`;
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service`;
+  `docs/book/build.sh`;
+  `scripts/check-release-readiness.sh --quick`.
 - Latest Grust Turso boundary guard slice:
   `Guard LakeCat graph against direct Turso use`.
   LakeCat still does not issue direct Turso SQL for graph operations. The graph

@@ -4123,6 +4123,7 @@ fn validate_policy_binding_upsert_event_evidence(
             "policy-binding upsert evidence must contain odrl-hash",
         ));
     };
+    validate_required_full_hash_field(event, policy, "odrl-hash")?;
     if recorded_odrl_hash != odrl_hash {
         return Err(outbox_evidence_error(
             event,
@@ -7278,6 +7279,22 @@ fn lineage_drain_event_summary(
     if event.event_type == "storage-profile.upserted" {
         let payload = event.payload.get("payload").unwrap_or(&event.payload);
         validate_storage_profile_upsert_event_evidence(event, payload)?;
+    }
+    if event.event_type == "policy-binding.upserted" {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_policy_binding_upsert_event_evidence(event, payload)?;
+    }
+    if event.event_type == "project.upserted" {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_project_upsert_event_evidence(event, payload)?;
+    }
+    if event.event_type == "server.upserted" {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_server_upsert_event_evidence(event, payload)?;
+    }
+    if event.event_type == "warehouse.upserted" {
+        let payload = event.payload.get("payload").unwrap_or(&event.payload);
+        validate_warehouse_upsert_event_evidence(event, payload)?;
     }
     if matches!(
         event.event_type.as_str(),
@@ -52412,6 +52429,117 @@ mod tests {
         }
     }
 
+    fn valid_lineage_summary_management_upsert_event(
+        event_id: &str,
+        event_type: &str,
+    ) -> OutboxEvent {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let (action, payload) = match event_type {
+            "policy-binding.upserted" => {
+                let odrl = json!({
+                    "uid": "policy:agent-read",
+                    "permission": []
+                });
+                (
+                    "policy-manage",
+                    json!({
+                        "event-type": "policy-binding.upserted",
+                        "warehouse": "local",
+                        "policy": {
+                            "policy-id": "agent-read",
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "table": "events",
+                            "enforced": true,
+                            "odrl": odrl,
+                            "odrl-hash": content_hash_json(&odrl).unwrap()
+                        }
+                    }),
+                )
+            }
+            "project.upserted" => (
+                "project-manage",
+                json!({
+                    "event-type": "project.upserted",
+                    "project-id": "analytics",
+                    "project-record": {
+                        "project-id": "analytics",
+                        "server-id": "primary",
+                        "display-name": "Analytics",
+                        "properties": {
+                            "owner": "querygraph"
+                        }
+                    }
+                }),
+            ),
+            "server.upserted" => {
+                let endpoint_url = "https://lakecat.example.com";
+                (
+                    "server-manage",
+                    json!({
+                        "event-type": "server.upserted",
+                        "server-id": "primary",
+                        "server-record": {
+                            "server-id": "primary",
+                            "display-name": "Primary",
+                            "endpoint-url": endpoint_url,
+                            "endpoint-url-hash": content_hash_json(&json!({
+                                "endpoint-url": endpoint_url
+                            })).unwrap(),
+                            "properties": {
+                                "region": "us-west"
+                            }
+                        }
+                    }),
+                )
+            }
+            "warehouse.upserted" => {
+                let storage_root = "file:///tmp/lakecat-analytics";
+                (
+                    "warehouse-manage",
+                    json!({
+                        "event-type": "warehouse.upserted",
+                        "project-id": "analytics",
+                        "warehouse": "local",
+                        "warehouse-record": {
+                            "warehouse": "local",
+                            "project-id": "analytics",
+                            "storage-root": storage_root,
+                            "storage-root-hash": content_hash_json(&json!({
+                                "storage-root": storage_root
+                            })).unwrap(),
+                            "properties": {
+                                "owner": "querygraph"
+                            }
+                        }
+                    }),
+                )
+            }
+            other => panic!("unsupported management upsert event type: {other}"),
+        };
+        let mut payload = payload;
+        payload["authorization-receipt"] = json!({
+            "principal": principal,
+            "action": action,
+            "allowed": true,
+            "engine": "lakecat-test",
+            "policy_hash": null,
+            "checked_at": chrono::Utc::now().to_rfc3339()
+        });
+        OutboxEvent {
+            event_id: event_id.to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: event_type.to_string(),
+            payload: json!({
+                "audit-event-id": format!("audit-envelope-{event_id}"),
+                "event-type": event_type,
+                "payload": payload
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        }
+    }
+
     fn valid_lineage_summary_management_list_event(
         event_id: &str,
         event_type: &str,
@@ -53150,7 +53278,7 @@ mod tests {
                         "policy-id": " "
                     }
                 }),
-                "policy-id must not be blank",
+                "policy-binding upsert policy-id contains unsupported characters",
             ),
             (
                 "evt-bad-summary-policy-odrl-hash",
@@ -53182,7 +53310,11 @@ mod tests {
         ];
 
         for (event_id, event_type, payload, expected_message) in cases {
-            let event = if event_type == "warehouse.listed" {
+            let event = if event_type == "policy-binding.upserted" {
+                let mut event = valid_lineage_summary_management_upsert_event(event_id, event_type);
+                merge_json_object(&mut event.payload["payload"], payload);
+                event
+            } else if event_type == "warehouse.listed" {
                 let mut event = valid_lineage_summary_management_list_event(event_id, event_type);
                 merge_json_object(&mut event.payload["payload"], payload);
                 event
@@ -53202,6 +53334,76 @@ mod tests {
                 .unwrap_err()
                 .to_string();
             assert!(err.contains(expected_message), "{err}");
+        }
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_management_upserts() {
+        let receipt = OutboxProjectionReceipt::default();
+        let cases = [
+            (
+                "evt-bad-summary-policy-odrl-full-hash",
+                "policy-binding.upserted",
+                json!({
+                    "policy": {
+                        "odrl-hash": "sha256:short"
+                    }
+                }),
+                "odrl-hash must contain full SHA-256 digest evidence",
+            ),
+            (
+                "evt-bad-summary-policy-odrl-hash-match",
+                "policy-binding.upserted",
+                json!({
+                    "policy": {
+                        "odrl-hash": content_hash_json(&json!({"different": "odrl"})).unwrap()
+                    }
+                }),
+                "policy-binding upsert odrl-hash must match odrl",
+            ),
+            (
+                "evt-bad-summary-project-record-id",
+                "project.upserted",
+                json!({
+                    "project-record": {
+                        "project-id": "shadow"
+                    }
+                }),
+                "project upsert project-id must match project-record",
+            ),
+            (
+                "evt-bad-summary-server-endpoint-hash",
+                "server.upserted",
+                json!({
+                    "server-record": {
+                        "endpoint-url-hash": "sha256:short"
+                    }
+                }),
+                "endpoint-url-hash must contain full SHA-256 digest evidence",
+            ),
+            (
+                "evt-bad-summary-warehouse-root-hash",
+                "warehouse.upserted",
+                json!({
+                    "warehouse-record": {
+                        "storage-root-hash": content_hash_json(&json!({
+                            "storage-root": "file:///tmp/other-root"
+                        })).unwrap()
+                    }
+                }),
+                "warehouse upsert storage-root-hash must match storage-root",
+            ),
+        ];
+
+        for (event_id, event_type, payload, expected_message) in cases {
+            let mut event = valid_lineage_summary_management_upsert_event(event_id, event_type);
+            merge_json_object(&mut event.payload["payload"], payload);
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{event_id}: {err}");
+            assert!(err.contains("event-id-hash=sha256:"), "{event_id}: {err}");
+            assert!(!err.contains(event_id), "{event_id}: {err}");
         }
     }
 
