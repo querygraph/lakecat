@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest raw credential summary hardening slice:
+  `Bind credential counts to prefix hashes`.
+  Raw lineage-drain summary construction now rejects `credential-count`
+  evidence that does not match the number of redacted
+  `credential-response-evidence[].prefix-hash` entries, so compact QGLake
+  credential proof cannot inherit inflated or contradictory credential counts.
+- Local verification for this raw credential summary slice passed:
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_credential_prefix_hashes -- --test-threads=1`
+  passed; `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_raw_credential_exception -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest raw scan summary hardening slice:
   `Validate fetched stats-field summaries`.
   Raw lineage-drain summary construction now rejects present fetched

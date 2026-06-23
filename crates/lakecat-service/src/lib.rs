@@ -7338,6 +7338,7 @@ fn lineage_drain_event_summary(
         .unwrap_or_default();
     let credential_count =
         lineage_summary_optional_count_alias_field(event, payload, &["credential-count"])?;
+    validate_lineage_summary_credential_counts(event, credential_count, &credential_prefix_hashes)?;
     let (
         raw_credential_exception_allowed,
         raw_credential_exception_reason,
@@ -7939,6 +7940,22 @@ fn lineage_summary_credential_prefix_hashes(
         "prefix-hash",
         "lineage drain credential-response prefix-hashes",
     )
+}
+
+fn validate_lineage_summary_credential_counts(
+    event: &OutboxEvent,
+    credential_count: Option<usize>,
+    credential_prefix_hashes: &[String],
+) -> Result<(), LakeCatError> {
+    if let Some(credential_count) = credential_count {
+        if credential_count != credential_prefix_hashes.len() {
+            return Err(outbox_evidence_error(
+                event,
+                "credential-count must match credential-response prefix-hashes in lineage drain summary",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn lineage_summary_required_filters(
@@ -52099,6 +52116,78 @@ mod tests {
             ),
             "{err}"
         );
+
+        let count_without_prefix_hashes = OutboxEvent {
+            event_id: "evt-summary-credential-count-without-prefixes".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            payload: json!({
+                "payload": {
+                    "credential-count": 1
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&count_without_prefix_hashes, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "credential-count must match credential-response prefix-hashes in lineage drain summary"
+            ),
+            "{err}"
+        );
+
+        let count_drift_prefix_hashes = OutboxEvent {
+            event_id: "evt-summary-credential-count-drift-prefixes".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            payload: json!({
+                "payload": {
+                    "credential-count": 2,
+                    "credential-response-evidence": [
+                        {"prefix-hash": content_hash_bytes(b"credential-one")}
+                    ]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&count_drift_prefix_hashes, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "credential-count must match credential-response prefix-hashes in lineage drain summary"
+            ),
+            "{err}"
+        );
+
+        let zero_count_with_prefix_hash = OutboxEvent {
+            event_id: "evt-summary-zero-credential-count-with-prefix".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "credentials.vend-attempted".to_string(),
+            payload: json!({
+                "payload": {
+                    "credential-count": 0,
+                    "credential-response-evidence": [
+                        {"prefix-hash": content_hash_bytes(b"unexpected-credential")}
+                    ]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&zero_count_with_prefix_hash, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "credential-count must match credential-response prefix-hashes in lineage drain summary"
+            ),
+            "{err}"
+        );
     }
 
     #[test]
@@ -52176,6 +52265,9 @@ mod tests {
                 "evt-bad-summary-blocked-with-credentials",
                 json!({
                     "credential-count": 1,
+                    "credential-response-evidence": [
+                        {"prefix-hash": content_hash_bytes(b"blocked-credential")}
+                    ],
                     "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
                     "lakecat:raw-credential-exception": {
                         "allowed": false,
@@ -52188,6 +52280,9 @@ mod tests {
                 "evt-bad-summary-allowed-with-block-reason",
                 json!({
                     "credential-count": 1,
+                    "credential-response-evidence": [
+                        {"prefix-hash": content_hash_bytes(b"allowed-credential")}
+                    ],
                     "lakecat:credential-block-reason": "fine-grained read restriction requires Sail-planned reads",
                     "lakecat:raw-credential-exception": {
                         "allowed": true,

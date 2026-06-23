@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened credential-count summary extraction. Raw lineage-drain summary
+  construction now rejects `credential-count` evidence that drifts from the
+  number of redacted `credential-response-evidence[].prefix-hash` entries, so
+  compact QGLake credential proof cannot inherit inflated or contradictory
+  credential counts.
 - Hardened fetched-scan stats-field summary extraction. Raw lineage-drain
   summary construction now rejects present `stats-fields` proof when it is
   empty, duplicate-bearing, or drifted from `effective-stats-fields`, matching
