@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use lakecat_core::WarehouseName;
+use lakecat_core::{WarehouseName, content_hash_bytes};
 use lakecat_graph::CatalogGraphSink;
 #[cfg(not(feature = "grust-local"))]
 use lakecat_graph::NoopCatalogGraphSink;
@@ -97,7 +97,8 @@ fn configured_governance_engine_from_policy_path(
     };
     let yaml = std::fs::read_to_string(policy_path).map_err(|err| {
         lakecat_core::LakeCatError::InvalidArgument(format!(
-            "failed to read LAKECAT_TYPESEC_RBAC_POLICY '{policy_path}': {err}"
+            "failed to read LAKECAT_TYPESEC_RBAC_POLICY; policy-path-hash={}: {err}",
+            content_hash_bytes(policy_path.as_bytes())
         ))
     })?;
     Ok(lakecat_security::typesec_integration::TypeSecGovernanceEngine::rbac_from_yaml(&yaml)?)
@@ -194,6 +195,16 @@ assignments:
             error
                 .to_string()
                 .contains("failed to read LAKECAT_TYPESEC_RBAC_POLICY")
+        );
+        assert!(
+            error.to_string().contains("policy-path-hash=sha256:"),
+            "missing policy path errors should carry hash-only path evidence: {error}"
+        );
+        assert!(
+            !error
+                .to_string()
+                .contains(missing.to_string_lossy().as_ref()),
+            "missing policy path errors must not expose raw local paths: {error}"
         );
     }
 }

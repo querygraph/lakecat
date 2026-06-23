@@ -5,6 +5,19 @@ Updated: 2026-06-22
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Redact TypeSec RBAC policy path failures`.
+  The `typesec-local` service binary now reports hash-only
+  `policy-path-hash=sha256:...` evidence when `LAKECAT_TYPESEC_RBAC_POLICY`
+  cannot be read, and the regression proves the raw local policy path is not
+  exposed in the startup configuration error.
+- Local verification for this TypeSec configuration hardening slice is green:
+  `cargo test -p lakecat-service --features typesec-local configured_governance_engine_rejects_missing_rbac_policy_path -- --nocapture` passed;
+  `cargo fmt -p lakecat-service -- --check` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest docs/book slice:
   `Align split Grust dependency boundary docs`.
   README, DESIGN, and the LakeCat book now explain the split dependency

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Redacted service-level TypeSec RBAC policy path read failures. The
+  `typesec-local` service binary now reports only `policy-path-hash=sha256:...`
+  evidence when `LAKECAT_TYPESEC_RBAC_POLICY` cannot be read, and the regression
+  proves the raw local path is not exposed.
 - Aligned the release docs and book with the split Grust dependency boundary.
   README, DESIGN, and the book now explain that LakeCat remains on published
   Grust 0.9.1 crates while QueryGraph's local handoff verifier follows the

@@ -6531,6 +6531,12 @@ management events. A namespace list proves `namespace-list`; creation proves
 `namespace-drop`. Replay admission rejects action drift before graph or
 OpenLineage projection, so standard Iceberg namespace behavior cannot become
 QueryGraph evidence under the wrong TypeSec-style authority.
+Service-level TypeSec configuration follows the same redaction posture. When
+the `typesec-local` service binary is pointed at `LAKECAT_TYPESEC_RBAC_POLICY`
+and the policy file cannot be read, LakeCat reports only
+`policy-path-hash=sha256:...` evidence rather than the raw local path. The
+path is operational configuration, not governance semantics, so the hash-only
+diagnostic belongs in LakeCat while RBAC interpretation remains in TypeSec.
 Recognized constraint operands must also include a right operand; otherwise
 LakeCat rejects the policy material instead of silently dropping an
 allowed-column, row-predicate, purpose, or credential-TTL restriction. The
