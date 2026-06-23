@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened Turso soft-delete tombstone row-key validation. Restore now carries
+  the durable `soft_deletes.table_key` row column through tombstone validation,
+  and regression coverage proves tombstone row-key remaps fail closed instead
+  of restoring the wrong table.
 - Hardened Turso metadata pointer-log row validation. Commit-history reads now
   bind decoded commit records back to the durable `metadata_pointer_log`
   `table_key` row column before returning pointer-history proof.

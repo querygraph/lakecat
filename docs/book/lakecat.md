@@ -91,6 +91,8 @@ Iceberg table operation while leaving the JSON payload looking plausible.
 Pointer-history proof follows the same rule: decoded commit records are bound
 back to the durable `metadata_pointer_log` table key before commit history can
 be returned to operators, replay validators, or QueryGraph handoff code.
+Soft-delete tombstones follow it too: restore validates the durable tombstone
+row key and decoded tombstone identity before a hidden table can reappear.
 
 Commit CAS is the bridge between standard Iceberg and LakeCat hardening. In
 Iceberg parlance, optimistic commit means the writer proposes a new metadata
