@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added saved handoff verifier non-bundle artifact hash-shape coverage. The
+  archived `lakecat-handoff-verify.json` self-verification artifact now
+  explicitly rejects short placeholder hashes and unverified extra hash fields
+  under `artifactFiles.lineageDrain` and `artifactFiles.querygraphImportPlan`,
+  with errors naming the malformed nested artifact path.
 - Added saved handoff verifier non-bundle artifact hash-drift coverage. The
   archived `lakecat-handoff-verify.json` self-verification artifact now
   explicitly rejects `artifactFiles.lineageDrain` and

@@ -17667,6 +17667,40 @@ mod tests {
     }
 
     #[test]
+    fn qglake_handoff_artifact_verifier_rejects_extra_non_bundle_artifact_hash_field() {
+        for artifact in ["lineageDrain", "querygraphImportPlan"] {
+            let temp = qglake_temp_dir(&format!(
+                "handoff-artifacts-self-verify-extra-{artifact}-artifact-hash-field"
+            ));
+            let summary_path = temp.join("handoff-summary.json");
+            let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+            let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+            output["artifactFiles"][artifact]["unverifiedHash"] =
+                json!(qglake_fixture_hash("unverified-non-bundle-artifact-hash"));
+            let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+            fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+                .expect("write drifted handoff verify output");
+            summary["artifacts"]["lakecatHandoffVerifyOutputHash"] =
+                json!(content_hash_bytes(&bytes));
+            fs::write(
+                &summary_path,
+                serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+            )
+            .expect("write summary");
+
+            let err = verify_qglake_handoff_artifact_files(&summary_path, &summary).expect_err(
+                "artifact verifier should reject extra non-bundle artifact hash fields",
+            );
+            let err = err.to_string();
+
+            assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+            assert!(err.contains("artifactFiles"), "{err}");
+            assert!(err.contains(artifact), "{err}");
+            assert!(err.contains("unexpected field unverifiedHash"), "{err}");
+        }
+    }
+
+    #[test]
     fn qglake_handoff_artifact_verifier_rejects_handoff_verify_output_short_artifact_hash() {
         let temp = qglake_temp_dir("handoff-artifacts-self-verify-short-artifact-hash");
         let summary_path = temp.join("handoff-summary.json");
@@ -17690,6 +17724,41 @@ mod tests {
         assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
         assert!(err.contains("artifactFiles"), "{err}");
         assert!(err.contains("full SHA-256"), "{err}");
+    }
+
+    #[test]
+    fn qglake_handoff_artifact_verifier_rejects_short_non_bundle_artifact_hash() {
+        for (artifact, short_hash) in [
+            ("lineageDrain", "sha256:lineage-drain"),
+            ("querygraphImportPlan", "sha256:querygraph-import-plan"),
+        ] {
+            let temp = qglake_temp_dir(&format!(
+                "handoff-artifacts-self-verify-short-{artifact}-artifact-hash"
+            ));
+            let summary_path = temp.join("handoff-summary.json");
+            let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+            let mut output = qglake_bind_handoff_verify_output_artifact(&temp, &mut summary);
+            output["artifactFiles"][artifact]["sha256"] = json!(short_hash);
+            let bytes = serde_json::to_vec_pretty(&output).expect("drifted handoff verify JSON");
+            fs::write(temp.join("lakecat-handoff-verify.json"), &bytes)
+                .expect("write drifted handoff verify output");
+            summary["artifacts"]["lakecatHandoffVerifyOutputHash"] =
+                json!(content_hash_bytes(&bytes));
+            fs::write(
+                &summary_path,
+                serde_json::to_vec_pretty(&summary).expect("summary JSON"),
+            )
+            .expect("write summary");
+
+            let err = verify_qglake_handoff_artifact_files(&summary_path, &summary)
+                .expect_err("artifact verifier should reject short non-bundle artifact hashes");
+            let err = err.to_string();
+
+            assert!(err.contains("lakecatHandoffVerifyOutput"), "{err}");
+            assert!(err.contains("artifactFiles"), "{err}");
+            assert!(err.contains(artifact), "{err}");
+            assert!(err.contains("full SHA-256"), "{err}");
+        }
     }
 
     #[test]

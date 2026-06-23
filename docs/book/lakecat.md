@@ -10503,7 +10503,10 @@ objects present, and it must keep the nested
 QueryGraph output hash is trusted. The lineage-drain and QueryGraph import-plan
 artifact hashes must still match the compact handoff summary; an archived
 sidecar cannot rewrite either nested artifact digest and then recompute only
-the outer verifier-output hash. The saved sidecar must also keep the
+the outer verifier-output hash. Their saved hash objects are closed over a
+single full-digest `sha256` field as well, so short placeholders or extra
+unverified fields fail before those artifacts are trusted. The saved sidecar
+must also keep the
 `artifactFiles.capturedOutputs.lakecatReplay`,
 `artifactFiles.capturedOutputs.querygraphVerify`, and
 `artifactFiles.capturedOutputs.querygraphImport` hash objects present before
