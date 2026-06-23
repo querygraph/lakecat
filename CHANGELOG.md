@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bound empty issuer-config credential evidence. Returned
+  `credential-response-evidence` entries with `issuer-config-entry-count = 0`
+  now must carry the canonical empty issuer-config hash, so replay cannot pair
+  a zero count with an arbitrary issuer-config digest before acknowledgement,
+  graph projection, or OpenLineage projection.
 - Hardened planned scan plan-task replay admission. `table.scan-planned`
   outbox evidence now allows `plan-task` only as validated replay evidence:
   when present it must be non-empty, LakeCat-issued, and free of decorated

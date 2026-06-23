@@ -9686,12 +9686,17 @@ policy-derived TTL cap. Returned credential entries must be duplicate-free by
 `prefix-hash`, and service replay now rejects unexpected fields inside each
 credential-response entry, so a replay event cannot count the same redacted
 credential twice or attach an unverified credential-scope claim beside the
-catalog-derived proof. LakeCat carries those redacted prefix hashes into the raw
-lineage-drain summary as `credentialPrefixHashes`, and the QGLake verifier
-rejects the drain before compact proof generation if the prefix hashes are
-missing, count-drifted, short, or duplicated. A malformed credential replay
-event therefore remains pending instead of becoming graph or OpenLineage
-evidence. The raw service summary builder now applies the same fail-closed
+catalog-derived proof. The issuer config stays redacted, but its proof is still
+internally checked: when `issuer-config-entry-count` is zero,
+`issuer-config-hash` must match LakeCat's canonical hash of the empty issuer
+config array. Non-zero issuer config remains represented by count plus full
+digest evidence, without storing or replaying raw credential config. LakeCat
+carries those redacted prefix hashes into the raw lineage-drain summary as
+`credentialPrefixHashes`, and the QGLake verifier rejects the drain before
+compact proof generation if the prefix hashes are missing, count-drifted, short,
+or duplicated. A malformed credential replay event therefore remains pending
+instead of becoming graph or OpenLineage evidence. The raw service summary
+builder now applies the same fail-closed
 posture before the verifier runs: non-array credential response evidence,
 missing prefix hashes, malformed prefix hashes, or duplicate prefix hashes
 reject the raw lineage-drain summary instead of silently omitting redacted

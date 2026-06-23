@@ -5,6 +5,23 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest credential replay hardening slice:
+  `Bind empty credential issuer config hash`.
+  `credentials.vend-attempted` replay now rejects returned
+  `credential-response-evidence` entries whose `issuer-config-entry-count` is
+  zero but whose `issuer-config-hash` does not match LakeCat's canonical hash
+  for the empty issuer config array. This keeps redacted returned-credential
+  proof internally consistent without storing raw issuer config in the replay
+  event.
+- Local verification for this credential replay slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_zero_credential_response_issuer_config_hash_drift -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib credential_response -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib credentials_vend_audit_payload -- --test-threads=1`;
+  `docs/book/build.sh`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest governed scan replay hardening slice:
   `Validate planned scan plan-task evidence`.
   `table.scan-planned` outbox admission now treats optional `plan-task` values

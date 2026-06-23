@@ -725,7 +725,10 @@ be inflated with repeated redacted credential entries. Service outbox admission
 must also close each `credential-response-evidence` entry over the
 catalog-derived credential fields it validates, so replay cannot attach
 unverified credential-scope, issuer, storage, authorization, or secret-ref
-claims beside an otherwise valid redacted prefix proof. Service outbox admission
+claims beside an otherwise valid redacted prefix proof. When a returned
+credential entry reports zero issuer config entries, its `issuer-config-hash`
+must also match LakeCat's canonical empty issuer-config hash; non-zero issuer
+config remains redacted as count plus full digest evidence. Service outbox admission
 must also close the top-level and authorization-receipt-context
 `lakecat:raw-credential-exception` objects over the raw exception fields
 LakeCat actually compares, so replay cannot attach unverified raw-credential
@@ -951,7 +954,9 @@ and then become accepted QGLake evidence.
 Credential summary extraction must likewise fail closed when
 `credential-response-evidence` is not an array or its returned entries omit,
 malform, or duplicate `prefix-hash` evidence, so redacted credential replay
-cannot lose malformed prefix proof.
+cannot lose malformed prefix proof. Returned entries that claim zero issuer
+config entries must also carry the canonical empty issuer-config hash before
+summary proof can be accepted.
 QueryGraph bootstrap standards summary extraction must also fail closed when
 `standards` evidence is not a string array or carries blank/duplicate entries,
 so corrupted bootstrap standards claims cannot disappear from raw QGLake proof.
