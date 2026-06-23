@@ -1152,6 +1152,12 @@ payloads over the fields current producers emit, so tenant-root management
 replay cannot append unverified endpoint, storage-root, project-scope, lineage,
 graph, QueryGraph, or application claims beside checked route identity, nested
 record, optional project scope, and authorization evidence.
+Service replay now also closes the wrapped
+`policy-binding.upserted`/`project.upserted`/`server.upserted`/
+`warehouse.upserted` envelopes over the producer wrapper fields, so archived
+management replay cannot append unverified tenant-root, endpoint, storage-root,
+ODRL, governance, graph, lineage, QueryGraph, or application claims beside an
+otherwise valid checked inner payload.
 Server and warehouse upsert replay must also bind redaction hashes back to the
 source value when that value is present: `endpoint-url-hash` must recompute
 from `endpoint-url`, and `storage-root-hash` must recompute from

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Closed service outbox admission over wrapped management-upsert replay
+  payloads. `policy-binding.upserted`, `project.upserted`,
+  `server.upserted`, and `warehouse.upserted` wrappers now reject extra
+  unverified tenant-root, endpoint, storage-root, ODRL, governance, graph,
+  lineage, QueryGraph, or application claims before acknowledgement, graph
+  projection, or OpenLineage projection.
 - Closed service outbox admission over wrapped storage-profile upsert replay
   payloads. `storage-profile.upserted` wrappers now reject extra unverified
   storage-profile, credential-root, governance, graph, lineage, QueryGraph, or

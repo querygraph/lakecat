@@ -7923,7 +7923,11 @@ LakeCat also closes the top-level management upsert payloads for
 sidecar cannot append unverified endpoint, storage-root, project-scope,
 lineage, graph, QueryGraph, or application claims beside checked route
 identity, nested record evidence, optional project scope, and authorization
-receipt evidence.
+receipt evidence. The wrapped outbox envelopes for `project.upserted`,
+`server.upserted`, and `warehouse.upserted` are closed as well: only the audit
+event id, event type, and checked inner payload are accepted, which keeps
+tenant-root replay evidence from gaining extra management claims outside the
+schema LakeCat actually verifies.
 Policy-binding upsert replay is checked before projection too: the
 evidence must carry a valid policy id, warehouse, optional namespace/table
 scope, an enforcement flag, the captured ODRL material, and an `odrl-hash`
@@ -7937,10 +7941,12 @@ proof can inherit them. It also closes the top-level
 `policy-binding.upserted` payload, so a replay sidecar cannot append
 unverified ODRL, governance, scope, lineage, graph, QueryGraph, or application
 claims beside checked warehouse, policy object, ODRL content hash, enforcement
-state, and authorization evidence. Those management upserts must also carry a
-valid authorization receipt principal, so the catalog graph and OpenLineage
-stream never accept actorless tenant-root, storage-profile, or policy
-mutations.
+state, and authorization evidence. The wrapped `policy-binding.upserted`
+envelope is closed too, so ODRL or governance claims cannot be smuggled beside
+an otherwise valid inner policy-binding replay payload. Those management
+upserts must also carry a valid authorization receipt principal, so the catalog
+graph and OpenLineage stream never accept actorless tenant-root,
+storage-profile, or policy mutations.
 Namespace lifecycle replay is checked before projection as well: create, load,
 and drop events must carry a valid warehouse and either a valid namespace path
 or non-empty namespace component array. A malformed namespace lifecycle event

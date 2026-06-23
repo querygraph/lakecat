@@ -1690,6 +1690,8 @@ const STORAGE_PROFILE_UPSERT_EVIDENCE_FIELDS: &[&str] = &[
 ];
 const STORAGE_PROFILE_UPSERT_OUTBOX_PAYLOAD_FIELDS: &[&str] =
     &["audit-event-id", "event-type", "payload"];
+const MANAGEMENT_UPSERT_OUTBOX_PAYLOAD_FIELDS: &[&str] =
+    &["audit-event-id", "event-type", "payload"];
 const RESERVED_STORAGE_PROFILE_PUBLIC_CONFIG_KEYS: &[&str] = &[
     "lakecat.storage-profile-id",
     "lakecat.storage-provider",
@@ -3943,6 +3945,14 @@ fn validate_policy_binding_upsert_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "policy-binding upsert outbox payload",
+            MANAGEMENT_UPSERT_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     validate_object_evidence_schema(
         event,
         payload,
@@ -4088,6 +4098,14 @@ fn validate_project_upsert_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "project upsert outbox payload",
+            MANAGEMENT_UPSERT_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     validate_object_evidence_schema(
         event,
         payload,
@@ -4150,6 +4168,14 @@ fn validate_server_upsert_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "server upsert outbox payload",
+            MANAGEMENT_UPSERT_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     validate_object_evidence_schema(
         event,
         payload,
@@ -4225,6 +4251,14 @@ fn validate_warehouse_upsert_event_evidence(
     event: &OutboxEvent,
     payload: &Value,
 ) -> Result<(), LakeCatError> {
+    if event.payload.get("payload").is_some() {
+        validate_object_evidence_schema(
+            event,
+            &event.payload,
+            "warehouse upsert outbox payload",
+            MANAGEMENT_UPSERT_OUTBOX_PAYLOAD_FIELDS,
+        )?;
+    }
     validate_object_evidence_schema(
         event,
         payload,
@@ -18923,6 +18957,174 @@ mod tests {
             assert!(
                 lineage.events.lock().await.is_empty(),
                 "{event_type} extra top-level fields must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_extra_management_upsert_wrapper_fields() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let odrl = json!({
+            "uid": "policy:agent-read",
+            "lakecat:read-restriction": {
+                "allowed-columns": ["event_id"]
+            }
+        });
+        let odrl_hash = content_hash_json(&odrl).unwrap();
+        let endpoint_url_hash = content_hash_json(&json!({
+            "endpoint-url": "https://lakecat.example"
+        }))
+        .unwrap();
+        let storage_root_hash = content_hash_json(&json!({
+            "storage-root": "file:///tmp/lakecat"
+        }))
+        .unwrap();
+        let cases = [
+            (
+                "policy-binding.upserted",
+                "policy-manage",
+                "evt-policy-binding-extra-wrapper-field",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal.clone(),
+                        "action": "policy-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "warehouse": "local",
+                    "policy": {
+                        "policy-id": "agent-read",
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "table": "events",
+                        "enforced": true,
+                        "odrl": odrl.clone(),
+                        "odrl-hash": odrl_hash.clone(),
+                    }
+                }),
+                "policy-binding upsert outbox payload contains unexpected field unverified-management-wrapper-claim",
+            ),
+            (
+                "project.upserted",
+                "project-manage",
+                "evt-project-extra-wrapper-field",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal.clone(),
+                        "action": "project-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "project-id": "default",
+                    "project-record": {
+                        "project-id": "default",
+                        "display-name": "Default Project",
+                        "properties": {"owner": "querygraph"}
+                    }
+                }),
+                "project upsert outbox payload contains unexpected field unverified-management-wrapper-claim",
+            ),
+            (
+                "server.upserted",
+                "server-manage",
+                "evt-server-extra-wrapper-field",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal.clone(),
+                        "action": "server-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "server-id": "prod",
+                    "server-record": {
+                        "server-id": "prod",
+                        "display-name": "Production",
+                        "endpoint-url": "https://lakecat.example",
+                        "endpoint-url-hash": endpoint_url_hash.clone(),
+                        "properties": {"region": "global"}
+                    }
+                }),
+                "server upsert outbox payload contains unexpected field unverified-management-wrapper-claim",
+            ),
+            (
+                "warehouse.upserted",
+                "warehouse-manage",
+                "evt-warehouse-extra-wrapper-field",
+                json!({
+                    "authorization-receipt": {
+                        "principal": principal.clone(),
+                        "action": "warehouse-manage",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "project-id": "default",
+                    "warehouse": "local",
+                    "warehouse-record": {
+                        "warehouse": "local",
+                        "project-id": "default",
+                        "storage-root": "file:///tmp/lakecat",
+                        "storage-root-hash": storage_root_hash.clone(),
+                        "properties": {"environment": "demo"}
+                    }
+                }),
+                "warehouse upsert outbox payload contains unexpected field unverified-management-wrapper-claim",
+            ),
+        ];
+
+        for (event_type, _action, event_id, payload, expected_message) in cases {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: event_type.to_string(),
+                    payload: json!({
+                        "audit-event-id": format!("audit-{event_id}"),
+                        "event-type": event_type,
+                        "payload": payload,
+                        "unverified-management-wrapper-claim": "shadow",
+                    }),
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("extra management upsert wrapper fields should fail");
+            let message = err.to_string();
+            assert!(message.contains(event_type), "{message}");
+            assert!(message.contains(expected_message), "{message}");
+            assert!(message.contains("event-id-hash=sha256:"), "{message}");
+            assert!(!message.contains(event_id), "{message}");
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "{event_type} extra wrapper fields must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "{event_type} extra wrapper fields must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "{event_type} extra wrapper fields must fail before lineage projection"
             );
         }
     }

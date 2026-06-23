@@ -6,6 +6,15 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Close management-upsert replay wrappers`.
+  Service outbox admission now closes wrapped `policy-binding.upserted`,
+  `project.upserted`, `server.upserted`, and `warehouse.upserted` replay
+  payloads over the wrapper fields current producers emit, rejecting extra
+  unverified tenant-root, endpoint, storage-root, ODRL, governance, graph,
+  lineage, QueryGraph, or application claims before acknowledgement, graph
+  projection, or OpenLineage projection. A focused regression covers all four
+  management wrapper shapes.
+- Latest implementation/testing slice:
   `Close storage-profile replay wrappers`.
   Service outbox admission now closes wrapped `storage-profile.upserted` replay
   payloads over the wrapper fields current producers emit, rejecting extra
