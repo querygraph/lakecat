@@ -7047,9 +7047,23 @@ fn lineage_drain_event_summary(
     Ok(LineageDrainEventSummary {
         event_id: event.event_id.clone(),
         event_type: event.event_type.clone(),
-        catalog_config_defaults: config_entries_summary(payload.get("defaults")),
-        catalog_config_overrides: config_entries_summary(payload.get("overrides")),
-        catalog_config_endpoints: string_array_summary(payload.get("endpoints")),
+        catalog_config_defaults: lineage_summary_config_entries(
+            event,
+            payload,
+            "defaults",
+            "lineage drain catalog config defaults",
+        )?,
+        catalog_config_overrides: lineage_summary_config_entries(
+            event,
+            payload,
+            "overrides",
+            "lineage drain catalog config overrides",
+        )?,
+        catalog_config_endpoints: payload
+            .get("endpoints")
+            .map(|_| lineage_summary_string_array_field(event, payload, "endpoints"))
+            .transpose()?
+            .unwrap_or_default(),
         principal_subject: payload
             .pointer("/authorization-receipt/principal/subject")
             .and_then(Value::as_str)
@@ -7455,6 +7469,27 @@ fn lineage_summary_required_filters(
     Ok(filters.clone())
 }
 
+fn lineage_summary_config_entries(
+    event: &OutboxEvent,
+    payload: &Value,
+    field: &str,
+    label: &str,
+) -> Result<Vec<ConfigEntry>, LakeCatError> {
+    let Some(entries) = payload.get(field) else {
+        return Ok(Vec::new());
+    };
+    if entries.is_null() {
+        return Ok(Vec::new());
+    }
+    validate_catalog_config_entries(event, entries, label)?;
+    serde_json::from_value(entries.clone()).map_err(|err| {
+        outbox_evidence_error(
+            event,
+            &format!("{label} must match ConfigEntry JSON shape: {err}"),
+        )
+    })
+}
+
 fn lineage_summary_string_array_field(
     event: &OutboxEvent,
     object: &Value,
@@ -7482,18 +7517,6 @@ fn lineage_summary_string_array_field(
     Ok(strings)
 }
 
-fn config_entries_summary(value: Option<&Value>) -> Vec<ConfigEntry> {
-    value
-        .and_then(Value::as_array)
-        .map(|entries| {
-            entries
-                .iter()
-                .filter_map(|entry| serde_json::from_value::<ConfigEntry>(entry.clone()).ok())
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
 fn namespace_summary_parts(value: Option<&Value>) -> Vec<String> {
     match value {
         Some(Value::Array(parts)) => parts
@@ -7504,19 +7527,6 @@ fn namespace_summary_parts(value: Option<&Value>) -> Vec<String> {
         Some(Value::String(path)) => path.split('.').map(str::to_string).collect(),
         _ => Vec::new(),
     }
-}
-
-fn string_array_summary(value: Option<&Value>) -> Vec<String> {
-    value
-        .and_then(Value::as_array)
-        .map(|values| {
-            values
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default()
 }
 
 async fn get_config(
@@ -48657,6 +48667,88 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("storage-profile-ids must be an array when present"));
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_catalog_config_fields() {
+        let receipt = OutboxProjectionReceipt::default();
+        let malformed_defaults = OutboxEvent {
+            event_id: "evt-bad-summary-config-defaults".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "catalog.config-read".to_string(),
+            payload: json!({
+                "payload": {
+                    "defaults": [{
+                        "key": "lakecat.compatibility",
+                        "value": false
+                    }]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_defaults, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("lineage drain catalog config defaults must contain string values"));
+
+        let duplicate_overrides = OutboxEvent {
+            event_id: "evt-duplicate-summary-config-overrides".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "catalog.config-read".to_string(),
+            payload: json!({
+                "payload": {
+                    "overrides": [
+                        {"key": "warehouse", "value": "local"},
+                        {"key": "warehouse", "value": "shadow"}
+                    ]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&duplicate_overrides, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("lineage drain catalog config overrides must not contain duplicate keys")
+        );
+
+        let non_array_endpoints = OutboxEvent {
+            event_id: "evt-bad-summary-config-endpoints".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "catalog.config-read".to_string(),
+            payload: json!({
+                "payload": {
+                    "endpoints": {
+                        "route": "GET /catalog/v1/config"
+                    }
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&non_array_endpoints, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("endpoints must be an array when present"));
+
+        let duplicate_endpoints = OutboxEvent {
+            event_id: "evt-duplicate-summary-config-endpoint".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "catalog.config-read".to_string(),
+            payload: json!({
+                "payload": {
+                    "endpoints": ["GET /catalog/v1/config", "GET /catalog/v1/config"]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&duplicate_endpoints, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("endpoints must not contain duplicate values"));
     }
 
     #[test]

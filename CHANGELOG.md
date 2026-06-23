@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened service lineage-drain catalog-config summaries. Raw lineage-drain
+  summary construction now rejects malformed config defaults/overrides and
+  malformed, blank, or duplicate endpoint evidence instead of silently dropping
+  invalid compatibility or integration-discovery claims.
 - Hardened service lineage-drain management ID summaries. Raw lineage-drain
   summary construction now rejects malformed, blank, or duplicate
   `project-ids`, `server-ids`, `warehouse-names`, `policy-ids`, and

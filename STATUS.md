@@ -6,6 +6,20 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest implementation/testing slice:
+  `Harden lineage-drain catalog-config summaries`.
+  Raw lineage-drain summary construction now rejects malformed config
+  defaults/overrides and malformed, blank, or duplicate endpoint evidence
+  instead of silently dropping invalid compatibility or integration-discovery
+  claims.
+- Local verification for this lineage-drain catalog-config summary slice is
+  green:
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_catalog_config_fields -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed; `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed; `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Latest implementation/testing slice:
   `Harden lineage-drain management ID summaries`.
   Raw lineage-drain summary construction now rejects malformed, blank, or
   duplicate `project-ids`, `server-ids`, `warehouse-names`, `policy-ids`, and

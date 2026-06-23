@@ -7214,6 +7214,11 @@ and when comparing captured LakeCat replay sidecars. A handoff cannot keep the
 `lakecat.format.v4*` key, using an override to rewrite v4 posture, omitting the
 standard REST, governed access, bootstrap, or lineage-drain endpoints, or
 archiving a captured replay file whose config proof differs from the summary.
+Raw lineage-drain summary construction now applies the same fail-closed shape
+checks before that compact proof is returned: config defaults and overrides
+must remain `ConfigEntry` arrays with duplicate-free string keys and string
+values, and endpoint evidence must remain a duplicate-free nonblank string
+array.
 That makes the config proof replayable outside the service process. QueryGraph
 can trust that the compatibility and integration contract it imports is the
 same contract LakeCat admitted before graph and OpenLineage projection.
