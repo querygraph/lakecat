@@ -2651,10 +2651,14 @@ fn validate_project_record_scope(project: &ProjectRecord, project_id: &str) -> L
 fn validate_warehouse_record_scope(
     record: &WarehouseRecord,
     warehouse: &WarehouseName,
-    project_id: Option<&str>,
+    row_project_id: &str,
+    row_storage_root: Option<&str>,
 ) -> LakeCatResult<()> {
     record.validate()?;
-    if record.warehouse != *warehouse || project_id.is_some_and(|id| record.project_id != id) {
+    if record.warehouse != *warehouse
+        || record.project_id != row_project_id
+        || record.storage_root.as_deref() != row_storage_root
+    {
         return Err(LakeCatError::Internal(
             "warehouse row scope does not match warehouse identity".to_string(),
         ));
@@ -6295,7 +6299,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select record_json, warehouse from warehouses
+                    "select record_json, warehouse, project_id, storage_root from warehouses
                      where warehouse = ?1",
                     (warehouse.as_str(),),
                 )
@@ -6307,7 +6311,12 @@ pub mod turso_store {
                 .map(|row| {
                     let record: WarehouseRecord = decode_json(row_string(&row, 0)?)?;
                     let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
-                    crate::validate_warehouse_record_scope(&record, &row_warehouse, None)?;
+                    crate::validate_warehouse_record_scope(
+                        &record,
+                        &row_warehouse,
+                        &row_string(&row, 2)?,
+                        row_optional_string(&row, 3)?.as_deref(),
+                    )?;
                     Ok(record)
                 })
                 .transpose()?
@@ -6321,7 +6330,7 @@ pub mod turso_store {
             let conn = self.connect()?;
             let mut rows = conn
                 .query(
-                    "select record_json, warehouse from warehouses
+                    "select record_json, warehouse, project_id, storage_root from warehouses
                      order by warehouse",
                     (),
                 )
@@ -6331,7 +6340,12 @@ pub mod turso_store {
             while let Some(row) = rows.next().await.map_err(turso_error)? {
                 let record: WarehouseRecord = decode_json(row_string(&row, 0)?)?;
                 let row_warehouse = WarehouseName::new(row_string(&row, 1)?)?;
-                crate::validate_warehouse_record_scope(&record, &row_warehouse, None)?;
+                crate::validate_warehouse_record_scope(
+                    &record,
+                    &row_warehouse,
+                    &row_string(&row, 2)?,
+                    row_optional_string(&row, 3)?.as_deref(),
+                )?;
                 warehouses.push(record);
             }
             Ok(warehouses)
@@ -6361,7 +6375,7 @@ pub mod turso_store {
             }
             let mut rows = conn
                 .query(
-                    "select record_json, warehouse, project_id from warehouses
+                    "select record_json, warehouse, project_id, storage_root from warehouses
                      where project_id = ?1
                      order by warehouse",
                     (project_id,),
@@ -6375,7 +6389,8 @@ pub mod turso_store {
                 crate::validate_warehouse_record_scope(
                     &record,
                     &row_warehouse,
-                    Some(&row_string(&row, 2)?),
+                    &row_string(&row, 2)?,
+                    row_optional_string(&row, 3)?.as_deref(),
                 )?;
                 warehouses.push(record);
             }
@@ -7633,6 +7648,72 @@ pub mod turso_store {
                 store.load_warehouse(&warehouse).await.unwrap_err(),
                 store.list_warehouses().await.unwrap_err(),
                 store.list_project_warehouses("default").await.unwrap_err(),
+            ] {
+                assert!(matches!(
+                    err,
+                    LakeCatError::Internal(message)
+                        if message.contains("warehouse row scope does not match")
+                ));
+            }
+        }
+
+        #[tokio::test]
+        async fn turso_store_rejects_warehouse_row_column_scope_drift() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            store
+                .upsert_project(
+                    ProjectRecord::new(
+                        "default",
+                        None,
+                        Some("Default Project".to_string()),
+                        BTreeMap::new(),
+                        Principal::anonymous(),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            store
+                .upsert_project(
+                    ProjectRecord::new(
+                        "other-project",
+                        None,
+                        Some("Other Project".to_string()),
+                        BTreeMap::new(),
+                        Principal::anonymous(),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            let warehouse = WarehouseName::new("local").unwrap();
+            let record = WarehouseRecord::new(
+                warehouse.clone(),
+                "default",
+                Some("file:///tmp/lakecat".to_string()),
+                BTreeMap::new(),
+                Principal::anonymous(),
+            )
+            .unwrap();
+            store.upsert_warehouse(record).await.unwrap();
+
+            let conn = store.connect().unwrap();
+            conn.execute(
+                "update warehouses
+                 set project_id = ?2, storage_root = ?3
+                 where warehouse = ?1",
+                ("local", "other-project", "file:///tmp/other-lakecat"),
+            )
+            .await
+            .unwrap();
+
+            for err in [
+                store.load_warehouse(&warehouse).await.unwrap_err(),
+                store.list_warehouses().await.unwrap_err(),
+                store
+                    .list_project_warehouses("other-project")
+                    .await
+                    .unwrap_err(),
             ] {
                 assert!(matches!(
                     err,

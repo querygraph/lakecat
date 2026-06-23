@@ -1,10 +1,24 @@
 # LakeCat Status
 
-Updated: 2026-06-22
+Updated: 2026-06-23
 
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Harden Turso warehouse row scope`.
+  Turso warehouse reads now bind decoded JSON back to the selecting row's
+  project id and storage root columns as well as warehouse name, so corrupted
+  row indexes cannot silently change tenant-root inventory for management or
+  QueryGraph bootstrap proof.
+- Local verification for this Turso warehouse scope slice is green:
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_warehouse_row_column_scope_drift -- --test-threads=1` passed;
+  `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"` passed;
+  `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest implementation/testing slice:
   `Harden Turso storage-profile row scope`.
   Turso storage-profile reads now bind decoded JSON back to the selecting row's

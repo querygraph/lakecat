@@ -244,14 +244,16 @@ The current working plan is:
    follow the same hash-only rule for storage roots, secret references,
    public-config keys, and production resolver parse failures. Turso
    server/project/warehouse reads must bind decoded JSON back to the selecting
-   row identity before returning tenant-root inventory for QueryGraph
+   row identity, including warehouse project and storage-root row columns,
+   before returning tenant-root inventory for QueryGraph
    bootstrap or management proof. Turso namespace reads must bind decoded JSON
    back to the selected warehouse row and namespace path before returning or
    dropping standard namespace state. Turso
    policy-binding reads must bind decoded JSON back to the row/query warehouse
-   and policy id before matching policies for tables. Turso storage-profile
-   reads must likewise bind decoded JSON back to the row/query warehouse and
-   profile id before credential-root matching. Guarded view mutations
+   policy id, namespace path, table name, and enforced flag before matching
+   policies for tables. Turso storage-profile reads must likewise bind decoded
+   JSON back to the row/query warehouse, profile id, location prefix, provider,
+   and issuance mode before credential-root matching. Guarded view mutations
    must reject invalid expected-version values before changing active view state
    or appending view-version receipts, and memory/Turso mutation paths must
    validate the existing receipt chain before appending a new view receipt so

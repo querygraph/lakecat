@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened Turso warehouse row scope validation. Warehouse reads now bind
+  decoded JSON back to the row's project id and storage root columns as well as
+  the warehouse name before tenant-root inventory can be returned for
+  management or QueryGraph bootstrap proof.
 - Hardened Turso storage-profile row scope validation. Storage-profile reads
   now bind decoded JSON back to the row's location prefix, provider, and
   issuance mode before a credential root can be returned or matched to a table.

@@ -6390,6 +6390,10 @@ Object storage remains the source of Iceberg metadata files. Turso stores the
 atomic pointer, management state, idempotency evidence, and event record. This
 mirrors the Iceberg catalog contract: metadata files describe the table;
 catalog state decides which metadata file is current.
+Warehouse reads bind decoded records to the Turso row's warehouse, project id,
+and storage-root columns before returning tenant-root inventory. That keeps
+management and QueryGraph bootstrap proof from inheriting a row index that
+points a valid JSON warehouse at a different project or storage root.
 For governed policy evidence, Turso policy-binding reads bind the decoded JSON
 back to the row's warehouse, policy id, namespace path, table name, and enforced
 flag before a binding can be returned or matched to a table. That keeps a
