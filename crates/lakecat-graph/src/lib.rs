@@ -651,6 +651,8 @@ pub mod grust_integration {
         #[cfg(feature = "grust-turso-local")]
         use grust_graph::{GraphAdminStore, NodeId, Traversal};
         use lakecat_core::{Namespace, TableIdent, TableName, WarehouseName};
+        #[cfg(feature = "grust-turso-local")]
+        use std::sync::Arc;
 
         #[test]
         fn converts_server_event_to_valid_grust_graph_event() {
@@ -1023,6 +1025,46 @@ pub mod grust_integration {
                 .await
                 .expect("catalog table node read from Turso")
                 .expect("table node persisted in Turso");
+
+            assert_eq!(table_node.id.as_str(), table_id);
+            assert_eq!(table_node.label.as_str(), "Table");
+            assert_eq!(
+                table_node.props.get("warehouse"),
+                Some(&Value::String("local".to_string()))
+            );
+        }
+
+        #[cfg(feature = "grust-turso-local")]
+        #[tokio::test]
+        async fn grust_turso_sink_emits_lakecat_catalog_projection_boundary() {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let table_id = table.stable_id();
+            let event = GraphEvent::table(
+                GraphAction::Created,
+                table,
+                serde_json::json!({"kind":"turso-sink-test"}),
+            )
+            .with_event_id("lakecat:outbox:evt-turso-sink");
+            let store = Arc::new(
+                grust_graph::TursoGraphStore::in_memory()
+                    .await
+                    .expect("Grust Turso graph store"),
+            );
+            store.bootstrap().await.expect("Grust Turso bootstrap");
+            let sink = GrustCatalogGraphSink::new(store.clone());
+
+            crate::CatalogGraphSink::emit(sink.as_ref(), event)
+                .await
+                .expect("LakeCat graph sink should emit through Grust Turso");
+            let table_node = store
+                .get_node(&NodeId::new(table_id.clone()))
+                .await
+                .expect("catalog table node read from Turso")
+                .expect("table node persisted by sink in Turso");
 
             assert_eq!(table_node.id.as_str(), table_id);
             assert_eq!(table_node.label.as_str(), "Table");

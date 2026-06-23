@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a Grust Turso sink regression. The `grust-turso-local` graph tests now
+  prove LakeCat's `CatalogGraphSink::emit` path writes catalog projection
+  events through Grust's `TursoGraphStore`, rather than LakeCat owning Turso
+  graph operations directly.
 - Hardened store-level idempotency validation evidence. Invalid table commit
   idempotency keys and request hashes now have memory and Turso assertions
   proving they fail before pointer movement, pointer-log insertion, audit,

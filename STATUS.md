@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest graph-boundary slice:
+  `Prove grust-turso graph sink emission`.
+  LakeCat's `grust-turso-local` graph tests now include a Turso-backed
+  `CatalogGraphSink::emit` regression. The test constructs Grust's
+  `TursoGraphStore`, emits a LakeCat catalog table event through
+  `GrustCatalogGraphSink`, and reads the table node back from Grust's Turso
+  backend. LakeCat still configures the sink and emits catalog events; graph
+  persistence, traversal, and Cypher behavior remain Grust-owned.
+- Local verification for this graph-boundary slice is green:
+  `cargo test -p lakecat-graph --features grust-turso-local --lib -- --test-threads=1`
+  passed; `cargo test -p lakecat-service --features grust-turso-local --lib -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-graph -- --check` passed;
+  `scripts/check-release-readiness.sh --quick` passed.
 - Latest commit/idempotency hardening slice:
   `Prove invalid idempotency has no store side effects`.
   Memory and Turso invalid table-commit tests now assert that malformed
