@@ -38,15 +38,15 @@ Updated: 2026-06-23
   and Cypher behavior remain in Grust.
 - Latest release evidence:
   `scripts/check-release-readiness.sh --release-candidate` passed from clean
-  head `db50150b` on 2026-06-23 after the latest Grust Turso Cypher
-  reconciliation. That proof covered shell syntax checks, isolated
+  head `b9ec44a2` on 2026-06-23 after the Grust Turso Cypher release row was
+  made explicit. That proof covered shell syntax checks, isolated
   dependency-contract metadata checks, manual workflow trigger checks, release
   version consistency, formatter checks, default workspace tests, explicit
   Turso/Sail/TypeSec/Grust feature rows, Grust Turso graph persistence,
-  traversal, and Cypher tests, all-features CLI and workspace tests,
-  out-of-tree book artifact validation, live QGLake handoff verification with
-  `graphProjectionProof.backend = grust-turso`, and final `git diff --check`
-  with a clean tree.
+  traversal, the explicit Cypher-over-Turso projection row, all-features CLI
+  and workspace tests, out-of-tree book artifact validation, live QGLake
+  handoff verification with `graphProjectionProof.backend = grust-turso`, and
+  final `git diff --check` with a clean tree.
 - Latest release-contract slice:
   `Isolate dependency-contract metadata temp files`.
   `scripts/check-local-dependency-contract.sh` now writes Cargo metadata

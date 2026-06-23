@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof from the current release
+  gate head. `scripts/check-release-readiness.sh --release-candidate` passed
+  from clean head `b9ec44a2`, covering the explicit Grust Turso Cypher
+  projection row, all-features workspace tests, out-of-tree book artifact
+  validation, live QGLake handoff verification with
+  `graphProjectionProof.backend = grust-turso`, and final `git diff --check`.
 - Pinned the Grust Turso Cypher projection proof as an explicit release-gate
   row. The full local release-readiness script now names the
   `grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary`
