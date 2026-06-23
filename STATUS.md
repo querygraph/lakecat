@@ -228,14 +228,16 @@ Updated: 2026-06-23
   `git diff --check`.
 - Latest release-candidate proof:
   `scripts/check-release-readiness.sh --release-candidate` passed locally from
-  clean head `4e66cd74`. The run covered dependency and workflow trigger
+  clean head `c72f8dfd`. The run covered dependency and workflow trigger
   contracts, release-version checks, formatting, default workspace tests,
   package/feature rows for Turso, Sail, TypeSec, Grust, and Grust Turso,
   explicit Rust `lakecat-cli qglake_handoff` verifier tests, all-features CLI
   and workspace tests, out-of-tree book artifact validation, live QGLake handoff
   replay with `graphProjectionProof.backend = grust-turso` and
   `graphProjectionProof.tablePrefix = lakecat_graph`, QueryGraph locked
-  verify/import, and `git diff --check`. No cloud CI run was needed or claimed.
+  verify/import, and `git diff --check`. After this status/book refresh,
+  `docs/book/build.sh`, `scripts/check-release-readiness.sh --quick`, and
+  `git diff --check` also passed. No cloud CI run was needed or claimed.
 - Latest saved handoff artifact proof slice:
   `Cover handoff graph table-prefix artifact drift`.
   The QGLake artifact verifier now has explicit regression coverage proving a

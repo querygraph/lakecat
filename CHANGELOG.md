@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof from clean head `c72f8dfd`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally,
+  covering dependency and workflow contracts, release-version checks,
+  formatting, default and all-features workspace tests, Turso/Sail/TypeSec/Grust
+  and Grust Turso feature rows, explicit Rust handoff verifier tests,
+  out-of-tree book artifact validation, QGLake handoff replay through
+  QueryGraph locked verify/import with `graphProjectionProof.backend =
+  grust-turso` and `graphProjectionProof.tablePrefix = lakecat_graph`, and
+  `git diff --check`.
 - Re-verified current Grust Turso graph operations. LakeCat still reaches Turso
   graph storage through `/Users/alexy/src/grust/crates/grust-turso`, the graph
   crate exercises persistence, traversal, Cypher, and matched-node patches over
