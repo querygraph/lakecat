@@ -4379,7 +4379,10 @@ projection boundary and the proof that the boundary was exercised.
 The June 23, 2026 boundary verification proves that this is code, not just
 architecture prose. `lakecat-graph` has no direct `turso::` graph operations,
 and the local dependency contract applies the same direct-Turso guard to the
-service graph-sink wiring. The durable graph tests instantiate
+service graph-sink wiring. It also rejects direct `turso` manifest dependencies
+from `lakecat-graph` and `lakecat-service`, so a future Turso-backed graph path
+must enter through `grust-turso` instead of a parallel local store. The durable
+graph tests instantiate
 `grust_turso::TursoGraphStore`, write catalog-event projections through Grust,
 traverse them through Grust, run Cypher-over-Turso through Grust, and apply
 Grust's matched-node mutation plan. The service startup test uses the same

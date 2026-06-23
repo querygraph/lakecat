@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added manifest-level Grust Turso graph boundary guards. The local dependency
+  contract now rejects direct `turso` dependencies in `lakecat-graph` and
+  `lakecat-service`, keeping durable Turso-backed graph persistence, traversal,
+  Cypher, and matched-node mutation routed through Grust's `grust-turso` crate.
 - Expanded raw table-commit replay summary coverage. Lineage-drain summary
   tests now prove malformed commit `response_hash`, optional idempotency hash,
   format-version, snapshot-id, and metadata pointer evidence fail before raw

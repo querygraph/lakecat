@@ -5,6 +5,13 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Grust Turso manifest-boundary slice:
+  the local dependency contract now rejects direct `turso` dependencies in
+  `lakecat-graph` and `lakecat-service`, in addition to the existing source
+  guards against `turso::` graph operations. LakeCat can still use the Rust
+  Turso crate for the catalog-store spine in `lakecat-store`, but Turso-backed
+  graph persistence, traversal, Cypher, and matched-node mutation stay routed
+  through Grust's `grust-turso` crate and `grust_turso::TursoGraphStore`.
 - Latest table commit replay summary coverage slice:
   raw lineage-drain summary tests now prove malformed `table.commit`
   `response_hash`, optional idempotency hash, format-version, snapshot-id, and

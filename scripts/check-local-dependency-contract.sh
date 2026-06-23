@@ -36,6 +36,32 @@ forbid_pattern() {
   fi
 }
 
+forbid_cargo_dependency() {
+  local dependency="$1"
+  local manifest="$2"
+  local description="$3"
+  if awk -v dependency="$dependency" '
+    /^\[dependencies\]/ {
+      in_dependencies = 1
+      next
+    }
+    /^\[/ {
+      in_dependencies = 0
+    }
+    in_dependencies {
+      line = $0
+      sub(/[[:space:]]*#.*/, "", line)
+      if (line ~ "^[[:space:]]*" dependency "[[:space:]]*=") {
+        exit 42
+      }
+    }
+  ' "$manifest"; then
+    :
+  else
+    fail "$description"
+  fi
+}
+
 require_manual_only_workflows() {
   local workflow
   local workflow_files=()
@@ -168,6 +194,10 @@ forbid_pattern '(^|[^[:alnum:]_])turso::' crates/lakecat-graph/src/lib.rs \
   "lakecat-graph must not use the Turso crate directly; durable graph persistence belongs in Grust grust-turso"
 forbid_pattern '(^|[^[:alnum:]_])turso::' crates/lakecat-service/src/main.rs \
   "lakecat-service must not use the Turso crate directly for graph sink wiring; durable graph persistence belongs in Grust grust-turso"
+forbid_cargo_dependency 'turso' crates/lakecat-graph/Cargo.toml \
+  "lakecat-graph must not depend on the Turso crate directly; use grust-turso for durable graph persistence"
+forbid_cargo_dependency 'turso' crates/lakecat-service/Cargo.toml \
+  "lakecat-service must not depend on the Turso crate directly for graph sink wiring; use grust-turso"
 require_pattern 'scripts/qglake-handoff-local.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must include the QGLake handoff proof"
 
