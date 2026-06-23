@@ -12900,7 +12900,11 @@ the fetch proof. That keeps governed plan/fetch receipts about Sail-planned
 work, not a carrier for raw path or token claims.
 The same fetched replay path treats `stats-fields` as checked evidence when it
 is present: the array must be non-empty, duplicate-free, and bound to the
-effective stats fields before downstream proof can use it.
+effective stats fields before downstream proof can use it. The compact QGLake
+handoff proof now preserves that fetched side as its own
+`fetchedRequestedStatsFields` and `fetchedEffectiveStatsFields` evidence, so a
+handoff cannot prove only the planned stats narrowing while silently dropping
+what the fetch path actually returned.
 
 The QueryGraph handoff is release-blocking as an acceptance proof, not as a
 requirement for ordinary Iceberg clients. The local QGLake workflow must keep
@@ -13587,7 +13591,8 @@ filter string." It is a chain of decisions and table facts:
 
 4. QueryGraph consumes only accepted proof:
    QGLake handoff, OpenLineage hashes, graph/import anchors, view chains,
-   credential posture, and agent workflow context.
+   credential posture, fetched requested/effective stats proof, and agent
+   workflow context.
 ```
 
 That chain is why Sail is not an optional optimization. Without engine-owned

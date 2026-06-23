@@ -1686,35 +1686,42 @@ fn verify_querygraph_import_plan_artifact_lists(
 fn require_governed_scan_stats_field_evidence(
     governed_scan: &serde_json::Map<String, Value>,
     planned_restriction: &serde_json::Map<String, Value>,
+    fetched_restriction: &serde_json::Map<String, Value>,
 ) -> lakecat_core::LakeCatResult<()> {
-    let requested = required_string_array(
+    let planned_requested = required_string_array(
         governed_scan,
         "plannedRequestedStatsFields",
         "governedScanProof",
     )?;
-    let effective = required_string_array(
+    let planned_effective = required_string_array(
         governed_scan,
         "plannedEffectiveStatsFields",
         "governedScanProof",
     )?;
-    if requested.is_empty() || effective.is_empty() {
+    if planned_requested.is_empty() || planned_effective.is_empty() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "governedScanProof stats-field evidence must preserve non-empty requested and effective fields".to_string(),
         ));
     }
-    require_non_empty_unique_strings(&requested, "governedScanProof.plannedRequestedStatsFields")?;
-    require_non_empty_unique_strings(&effective, "governedScanProof.plannedEffectiveStatsFields")?;
-    if requested.len() <= effective.len() {
+    require_non_empty_unique_strings(
+        &planned_requested,
+        "governedScanProof.plannedRequestedStatsFields",
+    )?;
+    require_non_empty_unique_strings(
+        &planned_effective,
+        "governedScanProof.plannedEffectiveStatsFields",
+    )?;
+    if planned_requested.len() <= planned_effective.len() {
         return Err(lakecat_core::LakeCatError::InvalidArgument(
             "governedScanProof plannedRequestedStatsFields must prove a wider request than plannedEffectiveStatsFields".to_string(),
         ));
     }
-    let requested_set = requested
+    let planned_requested_set = planned_requested
         .iter()
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
-    for field in &effective {
-        if !requested_set.contains(field.as_str()) {
+    for field in &planned_effective {
+        if !planned_requested_set.contains(field.as_str()) {
             return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
                 "governedScanProof plannedEffectiveStatsFields contains {field} that was not requested"
             )));
@@ -1729,6 +1736,50 @@ fn require_governed_scan_stats_field_evidence(
             "governedScanProof",
         )?,
         "governedScanProof.plannedReadRestriction",
+    )?;
+    let fetched_requested = required_string_array(
+        governed_scan,
+        "fetchedRequestedStatsFields",
+        "governedScanProof",
+    )?;
+    let fetched_effective = required_string_array(
+        governed_scan,
+        "fetchedEffectiveStatsFields",
+        "governedScanProof",
+    )?;
+    if fetched_requested.is_empty() || fetched_effective.is_empty() {
+        return Err(lakecat_core::LakeCatError::InvalidArgument(
+            "governedScanProof fetched stats-field evidence must preserve non-empty requested and effective fields".to_string(),
+        ));
+    }
+    require_non_empty_unique_strings(
+        &fetched_requested,
+        "governedScanProof.fetchedRequestedStatsFields",
+    )?;
+    require_non_empty_unique_strings(
+        &fetched_effective,
+        "governedScanProof.fetchedEffectiveStatsFields",
+    )?;
+    let fetched_requested_set = fetched_requested
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    for field in &fetched_effective {
+        if !fetched_requested_set.contains(field.as_str()) {
+            return Err(lakecat_core::LakeCatError::InvalidArgument(format!(
+                "governedScanProof fetchedEffectiveStatsFields contains {field} that was not requested"
+            )));
+        }
+    }
+    require_value_match(
+        fetched_restriction,
+        "allowed-columns",
+        required_value(
+            governed_scan,
+            "fetchedEffectiveStatsFields",
+            "governedScanProof",
+        )?,
+        "governedScanProof.fetchedReadRestriction",
     )?;
     Ok(())
 }
@@ -3357,7 +3408,11 @@ fn verify_qglake_handoff_summary_value(summary: &Value) -> lakecat_core::LakeCat
         "governedScanProof.fetchedReadRestriction",
     )?;
     require_governed_scan_projection_evidence(governed_scan, planned_restriction)?;
-    require_governed_scan_stats_field_evidence(governed_scan, planned_restriction)?;
+    require_governed_scan_stats_field_evidence(
+        governed_scan,
+        planned_restriction,
+        fetched_restriction,
+    )?;
     let fetched_required_filters =
         required_array(governed_scan, "fetchedRequiredFilters", "governedScanProof")?;
     let expected_fetched_filters = vec![
@@ -4059,6 +4114,8 @@ const GOVERNED_SCAN_PROOF_FIELDS: &[&str] = &[
     "plannedEffectiveProjection",
     "plannedRequestedStatsFields",
     "plannedEffectiveStatsFields",
+    "fetchedRequestedStatsFields",
+    "fetchedEffectiveStatsFields",
     "fetchedRequiredProjection",
     "fetchedEffectiveProjection",
     "fetchedRequiredFilters",
@@ -5917,6 +5974,8 @@ fn qglake_scan_replay_evidence_json(drain: &LineageDrainResponse) -> Option<Valu
         "plannedEffectiveProjection": &planned.effective_projection,
         "plannedRequestedStatsFields": &planned.requested_stats_fields,
         "plannedEffectiveStatsFields": &planned.effective_stats_fields,
+        "fetchedRequestedStatsFields": &fetched.requested_stats_fields,
+        "fetchedEffectiveStatsFields": &fetched.effective_stats_fields,
         "fetchedRequiredProjection": &fetched.required_projection,
         "fetchedEffectiveProjection": &fetched.effective_projection,
         "fetchedRequiredFilters": &fetched.required_filters,
@@ -11957,6 +12016,8 @@ mod tests {
                     "plannedEffectiveProjection": ["event_id", "occurred_at", "severity"],
                     "plannedRequestedStatsFields": ["event_id", "occurred_at", "severity", "raw_payload"],
                     "plannedEffectiveStatsFields": ["event_id", "occurred_at", "severity"],
+                    "fetchedRequestedStatsFields": ["event_id", "occurred_at", "severity"],
+                    "fetchedEffectiveStatsFields": ["event_id", "occurred_at", "severity"],
                     "fetchedRequiredProjection": ["event_id", "occurred_at", "severity"],
                     "fetchedEffectiveProjection": ["event_id", "occurred_at", "severity"],
                     "fetchedRequiredFilters": [{
@@ -12418,6 +12479,8 @@ mod tests {
                     "plannedEffectiveProjection": ["event_id", "occurred_at", "severity"],
                     "plannedRequestedStatsFields": ["event_id", "occurred_at", "severity", "raw_payload"],
                     "plannedEffectiveStatsFields": ["event_id", "occurred_at", "severity"],
+                    "fetchedRequestedStatsFields": ["event_id", "occurred_at", "severity"],
+                    "fetchedEffectiveStatsFields": ["event_id", "occurred_at", "severity"],
                     "fetchedRequiredProjection": ["event_id", "occurred_at", "severity"],
                     "fetchedEffectiveProjection": ["event_id", "occurred_at", "severity"],
                     "fetchedRequiredFilters": [{
@@ -14747,6 +14810,70 @@ mod tests {
 
         assert!(err.to_string().contains("governedScanProof"));
         assert!(err.to_string().contains("plannedEffectiveStatsFields"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_fetched_scan_stats_field_evidence() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("fetchedRequestedStatsFields");
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject missing fetched stats-field evidence");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("fetchedRequestedStatsFields"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_requires_fetched_effective_scan_stats_field_evidence() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]
+            .as_object_mut()
+            .unwrap()
+            .remove("fetchedEffectiveStatsFields");
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject missing fetched effective stats-field evidence",
+        );
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("fetchedEffectiveStatsFields"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_fetched_scan_stats_field_drift() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["fetchedRequestedStatsFields"] =
+            json!(["event_id", "occurred_at", "severity", "raw_payload"]);
+        summary["lakecatReplayVerification"]["governedScanProof"]["fetchedEffectiveStatsFields"] =
+            json!(["event_id", "occurred_at", "raw_payload"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary)
+            .expect_err("handoff summary should reject drifted fetched scan stats fields");
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("allowed-columns mismatch"));
+    }
+
+    #[test]
+    fn qglake_handoff_summary_verifier_rejects_unrequested_fetched_scan_stats_field() {
+        let mut summary = qglake_handoff_summary_json();
+        summary["lakecatReplayVerification"]["governedScanProof"]["fetchedRequestedStatsFields"] =
+            json!(["event_id", "occurred_at"]);
+        summary["lakecatReplayVerification"]["governedScanProof"]["fetchedEffectiveStatsFields"] =
+            json!(["event_id", "occurred_at", "severity"]);
+
+        let err = verify_qglake_handoff_summary_value(&summary).expect_err(
+            "handoff summary should reject fetched effective stats fields that were never requested",
+        );
+
+        assert!(err.to_string().contains("governedScanProof"));
+        assert!(err.to_string().contains("fetchedEffectiveStatsFields"));
+        assert!(err.to_string().contains("severity"));
+        assert!(err.to_string().contains("not requested"));
     }
 
     #[test]
@@ -18810,6 +18937,28 @@ mod tests {
             .expect_err("captured replay scan stats-field proof drift should be rejected");
         assert!(err.to_string().contains(
             "captured LakeCat replay output.replay-evidence.scan.plannedEffectiveStatsFields mismatch"
+        ));
+    }
+
+    #[test]
+    fn qglake_handoff_captured_output_semantics_rejects_fetched_scan_stats_field_drift() {
+        let temp = qglake_temp_dir("handoff-captured-fetched-scan-stats-field-drift");
+        let summary_path = temp.join("handoff-summary.json");
+        let mut summary = qglake_handoff_summary_json_with_artifacts(&temp);
+        let mut drifted =
+            read_json_file(&temp.join("lakecat-replay.txt")).expect("read LakeCat replay output");
+        drifted["replay-evidence"]["scan"]["fetchedEffectiveStatsFields"] =
+            json!(["event_id", "occurred_at", "severity", "raw_payload"]);
+        let drifted_bytes = serde_json::to_vec_pretty(&drifted).expect("drifted JSON bytes");
+        fs::write(temp.join("lakecat-replay.txt"), &drifted_bytes)
+            .expect("write drifted LakeCat replay output");
+        summary["artifacts"]["capturedOutputs"]["lakecatReplay"]["sha256"] =
+            json!(content_hash_bytes(&drifted_bytes));
+
+        let err = verify_qglake_handoff_captured_output_semantics(&summary_path, &summary)
+            .expect_err("captured replay fetched scan stats-field proof drift should be rejected");
+        assert!(err.to_string().contains(
+            "captured LakeCat replay output.replay-evidence.scan.fetchedEffectiveStatsFields mismatch"
         ));
     }
 

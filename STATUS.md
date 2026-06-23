@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Preserve fetched scan stats proof`.
+  QGLake governed scan replay evidence now carries
+  `fetchedRequestedStatsFields` and `fetchedEffectiveStatsFields` alongside the
+  planned stats-field proof. The Rust handoff verifier and local
+  `scripts/qglake-handoff-local.sh` path now require fetched stats evidence to
+  be present, non-empty, requested/effective consistent, and bound to the
+  fetched read restriction before compact QGLake/QueryGraph proof can accept
+  it; captured LakeCat replay output comparison also rejects fetched stats
+  drift.
 - Latest documentation/book slice:
   `Deepen catalog concepts and Sail engine workflow examples`.
   The LakeCat book now gives a more explicit argument for separating standard

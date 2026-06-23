@@ -892,6 +892,22 @@ if (evidence.plannedRequestedStatsFields.length <= evidence.plannedEffectiveStat
   console.error("LakeCat scan replay evidence does not prove stats-field narrowing");
   process.exit(1);
 }
+if (!Array.isArray(evidence.fetchedRequestedStatsFields) || evidence.fetchedRequestedStatsFields.length === 0) {
+  console.error("LakeCat scan replay evidence is missing fetchedRequestedStatsFields");
+  process.exit(1);
+}
+if (!Array.isArray(evidence.fetchedEffectiveStatsFields) || evidence.fetchedEffectiveStatsFields.length === 0) {
+  console.error("LakeCat scan replay evidence is missing fetchedEffectiveStatsFields");
+  process.exit(1);
+}
+if (evidence.fetchedRequestedStatsFields.some((item) => typeof item !== "string" || item.length === 0)) {
+  console.error("LakeCat scan replay evidence has invalid fetchedRequestedStatsFields");
+  process.exit(1);
+}
+if (evidence.fetchedEffectiveStatsFields.some((item) => typeof item !== "string" || item.length === 0)) {
+  console.error("LakeCat scan replay evidence has invalid fetchedEffectiveStatsFields");
+  process.exit(1);
+}
 if (!Array.isArray(evidence.fetchedRequiredFilters) || evidence.fetchedRequiredFilters.length === 0) {
   console.error("LakeCat scan replay evidence is missing fetchedRequiredFilters");
   process.exit(1);
@@ -933,6 +949,10 @@ if (JSON.stringify(evidence.fetchedRequiredProjection) !== JSON.stringify(eviden
   console.error("LakeCat scan replay evidence fetchedRequiredProjection does not match allowed columns");
   process.exit(1);
 }
+if (JSON.stringify(evidence.fetchedEffectiveStatsFields) !== JSON.stringify(evidence.fetchedReadRestriction["allowed-columns"])) {
+  console.error("LakeCat scan replay evidence fetchedEffectiveStatsFields do not match allowed columns");
+  process.exit(1);
+}
 const requestedProjection = new Set(evidence.plannedRequestedProjection);
 for (const field of evidence.plannedEffectiveProjection) {
   if (!requestedProjection.has(field)) {
@@ -944,6 +964,13 @@ const requestedStats = new Set(evidence.plannedRequestedStatsFields);
 for (const field of evidence.plannedEffectiveStatsFields) {
   if (!requestedStats.has(field)) {
     console.error("LakeCat scan replay evidence has an effective stats field that was not requested");
+    process.exit(1);
+  }
+}
+const fetchedRequestedStats = new Set(evidence.fetchedRequestedStatsFields);
+for (const field of evidence.fetchedEffectiveStatsFields) {
+  if (!fetchedRequestedStats.has(field)) {
+    console.error("LakeCat scan replay evidence has a fetched effective stats field that was not requested");
     process.exit(1);
   }
 }
@@ -961,6 +988,8 @@ process.stdout.write(JSON.stringify({
   plannedEffectiveProjection: evidence.plannedEffectiveProjection,
   plannedRequestedStatsFields: evidence.plannedRequestedStatsFields,
   plannedEffectiveStatsFields: evidence.plannedEffectiveStatsFields,
+  fetchedRequestedStatsFields: evidence.fetchedRequestedStatsFields,
+  fetchedEffectiveStatsFields: evidence.fetchedEffectiveStatsFields,
   fetchedRequiredProjection: evidence.fetchedRequiredProjection,
   fetchedEffectiveProjection: evidence.fetchedEffectiveProjection,
   fetchedRequiredFilters: evidence.fetchedRequiredFilters,

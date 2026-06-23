@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Hardened QGLake governed scan proof for fetched stats fields. The compact
+  LakeCat replay evidence now preserves `fetchedRequestedStatsFields` and
+  `fetchedEffectiveStatsFields`, the Rust verifier and local QGLake handoff
+  script require them to be non-empty and tied to the fetched read
+  restriction, captured replay output comparison rejects drift, and the book
+  documents the planned-vs-fetched stats proof boundary.
 - Expanded the LakeCat book's catalog-concepts chapter with a fuller
   standard-vs-extension-vs-product argument. The new material explicitly
   explains why the Rust service spine, Turso store, idempotent proof envelope,
