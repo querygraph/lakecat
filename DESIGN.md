@@ -773,6 +773,10 @@ chain-hash, tombstone, and authorization evidence. Service replay now also
 closes the wrapped receipt-read envelopes over the producer wrapper fields, so
 those claims cannot ride beside an otherwise valid checked receipt-list or
 receipt-chain payload.
+Raw lineage-drain summaries must reuse those same receipt-list and
+receipt-chain replay validators before returning compact QGLake proof, so a
+valid-looking view-history summary cannot become a weaker admission path than
+delivery replay.
 Service replay must close nested receipt-chain and receipt objects over the
 fields LakeCat verifies before acknowledgement, graph projection, OpenLineage
 projection, or QGLake proof, so unverified view-history, principal, lifecycle,

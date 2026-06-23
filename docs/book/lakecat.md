@@ -10276,7 +10276,11 @@ lineage-drain summary now carries the nested chain receipts as full receipt
 hash coverage before that check runs. Summary construction also fails closed
 when top-level or nested view receipt and receipt-chain hashes are malformed,
 or when a nested receipt-chain object or verified-count field is malformed,
-instead of omitting bad values from the raw replay summary. Generated replay
+instead of omitting bad values from the raw replay summary. Raw
+lineage-drain summaries now also reuse the full view receipt-list and
+receipt-chain replay validators before returning compact proof, so otherwise
+valid view-history summaries cannot append extra lineage, graph, QueryGraph, or
+application claims that delivery replay would have rejected. Generated replay
 evidence also preserves each accepted view's `acceptedReceiptChainHash` inside
 the namespace
 `receiptChains[].chainHashes` set, even when the namespace read has its own
@@ -13873,6 +13877,10 @@ QueryGraph, or application claims beside otherwise valid Sail-planned proof.
 Raw lineage-drain summaries reuse those scan replay validators before compact
 proof is returned, which keeps governed scan proof tied to the same
 Sail-planned evidence that would be accepted for delivery.
+View receipt summaries follow the same pattern for
+`view.version-receipts-listed` and `view.version-receipt-chains-listed`: compact
+view-history proof is returned only after the full receipt-list or
+receipt-chain replay validator accepts the payload.
 Inventory replay applies the same rule to `namespace.listed`, `view.listed`,
 and management list wrappers, keeping archived namespace, view, project,
 server, warehouse, policy, and storage-profile reads from carrying unchecked

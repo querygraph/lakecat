@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Hardened raw view receipt summary extraction. Raw lineage-drain summary
+  construction now reuses the service replay validators for
+  `view.version-receipts-listed` and
+  `view.version-receipt-chains-listed` evidence, so otherwise valid view
+  receipt-list or receipt-chain payloads cannot append unverified view-history,
+  lineage, graph, QueryGraph, or application claims before compact QGLake view
+  proof inherits them.
 - Hardened raw table-operation summary extraction. Raw lineage-drain summary
   construction now reuses the service replay validators for
   `table.commits-listed`, `table.scan-planned`, and

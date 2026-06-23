@@ -7726,6 +7726,7 @@ fn lineage_drain_event_summary(
         replay_open_lineage_hashes: receipt.open_lineage_hashes.clone(),
     };
     validate_lineage_summary_table_operation_event_evidence(event, payload)?;
+    validate_lineage_summary_view_receipt_event_evidence(event, payload)?;
     Ok(summary)
 }
 
@@ -7737,6 +7738,19 @@ fn validate_lineage_summary_table_operation_event_evidence(
         "table.commits-listed" => validate_table_commit_history_event_evidence(event, payload),
         "table.scan-planned" => validate_scan_planned_event_evidence(event, payload),
         "table.scan-tasks-fetched" => validate_scan_tasks_fetched_event_evidence(event, payload),
+        _ => Ok(()),
+    }
+}
+
+fn validate_lineage_summary_view_receipt_event_evidence(
+    event: &OutboxEvent,
+    payload: &Value,
+) -> Result<(), LakeCatError> {
+    match event.event_type.as_str() {
+        "view.version-receipts-listed" => validate_view_receipt_list_event_evidence(event, payload),
+        "view.version-receipt-chains-listed" => {
+            validate_view_receipt_chain_event_evidence(event, payload)
+        }
         _ => Ok(()),
     }
 }
@@ -52060,6 +52074,118 @@ mod tests {
             ),
             "{err}"
         );
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_unverified_view_receipt_fields() {
+        let receipt = OutboxProjectionReceipt::default();
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        let view_hash = content_hash_bytes(b"events-view-v1");
+        let receipt_hash = content_hash_bytes(b"events-view-receipt-v1");
+        let drop_receipt_hash = content_hash_bytes(b"events-view-drop-receipt-v1");
+        let chain_hash = content_hash_bytes(b"events-view-chain-v1");
+
+        let cases = [
+            (
+                "view.version-receipts-listed",
+                "view receipt-list contains unexpected field unverified-receipt-list-claim",
+                json!({
+                    "event-type": "view.version-receipts-listed",
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "view": "events_view",
+                    "receipt-count": 2,
+                    "receipt-hashes": [receipt_hash, drop_receipt_hash],
+                    "drop-receipt-hashes": [drop_receipt_hash],
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "view-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "unverified-receipt-list-claim": true,
+                }),
+            ),
+            (
+                "view.version-receipt-chains-listed",
+                "view receipt-chain contains unexpected field unverified-receipt-chain-claim",
+                json!({
+                    "event-type": "view.version-receipt-chains-listed",
+                    "warehouse": "local",
+                    "namespace": ["default"],
+                    "chain-count": 1,
+                    "receipt-count": 1,
+                    "tombstone-count": 0,
+                    "chain-verified-count": 1,
+                    "view-version-receipt-chains": [{
+                        "stable-id": "lakecat:view:local:default:events_view",
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "name": "events_view",
+                        "chain-hash": chain_hash,
+                        "chain-verified": true,
+                        "latest-view-version": 1,
+                        "latest-operation": "upsert",
+                        "tombstoned": false,
+                        "receipt-count": 1,
+                        "receipts": [{
+                            "stable-id": "lakecat:view:local:default:events_view",
+                            "warehouse": "local",
+                            "namespace": ["default"],
+                            "name": "events_view",
+                            "view-version": 1,
+                            "previous-view-version": null,
+                            "previous-receipt-hash": null,
+                            "operation": "upsert",
+                            "view-hash": view_hash,
+                            "receipt-hash": receipt_hash,
+                            "principal-subject": "agent:operator",
+                            "principal-kind": "agent",
+                            "recorded-at": "2026-06-20T00:00:00Z"
+                        }]
+                    }],
+                    "chain-hashes": [chain_hash],
+                    "receipt-hashes": [receipt_hash],
+                    "drop-receipt-hashes": [],
+                    "authorization-receipt": {
+                        "principal": principal,
+                        "action": "view-load",
+                        "allowed": true,
+                        "engine": "test",
+                        "policy_hash": null,
+                        "checked_at": chrono::Utc::now(),
+                    },
+                    "unverified-receipt-chain-claim": true,
+                }),
+            ),
+        ];
+
+        for (event_type, expected_message, payload) in cases {
+            let event = OutboxEvent {
+                event_id: format!("evt-summary-{event_type}-extra-field"),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: event_type.to_string(),
+                payload: json!({
+                    "audit-event-id": format!("audit-summary-{event_type}-extra-field"),
+                    "event-type": event_type,
+                    "payload": payload,
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            };
+
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{event_type}: {err}");
+            assert!(err.contains("event-id-hash=sha256:"), "{event_type}: {err}");
+            assert!(
+                !err.contains(event.event_id.as_str()),
+                "{event_type}: {err}"
+            );
+        }
     }
 
     #[test]
