@@ -5,6 +5,17 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Turso idempotency row-hash hardening:
+  durable `idempotency_records.request_hash` values are now validated as full
+  SHA-256 evidence before replay comparison. Corrupted row hashes fail closed
+  before direct idempotency replay or an idempotent commit retry can return a
+  stored response.
+- Local verification for this Turso idempotency row-hash slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local --lib turso_store_rejects_table_idempotency -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local --lib -- --test-threads=1`;
+  `docs/book/build.sh`; `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest metadata cleanup setup-failure hardening:
   `cleanup_planned_metadata_after_commit_error` now has direct regression
   coverage for cleanup setup failures, not only delete failures. A failed

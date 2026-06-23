@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened Turso idempotency request-hash row validation. Durable
+  `idempotency_records.request_hash` values are now checked for full SHA-256
+  evidence before replay comparison, so corrupted idempotency rows fail closed
+  before returning a stored commit response or retrying commit planning.
 - Covered metadata cleanup setup failure redaction. The service test suite now
   exercises `cleanup_planned_metadata_after_commit_error` when cleanup fails
   while opening the metadata object-store location, proving the original commit
