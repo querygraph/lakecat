@@ -135,6 +135,8 @@ if [[ "$mode" == "full" ]]; then
     grust_cypher_can_query_lakecat_catalog_projection_boundary -- --test-threads=1
   run cargo test -p lakecat-graph --features grust-turso-local --lib \
     grust_turso_store -- --test-threads=1
+  run cargo test -p lakecat-graph --features grust-turso-local --lib \
+    grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary -- --test-threads=1
   run cargo test -p lakecat-cli --all-features -- --test-threads=1
   run cargo test --workspace --all-features
 

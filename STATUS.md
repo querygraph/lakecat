@@ -12,7 +12,19 @@ Updated: 2026-06-23
   exercised through LakeCat's `grust-turso-local` projection boundary. The
   release-readiness gate already uses the `grust_turso_store` filter, which now
   includes the Turso-backed Cypher regression.
-- Local verification for this contract/docs slice is green:
+- Latest release-contract slice:
+  `Pin Grust Turso Cypher release row`.
+  `scripts/check-release-readiness.sh` now runs the
+  `grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary`
+  regression as its own explicit row, and the local dependency contract rejects
+  release gates that drop that LakeCat-to-Grust Turso Cypher proof.
+- Local verification for this release-contract slice is green:
+  `bash -n scripts/check-release-readiness.sh scripts/check-local-dependency-contract.sh`
+  passed; `scripts/check-local-dependency-contract.sh` passed;
+  `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary -- --test-threads=1`
+  passed; `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
+- Previous local verification for the contract/docs slice is green:
   `scripts/check-local-dependency-contract.sh` passed;
   `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store -- --test-threads=1`
   passed; `scripts/check-release-readiness.sh --quick` passed;

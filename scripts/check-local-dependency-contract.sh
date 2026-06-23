@@ -137,6 +137,8 @@ require_pattern 'cargo test -p lakecat-graph --features grust-turso-local --lib'
   "release-readiness gate must prove LakeCat graph projection persists through Grust Turso"
 require_pattern 'grust_turso_store' scripts/check-release-readiness.sh \
   "release-readiness gate must run the Grust Turso graph persistence, traversal, and Cypher tests"
+require_pattern 'grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary' scripts/check-release-readiness.sh \
+  "release-readiness gate must keep the explicit Grust Turso Cypher projection row"
 require_pattern 'grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary' crates/lakecat-graph/src/lib.rs \
   "LakeCat graph tests must prove Grust Cypher over the Turso-backed catalog projection"
 require_pattern 'scripts/qglake-handoff-local.sh' scripts/check-release-readiness.sh \

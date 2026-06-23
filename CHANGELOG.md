@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Pinned the Grust Turso Cypher projection proof as an explicit release-gate
+  row. The full local release-readiness script now names the
+  `grust_turso_store_runs_cypher_over_lakecat_catalog_projection_boundary`
+  regression directly, and the dependency contract rejects any future gate that
+  drops that LakeCat-to-Grust Turso query proof.
 - Refreshed the full local release-candidate proof after the Grust Turso Cypher
   reconciliation. `scripts/check-release-readiness.sh --release-candidate`
   passed from clean head `db50150b`, including the `grust-turso-local`
