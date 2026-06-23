@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Expanded the book's graph workflow narrative. The LakeCat book now explains
+  how `grust-turso-local` keeps graph persistence, traversal, matched-node
+  patches, and Cypher-facing behavior in Grust while LakeCat emits only
+  catalog-facing projection facts and QueryGraph consumes the resulting graph
+  readiness evidence.
 - Added Grust Turso matched-node patch verification. The `grust-turso-local`
   graph tests now project a LakeCat catalog event into Grust's
   `TursoGraphStore`, execute Grust's matched-node mutation plan over the

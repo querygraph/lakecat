@@ -4362,6 +4362,49 @@ and durable proof. The pieces that may generalize are smaller than QueryGraph:
 catalog event identity, lineage receipt binding, view lifecycle proof,
 credential proof, and pointer-history profiles.
 
+The Grust Turso workflow is the concrete graph version of that boundary. A
+LakeCat table event is not a request for LakeCat to become a graph database.
+It is a catalog fact with a stable subject, table identity, action, event id,
+and redacted properties. With the `grust-turso-local` feature enabled, the
+service configures `GrustCatalogGraphSink<TursoGraphStore>` and emits the same
+catalog event through the sink that production outbox replay uses. Grust owns
+the Turso graph tables, persistence behavior, traversal semantics, and Cypher
+mutation semantics. LakeCat owns only the catalog-facing projection boundary
+and the proof that the boundary was exercised.
+
+A local QueryGraph acceptance run therefore has three distinct graph stages:
+
+1. LakeCat drains replay-validated catalog events from the transactional
+   outbox.
+2. The configured Grust sink writes catalog-event, warehouse, namespace, table,
+   policy, storage-profile, view, scan, commit, and lineage anchors into a
+   Turso-backed Grust graph store.
+3. QueryGraph can traverse and mutate those graph facts through Grust APIs
+   without asking LakeCat for a graph-specific endpoint.
+
+The current boundary regression mirrors that workflow in small form:
+
+```text
+catalog event:  lakecat:outbox:evt-turso-matched-node
+subject:        lakecat:table:local:default:events
+sink:           GrustCatalogGraphSink<TursoGraphStore>
+store:          grust-turso
+operation:      PatchMatchingNodes(label = Table, id = subject)
+patch:          querygraph_ready = true
+read-back:      TursoGraphStore.get_node(subject)
+```
+
+That example is intentionally not an Iceberg proposal. Iceberg clients do not
+need to know that `querygraph_ready` exists, and a Spark or PyIceberg table load
+should never depend on a graph patch. The portable idea is narrower: catalog
+events should have stable, replayable identity, and downstream semantic systems
+should be able to prove that their graph state was derived from accepted
+catalog transitions. The LakeCat product choice is to use Grust's Turso backend
+for that graph state, including matched-node patches and Cypher-facing
+mutation behavior. If the graph operation becomes reusable, it belongs in
+Grust; if the proof of catalog emission changes, it belongs in LakeCat; if the
+meaning of `querygraph_ready` changes, it belongs in QueryGraph.
+
 ### Catalog Concepts As A Contract
 
 The easiest mistake to make with LakeCat is to call every useful surface an

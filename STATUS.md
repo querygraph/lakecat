@@ -5,6 +5,17 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest book workflow slice:
+  `Document Grust Turso graph boundary workflow`.
+  The LakeCat book now includes a concrete QueryGraph/Grust Turso workflow:
+  LakeCat drains replay-validated catalog events, emits catalog-facing graph
+  anchors through `GrustCatalogGraphSink<TursoGraphStore>`, and leaves
+  persistence, traversal, matched-node patches, and Cypher-facing mutation
+  behavior in Grust while QueryGraph consumes readiness evidence.
+- Local verification for this book workflow slice is green:
+  `docs/book/build.sh` passed; `scripts/check-local-dependency-contract.sh`
+  passed; `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest Grust Turso graph boundary slice:
   `Prove Grust Turso matched-node patches`.
   The `grust-turso-local` graph tests now project a LakeCat catalog event into
