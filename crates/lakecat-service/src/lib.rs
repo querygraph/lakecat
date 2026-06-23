@@ -46374,6 +46374,31 @@ mod tests {
         assert!(!message.contains("failed to clean up"));
     }
 
+    #[tokio::test]
+    async fn metadata_cleanup_after_commit_error_redacts_cleanup_setup_failure() {
+        let cleanup_location = "not a uri /tmp/lakecat-secret/events/metadata/00001.json";
+        let err = cleanup_planned_metadata_after_commit_error(
+            Some(PlannedMetadataWrite {
+                location: cleanup_location.to_string(),
+            }),
+            None,
+            LakeCatError::Conflict("metadata pointer changed".to_string()),
+        )
+        .await;
+
+        let LakeCatError::Conflict(message) = err else {
+            panic!("expected cleanup setup failure to preserve commit conflict");
+        };
+        assert!(message.contains("metadata pointer changed"));
+        assert!(message.contains("metadata cleanup also failed"));
+        assert!(message.contains("error-detail-hash=sha256:"));
+        assert!(!message.contains(cleanup_location));
+        assert!(!message.contains("lakecat-secret"));
+        assert!(!message.contains("00001.json"));
+        assert!(!message.contains("relative URL"));
+        assert!(!message.contains("invalid metadata location"));
+    }
+
     #[test]
     fn metadata_object_location_must_be_child_of_storage_profile_root() {
         let unique = std::time::SystemTime::now()

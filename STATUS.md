@@ -5,6 +5,17 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest metadata cleanup setup-failure hardening:
+  `cleanup_planned_metadata_after_commit_error` now has direct regression
+  coverage for cleanup setup failures, not only delete failures. A failed
+  metadata object-store location parse during rejected-commit cleanup preserves
+  the original commit conflict and appends only `error-detail-hash` cleanup
+  evidence without raw paths or backend parse text.
+- Local verification for this metadata cleanup setup-failure slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib metadata_cleanup -- --test-threads=1`;
+  `docs/book/build.sh`; `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`; `git diff --check`.
 - Latest Grust Turso graph-sink startup hardening:
   `grust-turso-local` service wiring still uses
   `grust_turso::TursoGraphStore` for durable graph projection, but

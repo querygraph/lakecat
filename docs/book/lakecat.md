@@ -7359,6 +7359,11 @@ treats that as successful cleanup rather than turning a resolved orphan into an
 internal error. Cleanup also refuses to delete the previous committed metadata
 pointer if a future plan accidentally reports it as the staged write; the
 committed metadata object remains the table's current state, not an orphan.
+The combined-error path now covers cleanup setup failures as well as delete
+failures: if LakeCat cannot open the staged metadata object's object-store
+location while cleaning up a rejected commit, the original commit conflict
+remains the visible error class and the cleanup detail is represented only by
+hash evidence.
 The same audit-safe shape applies before the write:
 current-pointer overwrite, existing-object overwrite, unsupported object-store
 configuration, and storage-profile-prefix failures report metadata-location

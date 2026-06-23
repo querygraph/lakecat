@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Covered metadata cleanup setup failure redaction. The service test suite now
+  exercises `cleanup_planned_metadata_after_commit_error` when cleanup fails
+  while opening the metadata object-store location, proving the original commit
+  conflict is preserved and the combined error carries only hash evidence for
+  cleanup details.
 - Redacted Grust Turso graph-sink startup failures. The
   `grust-turso-local` service wiring still configures
   `grust_turso::TursoGraphStore`, but connect/bootstrap errors now expose only
