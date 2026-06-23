@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-contract slice:
+  `Reject published tag retag instructions`.
+  `RELEASE.md` now treats `v0.1.0` as an already-published baseline and uses a
+  workspace-version-derived tag command only for future versions without an
+  existing tag. `scripts/check-release-version-contract.sh` rejects docs that
+  instruct retagging the current published workspace-version tag while still
+  checking tag ancestry and requiring future unpublished tags to be derived
+  from the workspace version.
+- Local verification for this release-contract slice is green:
+  `bash -n scripts/check-release-version-contract.sh scripts/check-local-dependency-contract.sh scripts/check-release-readiness.sh`
+  passed; `scripts/check-release-version-contract.sh` passed;
+  `scripts/check-local-dependency-contract.sh` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest graph-boundary verification:
   `Verify grust-turso backed graph operations`.
   `cargo tree -p lakecat-graph --features grust-turso-local -i grust-turso`

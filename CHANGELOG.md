@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened the post-`v0.1.0` tag contract. `RELEASE.md` no longer shows a
+  literal `git tag -a v0.1.0` command after the tag has already been published,
+  and `scripts/check-release-version-contract.sh` now rejects release docs that
+  instruct retagging an existing workspace-version tag while still validating
+  the tag command for future unpublished versions.
 - Verified the current Grust Turso graph boundary from clean head `44902932`.
   `cargo tree -p lakecat-graph --features grust-turso-local -i grust-turso`
   resolves LakeCat's graph path through `/Users/alexy/src/grust/crates/grust-turso`,

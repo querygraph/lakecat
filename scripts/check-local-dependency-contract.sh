@@ -27,6 +27,15 @@ require_pattern() {
   rg -q "$pattern" "$file" || fail "$description"
 }
 
+forbid_pattern() {
+  local pattern="$1"
+  local file="$2"
+  local description="$3"
+  if rg -q "$pattern" "$file"; then
+    fail "$description"
+  fi
+}
+
 require_manual_only_workflows() {
   local workflow
   local workflow_files=()
@@ -178,10 +187,14 @@ require_pattern 'partial[[:space:]]+evidence instead of release-candidate succes
   "release-readiness help must describe skipped full runs as partial evidence"
 require_pattern 'docs/book/check_pdf_layout\.sh' RELEASE.md \
   "RELEASE.md must include the PDF layout artifact check"
-require_pattern 'git tag -a v0\.1\.0' RELEASE.md \
-  "RELEASE.md must document the current workspace release tag"
-require_pattern 'retag `v0\.1\.0`' RELEASE.md \
+require_pattern 'For the already-published `v0\.1\.0` baseline, do not run another tag command' RELEASE.md \
   "RELEASE.md must preserve the post-v0.1.0 no-retag rule"
+require_pattern 'git tag -a "v\$version"' RELEASE.md \
+  "RELEASE.md must derive future unpublished release tags from the workspace version"
+forbid_pattern 'git tag -a v0\.1\.0' RELEASE.md \
+  "RELEASE.md must not instruct retagging the already-published v0.1.0 baseline"
+require_pattern 'must not instruct retagging already-published \$local_tag' scripts/check-release-version-contract.sh \
+  "release version contract must reject retag instructions for already-published workspace tags"
 require_pattern 'Typed Iceberg v4 support belongs in Sail' RELEASE.md \
   "RELEASE.md must keep typed Iceberg v4 in the deferred Sail-owned ledger"
 

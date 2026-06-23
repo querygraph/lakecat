@@ -138,23 +138,34 @@ of truth yet.
 
 ## Tagging
 
-After the full gate passes from the final clean candidate and release notes are
-committed:
+For the already-published `v0.1.0` baseline, do not run another tag command.
+Post-`v0.1.0` hardening should keep changes under `Unreleased` until the
+workspace version moves forward.
+
+For a future release where `Cargo.toml` has moved to a version without an
+existing local tag, tag only after the full gate passes from the final clean
+candidate and release notes are committed:
 
 ```sh
 git status --short --branch
 scripts/check-release-readiness.sh --release-candidate
-git tag -a v0.1.0 -m "LakeCat 0.1.0"
+version=$(awk '
+  /^\[workspace\.package\]/ { in_workspace_package = 1; next }
+  /^\[/ { in_workspace_package = 0 }
+  in_workspace_package && /^version[[:space:]]*=/ {
+    gsub(/"/, "", $3)
+    print $3
+    exit
+  }
+' Cargo.toml)
+git tag -a "v$version" -m "LakeCat $version"
 git push origin master
-git push origin v0.1.0
+git push origin "v$version"
 ```
 
-Use a different tag only if `Cargo.toml` version has changed.
-
-For post-`v0.1.0` hardening while `Cargo.toml` remains at `0.1.0`, do not
-retag `v0.1.0`. Keep changes under `Unreleased`, keep the local release gate
-green, and cut the next tag only after the workspace version and release notes
-move forward together.
+For post-`v0.1.0` hardening while `Cargo.toml` remains at `0.1.0`, keep the
+local release gate green and cut the next tag only after the workspace version
+and release notes move forward together.
 
 ## Deferred Work Ledger
 

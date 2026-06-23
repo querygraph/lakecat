@@ -55,14 +55,16 @@ if [[ -n "$metadata_mismatches" ]]; then
   fail "LakeCat package versions do not match $workspace_version: $metadata_mismatches"
 fi
 
-release_tag="$(sed -n 's/.*git tag -a v\([0-9][0-9A-Za-z.-]*\) .*/\1/p' RELEASE.md | head -n 1)"
-[[ -n "$release_tag" ]] || fail "could not read release tag command from RELEASE.md"
-[[ "$release_tag" == "$workspace_version" ]] || \
-  fail "RELEASE.md tag v$release_tag does not match workspace version $workspace_version"
 local_tag="v$workspace_version"
 if git rev-parse -q --verify "refs/tags/$local_tag" >/dev/null; then
   git merge-base --is-ancestor "$local_tag^{}" HEAD || \
     fail "published release tag $local_tag must be an ancestor of HEAD"
+  if rg -q "git tag -a $local_tag\\b" RELEASE.md; then
+    fail "RELEASE.md must not instruct retagging already-published $local_tag"
+  fi
+else
+  rg -q 'git tag -a "v\$version"' RELEASE.md || \
+    fail "RELEASE.md must derive future unpublished tags from the workspace version"
 fi
 release_date="$(date -u +%F)"
 rg -q "^## $workspace_version - $release_date$" CHANGELOG.md || \
