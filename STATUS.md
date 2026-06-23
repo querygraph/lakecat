@@ -5,6 +5,12 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest graph-integration slice:
+  `Prove Grust Turso traversal projection`.
+  LakeCat's `grust-turso-local` graph tests now prove catalog events can be
+  written to Grust's Turso backend and traversed through Grust graph-store
+  APIs. LakeCat still only emits bounded catalog events; durable graph
+  persistence and query semantics remain in Grust.
 - Latest release-contract slice:
   `Add release-candidate clean gate`.
   `scripts/check-release-readiness.sh --release-candidate` now requires a clean

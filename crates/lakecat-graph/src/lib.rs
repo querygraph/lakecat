@@ -649,7 +649,7 @@ pub mod grust_integration {
             execute_cypher_mutation_returning_with_options_on_store,
         };
         #[cfg(feature = "grust-turso-local")]
-        use grust_graph::{GraphAdminStore, NodeId};
+        use grust_graph::{GraphAdminStore, NodeId, Traversal};
         use lakecat_core::{Namespace, TableIdent, TableName, WarehouseName};
 
         #[test]
@@ -1028,6 +1028,49 @@ pub mod grust_integration {
             assert_eq!(table_node.label.as_str(), "Table");
             assert_eq!(
                 table_node.props.get("warehouse"),
+                Some(&Value::String("local".to_string()))
+            );
+        }
+
+        #[cfg(feature = "grust-turso-local")]
+        #[tokio::test]
+        async fn grust_turso_store_traverses_lakecat_catalog_projection_boundary() {
+            let table = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            let table_id = table.stable_id();
+            let event = GraphEvent::table(
+                GraphAction::Created,
+                table,
+                serde_json::json!({"kind":"turso-cypher-test"}),
+            )
+            .with_event_id("lakecat:outbox:evt-turso-cypher");
+            let graph = graph_event_to_grust(&event);
+            let store = grust_graph::TursoGraphStore::in_memory()
+                .await
+                .expect("Grust Turso graph store");
+            store.bootstrap().await.expect("Grust Turso bootstrap");
+            store
+                .put_graph(&graph)
+                .await
+                .expect("catalog graph write to Turso");
+
+            let affected_tables = store
+                .traverse(
+                    Traversal::from_node("lakecat:outbox:evt-turso-cypher")
+                        .out("AFFECTS_TABLE")
+                        .to("Table"),
+                )
+                .await
+                .expect("Grust Turso traversal over LakeCat graph");
+
+            assert_eq!(affected_tables.len(), 1);
+            assert_eq!(affected_tables[0].id.as_str(), table_id);
+            assert_eq!(affected_tables[0].label.as_str(), "Table");
+            assert_eq!(
+                affected_tables[0].props.get("warehouse"),
                 Some(&Value::String("local".to_string()))
             );
         }

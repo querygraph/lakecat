@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a focused Grust Turso traversal regression for LakeCat catalog graph
+  projection. The `grust-turso-local` graph tests now prove catalog events can
+  be written to Grust's Turso backend and traversed through Grust graph-store
+  APIs, keeping graph storage and query semantics in Grust.
 - Added an explicit release-candidate mode to the local release gate. The new
   `--release-candidate` option requires a clean tree before and after the full
   gate and rejects skipped book or handoff proof.
