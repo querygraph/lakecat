@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened service lineage-drain QueryGraph standards summaries. Raw
+  lineage-drain summary construction now rejects malformed, blank, or
+  duplicate `standards` entries instead of silently dropping invalid bootstrap
+  standards evidence, so QueryGraph/QGLake proof cannot omit corrupted
+  standards claims.
 - Expanded the LakeCat book's standards and engine-boundary decision record
   with a catalog-concepts-in-plain-terms section. The added text separates
   standard Iceberg vocabulary from LakeCat, QueryGraph, TypeSec, Sail, Turso,

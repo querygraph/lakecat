@@ -5,6 +5,20 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Harden lineage-drain QueryGraph standards summaries`.
+  Raw lineage-drain summary construction now rejects malformed, blank, or
+  duplicate `standards` entries instead of silently dropping invalid bootstrap
+  standards evidence, so QueryGraph/QGLake proof cannot omit corrupted
+  standards claims.
+- Local verification for this lineage-drain QueryGraph standards summary slice
+  is green:
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_querygraph_standards -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-service -- --check` passed;
+  `cargo test -p lakecat-service` passed; `docs/book/build.sh` passed;
+  `docs/book/check_epub_metadata.sh docs/book/dist/lakecat.epub "lakecat (0.1.0)"`
+  passed; `scripts/check-release-readiness.sh --quick` passed;
+  `git diff --check` passed.
 - Latest documentation/book slice:
   `Expand catalog concept and Sail engine-boundary explanations`.
   The book now separates standard Iceberg vocabulary from LakeCat,

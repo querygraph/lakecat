@@ -7254,14 +7254,8 @@ fn lineage_drain_event_summary(
             .map(str::to_string),
         standards: payload
             .get("standards")
-            .and_then(Value::as_array)
-            .map(|standards| {
-                standards
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_string)
-                    .collect()
-            })
+            .map(|_| lineage_summary_string_array_field(event, payload, "standards"))
+            .transpose()?
             .unwrap_or_default(),
         credential_count: payload
             .get("credential-count")
@@ -48414,6 +48408,61 @@ mod tests {
             ),
             "{err}"
         );
+    }
+
+    #[test]
+    fn lineage_drain_summary_rejects_malformed_querygraph_standards() {
+        let receipt = OutboxProjectionReceipt::default();
+        let malformed_standards = OutboxEvent {
+            event_id: "evt-bad-summary-standards".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "querygraph.bootstrap".to_string(),
+            payload: json!({
+                "payload": {
+                    "standards": ["Iceberg REST", 42]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&malformed_standards, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("standards must contain strings"));
+
+        let blank_standard = OutboxEvent {
+            event_id: "evt-blank-summary-standard".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "querygraph.bootstrap".to_string(),
+            payload: json!({
+                "payload": {
+                    "standards": ["Iceberg REST", " "]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&blank_standard, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("standards must not contain blank strings"));
+
+        let duplicate_standard = OutboxEvent {
+            event_id: "evt-duplicate-summary-standard".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "querygraph.bootstrap".to_string(),
+            payload: json!({
+                "payload": {
+                    "standards": ["Iceberg REST", "Iceberg REST"]
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&duplicate_standard, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("standards must not contain duplicate values"));
     }
 
     #[test]

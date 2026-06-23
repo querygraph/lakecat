@@ -12323,6 +12323,11 @@ corrupted outbox row cannot add
 an unverified compatibility claim, endpoint claim, graph claim, standards claim,
 OpenLineage claim, QueryGraph claim, or application claim and have it flow into
 Grust, OpenLineage, QGLake, or QueryGraph import proof.
+The raw lineage-drain summary follows the same posture for bootstrap standards:
+if `standards` is present, it must be a string-array-shaped claim without
+blank, non-string, or duplicate entries. Malformed standards evidence now
+rejects the summary instead of disappearing from the QGLake proof that
+QueryGraph later compares.
 
 ## What Comes Next
 

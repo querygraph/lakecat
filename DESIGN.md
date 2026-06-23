@@ -865,6 +865,9 @@ Credential summary extraction must likewise fail closed when
 `credential-response-evidence` is not an array or its returned entries omit,
 malform, or duplicate `prefix-hash` evidence, so redacted credential replay
 cannot lose malformed prefix proof.
+QueryGraph bootstrap standards summary extraction must also fail closed when
+`standards` evidence is not a string array or carries blank/duplicate entries,
+so corrupted bootstrap standards claims cannot disappear from raw QGLake proof.
 Compact QGLake storage-profile and credential secret-reference proof must
 mirror service replay admission: present secret refs require nonblank providers
 and full SHA-256 hashes, while absent secret refs may omit provider/hash fields
