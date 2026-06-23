@@ -5,6 +5,19 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest table commit replay summary coverage slice:
+  raw lineage-drain summary tests now prove malformed `table.commit`
+  `response_hash`, optional idempotency hash, format-version, snapshot-id, and
+  metadata pointer evidence fail before QGLake replay can summarize commit
+  evidence.
+- Local verification for this table commit replay summary coverage slice
+  passed: `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service --lib lineage_drain_summary_rejects_malformed_table_commit_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_malformed_table_commit -- --test-threads=1`;
+  `cargo test -p lakecat-service --lib outbox_drain_rejects_blank_table_commit -- --test-threads=1`;
+  `scripts/check-local-dependency-contract.sh`;
+  `scripts/check-release-readiness.sh --quick`;
+  `git diff --check`.
 - Latest QGLake import-plan artifact closure slice:
   the saved `querygraph-import-plan.json` semantic verifier now closes the
   artifact root, nested `verification` object, table import entries, and view

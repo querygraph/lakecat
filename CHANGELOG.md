@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Expanded raw table-commit replay summary coverage. Lineage-drain summary
+  tests now prove malformed commit `response_hash`, optional idempotency hash,
+  format-version, snapshot-id, and metadata pointer evidence fail before raw
+  QGLake replay can summarize a table commit.
 - Closed archived QueryGraph import-plan artifact semantics. The QGLake handoff
   verifier now rejects unverified extra fields at the saved
   `querygraph-import-plan.json` root, its nested `verification` object, and

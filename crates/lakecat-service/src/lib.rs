@@ -51849,6 +51849,46 @@ mod tests {
                 "short-request-hash",
                 "request_hash/request-hash must contain full SHA-256 digest evidence",
             ),
+            (
+                "short-response-hash",
+                "short-response-hash",
+                "response_hash/response-hash must contain full SHA-256 digest evidence",
+            ),
+            (
+                "short-idempotency-hash",
+                "short-idempotency-hash",
+                "idempotency_key_sha256/idempotency-key-sha256 must contain full SHA-256 digest evidence",
+            ),
+            (
+                "missing-format-version",
+                "remove-format-version",
+                "table commit evidence must contain unsigned format version",
+            ),
+            (
+                "zero-format-version",
+                "zero-format-version",
+                "table commit evidence format version must be positive",
+            ),
+            (
+                "missing-snapshot-id",
+                "remove-snapshot-id",
+                "table commit evidence must contain signed snapshot id",
+            ),
+            (
+                "negative-snapshot-id",
+                "negative-snapshot-id",
+                "table commit evidence snapshot id must be non-negative",
+            ),
+            (
+                "missing-new-metadata",
+                "remove-new-metadata",
+                "table commit evidence must contain non-empty new metadata location",
+            ),
+            (
+                "blank-previous-metadata",
+                "blank-previous-metadata",
+                "table commit evidence previous metadata location must be non-empty when present",
+            ),
         ] {
             let mut commit = base_commit.clone();
             match mutate {
@@ -51860,6 +51900,33 @@ mod tests {
                 }
                 "short-request-hash" => {
                     commit["request_hash"] = json!("sha256:short");
+                }
+                "short-response-hash" => {
+                    commit["response_hash"] = json!("sha256:short");
+                }
+                "short-idempotency-hash" => {
+                    commit["idempotency_key_sha256"] = json!("sha256:short");
+                }
+                "remove-format-version" => {
+                    commit.as_object_mut().unwrap().remove("format_version");
+                }
+                "zero-format-version" => {
+                    commit["format_version"] = json!(0);
+                }
+                "remove-snapshot-id" => {
+                    commit.as_object_mut().unwrap().remove("snapshot_id");
+                }
+                "negative-snapshot-id" => {
+                    commit["snapshot_id"] = json!(-1);
+                }
+                "remove-new-metadata" => {
+                    commit
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("new_metadata_location");
+                }
+                "blank-previous-metadata" => {
+                    commit["previous_metadata_location"] = json!(" ");
                 }
                 _ => unreachable!("unknown table commit summary mutation"),
             }
