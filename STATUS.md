@@ -5,6 +5,17 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest release-engineering slice:
+  `Refresh full release gate after Grust Turso proof`.
+  The full local `scripts/check-release-readiness.sh` gate passed on
+  2026-06-23 from the current tree after the Grust Turso handoff proof work.
+  This refreshed proof covers shell-contract checks, dependency-contract
+  checks, manual workflow trigger checks, formatter checks, default and
+  all-features workspace tests, explicit Turso/Sail/TypeSec/Grust feature
+  rows, `grust-turso-local` graph projection rows, book artifact validation,
+  live QGLake handoff replay verification with `graphProjectionProof.backend =
+  grust-turso`, and `git diff --check`. Cloud CI remains manual-only; this is
+  the release evidence for the current local tree.
 - Latest implementation/testing slice:
   `Bind QGLake graph projection backend proof`.
   QGLake handoff summaries now carry machine-readable

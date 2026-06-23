@@ -7934,7 +7934,10 @@ The full gate runs the dependency contract, the workspace formatting matrix,
 default workspace tests, QGLake fixture coverage, Turso store tests, Sail,
 TypeSec, and Grust integration feature tests, an explicit all-features CLI
 test, the all-features workspace library test, the book build, and the QGLake
-handoff proof. The default workspace test still covers ordinary doc-tests; the
+handoff proof. The current full proof also exercises `grust-turso-local` graph
+projection rows and the live QGLake handoff summary must include
+`graphProjectionProof.backend = grust-turso` before replay verification is
+accepted. The default workspace test still covers ordinary doc-tests; the
 feature matrix targets package unit tests so an empty rustdoc phase cannot hang
 after the actual Turso/Sail/TypeSec/Grust coverage has passed. The `--quick`
 mode keeps script syntax, dependency-contract, formatting, and diff checks

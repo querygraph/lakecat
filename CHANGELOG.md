@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Refreshed the full local release-readiness proof after the Grust Turso
+  handoff proof work. `scripts/check-release-readiness.sh` now passes from the
+  current tree, including explicit Grust Turso graph projection tests, rebuilt
+  book artifacts, live QGLake handoff with `graphProjectionProof.backend =
+  grust-turso`, replay verification, and `git diff --check`.
 - Added machine-readable Grust Turso graph projection proof to QGLake handoff
   summaries. The handoff harness now records a hash-only
   `graphProjectionProof` for the `grust-turso` backend, and the Rust handoff
