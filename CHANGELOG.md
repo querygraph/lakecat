@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added lineage-drain coverage for closed credential-response summaries. Raw
+  credential replay summaries now have an explicit regression proving extra
+  fields inside `credential-response-evidence` are rejected before QGLake proof
+  can inherit unverified credential-scope claims.
 - Added exact stats-field binding coverage for fetched scan replay. Service
   outbox drain and lineage-drain summary regression tests now prove
   `stats-fields` cannot be a strict subset of `effective-stats-fields`; it

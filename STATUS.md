@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest lineage-drain credential-response closure coverage:
+  raw credential replay summaries now explicitly reject unexpected fields
+  inside `credential-response-evidence` entries before QGLake proof can inherit
+  unverified credential-scope claims. The regression also checks that
+  operator-facing errors retain hash-only event identity evidence.
+- Local verification for this credential-response closure slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_credential_prefix_hashes -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest fetched scan stats-field exact-binding coverage:
   service outbox drain and lineage-drain summary regression tests now prove
   fetched `stats-fields` cannot be a strict subset of

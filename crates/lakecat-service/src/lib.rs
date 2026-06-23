@@ -53286,6 +53286,28 @@ mod tests {
             .to_string();
         assert!(err.contains("credential-response-evidence"), "{err}");
 
+        let mut extra_credential_response_field =
+            valid_lineage_summary_credential_event("evt-extra-summary-credential-response-field");
+        extra_credential_response_field.payload["payload"]["credential-response-evidence"][0]["unverified-credential-scope"] =
+            json!("all-objects");
+        let err = lineage_drain_event_summary(&extra_credential_response_field, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "credential-vend credential-response contains unexpected field unverified-credential-scope"
+            ),
+            "{err}"
+        );
+        assert!(
+            err.contains("event-id-hash=sha256:"),
+            "operator-facing summary errors should keep event identity redacted: {err}"
+        );
+        assert!(
+            !err.contains("evt-extra-summary-credential-response-field"),
+            "operator-facing summary errors must not expose raw event ids: {err}"
+        );
+
         let mut missing_prefix_hash =
             valid_lineage_summary_credential_event("evt-missing-summary-prefix-hash");
         missing_prefix_hash.payload["payload"]["credential-response-evidence"][0]
