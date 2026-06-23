@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest fetched scan stats-field exact-binding coverage:
+  service outbox drain and lineage-drain summary regression tests now prove
+  fetched `stats-fields` cannot be a strict subset of
+  `effective-stats-fields`; the arrays must match exactly before downstream
+  graph, OpenLineage, or QGLake proof can inherit fetched scan stats evidence.
+- Local verification for this stats-field exact-binding coverage slice passed:
+  `cargo fmt -p lakecat-service -- --check`;
+  `cargo test -p lakecat-service outbox_drain_rejects_malformed_scan_fetch_stats_fields_evidence -- --test-threads=1`;
+  `cargo test -p lakecat-service lineage_drain_summary_rejects_malformed_scan_stats_fields -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest fetched-scan required-filter provenance coverage:
   service outbox drain and lineage-drain summary regression tests now prove the
   unsourced `required-filters` rejection for both planned and fetched scan

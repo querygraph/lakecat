@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added exact stats-field binding coverage for fetched scan replay. Service
+  outbox drain and lineage-drain summary regression tests now prove
+  `stats-fields` cannot be a strict subset of `effective-stats-fields`; it
+  must exactly match before graph, OpenLineage, or QGLake proof can inherit it.
 - Added fetched-scan coverage for unsourced required filters. Service outbox
   drain and lineage-drain summary regression tests now prove both planned and
   fetched scan replay reject non-empty `required-filters` evidence when no

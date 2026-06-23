@@ -17073,7 +17073,7 @@ mod tests {
             content_hash_json(&json!({"policy-id": "agent-read", "scope": "default.events"}))
                 .unwrap();
         let read_restriction = json!({
-            "allowed-columns": ["event_id"],
+            "allowed-columns": ["event_id", "payload"],
             "row-predicate": {
                 "type": "not-eq",
                 "term": "severity",
@@ -17086,22 +17086,42 @@ mod tests {
         let cases = [
             (
                 "evt-scan-fetch-empty-stats-fields",
+                json!(["event_id"]),
+                json!(["event_id"]),
                 json!([]),
                 "scan-tasks-fetched stats-fields must not be empty",
             ),
             (
                 "evt-scan-fetch-duplicate-stats-fields",
+                json!(["event_id"]),
+                json!(["event_id"]),
                 json!(["event_id", "event_id"]),
                 "scan-tasks-fetched stats-fields must be duplicate-free",
             ),
             (
                 "evt-scan-fetch-drifted-stats-fields",
+                json!(["event_id"]),
+                json!(["event_id"]),
                 json!(["payload"]),
                 "scan-tasks-fetched stats-fields must be a subset of effective-stats-fields",
             ),
+            (
+                "evt-scan-fetch-narrowed-stats-fields",
+                json!(["event_id", "payload"]),
+                json!(["event_id", "payload"]),
+                json!(["event_id"]),
+                "scan-tasks-fetched stats-fields must match effective-stats-fields",
+            ),
         ];
 
-        for (event_id, stats_fields, expected_message) in cases {
+        for (
+            event_id,
+            requested_stats_fields,
+            effective_stats_fields,
+            stats_fields,
+            expected_message,
+        ) in cases
+        {
             let payload = json!({
                 "event-type": "table.scan-tasks-fetched",
                 "table": ident,
@@ -17122,8 +17142,8 @@ mod tests {
                 "read-restriction": read_restriction,
                 "required-projection": ["event_id"],
                 "effective-projection": ["event_id"],
-                "requested-stats-fields": ["event_id"],
-                "effective-stats-fields": ["event_id"],
+                "requested-stats-fields": requested_stats_fields,
+                "effective-stats-fields": effective_stats_fields,
                 "stats-fields": stats_fields,
                 "required-filters": [{
                     "type": "not-eq",
@@ -52033,6 +52053,33 @@ mod tests {
                 "lineage drain summary stats-fields must be a subset of effective-stats-fields"
             ) || err
                 .contains("lineage drain summary stats-fields must match effective-stats-fields"),
+            "{err}"
+        );
+
+        let narrowed_stats_fields = OutboxEvent {
+            event_id: "evt-narrowed-summary-stats-fields".to_string(),
+            sink: "lakecat.lineage-and-graph".to_string(),
+            event_type: "table.scan-tasks-fetched".to_string(),
+            payload: json!({
+                "payload": {
+                    "requested-projection": ["event_id", "payload"],
+                    "effective-projection": ["event_id", "payload"],
+                    "requested-stats-fields": ["event_id", "payload"],
+                    "effective-stats-fields": ["event_id", "payload"],
+                    "stats-fields": ["event_id"],
+                    "file-scan-task-count": 1,
+                    "delete-file-count": 0,
+                    "child-plan-task-count": 0
+                }
+            }),
+            created_at: chrono::Utc::now(),
+            delivered_at: None,
+        };
+        let err = lineage_drain_event_summary(&narrowed_stats_fields, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("lineage drain summary stats-fields must match effective-stats-fields"),
             "{err}"
         );
     }
