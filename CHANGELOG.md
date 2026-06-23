@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened memory active-view scope binding. Memory store view reads and
+  guarded mutations now validate active `ViewRecord` values against their map
+  keys before listing, loading, updating, or dropping views, matching Turso's
+  decoded row-scope drift rejection.
 - Hardened memory policy-binding scope binding. Memory store reads now validate
   stored policy-binding values against their map keys before listing or table
   policy matching, matching Turso's decoded row-scope drift rejection.

@@ -284,12 +284,12 @@ The current working plan is:
    must reject invalid expected-version values before changing active view state
    or appending view-version receipts, and memory/Turso mutation paths must
    validate the existing receipt chain before appending a new view receipt so
-   corrupted durable history cannot be extended. Memory/Turso keyed active-view
-   reads and Turso view-list reads must also bind decoded view JSON back to the
-   selected warehouse, namespace, and view identity before returning, updating,
-   or dropping active view state; the Turso active-view regression suite now
-   covers both decoded JSON drift and durable `views` row-column drift for
-   load, list, guarded mutation, and drop paths. Turso receipt reads and
+   corrupted durable history cannot be extended. Memory/Turso active-view reads
+   and guarded mutations must also bind decoded view JSON back to the memory map
+   key or selected Turso warehouse, namespace, and view identity before
+   returning, updating, or dropping active view state; the Turso active-view
+   regression suite now covers both decoded JSON drift and durable `views`
+   row-column drift for load, list, guarded mutation, and drop paths. Turso receipt reads and
    mutation-chain lookups
    must also verify decoded receipt JSON against the durable receipt row and
    row/query warehouse, namespace, and view scope before returning or extending

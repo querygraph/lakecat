@@ -1192,6 +1192,16 @@ fn validate_view_record_scope(
     Ok(())
 }
 
+fn validate_view_record_map_scope(record: &ViewRecord, record_key: &str) -> LakeCatResult<()> {
+    record.validate()?;
+    if view_key(record) != record_key {
+        return Err(LakeCatError::Internal(
+            "view record row scope does not match view identity".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn view_version_operation_order(operation: &ViewVersionOperation) -> u8 {
     match operation {
         ViewVersionOperation::Upsert => 0,
@@ -2246,6 +2256,9 @@ impl CatalogStore for MemoryCatalogStore {
         let view_key = view_key(&view);
         let principal = view.created.principal.clone();
         let previous = state.views.get(&view_key);
+        if let Some(previous) = previous {
+            validate_view_record_map_scope(previous, &view_key)?;
+        }
         let latest_receipt = latest_view_receipt_evidence(
             state
                 .view_version_receipts
@@ -2284,6 +2297,9 @@ impl CatalogStore for MemoryCatalogStore {
         let view_key = view_key(&view);
         let principal = view.created.principal.clone();
         let previous = state.views.get(&view_key);
+        if let Some(previous) = previous {
+            validate_view_record_map_scope(previous, &view_key)?;
+        }
         if let Some(expected) = expected_view_version {
             require_expected_view_version(previous, expected)?;
         }
@@ -2365,6 +2381,10 @@ impl CatalogStore for MemoryCatalogStore {
                 name: view.as_str().to_string(),
             })
             .and_then(|record| {
+                validate_view_record_map_scope(
+                    &record,
+                    &view_key_parts(warehouse, namespace, view),
+                )?;
                 validate_view_record_scope(&record, warehouse, namespace, view)?;
                 Ok(record)
             })
@@ -2401,6 +2421,7 @@ impl CatalogStore for MemoryCatalogStore {
                 object: "view",
                 name: view.as_str().to_string(),
             })?;
+        validate_view_record_map_scope(current, &view_key)?;
         validate_view_record_scope(current, warehouse, namespace, view)?;
         if let Some(expected) = expected_view_version {
             require_expected_view_version(Some(current), expected)?;
@@ -2427,14 +2448,17 @@ impl CatalogStore for MemoryCatalogStore {
         let state = self.state.read().await;
         let mut views = state
             .views
-            .values()
+            .iter()
+            .map(|(view_key, view)| {
+                validate_view_record_map_scope(view, view_key)?;
+                Ok(view)
+            })
+            .collect::<LakeCatResult<Vec<_>>>()?
+            .into_iter()
             .filter(|view| view.warehouse == *warehouse && view.namespace == *namespace)
             .cloned()
             .collect::<Vec<_>>();
         views.sort_by(|left, right| left.name.as_str().cmp(right.name.as_str()));
-        for view in &views {
-            validate_view_record_scope(view, warehouse, namespace, &view.name)?;
-        }
         Ok(views)
     }
 
@@ -4396,6 +4420,71 @@ mod memory_tests {
             LakeCatError::InvalidArgument(message)
                 if message.contains("view SQL must not be empty")
         ));
+    }
+
+    #[tokio::test]
+    async fn memory_store_rejects_view_record_map_scope_drift() {
+        let store = MemoryCatalogStore::new();
+        let warehouse = WarehouseName::new("local").unwrap();
+        let namespace = "default".parse::<Namespace>().unwrap();
+        let view_name = TableName::new("active_customers").unwrap();
+        let view = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            view_name.clone(),
+            "select * from customers where active",
+            "sql",
+            Some(1),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        let view = store.upsert_view(view).await.unwrap();
+        let original_view_key = view_key(&view);
+        store
+            .state
+            .write()
+            .await
+            .views
+            .get_mut(&original_view_key)
+            .unwrap()
+            .name = TableName::new("other_view").unwrap();
+
+        let replacement = ViewRecord::new(
+            warehouse.clone(),
+            namespace.clone(),
+            view_name.clone(),
+            "select id from customers where active",
+            "sql",
+            Some(2),
+            BTreeMap::new(),
+            Principal::anonymous(),
+        )
+        .unwrap();
+        for err in [
+            store
+                .load_view(&warehouse, &namespace, &view_name)
+                .await
+                .unwrap_err(),
+            store.list_views(&warehouse, &namespace).await.unwrap_err(),
+            store
+                .upsert_view_if_version(replacement, Some(1))
+                .await
+                .unwrap_err(),
+            store
+                .drop_view(&warehouse, &namespace, &view_name, Principal::anonymous())
+                .await
+                .unwrap_err(),
+        ] {
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains("view record row scope does not match")
+            ));
+        }
+
+        let state = store.state.read().await;
+        assert_eq!(state.view_version_receipts.len(), 1);
     }
 
     #[tokio::test]

@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest memory active-view scope binding:
+  memory store view reads and guarded mutations now validate active
+  `ViewRecord` values against their map keys before listing, loading, updating,
+  or dropping views, matching Turso's decoded row-scope drift rejection.
+- Local verification for this memory active-view scope slice passed:
+  `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store memory_store_rejects_view_record_map_scope_drift -- --test-threads=1`;
+  `cargo test -p lakecat-store --features turso-local turso_store_rejects_view_record_json_scope_drift -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest memory policy-binding scope binding:
   memory store reads now validate stored policy-binding values against their
   map keys before listing or table policy matching, matching Turso's decoded
