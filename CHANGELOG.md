@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Bound wrapped outbox replay `event-type` evidence to the durable outbox row.
+  Service replay admission now rejects wrapper or inner payload `event-type`
+  drift before acknowledgement, graph projection, or OpenLineage projection,
+  preventing archived replay payloads from splicing a valid event body under a
+  different catalog event type.
 - Expanded the LakeCat book's standards ledger for catalog concepts. The book
   now explicitly separates LakeCat/QueryGraph/TypeSec/Turso/Grust/Sail product
   architecture from possible optional Iceberg-adjacent profiles, and makes the

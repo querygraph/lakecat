@@ -939,7 +939,10 @@ Service replay admission now closes the wrapped payload schema for
 `namespace.listed`, `view.listed`, and management list events, so an archived
 inventory read cannot append unverified namespace, view, management,
 OpenLineage, replay, or QueryGraph claims beside otherwise valid count and
-ID/name/path evidence before acknowledgement or projection.
+ID/name/path evidence before acknowledgement or projection. Service replay also
+binds any present wrapper or inner payload `event-type` field back to the
+durable outbox row event type before acknowledgement or projection, so replay
+cannot splice a valid payload body under a different catalog event type.
 Policy-list proof must be paired with policy-upsert content proof: compact
 `managementProof.policyUpsertProof` must carry a policy id listed in
 `policyIds`, a full ODRL content hash, principal subject/kind, full

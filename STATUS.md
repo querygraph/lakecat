@@ -5,6 +5,13 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Bind wrapped replay event types`.
+  Service outbox admission now binds any present wrapper or inner payload
+  `event-type` evidence back to the durable outbox row event type before
+  per-event validation, acknowledgement, graph projection, or OpenLineage
+  projection. A focused regression covers both wrapper-level and inner-payload
+  drift for `namespace.listed` replay.
 - Latest documentation/book slice:
   `Clarify standards ledger for catalog concepts`.
   The book now directly answers whether current LakeCat concepts are standard

@@ -1360,6 +1360,10 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
             "outbox event type is not supported for projection",
         ));
     }
+    validate_outbox_event_type_binding(event, &event.payload, "outbox payload")?;
+    if !std::ptr::eq(payload, &event.payload) {
+        validate_outbox_event_type_binding(event, payload, "outbox inner payload")?;
+    }
     validate_read_restriction_policy_hashes(
         event,
         payload.get("read-restriction"),
@@ -1445,6 +1449,29 @@ fn validate_outbox_event_evidence(event: &OutboxEvent) -> Result<(), LakeCatErro
     }
     if event.event_type == "querygraph.bootstrap" {
         validate_querygraph_bootstrap_event_evidence(event, payload)?;
+    }
+    Ok(())
+}
+
+fn validate_outbox_event_type_binding(
+    event: &OutboxEvent,
+    payload: &Value,
+    label: &str,
+) -> Result<(), LakeCatError> {
+    let Some(event_type) = payload.get("event-type") else {
+        return Ok(());
+    };
+    let Some(event_type) = event_type.as_str().filter(|value| !value.trim().is_empty()) else {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} event-type must be a non-empty string when present"),
+        ));
+    };
+    if event_type != event.event_type {
+        return Err(outbox_evidence_error(
+            event,
+            &format!("{label} event-type must match outbox event type"),
+        ));
     }
     Ok(())
 }
@@ -29021,6 +29048,107 @@ mod tests {
             assert!(
                 lineage.events.lock().await.is_empty(),
                 "extra inventory-list wrapper fields must fail before lineage projection"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn outbox_drain_rejects_mismatched_wrapped_event_type_evidence() {
+        let principal = Principal::new("agent:operator", PrincipalKind::Agent).unwrap();
+        let base_payload = json!({
+            "authorization-receipt": {
+                "principal": principal,
+                "action": "namespace-list",
+                "allowed": true,
+                "engine": "test",
+                "policy_hash": null,
+                "checked_at": chrono::Utc::now(),
+            },
+            "warehouse": "local",
+            "namespace-count": 1,
+            "namespace-paths": ["default"],
+        });
+        let cases = vec![
+            (
+                "evt-wrapper-event-type-drift",
+                json!({
+                    "audit-event-id": "audit-wrapper-event-type-drift",
+                    "event-type": "table.loaded",
+                    "payload": base_payload.clone(),
+                }),
+                "outbox payload event-type must match outbox event type",
+            ),
+            (
+                "evt-inner-event-type-drift",
+                json!({
+                    "audit-event-id": "audit-inner-event-type-drift",
+                    "event-type": "namespace.listed",
+                    "payload": {
+                        "event-type": "table.loaded",
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "namespace-list",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now(),
+                        },
+                        "warehouse": "local",
+                        "namespace-count": 1,
+                        "namespace-paths": ["default"],
+                    },
+                }),
+                "outbox inner payload event-type must match outbox event type",
+            ),
+        ];
+
+        for (event_id, payload, expected_message) in cases {
+            let store = Arc::new(RecordingOutboxStore {
+                events: Mutex::new(vec![OutboxEvent {
+                    event_id: event_id.to_string(),
+                    sink: "lakecat.lineage-and-graph".to_string(),
+                    event_type: "namespace.listed".to_string(),
+                    payload,
+                    created_at: chrono::Utc::now(),
+                    delivered_at: None,
+                }]),
+                delivered: Mutex::default(),
+            });
+            let graph = Arc::new(RecordingGraph::default());
+            let lineage = Arc::new(RecordingLineage::default());
+            let state = LakeCatState::new(WarehouseName::new("local").unwrap(), store.clone())
+                .with_integrations(
+                    default_sail_engine(),
+                    AllowAllGovernanceEngine::new(),
+                    graph.clone(),
+                    lineage.clone(),
+                );
+
+            let err = drain_outbox_once(&state, 10)
+                .await
+                .expect_err("mismatched event-type evidence should fail before delivery");
+
+            let message = err.to_string();
+            assert!(
+                message.contains(
+                    "outbox event namespace.listed (lakecat.lineage-and-graph) has invalid"
+                ),
+                "namespace.listed should be identified in the validation error"
+            );
+            assert!(message.contains("event-id-hash=sha256:"));
+            assert!(message.contains(expected_message), "{message}");
+            assert!(!message.contains(event_id));
+            assert!(
+                store.delivered.lock().await.is_empty(),
+                "mismatched event-type evidence must fail before acknowledgement"
+            );
+            assert!(
+                graph.events.lock().await.is_empty(),
+                "mismatched event-type evidence must fail before graph projection"
+            );
+            assert!(
+                lineage.events.lock().await.is_empty(),
+                "mismatched event-type evidence must fail before lineage projection"
             );
         }
     }
