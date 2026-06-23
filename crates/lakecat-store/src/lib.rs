@@ -2725,12 +2725,23 @@ fn audit_event_id(event: &CatalogAuditEvent) -> LakeCatResult<String> {
 }
 
 fn audit_outbox_payload(event_id: &str, event: &CatalogAuditEvent) -> Value {
-    serde_json::json!({
-        "audit-event-id": event_id,
-        "event-type": &event.event_type,
-        "table": &event.table,
-        "payload": &event.payload,
-    })
+    let mut payload = serde_json::Map::new();
+    payload.insert(
+        "audit-event-id".to_string(),
+        Value::String(event_id.to_string()),
+    );
+    payload.insert(
+        "event-type".to_string(),
+        Value::String(event.event_type.clone()),
+    );
+    if let Some(table) = &event.table {
+        payload.insert(
+            "table".to_string(),
+            serde_json::to_value(table).expect("table serializes"),
+        );
+    }
+    payload.insert("payload".to_string(), event.payload.clone());
+    Value::Object(payload)
 }
 
 fn validate_audit_payload_authorization_principal(
@@ -4470,6 +4481,80 @@ mod memory_tests {
                 .is_empty()
         );
         assert_eq!(store.mark_outbox_delivered(&event_ids).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn memory_store_omits_table_from_unscoped_audit_outbox_events() {
+        let store = MemoryCatalogStore::new();
+        store
+            .record_audit_event(
+                CatalogAuditEvent::new(
+                    "catalog.config-read",
+                    None,
+                    Principal::anonymous(),
+                    serde_json::json!({
+                        "event-type": "catalog.config-read",
+                        "authorization-receipt": {
+                            "engine": "typesec",
+                            "allowed": true,
+                            "action": "catalog-config"
+                        },
+                        "warehouse": "local"
+                    }),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let ident = TableIdent::new(
+            WarehouseName::new("local").unwrap(),
+            "default".parse::<Namespace>().unwrap(),
+            TableName::new("events").unwrap(),
+        );
+        store
+            .record_audit_event(
+                CatalogAuditEvent::new(
+                    "table.loaded",
+                    Some(ident.clone()),
+                    Principal::anonymous(),
+                    serde_json::json!({
+                        "event-type": "table.loaded",
+                        "table": ident,
+                        "authorization-receipt": {
+                            "engine": "typesec",
+                            "allowed": true,
+                            "action": "table-load"
+                        },
+                        "metadata-location": "file:///tmp/events/metadata/00000.json",
+                        "version": 1
+                    }),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let pending = store
+            .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+            .await
+            .unwrap();
+        let config = pending
+            .iter()
+            .find(|event| event.event_type == "catalog.config-read")
+            .expect("config-read event");
+        assert!(
+            config.payload.get("table").is_none(),
+            "unscoped config-read wrapper must not carry table evidence"
+        );
+        let table = pending
+            .iter()
+            .find(|event| event.event_type == "table.loaded")
+            .expect("table-loaded event");
+        assert!(
+            table.payload.get("table").is_some(),
+            "table-scoped wrapper must preserve table evidence"
+        );
     }
 
     #[tokio::test]
@@ -6890,12 +6975,7 @@ pub mod turso_store {
             .await
             .map_err(turso_error)?;
 
-            let outbox_payload = serde_json::json!({
-                "audit-event-id": event_id,
-                "event-type": event.event_type,
-                "table": event.table,
-                "payload": event.payload,
-            });
+            let outbox_payload = crate::audit_outbox_payload(&event_id, &event);
             tx_insert_outbox_event(&tx, &outbox_payload, event.created_at).await?;
             tx.commit().await.map_err(turso_error)?;
             Ok(())
@@ -10306,6 +10386,80 @@ pub mod turso_store {
                     .await
                     .unwrap(),
                 1
+            );
+        }
+
+        #[tokio::test]
+        async fn turso_store_omits_table_from_unscoped_audit_outbox_events() {
+            let store = TursoCatalogStore::in_memory().await.unwrap();
+            store
+                .record_audit_event(
+                    CatalogAuditEvent::new(
+                        "catalog.config-read",
+                        None,
+                        Principal::anonymous(),
+                        serde_json::json!({
+                            "event-type": "catalog.config-read",
+                            "authorization-receipt": {
+                                "engine": "typesec",
+                                "allowed": true,
+                                "action": "catalog-config"
+                            },
+                            "warehouse": "local"
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            let ident = TableIdent::new(
+                WarehouseName::new("local").unwrap(),
+                "default".parse::<Namespace>().unwrap(),
+                TableName::new("events").unwrap(),
+            );
+            store
+                .record_audit_event(
+                    CatalogAuditEvent::new(
+                        "table.loaded",
+                        Some(ident.clone()),
+                        Principal::anonymous(),
+                        serde_json::json!({
+                            "event-type": "table.loaded",
+                            "table": ident,
+                            "authorization-receipt": {
+                                "engine": "typesec",
+                                "allowed": true,
+                                "action": "table-load"
+                            },
+                            "metadata-location": "file:///tmp/events/metadata/00000.json",
+                            "version": 1
+                        }),
+                    )
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            let pending = store
+                .pending_outbox_events(Some("lakecat.lineage-and-graph"), 10)
+                .await
+                .unwrap();
+            let config = pending
+                .iter()
+                .find(|event| event.event_type == "catalog.config-read")
+                .expect("config-read event");
+            assert!(
+                config.payload.get("table").is_none(),
+                "unscoped config-read wrapper must not carry table evidence"
+            );
+            let table = pending
+                .iter()
+                .find(|event| event.event_type == "table.loaded")
+                .expect("table-loaded event");
+            assert!(
+                table.payload.get("table").is_some(),
+                "table-scoped wrapper must preserve table evidence"
             );
         }
 

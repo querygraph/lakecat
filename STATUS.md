@@ -5,6 +5,36 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest implementation/testing slice:
+  `Omit unscoped audit outbox table wrappers`.
+  The full local release gate exposed that live QGLake handoff config reads
+  were producing a `catalog.config-read` outbox wrapper with null table
+  evidence, while service replay correctly closes config-read wrappers over
+  only `audit-event-id`, `event-type`, and `payload`. Memory and Turso audit
+  outbox paths now share the same wrapper builder and omit `table` for
+  warehouse-scoped events while preserving table evidence for table-scoped
+  events. Focused memory and Turso regressions cover both shapes.
+- Latest release-engineering slice:
+  `Refresh full release gate after catalog concept reference`.
+  The full local release-readiness gate was rerun on June 23, 2026 after the
+  dedicated catalog concept reference landed in the book, after the unscoped
+  audit outbox wrapper fix above, and after this status file was reconciled
+  with the current tree. The gate passed locally from the tree committed as
+  `Omit unscoped audit outbox table wrappers`, covering shell-contract checks,
+  dependency-contract checks, manual workflow trigger checks, formatter checks,
+  default and all-features workspace tests, explicit Turso/Sail/TypeSec/Grust
+  feature gates, book artifact validation, local QGLake handoff replay
+  verification, and `git diff --check`.
+- Latest documentation/book slice:
+  `Expand book catalog concept reference`.
+  The book now includes a dedicated concept reference that walks the Rust
+  service spine, Turso local store, Iceberg REST-compatible namespace/table
+  paths, commit CAS/proof spine, governed scan and credential receipts,
+  QueryGraph/QGLake surfaces, and typed Iceberg v4 direction as standard
+  Iceberg parlance, LakeCat/TypeSec/QueryGraph behavior, or possible future
+  neutral profiles. It reinforces the release posture that reusable
+  table-format interpretation, scan planning, metadata-as-data, commit
+  validation, and typed v4 work belong in Sail rather than LakeCat.
 - Latest handoff-script hardening slice:
   `Tighten compact secret-reference provider proof`.
   `scripts/qglake-handoff-local.sh` now requires nonblank

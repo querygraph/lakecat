@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Fixed unscoped audit outbox wrappers for memory and Turso stores. Warehouse-
+  scoped events such as `catalog.config-read` now omit the wrapper `table`
+  field instead of emitting null table evidence that closed replay admission
+  rejects, while table-scoped audit events still preserve table evidence.
+- Refreshed release status after the catalog concept reference work. `STATUS.md`
+  now records the latest book slice and the full local release-readiness gate
+  evidence for the current tree, keeping the first-release ledger aligned with
+  local verification rather than cloud CI.
 - Expanded the LakeCat book with a dedicated catalog concept reference. The
   new section walks the Rust service spine, Turso local store, Iceberg REST
   paths, commit CAS/proof spine, governed scan and credential receipts,
