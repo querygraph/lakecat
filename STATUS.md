@@ -73,7 +73,7 @@ Updated: 2026-06-23
   `git diff --check`.
 - Latest release-candidate proof:
   `scripts/check-release-readiness.sh --release-candidate` passed locally from
-  clean head `0167d442`. The run covered dependency and workflow trigger
+  clean head `7c152e36`. The run covered dependency and workflow trigger
   contracts, release-version checks, formatting, default workspace tests,
   package/feature rows for Turso, Sail, TypeSec, Grust, and Grust Turso,
   explicit Rust `lakecat-cli qglake_handoff` verifier tests, all-features CLI

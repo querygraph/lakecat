@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof from clean head `7c152e36`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally,
+  covering dependency and workflow contracts, release-version checks,
+  formatting, default and all-features workspace tests, Turso/Sail/TypeSec/Grust
+  and Grust Turso feature rows, explicit Rust handoff verifier tests,
+  out-of-tree book artifact validation, QGLake handoff replay through
+  QueryGraph locked verify/import with `graphProjectionProof.backend =
+  grust-turso` and `graphProjectionProof.tablePrefix = lakecat_graph`, and
+  `git diff --check`.
 - Hardened raw lineage-drain credential summary extraction. Compact credential
   summaries now validate each `credential-response-evidence` entry's
   `issuer-config-hash` and unsigned `issuer-config-entry-count`, including the

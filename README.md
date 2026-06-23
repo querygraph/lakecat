@@ -143,7 +143,8 @@ EPUB metadata and PDF layout validation, QGLake handoff proof, and
 `git diff --check`.
 The current full proof also verifies the Grust Turso graph projection evidence,
 including `graphProjectionProof.backend = grust-turso` and
-`graphProjectionProof.tablePrefix = lakecat_graph`.
+`graphProjectionProof.tablePrefix = lakecat_graph`; the latest clean
+release-candidate proof was refreshed from head `7c152e36`.
 In `--release-candidate` mode, book artifacts are built into a temporary dist
 directory through `LAKECAT_BOOK_DIST_DIR`; run `docs/book/build.sh` directly
 when intentionally refreshing tracked `docs/book/dist` artifacts.

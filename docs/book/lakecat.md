@@ -13543,6 +13543,11 @@ docs/book/build.sh
 scripts/check-local-dependency-contract.sh
 ```
 
+The current full local release-candidate proof was refreshed on June 23, 2026
+from clean head `7c152e36`. It passed with the temporary book build,
+QueryGraph locked verify/import, Grust Turso graph projection proof, and the
+final clean-tree check.
+
 The quick check is acceptable while landing a narrow slice:
 
 ```sh
