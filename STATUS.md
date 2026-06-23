@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest QGLake proof fixture repair:
+  positive QGLake replay and handoff artifact tests now compare hardened
+  receipt/proof fields against deterministic full fixture digests instead of
+  stale readable `sha256:` placeholders.
+- Local verification for this QGLake proof fixture repair passed:
+  `cargo fmt -p lakecat-cli -- --check`;
+  `cargo test -p lakecat-cli qglake_handoff_lineage_drain_artifact_semantics_accept_matching_drain -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_replay_artifact_verifier_accepts_matching_bundle_and_drain -- --test-threads=1`;
+  `cargo test -p lakecat-cli qglake_lineage_drain -- --test-threads=1`;
+  and `cargo test -p lakecat-cli qglake_replay_artifact -- --test-threads=1`.
 - Latest QGLake lineage-drain request/bootstrap proof hardening:
   raw QGLake lineage-drain verification now requires full SHA-256 digest
   evidence for the lineage-read authorization receipt, core QueryGraph

@@ -19353,7 +19353,7 @@ mod tests {
         );
         assert_eq!(
             semantics["queryGraphImportHash"],
-            json!("sha256:querygraph-import")
+            json!(qglake_fixture_hash("querygraph-import"))
         );
         assert_eq!(
             semantics["requestIdentitySource"],
@@ -21694,7 +21694,7 @@ mod tests {
         );
         assert_eq!(
             replay_json["replay-evidence"]["requestIdentity"]["authorizationReceiptHash"],
-            json!("sha256:lineage-read")
+            json!(qglake_fixture_hash("lineage-read"))
         );
         assert_eq!(
             replay_json["replay-evidence"]["queryGraphBootstrap"]["bundleHash"],
@@ -21710,11 +21710,11 @@ mod tests {
         );
         assert_eq!(
             replay_json["replay-evidence"]["queryGraphBootstrap"]["agentDelegationHash"],
-            json!("sha256:delegation")
+            json!(qglake_fixture_hash("delegation"))
         );
         assert_eq!(
             replay_json["replay-evidence"]["queryGraphBootstrap"]["agentSummarySignatureHash"],
-            json!("sha256:summary")
+            json!(qglake_fixture_hash("summary"))
         );
         assert_eq!(
             replay_json["replay-evidence"]["management"]["policyBindingCount"],

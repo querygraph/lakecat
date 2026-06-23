@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed QGLake proof fixture assertions after full-hash hardening. Positive
+  replay and handoff artifact tests now compare against deterministic full
+  fixture digests instead of old readable `sha256:` placeholders.
 - Hardened raw QGLake lineage-drain request/bootstrap proof hashes. The CLI
   verifier now requires full SHA-256 digest evidence for the lineage-read
   authorization receipt, core QueryGraph bundle/graph/OpenLineage/import hashes,
