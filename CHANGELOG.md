@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Refreshed the full local release-candidate proof from clean head `1ea1e1c3`.
+  `scripts/check-release-readiness.sh --release-candidate` passed locally with
+  the strengthened post-tag release-posture contract, full workspace and
+  feature-gate matrix, out-of-tree book artifact validation, Grust Turso
+  QGLake handoff, QueryGraph locked verify/import, and `git diff --check`.
 - Hardened release-posture contracts for the published `v0.1.0` baseline.
   `scripts/check-release-version-contract.sh` and the local dependency
   contract now require release docs to distinguish current post-tag hardening
