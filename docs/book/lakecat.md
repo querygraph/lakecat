@@ -7580,7 +7580,10 @@ hash-only event-id, event-type, and payload evidence before graph or lineage
 projection can see it. Turso corrupt-payload drift follows the same rule: the
 operator-facing error is allowed to carry event-id, event-type, payload-event
 type, and payload hashes, but not the raw event id, event type, payload field
-names, or payload values.
+names, or payload values. Embedded and Turso validation also reject pending
+rows whose payload omits `event-type` entirely; a durable row cannot keep a
+plausible payload hash while dropping the replay type that graph and lineage
+projection use to choose the admission path.
 The drain also refuses unknown event types before any projection happens. A
 future or custom event stays pending until LakeCat knows how to project it,
 instead of disappearing behind an empty graph/lineage receipt.

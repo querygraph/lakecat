@@ -5,6 +5,15 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest pending outbox missing payload event-type coverage:
+  embedded and Turso pending-row validation now explicitly prove a corrupt
+  durable pending row whose payload drops `event-type` fails with hash-only
+  event-id, event-type, and payload evidence before graph or lineage projection
+  can observe it.
+- Local verification for this pending outbox missing payload event-type slice
+  passed: `cargo fmt -p lakecat-store -- --check`;
+  `cargo test -p lakecat-store --features turso-local missing_pending_outbox_payload_event_types -- --test-threads=1`;
+  `scripts/check-release-readiness.sh --quick`; and `git diff --check`.
 - Latest raw commit-history receipt-admission summary coverage:
   raw `table.commits-listed` lineage-drain summaries now re-check
   authorization receipt principal, action, allowed decision, engine, and

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added pending outbox missing payload event-type coverage. Embedded and Turso
+  pending-row validation now explicitly prove a corrupt row whose payload drops
+  `event-type` fails with hash-only event-id, event-type, and payload evidence
+  before graph or lineage projection can observe the row.
 - Added raw commit-history summary receipt-admission coverage. Raw
   `table.commits-listed` summaries now re-check authorization receipt
   principal, action, allowed decision, engine, and RFC3339 `checked_at`
