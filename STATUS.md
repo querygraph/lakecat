@@ -5,6 +5,21 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest commit-history pointer hardening slice:
+  `Reject decorated commit history metadata pointers`.
+  Store-level commit-history validation now rejects decorated or
+  credential-bearing previous/new metadata locations in persisted commit
+  records before those rows can become graph, OpenLineage, QGLake, or
+  QueryGraph replay evidence. Memory and Turso regressions assert hash-only
+  diagnostics without echoing raw token or access-key material.
+- Local verification for this commit-history pointer slice is green:
+  `cargo test -p lakecat-store --lib memory_store_rejects_malformed_commit_history_records -- --test-threads=1`
+  passed;
+  `cargo test -p lakecat-store --features turso-local --lib turso_store_rejects_malformed_commit_history_records -- --test-threads=1`
+  passed; `cargo fmt -p lakecat-store -- --check` passed;
+  `cargo test -p lakecat-store --features turso-local` passed;
+  `scripts/check-release-readiness.sh --quick` passed; `git diff --check`
+  passed.
 - Latest commit-history replay hardening slice:
   `Cover malformed commit history format and snapshot evidence`.
   Memory and Turso commit-history read tests now reject stored commit records

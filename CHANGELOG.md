@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hardened commit-history metadata pointer replay at the store boundary. Memory
+  and Turso commit-history tests now reject decorated or credential-bearing
+  previous/new metadata locations in stored commit records with hash-only
+  diagnostics before downstream replay surfaces can consume them.
 - Expanded malformed commit-history row coverage. Memory and Turso store tests
   now reject stored commit records that drop format-version evidence, drop
   snapshot-id evidence, or carry negative snapshot IDs before those rows can be

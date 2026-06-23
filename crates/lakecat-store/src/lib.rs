@@ -493,6 +493,11 @@ impl TableCommitRecord {
                     .to_string(),
             ));
         }
+        validate_commit_record_metadata_location(
+            self.previous_metadata_location.as_deref(),
+            "previous",
+        )?;
+        validate_commit_record_metadata_location(self.new_metadata_location.as_deref(), "new")?;
         let Some(format_version) = self.format_version else {
             return Err(LakeCatError::Internal(
                 "table commit record format version must be present".to_string(),
@@ -535,6 +540,28 @@ impl TableCommitRecord {
         }
         Ok(())
     }
+}
+
+fn validate_commit_record_metadata_location(
+    location: Option<&str>,
+    label: &str,
+) -> LakeCatResult<()> {
+    let Some(location) = location else {
+        return Ok(());
+    };
+    if location_has_query_fragment_or_userinfo(location) {
+        return Err(LakeCatError::Internal(format!(
+            "table commit record {label} metadata location must not contain decorated location material; metadata-location-hash={}",
+            content_hash_bytes(location.as_bytes())
+        )));
+    }
+    if embeds_raw_secret_material(location) {
+        return Err(LakeCatError::Internal(format!(
+            "table commit record {label} metadata location must not contain credential material; metadata-location-hash={}",
+            content_hash_bytes(location.as_bytes())
+        )));
+    }
+    Ok(())
 }
 
 fn validate_sha256_evidence(value: &str, message: &str) -> LakeCatResult<()> {
@@ -5697,6 +5724,42 @@ mod memory_tests {
                 if message.contains("table commit record snapshot id must be present")
         ));
 
+        let mut decorated_new_metadata_record = base_record.clone();
+        decorated_new_metadata_record.new_metadata_location =
+            Some("s3://lakecat-demo/events/metadata/00001.json?token=secret".to_string());
+        store.state.write().await.commits[0] = decorated_new_metadata_record;
+
+        let err = store
+            .table_commit_records(&ident, 0, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains(
+                    "table commit record new metadata location must not contain decorated location material"
+                ) && message.contains("metadata-location-hash=sha256:")
+                && !message.contains("token=secret")
+        ));
+
+        let mut credential_previous_metadata_record = base_record.clone();
+        credential_previous_metadata_record.previous_metadata_location =
+            Some("s3://lakecat-demo/events/metadata/access_key=secret.json".to_string());
+        store.state.write().await.commits[0] = credential_previous_metadata_record;
+
+        let err = store
+            .table_commit_records(&ident, 0, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            LakeCatError::Internal(message)
+                if message.contains(
+                    "table commit record previous metadata location must not contain credential material"
+                ) && message.contains("metadata-location-hash=sha256:")
+                && !message.contains("access_key=secret")
+        ));
+
         let mut malformed_response_record = base_record.clone();
         malformed_response_record.response_hash = "sha256:short".to_string();
         store.state.write().await.commits[0] = malformed_response_record;
@@ -9959,6 +10022,58 @@ pub mod turso_store {
                 err,
                 LakeCatError::Internal(message)
                     if message.contains("table commit record snapshot id must be present")
+            ));
+
+            let mut decorated_new_metadata_record = base_record.clone();
+            decorated_new_metadata_record.new_metadata_location =
+                Some("s3://lakecat-demo/events/metadata/00001.json?token=secret".to_string());
+            conn.execute(
+                "update metadata_pointer_log set record_json = ?2 where table_key = ?1",
+                (
+                    table_key(&ident),
+                    encode_json(&decorated_new_metadata_record).unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .table_commit_records(&ident, 0, None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains(
+                        "table commit record new metadata location must not contain decorated location material"
+                    ) && message.contains("metadata-location-hash=sha256:")
+                    && !message.contains("token=secret")
+            ));
+
+            let mut credential_previous_metadata_record = base_record.clone();
+            credential_previous_metadata_record.previous_metadata_location =
+                Some("s3://lakecat-demo/events/metadata/access_key=secret.json".to_string());
+            conn.execute(
+                "update metadata_pointer_log set record_json = ?2 where table_key = ?1",
+                (
+                    table_key(&ident),
+                    encode_json(&credential_previous_metadata_record).unwrap(),
+                ),
+            )
+            .await
+            .unwrap();
+
+            let err = store
+                .table_commit_records(&ident, 0, None)
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                err,
+                LakeCatError::Internal(message)
+                    if message.contains(
+                        "table commit record previous metadata location must not contain credential material"
+                    ) && message.contains("metadata-location-hash=sha256:")
+                    && !message.contains("access_key=secret")
             ));
 
             let mut malformed_idempotency_record = base_record.clone();
