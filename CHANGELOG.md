@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog-concepts chapter with a fuller
+  standard-vs-extension-vs-product argument. The new material explicitly
+  explains why the Rust service spine, Turso store, idempotent proof envelope,
+  governed TypeSec-style receipts, QueryGraph/QGLake/OpenLineage handoff, and
+  possible future Iceberg-adjacent profiles are separate layers, then walks
+  PySpark, namespace management, optimistic commit retry, governed scan,
+  credential exception, agentic, and QueryGraph import workflows to show why
+  Sail should own engine-truth planning and table-format semantics.
 - Refreshed the first-release dependency-boundary documentation from live
   registry evidence. README, design, status, and book text now record that
   `cargo search` still shows `grust-cypher`/`grust-core` at 0.9.1 and

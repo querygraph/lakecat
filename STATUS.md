@@ -5,6 +5,16 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/book slice:
+  `Deepen catalog concepts and Sail engine workflow examples`.
+  The LakeCat book now gives a more explicit argument for separating standard
+  Iceberg terms, LakeCat implementation choices, TypeSec-governed receipt
+  evidence, QueryGraph/QGLake/OpenLineage product surfaces, and possible
+  future neutral profiles. It also expands the workflow examples from PySpark
+  and namespace management through optimistic commit retry, governed scans,
+  credential exceptions, agentic reads, and QueryGraph import to show why Sail
+  should own table-format interpretation, scan planning, delete handling,
+  metadata-as-data, and typed Iceberg v4 semantics.
 - Latest release-boundary slice:
   `Refresh dependency posture evidence`.
   Live `cargo search` checks on June 23, 2026 still show `grust-graph` at
