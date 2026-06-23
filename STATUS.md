@@ -5,6 +5,22 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest documentation/release-evidence slice:
+  `Expand catalog concepts and refresh full release gate`.
+  The book now more explicitly separates what a standard Iceberg REST client
+  sees, what the LakeCat/Turso catalog-control spine proves, what governed
+  TypeSec/LakeCat/Sail callers receive, what QueryGraph/QGLake consumes, and
+  which proof ideas are local architecture versus plausible future neutral
+  catalog profiles.
+- Full local release-readiness verification for this release-hardening line is
+  green: `scripts/check-release-readiness.sh` passed on 2026-06-23. The gate
+  covered shell-contract checks, the local dependency contract, manual-only
+  workflow trigger contract, formatter checks, default workspace tests,
+  explicit Sail, Turso, TypeSec, Grust, service, store, graph, security, and
+  CLI feature gates, full workspace all-features tests, book rebuild and EPUB
+  metadata validation, local QGLake handoff replay verification, and
+  `git diff --check`. Cloud CI remains manual/disabled; this is local release
+  evidence, not cloud-run evidence.
 - Latest implementation/testing slice:
   `Harden memory audit event identity parity`.
   Embedded memory-store audit recording now rejects duplicate audit event ids

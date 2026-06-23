@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Expanded the LakeCat book's catalog-concepts explanation and refreshed full
+  local release-readiness evidence. The book now separates what standard
+  Iceberg clients see, what governed TypeSec/LakeCat/Sail callers see, what
+  QueryGraph consumes, and which proof ideas are local architecture versus
+  future neutral profile candidates. The full `scripts/check-release-readiness.sh`
+  gate passed from the current release-hardening line, including default and
+  all-features workspace tests, Turso/Sail/TypeSec/Grust feature gates, QGLake
+  handoff, book artifact verification, dependency-contract checks, manual CI
+  trigger contract checks, and `git diff --check`.
 - Hardened memory-store audit event identity parity. Embedded audit recording
   now rejects duplicate audit event ids before mutating audit/outbox state, so
   memory and Turso stores both prevent duplicate lineage/graph replay evidence.

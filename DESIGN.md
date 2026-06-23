@@ -348,7 +348,7 @@ Authoritative first-release evidence:
   QueryGraph, and CI-trigger assumptions still match the current repo.
 
 Approximate completion for this first-release scope is about 85-90 percent as
-of June 22, 2026. The percentage is intentionally about the locally verifiable
+of June 23, 2026. The percentage is intentionally about the locally verifiable
 LakeCat catalog substrate, not the whole long-term QueryGraph architecture.
 Most catalog and proof surfaces are implemented and heavily regression-tested:
 standard Iceberg REST namespace/table behavior, the Rust service spine,
@@ -356,8 +356,14 @@ Turso-backed store, memory-store parity, commit CAS, idempotency, pointer
 logs, audit/outbox, replay admission, governed scan/fetch, credential receipt
 proof, management surfaces, view receipt chains, QueryGraph bootstrap,
 OpenLineage replay, and QGLake handoff/import proof.
-The broad local release gate has been recorded from the current handoff path,
-including QueryGraph `lakecat-verify` and `lakecat-import` under `--locked`.
+The broad local release gate was refreshed on June 23, 2026 from the current
+release-hardening line. `scripts/check-release-readiness.sh` passed locally,
+including shell-contract checks, dependency-contract checks, manual CI trigger
+contract checks, formatter checks, default and all-features workspace tests,
+explicit Turso/Sail/TypeSec/Grust feature gates, book artifact validation,
+local QGLake handoff replay verification, and `git diff --check`. This remains
+local release evidence; automatic cloud CI stays manual/disabled until local
+gates are consistently boring from the final release commit.
 
 The remaining 10-15 percent should be treated as release engineering and
 boundary cleanup rather than new architecture:
