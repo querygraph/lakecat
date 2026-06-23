@@ -9518,9 +9518,10 @@ every sequence number to be positive and strictly increasing, requires commit
 hashes to be duplicate-free, and requires positive graph event evidence plus
 replay and OpenLineage receipt hashes. Captured
 raw lineage-drain regressions cover both missing and drifted commit-history
-principal subject, principal kind, and authorization action, so actor and
-action attribution must survive before the compact handoff proof exists. The
-service admission layer now rejects
+principal subject, principal kind, and authorization action, and raw summaries
+also re-check nonblank receipt engine and RFC3339 `checked_at` shape when
+receipt evidence is present, so actor, action, and decision provenance must
+survive before the compact handoff proof exists. The service admission layer now rejects
 `table.commits-listed` source replay whose authorization receipt principal is
 missing or malformed, whose top-level `principal-subject` or `principal-kind`
 is missing, or whose top-level actor summary drifts from the receipt before

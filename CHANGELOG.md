@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added raw commit-history summary receipt-shape coverage. Raw
+  `table.commits-listed` summaries now re-check nonblank authorization receipt
+  engines and RFC3339 `checked_at` timestamps before compact QGLake
+  commit-history proof can inherit pointer-log evidence.
 - Added raw management-list summary closed-schema coverage. Raw `server.listed`
   summaries now explicitly prove unexpected QueryGraph-style payload claims are
   rejected with hash-only event identity before compact QGLake management proof

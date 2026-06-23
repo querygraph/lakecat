@@ -7415,6 +7415,7 @@ fn lineage_drain_event_summary(
     let authorization_receipt = payload
         .get("authorization-receipt")
         .or_else(|| payload.pointer("/payload/authorization-receipt"));
+    validate_lineage_summary_commit_history_receipt_shape(event, payload, authorization_receipt)?;
     let request_identity = authorization_receipt
         .and_then(|receipt| receipt.get("request-identity"))
         .or_else(|| {
@@ -8478,6 +8479,19 @@ fn lineage_summary_authorization_principal_fields(
     let subject = lineage_summary_optional_nonblank_string_field(event, principal, "subject")?;
     let kind = lineage_summary_optional_nonblank_string_field(event, principal, "kind")?;
     Ok((subject, kind))
+}
+
+fn validate_lineage_summary_commit_history_receipt_shape(
+    event: &OutboxEvent,
+    payload: &Value,
+    authorization_receipt: Option<&Value>,
+) -> Result<(), LakeCatError> {
+    if event.event_type != "table.commits-listed" || authorization_receipt.is_none() {
+        return Ok(());
+    }
+    validate_authorization_receipt_engine(event, payload, "table commit-history")?;
+    validate_authorization_receipt_checked_at(event, payload, "table commit-history")?;
+    Ok(())
 }
 
 fn lineage_summary_optional_nonblank_string_field(
@@ -53217,6 +53231,58 @@ mod tests {
         assert!(
             err.contains("sequence-numbers must be strictly increasing in lineage drain summary")
         );
+
+        let principal = Principal::new("agent:reader", PrincipalKind::Agent).unwrap();
+        for (event_id, field, value, expected_message) in [
+            (
+                "evt-blank-summary-commit-history-engine",
+                "engine",
+                json!(" "),
+                "table commit-history authorization receipt engine must be non-empty",
+            ),
+            (
+                "evt-malformed-summary-commit-history-checked-at",
+                "checked_at",
+                json!("not-a-timestamp"),
+                "table commit-history authorization receipt checked_at timestamp must be RFC3339",
+            ),
+        ] {
+            let mut event = OutboxEvent {
+                event_id: event_id.to_string(),
+                sink: "lakecat.lineage-and-graph".to_string(),
+                event_type: "table.commits-listed".to_string(),
+                payload: json!({
+                    "payload": {
+                        "event-type": "table.commits-listed",
+                        "authorization-receipt": {
+                            "principal": principal,
+                            "action": "table-load",
+                            "allowed": true,
+                            "engine": "test",
+                            "policy_hash": null,
+                            "checked_at": chrono::Utc::now().to_rfc3339(),
+                        },
+                        "warehouse": "local",
+                        "namespace": ["default"],
+                        "table": "events",
+                        "commit-count": 1,
+                        "commit-hashes": [content_hash_bytes(b"commit-one")],
+                        "sequence-numbers": [1],
+                        "principal-subject": "agent:reader",
+                        "principal-kind": "agent",
+                    }
+                }),
+                created_at: chrono::Utc::now(),
+                delivered_at: None,
+            };
+            event.payload["payload"]["authorization-receipt"][field] = value;
+            let err = lineage_drain_event_summary(&event, &receipt)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected_message), "{event_id}: {err}");
+            assert!(err.contains("event-id-hash=sha256:"), "{event_id}: {err}");
+            assert!(!err.contains(event_id), "{event_id}: {err}");
+        }
     }
 
     #[test]
