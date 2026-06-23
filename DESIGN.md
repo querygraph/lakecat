@@ -233,7 +233,9 @@ The current working plan is:
    evidence rule. Turso table list, load, commit, soft-delete, and restore
    paths must bind decoded table JSON back to the durable row key, warehouse,
    namespace, and table-name columns before returning or mutating REST-visible
-   table state.
+   table state. Turso commit-history reads must bind decoded commit records
+   back to the durable `metadata_pointer_log.table_key` row column before
+   returning pointer-history proof.
 4. Keep the graph bounded. LakeCat should emit stable catalog-domain facts for
    Server, Project, Warehouse, Namespace, Table, View, Column, Snapshot, Policy,
    StorageProfile, Principal, ScanPlan, Commit, and lineage runs. Traversal,

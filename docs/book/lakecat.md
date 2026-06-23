@@ -88,6 +88,9 @@ warehouse, namespace, and table-name columns before table list, load, commit,
 soft-delete, or restore paths can return or mutate REST-visible table state.
 That prevents a damaged local store row from quietly remapping a standard
 Iceberg table operation while leaving the JSON payload looking plausible.
+Pointer-history proof follows the same rule: decoded commit records are bound
+back to the durable `metadata_pointer_log` table key before commit history can
+be returned to operators, replay validators, or QueryGraph handoff code.
 
 Commit CAS is the bridge between standard Iceberg and LakeCat hardening. In
 Iceberg parlance, optimistic commit means the writer proposes a new metadata

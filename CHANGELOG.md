@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened Turso metadata pointer-log row validation. Commit-history reads now
+  bind decoded commit records back to the durable `metadata_pointer_log`
+  `table_key` row column before returning pointer-history proof.
 - Hardened Turso table row-column validation. Table list, load, commit,
   soft-delete, and restore paths now bind decoded table JSON to durable
   `tables` row key, warehouse, namespace, and table-name columns before
