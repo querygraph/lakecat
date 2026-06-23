@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added raw view-list summary count-binding coverage. Raw lineage-drain
+  `view.listed` summaries now explicitly prove `view-count` must match
+  `view-names` before compact QGLake view inventory proof can inherit archived
+  catalog discovery evidence.
 - Added raw view-list summary coverage for read-side authorization. Raw
   lineage-drain `view.listed` summaries now explicitly prove `view-manage`
   receipts are rejected; view inventory replay must carry the read-side

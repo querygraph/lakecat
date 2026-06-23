@@ -8386,19 +8386,20 @@ project scope where applicable, count-aligned IDs, and duplicate-free
 identifiers before QueryGraph can treat server, project, warehouse,
 policy-binding, or storage-profile inventory as accepted proof.
 View replay is checked at the same boundary: view list events must carry valid
-warehouse, namespace, and count evidence, while view create/load/drop evidence
-must carry a valid warehouse, namespace, and non-empty view name before graph or
-OpenLineage projection. View list and lifecycle replay must also carry a valid
+warehouse, namespace, and count evidence, and the count must match the listed
+view names before graph or OpenLineage projection. View create/load/drop
+evidence must carry a valid warehouse, namespace, and non-empty view name before
+projection too. View list and lifecycle replay must also carry a valid
 authorization receipt principal before delivery, preserving actor evidence for
 QueryGraph view proofs. A view list is read-side catalog evidence, so the
 service requires its authorization receipt action to be `view-load`; a
 `view-manage` receipt is valid for mutations but not for replaying
-`view.listed`. Raw lineage-drain summaries enforce the same read-side action
-before compact QGLake proof is built, so an archived view inventory cannot be
-accepted under mutation authority. View lifecycle replay is action-bound too:
-`view.upserted` requires `view-manage`, `view.loaded` requires `view-load`,
-and `view.dropped` requires `view-drop` before LakeCat emits graph or
-OpenLineage evidence. The
+`view.listed`. Raw lineage-drain summaries enforce the same count binding and
+read-side action before compact QGLake proof is built, so an archived view
+inventory cannot inflate discovery counts or be accepted under mutation
+authority. View lifecycle replay is action-bound too: `view.upserted` requires
+`view-manage`, `view.loaded` requires `view-load`, and `view.dropped` requires
+`view-drop` before LakeCat emits graph or OpenLineage evidence. The
 nested `view` evidence is closed over the catalog route's view shape too:
 warehouse, namespace, name, store-assigned `view-version`, SQL, dialect, schema
 version, columns, and properties. If a sidecar also carries top-level

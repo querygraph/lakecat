@@ -54945,6 +54945,15 @@ mod tests {
                 "view list view-names contains an invalid view name",
             ),
             (
+                "evt-bad-summary-view-count-mismatch",
+                "view.listed",
+                json!({
+                    "view-count": 2,
+                    "view-names": ["events_view"]
+                }),
+                "view list view-names count must match view list count",
+            ),
+            (
                 "evt-duplicate-summary-view-name",
                 "view.listed",
                 json!({
