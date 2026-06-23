@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Re-verified the Grust Turso graph boundary against current Grust head
+  `107bbf9`. LakeCat graph tests still exercise `grust_turso::TursoGraphStore`
+  for persistence, traversal, Cypher-over-Turso, and matched-node patches; the
+  service startup test still persists catalog events through the configured
+  Grust Turso sink; and the local dependency contract still forbids direct
+  `turso::` graph operations in `lakecat-graph`.
 - Refreshed the full local release-candidate proof from clean head `7c152e36`.
   `scripts/check-release-readiness.sh --release-candidate` passed locally,
   covering dependency and workflow contracts, release-version checks,

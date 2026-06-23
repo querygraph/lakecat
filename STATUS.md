@@ -5,6 +5,18 @@ Updated: 2026-06-23
 ## Current State
 
 - LakeCat is on `master`.
+- Latest Grust Turso boundary verification:
+  current Grust head `107bbf9 Add Turso Cypher matched-node patches` keeps
+  `grust-turso` as the owner of Turso graph persistence, traversal,
+  Cypher-over-Turso, and matched-node mutation. LakeCat's graph crate still
+  emits catalog-facing projections through Grust APIs, and the local dependency
+  contract still forbids direct `turso::` graph operations in
+  `lakecat-graph`.
+- Local verification for this Grust Turso boundary check passed:
+  `cargo test -p lakecat-graph --features grust-turso-local --lib grust_turso_store`;
+  `cargo test -p lakecat-service --features grust-turso-local --bin lakecat-service configured_grust_turso_graph_sink_projects_catalog_events_to_turso_store`;
+  `scripts/check-local-dependency-contract.sh`;
+  `cargo test --manifest-path /Users/alexy/src/grust/Cargo.toml -p grust-turso`.
 - Latest raw lineage-drain summary hardening slice:
   `Validate credential summary issuer config hash`.
   Compact credential summary extraction now validates every

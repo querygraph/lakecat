@@ -4376,6 +4376,14 @@ uses. Grust owns the Turso graph tables, persistence behavior, traversal
 semantics, and Cypher mutation semantics. LakeCat owns only the catalog-facing
 projection boundary and the proof that the boundary was exercised.
 
+The June 23, 2026 boundary verification proves that this is code, not just
+architecture prose. `lakecat-graph` has no direct `turso::` graph operations;
+its durable graph tests instantiate `grust_turso::TursoGraphStore`, write
+catalog-event projections through Grust, traverse them through Grust, run
+Cypher-over-Turso through Grust, and apply Grust's matched-node mutation plan.
+The service startup test uses the same configured sink and table prefix that
+the QGLake handoff proof reports.
+
 A local QueryGraph acceptance run therefore has three distinct graph stages:
 
 1. LakeCat drains replay-validated catalog events from the transactional
