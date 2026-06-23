@@ -6,6 +6,12 @@ Updated: 2026-06-23
 
 - LakeCat is on `master`.
 - Latest release-contract slice:
+  `Run Grust Turso traversal in release gate`.
+  `scripts/check-release-readiness.sh` now runs the `grust_turso_store` test
+  filter for `lakecat-graph --features grust-turso-local`, so the authoritative
+  local gate covers both durable catalog graph persistence and traversal over
+  Grust's Turso backend.
+- Latest release-contract slice:
   `Build release-candidate book artifacts out of tree`.
   `docs/book/build.sh` now honors `LAKECAT_BOOK_DIST_DIR`, and
   `scripts/check-release-readiness.sh --release-candidate` validates book

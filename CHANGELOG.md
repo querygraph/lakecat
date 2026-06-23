@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Broadened the release-candidate Grust Turso graph proof. The local release
+  gate now runs the `grust_turso_store` test filter so both durable catalog
+  graph persistence and traversal over Grust's Turso backend are covered.
 - Made the release-candidate book build clean-tree safe. `docs/book/build.sh`
   now honors `LAKECAT_BOOK_DIST_DIR`, and `scripts/check-release-readiness.sh
   --release-candidate` validates EPUB/PDF/MOBI artifacts in a temporary dist

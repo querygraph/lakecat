@@ -128,6 +128,8 @@ require_pattern 'cargo test -p lakecat-service --features grust-turso-local --li
   "release-readiness gate must prove service outbox projection through the Grust Turso feature"
 require_pattern 'cargo test -p lakecat-graph --features grust-turso-local --lib' scripts/check-release-readiness.sh \
   "release-readiness gate must prove LakeCat graph projection persists through Grust Turso"
+require_pattern 'grust_turso_store' scripts/check-release-readiness.sh \
+  "release-readiness gate must run the Grust Turso graph persistence and traversal tests"
 require_pattern 'scripts/qglake-handoff-local.sh' scripts/check-release-readiness.sh \
   "release-readiness gate must include the QGLake handoff proof"
 
